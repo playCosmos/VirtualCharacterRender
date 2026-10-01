@@ -217,6 +217,12 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         continue;
                     }
 
+                    if (_iosEndpoint != null &&
+                        !remote.Address.Equals(_iosEndpoint.Address))
+                    {
+                        continue;
+                    }
+
                     var text = Encoding.UTF8.GetString(bytes);
                     if (IFacialMocapFrameParser.TryParse(
                         text,
@@ -318,7 +324,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 bodyHandsFrame: null,
                 bodyHandsConfigured: false);
 
-            if (!_presence.AnySourceAvailable &&
+            if (_presence.HasEvent(
+                    TrackingPresenceEvents.TrackingSourceLost) &&
                 _source != null)
             {
                 _source.MarkSourceLost();
