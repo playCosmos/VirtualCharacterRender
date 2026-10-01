@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.Protocols.Vmc
 {
