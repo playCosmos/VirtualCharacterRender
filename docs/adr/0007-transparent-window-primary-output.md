@@ -2,156 +2,93 @@
 
 - Status: Proposed
 - Date: 2026-10-01
+- P0 implementation updated: 2026-10-02
 
 ## Context
 
 VirtualCharacterRender is intended to act as a local virtual-character rendering overlay for broadcasting on Windows and macOS. The minimum output path should be easy to use and should not require a separate video transport.
 
-The product needs correct alpha, low overhead, topmost/click-through control, resize/high-DPI behavior, and an OBS-compatible capture workflow on both supported desktop platforms.
-
 ## Proposed decision
 
-Use a transparent desktop window as the initial output abstraction.
+Use a transparent desktop window with an OBS-compatible capture workflow as the initial production output concept on both platforms.
 
-For P0, use UniWindowController 0.9.8 as the candidate native window adapter behind the project-owned `IOverlayOutputAdapter` boundary.
+The shared runtime exposes `IOverlayOutputAdapter`. Native window/compositor implementation is platform-specific.
 
-The dependency is pinned to the UPM release commit for 0.9.8 rather than the moving `upm` branch:
+High-performance native transports are optional adapters rather than core dependencies; examples may include Windows-specific Spout-class output or macOS-specific Syphon-class output after separate validation.
 
-```text
-com.kirurobo.uniwinc
-https://github.com/kirurobo/UniWindowController.git#304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc
-```
+Virtual camera and NDI remain optional future outputs.
 
-The release commit contains the UPM package at repository root.
+## P0 candidate implementation
 
-The shared runtime does not expose Kirurobo, Win32, Cocoa, Metal, D3D, Unity Camera, or native window types.
+P0 uses UniWindowController 0.9.8, pinned by Git tag `v0.9.8`, behind `UniWinCOverlayOutput`.
 
-High-performance transports such as Spout-class Windows output or Syphon-class macOS output remain optional future adapters.
+The dependency is an implementation candidate, not a shared runtime contract.
 
-## P0 Windows baseline
+Rendering and window ownership remain separate:
 
-The candidate alpha-window path requires:
+- `DesktopRenderBootstrap`: resolution/frame pacing/camera render baseline
+- `UniWinCOverlayOutput`: transparency/topmost/click-through/native window status
 
-- Windows standalone x86-64
-- Direct3D 11
-- automatic graphics API selection disabled
-- D3D12 excluded from the transparent-window baseline
-- D3D11 flip-model swapchain disabled so Unity uses the BitBlt path required by the DWM transparency technique used by the adapter
-- windowed/resizable player
+### URP
+
+P0 alpha path:
+
 - URP Alpha Processing enabled
-- SDR RGBA8 path with camera HDR disabled
-- camera background Solid Color with alpha 0
+- SDR RGBA8 path
+- camera HDR disabled
+- Solid Color clear with alpha 0
 
-OBS validation uses Game Capture with transparency enabled.
+### Windows
 
-The BitBlt constraint may cost some presentation efficiency. P0 measures the real delta instead of assuming it is negligible.
+P0 transparent-window path:
 
-## P0 macOS baseline
+- Windows x86-64
+- explicit D3D11
+- D3D12 excluded for this output validation path
+- D3D11 flip-model swapchain disabled
+- BitBlt presentation path
+- OBS Game Capture with transparency enabled
 
-The candidate path uses the same project-owned output abstraction with UniWindowController's macOS native implementation.
+This is an output-path constraint, not a general claim that D3D12 is unsuitable for rendering.
 
-Validate on Apple Silicon M1 or newer:
+### macOS
 
-- Metal standalone player
-- true alpha
-- Retina scaling
-- topmost
-- explicit click-through
-- move/resize and multi-monitor behavior
-- OBS macOS Screen Capture/window workflow
-- sleep/wake and relaunch behavior
+P0 uses the same adapter boundary with the dependency's macOS native implementation and Metal.
 
-macOS acceptance is evidence-based. Cross-platform API support in the dependency is not itself a PASS.
+Retina scaling, multi-monitor behavior, sleep/wake, relaunch, and OBS macOS capture must be validated on M1+.
 
-## Hit testing
+### Click-through
 
-Automatic per-pixel opacity hit testing is disabled in the lightweight baseline.
+Automatic opacity/pixel hit testing is disabled in the lightweight baseline. Explicit click-through is used instead.
 
-The P0 adapter uses explicit click-through state:
-
-```text
-isHitTestEnabled = false
-HitTestType = None
-```
-
-This avoids continuous pixel-readback work. A later interactive-overlay mode may use raycast or another measured hit-test policy.
-
-## Rendering requirements
-
-URP 17 Alpha Processing must be enabled. Otherwise post-processing can replace output alpha with 1.
-
-The initial low-complexity alpha format is SDR RGBA8:
-
-- camera HDR off
-- transparent camera clear alpha
-- no separate RenderTexture for the basic overlay path
-
-A small P0 alpha-reference pattern renders opaque, 50%, 25%, and overlapping semi-transparent patches through the same back buffer as the character.
-
-## Ownership
-
-```text
-Rendering subsystem
-  ├ resolution
-  ├ frame pacing
-  └ camera render quality
-
-Output subsystem
-  ├ transparent window
-  ├ topmost
-  ├ click-through
-  └ native window status
-```
-
-Output does not own the 720p/1080p preset or the 60 FPS frame policy.
+This avoids the dependency's heavier per-pixel hit-test path. Remaining native-controller overhead is measured rather than assumed zero.
 
 ## P0 validation
 
-Static checks:
+On Windows and macOS independently:
 
-- package resolves as version 0.9.8 from pinned commit `304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc`
-- camera background alpha is 0
-- HDR is disabled for the SDR baseline
-- URP Alpha Processing is enabled
-- Windows graphics API is explicitly D3D11
-- D3D11 flip model is disabled
-- automatic per-pixel hit testing is disabled
+- alpha correctness
+- opaque/50%/25%/overlap test pattern
+- straight vs premultiplied-alpha behavior
+- VRM hair/outline edge artifacts
+- OBS-compatible capture reliability
+- high-DPI/Retina and multi-monitor behavior
+- resize/window behavior
+- click-through/topmost policy
+- performance at 720p60 and 1080p60
+- interaction with post effects and outlines
+- shutdown/relaunch behavior
+- sleep/wake where practical
 
-Standalone checks on Windows and macOS independently:
-
-- true alpha
-- straight/premultiplied edge correctness
-- semi-transparent overlap correctness
-- VRM hair/outline edge behavior
-- OBS-compatible capture
-- high-DPI/Retina behavior
-- resize and multi-monitor behavior
-- topmost/click-through behavior
-- 720p60 minimum baseline
-- 1080p60 measurement
-- shutdown/relaunch
-- no persistent output-related frame-time regression
+Static project configuration is not sufficient to accept this ADR.
 
 ## Consequences if accepted
 
 - simple local broadcast workflow
-- platform window/compositor behavior becomes part of the support surface
-- output implementation remains replaceable behind a project-owned interface
-- optional high-performance native video transports remain possible
-
-## Sources
-
-- Unity URP 17 Alpha Processing:
-  https://docs.unity3d.com/6000.0/Documentation/Manual/urp/whats-new/urp-whats-new.html
-- Unity PlayerSettings graphics APIs:
-  https://docs.unity3d.com/6000.0/Documentation/ScriptReference/PlayerSettings.SetGraphicsAPIs.html
-- UniWindowController:
-  https://github.com/kirurobo/UniWindowController
-- OBS Game Capture:
-  https://obsproject.com/kb/game-capture-source
+- platform compositor/window behavior becomes part of the support surface
+- output implementation remains replaceable behind a common interface
+- advanced platform-specific output paths remain possible
 
 ## Revisit conditions
 
-Accept after the transparent standalone/OBS gates pass on both Windows and macOS.
-
-Replace the P0 candidate adapter if either platform has unreliable alpha, unacceptable presentation overhead, unresolved platform lifecycle failures, or a better lower-complexity native path is demonstrated.
+Promote another output transport if transparent-window capture on either target platform is unreliable, loses alpha fidelity, or creates unacceptable overhead.
