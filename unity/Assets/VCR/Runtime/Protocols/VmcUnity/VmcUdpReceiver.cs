@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using UnityEngine;
+using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Protocols.Vmc;
 
@@ -20,7 +21,8 @@ namespace VCR.Runtime.Protocols.VmcUnity
     public sealed class VmcUdpReceiver :
         MonoBehaviour,
         ITrackingFrameProvider,
-        ITrackingPresenceProvider
+        ITrackingPresenceProvider,
+        IRuntimeMetricsSource
     {
         [Header("Receive")]
         [SerializeField, Range(1, 65535)] private int localPort = 39539;
@@ -321,6 +323,24 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     $"events={_presence.Events}",
                     this);
             }
+        }
+
+        public void CollectMetrics(List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.receive.packets",
+                PacketCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.receive.malformed",
+                MalformedPacketCount,
+                "count"));
         }
 
         private void StopReceiver()
