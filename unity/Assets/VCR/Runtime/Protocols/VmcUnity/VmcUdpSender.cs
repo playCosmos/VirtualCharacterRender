@@ -145,6 +145,13 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
             var pose = frame.HumanoidPose;
 
+            if (pose.PoseSpace != HumanoidPoseSpace.OriginalLocal)
+            {
+                throw new InvalidOperationException(
+                    "VMC sender requires OriginalLocal humanoid bones by default. " +
+                    "Capture original VRM humanoid bones or add an explicit normalized-bone sender mode.");
+            }
+
             if (sendRoot)
             {
                 messages.Add(
