@@ -23,7 +23,8 @@
     "VCR.Runtime.Events.Unity",
     "VCR.Runtime.Capabilities",
     "VCR.Runtime.Environment",
-    "VCR.Runtime.Environment.Unity"
+    "VCR.Runtime.Environment.Unity",
+    "VCR.Runtime.P0"
   ],
   "includePlatforms": [
     "Editor"
