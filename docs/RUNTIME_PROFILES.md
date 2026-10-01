@@ -2,9 +2,15 @@
 
 ## Goal
 
-VirtualCharacterRender uses one runtime pipeline from lightweight avatar rendering to advanced scene/event operation.
+VirtualCharacterRender uses one one-character runtime pipeline from lightweight desktop operation to advanced scene/event/environment workflows.
 
-There are no separate "lite" and "pro" runtimes. Profiles select capabilities, budgets, and services on top of the same domain model and renderer interfaces.
+There are no separate Lite and Pro engines. Profiles control capabilities and budgets on top of the same character, tracking, scene, and renderer contracts.
+
+## Product constraint
+
+All current profiles operate on exactly one active character.
+
+Multi-character behavior is not an Advanced-profile feature. It is a future product expansion only.
 
 ## Principle
 
@@ -13,76 +19,74 @@ Same executable/runtime
         ↓
 Capability Registry
         ↓
-Selected Runtime Profile
+Selected capability preset
         ↓
 Only required services initialized
         ↓
-Same Character / Tracking / Material / Output pipeline
+Same one-character pipeline
 ```
 
-A lightweight session must not initialize advanced subsystems merely because they exist in the product.
+## Lightweight/default
 
-## Initial profiles
-
-### Lightweight
-
-Target: VSeeFace-class simple desktop use.
+Target: VSeeFace-class simple use with built-in capture.
 
 Default scope:
 
 - one active character
 - one primary camera
-- webcam face tracking or iPhone ARKit-compatible face input
-- basic head/face/eye/mouth motion
-- optional simple hand/body tracking when available
-- expressions
-- MToon/default material plus simple overrides
+- one environment
+- webcam and/or ARKit-compatible input
+- face tracking with eyes/mouth prioritized
+- head tracking
+- hand tracking
+- upper-body tracking
+- expressions and basic motion
+- MToon/default material
 - transparent overlay
 - basic OBS workflow
+- basic AFK/local-state events where configured
 - minimal background services
 
-Excluded by default:
+Not active unless requested:
 
-- event graph runtime
-- multiple scene cameras
-- heavy post effects
-- multi-character scene orchestration
-- advanced plugin scanning
-- unused protocol listeners
+- full-body tracking/IK
+- heavy post processing
+- visual event graph editor
+- optional protocol listeners
+- executable plugins
+- expensive environment features
 
-### Standard
+## Standard
 
-Adds:
+Adds optional capabilities such as:
 
-- multiple tracking-source routing
-- motion/expression mixing
+- multiple tracking-source routing for the same performer
+- richer motion/expression mixing
 - custom shader presets and bindings
 - VMC/OSC/WebSocket integrations
+- reactive environment states
 - props
 - richer post processing
-- scene presets
-- more detailed diagnostics
+- broadcast chat/donation event adapters
+- detailed diagnostics
 
-### Advanced
+## Advanced
 
-Target: Warudo-class extensibility and scene behavior.
+Target: Warudo-class extensibility for one performer.
 
 Adds:
 
-- multiple characters
-- scene graph/orchestration
-- event/node runtime
+- advanced environment/world features
+- event/node runtime and later editor
 - complex shader/event bindings
-- multiple cameras
+- multiple scene cameras where justified
 - props/effects automation
 - plugin extensions
-- multiple protocol sources
-- advanced tracking routing
-- scripting/automation interfaces when separately approved
+- multiple protocol/event sources
+- optional full-body tracking
+- scripting/automation interfaces only if separately approved
 
 ## Capability model
-
-Features are exposed as capabilities rather than profile-specific code forks.
 
 Example capability IDs:
 
@@ -92,50 +96,48 @@ render.custom-shader
 render.post-process
 tracking.webcam-face
 tracking.arkit-face
-tracking.body
+tracking.head
 tracking.hands
+tracking.upper-body
+tracking.full-body
+environment.image
+environment.video
+environment.parallax
+environment.3d
+environment.dynamic-light
 protocol.vmc
 protocol.osc
 protocol.websocket
-scene.multi-character
-scene.props
+events.presence
+events.broadcast-chat
+events.donation
 events.runtime
 plugins.runtime
 output.transparent-window
 ```
 
-A profile is a predefined capability set plus runtime budgets. Users may later customize a profile without changing the pipeline.
+## Graphics quality is separate
+
+Runtime capability selection is not graphics quality.
+
+A user can use advanced events with reduced visual quality or a simple character session with high visual quality.
+
+Graphics-quality presets and capability presets are stored separately.
 
 ## Lazy initialization
 
-Subsystems must initialize on demand whenever practical.
-
-Examples:
-
-- do not start camera capture if webcam tracking is disabled
-- do not open VMC/OSC sockets if the protocol is disabled
-- do not initialize event execution if no event graph is active
-- do not allocate post-processing resources when unused
-- do not scan/load optional plugins unnecessarily
-- do not update invisible/inactive characters at full cost without a reason
+- do not start camera inference if webcam tracking is disabled
+- do not start a full-body solver if full tracking is disabled
+- do not open protocol/event connections if disabled
+- do not allocate heavy post-processing/environment resources if unused
+- do not load executable plugins unless enabled
 
 ## Performance budgets
 
-Performance is measured per subsystem and per profile.
+Track at minimum CPU/GPU frame time, memory, render FPS, tracking latency/update rate, mixer cost, shader/post-processing cost, environment cost, and protocol/event cost.
 
-Track at minimum:
-
-- CPU frame time
-- GPU frame time
-- memory
-- render FPS
-- tracking latency/update rate
-- motion-mixer cost
-- shader/post-processing cost
-- protocol/event cost
-
-The Lightweight profile is a release target, not merely an Advanced profile with UI options hidden.
+See `PERFORMANCE.md`.
 
 ## Compatibility rule
 
-A character/profile created in Lightweight remains valid in Standard or Advanced. Advanced-only capabilities that are unavailable in a lower profile must degrade explicitly rather than corrupting the character or scene.
+Increasing or reducing capability selection must not invalidate the active character/profile. Unsupported optional features degrade explicitly rather than corrupting the scene.
