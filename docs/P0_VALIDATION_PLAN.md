@@ -125,6 +125,30 @@ External custom-shader gate:
 
 ADR-0029 defines the P0 execution model. Raw HLSL source compilation is not a runtime requirement.
 
+### V2C — Environment, normalized events, and lazy capabilities
+
+Source-free gates:
+
+```text
+VCR > P0 > Validate Environment Runtime
+VCR > P0 > Validate Normalized Event Runtime
+VCR > P0 > Validate Lazy Capability Registry
+```
+
+PASS when:
+
+- an environment state changes without scene reload
+- static/event-driven basic environment control has no per-frame `Update()`
+- the runtime test scene contains an explicit Environment root and environment-owned light
+- tracking disappearance is named/emitted as `tracking.subject_lost`, not AFK
+- subject loss/restoration remains distinct from tracking source loss/restoration
+- normalized event dispatch assigns monotonic sequence order
+- donation payload can carry actor/text/amount/currency without service-specific runtime types
+- the Unity ingress event queue is bounded and dispatch-limited per frame
+- capability registration does not instantiate its service
+- enable instantiates, disable disposes, and re-enable recreates the service
+- the capability registry itself has no recurring frame update loop
+
 ### V3 — Webcam tracking
 
 Source-free presence gate:
