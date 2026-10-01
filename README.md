@@ -22,7 +22,7 @@ The application targets:
 - full-body tracking as a separate optional capability
 - VMC/OSC/WebSocket interoperability
 - dynamic environments from static/lightweight backgrounds to reactive 3D spaces
-- broadcast event inputs such as away/AFK, chat, donations/support, commands, and external events
+- broadcast and tracking-derived event inputs such as SubjectLost/SubjectRestored, chat, donations/support, commands, and external events
 - MToon plus material overrides and custom shaders
 - transparent broadcast overlay output suitable for OBS
 - 2D support later as a separate extension/backend
@@ -63,7 +63,7 @@ Lightweight and advanced operation do not use separate character/rendering pipel
 VirtualCharacterRender/
 ├─ docs/                 Architecture, roadmap, subsystem specifications
 │  └─ adr/               Architecture Decision Records
-├─ unity/                Primary renderer/backend candidate
+├─ unity/                Primary Unity/URP renderer/backend
 ├─ plugins/              Extension/package conventions
 ├─ schemas/              Portable data and package schemas
 ├─ samples/              Example scenes, bindings, shader/environment packages
@@ -92,7 +92,7 @@ The production Unity project is intentionally not scaffolded until the P0 decisi
 - The product is implemented and validated for one active character.
 - Multi-character support is not an initial feature; future expansion must remain possible without shaping current UI/tracking complexity.
 - External inputs never mutate renderer objects directly.
-- Windows and macOS share application/runtime contracts.
+- Unity/URP is the primary 3D renderer on Windows and macOS; shared application/runtime contracts remain engine-facing abstractions.
 - Built-in and external tracking use the same normalized tracking state.
 - Built-in basic tracking includes face/eyes/mouth, head, hands, and upper body.
 - Full-body tracking is optional and separate.
