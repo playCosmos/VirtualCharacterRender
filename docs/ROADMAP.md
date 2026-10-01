@@ -6,7 +6,7 @@ Deliverables:
 
 - architecture/subsystem documentation and ADR process
 - Windows and macOS validation matrix
-- Unity/URP feasibility prototype on both platforms
+- Unity/URP implementation baseline on both platforms
 - UniVRM VRM 0.x and 1.0 load validation
 - transparent-window and OBS-compatible capture validation
 - 720p60 minimum and 1080p60 recommended baseline measurements
@@ -45,7 +45,8 @@ Exit criteria:
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
 - optional full-body services remain disabled in the baseline
 - disabled optional capabilities have no meaningful recurring frame cost
-- P0 ADRs are accepted, rejected, or explicitly deferred
+- exact Unity LTS / URP / UniVRM versions are pinned or explicitly blocked with evidence
+- remaining P0 ADRs are accepted, rejected, or explicitly deferred
 
 ## P1 — Cross-platform Renderer Core
 
