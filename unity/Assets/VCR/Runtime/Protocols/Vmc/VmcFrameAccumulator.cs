@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
 
 namespace VCR.Runtime.Protocols.Vmc
@@ -129,7 +130,8 @@ namespace VCR.Runtime.Protocols.Vmc
                 subjectDetected,
                 humanoidPose: pose,
                 expressions: _committedExpressions,
-                sourceId: _sourceId);
+                sourceId: _sourceId,
+                runtimeTimestampUs: MonotonicClock.NowMicroseconds());
 
             return true;
         }
