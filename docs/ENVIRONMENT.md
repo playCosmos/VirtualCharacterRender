@@ -6,6 +6,23 @@ Environment is a first-class scene subsystem rather than a passive background im
 
 A lightweight session may use a single static image, while the same interface can represent parallax, video, 3D spaces, dynamic lighting, shader-driven scenes, and event-reactive states.
 
+## P0 implementation
+
+The P0 environment boundary is now represented by:
+
+- `IEnvironmentRuntime`
+- `EnvironmentRuntimeStatus`
+- `EnvironmentStateChange`
+- `EnvironmentUpdatePolicy`
+- `EnvironmentSpaceMode`
+- Unity `BasicEnvironmentRuntime`
+
+The generated P0 runtime scene owns its directional light under an explicit `Environment` root.
+
+`BasicEnvironmentRuntime` intentionally has no `Update()` method. Static and event-driven environments therefore pay no controller-side per-frame update cost.
+
+A state change such as `day -> night` updates the environment state without requiring a scene reload. Visual state binding/transitions are later Environment Runtime work.
+
 ## Environment classes
 
 ```text
