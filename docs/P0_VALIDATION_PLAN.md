@@ -257,6 +257,45 @@ PASS when:
 - loss of one source does not incorrectly emit SubjectLost while another source still sees the performer
 - the compatibility path does not claim subject absence from an all-zero packet because the protocol lacks explicit tracking-valid state
 
+### V3B — Material and custom-shader safety
+
+Run:
+
+```text
+VCR > P0 > Validate Material Override Runtime
+```
+
+PASS requires:
+
+- one material slot is discovered with a stable runtime ID
+- valid shader override creates a runtime Material clone
+- original source Material object is not modified
+- runtime parameter mutation affects only the clone
+- invalid shader ID fails cleanly
+- invalid override restores the exact original shared-material reference
+- failure status/error is retained for diagnostics
+
+Build the validation shader bundle separately for each target:
+
+```text
+VCR > P0 > Build Shader Bundle > Windows x64
+VCR > P0 > Build Shader Bundle > macOS
+```
+
+On the current Editor platform, run:
+
+```text
+VCR > P0 > Validate Current Platform Shader Bundle
+```
+
+PASS requires:
+
+- platform bundle loads
+- at least one Shader asset registers
+- `VCR/P0/TintUnlit` resolves through `RuntimeShaderRegistry`
+
+Windows and macOS bundles are separate artifacts. Do not reuse one platform's shader bundle on the other.
+
 ### V4A — Transparent desktop output
 
 Prepare the scene/project:
