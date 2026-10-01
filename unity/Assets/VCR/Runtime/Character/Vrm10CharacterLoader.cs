@@ -59,9 +59,10 @@ namespace VCR.Runtime.Character
             CancelPendingLoad();
 
             var generation = ++_loadGeneration;
-            _loadCancellation =
+            var loadCancellation =
                 CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken);
+            _loadCancellation = loadCancellation;
 
             Vrm10Instance loaded = null;
 
@@ -76,7 +77,7 @@ namespace VCR.Runtime.Character
                     materialGenerator:
                         Vrm10MaterialDescriptorGeneratorUtility
                             .GetValidVrm10MaterialDescriptorGenerator(),
-                    ct: _loadCancellation.Token);
+                    ct: loadCancellation.Token);
 
                 if (loaded == null)
                 {
@@ -84,7 +85,7 @@ namespace VCR.Runtime.Character
                         "UniVRM returned no instance.");
                 }
 
-                if (_loadCancellation.IsCancellationRequested ||
+                if (loadCancellation.IsCancellationRequested ||
                     generation != _loadGeneration)
                 {
                     DestroyLoaded(loaded);
@@ -130,11 +131,14 @@ namespace VCR.Runtime.Character
             }
             finally
             {
-                if (generation == _loadGeneration)
+                if (ReferenceEquals(
+                    _loadCancellation,
+                    loadCancellation))
                 {
-                    _loadCancellation?.Dispose();
                     _loadCancellation = null;
                 }
+
+                loadCancellation.Dispose();
             }
         }
 
@@ -165,9 +169,9 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            _loadCancellation.Cancel();
-            _loadCancellation.Dispose();
+            var cancellation = _loadCancellation;
             _loadCancellation = null;
+            cancellation.Cancel();
         }
 
         public void SetTrackingProvider(
