@@ -143,6 +143,9 @@ namespace VCR.Editor.P0
             var alphaPattern =
                 runtimeRoot.AddComponent<
                     P0AlphaTestPattern>();
+            alphaPattern.Configure(
+                P0TransparentOutputMenu
+                    .EnsureAlphaTestMaterialAsset());
 
             var diagnostics =
                 runtimeRoot.AddComponent<
