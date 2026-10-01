@@ -74,18 +74,78 @@ Lightweight/default operation reduces work through capability/resource policy:
 - no full-body solver unless enabled
 - no optional plugin/output initialization without use
 
-## Transparency P0 checks
+## Transparent output P0 path
+
+The shared output contract is independent from the native window implementation:
+
+```text
+Render back buffer
+      ↓
+IOverlayOutputAdapter
+      ↓
+UniWinCOverlayOutput (P0 candidate)
+      ↓
+Windows/macOS native window
+```
+
+The dependency is pinned to UniWindowController 0.9.8 for P0.
+
+Rendering and output ownership are separate:
+
+- `DesktopRenderBootstrap` owns resolution and frame pacing
+- `UniWinCOverlayOutput` owns transparency, topmost, click-through, and native-window status
+
+### URP alpha
+
+URP 17 Alpha Processing is required.
+
+Initial P0 path:
+
+- SDR
+- RGBA8
+- HDR disabled
+- Solid Color camera background
+- clear alpha 0
+
+`P0AlphaTestPattern` provides opaque, 50%, 25%, and overlapping semi-transparent patches through the same back-buffer path used by the character.
+
+### Windows
+
+P0 transparent-window baseline:
+
+- x86-64 standalone
+- explicit Direct3D 11
+- D3D12 excluded
+- D3D11 flip-model swapchain disabled
+- windowed/resizable
+- OBS Game Capture transparency validation
+
+The BitBlt presentation constraint is measured as part of the performance gate.
+
+### macOS
+
+P0 validates the same output abstraction on Apple Silicon M1+ using the dependency's macOS native adapter and Metal.
+
+OBS uses the macOS screen/window capture workflow rather than Windows Game Capture.
+
+### Hit testing
+
+Automatic opacity hit testing is disabled by default because it adds recurring pixel inspection. The baseline uses explicit click-through state. Interactive automatic hit testing can be added later only with measured cost.
+
+### Required checks
 
 Required independently on Windows and macOS:
 
 - true alpha
 - straight vs premultiplied alpha
+- semi-transparent overlap
 - hair/outline edge artifacts
 - transparent post-processing
 - OBS-compatible capture behavior
-- high-DPI/retina behavior
+- high-DPI/Retina behavior
 - transparent/click-through/topmost window behavior
 - resize and multi-monitor behavior
+- shutdown/relaunch
 
 Chroma key is not a substitute for correct alpha.
 
