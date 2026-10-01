@@ -6,6 +6,16 @@ namespace VCR.Runtime.Tracking.MediaPipe
 {
     internal static class MediaPipeHolisticNormalizer
     {
+        private static readonly UpperBodyJoint[] ConfidenceJoints =
+        {
+            UpperBodyJoint.LeftShoulder,
+            UpperBodyJoint.RightShoulder,
+            UpperBodyJoint.LeftElbow,
+            UpperBodyJoint.RightElbow,
+            UpperBodyJoint.LeftWrist,
+            UpperBodyJoint.RightWrist
+        };
+
         // MediaPipe Pose landmark indices.
         private const int Nose = 0;
         private const int LeftShoulder = 11;
@@ -62,15 +72,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             var sum = 0f;
             var count = 0;
 
-            foreach (UpperBodyJoint joint in new[]
-            {
-                UpperBodyJoint.LeftShoulder,
-                UpperBodyJoint.RightShoulder,
-                UpperBodyJoint.LeftElbow,
-                UpperBodyJoint.RightElbow,
-                UpperBodyJoint.LeftWrist,
-                UpperBodyJoint.RightWrist
-            })
+            foreach (var joint in ConfidenceJoints)
             {
                 var confidence = body.Get(joint).Confidence;
                 if (confidence >= 0f)
