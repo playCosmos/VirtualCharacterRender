@@ -11,7 +11,13 @@ Deliverables:
 - transparent-window and OBS-compatible capture validation
 - 720p60 minimum and 1080p60 recommended baseline measurements
 - MToon validation
-- custom shader/material override prototype
+- custom shader/material override prototype:
+  - non-destructive material-slot discovery
+  - runtime material clones
+  - generic parameter setters
+  - safe source-material fallback
+  - precompiled shader ID registry
+  - platform-specific AssetBundle shader registration
 - MediaPipeUnityPlugin dual-task LIVE_STREAM spike:
   - FaceLandmarker: face/eyes/mouth/head
   - HolisticLandmarker: hands/upper body
@@ -52,6 +58,7 @@ Exit criteria:
 - higher resolutions remain configurable without inheriting the same blanket guarantee
 - one material can be overridden without corrupting the source model
 - an invalid custom shader does not terminate the application
+- a precompiled custom shader bundle can be registered/applied on both target platforms without source-material mutation
 - FaceLandmarker produces usable normalized eye/mouth/face/head state without requiring pose
 - normalized face state drives VRM head/blink/look/mouth through the character adapter
 - HolisticLandmarker produces usable hand/upper-body state
