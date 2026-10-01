@@ -69,6 +69,12 @@ Required on both platforms:
 - failure recovery
 - built-in tracking cost
 
+The P0 transparent-window candidate is UniWindowController 0.9.8 behind the project-owned output adapter.
+
+Windows transparent-output validation currently requires the D3D11 BitBlt path because the candidate DWM transparency path does not support D3D12/flip-model composition. This constraint belongs to the P0 output path and may be revisited if a different native output adapter is selected.
+
+macOS validates the same output abstraction through the candidate's native macOS implementation on Apple Silicon M1+.
+
 Platform-specific output transports such as Spout-class Windows paths or Syphon-class macOS paths are optional adapters, not core contracts.
 
 ## Architecture rule
