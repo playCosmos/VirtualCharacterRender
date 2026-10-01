@@ -2,6 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Runtime.Tracking.Routing;
 
@@ -29,6 +30,10 @@ namespace VCR.Editor.P0
                 trackingRoot.AddComponent<PriorityTrackingRouter>();
             router.SetFallbackProvider(mediaPipe);
 
+            var diagnostics =
+                trackingRoot.AddComponent<P0RuntimeDiagnostics>();
+            diagnostics.SetTrackingProvider(router);
+
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
             {
                 Object.DestroyImmediate(trackingRoot);
@@ -41,7 +46,7 @@ namespace VCR.Editor.P0
 
             Debug.Log(
                 $"VCR P0 tracking scene created: {ScenePath}. " +
-                "Press Play and inspect Console tracking/5s diagnostics.");
+                "Press Play and inspect the 5-second P0 diagnostics reports in Console.");
         }
     }
 }
