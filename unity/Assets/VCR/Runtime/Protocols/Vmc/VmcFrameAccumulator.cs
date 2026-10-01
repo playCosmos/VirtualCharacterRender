@@ -56,7 +56,8 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
-            var changed = false;
+            var stateChanged = false;
+            var poseChanged = false;
             var expressionApply = false;
 
             foreach (var message in messages)
@@ -69,7 +70,7 @@ namespace VCR.Runtime.Protocols.Vmc
                 switch (message.Address)
                 {
                     case "/VMC/Ext/OK":
-                        changed |= ProcessAvailable(message);
+                        stateChanged |= ProcessAvailable(message);
                         break;
 
                     case "/VMC/Ext/T":
@@ -77,11 +78,11 @@ namespace VCR.Runtime.Protocols.Vmc
                         break;
 
                     case "/VMC/Ext/Root/Pos":
-                        changed |= ProcessRoot(message);
+                        poseChanged |= ProcessRoot(message);
                         break;
 
                     case "/VMC/Ext/Bone/Pos":
-                        changed |= ProcessBone(message);
+                        poseChanged |= ProcessBone(message);
                         break;
 
                     case "/VMC/Ext/Blend/Val":
@@ -90,7 +91,6 @@ namespace VCR.Runtime.Protocols.Vmc
 
                     case "/VMC/Ext/Blend/Apply":
                         expressionApply = true;
-                        changed = true;
                         break;
                 }
             }
@@ -100,14 +100,24 @@ namespace VCR.Runtime.Protocols.Vmc
                 _committedExpressions = BuildExpressions();
             }
 
-            if (!changed)
+            if (!stateChanged &&
+                !poseChanged &&
+                !expressionApply)
             {
                 return false;
             }
 
-            var pose = _hasAnyBone
-                ? BuildPose()
-                : null;
+            // Do not refresh an old pose merely because a heartbeat or
+            // expression packet arrived. Pose freshness is a separate domain.
+            var pose =
+                poseChanged && _hasAnyBone
+                    ? BuildPose()
+                    : null;
+
+            var expressions =
+                expressionApply
+                    ? _committedExpressions
+                    : null;
 
             var subjectDetected =
                 _trackingKnown
@@ -130,9 +140,7 @@ namespace VCR.Runtime.Protocols.Vmc
                 subjectDetected ? 1f : 0f,
                 subjectDetected,
                 humanoidPose: pose,
-                expressions: expressionApply
-                    ? _committedExpressions
-                    : null,
+                expressions: expressions,
                 sourceId: _sourceId,
                 runtimeTimestampUs: MonotonicClock.NowMicroseconds());
 
