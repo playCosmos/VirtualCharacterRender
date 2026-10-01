@@ -123,6 +123,8 @@ This ADR does not pin:
 
 Those are selected through P0/P3 validation.
 
+ADR-0028 subsequently selects iFacialMocap/FaceMotion3D UDP v2 as the first P0 compatibility transport. That does not make it the permanent or exclusive ARKit transport.
+
 OpenSeeFace or another tracker may later be evaluated as an optional fallback or quality-assist path, but it is not part of the accepted baseline.
 
 ## Validation
