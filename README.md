@@ -70,10 +70,12 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The production Unity project is intentionally not scaffolded until the P0 decisions and validation gates in `docs/ROADMAP.md` are satisfied.
+The Unity P0 implementation is scaffolded on `feature/p0-unity-bootstrap`. Source-free feasibility paths are implemented; Windows/macOS standalone, hardware, tracking-quality, OBS, and performance evidence remain required before P0 closeout.
 
 ## Architecture documents
 
+- [P0 status](docs/P0_STATUS.md)
+- [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Performance](docs/PERFORMANCE.md)
@@ -82,7 +84,7 @@ The production Unity project is intentionally not scaffolded until the P0 decisi
 - [Rendering](docs/RENDERING.md)
 - [Shader system](docs/SHADER_SYSTEM.md)
 - [Tracking](docs/TRACKING.md)
-- [Event system](docs/EVENT_SYSTEM.md)
+- [Event system](docs/EVENTS.md)
 - [Environment runtime](docs/ENVIRONMENT.md)
 - [Protocols](docs/PROTOCOLS.md)
 - [Architecture Decision Records](docs/adr/README.md)
@@ -102,4 +104,6 @@ The production Unity project is intentionally not scaffolded until the P0 decisi
 
 ## Status
 
-P0 architecture and feasibility.
+P0 architecture/feasibility implementation is active on `feature/p0-unity-bootstrap`.
+
+The remaining closeout work is evidence-driven: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements.
