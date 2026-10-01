@@ -7,6 +7,7 @@ namespace VCR.Runtime.Tracking
         ArKitFace = 2,
         Vmc = 3,
         AudioFallback = 4,
+        MediaPipeFaceWebcam = 5,
         ExternalPlugin = 100
     }
 }
