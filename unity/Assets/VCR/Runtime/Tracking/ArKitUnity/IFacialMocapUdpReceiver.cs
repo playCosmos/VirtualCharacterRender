@@ -67,6 +67,11 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
         private void OnEnable()
         {
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
             StartReceiver();
         }
 
