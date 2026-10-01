@@ -29,6 +29,8 @@ unity/Recordings/
 .DS_Store
 Thumbs.db
 
-# Local third-party binary packages
+# Local third-party binary packages / extracted models
 unity/Packages/LocalPackages/*.tgz
 !unity/Packages/LocalPackages/README.md
+unity/Assets/StreamingAssets/VCR/Models/holistic_landmarker.bytes
+unity/Assets/StreamingAssets/VCR/Models/holistic_landmarker.bytes.meta
