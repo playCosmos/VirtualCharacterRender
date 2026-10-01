@@ -5,6 +5,8 @@ using UnityEngine;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Events.Unity;
+using VCR.Runtime.Environment;
+using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.Output.Unity;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Tracking.MediaPipe;
@@ -53,10 +55,25 @@ namespace VCR.Editor.P0
                 new Color(0f, 0f, 0f, 0f);
             camera.allowHDR = false;
 
+            var environmentRoot =
+                new GameObject("Environment");
+            environmentRoot.transform.SetParent(
+                runtimeRoot.transform,
+                false);
+
+            var environment =
+                environmentRoot.AddComponent<
+                    BasicEnvironmentRuntime>();
+            environment.Configure(
+                "environment.p0.basic",
+                "default",
+                EnvironmentUpdatePolicy.Static,
+                EnvironmentSpaceMode.World);
+
             var lightObject =
                 new GameObject("Main Directional Light");
             lightObject.transform.SetParent(
-                runtimeRoot.transform,
+                environmentRoot.transform,
                 false);
             lightObject.transform.localRotation =
                 Quaternion.Euler(45f, -30f, 0f);
