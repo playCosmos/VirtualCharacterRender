@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Tracking;
@@ -10,11 +11,14 @@ namespace VCR.Runtime.Protocols.Vmc
     {
         private readonly object _sync = new();
         private readonly LatestValueBuffer<TrackingFrame> _latest = new();
+        private readonly LatestValueBuffer<TrackingFrame> _latestPose = new();
+        private readonly LatestValueBuffer<TrackingFrame> _latestExpressions = new();
         private readonly VmcFrameAccumulator _accumulator;
 
         private TrackingSourceHealth _health;
         private bool _started;
         private bool _disposed;
+        private int _lastSubjectDetected;
 
         public VmcTrackingSource(string sourceId = "vmc-udp")
         {
@@ -30,9 +34,10 @@ namespace VCR.Runtime.Protocols.Vmc
         public string SourceId { get; }
         public TrackingSourceKind Kind => TrackingSourceKind.Vmc;
         public TrackingRegion Regions =>
-            TrackingRegion.FullBody |
-            TrackingRegion.Face |
-            TrackingRegion.Head;
+            TrackingRegion.FullBody;
+
+        public bool LastSubjectDetected =>
+            Volatile.Read(ref _lastSubjectDetected) != 0;
 
         public TrackingSourceHealth Health
         {
@@ -89,6 +94,19 @@ namespace VCR.Runtime.Protocols.Vmc
             }
 
             _latest.Publish(frame);
+            Volatile.Write(
+                ref _lastSubjectDetected,
+                frame.SubjectDetected ? 1 : 0);
+
+            if (frame.HumanoidPose != null)
+            {
+                _latestPose.Publish(frame);
+            }
+
+            if (frame.Expressions != null)
+            {
+                _latestExpressions.Publish(frame);
+            }
 
             lock (_sync)
             {
@@ -105,6 +123,18 @@ namespace VCR.Runtime.Protocols.Vmc
         public bool TryTakeLatest(out TrackingFrame frame)
         {
             frame = _latest.TakeLatest();
+            return frame != null;
+        }
+
+        public bool TryTakeLatestPose(out TrackingFrame frame)
+        {
+            frame = _latestPose.TakeLatest();
+            return frame != null;
+        }
+
+        public bool TryTakeLatestExpressions(out TrackingFrame frame)
+        {
+            frame = _latestExpressions.TakeLatest();
             return frame != null;
         }
 
