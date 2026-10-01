@@ -10,5 +10,7 @@ namespace VCR.Runtime.Tracking
     {
         bool TryGetLatestFace(out TrackingFrame frame);
         bool TryGetLatestBodyHands(out TrackingFrame frame);
+        bool TryGetLatestHumanoidPose(out TrackingFrame frame);
+        bool TryGetLatestExpressions(out TrackingFrame frame);
     }
 }
