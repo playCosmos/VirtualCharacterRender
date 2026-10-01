@@ -4,13 +4,16 @@ set -euo pipefail
 VERSION="0.16.3"
 EXPECTED_SHA256="cc3e77a219e0b99618ae3be64c31a566197deedc69c1e136acf52d65d7cf2e79"
 URL="https://github.com/homuler/MediaPipeUnityPlugin/releases/download/v${VERSION}/com.github.homuler.mediapipe-${VERSION}.tgz"
+MODEL_NAMES=(
+  "face_landmarker_v2_with_blendshapes.bytes"
+  "holistic_landmarker.bytes"
+)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TARGET_DIR="${REPO_ROOT}/unity/Packages/LocalPackages"
 TARGET="${TARGET_DIR}/com.github.homuler.mediapipe-${VERSION}.tgz"
 MODEL_DIR="${REPO_ROOT}/unity/Assets/StreamingAssets/VCR/Models"
-MODEL_TARGET="${MODEL_DIR}/holistic_landmarker.bytes"
 
 mkdir -p "${TARGET_DIR}" "${MODEL_DIR}"
 
@@ -47,16 +50,17 @@ if [[ "${needs_download}" -eq 1 ]]; then
   echo "Verified: ${TARGET}"
 fi
 
-MODEL_ENTRY="$(tar -tzf "${TARGET}" | grep -E '(^|/)holistic_landmarker\.bytes$' | head -n 1 || true)"
-if [[ -z "${MODEL_ENTRY}" ]]; then
-  echo "holistic_landmarker.bytes was not found in ${TARGET}" >&2
-  exit 1
-fi
-
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
-tar -xzf "${TARGET}" -C "${TMP_DIR}" "${MODEL_ENTRY}"
-cp -f "${TMP_DIR}/${MODEL_ENTRY}" "${MODEL_TARGET}"
+for MODEL_NAME in "${MODEL_NAMES[@]}"; do
+  MODEL_ENTRY="$(tar -tzf "${TARGET}" | grep -E "(^|/)${MODEL_NAME}$" | head -n 1 || true)"
+  if [[ -z "${MODEL_ENTRY}" ]]; then
+    echo "${MODEL_NAME} was not found in ${TARGET}" >&2
+    exit 1
+  fi
 
-echo "Prepared model: ${MODEL_TARGET}"
+  tar -xzf "${TARGET}" -C "${TMP_DIR}" "${MODEL_ENTRY}"
+  cp -f "${TMP_DIR}/${MODEL_ENTRY}" "${MODEL_DIR}/${MODEL_NAME}"
+  echo "Prepared model: ${MODEL_DIR}/${MODEL_NAME}"
+done
