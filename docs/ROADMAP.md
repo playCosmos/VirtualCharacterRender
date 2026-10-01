@@ -22,7 +22,7 @@ Deliverables:
 - VMC receive/send spike
 - normalized face/upper-body/hand payload prototype
 - normalized tracking -> UniVRM ControlRig mapping prototype
-- tracking-derived subject-presence prototype
+- tracking-derived subject-presence resolver with source-loss distinction and neutral fallback prototype
 - normalized event prototype
 - dynamic-environment abstraction prototype
 - capability/lazy-initialization bootstrap
@@ -49,6 +49,7 @@ Exit criteria:
 - mobile ARKit-compatible face data reaches desktop normalized state
 - mixed ARKit + Holistic routing works without character reload
 - performer disappearance can be distinguished from source/device disconnection
+- stable tracking loss returns the VRM tracking contribution toward neutral without a one-frame snap
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
 - optional full-body services remain disabled in the baseline
 - disabled optional capabilities have no meaningful recurring frame cost
