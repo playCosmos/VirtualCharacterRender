@@ -178,6 +178,19 @@ Presence is evaluated across configured tracking sources. For example:
 
 Brief occlusion and temporary confidence loss must not cause rapid presence-event flapping.
 
+The P0 implementation now uses `TrackingPresenceResolver` and `ITrackingPresenceProvider`.
+
+It distinguishes:
+
+```text
+fresh callback + no performer -> subject absence candidate
+no fresh callback            -> source unavailable candidate
+```
+
+Current configurable P0 starting values are 0.50 s lost grace, 0.15 s restore stability, and 1.00 s callback stale timeout. These are not final product thresholds.
+
+During the grace period the character holds the last valid tracking state. On stable loss/source unavailability, the P0 VRM target discards stale payloads and smoothly returns tracking-driven head, expressions, torso, and arms toward neutral/reference state. Restoration recalibrates on fresh stable frames.
+
 ## Full-body tracking
 
 Full-body tracking is a separate capability.
