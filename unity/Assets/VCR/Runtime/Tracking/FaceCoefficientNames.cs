@@ -25,8 +25,8 @@ namespace VCR.Runtime.Tracking
 
         public static string GetCanonical(FaceCoefficient coefficient)
         {
-            if (coefficient < FaceCoefficient.Neutral ||
-                coefficient >= FaceCoefficient.Count)
+            var index = (int)coefficient;
+            if (index < 0 || index >= (int)FaceCoefficient.Count)
             {
                 return string.Empty;
             }
