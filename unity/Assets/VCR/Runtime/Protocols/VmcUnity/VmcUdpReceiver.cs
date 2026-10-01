@@ -29,6 +29,10 @@ namespace VCR.Runtime.Protocols.VmcUnity
         [Tooltip("Default is loopback-only. Blank accepts any sender and is not recommended outside a trusted LAN.")]
         [SerializeField] private string allowedSenderIPv4Address = "127.0.0.1";
 
+        [Header("Compatibility")]
+        [Tooltip("VMC Protocol defaults to original/non-normalized VRM1 bones. Enable only for senders explicitly configured to transmit normalized ControlRig bones.")]
+        [SerializeField] private bool incomingBonesAreNormalized = false;
+
         [Header("Presence")]
         [SerializeField, Min(0.1f)] private float sourceStaleSeconds = 1.0f;
         [SerializeField, Min(0f)] private float subjectLostGraceSeconds = 0.5f;
@@ -172,7 +176,11 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
             _lastPacketArrivalUs = -1;
 
-            _source = new VmcTrackingSource("vmc-udp");
+            _source = new VmcTrackingSource(
+                "vmc-udp",
+                incomingBonesAreNormalized
+                    ? HumanoidPoseSpace.NormalizedLocal
+                    : HumanoidPoseSpace.OriginalLocal);
             _source.Start();
 
             _presenceResolver = new TrackingPresenceResolver(
