@@ -37,9 +37,9 @@ ADR files record consequential technical decisions and their reasoning.
 | [0012](0012-capability-lazy-initialization.md) | Capability-based lazy initialization | Accepted |
 | [0013](0013-runtime-profile-vs-graphics-quality.md) | Runtime capabilities and graphics quality are separate | Accepted |
 | [0014](0014-performance-budget-and-diagnostics.md) | Performance budget and diagnostics are architectural requirements | Accepted |
-| [0015](0015-plugin-execution-security-boundary.md) | Plugin execution/security boundary | Proposed |
+| [0015](0015-plugin-execution-security-boundary.md) | Plugin execution/security boundary | Deferred |
 | [0016](0016-character-scene-environment-asset-separation.md) | Character, scene, and environment asset separation | Accepted |
-| [0017](0017-physics-domain-separation.md) | Character-secondary and world physics separation | Proposed |
+| [0017](0017-physics-domain-separation.md) | Character-secondary and world physics separation | Deferred |
 | [0018](0018-single-character-product-scope.md) | Single active character product scope | Accepted |
 | [0019](0019-3d-first-2d-extension.md) | 3D-first product; 2D as separate extension | Accepted |
 | [0020](0020-external-broadcast-event-adapters.md) | External broadcast events through normalized adapters | Accepted |
