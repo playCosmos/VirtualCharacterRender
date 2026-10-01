@@ -50,6 +50,7 @@ namespace VCR.Editor.P0
                 CameraClearFlags.SolidColor;
             camera.backgroundColor =
                 new Color(0f, 0f, 0f, 0f);
+            camera.allowHDR = false;
 
             var lightObject =
                 new GameObject("Main Directional Light");
@@ -108,6 +109,8 @@ namespace VCR.Editor.P0
                     P0RuntimeDiagnostics>();
             diagnostics.SetTrackingProvider(router);
 
+            P0TransparentOutputMenu.ConfigureProjectBaseline();
+
             if (!EditorSceneManager.SaveScene(
                 scene,
                 ScenePath))
@@ -124,7 +127,8 @@ namespace VCR.Editor.P0
 
             Debug.Log(
                 $"VCR P0 runtime scene created: {ScenePath}. " +
-                "Run 'VCR > P0 > Configure Transparent Output Baseline', then enter Play mode. " +
+                "Transparent-output project settings were applied automatically. " +
+                "Run 'VCR > P0 > Validate Transparent Output Baseline', then enter Play mode. " +
                 "Use 'VCR > P0 > Load VRM Into Runtime Scene' and inspect the alpha pattern plus five-second diagnostics.");
         }
     }
