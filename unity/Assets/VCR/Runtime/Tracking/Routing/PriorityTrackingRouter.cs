@@ -189,7 +189,7 @@ namespace VCR.Runtime.Tracking.Routing
                 var presence = _preferredPresence.Presence;
                 return
                     presence.FaceSourceAvailable &&
-                    presence.SubjectState == SubjectPresenceState.Present &&
+                    presence.FaceSubjectEvidence &&
                     _preferredFaceProvider.TryGetLatestFace(out var frame) &&
                     frame?.Face != null &&
                     frame.SubjectDetected;
@@ -309,8 +309,7 @@ namespace VCR.Runtime.Tracking.Routing
             var usable =
                 !presence.HasValue ||
                 (presence.Value.FullBodySourceAvailable &&
-                 presence.Value.SubjectState ==
-                    SubjectPresenceState.Present);
+                 presence.Value.FullBodySubjectEvidence);
 
             if (!usable)
             {
@@ -393,11 +392,9 @@ namespace VCR.Runtime.Tracking.Routing
 
             var faceEvidence =
                 (preferredFaceAvailable &&
-                 preferred.Value.SubjectState ==
-                    SubjectPresenceState.Present) ||
+                 preferred.Value.FaceSubjectEvidence) ||
                 (fallbackFaceAvailable &&
-                 fallback.Value.SubjectState ==
-                    SubjectPresenceState.Present);
+                 fallback.Value.FaceSubjectEvidence);
 
             var bodyConfigured = _fallbackProvider != null;
             var bodyAvailable =
@@ -406,8 +403,7 @@ namespace VCR.Runtime.Tracking.Routing
 
             var bodyEvidence =
                 bodyAvailable &&
-                _latestBodyHands != null &&
-                _latestBodyHands.SubjectDetected;
+                fallback.Value.BodyHandsSubjectEvidence;
 
             var faceConfigured =
                 _preferredFaceProvider != null ||
@@ -422,8 +418,7 @@ namespace VCR.Runtime.Tracking.Routing
 
             var fullBodyEvidence =
                 fullBodyAvailable &&
-                external.Value.SubjectState ==
-                    SubjectPresenceState.Present;
+                external.Value.FullBodySubjectEvidence;
 
             var decisionReady =
                 faceAvailable ||
