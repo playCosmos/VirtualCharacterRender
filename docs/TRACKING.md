@@ -22,23 +22,18 @@ Multi-person identity tracking from one webcam is not an initial feature.
 ## Accepted baseline stack
 
 ADR-0022 defines the source strategy.
-ADR-0023 defines the Unity/MediaPipe execution strategy.
+ADR-0025 defines the active Unity/MediaPipe execution strategy. ADR-0023 is superseded.
 
 Primary webcam baseline:
 
 ```text
 Webcam
- ↓
-Shared capture/preprocess
- ↓
-MediaPipe HolisticLandmarker
- (LIVE_STREAM)
- ├─ face
- ├─ pose / upper body
- ├─ left hand
- └─ right hand
- ↓
-Normalized Tracking State
+  ├─ FaceLandmarker (higher priority/rate)
+  │    └─ face / eyes / mouth / head
+  └─ HolisticLandmarker (lower configurable rate)
+       └─ hands / upper body
+
+Both use LIVE_STREAM asynchronous execution.
 ```
 
 Preferred mixed configuration:
@@ -51,8 +46,8 @@ Hands / Upper Body         = MediaPipe Holistic webcam path
 Fallback without ARKit:
 
 ```text
-Face / Eyes / Mouth / Head = MediaPipe Holistic webcam path
-Hands / Upper Body         = MediaPipe Holistic webcam path
+Face / Eyes / Mouth / Head = MediaPipe FaceLandmarker
+Hands / Upper Body         = MediaPipe HolisticLandmarker
 ```
 
 Do not continuously average ARKit and MediaPipe face data by default. Route by region and source health, then transition smoothly on source changes.
@@ -63,17 +58,17 @@ Initial implementation uses:
 
 - homuler MediaPipeUnityPlugin
 - MediaPipe Tasks API
-- HolisticLandmarker
+- FaceLandmarker for face/head
+- HolisticLandmarker for hands/upper body
 - LIVE_STREAM/asynchronous execution
-- one webcam capture/preprocessing path
+- one shared webcam source
+- independent small input pools
 - one performer
-- segmentation disabled by default
+- segmentation disabled
 
-Do not start with separate FaceLandmarker, HandLandmarker, and PoseLandmarker loops.
+Face tracking is independent of pose detection. When ARKit owns face/head, the MediaPipe FaceLandmarker can stop entirely while Holistic continues for hands/upper body.
 
-This reduces task orchestration, repeated camera handling, synchronization, and managed/native crossings.
-
-When ARKit owns the face/head regions, Holistic may still run its face path initially while those outputs are ignored. This deliberate redundancy keeps the implementation simple. Split hand/pose inference is considered only if profiling proves that redundant face inference materially breaks the performance target.
+Do not start with separate HandLandmarker and PoseLandmarker loops. Split those only if M1/Windows profiling or hand-quality testing justifies the added complexity.
 
 ## Pipeline
 
