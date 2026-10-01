@@ -131,7 +131,8 @@ External receive gate:
 - default `127.0.0.1:39539` path works
 - explicit LAN sender IPv4 filtering works
 - `/OK` and stale packets produce stable source-health transitions
-- VMC original local bone rotations are converted to ControlRig normalized rotations using target initial posture data
+- VMC default `OriginalLocal` bone rotations are converted to ControlRig normalized rotations using target initial posture data
+- the explicit `NormalizedLocal` compatibility option bypasses posture conversion without double-conversion
 - hips/spine/arms/legs/fingers are inspected for direction, starting-pose fidelity, and retarget continuity
 - optional root position/rotation policy is tested separately
 - face/head source priority remains ARKit > MediaPipe when VMC full body is active
