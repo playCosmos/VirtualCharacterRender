@@ -6,11 +6,10 @@ using VCR.Runtime.Core;
 namespace VCR.Runtime.Tracking.MediaPipe
 {
     /// <summary>
-    /// Thread-safe bridge from MediaPipe LIVE_STREAM callbacks to the runtime.
+    /// Thread-safe bridge for the Holistic body/hand task.
     ///
-    /// The callback may run off the Unity main thread. It therefore converts
-    /// only source-neutral validity metadata here and publishes the newest frame
-    /// into a single-slot buffer. Unity objects are not touched.
+    /// Face/head output is intentionally ignored. ADR-0025 assigns face/head
+    /// ownership to FaceLandmarker or ARKit so pose loss cannot erase face data.
     /// </summary>
     public sealed class MediaPipeHolisticCallbackBridge
     {
@@ -22,12 +21,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
             Image image,
             long timestampMillisec)
         {
-            var regions = TrackingRegion.None;
+            _ = image;
 
-            if (HasLandmarks(result.faceLandmarks))
-            {
-                regions |= TrackingRegion.Face | TrackingRegion.Head;
-            }
+            var regions = TrackingRegion.None;
 
             if (HasLandmarks(result.poseLandmarks))
             {
@@ -44,9 +40,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 regions |= TrackingRegion.RightHand;
             }
 
-            var subjectDetected =
-                (regions & (TrackingRegion.Face | TrackingRegion.Head | TrackingRegion.UpperBody)) != 0;
-
             var sequence = Interlocked.Increment(ref _sequence);
 
             _latest.Publish(new TrackingFrame(
@@ -54,7 +47,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 timestampMillisec * 1000L,
                 regions,
                 float.NaN,
-                subjectDetected));
+                regions != TrackingRegion.None));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
