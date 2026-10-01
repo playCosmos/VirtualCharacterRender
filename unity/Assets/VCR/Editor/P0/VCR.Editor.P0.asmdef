@@ -2,7 +2,9 @@
   "name": "VCR.Editor.P0",
   "rootNamespace": "VCR.Editor.P0",
   "references": [
-    "VCR.Runtime.Tracking.MediaPipe"
+    "VCR.Runtime.Tracking.MediaPipe",
+    "VCR.Runtime.Character",
+    "VRM10"
   ],
   "includePlatforms": [
     "Editor"
