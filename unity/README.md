@@ -112,6 +112,8 @@ VCR > P0 > Add VMC Sender to Selected VRM
 
 The sender defaults to `127.0.0.1:39539`, 60 Hz, original/non-ControlRig VRM humanoid bones, and VRM0-compatible expression names.
 
+If the same process is already listening with the VMC receiver on loopback port 39539, the sender refuses that destination to prevent self-feedback. Use a different target port for bidirectional local testing.
+
 The generated tracking scene also contains `P0RuntimeDiagnostics`. It reports frame average/P95/P99, normalized channel update rates/age, MediaPipe processing latency, and protocol metrics every five seconds. CSV evidence is optional in the component Inspector.
 
 Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
