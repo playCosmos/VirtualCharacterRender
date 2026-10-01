@@ -88,6 +88,17 @@ ARKit frame:
 
 The routing/mixer layer combines domains later.
 
+## Humanoid pose-space exception
+
+Face, hand, and upper-body landmark domains are fully normalized at the source boundary. VMC full-body bone rotations are different: the protocol's VRM1 default is the sender avatar's original/non-normalized local rotation, and the protocol does not carry enough bind-pose information to normalize that rotation independently of a target avatar.
+
+Therefore the source-neutral full-body envelope is `HumanoidPoseState` with explicit `HumanoidPoseSpace`:
+
+- `OriginalLocal` — VMC default; converted at the target boundary using the target model's initial bone posture
+- `NormalizedLocal` — already suitable for a normalized ControlRig; conversion is skipped
+
+This is explicit rather than pretending VMC original rotations are already normalized.
+
 ## Consequences
 
 - source adapters can change without changing VRM/runtime contracts
