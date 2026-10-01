@@ -118,6 +118,19 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             return false;
         }
 
+        public bool TryGetLatestHumanoidPose(out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+        public bool TryGetLatestExpressions(out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+
         [ContextMenu("Send iFacialMocap Handshake")]
         public void SendHandshake()
         {
