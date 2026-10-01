@@ -2,14 +2,64 @@
 
 Unity with URP is the accepted primary renderer/backend for the initial 3D product.
 
-The exact Unity LTS, URP, and UniVRM versions are not pinned until P0 compatibility validation is complete.
+## P0 pinned baseline
 
-The production Unity project should be scaffolded only after:
+- Unity: 6000.3.25f1
+- URP: 17.3.x, matched to Unity 6000.3
+- UniVRM: 0.131.2
+- MediaPipeUnityPlugin: 0.16.3
 
-- target Unity LTS candidates are identified
-- compatible URP and UniVRM combinations are checked
-- Windows and macOS build targets are included from the start
-- the project baseline records the selected package versions
+See:
+
+- `../docs/COMPATIBILITY_MATRIX.md`
+- `../docs/P0_VALIDATION_PLAN.md`
+- ADR-0024
+
+## First setup
+
+1. Install Unity 6000.3.25f1 with the target desktop build support.
+2. From the repository root, fetch the pinned MediaPipe binary package.
+
+Windows:
+
+```powershell
+./tools/bootstrap-mediapipe.ps1
+```
+
+macOS:
+
+```bash
+chmod +x ./tools/bootstrap-mediapipe.sh
+./tools/bootstrap-mediapipe.sh
+```
+
+3. Open the `unity/` directory as the Unity project.
+4. Let Package Manager resolve URP and UniVRM.
+5. In Unity, run:
+
+```text
+VCR > P0 > Validate Package Baseline
+```
+
+Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
+
+## Current module skeleton
+
+```text
+Assets/VCR/
+├─ Runtime/
+│  ├─ Core/
+│  │  └─ LatestValueBuffer
+│  └─ Tracking/
+│     ├─ ITrackingSource
+│     ├─ TrackingFrame
+│     ├─ TrackingRegion
+│     ├─ TrackingSourceHealth
+│     └─ TrackingSourceKind
+└─ Editor/
+   └─ P0/
+      └─ P0PackageBaselineCheck
+```
 
 Planned module areas:
 
@@ -31,3 +81,7 @@ VCR/
 ```
 
 Unity-specific objects remain inside Unity/backend modules and must not become public domain/runtime contracts.
+
+## Implementation rule
+
+The MediaPipe LIVE_STREAM callback will publish only the newest source-neutral tracking frame into the runtime buffer. Unity/render consumers never drain an inference backlog.
