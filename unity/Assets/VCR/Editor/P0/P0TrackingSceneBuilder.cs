@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Runtime.Tracking.MediaPipe;
+using VCR.Runtime.Tracking.Routing;
 
 namespace VCR.Editor.P0
 {
@@ -22,7 +23,11 @@ namespace VCR.Editor.P0
                 NewSceneMode.Single);
 
             var trackingRoot = new GameObject("P0 Tracking");
-            trackingRoot.AddComponent<MediaPipeWebcamTrackingRunner>();
+            var mediaPipe =
+                trackingRoot.AddComponent<MediaPipeWebcamTrackingRunner>();
+            var router =
+                trackingRoot.AddComponent<PriorityTrackingRouter>();
+            router.SetFallbackProvider(mediaPipe);
 
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
             {
