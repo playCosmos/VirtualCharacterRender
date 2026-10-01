@@ -3,6 +3,8 @@
   "rootNamespace": "VCR.Editor.P0",
   "references": [
     "VCR.Runtime.Tracking.MediaPipe",
+    "VCR.Runtime.Tracking.ArKitUnity",
+    "VCR.Runtime.Tracking.Routing",
     "VCR.Runtime.Character",
     "VRM10"
   ],
