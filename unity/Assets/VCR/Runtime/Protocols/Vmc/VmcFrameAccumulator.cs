@@ -130,7 +130,9 @@ namespace VCR.Runtime.Protocols.Vmc
                 subjectDetected ? 1f : 0f,
                 subjectDetected,
                 humanoidPose: pose,
-                expressions: _committedExpressions,
+                expressions: expressionApply
+                    ? _committedExpressions
+                    : null,
                 sourceId: _sourceId,
                 runtimeTimestampUs: MonotonicClock.NowMicroseconds());
 
