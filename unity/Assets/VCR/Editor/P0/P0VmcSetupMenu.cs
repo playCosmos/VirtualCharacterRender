@@ -133,7 +133,7 @@ namespace VCR.Editor.P0
                 accumulator.Process(
                     heartbeatDecoded,
                     arrivalTimestampUs: 2_000_000,
-                    out var heartbeatFrame);
+                    out _);
 
             var expressionPacket =
                 OscPacketWriter.WriteBundle(
@@ -152,12 +152,13 @@ namespace VCR.Editor.P0
                     expressionPacket,
                     expressionPacket.Length,
                     expressionDecoded);
+            TrackingFrame expressionFrame = null;
             var expressionProducedFrame =
                 expressionParsed &&
                 accumulator.Process(
                     expressionDecoded,
                     arrivalTimestampUs: 2_100_000,
-                    out var expressionFrame);
+                    out expressionFrame);
 
             var oversized =
                 new byte[OscPacketReader.MaxPacketBytes + 1];
