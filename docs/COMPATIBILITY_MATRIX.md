@@ -9,7 +9,7 @@
 | UniVRM | 0.131.2 | Pinned for P0 | VRM 0.x + VRM 1.0 packages |
 | MediaPipeUnityPlugin | 0.16.3 | Pinned for P0 | Prebuilt desktop native package |
 | MediaPipe runtime | 0.10.22 | Transitive | Bundled by MediaPipeUnityPlugin 0.16.3 |
-| UniWindowController | 0.9.8 | Pinned P0 output candidate | MIT; Windows/macOS native transparent-window adapter |
+| UniWindowController | 0.9.8 / `304f9ba2` | Pinned P0 output candidate | MIT; Windows/macOS native transparent-window adapter; exact UPM release commit pinned |
 | macOS | Apple Silicon M1+ | Supported baseline | M1 is minimum validation reference |
 | Windows | x86-64 | Platform target | Hardware floor TBD |
 
