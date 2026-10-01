@@ -8,6 +8,7 @@ using UnityEngine;
 using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Protocols.Vmc;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.Protocols.VmcUnity
 {
