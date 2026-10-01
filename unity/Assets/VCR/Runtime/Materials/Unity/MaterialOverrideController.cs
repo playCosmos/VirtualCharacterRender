@@ -129,6 +129,38 @@ namespace VCR.Runtime.Materials.Unity
             return false;
         }
 
+        public bool TryApplyShaderId(
+            string slotId,
+            string shaderId,
+            out string error)
+        {
+            error = null;
+
+            if (!TryGetRecord(
+                slotId,
+                out var record,
+                out error))
+            {
+                return false;
+            }
+
+            if (!RuntimeShaderRegistry.TryResolve(
+                    shaderId,
+                    out var shader))
+            {
+                return FailAndFallback(
+                    record,
+                    $"Precompiled shader '{shaderId}' was not found. " +
+                    "Built-player shaders must survive stripping; external shaders must be registered from a compatible bundle.",
+                    out error);
+            }
+
+            return TryApplyShader(
+                slotId,
+                shader,
+                out error);
+        }
+
         public bool TryApplyShader(
             string slotId,
             Shader shader,
