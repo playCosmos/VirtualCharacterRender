@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.Rendering",
+  "rootNamespace": "VCR.Runtime.Rendering",
+  "references": [
+    "VCR.Runtime.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
