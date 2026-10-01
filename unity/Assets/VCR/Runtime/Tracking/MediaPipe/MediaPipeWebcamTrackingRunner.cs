@@ -16,7 +16,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     /// FaceLandmarker at a higher priority/rate, and HolisticLandmarker at a
     /// lower configurable rate for hands/upper body.
     /// </summary>
-    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider
+    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider, IFaceTrackingActivationControl
     {
         private const string FaceModelRelativePath =
             "VCR/Models/face_landmarker_v2_with_blendshapes.bytes";
@@ -69,6 +69,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
         public bool MediaPipeFaceEnabled => mediaPipeFaceEnabled;
+        public bool FaceTrackingEnabled => mediaPipeFaceEnabled;
         public TrackingPresenceSnapshot Presence => _presence;
 
         public bool TryGetLatestFace(out TrackingFrame frame)
@@ -195,6 +196,11 @@ namespace VCR.Runtime.Tracking.MediaPipe
         /// shared webcam or body/hand task. Re-enabling lazily starts FaceLandmarker
         /// if it was disabled at startup.
         /// </summary>
+        public void SetFaceTrackingEnabled(bool enabled)
+        {
+            SetMediaPipeFaceEnabled(enabled);
+        }
+
         public void SetMediaPipeFaceEnabled(bool enabled)
         {
             mediaPipeFaceEnabled = enabled;
