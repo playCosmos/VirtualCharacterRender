@@ -17,7 +17,8 @@ namespace VCR.Runtime.Tracking
             NormalizedFaceState face = null,
             NormalizedUpperBodyState upperBody = null,
             NormalizedHandState leftHand = null,
-            NormalizedHandState rightHand = null)
+            NormalizedHandState rightHand = null,
+            string sourceId = null)
         {
             Sequence = sequence;
             SourceTimestampUs = sourceTimestampUs;
@@ -28,6 +29,7 @@ namespace VCR.Runtime.Tracking
             UpperBody = upperBody;
             LeftHand = leftHand;
             RightHand = rightHand;
+            SourceId = sourceId;
         }
 
         public long Sequence { get; }
@@ -40,5 +42,6 @@ namespace VCR.Runtime.Tracking
         public NormalizedUpperBodyState UpperBody { get; }
         public NormalizedHandState LeftHand { get; }
         public NormalizedHandState RightHand { get; }
+        public string SourceId { get; }
     }
 }
