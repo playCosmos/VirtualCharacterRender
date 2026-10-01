@@ -63,6 +63,8 @@ namespace VCR.Runtime.Character
         private NormalizedUpperBodyState _latestBody;
         private long _lastFaceSequence = -1;
         private long _lastBodySequence = -1;
+        private string _lastFaceSourceId;
+        private string _lastBodySourceId;
 
         private float _blinkLeft;
         private float _blinkRight;
@@ -116,6 +118,15 @@ namespace VCR.Runtime.Character
                 faceFrame?.Face != null &&
                 faceFrame.Sequence != _lastFaceSequence)
             {
+                if (!string.Equals(
+                    _lastFaceSourceId,
+                    faceFrame.SourceId,
+                    StringComparison.Ordinal))
+                {
+                    _faceCalibrated = false;
+                    _lastFaceSourceId = faceFrame.SourceId;
+                }
+
                 _lastFaceSequence = faceFrame.Sequence;
                 Submit(faceFrame);
             }
@@ -124,6 +135,15 @@ namespace VCR.Runtime.Character
                 bodyFrame != null &&
                 bodyFrame.Sequence != _lastBodySequence)
             {
+                if (!string.Equals(
+                    _lastBodySourceId,
+                    bodyFrame.SourceId,
+                    StringComparison.Ordinal))
+                {
+                    _bodyCalibrated = false;
+                    _lastBodySourceId = bodyFrame.SourceId;
+                }
+
                 _lastBodySequence = bodyFrame.Sequence;
                 Submit(bodyFrame);
             }
@@ -190,6 +210,12 @@ namespace VCR.Runtime.Character
             _provider = provider;
             _presenceProvider = provider as ITrackingPresenceProvider;
             trackingProviderBehaviour = provider as MonoBehaviour;
+            _lastFaceSequence = -1;
+            _lastBodySequence = -1;
+            _lastFaceSourceId = null;
+            _lastBodySourceId = null;
+            _faceCalibrated = false;
+            _bodyCalibrated = false;
         }
 
         private void ResolveProvider()
