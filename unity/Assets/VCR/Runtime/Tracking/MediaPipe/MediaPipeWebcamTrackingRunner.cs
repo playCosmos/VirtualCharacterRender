@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using System.Diagnostics;
+using Stopwatch = System.Diagnostics.Stopwatch;
 using System.IO;
 using Mediapipe;
 using Mediapipe.Unity.Experimental;
