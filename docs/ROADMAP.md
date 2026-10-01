@@ -17,8 +17,8 @@ Deliverables:
   - HolisticLandmarker: hands/upper body
   - independent async frame-drop behavior
   - per-task M1 CPU inference cost
-- Apple ARKit-compatible mobile face-tracking input spike
-- mixed ARKit + Holistic hands/upper-body routing spike
+- Apple ARKit-compatible mobile face-tracking input spike via iFacialMocap/FaceMotion3D UDP v2 compatibility adapter
+- ARKit-priority / MediaPipe-face-fallback router with Holistic hands/upper-body kept active
 - VMC receive/send spike
 - normalized face/upper-body/hand payload prototype
 - normalized tracking -> UniVRM ControlRig mapping prototype
@@ -46,8 +46,8 @@ Exit criteria:
 - normalized upper-body state drives torso and arm motion through UniVRM ControlRig/fallback bones
 - Face and Holistic live-stream inference do not block the Unity render loop
 - M1 tracking CPU cost and end-to-end latency are measured
-- mobile ARKit-compatible face data reaches desktop normalized state
-- mixed ARKit + Holistic routing works without character reload
+- iFacialMocap/FaceMotion3D ARKit-compatible face data reaches desktop normalized state
+- mixed ARKit + Holistic routing works without character reload and disables redundant MediaPipe face inference while ARKit is healthy
 - performer disappearance can be distinguished from source/device disconnection
 - stable tracking loss returns the VRM tracking contribution toward neutral without a one-frame snap
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
