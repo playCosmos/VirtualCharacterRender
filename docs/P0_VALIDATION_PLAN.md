@@ -19,6 +19,28 @@ P0 validates the selected architecture before feature development expands.
 
 Passing P0 means the stack can render one VRM character, track one performer, recover from normal source failures, and sustain the defined baseline frame-rate targets without forcing architecture changes.
 
+## Source-free static suite
+
+Run:
+
+```text
+VCR > P0 > Run All Source-Free Checks
+```
+
+The suite currently covers:
+
+- package/version pins
+- tracking presence resolver
+- iFacialMocap parser
+- OSC/VMC codec
+- diagnostics percentile math
+- material override/fallback
+- normalized event bus
+- environment state runtime
+- lazy capability lifecycle
+
+This suite can prove contract/code-path invariants but cannot replace standalone player, camera/iPhone, OBS, GPU, or frame-time evidence.
+
 ## Validation order
 
 ### V0 — Project/bootstrap
