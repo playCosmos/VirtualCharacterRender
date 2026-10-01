@@ -38,6 +38,9 @@
 - ADR-0025 uses FaceLandmarker for face/head and HolisticLandmarker for hands/upper body because the 0.16.3 Holistic C# wrapper gates complete results on pose availability.
 - Separate Hand/Pose tasks remain a later optimization only if profiling or hand-quality evidence justifies the added complexity.
 - Windows hardware requirements remain intentionally undefined until P0 measurements exist.
+- UniWindowController 0.9.8 is a P0 implementation candidate, not a shared-runtime dependency.
+- The lightweight overlay baseline disables UniWindowController's automatic opacity hit test to avoid per-frame pixel-readback overhead.
+- Windows transparent-window validation uses D3D11/BitBlt because the tested alpha-composition path is not compatible with the D3D11 flip-model configuration.
 - Windows transparent-window P0 is explicitly D3D11-only with the D3D11 flip-model swapchain disabled. This is an output-path constraint, not a claim that D3D12 is generally unsuitable for the renderer.
 - URP Alpha Processing must be enabled; the P0 transparent path uses SDR RGBA8 with camera HDR disabled.
 - UniWindowController automatic opacity hit testing is disabled in the lightweight baseline.
