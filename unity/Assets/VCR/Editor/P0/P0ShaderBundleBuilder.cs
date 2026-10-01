@@ -1,7 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEngine;
-using VCR.Runtime.Rendering;
+using VCR.Runtime.Materials.Unity;
 
 namespace VCR.Editor.P0
 {
@@ -60,11 +60,21 @@ namespace VCR.Editor.P0
                     root.AddComponent<
                         RuntimeShaderBundleLoader>();
 
-                if (!loader.TryLoad(bundlePath))
+                if (!loader.TryLoadFromFile(
+                        bundlePath,
+                        out var registeredCount,
+                        out var loadError))
                 {
                     Debug.LogError(
                         "VCR P0 shader bundle: FAIL - " +
-                        loader.LastError);
+                        loadError);
+                    return;
+                }
+
+                if (registeredCount <= 0)
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - no Shader assets were registered.");
                     return;
                 }
 
