@@ -219,17 +219,42 @@ During the grace period the character holds the last valid tracking state. On st
 
 ## Full-body tracking
 
-Full-body tracking is a separate capability.
+Full-body tracking is a separate optional capability.
 
-It may use:
+The P0 VMC path is now:
 
-- VMC
+```text
+VMC OSC/UDP
+  ↓
+VmcTrackingSource
+  ↓
+NormalizedHumanoidPose
+  ↓
+PriorityTrackingRouter external-pose slot
+  ↓
+Vrm10HumanoidPoseTarget
+```
+
+`NormalizedHumanoidPose` carries model-root transform plus local transforms for the Unity/VMC humanoid bone-name set. `NormalizedExpressionState` separately carries standard expressions and arbitrary custom expression name/value pairs.
+
+The P0 VRM full-body target does not directly copy another model's bind-pose rotations. The first valid VMC pose establishes source/target references and later frames apply relative bone-rotation deltas to the target ControlRig. This is a feasibility retargeter, not the final production full-body solver.
+
+Default routing behavior:
+
+- ARKit/MediaPipe still owns face/head priority
+- VMC can own optional full-body pose
+- while VMC full body is available, the webcam upper-body mapper is suspended
+- the VMC target skips head/eye/jaw bones by default so the selected face source can override them
+- when VMC becomes unavailable, webcam upper-body mapping can resume
+
+Other future full-body sources may include:
+
 - SteamVR-class trackers
 - mocopi-class devices
 - camera-based full-body solutions
 - future plugins/adapters
 
-Full-body solvers, leg tracking, floor/root calibration, and advanced IK do not belong to the baseline performance budget unless explicitly enabled.
+Full-body solvers, leg/floor calibration, root policy, and advanced IK do not belong to the baseline performance budget unless explicitly enabled.
 
 ## Normalized domains
 
@@ -263,6 +288,18 @@ Hands:
 - left/right 21-joint topology
 - metric/world positions where available
 - confidence per joint when available
+
+Humanoid pose:
+
+- model root position/rotation
+- local position/rotation per canonical humanoid bone
+- used by VMC and future full-body adapters
+
+Expressions:
+
+- standard neutral/emotion/vowel/blink/look channels
+- custom named expression values
+- independent from face-landmark coefficients
 
 MediaPipe callback-owned result buffers are never retained outside the adapter. The adapter copies them into immutable normalized payloads before returning from the callback.
 
