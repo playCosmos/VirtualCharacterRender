@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using Kirurobo;
 using UnityEditor;
@@ -10,6 +11,9 @@ namespace VCR.Editor.P0
 {
     public static class P0TransparentOutputMenu
     {
+        public const string AlphaTestMaterialPath =
+            "Assets/VCR/P0/Generated/P0AlphaTestBase.mat";
+
         [MenuItem("VCR/P0/Configure Transparent Output Baseline")]
         public static void Configure()
         {
@@ -63,7 +67,78 @@ namespace VCR.Editor.P0
         {
             ConfigurePlayerSettings();
             ConfigureUrpAlpha();
+            EnsureAlphaTestMaterialAsset();
             AssetDatabase.SaveAssets();
+        }
+
+        public static Material EnsureAlphaTestMaterialAsset()
+        {
+            var shader =
+                Shader.Find(
+                    "Universal Render Pipeline/Unlit");
+
+            if (shader == null)
+            {
+                Debug.LogError(
+                    "VCR P0: URP Unlit shader was not found; alpha-test material cannot be created.");
+                return null;
+            }
+
+            var directory =
+                Path.GetDirectoryName(
+                    AlphaTestMaterialPath);
+
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+                AssetDatabase.Refresh();
+            }
+
+            var material =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    AlphaTestMaterialPath);
+
+            if (material == null)
+            {
+                material =
+                    new Material(shader)
+                    {
+                        name = "P0AlphaTestBase"
+                    };
+
+                AssetDatabase.CreateAsset(
+                    material,
+                    AlphaTestMaterialPath);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat(
+                "_SrcBlend",
+                (float)BlendMode.SrcAlpha);
+            material.SetFloat(
+                "_DstBlend",
+                (float)BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0f);
+            material.EnableKeyword(
+                "_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue =
+                (int)RenderQueue.Transparent;
+
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor(
+                    "_BaseColor",
+                    Color.white);
+            }
+
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssetIfDirty(material);
+            return material;
         }
 
         [MenuItem("VCR/P0/Validate Transparent Output Baseline")]
@@ -138,6 +213,17 @@ namespace VCR.Editor.P0
                         ref failures);
                 }
             }
+
+            var alphaTestMaterial =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    AlphaTestMaterialPath);
+
+            Check(
+                alphaTestMaterial != null &&
+                alphaTestMaterial.shader != null,
+                "Alpha-test material asset is referenced and build-preservable.",
+                "Alpha-test material asset is missing. Reconfigure the transparent-output baseline.",
+                ref failures);
 
             var urp =
                 UniversalRenderPipeline.asset;
