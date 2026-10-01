@@ -84,7 +84,7 @@ namespace VCR.Editor.P0
                 frame.HumanoidPose == null ||
                 frame.Expressions == null)
             {
-                Debug.LogError("VCR P0 OSC/VMC codec: FAIL (VMC normalization)");
+                Debug.LogError("VCR P0 OSC/VMC codec: FAIL (VMC pose/expression decode)");
                 return;
             }
 
@@ -171,6 +171,8 @@ namespace VCR.Editor.P0
             var pass =
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
+                frame.HumanoidPose.PoseSpace ==
+                    HumanoidPoseSpace.OriginalLocal &&
                 hasHips &&
                 malformedRejected &&
                 vrm0Alias &&
@@ -203,7 +205,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (codec, normalized values, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
             }
         }
 
