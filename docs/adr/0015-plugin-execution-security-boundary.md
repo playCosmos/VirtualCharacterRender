@@ -1,6 +1,6 @@
 # ADR-0015: Plugin execution and security boundary
 
-- Status: Proposed
+- Status: Deferred
 - Date: 2026-10-01
 
 ## Context
@@ -19,6 +19,12 @@ Prefer declarative/data packages first. Treat executable plugins as a separate t
 - define file/network permissions
 - define crash containment and diagnostics
 - define signing/identity policy if applicable
+
+## Deferral
+
+Executable plugin loading is not required for P0. Declarative shader/environment packages and protocol/event adapters cover current feasibility work.
+
+Resume this ADR when P7/P12 introduces a concrete executable-plugin use case.
 
 ## Revisit conditions
 
