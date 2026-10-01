@@ -64,7 +64,13 @@ The target auto-finds a routed provider when present, prefers UniVRM's ControlRi
 
 ### Optional ARKit/iPhone P0 path
 
-Validate the parser first:
+Run the source-free presence smoke check:
+
+```text
+VCR > P0 > Validate Presence Resolver
+```
+
+Validate the ARKit packet parser:
 
 ```text
 VCR > P0 > Validate iFacialMocap Parser
