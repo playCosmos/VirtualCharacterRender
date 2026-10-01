@@ -22,7 +22,7 @@ Multi-person identity tracking from one webcam is not an initial feature.
 ## Accepted baseline stack
 
 ADR-0022 defines the source strategy.
-ADR-0025 defines the active Unity/MediaPipe execution strategy. ADR-0023 is superseded.
+ADR-0025 defines the active Unity/MediaPipe execution strategy. ADR-0026 defines normalized payloads and coordinates. ADR-0027 defines the current UniVRM target path. ADR-0023 is superseded.
 
 Primary webcam baseline:
 
@@ -192,26 +192,52 @@ Full-body solvers, leg tracking, floor/root calibration, and advanced IK do not 
 
 ## Normalized domains
 
+Coordinates are source-neutral and engine independent:
+
+```text
++X = performer right
++Y = up
++Z = forward
+```
+
+MediaPipe world coordinates are converted as `(x, y, z) -> (x, -y, -z)`.
+
 Face:
 
-- head-related face transform where appropriate
-- left/right eye openness
-- gaze
-- brows
-- mouth openness
-- mouth-shape coefficients
-- generic expressions
+- normalized head rotation and position when available
+- fixed MediaPipe/ARKit-compatible semantic coefficient set
+- eye blink/look channels
+- brow channels
+- jaw/mouth channels
+- cheek/nose channels
 
 Body:
 
-- root/upper-body transforms appropriate to source capability
-- humanoid bone transforms where available
-- optional confidence per joint
+- P0 upper-body joints: nose, shoulders, elbows, wrists, hips
+- metric/world positions where the source provides them
+- confidence per joint when available
 
 Hands:
 
-- wrist pose
-- finger curl or detailed joint pose according to source quality
+- left/right 21-joint topology
+- metric/world positions where available
+- confidence per joint when available
+
+MediaPipe callback-owned result buffers are never retained outside the adapter. The adapter copies them into immutable normalized payloads before returning from the callback.
+
+## Current VRM target
+
+`Vrm10TrackingTarget` consumes only normalized tracking data.
+
+- UniVRM runtime ControlRig bones are preferred when present.
+- raw humanoid bones are fallback only.
+- first valid face frame establishes neutral head orientation.
+- first valid upper-body frame establishes torso/arm reference directions.
+- blink and eye look map to VRM standard expression presets.
+- mouth coefficients use provisional P0 geometric-to-phoneme heuristics.
+- normalized hand data is preserved, but finger retargeting is intentionally deferred.
+
+The P0 relative-direction upper-body solver is a feasibility mapper, not the final IK/full-body solver.
 
 ## Source health
 
