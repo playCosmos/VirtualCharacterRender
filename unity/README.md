@@ -88,6 +88,32 @@ When fresh ARKit packets become stable, the router selects ARKit face/head and s
 
 The initial head Euler sign profile is provisional and must be checked against physical pitch/yaw/roll on both Windows and macOS.
 
+### Optional VMC P0 path
+
+Run the source-free codec test:
+
+```text
+VCR > P0 > Validate OSC and VMC Codec
+```
+
+To receive optional VMC full-body motion:
+
+```text
+VCR > P0 > Add VMC Receiver
+```
+
+The receiver defaults to UDP 39539 and accepts only `127.0.0.1`. Set an explicit sender IPv4 address for LAN use. The router treats VMC as an optional full-body provider; face/head priority remains ARKit then MediaPipe.
+
+To send the selected VRM's final runtime pose:
+
+```text
+VCR > P0 > Add VMC Sender to Selected VRM
+```
+
+The sender defaults to `127.0.0.1:39539`, 60 Hz, original/non-ControlRig VRM humanoid bones, and VRM0-compatible expression names.
+
+The generated tracking scene also contains `P0RuntimeDiagnostics`. It reports frame average/P95/P99, normalized channel update rates/age, MediaPipe processing latency, and protocol metrics every five seconds. CSV evidence is optional in the component Inspector.
+
 Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
 
 ## Current module skeleton
@@ -104,14 +130,25 @@ Assets/VCR/
 │  │  ├─ NormalizedFaceState
 │  │  ├─ NormalizedUpperBodyState
 │  │  ├─ NormalizedHandState
+│  │  ├─ NormalizedHumanoidPose
+│  │  ├─ NormalizedExpressionState
+│  │  ├─ Routing/
 │  │  └─ MediaPipe/
 │  │     ├─ MediaPipeFaceSource
 │  │     ├─ MediaPipeHolisticSource
 │  │     ├─ MediaPipeFaceNormalizer
 │  │     ├─ MediaPipeHolisticNormalizer
 │  │     └─ MediaPipeWebcamTrackingRunner
-│  └─ Character/
-│     └─ Vrm10TrackingTarget
+│  ├─ Character/
+│  │  ├─ Vrm10TrackingTarget
+│  │  ├─ Vrm10HumanoidPoseTarget
+│  │  └─ Vrm10MotionSnapshotProvider
+│  ├─ Protocols/
+│  │  ├─ Osc/
+│  │  ├─ Vmc/
+│  │  └─ VmcUnity/
+│  └─ Diagnostics/
+│     └─ P0RuntimeDiagnostics
 └─ Editor/
    └─ P0/
       └─ P0PackageBaselineCheck
