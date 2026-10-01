@@ -48,7 +48,7 @@ Then create the tracking smoke-test scene with:
 VCR > P0 > Create Tracking Test Scene
 ```
 
-The generated scene contains the shared-webcam dual-task runner from ADR-0025.
+The generated scene contains the shared-webcam dual-task runner from ADR-0025 plus the priority tracking router.
 
 To preview normalized tracking on an imported/loaded VRM:
 
@@ -60,7 +60,27 @@ To preview normalized tracking on an imported/loaded VRM:
 VCR > P0 > Attach Tracking Target to Selected VRM
 ```
 
-The target auto-finds an `ITrackingFrameProvider`, prefers UniVRM's ControlRig, and calibrates face/body on the first valid frames.
+The target auto-finds a routed provider when present, prefers UniVRM's ControlRig, and calibrates face/body on the first valid frames.
+
+### Optional ARKit/iPhone P0 path
+
+Validate the parser first:
+
+```text
+VCR > P0 > Validate iFacialMocap Parser
+```
+
+Then add the receiver:
+
+```text
+VCR > P0 > Add iFacialMocap ARKit Receiver
+```
+
+Set the iPhone/iPad IPv4 address on the receiver component before Play mode. The receiver requests the documented iFacialMocap/FaceMotion3D UDP v2 stream on port 49983 by default and connects itself as the router's preferred face provider.
+
+When fresh ARKit packets become stable, the router selects ARKit face/head and stops MediaPipe FaceLandmarker. Holistic hand/upper-body inference continues. If ARKit packets become stale, MediaPipe face restarts automatically.
+
+The initial head Euler sign profile is provisional and must be checked against physical pitch/yaw/roll on both Windows and macOS.
 
 Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
 
