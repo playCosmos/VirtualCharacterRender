@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Character",
+  "rootNamespace": "VCR.Runtime.Character",
+  "references": [
+    "VCR.Runtime.Tracking",
+    "VRM10"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
