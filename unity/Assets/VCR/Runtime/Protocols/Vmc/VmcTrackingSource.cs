@@ -20,10 +20,14 @@ namespace VCR.Runtime.Protocols.Vmc
         private bool _disposed;
         private int _lastSubjectDetected;
 
-        public VmcTrackingSource(string sourceId = "vmc-udp")
+        public VmcTrackingSource(
+            string sourceId = "vmc-udp",
+            HumanoidPoseSpace poseSpace = HumanoidPoseSpace.OriginalLocal)
         {
             SourceId = sourceId;
-            _accumulator = new VmcFrameAccumulator(SourceId);
+            _accumulator = new VmcFrameAccumulator(
+                SourceId,
+                poseSpace);
             _health = new TrackingSourceHealth(
                 TrackingSourceHealthState.Stopped,
                 0,
