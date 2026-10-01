@@ -5,39 +5,48 @@
 
 ## Context
 
-The product must cover both lightweight VSeeFace-class usage and advanced Warudo-class scenes and interactions. Separate runtimes would duplicate character, tracking, shader, protocol, and serialization logic and create compatibility drift.
+The product must cover both lightweight VSeeFace-class usage and Warudo-class advanced scene/event/environment behavior for one performer. Separate runtimes would duplicate character, tracking, shader, protocol, event, and serialization logic.
 
 ## Decision
 
-Use one runtime pipeline with capability-driven, lazily initialized subsystems.
+Use one one-character runtime pipeline with capability-driven, lazily initialized subsystems.
 
-Profiles such as Lightweight, Standard, and Advanced are capability presets and resource budgets, not separate implementations.
+Capability presets and graphics-quality presets are independent.
 
 Core flow remains:
 
 ```text
-Inputs → Normalized State → Mixers/Runtime → Character/Scene → Rendering → Output
+Inputs
+ → Normalized Tracking/Events
+ → Mixers/Event Runtime
+ → Character/Scene/Environment
+ → Rendering
+ → Output
 ```
 
-Advanced systems attach to the same state and service boundaries used by lightweight sessions.
+Advanced systems attach to the same state/service boundaries used by lightweight sessions.
+
+Multi-character operation is not an Advanced capability in the current product.
 
 ## Consequences
 
 - simple sessions avoid loading unused advanced services
-- advanced sessions can add scene/event/plugin features without replacing the core runtime
+- advanced sessions add scene/environment/event/plugin features without replacing the core runtime
 - profiling must measure subsystem activation cost
-- capabilities require explicit dependencies and lifecycle management
-- UI can scale from simple to advanced without changing stored character data
+- capabilities require explicit dependencies/lifecycle management
+- UI can scale in complexity without changing the active character data model
 
 ## Validation
 
 P0/P1 must demonstrate:
 
-- minimal single-character session with optional subsystems disabled
+- minimal one-character session with optional subsystems disabled
 - advanced capabilities can be enabled without changing character/runtime contracts
-- disabled protocol/event/tracking services consume no meaningful recurring work
-- profile switching cannot invalidate persistent character configuration
+- disabled protocol/event/tracking/full-body services consume no meaningful recurring work
+- capability/quality setting changes do not invalidate persistent character configuration
 
 ## Revisit conditions
 
-A separate process or service may be introduced for isolation/performance, but it must implement the same contracts and must not create a separate product data model.
+A future multi-character product requirement requires a separate ADR rather than being inferred from Advanced mode.
+
+A separate process/service may be introduced for isolation/performance if it implements the same contracts and does not create a second product data model.
