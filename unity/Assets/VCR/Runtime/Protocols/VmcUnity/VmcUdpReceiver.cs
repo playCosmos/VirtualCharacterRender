@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Stopwatch = System.Diagnostics.Stopwatch;
 using UnityEngine;
 using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
@@ -37,8 +36,6 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         [Header("Diagnostics")]
         [SerializeField] private bool logStateChanges = true;
-
-        private readonly Stopwatch _clock = new();
 
         private VmcTrackingSource _source;
         private UdpClient _receiver;
@@ -85,18 +82,22 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     this);
             }
 
-            if (_source != null &&
-                _source.TryTakeLatest(out var frame))
+            if (_source != null)
             {
-                if (frame.HumanoidPose != null)
+                if (_source.TryTakeLatestPose(out var poseFrame))
                 {
-                    _latestPoseFrame = frame;
+                    _latestPoseFrame = poseFrame;
                 }
 
-                if (frame.Expressions != null)
+                if (_source.TryTakeLatestExpressions(
+                        out var expressionFrame))
                 {
-                    _latestExpressionFrame = frame;
+                    _latestExpressionFrame = expressionFrame;
                 }
+
+                // Drain status-only frames so the source's single-slot
+                // compatibility buffer cannot retain old control state.
+                _source.TryTakeLatest(out _);
             }
 
             UpdatePresence();
@@ -148,7 +149,6 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 }
             }
 
-            _clock.Restart();
             _lastPacketArrivalUs = -1;
 
             _source = new VmcTrackingSource("vmc-udp");
@@ -213,7 +213,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     }
 
                     var arrivalUs =
-                        _clock.ElapsedMilliseconds * 1000L;
+                        MonotonicClock.NowMicroseconds();
                     Interlocked.Exchange(
                         ref _lastPacketArrivalUs,
                         arrivalUs);
@@ -275,22 +275,26 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 return;
             }
 
-            var nowUs =
-                _clock.ElapsedMilliseconds * 1000L;
+            var nowUs = MonotonicClock.NowMicroseconds();
             var lastArrival =
                 Interlocked.Read(ref _lastPacketArrivalUs);
+            var staleUs =
+                SecondsToMicroseconds(sourceStaleSeconds);
 
-            var sourceAvailable =
+            var transportAvailable =
                 lastArrival >= 0 &&
-                nowUs - lastArrival <=
-                    SecondsToMicroseconds(sourceStaleSeconds);
+                nowUs - lastArrival <= staleUs;
+
+            var poseAvailable =
+                transportAvailable &&
+                _latestPoseFrame != null &&
+                _latestPoseFrame.RuntimeTimestampUs > 0 &&
+                nowUs - _latestPoseFrame.RuntimeTimestampUs <= staleUs;
 
             var subjectEvidence =
-                sourceAvailable &&
-                ((_latestPoseFrame != null &&
-                  _latestPoseFrame.SubjectDetected) ||
-                 (_latestExpressionFrame != null &&
-                  _latestExpressionFrame.SubjectDetected));
+                poseAvailable &&
+                _source != null &&
+                _source.LastSubjectDetected;
 
             var previous = _presence;
 
@@ -304,17 +308,19 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 bodyHandsSubjectEvidence: false,
                 sourceDecisionReady:
                     lastArrival >= 0 ||
-                    nowUs >=
-                        SecondsToMicroseconds(sourceStaleSeconds),
+                    nowUs >= staleUs,
                 fullBodyConfigured: true,
-                fullBodySourceAvailable: sourceAvailable,
+                fullBodySourceAvailable: poseAvailable,
                 fullBodySubjectEvidence: subjectEvidence);
 
             if (_presence.HasEvent(
                     TrackingPresenceEvents.TrackingSourceLost) &&
                 _source != null)
             {
-                _source.MarkSourceLost();
+                _source.MarkSourceLost(
+                    transportAvailable
+                        ? "VMC pose stream became stale."
+                        : "VMC UDP transport became stale.");
             }
 
             if (logStateChanges &&
@@ -322,7 +328,8 @@ namespace VCR.Runtime.Protocols.VmcUnity
             {
                 Debug.Log(
                     $"VCR VMC presence: state={_presence.SubjectState}, " +
-                    $"events={_presence.Events}",
+                    $"events={_presence.Events}, transport={(transportAvailable ? "up" : "down")}, " +
+                    $"pose={(poseAvailable ? "fresh" : "stale")}",
                     this);
             }
         }
