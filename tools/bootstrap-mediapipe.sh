@@ -9,8 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TARGET_DIR="${REPO_ROOT}/unity/Packages/LocalPackages"
 TARGET="${TARGET_DIR}/com.github.homuler.mediapipe-${VERSION}.tgz"
+MODEL_DIR="${REPO_ROOT}/unity/Assets/StreamingAssets/VCR/Models"
+MODEL_TARGET="${MODEL_DIR}/holistic_landmarker.bytes"
 
-mkdir -p "${TARGET_DIR}"
+mkdir -p "${TARGET_DIR}" "${MODEL_DIR}"
 
 sha256_file() {
   if command -v shasum >/dev/null 2>&1; then
@@ -20,23 +22,41 @@ sha256_file() {
   fi
 }
 
+needs_download=1
 if [[ -f "${TARGET}" ]]; then
   CURRENT="$(sha256_file "${TARGET}")"
   if [[ "${CURRENT}" == "${EXPECTED_SHA256}" ]]; then
+    needs_download=0
     echo "MediaPipeUnityPlugin ${VERSION} already present and verified."
-    exit 0
+  else
+    rm -f "${TARGET}"
   fi
-  rm -f "${TARGET}"
 fi
 
-echo "Downloading MediaPipeUnityPlugin ${VERSION}..."
-curl -fL "${URL}" -o "${TARGET}"
+if [[ "${needs_download}" -eq 1 ]]; then
+  echo "Downloading MediaPipeUnityPlugin ${VERSION}..."
+  curl -fL "${URL}" -o "${TARGET}"
 
-ACTUAL="$(sha256_file "${TARGET}")"
-if [[ "${ACTUAL}" != "${EXPECTED_SHA256}" ]]; then
-  rm -f "${TARGET}"
-  echo "SHA-256 mismatch. Expected ${EXPECTED_SHA256}, got ${ACTUAL}" >&2
+  ACTUAL="$(sha256_file "${TARGET}")"
+  if [[ "${ACTUAL}" != "${EXPECTED_SHA256}" ]]; then
+    rm -f "${TARGET}"
+    echo "SHA-256 mismatch. Expected ${EXPECTED_SHA256}, got ${ACTUAL}" >&2
+    exit 1
+  fi
+
+  echo "Verified: ${TARGET}"
+fi
+
+MODEL_ENTRY="$(tar -tzf "${TARGET}" | grep -E '(^|/)holistic_landmarker\.bytes$' | head -n 1 || true)"
+if [[ -z "${MODEL_ENTRY}" ]]; then
+  echo "holistic_landmarker.bytes was not found in ${TARGET}" >&2
   exit 1
 fi
 
-echo "Verified: ${TARGET}"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+tar -xzf "${TARGET}" -C "${TMP_DIR}" "${MODEL_ENTRY}"
+cp -f "${TMP_DIR}/${MODEL_ENTRY}" "${MODEL_TARGET}"
+
+echo "Prepared model: ${MODEL_TARGET}"
