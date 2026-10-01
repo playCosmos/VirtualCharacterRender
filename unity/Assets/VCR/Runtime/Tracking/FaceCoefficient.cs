@@ -3,8 +3,9 @@ namespace VCR.Runtime.Tracking
     /// <summary>
     /// Source-neutral facial coefficients.
     ///
-    /// Names intentionally follow the ARKit/MediaPipe-compatible semantic set so
-    /// MediaPipe webcam and ARKit mobile input can share one face contract.
+    /// Names form a small MediaPipe/ARKit semantic superset so MediaPipe webcam and
+    /// ARKit mobile input can share one face contract without dropping
+    /// source-specific channels such as MediaPipe neutral or ARKit tongueOut.
     /// </summary>
     public enum FaceCoefficient
     {
@@ -60,6 +61,7 @@ namespace VCR.Runtime.Tracking
         MouthUpperUpRight,
         NoseSneerLeft,
         NoseSneerRight,
+        TongueOut,
         Count
     }
 }
