@@ -197,6 +197,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     _faceSource.Stop();
                 }
 
+                _latestFaceFrame = null;
                 return;
             }
 
