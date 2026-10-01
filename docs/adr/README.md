@@ -3,6 +3,7 @@
 ADR files record consequential technical decisions and their reasoning.
 
 ## Status
+
 - Proposed — under evaluation.
 - Accepted — active decision.
 - Rejected — evaluated and not selected.
@@ -10,6 +11,7 @@ ADR files record consequential technical decisions and their reasoning.
 - Deferred — intentionally postponed.
 
 ## Rules
+
 1. Do not silently rewrite an Accepted ADR to change its decision.
 2. Clarifications may be added without changing the original outcome.
 3. A materially different decision requires a new ADR that supersedes the old one.
@@ -18,6 +20,7 @@ ADR files record consequential technical decisions and their reasoning.
 6. Implementation docs link to ADRs instead of duplicating rationale.
 
 ## Index
+
 | ADR | Decision | Status |
 |---|---|---|
 | [0001](0001-layered-runtime-boundaries.md) | Layered runtime boundaries | Accepted |
@@ -27,3 +30,6 @@ ADR files record consequential technical decisions and their reasoning.
 | [0005](0005-normalized-tracking-state.md) | Normalized tracking state | Accepted |
 | [0006](0006-vmc-first-class-interoperability.md) | VMC as first-class interoperability protocol | Proposed |
 | [0007](0007-transparent-window-primary-output.md) | Transparent window as initial broadcast output | Proposed |
+| [0008](0008-windows-macos-first-class-platforms.md) | Windows and macOS as first-class targets | Accepted |
+| [0009](0009-single-scalable-capability-pipeline.md) | One scalable capability pipeline | Accepted |
+| [0010](0010-built-in-basic-motion-capture.md) | Built-in webcam/mobile basic motion capture | Accepted |
