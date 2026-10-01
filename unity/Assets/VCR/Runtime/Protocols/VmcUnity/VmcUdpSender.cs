@@ -45,6 +45,19 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         public long PacketCount => _packetCount;
         public long ErrorCount => _errorCount;
+        public int RemotePort => remotePort;
+
+        public bool IsLoopbackDestination
+        {
+            get
+            {
+                return
+                    IPAddress.TryParse(
+                        remoteIPv4Address,
+                        out var address) &&
+                    IPAddress.IsLoopback(address);
+            }
+        }
 
         private void OnEnable()
         {
