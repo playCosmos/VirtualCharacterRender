@@ -12,12 +12,15 @@ Deliverables:
 - 720p60 minimum and 1080p60 recommended baseline measurements
 - MToon validation
 - custom shader/material override prototype
-- basic webcam motion-capture spike:
+- MediaPipeUnityPlugin HolisticLandmarker LIVE_STREAM spike:
   - face with eye/mouth priority
   - head
   - hands
   - upper body
+  - async frame-drop behavior
+  - M1 CPU inference cost
 - Apple ARKit-compatible mobile face-tracking input spike
+- mixed ARKit + Holistic routing spike
 - VMC receive/send spike
 - normalized tracking-state prototype
 - tracking-derived subject-presence prototype
@@ -38,9 +41,11 @@ Exit criteria:
 - higher resolutions remain configurable without inheriting the same blanket guarantee
 - one material can be overridden without corrupting the source model
 - an invalid custom shader does not terminate the application
-- webcam tracking produces usable normalized eye/mouth/face/head/hand/upper-body state according to source capability
+- Holistic webcam tracking produces usable normalized eye/mouth/face/head/hand/upper-body state
+- Holistic live-stream inference does not block the Unity render loop
+- M1 tracking CPU cost and end-to-end latency are measured
 - mobile ARKit-compatible face data reaches desktop normalized state
-- tracking sources can switch without character reload
+- mixed ARKit + Holistic routing works without character reload
 - performer disappearance can be distinguished from source/device disconnection
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
 - optional full-body services remain disabled in the baseline
@@ -60,15 +65,19 @@ Material-slot abstraction, MToon preservation, runtime overrides, generic shader
 
 Productionize:
 
+- MediaPipe HolisticLandmarker live-stream webcam path
 - face tracking with eye and mouth quality prioritized
 - head pose
 - hands
 - upper body
+- low-light tracking preprocessing/refinement
 - Apple ARKit-compatible face input
 - optional audio-driven fallback motion
 - subject-presence derivation from webcam/ARKit tracking state
 
 Full-body tracking/IK is a separate optional capability and does not define baseline runtime cost.
+
+Only split webcam inference into separate tasks/custom graph if measured profiling justifies the additional complexity.
 
 ## P4 — Tracking Abstraction and Routing
 
