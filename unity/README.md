@@ -12,6 +12,7 @@ Unity with URP is the accepted primary renderer/backend for the initial 3D produ
 
 See:
 
+- `../docs/P0_STATUS.md`
 - `../docs/COMPATIBILITY_MATRIX.md`
 - `../docs/P0_VALIDATION_PLAN.md`
 - ADR-0024
@@ -114,6 +115,28 @@ VCR > P0 > Build > macOS Performance Player
 Evidence players are Development builds and automatically write `vcr-p0-system.txt` plus `vcr-p0-diagnostics.csv` under `Application.persistentDataPath`.
 
 Performance players omit automatic CSV file I/O. Use them for final frame-time measurements.
+
+### Standalone VRM evidence bootstrap
+
+The generated P0 runtime scene contains `P0StandaloneBootstrap`. Standalone Evidence/Performance players can load a real model without application UI:
+
+```text
+VirtualCharacterRender-P0 --vcr-vrm="<absolute path to model.vrm>"
+```
+
+Both `--name=value` and `--name value` forms are accepted.
+
+Optional precompiled custom-shader validation can run in the same player:
+
+```text
+--vcr-shader-bundle="<platform-specific bundle>"
+--vcr-shader-id="<shader name/id>"
+--vcr-material-slot="<optional slot id>"
+```
+
+If `--vcr-material-slot` is omitted, the first discovered VRM material slot is used. If the shader cannot be resolved/applied, the source material remains/restores as fallback.
+
+No command-line option means no model or shader bundle is loaded by this bootstrap, and it has no per-frame `Update()`.
 
 ### Material/custom shader P0 path
 
