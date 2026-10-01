@@ -149,6 +149,27 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 }
             }
 
+            var senders =
+                FindObjectsByType<VmcUdpSender>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            foreach (var sender in senders)
+            {
+                if (sender != null &&
+                    sender.isActiveAndEnabled &&
+                    sender.IsLoopbackDestination &&
+                    sender.RemotePort == localPort)
+                {
+                    Debug.LogError(
+                        "VCR VMC receiver: an active VMC sender already targets this process's loopback listen port. " +
+                        "Use distinct ports to avoid a self-feedback loop.",
+                        this);
+                    enabled = false;
+                    return;
+                }
+            }
+
             _lastPacketArrivalUs = -1;
 
             _source = new VmcTrackingSource("vmc-udp");
