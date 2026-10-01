@@ -7,7 +7,7 @@
 
 Implementation cannot begin reproducibly while Unity, URP, UniVRM, and MediaPipe integration versions remain floating.
 
-The project needs a stable P0 combination that supports Windows, macOS Apple Silicon, VRM 0.x/1.0, URP, and the accepted MediaPipe Holistic tracking path.
+The project needs a stable P0 combination that supports Windows, macOS Apple Silicon, VRM 0.x/1.0, URP, and the accepted MediaPipe tracking path. The current execution decision is ADR-0025 (FaceLandmarker + HolisticLandmarker).
 
 ## Decision
 
