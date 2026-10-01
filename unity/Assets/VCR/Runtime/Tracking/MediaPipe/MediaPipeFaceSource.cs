@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
+using VCR.Runtime.Core;
 using Mediapipe;
 using Mediapipe.Tasks.Core;
 using Mediapipe.Tasks.Vision.Core;
@@ -16,11 +18,13 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private readonly object _sync = new();
         private readonly byte[] _modelBytes;
         private readonly MediaPipeFaceCallbackBridge _bridge;
+        private readonly Dictionary<long, long> _submittedAtUs = new();
 
         private FaceLandmarker _landmarker;
         private TrackingSourceHealth _health;
         private int _acceptCallbacks;
         private long _resultCount;
+        private long _lastProcessingLatencyUs;
         private bool _disposed;
 
         public MediaPipeFaceSource(byte[] modelBytes, string sourceId = "mediapipe-face-webcam")
@@ -47,6 +51,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
         public TrackingRegion Regions => TrackingRegion.Face | TrackingRegion.Head;
 
         public long ResultCount => Interlocked.Read(ref _resultCount);
+        public long LastProcessingLatencyUs =>
+            Interlocked.Read(ref _lastProcessingLatencyUs);
 
         public TrackingSourceHealth Health
         {
@@ -124,6 +130,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 ThrowIfDisposed();
                 landmarker = _landmarker ??
                     throw new InvalidOperationException("Tracking source is not started.");
+
+                if (_submittedAtUs.Count > 64)
+                {
+                    _submittedAtUs.Clear();
+                }
+
+                _submittedAtUs[timestampMillisec] =
+                    MonotonicClock.NowMicroseconds();
             }
 
             landmarker.DetectAsync(image, timestampMillisec);
@@ -144,6 +158,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 landmarker = _landmarker;
                 _landmarker = null;
+                _submittedAtUs.Clear();
 
                 _health = new TrackingSourceHealth(
                     TrackingSourceHealthState.Stopped,
@@ -177,6 +192,44 @@ namespace VCR.Runtime.Tracking.MediaPipe
             if (Volatile.Read(ref _acceptCallbacks) == 0)
             {
                 return;
+            }
+
+            long submittedAtUs = 0;
+            lock (_sync)
+            {
+                if (_submittedAtUs.TryGetValue(
+                    timestampMillisec,
+                    out submittedAtUs))
+                {
+                    _submittedAtUs.Remove(timestampMillisec);
+                }
+            }
+
+            if (submittedAtUs > 0)
+            {
+                Interlocked.Exchange(
+                    ref _lastProcessingLatencyUs,
+                    MonotonicClock.NowMicroseconds() -
+                    submittedAtUs);
+            }
+
+            long submittedAtUs = 0;
+            lock (_sync)
+            {
+                if (_submittedAtUs.TryGetValue(
+                    timestampMillisec,
+                    out submittedAtUs))
+                {
+                    _submittedAtUs.Remove(timestampMillisec);
+                }
+            }
+
+            if (submittedAtUs > 0)
+            {
+                Interlocked.Exchange(
+                    ref _lastProcessingLatencyUs,
+                    MonotonicClock.NowMicroseconds() -
+                    submittedAtUs);
             }
 
             _bridge.OnResult(in result, image, timestampMillisec);
