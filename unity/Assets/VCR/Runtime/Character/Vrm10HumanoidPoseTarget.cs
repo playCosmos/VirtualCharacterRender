@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Tracking;
@@ -32,12 +33,20 @@ namespace VCR.Runtime.Character
         [SerializeField] private bool applyExpressions = true;
         [SerializeField, Min(0f)] private float expressionSmoothing = 22f;
 
+        [Header("Tracking loss")]
+        [SerializeField] private bool returnToNeutralWhenUnavailable = true;
+        [SerializeField, Min(0f)] private float neutralReturnSmoothing = 8f;
+
         private ITrackingFrameProvider _provider;
         private ITrackingPresenceProvider _presenceProvider;
         private float _nextProviderSearchTime;
 
         private readonly Transform[] _bones =
             new Transform[(int)HumanoidBoneId.Count];
+        private readonly Quaternion[] _neutralBoneRotations =
+            new Quaternion[(int)HumanoidBoneId.Count];
+        private readonly bool[] _hasNeutralBone =
+            new bool[(int)HumanoidBoneId.Count];
         private Vrm10BonePostureConverter _postureConverter;
 
         private NormalizedHumanoidPose _latestPose;
@@ -53,9 +62,13 @@ namespace VCR.Runtime.Character
         private Vector3 _targetRootReferencePosition;
         private Quaternion _targetRootReferenceRotation;
         private bool _rootReferenceInitialized;
+        private bool _fullBodyUnavailable = true;
 
         private readonly float[] _smoothedExpressions =
             new float[(int)StandardExpression.Count];
+
+        private readonly Dictionary<string, float> _smoothedCustomExpressions =
+            new(StringComparer.Ordinal);
 
         private void Awake()
         {
@@ -94,12 +107,27 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            if (_presenceProvider != null &&
-                !_presenceProvider.Presence.FullBodySourceAvailable)
+            if (_presenceProvider != null)
             {
-                _latestPose = null;
-                _latestExpressions = null;
-                return;
+                var presence =
+                    _presenceProvider.Presence;
+
+                var unavailable =
+                    presence.SubjectState !=
+                        SubjectPresenceState.Present ||
+                    !presence.FullBodySourceAvailable ||
+                    !presence.FullBodySubjectEvidence;
+
+                SetFullBodyUnavailable(unavailable);
+
+                if (_fullBodyUnavailable)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                SetFullBodyUnavailable(false);
             }
 
             if (_provider.TryGetLatestHumanoidPose(out var poseFrame) &&
@@ -146,12 +174,22 @@ namespace VCR.Runtime.Character
 
         private void LateUpdate()
         {
-            var deltaTime = Time.unscaledDeltaTime;
+            var deltaTime =
+                Time.unscaledDeltaTime;
+
+            if (_fullBodyUnavailable &&
+                returnToNeutralWhenUnavailable)
+            {
+                ApplyNeutral(deltaTime);
+                return;
+            }
 
             if (applyHumanoidPose &&
                 _latestPose != null)
             {
-                ApplyPose(_latestPose, deltaTime);
+                ApplyPose(
+                    _latestPose,
+                    deltaTime);
             }
 
             if (applyExpressions &&
@@ -176,6 +214,12 @@ namespace VCR.Runtime.Character
             _lastExpressionSourceId = null;
             _latestPose = null;
             _latestExpressions = null;
+            _fullBodyUnavailable = true;
+            Array.Clear(
+                _smoothedExpressions,
+                0,
+                _smoothedExpressions.Length);
+            _smoothedCustomExpressions.Clear();
             ResetPoseCalibration();
         }
 
@@ -183,6 +227,28 @@ namespace VCR.Runtime.Character
         public void ResetPoseCalibration()
         {
             _rootReferenceInitialized = false;
+        }
+
+        private void SetFullBodyUnavailable(
+            bool unavailable)
+        {
+            if (_fullBodyUnavailable == unavailable)
+            {
+                return;
+            }
+
+            _fullBodyUnavailable = unavailable;
+
+            if (unavailable)
+            {
+                _latestPose = null;
+                _latestExpressions = null;
+                return;
+            }
+
+            ResetPoseCalibration();
+            _lastPoseSequence = -1;
+            _lastExpressionSequence = -1;
         }
 
         private void ResolveProvider()
@@ -237,7 +303,17 @@ namespace VCR.Runtime.Character
                 var bone = (HumanoidBoneId)i;
                 if (TryMapBone(bone, out var unityBone))
                 {
-                    _bones[i] = GetDrivenBone(unityBone);
+                    var driven =
+                        GetDrivenBone(unityBone);
+
+                    _bones[i] = driven;
+
+                    if (driven != null)
+                    {
+                        _neutralBoneRotations[i] =
+                            driven.localRotation;
+                        _hasNeutralBone[i] = true;
+                    }
                 }
             }
         }
@@ -355,6 +431,120 @@ namespace VCR.Runtime.Character
             }
         }
 
+        private void ApplyNeutral(float deltaTime)
+        {
+            var alpha =
+                SmoothAlpha(
+                    neutralReturnSmoothing,
+                    deltaTime);
+
+            if (applyHumanoidPose)
+            {
+                for (var i = 0;
+                     i < (int)HumanoidBoneId.Count;
+                     i++)
+                {
+                    if (!_hasNeutralBone[i])
+                    {
+                        continue;
+                    }
+
+                    var bone = _bones[i];
+                    if (bone == null)
+                    {
+                        continue;
+                    }
+
+                    bone.localRotation =
+                        Quaternion.Slerp(
+                            bone.localRotation,
+                            _neutralBoneRotations[i],
+                            alpha);
+                }
+
+                if (_rootReferenceInitialized)
+                {
+                    if (applyRootPosition)
+                    {
+                        target.transform.localPosition =
+                            Vector3.Lerp(
+                                target.transform.localPosition,
+                                _targetRootReferencePosition,
+                                alpha);
+                    }
+
+                    if (applyRootRotation)
+                    {
+                        target.transform.localRotation =
+                            Quaternion.Slerp(
+                                target.transform.localRotation,
+                                _targetRootReferenceRotation,
+                                alpha);
+                    }
+                }
+            }
+
+            if (applyExpressions)
+            {
+                FadeExpressionsToNeutral(alpha);
+            }
+        }
+
+        private void FadeExpressionsToNeutral(float alpha)
+        {
+            var runtime =
+                target.Runtime.Expression;
+
+            for (var i = 0;
+                 i < (int)StandardExpression.Count;
+                 i++)
+            {
+                _smoothedExpressions[i] =
+                    Mathf.Lerp(
+                        _smoothedExpressions[i],
+                        0f,
+                        alpha);
+
+                if (TryExpressionKey(
+                    (StandardExpression)i,
+                    out var key))
+                {
+                    runtime.SetWeight(
+                        key,
+                        _smoothedExpressions[i]);
+                }
+            }
+
+            if (_smoothedCustomExpressions.Count == 0)
+            {
+                return;
+            }
+
+            var names =
+                new string[
+                    _smoothedCustomExpressions.Count];
+
+            _smoothedCustomExpressions.Keys.CopyTo(
+                names,
+                0);
+
+            foreach (var name in names)
+            {
+                var value =
+                    Mathf.Lerp(
+                        _smoothedCustomExpressions[name],
+                        0f,
+                        alpha);
+
+                _smoothedCustomExpressions[name] =
+                    value;
+
+                runtime.SetWeight(
+                    ExpressionKey.CreateCustom(name),
+                    value);
+            }
+        }
+
         private void ApplyExpressionState(
             NormalizedExpressionState state,
             float deltaTime)
@@ -393,9 +583,27 @@ namespace VCR.Runtime.Character
                     continue;
                 }
 
+                var targetValue =
+                    Mathf.Clamp01(custom.Value);
+
+                _smoothedCustomExpressions.TryGetValue(
+                    custom.Name,
+                    out var currentValue);
+
+                var smoothed =
+                    Mathf.Lerp(
+                        currentValue,
+                        targetValue,
+                        alpha);
+
+                _smoothedCustomExpressions[
+                    custom.Name] =
+                    smoothed;
+
                 runtime.SetWeight(
-                    ExpressionKey.CreateCustom(custom.Name),
-                    Mathf.Clamp01(custom.Value));
+                    ExpressionKey.CreateCustom(
+                        custom.Name),
+                    smoothed);
             }
         }
 
