@@ -58,6 +58,7 @@ namespace VCR.Runtime.Character
         private bool _bodyCalibrated;
         private bool _hasBodyReference;
         private bool _trackingSuppressed;
+        private bool _fullBodyOverrideActive;
 
         private NormalizedFaceState _latestFace;
         private NormalizedUpperBodyState _latestBody;
@@ -131,7 +132,18 @@ namespace VCR.Runtime.Character
                 Submit(faceFrame);
             }
 
-            if (_provider.TryGetLatestBodyHands(out var bodyFrame) &&
+            var fullBodyAvailable =
+                _presenceProvider != null &&
+                _presenceProvider.Presence.FullBodySourceAvailable;
+
+            if (fullBodyAvailable != _fullBodyOverrideActive)
+            {
+                _fullBodyOverrideActive = fullBodyAvailable;
+                _bodyCalibrated = false;
+            }
+
+            if (!_fullBodyOverrideActive &&
+                _provider.TryGetLatestBodyHands(out var bodyFrame) &&
                 bodyFrame != null &&
                 bodyFrame.Sequence != _lastBodySequence)
             {
@@ -164,7 +176,9 @@ namespace VCR.Runtime.Character
                 ApplyFace(_latestFace, deltaTime);
             }
 
-            if (applyUpperBody && _latestBody != null)
+            if (applyUpperBody &&
+                !_fullBodyOverrideActive &&
+                _latestBody != null)
             {
                 ApplyBody(_latestBody, deltaTime);
             }
