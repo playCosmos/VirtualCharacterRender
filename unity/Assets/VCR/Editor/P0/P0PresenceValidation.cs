@@ -95,6 +95,64 @@ namespace VCR.Editor.P0
                 bodyHandsFrame: null,
                 bodyHandsConfigured: false);
 
+            var mixedResolver = new TrackingPresenceResolver(
+                lostGraceUs,
+                restoreStableUs,
+                sourceStaleUs);
+            mixedResolver.Reset(0);
+
+            _ = mixedResolver.UpdateResolved(
+                0,
+                faceConfigured: true,
+                faceSourceAvailable: true,
+                faceSubjectEvidence: true,
+                bodyHandsConfigured: false,
+                bodyHandsSourceAvailable: false,
+                bodyHandsSubjectEvidence: false,
+                sourceDecisionReady: true,
+                fullBodyConfigured: true,
+                fullBodySourceAvailable: true,
+                fullBodySubjectEvidence: true);
+
+            _ = mixedResolver.UpdateResolved(
+                200_000,
+                faceConfigured: true,
+                faceSourceAvailable: true,
+                faceSubjectEvidence: true,
+                bodyHandsConfigured: false,
+                bodyHandsSourceAvailable: false,
+                bodyHandsSubjectEvidence: false,
+                sourceDecisionReady: true,
+                fullBodyConfigured: true,
+                fullBodySourceAvailable: true,
+                fullBodySubjectEvidence: true);
+
+            var mixedDomain = mixedResolver.UpdateResolved(
+                250_000,
+                faceConfigured: true,
+                faceSourceAvailable: true,
+                faceSubjectEvidence: false,
+                bodyHandsConfigured: false,
+                bodyHandsSourceAvailable: false,
+                bodyHandsSubjectEvidence: false,
+                sourceDecisionReady: true,
+                fullBodyConfigured: true,
+                fullBodySourceAvailable: true,
+                fullBodySubjectEvidence: true);
+
+            var mixedSourceLost = mixedResolver.UpdateResolved(
+                300_000,
+                faceConfigured: true,
+                faceSourceAvailable: false,
+                faceSubjectEvidence: false,
+                bodyHandsConfigured: false,
+                bodyHandsSourceAvailable: false,
+                bodyHandsSubjectEvidence: false,
+                sourceDecisionReady: true,
+                fullBodyConfigured: true,
+                fullBodySourceAvailable: true,
+                fullBodySubjectEvidence: true);
+
             var pass =
                 initial.SubjectState == SubjectPresenceState.Unknown &&
                 stable.SubjectState == SubjectPresenceState.Present &&
@@ -107,7 +165,19 @@ namespace VCR.Editor.P0
                 sourceLost.HasEvent(
                     TrackingPresenceEvents.TrackingSourceLost) &&
                 !sourceLost.HasEvent(
-                    TrackingPresenceEvents.SubjectLost);
+                    TrackingPresenceEvents.SubjectLost) &&
+                mixedDomain.SubjectState ==
+                    SubjectPresenceState.Present &&
+                mixedDomain.FaceSourceAvailable &&
+                !mixedDomain.FaceSubjectEvidence &&
+                mixedDomain.FullBodySourceAvailable &&
+                mixedDomain.FullBodySubjectEvidence &&
+                mixedSourceLost.SubjectState ==
+                    SubjectPresenceState.Present &&
+                !mixedSourceLost.FaceSourceAvailable &&
+                !mixedSourceLost.FaceSubjectEvidence &&
+                mixedSourceLost.FullBodySourceAvailable &&
+                mixedSourceLost.FullBodySubjectEvidence;
 
             if (pass)
             {
@@ -122,7 +192,9 @@ namespace VCR.Editor.P0
                     $"withinGrace={withinGrace.SubjectState}, " +
                     $"lost={lost.SubjectState}/{lost.Events}, " +
                     $"restored={restored.SubjectState}/{restored.Events}, " +
-                    $"sourceLost={sourceLost.SubjectState}/{sourceLost.Events}");
+                    $"sourceLost={sourceLost.SubjectState}/{sourceLost.Events}, " +
+                    $"mixedFace={mixedDomain.FaceSourceAvailable}/{mixedDomain.FaceSubjectEvidence}, " +
+                    $"mixedFull={mixedDomain.FullBodySourceAvailable}/{mixedDomain.FullBodySubjectEvidence}");
             }
         }
 
