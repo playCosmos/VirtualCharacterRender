@@ -49,7 +49,7 @@ namespace VCR.Runtime.Character
             new bool[(int)HumanoidBoneId.Count];
         private Vrm10BonePostureConverter _postureConverter;
 
-        private NormalizedHumanoidPose _latestPose;
+        private HumanoidPoseState _latestPose;
         private NormalizedExpressionState _latestExpressions;
 
         private long _lastPoseSequence = -1;
@@ -329,7 +329,7 @@ namespace VCR.Runtime.Character
         }
 
         private void ApplyPose(
-            NormalizedHumanoidPose pose,
+            HumanoidPoseState pose,
             float deltaTime)
         {
             var alpha = SmoothAlpha(
@@ -360,11 +360,13 @@ namespace VCR.Runtime.Character
                     ToUnity(sourcePose.LocalRotation);
 
                 var desired =
-                    _postureConverter != null
-                        ? _postureConverter.ToNormalizedLocalRotation(
-                            boneId,
-                            sourceRotation)
-                        : sourceRotation;
+                    pose.PoseSpace == HumanoidPoseSpace.NormalizedLocal
+                        ? sourceRotation
+                        : (_postureConverter != null
+                            ? _postureConverter.ToNormalizedLocalRotation(
+                                boneId,
+                                sourceRotation)
+                            : sourceRotation);
 
                 bone.localRotation =
                     Quaternion.Slerp(
@@ -375,7 +377,7 @@ namespace VCR.Runtime.Character
         }
 
         private void ApplyRoot(
-            NormalizedHumanoidPose pose,
+            HumanoidPoseState pose,
             float alpha)
         {
             if (!applyRootPosition &&
