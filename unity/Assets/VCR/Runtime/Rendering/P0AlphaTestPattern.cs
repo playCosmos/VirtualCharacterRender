@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace VCR.Runtime.Rendering
 {
@@ -14,6 +13,7 @@ namespace VCR.Runtime.Rendering
     public sealed class P0AlphaTestPattern : MonoBehaviour
     {
         [SerializeField] private bool visible = true;
+        [SerializeField] private Material baseMaterial;
         [SerializeField] private Vector3 origin =
             new Vector3(-1.15f, -0.65f, 0.15f);
         [SerializeField, Min(0.05f)] private float size = 0.32f;
@@ -28,6 +28,11 @@ namespace VCR.Runtime.Rendering
             {
                 Build();
             }
+        }
+
+        public void Configure(Material material)
+        {
+            baseMaterial = material;
         }
 
         [ContextMenu("Show Alpha Test Pattern")]
@@ -48,13 +53,12 @@ namespace VCR.Runtime.Rendering
         {
             Clear();
 
-            var shader =
-                Shader.Find("Universal Render Pipeline/Unlit");
-
-            if (shader == null)
+            if (baseMaterial == null ||
+                baseMaterial.shader == null)
             {
                 Debug.LogError(
-                    "VCR P0 alpha test: URP Unlit shader was not found.",
+                    "VCR P0 alpha test: serialized base material is missing. " +
+                    "Recreate the P0 runtime scene so the validation material is included in the build.",
                     this);
                 return;
             }
@@ -62,22 +66,19 @@ namespace VCR.Runtime.Rendering
             CreatePatch(
                 "Alpha 100%",
                 origin,
-                new Color(1f, 1f, 1f, 1f),
-                shader);
+                new Color(1f, 1f, 1f, 1f));
 
             CreatePatch(
                 "Alpha 50%",
                 origin +
                 Vector3.right * (size + gap),
-                new Color(1f, 1f, 1f, 0.5f),
-                shader);
+                new Color(1f, 1f, 1f, 0.5f));
 
             CreatePatch(
                 "Alpha 25%",
                 origin +
                 Vector3.right * 2f * (size + gap),
-                new Color(1f, 1f, 1f, 0.25f),
-                shader);
+                new Color(1f, 1f, 1f, 0.25f));
 
             // Two overlapping 50% patches make premultiplied/straight-alpha
             // edge mistakes visually obvious in OBS/window capture.
@@ -85,23 +86,20 @@ namespace VCR.Runtime.Rendering
                 "Overlap A",
                 origin +
                 Vector3.up * (size + gap),
-                new Color(1f, 0.25f, 0.25f, 0.5f),
-                shader);
+                new Color(1f, 0.25f, 0.25f, 0.5f));
 
             CreatePatch(
                 "Overlap B",
                 origin +
                 Vector3.up * (size + gap) +
                 new Vector3(size * 0.45f, size * 0.15f, -0.01f),
-                new Color(0.25f, 0.6f, 1f, 0.5f),
-                shader);
+                new Color(0.25f, 0.6f, 1f, 0.5f));
         }
 
         private void CreatePatch(
             string name,
             Vector3 localPosition,
-            Color color,
-            Shader shader)
+            Color color)
         {
             var patch =
                 GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -120,25 +118,21 @@ namespace VCR.Runtime.Rendering
             }
 
             var material =
-                new Material(shader)
+                new Material(baseMaterial)
                 {
                     name = "VCR P0 " + name,
-                    hideFlags = HideFlags.DontSave,
-                    renderQueue = (int)RenderQueue.Transparent
+                    hideFlags = HideFlags.DontSave
                 };
 
-            material.SetColor("_BaseColor", color);
-            material.SetFloat("_Surface", 1f);
-            material.SetFloat("_Blend", 0f);
-            material.SetFloat(
-                "_SrcBlend",
-                (float)BlendMode.SrcAlpha);
-            material.SetFloat(
-                "_DstBlend",
-                (float)BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0f);
-            material.EnableKeyword(
-                "_SURFACE_TYPE_TRANSPARENT");
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
 
             patch.GetComponent<MeshRenderer>().sharedMaterial =
                 material;
