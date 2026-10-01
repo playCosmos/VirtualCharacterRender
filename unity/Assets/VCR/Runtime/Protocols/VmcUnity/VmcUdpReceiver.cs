@@ -58,6 +58,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         public ITrackingSource TrackingSource => _source;
         public TrackingPresenceSnapshot Presence => _presence;
+        public int LocalPort => localPort;
         public long PacketCount => Interlocked.Read(ref _packetCount);
         public long MalformedPacketCount =>
             Interlocked.Read(ref _malformedPacketCount);
