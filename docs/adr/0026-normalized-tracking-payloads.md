@@ -71,6 +71,8 @@ No character code retains references to MediaPipe result buffers.
 
 A source may populate only the domains it owns.
 
+Low-level source adapters may use a destructive single-slot buffer internally, but the public `ITrackingFrameProvider` exposes non-destructive latest-frame snapshots. This allows character application, diagnostics, presence logic, and future routing/mixers to observe the same frame without stealing it from one another.
+
 Examples:
 
 ```text
