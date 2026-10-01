@@ -121,7 +121,15 @@ namespace VCR.Runtime.Output.Unity
             topmost = settings.Topmost;
             clickThrough = settings.ClickThrough;
 
-            ConfigureCameraForAlpha();
+            if (transparent)
+            {
+                ConfigureCameraForAlpha();
+            }
+            else
+            {
+                RestoreCameraState();
+            }
+
             _lastError = ValidateRuntime();
 
             if (_controller == null)

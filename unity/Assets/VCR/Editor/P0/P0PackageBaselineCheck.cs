@@ -16,7 +16,8 @@ namespace VCR.Editor.P0
                 ["com.vrmc.gltf"] = "0.131.2",
                 ["com.vrmc.univrm"] = "0.131.2",
                 ["com.vrmc.vrm"] = "0.131.2",
-                ["com.github.homuler.mediapipe"] = "0.16.3"
+                ["com.github.homuler.mediapipe"] = "0.16.3",
+                ["com.kirurobo.uniwinc"] = "0.9.8"
             };
 
         [MenuItem("VCR/P0/Validate Package Baseline")]
