@@ -59,11 +59,14 @@ PASS when:
 
 Baseline path:
 
-Webcam -> preprocessing -> HolisticLandmarker LIVE_STREAM -> normalized tracking.
+Webcam -> shared capture ->
+- FaceLandmarker LIVE_STREAM -> face/head normalized tracking
+- HolisticLandmarker LIVE_STREAM -> hands/upper-body normalized tracking
 
 PASS when:
 
-- face/head/hands/upper-body results are produced
+- face/head results are produced independently of pose
+- hands/upper-body results are produced by the Holistic path
 - Unity render loop is not blocked by inference
 - stale camera frames do not accumulate
 - callback/thread handoff is safe
@@ -89,7 +92,7 @@ Reference workload:
 1 camera
 1 lightweight environment
 MToon/default material path
-MediaPipe Holistic webcam tracking
+MediaPipe FaceLandmarker + Holistic webcam tracking
 face/head/hands/upper body active
 transparent output
 no full-body tracking
