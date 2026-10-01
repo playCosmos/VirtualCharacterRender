@@ -15,7 +15,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     {
         private readonly object _sync = new();
         private readonly byte[] _modelBytes;
-        private readonly MediaPipeFaceCallbackBridge _bridge = new();
+        private readonly MediaPipeFaceCallbackBridge _bridge;
 
         private FaceLandmarker _landmarker;
         private TrackingSourceHealth _health;
@@ -32,6 +32,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             SourceId = sourceId;
+            _bridge = new MediaPipeFaceCallbackBridge(SourceId);
             _health = new TrackingSourceHealth(
                 TrackingSourceHealthState.Stopped,
                 0,
