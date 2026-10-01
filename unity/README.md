@@ -118,6 +118,27 @@ External bundles are platform-specific. Build and validate separate Windows/macO
 
 Raw HLSL source is not compiled inside the application.
 
+### Environment/event/capability P0 path
+
+The generated runtime scene contains:
+
+- `Environment` + `BasicEnvironmentRuntime`
+- environment-owned directional light
+- `NormalizedEventHub`
+- `TrackingPresenceEventAdapter`
+
+Tracking subject disappearance is emitted as `tracking.subject_lost`; it is not an inactivity/AFK timer.
+
+Source-free checks:
+
+```text
+VCR > P0 > Validate Environment Runtime
+VCR > P0 > Validate Normalized Event Runtime
+VCR > P0 > Validate Lazy Capability Registry
+```
+
+The event hub has a bounded ingress queue and bounded per-frame dispatch. The capability registry instantiates optional services only when enabled.
+
 ### Optional ARKit/iPhone P0 path
 
 Run the source-free presence smoke check:
@@ -207,6 +228,16 @@ Assets/VCR/
 │  │  ├─ Vrm10TrackingTarget
 │  │  ├─ Vrm10HumanoidPoseTarget
 │  │  └─ Vrm10MotionSnapshotProvider
+│  ├─ Capabilities/
+│  │  └─ CapabilityRegistry
+│  ├─ Environment/
+│  │  ├─ IEnvironmentRuntime
+│  │  └─ Unity/BasicEnvironmentRuntime
+│  ├─ Events/
+│  │  ├─ NormalizedEventBus
+│  │  └─ Unity/
+│  │     ├─ NormalizedEventHub
+│  │     └─ TrackingPresenceEventAdapter
 │  ├─ Materials/
 │  │  ├─ MaterialSlotDescriptor
 │  │  └─ Unity/
