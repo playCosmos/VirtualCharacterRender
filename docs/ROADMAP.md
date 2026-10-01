@@ -12,15 +12,13 @@ Deliverables:
 - 720p60 minimum and 1080p60 recommended baseline measurements
 - MToon validation
 - custom shader/material override prototype
-- MediaPipeUnityPlugin HolisticLandmarker LIVE_STREAM spike:
-  - face with eye/mouth priority
-  - head
-  - hands
-  - upper body
-  - async frame-drop behavior
-  - M1 CPU inference cost
+- MediaPipeUnityPlugin dual-task LIVE_STREAM spike:
+  - FaceLandmarker: face/eyes/mouth/head
+  - HolisticLandmarker: hands/upper body
+  - independent async frame-drop behavior
+  - per-task M1 CPU inference cost
 - Apple ARKit-compatible mobile face-tracking input spike
-- mixed ARKit + Holistic routing spike
+- mixed ARKit + Holistic hands/upper-body routing spike
 - VMC receive/send spike
 - normalized tracking-state prototype
 - tracking-derived subject-presence prototype
@@ -41,8 +39,9 @@ Exit criteria:
 - higher resolutions remain configurable without inheriting the same blanket guarantee
 - one material can be overridden without corrupting the source model
 - an invalid custom shader does not terminate the application
-- Holistic webcam tracking produces usable normalized eye/mouth/face/head/hand/upper-body state
-- Holistic live-stream inference does not block the Unity render loop
+- FaceLandmarker produces usable normalized eye/mouth/face/head state without requiring pose
+- HolisticLandmarker produces usable hand/upper-body state
+- Face and Holistic live-stream inference do not block the Unity render loop
 - M1 tracking CPU cost and end-to-end latency are measured
 - mobile ARKit-compatible face data reaches desktop normalized state
 - mixed ARKit + Holistic routing works without character reload
@@ -65,7 +64,7 @@ Material-slot abstraction, MToon preservation, runtime overrides, generic shader
 
 Productionize:
 
-- MediaPipe HolisticLandmarker live-stream webcam path
+- MediaPipe FaceLandmarker + HolisticLandmarker live-stream webcam paths
 - face tracking with eye and mouth quality prioritized
 - head pose
 - hands
@@ -77,7 +76,7 @@ Productionize:
 
 Full-body tracking/IK is a separate optional capability and does not define baseline runtime cost.
 
-Only split webcam inference into separate tasks/custom graph if measured profiling justifies the additional complexity.
+Do not split Holistic into separate Hand/Pose tasks unless measured profiling or hand-quality evidence justifies the additional complexity.
 
 ## P4 — Tracking Abstraction and Routing
 
