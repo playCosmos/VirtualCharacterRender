@@ -38,12 +38,7 @@ namespace VCR.Runtime.Character
 
         private readonly Transform[] _bones =
             new Transform[(int)HumanoidBoneId.Count];
-        private readonly Quaternion[] _sourceReferenceRotations =
-            new Quaternion[(int)HumanoidBoneId.Count];
-        private readonly Quaternion[] _targetReferenceRotations =
-            new Quaternion[(int)HumanoidBoneId.Count];
-        private readonly bool[] _hasReference =
-            new bool[(int)HumanoidBoneId.Count];
+        private Vrm10BonePostureConverter _postureConverter;
 
         private NormalizedHumanoidPose _latestPose;
         private NormalizedExpressionState _latestExpressions;
@@ -78,6 +73,8 @@ namespace VCR.Runtime.Character
                 return;
             }
 
+            _postureConverter =
+                Vrm10BonePostureConverter.Capture(target);
             CacheBones();
             ResolveProvider();
         }
@@ -185,10 +182,6 @@ namespace VCR.Runtime.Character
         [ContextMenu("Recalibrate Full Body")]
         public void ResetPoseCalibration()
         {
-            Array.Clear(
-                _hasReference,
-                0,
-                _hasReference.Length);
             _rootReferenceInitialized = false;
         }
 
@@ -290,23 +283,12 @@ namespace VCR.Runtime.Character
                 var sourceRotation =
                     ToUnity(sourcePose.LocalRotation);
 
-                if (!_hasReference[i])
-                {
-                    _sourceReferenceRotations[i] =
-                        sourceRotation;
-                    _targetReferenceRotations[i] =
-                        bone.localRotation;
-                    _hasReference[i] = true;
-                    continue;
-                }
-
-                var delta =
-                    Quaternion.Inverse(
-                        _sourceReferenceRotations[i]) *
-                    sourceRotation;
-
                 var desired =
-                    _targetReferenceRotations[i] * delta;
+                    _postureConverter != null
+                        ? _postureConverter.ToNormalizedLocalRotation(
+                            boneId,
+                            sourceRotation)
+                        : sourceRotation;
 
                 bone.localRotation =
                     Quaternion.Slerp(
