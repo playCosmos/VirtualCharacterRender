@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Rendering;
 
 namespace VCR.Editor.P0
 {
@@ -23,6 +24,73 @@ namespace VCR.Editor.P0
             Build(
                 BuildTarget.StandaloneOSX,
                 "macos");
+        }
+
+        [MenuItem("VCR/P0/Validate Current Platform Shader Bundle")]
+        public static void ValidateCurrentPlatformBundle()
+        {
+#if UNITY_EDITOR_WIN
+            var platformFolder = "windows";
+#elif UNITY_EDITOR_OSX
+            var platformFolder = "macos";
+#else
+            Debug.LogError(
+                "VCR P0 shader bundle: current Editor platform is not a supported P0 desktop target.");
+            return;
+#endif
+
+            var bundlePath =
+                Path.GetFullPath(
+                    Path.Combine(
+                        "Assets",
+                        "VCR",
+                        "P0",
+                        "BuiltShaderBundles",
+                        platformFolder,
+                        "vcr-p0-shaders.bundle"));
+
+            var root = new GameObject(
+                "VCR P0 Shader Bundle Self-Test");
+            root.hideFlags =
+                HideFlags.HideAndDontSave;
+
+            try
+            {
+                var loader =
+                    root.AddComponent<
+                        RuntimeShaderBundleLoader>();
+
+                if (!loader.TryLoad(bundlePath))
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - " +
+                        loader.LastError);
+                    return;
+                }
+
+                if (!RuntimeShaderRegistry.TryResolve(
+                        "VCR/P0/TintUnlit",
+                        out var shader) ||
+                    shader == null)
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - loaded Shader was not registered.");
+                    return;
+                }
+
+                Debug.Log(
+                    $"VCR P0 shader bundle SELF-TEST: PASS - '{shader.name}' loaded and registered from {bundlePath}.");
+            }
+            finally
+            {
+                RuntimeShaderRegistry.Unregister(
+                    "VCR/P0/TintUnlit");
+
+                if (root != null)
+                {
+                    Object.DestroyImmediate(root);
+                }
+            }
         }
 
         private static void Build(
