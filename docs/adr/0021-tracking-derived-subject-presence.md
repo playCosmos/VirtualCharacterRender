@@ -35,7 +35,31 @@ Presence derivation may use:
 - configurable lost grace period
 - configurable restore stability period
 
-The exact default timing thresholds are determined by tracking validation rather than hard-coded into the architecture.
+The exact product defaults are determined by tracking validation rather than hard-coded into the architecture.
+
+The current P0 implementation uses configurable engineering defaults only:
+
+- subject-lost grace: 0.50 s
+- restore stability: 0.15 s
+- source callback stale threshold: 1.00 s
+
+These are measurement starting points, not accepted product thresholds.
+
+A fresh callback that reports no subject contributes to `SubjectLost`. A callback stream that itself becomes stale contributes to `TrackingSourceLost`. Loss of all sources makes subject state `Unknown`; source failure must not be misreported as performer absence.
+
+## Character fallback
+
+The P0 VRM target holds the last valid pose during the subject-lost grace period.
+
+After stable subject loss or tracking-source unavailability:
+
+- stale face/body payloads are discarded
+- head returns smoothly to its neutral reference
+- tracking-driven VRM expressions fade toward zero
+- torso and arms return toward their last calibrated neutral/reference pose
+- the next stable restore begins a fresh face/body calibration
+
+This visual fallback is separate from presence event semantics.
 
 ## Consequences
 
