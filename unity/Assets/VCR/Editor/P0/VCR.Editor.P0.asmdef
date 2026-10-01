@@ -2,6 +2,7 @@
   "name": "VCR.Editor.P0",
   "rootNamespace": "VCR.Editor.P0",
   "references": [
+    "VCR.Runtime.Tracking",
     "VCR.Runtime.Tracking.MediaPipe",
     "VCR.Runtime.Tracking.ArKitUnity",
     "VCR.Runtime.Tracking.Routing",
