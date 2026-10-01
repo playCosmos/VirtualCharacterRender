@@ -258,7 +258,8 @@ namespace VCR.Runtime.Tracking.Routing
                 selected.Confidence,
                 selected.SubjectDetected,
                 face: selected.Face,
-                sourceId: selected.SourceId);
+                sourceId: selected.SourceId,
+                runtimeTimestampUs: selected.RuntimeTimestampUs);
         }
 
         private void UpdateBodyHandsSnapshot()
@@ -291,7 +292,8 @@ namespace VCR.Runtime.Tracking.Routing
                 upperBody: selected.UpperBody,
                 leftHand: selected.LeftHand,
                 rightHand: selected.RightHand,
-                sourceId: selected.SourceId);
+                sourceId: selected.SourceId,
+                runtimeTimestampUs: selected.RuntimeTimestampUs);
         }
 
         private void UpdateExternalPoseSnapshots()
@@ -336,7 +338,8 @@ namespace VCR.Runtime.Tracking.Routing
                     poseFrame.Confidence,
                     poseFrame.SubjectDetected,
                     humanoidPose: poseFrame.HumanoidPose,
-                    sourceId: poseFrame.SourceId);
+                    sourceId: poseFrame.SourceId,
+                    runtimeTimestampUs: poseFrame.RuntimeTimestampUs);
             }
 
             if (_externalPoseProvider.TryGetLatestExpressions(
@@ -361,7 +364,8 @@ namespace VCR.Runtime.Tracking.Routing
                     expressionFrame.Confidence,
                     expressionFrame.SubjectDetected,
                     expressions: expressionFrame.Expressions,
-                    sourceId: expressionFrame.SourceId);
+                    sourceId: expressionFrame.SourceId,
+                    runtimeTimestampUs: expressionFrame.RuntimeTimestampUs);
             }
         }
 
