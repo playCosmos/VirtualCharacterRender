@@ -1,12 +1,14 @@
 namespace VCR.Runtime.Tracking
 {
     /// <summary>
-    /// Source-neutral frame provider consumed by routing/mixer or P0 preview targets.
-    /// Implementations may be MediaPipe, ARKit/VMC routing, or a future mixer.
+    /// Source-neutral non-destructive snapshot provider.
+    ///
+    /// Multiple consumers may read the same latest frame. Consumers use the
+    /// frame sequence/timestamp to decide whether it is new for their purpose.
     /// </summary>
     public interface ITrackingFrameProvider
     {
-        bool TryTakeLatestFace(out TrackingFrame frame);
-        bool TryTakeLatestBodyHands(out TrackingFrame frame);
+        bool TryGetLatestFace(out TrackingFrame frame);
+        bool TryGetLatestBodyHands(out TrackingFrame frame);
     }
 }
