@@ -192,8 +192,18 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             mediaPipeFaceEnabled = enabled;
 
-            if (!enabled || _faceSource == null)
+            if (_faceSource == null)
             {
+                return;
+            }
+
+            if (!enabled)
+            {
+                if (_faceSource.Health.State != TrackingSourceHealthState.Stopped)
+                {
+                    _faceSource.Stop();
+                }
+
                 return;
             }
 
