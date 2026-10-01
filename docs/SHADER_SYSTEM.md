@@ -26,9 +26,17 @@ Renderer Material Slot
 
 Current Unity implementation:
 
-- `MaterialOverrideController`
-- `RuntimeShaderRegistry`
-- `RuntimeShaderBundleLoader`
+- `VCR.Runtime.Materials.Unity.MaterialOverrideController`
+- `VCR.Runtime.Materials.Unity.RuntimeShaderRegistry`
+- `VCR.Runtime.Materials.Unity.RuntimeShaderBundleLoader`
+
+P0 validation assets/tools:
+
+- `Assets/VCR/P0/Shaders/P0TintUnlit.shader`
+- `VCR > P0 > Validate Material Override Runtime`
+- `VCR > P0 > Build Shader Bundle > Windows x64`
+- `VCR > P0 > Build Shader Bundle > macOS`
+- `VCR > P0 > Validate Current Platform Shader Bundle`
 
 The source material is never modified.
 
@@ -49,6 +57,8 @@ P0 supports:
 - float/int/bool/color/vector/texture runtime parameters
 - source restoration
 - invalid/unsupported shader fallback
+- source-material mutation isolation
+- precompiled Shader registration from a platform AssetBundle
 - diagnostics counters
 
 Whole-character presets and serialized parameter metadata remain later material/shader-runtime work.
