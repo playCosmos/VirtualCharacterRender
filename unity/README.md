@@ -50,6 +50,18 @@ VCR > P0 > Create Tracking Test Scene
 
 The generated scene contains the shared-webcam dual-task runner from ADR-0025.
 
+To preview normalized tracking on an imported/loaded VRM:
+
+1. Put the VRM instance in the same scene as the tracking runner.
+2. Select the VRM root or one of its children.
+3. Run:
+
+```text
+VCR > P0 > Attach Tracking Target to Selected VRM
+```
+
+The target auto-finds an `ITrackingFrameProvider`, prefers UniVRM's ControlRig, and calibrates face/body on the first valid frames.
+
 Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
 
 ## Current module skeleton
@@ -59,16 +71,21 @@ Assets/VCR/
 ├─ Runtime/
 │  ├─ Core/
 │  │  └─ LatestValueBuffer
-│  └─ Tracking/
-│     ├─ ITrackingSource
-│     ├─ TrackingFrame
-│     ├─ TrackingRegion
-│     ├─ TrackingSourceHealth
-│     ├─ TrackingSourceKind
-│     └─ MediaPipe/
-│        ├─ MediaPipeFaceSource
-│        ├─ MediaPipeHolisticSource
-│        └─ MediaPipeWebcamTrackingRunner
+│  ├─ Tracking/
+│  │  ├─ ITrackingSource
+│  │  ├─ ITrackingFrameProvider
+│  │  ├─ TrackingFrame
+│  │  ├─ NormalizedFaceState
+│  │  ├─ NormalizedUpperBodyState
+│  │  ├─ NormalizedHandState
+│  │  └─ MediaPipe/
+│  │     ├─ MediaPipeFaceSource
+│  │     ├─ MediaPipeHolisticSource
+│  │     ├─ MediaPipeFaceNormalizer
+│  │     ├─ MediaPipeHolisticNormalizer
+│  │     └─ MediaPipeWebcamTrackingRunner
+│  └─ Character/
+│     └─ Vrm10TrackingTarget
 └─ Editor/
    └─ P0/
       └─ P0PackageBaselineCheck
