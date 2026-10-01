@@ -165,7 +165,8 @@ namespace VCR.Runtime.Tracking.ArKit
                 subjectDetected ? 1f : 0f,
                 subjectDetected,
                 face: face,
-                sourceId: SourceId));
+                sourceId: SourceId,
+                runtimeTimestampUs: MonotonicClock.NowMicroseconds()));
         }
 
         private void ThrowIfDisposed()
