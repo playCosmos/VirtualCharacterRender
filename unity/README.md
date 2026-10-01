@@ -100,6 +100,21 @@ VCR > P0 > Validate Transparent Output Baseline
 
 The static check is not a platform PASS. Build standalone players and validate Windows/macOS native alpha plus OBS capture separately.
 
+### Evidence and performance players
+
+Build menus:
+
+```text
+VCR > P0 > Build > Windows x64 Evidence Player
+VCR > P0 > Build > Windows x64 Performance Player
+VCR > P0 > Build > macOS Evidence Player
+VCR > P0 > Build > macOS Performance Player
+```
+
+Evidence players are Development builds and automatically write `vcr-p0-system.txt` plus `vcr-p0-diagnostics.csv` under `Application.persistentDataPath`.
+
+Performance players omit automatic CSV file I/O. Use them for final frame-time measurements.
+
 ### Material/custom shader P0 path
 
 Every VRM loaded by `Vrm10CharacterLoader` gets a `MaterialOverrideController`.
