@@ -11,7 +11,7 @@ The product is implemented for one active performer/avatar. Advanced features de
 ```text
 Built-in / External Inputs
  Webcam / ARKit / VMC / OSC / WebSocket / MIDI / Audio
- Broadcast chat / Donation / AFK / Local state
+ Broadcast chat / Donation / Tracking subject presence / Local state
                            ↓
                      Input Adapters
                            ↓
@@ -127,7 +127,7 @@ Shared runtime → Win32/Cocoa object
 - Missing tracking sources fall back to neutral/configured state.
 - Camera/mobile/full-body tracking can be disabled without leaving inference/network work active.
 - Broadcast adapters can disconnect without blocking or corrupting render state.
-- Shader compile/load failure falls back to a safe material.
+- Custom shader resolution/load/application failure restores the source material or another deterministic safe fallback.
 - Plugin failure must not terminate the renderer.
 - Network/protocol work must not block render timing.
 - Output failure must not corrupt character or scene state.
