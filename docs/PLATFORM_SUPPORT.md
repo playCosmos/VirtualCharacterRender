@@ -9,6 +9,23 @@ VirtualCharacterRender targets both:
 
 Neither platform is a secondary port. Platform-specific features are implemented behind shared output/input abstractions.
 
+## Hardware baseline
+
+### macOS
+
+- Apple Silicon only for the current supported baseline
+- M1 or newer
+- M1 is the minimum performance-validation reference
+
+Intel Mac support is not part of the current baseline.
+
+### Windows
+
+- minimum hardware: TBD
+- recommended hardware: TBD
+
+Windows requirements are intentionally deferred until P0 performance measurements establish realistic CPU/GPU tiers.
+
 ## Shared application layer
 
 These systems must remain portable across supported desktop platforms:
@@ -38,7 +55,7 @@ Platform-specific implementation is expected for:
 
 ## Rendering validation
 
-P0 must validate the renderer candidate independently on Windows and macOS.
+P0 must validate Unity/URP independently on Windows and macOS.
 
 Required on both platforms:
 
@@ -50,6 +67,7 @@ Required on both platforms:
 - target frame-rate stability
 - OBS-compatible capture path
 - failure recovery
+- built-in tracking cost
 
 Platform-specific output transports such as Spout-class Windows paths or Syphon-class macOS paths are optional adapters, not core contracts.
 
