@@ -84,6 +84,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
             return frame != null;
         }
 
+        public bool TryGetLatestHumanoidPose(out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+        public bool TryGetLatestExpressions(out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+
         private IEnumerator Start()
         {
             yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
