@@ -31,12 +31,13 @@ namespace VCR.Runtime.Tracking
 
         public float Get(FaceCoefficient coefficient)
         {
-            if (coefficient < 0 || coefficient >= FaceCoefficient.Count)
+            var index = (int)coefficient;
+            if (index < 0 || index >= (int)FaceCoefficient.Count)
             {
                 return 0f;
             }
 
-            return _coefficients[(int)coefficient];
+            return _coefficients[index];
         }
 
         public float EyeOpenLeft => 1f - Get(FaceCoefficient.EyeBlinkLeft);
