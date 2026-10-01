@@ -11,7 +11,11 @@
     "VCR.Runtime.Protocols.Osc",
     "VCR.Runtime.Protocols.Vmc",
     "VCR.Runtime.Protocols.VmcUnity",
-    "VRM10"
+    "VRM10",
+    "VCR.Runtime.Output",
+    "VCR.Runtime.Output.Unity",
+    "Kirurobo.UniWindowController",
+    "Unity.RenderPipelines.Universal.Runtime"
   ],
   "includePlatforms": [
     "Editor"
