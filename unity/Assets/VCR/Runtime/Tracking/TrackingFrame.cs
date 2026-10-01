@@ -18,6 +18,8 @@ namespace VCR.Runtime.Tracking
             NormalizedUpperBodyState upperBody = null,
             NormalizedHandState leftHand = null,
             NormalizedHandState rightHand = null,
+            NormalizedHumanoidPose humanoidPose = null,
+            NormalizedExpressionState expressions = null,
             string sourceId = null)
         {
             Sequence = sequence;
@@ -29,6 +31,8 @@ namespace VCR.Runtime.Tracking
             UpperBody = upperBody;
             LeftHand = leftHand;
             RightHand = rightHand;
+            HumanoidPose = humanoidPose;
+            Expressions = expressions;
             SourceId = sourceId;
         }
 
@@ -42,6 +46,8 @@ namespace VCR.Runtime.Tracking
         public NormalizedUpperBodyState UpperBody { get; }
         public NormalizedHandState LeftHand { get; }
         public NormalizedHandState RightHand { get; }
+        public NormalizedHumanoidPose HumanoidPose { get; }
+        public NormalizedExpressionState Expressions { get; }
         public string SourceId { get; }
     }
 }
