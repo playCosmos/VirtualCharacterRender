@@ -33,13 +33,22 @@ chmod +x ./tools/bootstrap-mediapipe.sh
 ./tools/bootstrap-mediapipe.sh
 ```
 
-3. Open the `unity/` directory as the Unity project.
-4. Let Package Manager resolve URP and UniVRM.
-5. In Unity, run:
+3. The bootstrap also extracts the pinned FaceLandmarker and Holistic model files into `Assets/StreamingAssets/VCR/Models/`.
+4. Open the `unity/` directory as the Unity project.
+5. Let Package Manager resolve URP and UniVRM.
+6. In Unity, run:
 
 ```text
 VCR > P0 > Validate Package Baseline
 ```
+
+Then create the tracking smoke-test scene with:
+
+```text
+VCR > P0 > Create Tracking Test Scene
+```
+
+The generated scene contains the shared-webcam dual-task runner from ADR-0025.
 
 Do not change pinned package versions to make a local error disappear without recording the compatibility evidence.
 
@@ -55,7 +64,11 @@ Assets/VCR/
 │     ├─ TrackingFrame
 │     ├─ TrackingRegion
 │     ├─ TrackingSourceHealth
-│     └─ TrackingSourceKind
+│     ├─ TrackingSourceKind
+│     └─ MediaPipe/
+│        ├─ MediaPipeFaceSource
+│        ├─ MediaPipeHolisticSource
+│        └─ MediaPipeWebcamTrackingRunner
 └─ Editor/
    └─ P0/
       └─ P0PackageBaselineCheck
