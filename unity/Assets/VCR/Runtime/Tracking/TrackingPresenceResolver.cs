@@ -84,7 +84,10 @@ namespace VCR.Runtime.Tracking
                 bodyHandsConfigured,
                 bodyHandsAvailable,
                 bodySubjectEvidence,
-                sourceDecisionReady);
+                sourceDecisionReady,
+                fullBodyConfigured: false,
+                fullBodySourceAvailable: false,
+                fullBodySubjectEvidence: false);
         }
 
         /// <summary>
@@ -99,13 +102,22 @@ namespace VCR.Runtime.Tracking
             bool bodyHandsConfigured,
             bool bodyHandsSourceAvailable,
             bool bodyHandsSubjectEvidence,
-            bool sourceDecisionReady = true)
+            bool sourceDecisionReady = true,
+            bool fullBodyConfigured = false,
+            bool fullBodySourceAvailable = false,
+            bool fullBodySubjectEvidence = false)
         {
             EnsureStarted(nowUs);
 
-            var anyConfigured = faceConfigured || bodyHandsConfigured;
+            var anyConfigured =
+                faceConfigured ||
+                bodyHandsConfigured ||
+                fullBodyConfigured;
+
             var anySourceAvailable =
-                faceSourceAvailable || bodyHandsSourceAvailable;
+                faceSourceAvailable ||
+                bodyHandsSourceAvailable ||
+                fullBodySourceAvailable;
 
             var events = TrackingPresenceEvents.None;
 
@@ -127,7 +139,9 @@ namespace VCR.Runtime.Tracking
             }
 
             var subjectEvidence =
-                faceSubjectEvidence || bodyHandsSubjectEvidence;
+                faceSubjectEvidence ||
+                bodyHandsSubjectEvidence ||
+                fullBodySubjectEvidence;
 
             if (!anySourceAvailable)
             {
@@ -214,6 +228,7 @@ namespace VCR.Runtime.Tracking
                 _subjectState,
                 faceSourceAvailable,
                 bodyHandsSourceAvailable,
+                fullBodySourceAvailable,
                 anySourceAvailable,
                 subjectEvidence,
                 events);
@@ -236,6 +251,7 @@ namespace VCR.Runtime.Tracking
                 _sequence,
                 nowUs,
                 SubjectPresenceState.Unknown,
+                false,
                 false,
                 false,
                 false,
