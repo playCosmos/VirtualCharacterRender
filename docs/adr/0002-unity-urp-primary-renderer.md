@@ -1,34 +1,59 @@
 # ADR-0002: Unity URP as primary renderer
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-01
 
 ## Context
 
-The product requires VRM rendering, custom shaders, post processing, transparent desktop output, and scalable operation from lightweight single-character use to advanced scenes on both Windows and macOS.
+The product requires VRM rendering, custom shaders, post processing, transparent desktop output, dynamic environments, and scalable operation from lightweight single-character use to advanced one-character scenes on both Windows and macOS.
 
-Unity currently supports desktop players on both Windows and macOS, making it a plausible shared backend candidate, but project-specific alpha, shader, packaging, and performance behavior still requires validation.
+Unity provides the best fit for the current product constraints because it combines mature real-time rendering, cross-platform desktop deployment, strong VRM ecosystem support, custom shader tooling, and lower runtime/application integration complexity than the evaluated alternatives for the same target visual quality.
 
-## Proposed decision
+## Decision
 
-Use Unity with URP as the first production renderer/backend for Windows and macOS.
+Use Unity with URP as the primary production renderer/backend for Windows and macOS.
 
-ADR-0001 and ADR-0008 remain mandatory: Unity types and platform-native types cannot become shared domain contracts.
+Unity is now an architectural dependency of the initial 3D product implementation.
 
-## Alternatives
+ADR-0001 and ADR-0008 remain mandatory:
 
+- Unity types do not become shared domain contracts.
+- platform-native types do not become shared domain contracts.
+- tracking, events, scene state, and external protocols remain behind application/runtime abstractions.
+
+The exact Unity LTS version, URP package version, and UniVRM version are pinned separately after P0 compatibility validation.
+
+## Alternatives considered
+
+- Unreal Engine
+- Blender/EEVEE as runtime
 - Three.js/WebGL/WebGPU with three-vrm
 - Godot
 - custom native renderer
-- separate native renderer per operating system
 - multiple production backends from day one
 
-## P0 validation
+## Rationale
 
-On both Windows and macOS:
+For the current product:
 
-- select and pin target Unity/LTS version
-- VRM/UniVRM compatibility
+- the runtime is optimized for one VRM character rather than a large world
+- lightweight 720p60/1080p60 operation is a primary requirement
+- Windows and macOS are both first-class targets
+- built-in webcam/ARKit tracking, event integration, transparent overlay, and desktop application behavior are core features
+- advanced 3D environments are supported, but they do not justify making a heavier world-oriented engine the baseline
+- Blender remains useful for content authoring, validation, and reference rendering rather than as the application runtime
+
+Unreal may provide a higher ceiling for very large or cinematic worlds, but that advantage does not outweigh the additional runtime/integration complexity for the current product target.
+
+## P0 validation still required
+
+Acceptance of Unity/URP does not remove implementation validation.
+
+Before the production project baseline is frozen, validate on Windows and macOS:
+
+- select and pin Unity LTS version
+- select and pin URP version
+- UniVRM compatibility
 - transparent-window behavior
 - OBS-compatible capture
 - alpha through URP/post effects
@@ -36,17 +61,30 @@ On both Windows and macOS:
 - high-DPI behavior
 - packaging/startup
 - lightweight CPU/GPU/memory baseline
+- 720p60 minimum target
+- 1080p60 recommended target
 - advanced-feature scaling
 - licensing/distribution implications
 
-## Consequences if accepted
+Failure of a specific Unity/URP version does not automatically revoke this ADR; first evaluate another supported Unity/URP version.
 
-- shared 3D/rendering/tooling path across both desktop targets
-- mature shader/content workflow
-- Unity runtime/toolchain dependency
-- platform-specific window/output adapters still required
-- strict anti-leak boundaries required for portability
+## Consequences
+
+- Unity/URP becomes the implementation target for the 3D renderer
+- shared 3D/rendering/tooling path across Windows and macOS
+- UniVRM remains the preferred VRM candidate pending ADR-0003 acceptance
+- custom shader architecture is implemented on top of URP while preserving higher-level shader/material abstractions
+- platform-specific window/output adapters are still required
+- strict anti-leak boundaries remain necessary for future portability and the separate 2D extension
 
 ## Revisit conditions
 
-Reject or defer if either target platform fails alpha/output requirements, lightweight performance targets, packaging constraints, or required shader/runtime behavior.
+Revisit the engine decision only if Unity/URP proves unable to satisfy a core requirement across supported platforms after reasonable version/backend alternatives are tested, including:
+
+- transparent output/capture
+- required VRM behavior
+- custom shader requirements
+- baseline 60 FPS target
+- distribution constraints
+
+A future 2D extension does not by itself supersede this 3D renderer decision.
