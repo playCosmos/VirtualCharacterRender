@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.Materials.Unity;
 
 namespace VCR.Runtime.Character
 {
@@ -26,6 +27,9 @@ namespace VCR.Runtime.Character
         [SerializeField] private MonoBehaviour trackingProviderBehaviour;
         [SerializeField] private bool attachTrackingTargets = true;
         [SerializeField] private bool attachMotionSnapshotProvider = true;
+
+        [Header("Materials")]
+        [SerializeField] private bool attachMaterialOverrideController = true;
 
         private CancellationTokenSource _loadCancellation;
         private int _loadGeneration;
@@ -202,6 +206,16 @@ namespace VCR.Runtime.Character
                 localPosition;
             instance.transform.localRotation =
                 Quaternion.Euler(localEulerAngles);
+
+            if (attachMaterialOverrideController)
+            {
+                var materials =
+                    instance.GetComponent<MaterialOverrideController>() ??
+                    instance.gameObject.AddComponent<
+                        MaterialOverrideController>();
+
+                materials.RefreshSlots();
+            }
 
             if (!attachTrackingTargets)
             {
