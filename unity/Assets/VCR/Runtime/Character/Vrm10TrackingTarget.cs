@@ -35,7 +35,12 @@ namespace VCR.Runtime.Character
         [SerializeField, Min(0f)] private float bodySmoothing = 14f;
         [SerializeField, Range(0f, 1f)] private float minimumJointConfidence = 0.35f;
 
+        [Header("Tracking loss")]
+        [SerializeField] private bool returnToNeutralWhenTrackingUnavailable = true;
+        [SerializeField, Min(0f)] private float neutralReturnSmoothing = 8f;
+
         private ITrackingFrameProvider _provider;
+        private ITrackingPresenceProvider _presenceProvider;
         private float _nextProviderSearchTime;
 
         private Transform _head;
@@ -45,12 +50,14 @@ namespace VCR.Runtime.Character
         private Transform _rightUpperArm;
         private Transform _rightLowerArm;
 
-        private Quaternion _headInitialLocal;
+        private Quaternion _headNeutralLocal;
         private Quaternion _headSourceReference;
         private bool _faceCalibrated;
 
         private BodyReference _bodyReference;
         private bool _bodyCalibrated;
+        private bool _hasBodyReference;
+        private bool _trackingSuppressed;
 
         private NormalizedFaceState _latestFace;
         private NormalizedUpperBodyState _latestBody;
@@ -100,6 +107,11 @@ namespace VCR.Runtime.Character
                 return;
             }
 
+            if (UpdateTrackingSuppression())
+            {
+                return;
+            }
+
             if (_provider.TryGetLatestFace(out var faceFrame) &&
                 faceFrame?.Face != null &&
                 faceFrame.Sequence != _lastFaceSequence)
@@ -119,14 +131,22 @@ namespace VCR.Runtime.Character
 
         private void LateUpdate()
         {
+            var deltaTime = Time.unscaledDeltaTime;
+
+            if (_trackingSuppressed && returnToNeutralWhenTrackingUnavailable)
+            {
+                ApplyNeutral(deltaTime);
+                return;
+            }
+
             if (_latestFace != null)
             {
-                ApplyFace(_latestFace, Time.unscaledDeltaTime);
+                ApplyFace(_latestFace, deltaTime);
             }
 
             if (applyUpperBody && _latestBody != null)
             {
-                ApplyBody(_latestBody, Time.unscaledDeltaTime);
+                ApplyBody(_latestBody, deltaTime);
             }
         }
 
@@ -168,6 +188,7 @@ namespace VCR.Runtime.Character
         public void SetTrackingProvider(ITrackingFrameProvider provider)
         {
             _provider = provider;
+            _presenceProvider = provider as ITrackingPresenceProvider;
             trackingProviderBehaviour = provider as MonoBehaviour;
         }
 
@@ -176,6 +197,7 @@ namespace VCR.Runtime.Character
             if (trackingProviderBehaviour is ITrackingFrameProvider configured)
             {
                 _provider = configured;
+                _presenceProvider = trackingProviderBehaviour as ITrackingPresenceProvider;
                 return;
             }
 
@@ -193,6 +215,7 @@ namespace VCR.Runtime.Character
                 if (behaviour is ITrackingFrameProvider provider)
                 {
                     _provider = provider;
+                    _presenceProvider = behaviour as ITrackingPresenceProvider;
                     trackingProviderBehaviour = behaviour;
                     return;
                 }
@@ -217,7 +240,7 @@ namespace VCR.Runtime.Character
 
             if (_head != null)
             {
-                _headInitialLocal = _head.localRotation;
+                _headNeutralLocal = _head.localRotation;
             }
         }
 
@@ -232,6 +255,142 @@ namespace VCR.Runtime.Character
             return target.Humanoid.GetBoneTransform(bone);
         }
 
+        private bool UpdateTrackingSuppression()
+        {
+            if (_presenceProvider == null)
+            {
+                _trackingSuppressed = false;
+                return false;
+            }
+
+            var presence = _presenceProvider.Presence;
+            var shouldSuppress =
+                presence.SubjectState != SubjectPresenceState.Present;
+
+            if (shouldSuppress == _trackingSuppressed)
+            {
+                return _trackingSuppressed;
+            }
+
+            _trackingSuppressed = shouldSuppress;
+
+            if (_trackingSuppressed)
+            {
+                // Keep the calibrated neutral references, but discard stale
+                // source payloads so they cannot be reapplied after a loss.
+                _latestFace = null;
+                _latestBody = null;
+                _faceCalibrated = false;
+                _bodyCalibrated = false;
+            }
+            else
+            {
+                // Re-entry starts from the current source pose without a snap.
+                _faceCalibrated = false;
+                _bodyCalibrated = false;
+            }
+
+            return _trackingSuppressed;
+        }
+
+        private void ApplyNeutral(float deltaTime)
+        {
+            var alpha = SmoothAlpha(neutralReturnSmoothing, deltaTime);
+
+            if (applyHead && _head != null)
+            {
+                _head.localRotation = Quaternion.Slerp(
+                    _head.localRotation,
+                    _headNeutralLocal,
+                    alpha);
+            }
+
+            if (applyUpperBody && _hasBodyReference)
+            {
+                if (_torso != null)
+                {
+                    _torso.rotation = Quaternion.Slerp(
+                        _torso.rotation,
+                        _bodyReference.TorsoWorldRotation,
+                        alpha);
+                }
+
+                ReturnBoneToReference(
+                    _leftUpperArm,
+                    _bodyReference.LeftUpperArmWorldRotation,
+                    alpha);
+                ReturnBoneToReference(
+                    _leftLowerArm,
+                    _bodyReference.LeftLowerArmWorldRotation,
+                    alpha);
+                ReturnBoneToReference(
+                    _rightUpperArm,
+                    _bodyReference.RightUpperArmWorldRotation,
+                    alpha);
+                ReturnBoneToReference(
+                    _rightLowerArm,
+                    _bodyReference.RightLowerArmWorldRotation,
+                    alpha);
+            }
+
+            if (applyExpressions)
+            {
+                FadeExpressionsToNeutral(alpha);
+            }
+        }
+
+        private void FadeExpressionsToNeutral(float alpha)
+        {
+            var expression = target.Runtime.Expression;
+
+            _blinkLeft = Mathf.Lerp(_blinkLeft, 0f, alpha);
+            _blinkRight = Mathf.Lerp(_blinkRight, 0f, alpha);
+            _lookUp = Mathf.Lerp(_lookUp, 0f, alpha);
+            _lookDown = Mathf.Lerp(_lookDown, 0f, alpha);
+            _lookLeft = Mathf.Lerp(_lookLeft, 0f, alpha);
+            _lookRight = Mathf.Lerp(_lookRight, 0f, alpha);
+            _aa = Mathf.Lerp(_aa, 0f, alpha);
+            _ih = Mathf.Lerp(_ih, 0f, alpha);
+            _ou = Mathf.Lerp(_ou, 0f, alpha);
+            _ee = Mathf.Lerp(_ee, 0f, alpha);
+            _oh = Mathf.Lerp(_oh, 0f, alpha);
+
+            var bilateralBlink = Mathf.Min(_blinkLeft, _blinkRight);
+            expression.SetWeight(ExpressionKey.Blink, bilateralBlink);
+            expression.SetWeight(
+                ExpressionKey.BlinkLeft,
+                Mathf.Max(0f, _blinkLeft - bilateralBlink));
+            expression.SetWeight(
+                ExpressionKey.BlinkRight,
+                Mathf.Max(0f, _blinkRight - bilateralBlink));
+
+            expression.SetWeight(ExpressionKey.LookUp, _lookUp);
+            expression.SetWeight(ExpressionKey.LookDown, _lookDown);
+            expression.SetWeight(ExpressionKey.LookLeft, _lookLeft);
+            expression.SetWeight(ExpressionKey.LookRight, _lookRight);
+            expression.SetWeight(ExpressionKey.Aa, _aa);
+            expression.SetWeight(ExpressionKey.Ih, _ih);
+            expression.SetWeight(ExpressionKey.Ou, _ou);
+            expression.SetWeight(ExpressionKey.Ee, _ee);
+            expression.SetWeight(ExpressionKey.Oh, _oh);
+        }
+
+        private static void ReturnBoneToReference(
+            Transform bone,
+            Quaternion reference,
+            float alpha)
+        {
+            if (bone == null)
+            {
+                return;
+            }
+
+            bone.rotation = Quaternion.Slerp(
+                bone.rotation,
+                reference,
+                alpha);
+        }
+
         private void ApplyFace(NormalizedFaceState face, float deltaTime)
         {
             var sourceHead = ToUnity(face.HeadRotation);
@@ -239,17 +398,13 @@ namespace VCR.Runtime.Character
             if (!_faceCalibrated)
             {
                 _headSourceReference = sourceHead;
-                if (_head != null)
-                {
-                    _headInitialLocal = _head.localRotation;
-                }
                 _faceCalibrated = true;
             }
 
             if (applyHead && _head != null)
             {
                 var delta = sourceHead * Quaternion.Inverse(_headSourceReference);
-                var desired = _headInitialLocal * delta;
+                var desired = _headNeutralLocal * delta;
                 var alpha = SmoothAlpha(headSmoothing, deltaTime) * headWeight;
                 _head.localRotation = Quaternion.Slerp(_head.localRotation, desired, alpha);
             }
@@ -341,6 +496,7 @@ namespace VCR.Runtime.Character
                 }
 
                 _bodyCalibrated = true;
+                _hasBodyReference = true;
                 return;
             }
 
