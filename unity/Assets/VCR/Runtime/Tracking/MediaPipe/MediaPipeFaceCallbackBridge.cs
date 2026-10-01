@@ -13,7 +13,13 @@ namespace VCR.Runtime.Tracking.MediaPipe
     public sealed class MediaPipeFaceCallbackBridge
     {
         private readonly LatestValueBuffer<TrackingFrame> _latest = new();
+        private readonly string _sourceId;
         private long _sequence;
+
+        public MediaPipeFaceCallbackBridge(string sourceId)
+        {
+            _sourceId = sourceId;
+        }
 
         public void OnResult(
             in FaceLandmarkerResult result,
@@ -38,7 +44,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 regions,
                 hasFace ? 1f : 0f,
                 hasFace,
-                face: face));
+                face: face,
+                sourceId: _sourceId));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
