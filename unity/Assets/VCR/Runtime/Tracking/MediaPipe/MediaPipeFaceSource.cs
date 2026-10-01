@@ -213,25 +213,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     submittedAtUs);
             }
 
-            long submittedAtUs = 0;
-            lock (_sync)
-            {
-                if (_submittedAtUs.TryGetValue(
-                    timestampMillisec,
-                    out submittedAtUs))
-                {
-                    _submittedAtUs.Remove(timestampMillisec);
-                }
-            }
-
-            if (submittedAtUs > 0)
-            {
-                Interlocked.Exchange(
-                    ref _lastProcessingLatencyUs,
-                    MonotonicClock.NowMicroseconds() -
-                    submittedAtUs);
-            }
-
             _bridge.OnResult(in result, image, timestampMillisec);
             Interlocked.Increment(ref _resultCount);
 
