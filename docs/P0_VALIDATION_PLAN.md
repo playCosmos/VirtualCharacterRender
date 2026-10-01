@@ -74,6 +74,22 @@ PASS when:
 - brief face loss does not crash the native plugin
 - SubjectLost/SubjectRestored behavior is stable
 
+### V3B — Normalized tracking to VRM
+
+PASS when:
+
+- MediaPipe callback data is converted to engine-independent normalized payloads
+- normalized coordinates use +X right, +Y up, +Z forward consistently
+- no MediaPipe result/list types cross into character code
+- one VRM receives head rotation from normalized face state
+- blink and eye-look expressions visibly follow normalized coefficients
+- provisional mouth mapping drives available VRM vowel presets without exceptions
+- upper-body calibration completes from shoulders/elbows/wrists/hips
+- torso and upper/lower arms respond through the UniVRM ControlRig when present
+- raw humanoid-bone fallback works when no ControlRig is available
+- missing VRM expression presets do not fail the frame
+- normalized hand joint payloads are produced even though finger retargeting is deferred
+
 ### V4 — ARKit mixed tracking
 
 PASS when:
