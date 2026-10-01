@@ -321,7 +321,9 @@ Record at minimum:
 - VMC receive packet/malformed counts when enabled
 - VMC send packet/error counts when enabled
 
-Optional CSV evidence can be written from the diagnostics component to `Application.persistentDataPath`.
+Evidence/Development players automatically write `vcr-p0-system.txt` and `vcr-p0-diagnostics.csv` to `Application.persistentDataPath`.
+
+Performance players do not automatically write CSV so periodic file I/O does not contaminate frame-time measurements. Use console/profiler capture for the performance run and compare it with the separate evidence run.
 
 macOS:
 
