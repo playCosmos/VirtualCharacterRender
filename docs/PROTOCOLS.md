@@ -55,6 +55,8 @@ For VRM1 outbound compatibility, the snapshot provider reads original `target.Hu
 
 Default receiver security posture is loopback-only sender acceptance on UDP 39539. LAN sender acceptance requires an explicit IPv4 address.
 
+If this process has an active VMC receiver on the same loopback destination port, the VMC sender refuses to start. Bidirectional local testing must use distinct receive/destination ports to avoid self-feedback.
+
 VMC full-body input is optional and does not belong to the baseline MediaPipe performance budget.
 
 P0 checks:
