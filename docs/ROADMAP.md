@@ -22,7 +22,7 @@ Deliverables:
 - VMC receive/send spike:
   - bounded OSC message/bundle codec
   - VMC UDP receiver with loopback-by-default sender filter
-  - normalized full-body humanoid pose and expression domains
+  - source-neutral humanoid pose with explicit pose space and expression domains
   - optional external full-body routing
   - calibrated UniVRM full-body P0 target
   - normalized final-character snapshot provider
