@@ -314,15 +314,7 @@ namespace VCR.Runtime.Protocols.Osc
 
         private static float Int32BitsToSingle(int bits)
         {
-            var bytes = BitConverter.GetBytes(bits);
-
-            if (BitConverter.IsLittleEndian)
-            {
-                Array.Reverse(bytes);
-                Array.Reverse(bytes);
-            }
-
-            return BitConverter.ToSingle(bytes, 0);
+            return BitConverter.Int32BitsToSingle(bits);
         }
 
         private static int Align4(int value)
