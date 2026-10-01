@@ -24,7 +24,7 @@ ADR files record consequential technical decisions and their reasoning.
 | ADR | Decision | Status |
 |---|---|---|
 | [0001](0001-layered-runtime-boundaries.md) | Layered runtime boundaries | Accepted |
-| [0002](0002-unity-urp-primary-renderer.md) | Unity URP as primary renderer | Proposed |
+| [0002](0002-unity-urp-primary-renderer.md) | Unity URP as primary renderer | Accepted |
 | [0003](0003-univrm-for-vrm-runtime.md) | UniVRM for VRM runtime | Proposed |
 | [0004](0004-custom-shaders-first-class.md) | Custom shaders as first-class feature | Accepted |
 | [0005](0005-normalized-tracking-state.md) | Normalized tracking state | Accepted |
