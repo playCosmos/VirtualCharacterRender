@@ -4,33 +4,49 @@
 - Date: 2026-10-01
 
 ## Context
-The initial product requires VRM rendering, transparent desktop output, custom shaders, post processing, and a mature Windows runtime.
+
+The product requires VRM rendering, custom shaders, post processing, transparent desktop output, and scalable operation from lightweight single-character use to advanced scenes on both Windows and macOS.
+
+Unity currently supports desktop players on both Windows and macOS, making it a plausible shared backend candidate, but project-specific alpha, shader, packaging, and performance behavior still requires validation.
 
 ## Proposed decision
-Use Unity with URP as the first production renderer/backend.
 
-ADR-0001 remains mandatory so Unity types do not become domain contracts.
+Use Unity with URP as the first production renderer/backend for Windows and macOS.
+
+ADR-0001 and ADR-0008 remain mandatory: Unity types and platform-native types cannot become shared domain contracts.
 
 ## Alternatives
+
 - Three.js/WebGL/WebGPU with three-vrm
 - Godot
 - custom native renderer
+- separate native renderer per operating system
 - multiple production backends from day one
 
 ## P0 validation
-- select target Unity/LTS version
+
+On both Windows and macOS:
+
+- select and pin target Unity/LTS version
+- VRM/UniVRM compatibility
 - transparent-window behavior
-- OBS capture
+- OBS-compatible capture
 - alpha through URP/post effects
-- UniVRM compatibility
 - custom/runtime shader workflow
-- packaging/startup/performance
+- high-DPI behavior
+- packaging/startup
+- lightweight CPU/GPU/memory baseline
+- advanced-feature scaling
 - licensing/distribution implications
 
 ## Consequences if accepted
-- mature 3D tooling and shader workflow
+
+- shared 3D/rendering/tooling path across both desktop targets
+- mature shader/content workflow
 - Unity runtime/toolchain dependency
+- platform-specific window/output adapters still required
 - strict anti-leak boundaries required for portability
 
 ## Revisit conditions
-Reject or defer if alpha/output behavior, distribution constraints, runtime cost, or shader limitations conflict materially with the product goals.
+
+Reject or defer if either target platform fails alpha/output requirements, lightweight performance targets, packaging constraints, or required shader/runtime behavior.
