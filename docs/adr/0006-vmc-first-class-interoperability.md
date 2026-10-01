@@ -21,7 +21,8 @@ Current P0 implementation now has:
 - normalized standard/custom expression domain
 - VRM0 and VRM1 expression-name compatibility mapping
 - optional full-body routing independent from face-source priority
-- calibrated VMC full-body application through UniVRM ControlRig/fallback bones
+- VMC original-to-normalized bone-posture conversion using UniVRM initial rotations
+- VMC full-body application through UniVRM ControlRig/fallback bones
 - normalized final-character snapshot provider
 - VMC UDP sender using source-neutral snapshots
 - default VRM0 expression-name transmission for compatibility
