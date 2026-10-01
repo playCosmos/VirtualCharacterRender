@@ -21,37 +21,59 @@ Multi-person identity tracking from one webcam is not an initial feature.
 
 ## Accepted baseline stack
 
-ADR-0022 defines the built-in tracking stack.
+ADR-0022 defines the source strategy.
+ADR-0023 defines the Unity/MediaPipe execution strategy.
 
-Primary baseline:
+Primary webcam baseline:
 
 ```text
 Webcam
- └─ MediaPipe-class tracking
-      ├─ face fallback
-      ├─ head fallback
-      ├─ hands
-      └─ upper body
-
-ARKit-compatible mobile source
- └─ preferred face / eyes / mouth / head
+ ↓
+Shared capture/preprocess
+ ↓
+MediaPipe HolisticLandmarker
+ (LIVE_STREAM)
+ ├─ face
+ ├─ pose / upper body
+ ├─ left hand
+ └─ right hand
+ ↓
+Normalized Tracking State
 ```
 
 Preferred mixed configuration:
 
 ```text
 Face / Eyes / Mouth / Head = ARKit
-Hands / Upper Body         = MediaPipe Webcam
+Hands / Upper Body         = MediaPipe Holistic webcam path
 ```
 
 Fallback without ARKit:
 
 ```text
-Face / Eyes / Mouth / Head = MediaPipe Webcam
-Hands / Upper Body         = MediaPipe Webcam
+Face / Eyes / Mouth / Head = MediaPipe Holistic webcam path
+Hands / Upper Body         = MediaPipe Holistic webcam path
 ```
 
 Do not continuously average ARKit and MediaPipe face data by default. Route by region and source health, then transition smoothly on source changes.
+
+## Unity execution model
+
+Initial implementation uses:
+
+- homuler MediaPipeUnityPlugin
+- MediaPipe Tasks API
+- HolisticLandmarker
+- LIVE_STREAM/asynchronous execution
+- one webcam capture/preprocessing path
+- one performer
+- segmentation disabled by default
+
+Do not start with separate FaceLandmarker, HandLandmarker, and PoseLandmarker loops.
+
+This reduces task orchestration, repeated camera handling, synchronization, and managed/native crossings.
+
+When ARKit owns the face/head regions, Holistic may still run its face path initially while those outputs are ignored. This deliberate redundancy keeps the implementation simple. Split hand/pose inference is considered only if profiling proves that redundant face inference materially breaks the performance target.
 
 ## Pipeline
 
@@ -73,9 +95,9 @@ Calibration / Temporal Filtering
      One Active Character
 ```
 
-## Webcam path
+## Webcam quality path
 
-The MediaPipe webcam path targets:
+The webcam path targets:
 
 - facial landmarks/expressions
 - left/right eye openness and useful gaze estimation
@@ -99,7 +121,18 @@ The tracking path may use:
 
 These operations affect tracking input only unless explicitly shown in a preview.
 
-Face, hands, and upper body may run at different update rates while rendering remains at 60 FPS.
+## Frame policy
+
+Tracking freshness is more important than processing every camera frame.
+
+- renderer remains 60 FPS
+- webcam inference runs asynchronously
+- do not build a deep frame queue
+- stale input frames may be dropped
+- results carry timestamps
+- mixer interpolation/smoothing bridges tracking rate to render rate
+
+Exact tracking/camera rates are selected after M1/Windows profiling.
 
 ## Apple mobile face tracking
 
