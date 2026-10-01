@@ -312,10 +312,41 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 return;
             }
 
+            if (IsLocalAddress(address))
+            {
+                var receivers =
+                    FindObjectsByType<VmcUdpReceiver>(
+                        FindObjectsInactive.Exclude,
+                        FindObjectsSortMode.None);
+
+                foreach (var receiver in receivers)
+                {
+                    if (receiver != null &&
+                        receiver.enabled &&
+                        receiver.LocalPort == remotePort)
+                    {
+                        Debug.LogError(
+                            "VCR VMC sender: destination matches an active local VMC receiver port. " +
+                            "This would create a self-loop. Change either the receiver listen port or sender destination port.",
+                            this);
+                        enabled = false;
+                        return;
+                    }
+                }
+            }
+
             _endpoint =
                 new IPEndPoint(address, remotePort);
             _client =
                 new UdpClient(AddressFamily.InterNetwork);
+        }
+
+        private static bool IsLocalAddress(IPAddress address)
+        {
+            return
+                IPAddress.IsLoopback(address) ||
+                address.Equals(IPAddress.Any) ||
+                address.Equals(IPAddress.Loopback);
         }
 
         private void CloseClient()
