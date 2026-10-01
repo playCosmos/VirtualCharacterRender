@@ -1,7 +1,8 @@
 # ADR-0023: MediaPipe Holistic live-stream execution in Unity
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-10-01
+- Superseded by: ADR-0025
 
 ## Context
 
