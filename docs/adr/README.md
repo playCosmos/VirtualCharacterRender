@@ -45,3 +45,4 @@ ADR files record consequential technical decisions and their reasoning.
 | [0020](0020-external-broadcast-event-adapters.md) | External broadcast events through normalized adapters | Accepted |
 | [0021](0021-tracking-derived-subject-presence.md) | Tracking-derived subject presence | Accepted |
 | [0022](0022-mediapipe-arkit-tracking-stack.md) | MediaPipe webcam tracking with ARKit face priority | Accepted |
+| [0023](0023-mediapipe-holistic-live-stream-execution.md) | MediaPipe Holistic live-stream execution in Unity | Accepted |
