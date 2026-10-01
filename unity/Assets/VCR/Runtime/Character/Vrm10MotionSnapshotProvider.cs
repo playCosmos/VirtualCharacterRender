@@ -84,7 +84,8 @@ namespace VCR.Runtime.Character
             var rootPosition = target.transform.localPosition;
             var rootRotation = target.transform.localRotation;
 
-            var pose = new NormalizedHumanoidPose(
+            var pose = new HumanoidPoseState(
+                HumanoidPoseSpace.OriginalLocal,
                 new TrackingVector3(
                     rootPosition.x,
                     rootPosition.y,
@@ -107,7 +108,8 @@ namespace VCR.Runtime.Character
                 subjectDetected: true,
                 humanoidPose: pose,
                 expressions: expressions,
-                sourceId: "character-runtime");
+                sourceId: "character-runtime",
+                runtimeTimestampUs: NowUs());
 
             return true;
         }
