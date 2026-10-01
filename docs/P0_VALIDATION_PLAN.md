@@ -9,7 +9,7 @@ P0 uses the following pinned baseline:
 - UniVRM: 0.131.2
 - MediaPipeUnityPlugin: 0.16.3
 - MediaPipe runtime in plugin: 0.10.22
-- UniWindowController: 0.9.8, UPM release commit `304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc`
+- UniWindowController: 0.9.8, pinned by Git tag `v0.9.8`
 - macOS minimum reference: Apple Silicon M1
 - Windows hardware reference: TBD
 
@@ -62,7 +62,7 @@ The generated runtime scene includes:
 
 Static PASS requires:
 
-- UniWindowController 0.9.8 resolves from the exact pinned UPM release commit
+- UniWindowController 0.9.8 resolves from the pinned `v0.9.8` UPM tag
 - URP Alpha Processing enabled
 - SDR/HDR-off camera baseline with clear alpha 0
 - Windows explicit D3D11
