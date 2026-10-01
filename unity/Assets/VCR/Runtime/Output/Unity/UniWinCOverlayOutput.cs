@@ -31,6 +31,8 @@ namespace VCR.Runtime.Output.Unity
 
         private UniWindowController _controller;
         private string _lastError;
+        private bool _pendingNativeApply;
+        private bool _nativeApplied;
 
         private CameraClearFlags _originalClearFlags;
         private Color _originalBackground;
@@ -48,7 +50,9 @@ namespace VCR.Runtime.Output.Unity
 
                 return new OverlayOutputStatus(
                     IsPlatformSupported(),
-                    isActiveAndEnabled &&
+                    !Application.isEditor &&
+                    IsPlatformSupported() &&
+                    _nativeApplied &&
                     string.IsNullOrEmpty(_lastError),
                     "uniwinc-0.9.8",
                     _lastError,
@@ -90,6 +94,19 @@ namespace VCR.Runtime.Output.Unity
             Apply(CurrentSettings());
         }
 
+        private void Update()
+        {
+            if (Application.isEditor ||
+                !_pendingNativeApply ||
+                _controller == null ||
+                !string.IsNullOrEmpty(_lastError))
+            {
+                return;
+            }
+
+            ApplyNativeSettings();
+        }
+
         public void ConfigureForP0(Camera camera)
         {
             targetCamera = camera;
@@ -128,13 +145,39 @@ namespace VCR.Runtime.Output.Unity
 
             // Native transparency is available only in standalone players.
             // Editor still receives camera/window configuration for setup.
-            if (!Application.isEditor &&
-                string.IsNullOrEmpty(_lastError))
+            _nativeApplied = false;
+            _pendingNativeApply =
+                !Application.isEditor &&
+                string.IsNullOrEmpty(_lastError);
+
+            if (_pendingNativeApply)
             {
-                _controller.isTransparent = transparent;
-                _controller.isTopmost = topmost;
-                _controller.isClickThrough = clickThrough;
+                ApplyNativeSettings();
             }
+        }
+
+        private void ApplyNativeSettings()
+        {
+            // UniWindowController may not have attached the native window yet.
+            // Transparent/click-through retain requested state before attach,
+            // while topmost requires the native core. Reapply until topmost
+            // reports the requested value.
+            _controller.transparentType =
+                UniWindowController.TransparentType.Alpha;
+            _controller.isTransparent = transparent;
+            _controller.isClickThrough = clickThrough;
+            _controller.isTopmost = topmost;
+
+            var topmostApplied =
+                _controller.isTopmost == topmost;
+
+            if (!topmostApplied)
+            {
+                return;
+            }
+
+            _nativeApplied = true;
+            _pendingNativeApply = false;
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)
@@ -247,6 +290,9 @@ namespace VCR.Runtime.Output.Unity
 
         private void OnDisable()
         {
+            _pendingNativeApply = false;
+            _nativeApplied = false;
+
             if (_controller != null &&
                 !Application.isEditor)
             {
