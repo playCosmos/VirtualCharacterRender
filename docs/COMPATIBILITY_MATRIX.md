@@ -22,7 +22,8 @@
 | VRM 1.0 load | Required | Required |
 | MToon | Required | Required |
 | MediaPipe native load | Required | Required |
-| Holistic LIVE_STREAM | Required | Required |
+| FaceLandmarker LIVE_STREAM | Required | Required |
+| Holistic LIVE_STREAM (hands/upper body) | Required | Required |
 | Transparent output | Required | Required |
 | OBS-compatible capture | Required | Required |
 | 720p60 baseline | Required | Required |
@@ -32,7 +33,8 @@
 
 - MediaPipeUnityPlugin desktop inference is CPU-based on macOS and Windows.
 - The MediaPipe prebuilt package is intentionally not committed to this repository because of its size; bootstrap scripts fetch the pinned release tarball.
-- HolisticLandmarker is used first for implementation simplicity. Separate Face/Hand/Pose tasks are an optimization fallback only if profiling proves necessary.
+- ADR-0025 uses FaceLandmarker for face/head and HolisticLandmarker for hands/upper body because the 0.16.3 Holistic C# wrapper gates complete results on pose availability.
+- Separate Hand/Pose tasks remain a later optimization only if profiling or hand-quality evidence justifies the added complexity.
 - Windows hardware requirements remain intentionally undefined until P0 measurements exist.
 
 ## Upgrade policy
