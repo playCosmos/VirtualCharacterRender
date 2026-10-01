@@ -1,0 +1,22 @@
+{
+  "name": "VCR.Runtime.Output.Unity",
+  "rootNamespace": "VCR.Runtime.Output.Unity",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Output",
+    "Kirurobo.UniWindowController"
+  ],
+  "includePlatforms": [
+    "Editor",
+    "macOSStandalone",
+    "WindowsStandalone64"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
