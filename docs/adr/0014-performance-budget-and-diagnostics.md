@@ -21,6 +21,17 @@ Primary product targets:
 
 Each major feature reports disabled recurring cost and enabled incremental cost.
 
+The P0 runtime implementation now records:
+
+- rolling frame average/P95/P99
+- normalized tracking update rates by domain
+- source publication-to-consumer snapshot age where a shared monotonic clock is available
+- MediaPipe Face/Holistic submit-to-callback latency
+- protocol packet/error counters through a generic `IRuntimeMetricsSource`
+- optional CSV validation evidence
+
+Metric collection is intentionally low-frequency; expensive scene scans/sorting do not occur every render frame.
+
 ## Consequences
 
 - reference workloads/test machines must be versioned
