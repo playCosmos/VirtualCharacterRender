@@ -86,6 +86,33 @@ Changing sources must not require character reload.
 
 Microphone-derived mouth/body motion can be used as an optional fallback when visual tracking is unavailable or intentionally disabled.
 
+## Subject presence
+
+Tracking must distinguish performer absence from source failure.
+
+The normalized tracking/health layer must expose enough information for a presence-state service to derive:
+
+- `SubjectLost`
+- `SubjectRestored`
+- `TrackingSourceLost`
+- `TrackingSourceRestored`
+
+`SubjectLost` means the configured performer is no longer reliably detected after a configurable grace period.
+
+`TrackingSourceLost` means the camera, mobile sender, network transport, or adapter itself is unavailable.
+
+Presence derivation may use:
+
+- detection validity
+- tracking confidence
+- face/head validity
+- upper-body validity where useful
+- source-specific tracking-state flags
+- lost grace period
+- restore stability period
+
+Brief occlusion and temporary confidence loss must not cause rapid presence-event flapping.
+
 ## Full-body tracking
 
 Full-body tracking is a separate capability.
@@ -132,6 +159,7 @@ Each adapter reports:
 - update rate
 - stale state
 - confidence where available
+- subject-validity state
 - error state
 - active inference/transport state
 
