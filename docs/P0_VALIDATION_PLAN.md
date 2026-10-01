@@ -54,6 +54,26 @@ PASS when:
 - MediaPipe native plugin loads on Windows x86-64
 - development build can be produced for both targets
 
+### Standalone test invocation
+
+The P0 runtime scene includes a standalone command-line bootstrap.
+
+Model-only evidence:
+
+```text
+VirtualCharacterRender-P0 --vcr-vrm="<absolute path to model.vrm>"
+```
+
+Optional external shader evidence:
+
+```text
+VirtualCharacterRender-P0 --vcr-vrm="<model.vrm>" --vcr-shader-bundle="<platform bundle>" --vcr-shader-id="<shader id>"
+```
+
+`--vcr-material-slot="<slot id>"` is optional; the first discovered slot is used when omitted.
+
+The bootstrap has no per-frame update loop and performs no model/shader loading if the corresponding arguments are absent.
+
 ### V1 — VRM/runtime
 
 PASS when:
