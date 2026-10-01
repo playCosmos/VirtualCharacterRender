@@ -7,6 +7,7 @@
     "VCR.Runtime.Tracking.ArKitUnity",
     "VCR.Runtime.Tracking.Routing",
     "VCR.Runtime.Character",
+    "VCR.Runtime.Diagnostics",
     "VCR.Runtime.Protocols.Osc",
     "VCR.Runtime.Protocols.Vmc",
     "VCR.Runtime.Protocols.VmcUnity",
