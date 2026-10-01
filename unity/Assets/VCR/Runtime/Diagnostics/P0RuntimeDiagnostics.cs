@@ -342,41 +342,13 @@ namespace VCR.Runtime.Diagnostics
             out float p95Ms,
             out float p99Ms)
         {
-            averageMs = 0f;
-            p95Ms = 0f;
-            p99Ms = 0f;
-
-            if (_frameCount <= 0)
-            {
-                return;
-            }
-
-            var count =
-                Math.Min(
-                    _frameCount,
-                    _frameMs.Length);
-
-            for (var i = 0; i < count; i++)
-            {
-                _sortScratch[i] =
-                    _frameMs[i];
-                averageMs +=
-                    _sortScratch[i];
-            }
-
-            averageMs /= count;
-
-            Array.Sort(
+            FrameTimingStatistics.Compute(
+                _frameMs,
+                _frameCount,
                 _sortScratch,
-                0,
-                count);
-
-            p95Ms =
-                _sortScratch[
-                    PercentileIndex(count, 0.95)];
-            p99Ms =
-                _sortScratch[
-                    PercentileIndex(count, 0.99)];
+                out averageMs,
+                out p95Ms,
+                out p99Ms);
         }
 
         private void CollectSubsystemMetrics(
@@ -517,18 +489,6 @@ namespace VCR.Runtime.Diagnostics
                     this);
                 writeCsvEvidence = false;
             }
-        }
-
-        private static int PercentileIndex(
-            int count,
-            double percentile)
-        {
-            return Math.Min(
-                count - 1,
-                Math.Max(
-                    0,
-                    (int)Math.Ceiling(
-                        percentile * count) - 1));
         }
 
         private static string FormatAge(double value)
