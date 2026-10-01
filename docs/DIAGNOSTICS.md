@@ -68,7 +68,14 @@ The generic metric-source boundary lets future subsystems add low-frequency gaug
 
 Console reports occur every five seconds by default.
 
-Optional CSV evidence is written to `Application.persistentDataPath` and includes:
+Standalone Development/Evidence builds enable CSV evidence automatically. Non-development Performance builds leave CSV writing disabled so validation file I/O does not contaminate the performance run.
+
+When evidence writing is enabled, `Application.persistentDataPath` receives:
+
+- `vcr-p0-system.txt` with UTC, OS, CPU/count/frequency, GPU/API/memory, RAM, Unity version, build type, startup resolution, and evidence path
+- `vcr-p0-diagnostics.csv` with time-series runtime metrics
+
+The CSV includes:
 
 - UTC timestamp
 - frame average/P95/P99
