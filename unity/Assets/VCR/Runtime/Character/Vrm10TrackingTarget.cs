@@ -57,7 +57,8 @@ namespace VCR.Runtime.Character
         private BodyReference _bodyReference;
         private bool _bodyCalibrated;
         private bool _hasBodyReference;
-        private bool _trackingSuppressed;
+        private bool _faceSuppressed;
+        private bool _bodySuppressed;
         private bool _fullBodyOverrideActive;
 
         private NormalizedFaceState _latestFace;
@@ -99,9 +100,11 @@ namespace VCR.Runtime.Character
 
         private void Update()
         {
-            if (_provider == null && Time.unscaledTime >= _nextProviderSearchTime)
+            if (_provider == null &&
+                Time.unscaledTime >= _nextProviderSearchTime)
             {
-                _nextProviderSearchTime = Time.unscaledTime + 1f;
+                _nextProviderSearchTime =
+                    Time.unscaledTime + 1f;
                 ResolveProvider();
             }
 
@@ -110,12 +113,10 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            if (UpdateTrackingSuppression())
-            {
-                return;
-            }
+            UpdateRegionAvailability();
 
-            if (_provider.TryGetLatestFace(out var faceFrame) &&
+            if (!_faceSuppressed &&
+                _provider.TryGetLatestFace(out var faceFrame) &&
                 faceFrame?.Face != null &&
                 faceFrame.Sequence != _lastFaceSequence)
             {
@@ -132,17 +133,8 @@ namespace VCR.Runtime.Character
                 Submit(faceFrame);
             }
 
-            var fullBodyAvailable =
-                _presenceProvider != null &&
-                _presenceProvider.Presence.FullBodySourceAvailable;
-
-            if (fullBodyAvailable != _fullBodyOverrideActive)
-            {
-                _fullBodyOverrideActive = fullBodyAvailable;
-                _bodyCalibrated = false;
-            }
-
             if (!_fullBodyOverrideActive &&
+                !_bodySuppressed &&
                 _provider.TryGetLatestBodyHands(out var bodyFrame) &&
                 bodyFrame != null &&
                 bodyFrame.Sequence != _lastBodySequence)
@@ -165,20 +157,28 @@ namespace VCR.Runtime.Character
         {
             var deltaTime = Time.unscaledDeltaTime;
 
-            if (_trackingSuppressed && returnToNeutralWhenTrackingUnavailable)
+            if (_faceSuppressed &&
+                returnToNeutralWhenTrackingUnavailable)
             {
-                ApplyNeutral(deltaTime);
-                return;
+                ApplyFaceNeutral(deltaTime);
             }
-
-            if (_latestFace != null)
+            else if (_latestFace != null)
             {
                 ApplyFace(_latestFace, deltaTime);
             }
 
-            if (applyUpperBody &&
-                !_fullBodyOverrideActive &&
-                _latestBody != null)
+            if (_fullBodyOverrideActive)
+            {
+                return;
+            }
+
+            if (_bodySuppressed &&
+                returnToNeutralWhenTrackingUnavailable)
+            {
+                ApplyBodyNeutral(deltaTime);
+            }
+            else if (applyUpperBody &&
+                     _latestBody != null)
             {
                 ApplyBody(_latestBody, deltaTime);
             }
@@ -230,6 +230,9 @@ namespace VCR.Runtime.Character
             _lastBodySourceId = null;
             _faceCalibrated = false;
             _bodyCalibrated = false;
+            _faceSuppressed = false;
+            _bodySuppressed = false;
+            _fullBodyOverrideActive = false;
         }
 
         private void ResolveProvider()
@@ -313,88 +316,139 @@ namespace VCR.Runtime.Character
             return target.Humanoid.GetBoneTransform(bone);
         }
 
-        private bool UpdateTrackingSuppression()
+        private void UpdateRegionAvailability()
         {
             if (_presenceProvider == null)
             {
-                _trackingSuppressed = false;
-                return false;
+                SetFaceSuppressed(false);
+                SetBodySuppressed(false);
+                _fullBodyOverrideActive = false;
+                return;
             }
 
             var presence = _presenceProvider.Presence;
-            var shouldSuppress =
-                presence.SubjectState != SubjectPresenceState.Present;
 
-            if (shouldSuppress == _trackingSuppressed)
+            var fullBodyAvailable =
+                presence.FullBodySourceAvailable &&
+                presence.FullBodySubjectEvidence;
+
+            if (fullBodyAvailable != _fullBodyOverrideActive)
             {
-                return _trackingSuppressed;
-            }
-
-            _trackingSuppressed = shouldSuppress;
-
-            if (_trackingSuppressed)
-            {
-                // Keep the calibrated neutral references, but discard stale
-                // source payloads so they cannot be reapplied after a loss.
-                _latestFace = null;
-                _latestBody = null;
-                _faceCalibrated = false;
+                _fullBodyOverrideActive = fullBodyAvailable;
                 _bodyCalibrated = false;
-            }
-            else
-            {
-                // Re-entry starts from the current source pose without a snap.
-                _faceCalibrated = false;
-                _bodyCalibrated = false;
+
+                if (!fullBodyAvailable)
+                {
+                    _latestBody = null;
+                }
             }
 
-            return _trackingSuppressed;
+            var faceUnavailable =
+                presence.SubjectState != SubjectPresenceState.Present ||
+                !presence.FaceSourceAvailable ||
+                !presence.FaceSubjectEvidence;
+
+            var bodyUnavailable =
+                presence.SubjectState != SubjectPresenceState.Present ||
+                !presence.BodyHandsSourceAvailable ||
+                !presence.BodyHandsSubjectEvidence;
+
+            SetFaceSuppressed(faceUnavailable);
+            SetBodySuppressed(bodyUnavailable);
         }
 
-        private void ApplyNeutral(float deltaTime)
+        private void SetFaceSuppressed(bool suppressed)
         {
-            var alpha = SmoothAlpha(neutralReturnSmoothing, deltaTime);
+            if (_faceSuppressed == suppressed)
+            {
+                return;
+            }
+
+            _faceSuppressed = suppressed;
+            _faceCalibrated = false;
+
+            if (suppressed)
+            {
+                _latestFace = null;
+            }
+        }
+
+        private void SetBodySuppressed(bool suppressed)
+        {
+            if (_bodySuppressed == suppressed)
+            {
+                return;
+            }
+
+            _bodySuppressed = suppressed;
+            _bodyCalibrated = false;
+
+            if (suppressed)
+            {
+                _latestBody = null;
+            }
+        }
+
+        private void ApplyFaceNeutral(float deltaTime)
+        {
+            var alpha =
+                SmoothAlpha(
+                    neutralReturnSmoothing,
+                    deltaTime);
 
             if (applyHead && _head != null)
             {
-                _head.localRotation = Quaternion.Slerp(
-                    _head.localRotation,
-                    _headNeutralLocal,
-                    alpha);
-            }
-
-            if (applyUpperBody && _hasBodyReference)
-            {
-                if (_torso != null)
-                {
-                    _torso.rotation = Quaternion.Slerp(
-                        _torso.rotation,
-                        _bodyReference.TorsoWorldRotation,
+                _head.localRotation =
+                    Quaternion.Slerp(
+                        _head.localRotation,
+                        _headNeutralLocal,
                         alpha);
-                }
-
-                ReturnBoneToReference(
-                    _leftUpperArm,
-                    _bodyReference.LeftUpperArmWorldRotation,
-                    alpha);
-                ReturnBoneToReference(
-                    _leftLowerArm,
-                    _bodyReference.LeftLowerArmWorldRotation,
-                    alpha);
-                ReturnBoneToReference(
-                    _rightUpperArm,
-                    _bodyReference.RightUpperArmWorldRotation,
-                    alpha);
-                ReturnBoneToReference(
-                    _rightLowerArm,
-                    _bodyReference.RightLowerArmWorldRotation,
-                    alpha);
             }
 
             if (applyExpressions)
             {
                 FadeExpressionsToNeutral(alpha);
             }
+        }
+
+        private void ApplyBodyNeutral(float deltaTime)
+        {
+            if (!applyUpperBody ||
+                !_hasBodyReference)
+            {
+                return;
+            }
+
+            var alpha =
+                SmoothAlpha(
+                    neutralReturnSmoothing,
+                    deltaTime);
+
+            if (_torso != null)
+            {
+                _torso.rotation =
+                    Quaternion.Slerp(
+                        _torso.rotation,
+                        _bodyReference.TorsoWorldRotation,
+                        alpha);
+            }
+
+            ReturnBoneToReference(
+                _leftUpperArm,
+                _bodyReference.LeftUpperArmWorldRotation,
+                alpha);
+            ReturnBoneToReference(
+                _leftLowerArm,
+                _bodyReference.LeftLowerArmWorldRotation,
+                alpha);
+            ReturnBoneToReference(
+                _rightUpperArm,
+                _bodyReference.RightUpperArmWorldRotation,
+                alpha);
+            ReturnBoneToReference(
+                _rightLowerArm,
+                _bodyReference.RightLowerArmWorldRotation,
+                alpha);
         }
 
         private void FadeExpressionsToNeutral(float alpha)
@@ -413,24 +467,52 @@ namespace VCR.Runtime.Character
             _ee = Mathf.Lerp(_ee, 0f, alpha);
             _oh = Mathf.Lerp(_oh, 0f, alpha);
 
-            var bilateralBlink = Mathf.Min(_blinkLeft, _blinkRight);
-            expression.SetWeight(ExpressionKey.Blink, bilateralBlink);
+            var bilateralBlink =
+                Mathf.Min(
+                    _blinkLeft,
+                    _blinkRight);
+
+            expression.SetWeight(
+                ExpressionKey.Blink,
+                bilateralBlink);
             expression.SetWeight(
                 ExpressionKey.BlinkLeft,
-                Mathf.Max(0f, _blinkLeft - bilateralBlink));
+                Mathf.Max(
+                    0f,
+                    _blinkLeft - bilateralBlink));
             expression.SetWeight(
                 ExpressionKey.BlinkRight,
-                Mathf.Max(0f, _blinkRight - bilateralBlink));
+                Mathf.Max(
+                    0f,
+                    _blinkRight - bilateralBlink));
 
-            expression.SetWeight(ExpressionKey.LookUp, _lookUp);
-            expression.SetWeight(ExpressionKey.LookDown, _lookDown);
-            expression.SetWeight(ExpressionKey.LookLeft, _lookLeft);
-            expression.SetWeight(ExpressionKey.LookRight, _lookRight);
-            expression.SetWeight(ExpressionKey.Aa, _aa);
-            expression.SetWeight(ExpressionKey.Ih, _ih);
-            expression.SetWeight(ExpressionKey.Ou, _ou);
-            expression.SetWeight(ExpressionKey.Ee, _ee);
-            expression.SetWeight(ExpressionKey.Oh, _oh);
+            expression.SetWeight(
+                ExpressionKey.LookUp,
+                _lookUp);
+            expression.SetWeight(
+                ExpressionKey.LookDown,
+                _lookDown);
+            expression.SetWeight(
+                ExpressionKey.LookLeft,
+                _lookLeft);
+            expression.SetWeight(
+                ExpressionKey.LookRight,
+                _lookRight);
+            expression.SetWeight(
+                ExpressionKey.Aa,
+                _aa);
+            expression.SetWeight(
+                ExpressionKey.Ih,
+                _ih);
+            expression.SetWeight(
+                ExpressionKey.Ou,
+                _ou);
+            expression.SetWeight(
+                ExpressionKey.Ee,
+                _ee);
+            expression.SetWeight(
+                ExpressionKey.Oh,
+                _oh);
         }
 
         private static void ReturnBoneToReference(
@@ -443,10 +525,11 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            bone.rotation = Quaternion.Slerp(
-                bone.rotation,
-                reference,
-                alpha);
+            bone.rotation =
+                Quaternion.Slerp(
+                    bone.rotation,
+                    reference,
+                    alpha);
         }
 
         private void ApplyFace(NormalizedFaceState face, float deltaTime)
