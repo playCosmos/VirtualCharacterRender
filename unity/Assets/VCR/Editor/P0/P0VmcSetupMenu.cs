@@ -118,6 +118,55 @@ namespace VCR.Editor.P0
                     out var vrm0Happy) &&
                 vrm0Happy == StandardExpression.Happy;
 
+            var heartbeatPacket =
+                OscPacketWriter.WriteMessage(
+                    "/VMC/Ext/T",
+                    OscArgument.FromFloat(2.0f));
+            var heartbeatDecoded = new List<OscMessage>();
+            var heartbeatParsed =
+                OscPacketReader.TryReadMessages(
+                    heartbeatPacket,
+                    heartbeatPacket.Length,
+                    heartbeatDecoded);
+            var heartbeatProducedFrame =
+                heartbeatParsed &&
+                accumulator.Process(
+                    heartbeatDecoded,
+                    arrivalTimestampUs: 2_000_000,
+                    out var heartbeatFrame);
+
+            var expressionPacket =
+                OscPacketWriter.WriteBundle(
+                    new[]
+                    {
+                        OscPacketWriter.WriteMessage(
+                            "/VMC/Ext/Blend/Val",
+                            OscArgument.FromString("Blink_L"),
+                            OscArgument.FromFloat(0.8f)),
+                        OscPacketWriter.WriteMessage(
+                            "/VMC/Ext/Blend/Apply")
+                    });
+            var expressionDecoded = new List<OscMessage>();
+            var expressionParsed =
+                OscPacketReader.TryReadMessages(
+                    expressionPacket,
+                    expressionPacket.Length,
+                    expressionDecoded);
+            var expressionProducedFrame =
+                expressionParsed &&
+                accumulator.Process(
+                    expressionDecoded,
+                    arrivalTimestampUs: 2_100_000,
+                    out var expressionFrame);
+
+            var oversized =
+                new byte[OscPacketReader.MaxPacketBytes + 1];
+            var oversizedAccepted =
+                OscPacketReader.TryReadMessages(
+                    oversized,
+                    oversized.Length,
+                    new List<OscMessage>());
+
             var pass =
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -125,6 +174,18 @@ namespace VCR.Editor.P0
                 malformedRejected &&
                 vrm0Alias &&
                 vrm1Alias &&
+                heartbeatParsed &&
+                !heartbeatProducedFrame &&
+                expressionParsed &&
+                expressionProducedFrame &&
+                expressionFrame != null &&
+                expressionFrame.HumanoidPose == null &&
+                expressionFrame.Expressions != null &&
+                Mathf.Approximately(
+                    expressionFrame.Expressions.Get(
+                        StandardExpression.BlinkLeft),
+                    0.8f) &&
+                !oversizedAccepted &&
                 Mathf.Approximately(
                     hips.LocalPosition.Y,
                     0.9f) &&
@@ -136,12 +197,12 @@ namespace VCR.Editor.P0
             if (pass)
             {
                 Debug.Log(
-                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages)");
+                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; stale-pose/bounds checks passed)");
             }
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (normalized values mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (codec, normalized values, stale-pose, or packet-bounds mismatch)");
             }
         }
 
