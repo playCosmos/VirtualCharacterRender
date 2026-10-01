@@ -1,11 +1,13 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using System.IO;
 using Mediapipe;
 using Mediapipe.Unity.Experimental;
 using UnityEngine;
 using UnityEngine.Rendering;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Tracking.MediaPipe
 {
@@ -16,7 +18,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     /// FaceLandmarker at a higher priority/rate, and HolisticLandmarker at a
     /// lower configurable rate for hands/upper body.
     /// </summary>
-    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider, IFaceTrackingActivationControl
+    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider, IFaceTrackingActivationControl, IRuntimeMetricsSource
     {
         private const string FaceModelRelativePath =
             "VCR/Models/face_landmarker_v2_with_blendshapes.bytes";
@@ -393,6 +395,34 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private static long SecondsToMicroseconds(float seconds)
         {
             return (long)(Math.Max(0f, seconds) * 1_000_000.0);
+        }
+
+        public void CollectMetrics(List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.latency",
+                (_faceSource?.LastProcessingLatencyUs ?? 0L) / 1000.0,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.latency",
+                (_holisticSource?.LastProcessingLatencyUs ?? 0L) / 1000.0,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.results",
+                _faceSource?.ResultCount ?? 0L,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.results",
+                _holisticSource?.ResultCount ?? 0L,
+                "count"));
         }
 
         private static byte[] LoadModel(string relativePath)
