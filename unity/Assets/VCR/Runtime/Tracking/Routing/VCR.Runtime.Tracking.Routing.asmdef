@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.Tracking.Routing",
+  "rootNamespace": "VCR.Runtime.Tracking.Routing",
+  "references": [
+    "VCR.Runtime.Tracking"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
