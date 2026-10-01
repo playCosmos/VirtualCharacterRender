@@ -74,64 +74,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             string name,
             out FaceCoefficient coefficient)
         {
-            switch (name)
-            {
-                case "_neutral": coefficient = FaceCoefficient.Neutral; return true;
-                case "browDownLeft": coefficient = FaceCoefficient.BrowDownLeft; return true;
-                case "browDownRight": coefficient = FaceCoefficient.BrowDownRight; return true;
-                case "browInnerUp": coefficient = FaceCoefficient.BrowInnerUp; return true;
-                case "browOuterUpLeft": coefficient = FaceCoefficient.BrowOuterUpLeft; return true;
-                case "browOuterUpRight": coefficient = FaceCoefficient.BrowOuterUpRight; return true;
-                case "cheekPuff": coefficient = FaceCoefficient.CheekPuff; return true;
-                case "cheekSquintLeft": coefficient = FaceCoefficient.CheekSquintLeft; return true;
-                case "cheekSquintRight": coefficient = FaceCoefficient.CheekSquintRight; return true;
-                case "eyeBlinkLeft": coefficient = FaceCoefficient.EyeBlinkLeft; return true;
-                case "eyeBlinkRight": coefficient = FaceCoefficient.EyeBlinkRight; return true;
-                case "eyeLookDownLeft": coefficient = FaceCoefficient.EyeLookDownLeft; return true;
-                case "eyeLookDownRight": coefficient = FaceCoefficient.EyeLookDownRight; return true;
-                case "eyeLookInLeft": coefficient = FaceCoefficient.EyeLookInLeft; return true;
-                case "eyeLookInRight": coefficient = FaceCoefficient.EyeLookInRight; return true;
-                case "eyeLookOutLeft": coefficient = FaceCoefficient.EyeLookOutLeft; return true;
-                case "eyeLookOutRight": coefficient = FaceCoefficient.EyeLookOutRight; return true;
-                case "eyeLookUpLeft": coefficient = FaceCoefficient.EyeLookUpLeft; return true;
-                case "eyeLookUpRight": coefficient = FaceCoefficient.EyeLookUpRight; return true;
-                case "eyeSquintLeft": coefficient = FaceCoefficient.EyeSquintLeft; return true;
-                case "eyeSquintRight": coefficient = FaceCoefficient.EyeSquintRight; return true;
-                case "eyeWideLeft": coefficient = FaceCoefficient.EyeWideLeft; return true;
-                case "eyeWideRight": coefficient = FaceCoefficient.EyeWideRight; return true;
-                case "jawForward": coefficient = FaceCoefficient.JawForward; return true;
-                case "jawLeft": coefficient = FaceCoefficient.JawLeft; return true;
-                case "jawOpen": coefficient = FaceCoefficient.JawOpen; return true;
-                case "jawRight": coefficient = FaceCoefficient.JawRight; return true;
-                case "mouthClose": coefficient = FaceCoefficient.MouthClose; return true;
-                case "mouthDimpleLeft": coefficient = FaceCoefficient.MouthDimpleLeft; return true;
-                case "mouthDimpleRight": coefficient = FaceCoefficient.MouthDimpleRight; return true;
-                case "mouthFrownLeft": coefficient = FaceCoefficient.MouthFrownLeft; return true;
-                case "mouthFrownRight": coefficient = FaceCoefficient.MouthFrownRight; return true;
-                case "mouthFunnel": coefficient = FaceCoefficient.MouthFunnel; return true;
-                case "mouthLeft": coefficient = FaceCoefficient.MouthLeft; return true;
-                case "mouthLowerDownLeft": coefficient = FaceCoefficient.MouthLowerDownLeft; return true;
-                case "mouthLowerDownRight": coefficient = FaceCoefficient.MouthLowerDownRight; return true;
-                case "mouthPressLeft": coefficient = FaceCoefficient.MouthPressLeft; return true;
-                case "mouthPressRight": coefficient = FaceCoefficient.MouthPressRight; return true;
-                case "mouthPucker": coefficient = FaceCoefficient.MouthPucker; return true;
-                case "mouthRight": coefficient = FaceCoefficient.MouthRight; return true;
-                case "mouthRollLower": coefficient = FaceCoefficient.MouthRollLower; return true;
-                case "mouthRollUpper": coefficient = FaceCoefficient.MouthRollUpper; return true;
-                case "mouthShrugLower": coefficient = FaceCoefficient.MouthShrugLower; return true;
-                case "mouthShrugUpper": coefficient = FaceCoefficient.MouthShrugUpper; return true;
-                case "mouthSmileLeft": coefficient = FaceCoefficient.MouthSmileLeft; return true;
-                case "mouthSmileRight": coefficient = FaceCoefficient.MouthSmileRight; return true;
-                case "mouthStretchLeft": coefficient = FaceCoefficient.MouthStretchLeft; return true;
-                case "mouthStretchRight": coefficient = FaceCoefficient.MouthStretchRight; return true;
-                case "mouthUpperUpLeft": coefficient = FaceCoefficient.MouthUpperUpLeft; return true;
-                case "mouthUpperUpRight": coefficient = FaceCoefficient.MouthUpperUpRight; return true;
-                case "noseSneerLeft": coefficient = FaceCoefficient.NoseSneerLeft; return true;
-                case "noseSneerRight": coefficient = FaceCoefficient.NoseSneerRight; return true;
-                default:
-                    coefficient = default;
-                    return false;
-            }
+            return FaceCoefficientNames.TryParse(name, out coefficient);
         }
     }
 }
