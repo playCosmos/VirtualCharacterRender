@@ -20,7 +20,8 @@ Deliverables:
 - Apple ARKit-compatible mobile face-tracking input spike
 - mixed ARKit + Holistic hands/upper-body routing spike
 - VMC receive/send spike
-- normalized tracking-state prototype
+- normalized face/upper-body/hand payload prototype
+- normalized tracking -> UniVRM ControlRig mapping prototype
 - tracking-derived subject-presence prototype
 - normalized event prototype
 - dynamic-environment abstraction prototype
@@ -40,7 +41,9 @@ Exit criteria:
 - one material can be overridden without corrupting the source model
 - an invalid custom shader does not terminate the application
 - FaceLandmarker produces usable normalized eye/mouth/face/head state without requiring pose
+- normalized face state drives VRM head/blink/look/mouth through the character adapter
 - HolisticLandmarker produces usable hand/upper-body state
+- normalized upper-body state drives torso and arm motion through UniVRM ControlRig/fallback bones
 - Face and Holistic live-stream inference do not block the Unity render loop
 - M1 tracking CPU cost and end-to-end latency are measured
 - mobile ARKit-compatible face data reaches desktop normalized state
