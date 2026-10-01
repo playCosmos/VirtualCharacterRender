@@ -22,7 +22,7 @@ Multi-person identity tracking from one webcam is not an initial feature.
 ## Accepted baseline stack
 
 ADR-0022 defines the source strategy.
-ADR-0025 defines the active Unity/MediaPipe execution strategy. ADR-0026 defines normalized payloads and coordinates. ADR-0027 defines the current UniVRM target path. ADR-0023 is superseded.
+ADR-0025 defines the active Unity/MediaPipe execution strategy. ADR-0026 defines normalized payloads and coordinates. ADR-0027 defines the current UniVRM target path. ADR-0028 defines the first ARKit compatibility transport. ADR-0023 is superseded.
 
 Primary webcam baseline:
 
@@ -139,6 +139,28 @@ Internally this is ARKit face-tracking data rather than Face ID authentication.
 
 Use it as the preferred source for high-quality face/head/expression input, especially eyes and mouth, when healthy.
 
+### P0 ARKit compatibility transport
+
+The first desktop compatibility adapter supports the documented iFacialMocap/FaceMotion3D UDP v2 stream:
+
+```text
+iPhone/iPad ARKit
+   ↓
+iFacialMocap / FaceMotion3D public stream
+   ↓ UDP v2
+IFacialMocapUdpReceiver
+   ↓
+ArKitFaceSource
+   ↓
+NormalizedFaceState
+```
+
+The desktop sends the v2 start request to port 49983 and receives the blendshape/head stream on the configured local port. Network receive and text parsing run off the Unity main thread.
+
+The public packet format does not expose a dedicated tracking-valid flag. A fresh parsed packet is treated as ARKit subject evidence; packet staleness is treated as source loss. Do not infer subject absence from an all-zero packet.
+
+Head Euler-axis signs are configurable. The current `(-X, -Y, +Z)` profile and disabled head translation are P0 test defaults pending physical validation.
+
 ## Source switching
 
 Priority for face/head:
@@ -150,6 +172,10 @@ Priority for face/head:
 Switching sources must not require character reload.
 
 A short transition/cross-fade should avoid visible pose snapping.
+
+The P0 `PriorityTrackingRouter` implements this region priority. While ARKit face is stably present it stops the MediaPipe FaceLandmarker through `IFaceTrackingActivationControl`; Holistic hands/upper body remain active. When ARKit is unavailable, MediaPipe face inference restarts automatically.
+
+Frames carry `SourceId`, allowing the VRM target to recalibrate only the region whose source changed.
 
 ## Audio fallback
 
