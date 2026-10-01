@@ -7,6 +7,9 @@
     "VCR.Runtime.Tracking.ArKitUnity",
     "VCR.Runtime.Tracking.Routing",
     "VCR.Runtime.Character",
+    "VCR.Runtime.Protocols.Osc",
+    "VCR.Runtime.Protocols.Vmc",
+    "VCR.Runtime.Protocols.VmcUnity",
     "VRM10"
   ],
   "includePlatforms": [
