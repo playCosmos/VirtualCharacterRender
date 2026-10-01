@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using VCR.Runtime.Core;
 using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(20000)]
-    public sealed class VmcUdpSender : MonoBehaviour
+    public sealed class VmcUdpSender : MonoBehaviour, IRuntimeMetricsSource
     {
         [Header("Snapshot")]
         [SerializeField] private MonoBehaviour snapshotProviderBehaviour;
@@ -237,6 +238,24 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 OscArgument.FromFloat(rotation.Y),
                 OscArgument.FromFloat(rotation.Z),
                 OscArgument.FromFloat(rotation.W));
+        }
+
+        public void CollectMetrics(List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.send.packets",
+                PacketCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.send.errors",
+                ErrorCount,
+                "count"));
         }
 
         public void SetSnapshotProvider(MonoBehaviour provider)
