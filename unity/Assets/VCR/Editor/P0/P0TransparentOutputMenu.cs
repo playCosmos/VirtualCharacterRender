@@ -273,6 +273,31 @@ namespace VCR.Editor.P0
                 "Run In Background should be enabled for broadcast overlay use.",
                 ref failures);
 
+            Check(
+                !string.IsNullOrWhiteSpace(
+                    PlayerSettings.macOS
+                        .cameraUsageDescription),
+                "macOS camera usage description is configured.",
+                "macOS Camera Usage Description is required for standalone webcam tracking.",
+                ref failures);
+
+            var macBuildTargetName =
+                BuildPipeline.GetBuildTargetName(
+                    BuildTarget.StandaloneOSX);
+            var macArchitecture =
+                EditorUserBuildSettings.GetPlatformSettings(
+                    macBuildTargetName,
+                    "Architecture");
+
+            Check(
+                string.Equals(
+                    macArchitecture,
+                    "arm64",
+                    System.StringComparison.OrdinalIgnoreCase),
+                "macOS P0 build architecture is Apple Silicon arm64.",
+                $"macOS P0 baseline requires arm64, got '{macArchitecture}'.",
+                ref failures);
+
             if (failures == 0)
             {
                 Debug.Log(
@@ -332,6 +357,17 @@ namespace VCR.Editor.P0
             PlayerSettings.resizableWindow = true;
             PlayerSettings.fullScreenMode =
                 FullScreenMode.Windowed;
+
+            PlayerSettings.macOS.cameraUsageDescription =
+                "VirtualCharacterRender uses the camera for face, hand, and upper-body tracking.";
+
+            var macBuildTargetName =
+                BuildPipeline.GetBuildTargetName(
+                    BuildTarget.StandaloneOSX);
+            EditorUserBuildSettings.SetPlatformSettings(
+                macBuildTargetName,
+                "Architecture",
+                "arm64");
 
             PlayerSettings.SetUseDefaultGraphicsAPIs(
                 BuildTarget.StandaloneWindows64,
