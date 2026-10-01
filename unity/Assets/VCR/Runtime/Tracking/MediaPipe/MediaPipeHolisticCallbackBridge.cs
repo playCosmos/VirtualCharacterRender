@@ -14,7 +14,13 @@ namespace VCR.Runtime.Tracking.MediaPipe
     public sealed class MediaPipeHolisticCallbackBridge
     {
         private readonly LatestValueBuffer<TrackingFrame> _latest = new();
+        private readonly string _sourceId;
         private long _sequence;
+
+        public MediaPipeHolisticCallbackBridge(string sourceId)
+        {
+            _sourceId = sourceId;
+        }
 
         public void OnResult(
             in HolisticLandmarkerResult result,
@@ -45,7 +51,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 regions != TrackingRegion.None,
                 upperBody: upperBody,
                 leftHand: leftHand,
-                rightHand: rightHand));
+                rightHand: rightHand,
+                sourceId: _sourceId));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
