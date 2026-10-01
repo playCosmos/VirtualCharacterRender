@@ -16,7 +16,9 @@
     "VCR.Runtime.Output",
     "VCR.Runtime.Output.Unity",
     "Kirurobo.UniWindowController",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Unity.RenderPipelines.Universal.Runtime",
+    "VCR.Runtime.Materials",
+    "VCR.Runtime.Materials.Unity"
   ],
   "includePlatforms": [
     "Editor"
