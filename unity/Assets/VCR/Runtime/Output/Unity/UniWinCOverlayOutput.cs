@@ -29,10 +29,6 @@ namespace VCR.Runtime.Output.Unity
         [SerializeField] private bool topmost = true;
         [SerializeField] private bool clickThrough = false;
 
-        [Header("Window")]
-        [SerializeField, Min(320)] private int width = 1920;
-        [SerializeField, Min(180)] private int height = 1080;
-
         private UniWindowController _controller;
         private string _lastError;
 
@@ -100,8 +96,6 @@ namespace VCR.Runtime.Output.Unity
             transparent = true;
             topmost = true;
             clickThrough = false;
-            width = 1920;
-            height = 1080;
         }
 
         public void Apply(OverlayOutputSettings settings)
@@ -109,16 +103,6 @@ namespace VCR.Runtime.Output.Unity
             transparent = settings.Transparent;
             topmost = settings.Topmost;
             clickThrough = settings.ClickThrough;
-
-            if (settings.Width > 0)
-            {
-                width = settings.Width;
-            }
-
-            if (settings.Height > 0)
-            {
-                height = settings.Height;
-            }
 
             ConfigureCameraForAlpha();
             _lastError = ValidateRuntime();
@@ -188,9 +172,7 @@ namespace VCR.Runtime.Output.Unity
             return new OverlayOutputSettings(
                 transparent,
                 topmost,
-                clickThrough,
-                width,
-                height);
+                clickThrough);
         }
 
         private void CaptureCameraState()
