@@ -44,7 +44,7 @@ Default scope:
 - MToon/default material
 - transparent overlay
 - basic OBS workflow
-- basic AFK/local-state events where configured
+- tracking-derived subject-presence/local-state events where configured
 - minimal background services
 
 Not active unless requested:
@@ -125,6 +125,8 @@ A user can use advanced events with reduced visual quality or a simple character
 Graphics-quality presets and capability presets are stored separately.
 
 ## Lazy initialization
+
+The P0 `CapabilityRegistry` is factory-based: registration does not instantiate the service; enable creates it; disable disposes it. The registry has no per-frame update loop.
 
 - do not start camera inference if webcam tracking is disabled
 - do not start a full-body solver if full tracking is disabled
