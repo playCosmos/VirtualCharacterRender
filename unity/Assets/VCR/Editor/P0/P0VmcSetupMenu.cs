@@ -93,10 +93,38 @@ namespace VCR.Editor.P0
                     HumanoidBoneId.Hips,
                     out var hips);
 
+            var malformed = new byte[]
+            {
+                (byte)'/', (byte)'x', 0, 0,
+                (byte)',', (byte)'f', 0, 0,
+                0, 0, 0
+            };
+            var malformedDecoded = new List<OscMessage>();
+            var malformedRejected =
+                !OscPacketReader.TryReadMessages(
+                    malformed,
+                    malformed.Length,
+                    malformedDecoded);
+
+            var vrm1Alias =
+                StandardExpressionNames.TryParse(
+                    "happy",
+                    out var vrm1Happy) &&
+                vrm1Happy == StandardExpression.Happy;
+
+            var vrm0Alias =
+                StandardExpressionNames.TryParse(
+                    "Joy",
+                    out var vrm0Happy) &&
+                vrm0Happy == StandardExpression.Happy;
+
             var pass =
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
                 hasHips &&
+                malformedRejected &&
+                vrm0Alias &&
+                vrm1Alias &&
                 Mathf.Approximately(
                     hips.LocalPosition.Y,
                     0.9f) &&
