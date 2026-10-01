@@ -13,6 +13,12 @@ Optional capabilities initialize only when enabled or required by loaded content
 
 Disabled optional services should have no meaningful recurring frame cost.
 
+## P0 implementation
+
+`CapabilityRegistry` stores service factories without instantiating them. Enable creates the service instance; disable disposes/releases it; re-enable creates a fresh instance. The registry itself has no render-frame update loop.
+
+This is a lifecycle foundation, not yet a statement that every existing P0 MonoBehaviour has been migrated behind the registry.
+
 ## Consequences
 
 - capability dependencies/lifecycle must be explicit
