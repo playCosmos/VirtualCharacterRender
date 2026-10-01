@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
@@ -9,6 +10,8 @@ namespace VCR.Editor.P0
 {
     public static class P0PackageBaselineCheck
     {
+        private const string UniWinCCommit =
+            "304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc";
         private static readonly IReadOnlyDictionary<string, string> Expected =
             new Dictionary<string, string>
             {
@@ -19,6 +22,37 @@ namespace VCR.Editor.P0
                 ["com.github.homuler.mediapipe"] = "0.16.3",
                 ["com.kirurobo.uniwinc"] = "0.9.8"
             };
+
+        private static void ValidateManifestPins(
+            List<string> failures)
+        {
+            var manifestPath = Path.GetFullPath(
+                Path.Combine(
+                    Application.dataPath,
+                    "..",
+                    "Packages",
+                    "manifest.json"));
+
+            if (!File.Exists(manifestPath))
+            {
+                failures.Add("Packages/manifest.json was not found.");
+                return;
+            }
+
+            var manifest = File.ReadAllText(manifestPath);
+            var expectedUniWinC =
+                "https://github.com/kirurobo/UniWindowController.git#" +
+                UniWinCCommit;
+
+            if (!manifest.Contains(
+                expectedUniWinC,
+                StringComparison.Ordinal))
+            {
+                failures.Add(
+                    "UniWindowController must be pinned to release commit " +
+                    UniWinCCommit);
+            }
+        }
 
         [MenuItem("VCR/P0/Validate Package Baseline")]
         public static void Validate()
@@ -42,6 +76,8 @@ namespace VCR.Editor.P0
                         $"Version mismatch: {pair.Key} expected {pair.Value}, got {package.version}");
                 }
             }
+
+            ValidateManifestPins(failures);
 
             if (failures.Count == 0)
             {
