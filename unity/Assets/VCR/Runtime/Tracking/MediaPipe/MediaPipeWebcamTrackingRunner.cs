@@ -56,30 +56,23 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private long _lastHolisticResultCount;
         private float _nextRateLogTime;
 
+        private TrackingFrame _latestFaceFrame;
+        private TrackingFrame _latestBodyHandsFrame;
+
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
         public bool MediaPipeFaceEnabled => mediaPipeFaceEnabled;
 
-        public bool TryTakeLatestFace(out TrackingFrame frame)
+        public bool TryGetLatestFace(out TrackingFrame frame)
         {
-            if (_faceSource != null)
-            {
-                return _faceSource.TryTakeLatest(out frame);
-            }
-
-            frame = null;
-            return false;
+            frame = _latestFaceFrame;
+            return frame != null;
         }
 
-        public bool TryTakeLatestBodyHands(out TrackingFrame frame)
+        public bool TryGetLatestBodyHands(out TrackingFrame frame)
         {
-            if (_holisticSource != null)
-            {
-                return _holisticSource.TryTakeLatest(out frame);
-            }
-
-            frame = null;
-            return false;
+            frame = _latestBodyHandsFrame;
+            return frame != null;
         }
 
         private IEnumerator Start()
@@ -302,6 +295,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private void Update()
         {
+            CaptureLatestSourceFrames();
+
             if (!logTrackingRate || Time.unscaledTime < _nextRateLogTime)
             {
                 return;
@@ -322,6 +317,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 $"face={faceDelta}, holistic={holisticDelta}, " +
                 $"faceState={_faceSource?.Health.State}, " +
                 $"holisticState={_holisticSource?.Health.State}");
+        }
+
+        private void CaptureLatestSourceFrames()
+        {
+            if (_faceSource != null && _faceSource.TryTakeLatest(out var faceFrame))
+            {
+                _latestFaceFrame = faceFrame;
+            }
+
+            if (_holisticSource != null && _holisticSource.TryTakeLatest(out var bodyFrame))
+            {
+                _latestBodyHandsFrame = bodyFrame;
+            }
         }
 
         private static byte[] LoadModel(string relativePath)
