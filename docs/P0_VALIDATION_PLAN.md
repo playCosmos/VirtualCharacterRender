@@ -144,6 +144,8 @@ External send gate:
 - default VRM0 expression vocabulary works with a VRM1 runtime
 - optional VRM1 expression-name mode is verified separately
 - sender frame rate can be reduced without queue buildup
+- same-process loopback sender -> receiver on the same port is rejected
+- bidirectional local testing uses distinct ports and does not create a feedback loop
 
 ADR-0006 remains Proposed until these external interoperability checks pass.
 
