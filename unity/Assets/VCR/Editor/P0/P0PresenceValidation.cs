@@ -43,6 +43,13 @@ namespace VCR.Editor.P0
                 timestampUs: 250_000,
                 subjectDetected: false);
 
+            _ = resolver.Update(
+                250_000,
+                absent,
+                faceConfigured: true,
+                bodyHandsFrame: null,
+                bodyHandsConfigured: false);
+
             var withinGrace = resolver.Update(
                 700_000,
                 absent,
