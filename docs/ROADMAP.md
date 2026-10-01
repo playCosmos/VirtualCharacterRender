@@ -8,114 +8,144 @@ Deliverables:
 - Windows and macOS validation matrix
 - Unity/URP feasibility prototype on both platforms
 - UniVRM VRM 0.x and 1.0 load validation
-- transparent-window and OBS-compatible capture validation on both platforms
+- transparent-window and OBS-compatible capture validation
+- 720p60 minimum and 1080p60 recommended baseline measurements
 - MToon validation
 - custom shader/material override prototype
-- webcam face/head tracking spike
+- basic webcam motion-capture spike:
+  - face with eye/mouth priority
+  - head
+  - hands
+  - upper body
 - Apple ARKit-compatible mobile face-tracking input spike
 - VMC receive/send spike
-- normalized-state prototype
-- capability/profile bootstrap
+- normalized tracking-state prototype
+- normalized event prototype
+- dynamic-environment abstraction prototype
+- capability/lazy-initialization bootstrap
+- early diagnostics/per-subsystem timing
 
 Exit criteria:
 
-- one VRM loads/renders on both Windows and macOS
-- transform, camera, and light work
-- alpha output is correct on both target platforms
-- OBS-compatible capture path is demonstrated on both target platforms
+- one VRM loads/renders on Windows and macOS
+- exactly one active character is the tested product path
+- transform, camera, light, and basic environment work
+- alpha output is correct
+- OBS-compatible capture is demonstrated
+- 720p60 is sustained in the defined baseline on an otherwise-unloaded validated PC
+- 1080p60 behavior is measured and treated as the primary recommended target
+- higher resolutions remain configurable without inheriting the same blanket guarantee
 - one material can be overridden without corrupting the source model
 - an invalid custom shader does not terminate the application
-- webcam tracking produces normalized head/face state
-- mobile ARKit-compatible face data reaches the desktop normalized state
-- switching tracking source does not require character reload
-- a minimal Lightweight session can run with advanced services disabled
+- webcam tracking produces usable normalized eye/mouth/face/head/hand/upper-body state according to source capability
+- mobile ARKit-compatible face data reaches desktop normalized state
+- tracking sources can switch without character reload
+- optional full-body services remain disabled in the baseline
+- disabled optional capabilities have no meaningful recurring frame cost
 - P0 ADRs are accepted, rejected, or explicitly deferred
 
 ## P1 — Cross-platform Renderer Core
 
-Scene/character lifecycle, camera/light abstraction, frame timing, model hot reload, resolution/render scale, diagnostics, safe shutdown, platform adapters, and capability lifecycle.
-
-The same runtime core is used on Windows and macOS.
+One-character scene/character lifecycle, camera/light abstraction, frame timing, model hot reload, dynamic-environment hook, resolution/render scale, diagnostics, safe shutdown, platform adapters, and capability lifecycle.
 
 ## P2 — Material and Shader Runtime
 
-Material-slot abstraction, MToon preservation, runtime overrides, generic shader parameters, presets, fallback material, cross-platform shader compatibility reporting, and error handling.
+Material-slot abstraction, MToon preservation, runtime overrides, generic shader parameters, presets, fallback material, cross-platform compatibility reporting, and error handling.
 
 ## P3 — Built-in Basic Motion Capture
 
 Productionize:
 
-- webcam face/head tracking
-- eye/mouth/expression tracking as source quality permits
+- face tracking with eye and mouth quality prioritized
+- head pose
+- hands
+- upper body
 - Apple ARKit-compatible face input
-- audio-driven fallback motion
-- optional webcam hand/body tracking after performance/quality gates
+- optional audio-driven fallback motion
 
-All sources feed the normalized tracking model.
+Full-body tracking/IK is a separate optional capability and does not define baseline runtime cost.
 
 ## P4 — Tracking Abstraction and Routing
 
-Source health, timestamps, confidence, smoothing hooks, source priority, body-region routing, and source hot switching.
+Source health, timestamps, confidence, smoothing, source priority, region routing, and source hot switching for the one active performer.
+
+Multi-person identity tracking is not in scope.
 
 ## P5 — Motion and Expression Mixer
 
-Base pose, tracking pose, additive motion, expressions, procedural motion, weighting, masks, deadzones, smoothing, and fallback.
+Base pose, tracking pose, additive motion, expressions, procedural motion, weighting, masks, deadzones, smoothing, and fallback behavior.
 
-## P6 — Material/Shader Package and Plugin Layer
+## P6 — Environment Runtime
+
+Static image/video, parallax, reactive 2D/2.5D layers, 3D environment hooks, state changes, transitions, environment lighting, update classes, and performance attribution.
+
+## P7 — Material/Shader Package and Plugin Layer
 
 Manifest, resources, compatibility metadata, validation, hot reload where supported, failure containment, and capability registration.
 
-## P7 — Protocols
+Executable plugin support remains gated by ADR-0015.
 
-VMC, OSC, and WebSocket first. MIDI remains an extension target.
+## P8 — Protocols and Event Adapters
 
-## P8 — Scene and Event Runtime
+VMC, OSC, and WebSocket plus normalized event injection.
 
-Implement runtime before graph UI:
+Introduce:
+
+- AFK/presence source
+- one broadcast chat integration
+- one donation/support integration
+
+Additional platforms use adapters rather than changing event-runtime contracts.
+
+## P9 — Event Runtime
+
+Implement event execution before the visual graph editor.
 
 ```text
-Event → Condition → Transform → Action
+Event → Filter/Condition → Transform/State → Action
 ```
 
-Actions can target expressions, motion, shader/material parameters, cameras, props, effects, and scene state.
+Targets include character, expressions, motion, environment, shader/material parameters, camera, props, effects, audio, and overlay elements.
 
-This phase expands the same runtime used by Lightweight sessions rather than introducing a second engine.
+## P10 — Broadcast Output
 
-## P9 — Broadcast Output
+Productionize transparent overlay and OBS workflow on both platforms. Platform-specific high-performance output transports may be optional adapters.
 
-Productionize transparent overlay output and OBS workflow on both platforms. Platform-specific high-performance transports may be added as optional adapters.
+## P11 — Application UI
 
-## P10 — Application UI
+UI areas:
 
-UI scales with profile/capabilities:
-
-- Simple/Lightweight view
 - Character
-- Scene
 - Tracking
-- Motion
-- Expression
-- Material
-- Shader
+- Motion/Expression
+- Environment
+- Material/Shader
 - Events
-- Output
+- Camera/Output
 - Settings
 - Diagnostics
 
-Advanced panels are not required to be active in Lightweight sessions.
+Advanced controls may remain collapsed/disabled when their capabilities are unused.
 
-## P11 — Advanced Scene Tooling
+## P12 — Advanced One-Character Scene Tooling
 
 - visual event/node editor
-- richer multi-character scene orchestration
-- props/effect automation
-- multiple cameras
+- richer environment/prop/effect automation
+- multiple scene cameras if justified
+- advanced shader bindings
 - advanced plugin workflows
+- full-body tracking integration as optional capability
 
-## P12 — 2D Backend
+## P13 — 2D Extension
 
-Evaluate Inochi2D, Live2D integration, or another backend against the same tracking/runtime/event contracts.
+Evaluate Inochi2D, Live2D integration, or another backend/extension against the established tracking/event/output contracts.
+
+## Future only — Multi-character
+
+Do not implement multi-person webcam tracking, multiple simultaneous performer bindings, multi-character UI, or multi-character performance work in the current roadmap.
+
+Keep internal contracts extensible where inexpensive so a future ADR can introduce multi-character support without forcing it into current complexity.
 
 ## Scope control
 
-Features outside the active phase are not blockers unless an ADR promotes them. Lightweight performance is a release criterion throughout development, not a cleanup task after advanced features are complete.
+Features outside the active phase are not blockers unless an ADR promotes them. Lightweight/default performance is a release criterion throughout development, not a cleanup task after advanced features are complete.
