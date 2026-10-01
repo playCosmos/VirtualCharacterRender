@@ -8,6 +8,7 @@ Unity with URP is the accepted primary renderer/backend for the initial 3D produ
 - URP: 17.3.x, matched to Unity 6000.3
 - UniVRM: 0.131.2
 - MediaPipeUnityPlugin: 0.16.3
+- UniWindowController: 0.9.8 (`v0.9.8`)
 
 See:
 
