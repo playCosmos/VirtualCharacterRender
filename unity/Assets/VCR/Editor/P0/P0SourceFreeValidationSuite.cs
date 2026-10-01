@@ -66,6 +66,26 @@ namespace VCR.Editor.P0
                     "Diagnostics math",
                     P0DiagnosticsValidation.Validate,
                     ref currentCheck);
+
+                Run(
+                    "Material override",
+                    P0MaterialOverrideMenu.Validate,
+                    ref currentCheck);
+
+                Run(
+                    "Normalized events",
+                    P0EventRuntimeMenu.Validate,
+                    ref currentCheck);
+
+                Run(
+                    "Environment runtime",
+                    P0EnvironmentMenu.Validate,
+                    ref currentCheck);
+
+                Run(
+                    "Lazy capabilities",
+                    P0CapabilityMenu.Validate,
+                    ref currentCheck);
             }
             catch (Exception exception)
             {
@@ -82,7 +102,7 @@ namespace VCR.Editor.P0
             {
                 Debug.Log(
                     "VCR P0 source-free validation suite: PASS " +
-                    "(package baseline, presence, ARKit parser, OSC/VMC codec, diagnostics math)");
+                    "(package baseline, presence, ARKit parser, OSC/VMC codec, diagnostics math, material override, normalized events, environment, lazy capabilities)");
                 return;
             }
 
