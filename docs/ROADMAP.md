@@ -19,14 +19,26 @@ Deliverables:
   - per-task M1 CPU inference cost
 - Apple ARKit-compatible mobile face-tracking input spike via iFacialMocap/FaceMotion3D UDP v2 compatibility adapter
 - ARKit-priority / MediaPipe-face-fallback router with Holistic hands/upper-body kept active
-- VMC receive/send spike
+- VMC receive/send spike:
+  - bounded OSC message/bundle codec
+  - VMC UDP receiver with loopback-by-default sender filter
+  - normalized full-body humanoid pose and expression domains
+  - optional external full-body routing
+  - calibrated UniVRM full-body P0 target
+  - normalized final-character snapshot provider
+  - VMC UDP sender with VRM0-compatible expression names
 - normalized face/upper-body/hand payload prototype
 - normalized tracking -> UniVRM ControlRig mapping prototype
 - tracking-derived subject-presence resolver with source-loss distinction and neutral fallback prototype
 - normalized event prototype
 - dynamic-environment abstraction prototype
 - capability/lazy-initialization bootstrap
-- early diagnostics/per-subsystem timing
+- early diagnostics/per-subsystem timing:
+  - frame average/P95/P99
+  - normalized channel update rates and snapshot age
+  - MediaPipe Face/Holistic submit-to-callback latency
+  - protocol packet/error counters
+  - optional CSV evidence
 
 Exit criteria:
 
@@ -45,12 +57,14 @@ Exit criteria:
 - HolisticLandmarker produces usable hand/upper-body state
 - normalized upper-body state drives torso and arm motion through UniVRM ControlRig/fallback bones
 - Face and Holistic live-stream inference do not block the Unity render loop
-- M1 tracking CPU cost and end-to-end latency are measured
+- M1 tracking CPU cost, Face/Holistic processing latency, and end-to-end behavior are measured
 - iFacialMocap/FaceMotion3D ARKit-compatible face data reaches desktop normalized state
 - mixed ARKit + Holistic routing works without character reload and disables redundant MediaPipe face inference while ARKit is healthy
 - performer disappearance can be distinguished from source/device disconnection
 - stable tracking loss returns the VRM tracking contribution toward neutral without a one-frame snap
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
+- VMC codec self-test passes and external receive/send interoperability is demonstrated before ADR-0006 acceptance
+- P0 diagnostics records frame P95/P99 and tracking/protocol metrics on both target platforms
 - optional full-body services remain disabled in the baseline
 - disabled optional capabilities have no meaningful recurring frame cost
 - exact Unity LTS / URP / UniVRM versions are pinned or explicitly blocked with evidence
