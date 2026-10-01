@@ -19,6 +19,40 @@ Full-body tracking is separate and optional.
 
 Multi-person identity tracking from one webcam is not an initial feature.
 
+## Accepted baseline stack
+
+ADR-0022 defines the built-in tracking stack.
+
+Primary baseline:
+
+```text
+Webcam
+ └─ MediaPipe-class tracking
+      ├─ face fallback
+      ├─ head fallback
+      ├─ hands
+      └─ upper body
+
+ARKit-compatible mobile source
+ └─ preferred face / eyes / mouth / head
+```
+
+Preferred mixed configuration:
+
+```text
+Face / Eyes / Mouth / Head = ARKit
+Hands / Upper Body         = MediaPipe Webcam
+```
+
+Fallback without ARKit:
+
+```text
+Face / Eyes / Mouth / Head = MediaPipe Webcam
+Hands / Upper Body         = MediaPipe Webcam
+```
+
+Do not continuously average ARKit and MediaPipe face data by default. Route by region and source health, then transition smoothly on source changes.
+
 ## Pipeline
 
 ```text
@@ -28,6 +62,10 @@ Built-in / External Source
            ↓
 Validation / Timestamp / Confidence
            ↓
+Quality / Region Routing
+           ↓
+Calibration / Temporal Filtering
+           ↓
     Normalized Tracking State
            ↓
        Routing / Mixer
@@ -35,11 +73,9 @@ Validation / Timestamp / Confidence
      One Active Character
 ```
 
-## Built-in capture
+## Webcam path
 
-### Webcam
-
-The built-in webcam path targets:
+The MediaPipe webcam path targets:
 
 - facial landmarks/expressions
 - left/right eye openness and useful gaze estimation
@@ -48,41 +84,44 @@ The built-in webcam path targets:
 - hands
 - upper-body landmarks/pose
 
-Quality may vary with camera, lighting, occlusion, and inference backend. Capability health/confidence must be observable.
+The tracking path may use:
 
-The webcam path may use separate inference models internally, but they emit one normalized subject state for the active performer.
+- ROI cropping
+- image quality analysis
+- adaptive gamma/brightness correction
+- local contrast enhancement
+- mild denoise
+- low-light preprocessing
+- confidence-aware reacquisition
+- eye/mouth refinement
+- user calibration
+- region-specific temporal filters
 
-### Apple mobile face tracking
+These operations affect tracking input only unless explicitly shown in a preview.
+
+Face, hands, and upper body may run at different update rates while rendering remains at 60 FPS.
+
+## Apple mobile face tracking
 
 Support an iPhone/iPad ARKit-compatible facial tracking source.
 
 Internally this is ARKit face-tracking data rather than Face ID authentication.
 
-Use it primarily for high-quality face/head/expression input, including eyes and mouth where the source provides suitable coefficients.
+Use it as the preferred source for high-quality face/head/expression input, especially eyes and mouth, when healthy.
 
-### Mixed source routing
+## Source switching
 
-Different body regions may come from different sources for the same performer.
+Priority for face/head:
 
-Example:
+1. ARKit when healthy
+2. MediaPipe webcam fallback
+3. configured neutral/audio fallback
 
-```text
-Face/Eyes/Mouth = ARKit mobile
-Head            = ARKit mobile
-Hands           = Webcam
-Upper Body      = Webcam
-```
+Switching sources must not require character reload.
 
-or:
+A short transition/cross-fade should avoid visible pose snapping.
 
-```text
-Face/Head       = Webcam
-Hands/UpperBody = VMC or another adapter
-```
-
-Changing sources must not require character reload.
-
-### Audio fallback
+## Audio fallback
 
 Microphone-derived mouth/body motion can be used as an optional fallback when visual tracking is unavailable or intentionally disabled.
 
@@ -99,17 +138,13 @@ The normalized tracking/health layer must expose enough information for a presen
 
 `SubjectLost` means the configured performer is no longer reliably detected after a configurable grace period.
 
+Presence is evaluated across configured tracking sources. For example:
+
+- MediaPipe loses the face while ARKit remains healthy => subject remains present
+- ARKit is lost while MediaPipe still detects the performer => subject remains present
+- all relevant subject-detection paths are lost beyond the grace interval => `SubjectLost`
+
 `TrackingSourceLost` means the camera, mobile sender, network transport, or adapter itself is unavailable.
-
-Presence derivation may use:
-
-- detection validity
-- tracking confidence
-- face/head validity
-- upper-body validity where useful
-- source-specific tracking-state flags
-- lost grace period
-- restore stability period
 
 Brief occlusion and temporary confidence loss must not cause rapid presence-event flapping.
 
