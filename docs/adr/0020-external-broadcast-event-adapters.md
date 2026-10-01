@@ -19,6 +19,14 @@ The event runtime consumes normalized events and drives generic actions targetin
 
 Credentials and platform-native payloads remain inside adapters/integration configuration.
 
+## P0 implementation
+
+The normalized event domain, bounded Unity ingress hub, and tracking-presence adapter are implemented.
+
+Tracking disappearance emits `tracking.subject_lost`; restoration emits `tracking.subject_restored`. Source/device loss remains a separate event.
+
+Broadcast chat/donation platform adapters are intentionally not hard-coded into the event runtime and remain P8 work.
+
 ## Consequences
 
 - streaming platforms can be added/replaced independently
