@@ -15,6 +15,7 @@ namespace VCR.Runtime.Protocols.Vmc
     public sealed class VmcFrameAccumulator
     {
         private readonly string _sourceId;
+        private readonly HumanoidPoseSpace _poseSpace;
         private readonly NormalizedBonePose[] _bones =
             new NormalizedBonePose[(int)HumanoidBoneId.Count];
         private readonly bool[] _hasBone =
@@ -38,11 +39,14 @@ namespace VCR.Runtime.Protocols.Vmc
         private long _sequence;
         private long _senderTimestampUs;
 
-        public VmcFrameAccumulator(string sourceId)
+        public VmcFrameAccumulator(
+            string sourceId,
+            HumanoidPoseSpace poseSpace = HumanoidPoseSpace.OriginalLocal)
         {
             _sourceId = string.IsNullOrWhiteSpace(sourceId)
                 ? "vmc"
                 : sourceId;
+            _poseSpace = poseSpace;
         }
 
         public bool Process(
@@ -265,7 +269,7 @@ namespace VCR.Runtime.Protocols.Vmc
             }
         }
 
-        private NormalizedHumanoidPose BuildPose()
+        private HumanoidPoseState BuildPose()
         {
             var bones =
                 new NormalizedBonePose[_bones.Length];
@@ -275,7 +279,8 @@ namespace VCR.Runtime.Protocols.Vmc
             Array.Copy(_bones, bones, _bones.Length);
             Array.Copy(_hasBone, hasBone, _hasBone.Length);
 
-            return new NormalizedHumanoidPose(
+            return new HumanoidPoseState(
+                _poseSpace,
                 _rootPosition,
                 _rootRotation,
                 bones,
