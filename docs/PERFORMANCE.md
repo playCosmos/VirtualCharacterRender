@@ -1,0 +1,131 @@
+# Performance
+
+## Product performance target
+
+VirtualCharacterRender is optimized for one active 3D character.
+
+The runtime must defend 60 FPS when the host PC is otherwise not under meaningful load, using the validated baseline configuration.
+
+## Resolution tiers
+
+### Minimum supported target
+
+- 1280×720
+- 60 FPS
+- transparent overlay
+- one character
+- built-in basic tracking enabled
+- default/MToon-class material path
+- normal broadcast UI/services
+
+This tier is the minimum release support target.
+
+### Recommended target
+
+- 1920×1080
+- 60 FPS
+- same baseline feature set
+
+1080p60 is the primary optimization and validation target.
+
+### Higher resolutions
+
+1440p, 4K, ultrawide, and custom resolutions are allowed.
+
+They are supported as configurable output modes, but performance guarantees are documented separately by platform/hardware class and are not implied by the 720p60/1080p60 targets.
+
+## Frame-time gates
+
+At 60 FPS the nominal frame budget is 16.67 ms.
+
+For validated baseline sessions:
+
+- average frame rate: 60 FPS target
+- P95 frame time: <= 16.67 ms target
+- P99 frame time: <= 25 ms target
+- sustained frame drops must be diagnosable by subsystem
+- startup/transitions may have separate documented transient budgets
+
+Average FPS alone is not a release gate.
+
+## Baseline session
+
+Performance measurements use an explicitly versioned reference workload:
+
+```text
+1 active VRM character
+1 primary camera
+1 environment
+basic face/head/hand/upper-body tracking
+basic expressions/motion
+MToon/default material path
+transparent overlay
+no heavy optional post effects
+no advanced event graph workload
+no full-body tracking
+```
+
+A reference model/content package and platform test machines must be recorded before performance claims are treated as release guarantees.
+
+## Tracking latency targets
+
+Initial engineering targets:
+
+- tracking adapter -> normalized state: <= 30 ms P95 where source permits
+- local VMC -> runtime: <= 30 ms P95
+- mobile ARKit-compatible LAN input -> runtime: <= 70 ms P95
+- webcam capture -> visible character response: <= 80 ms target
+
+These are engineering targets subject to P0 hardware/source validation.
+
+## Runtime cost attribution
+
+Diagnostics must attribute at least:
+
+- render CPU time
+- render GPU time
+- tracking/inference time
+- motion/expression mixer time
+- shader/post-processing cost
+- environment cost
+- event/protocol cost
+- memory use
+- render-target/texture allocation
+- active capabilities/services
+
+## Disabled capability rule
+
+A disabled optional capability should create no meaningful recurring frame cost.
+
+Examples:
+
+- no camera inference when webcam tracking is disabled
+- no full-body solver when full tracking is disabled
+- no protocol polling/listener if not enabled
+- no event graph evaluation if no graph is active
+- no heavy post-processing allocation when unused
+
+## Stability gates
+
+Candidate release soak tests should include:
+
+- 1 hour normal interactive session
+- 8 hour extended session
+- repeated tracker disconnect/reconnect
+- repeated model/environment reload
+- shader failure and fallback
+- sleep/wake or display changes where platform behavior permits
+
+Crash, runaway allocation, unrecovered device loss, and continuously increasing memory are release blockers until characterized.
+
+## Performance policy
+
+New features must report:
+
+1. disabled recurring cost
+2. enabled incremental CPU cost
+3. enabled incremental GPU cost
+4. memory/VRAM delta
+5. latency impact where applicable
+
+Performance regression is an architectural concern, not a final optimization phase.
