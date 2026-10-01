@@ -2,11 +2,11 @@
 
 ## Objective
 
-Provide predictable low-latency one-character 3D rendering with correct transparent broadcast output on Windows and macOS while keeping core runtime contracts backend-independent.
+Provide predictable low-latency one-character 3D rendering through Unity URP with correct transparent broadcast output on Windows and macOS while keeping core runtime contracts backend-independent.
 
-## Primary candidate
+## Primary renderer
 
-Unity with URP is the P0 candidate. It remains Proposed until validated on both desktop targets.
+Unity with URP is the accepted primary renderer for the 3D product. P0 still pins and validates the exact Unity LTS, URP, and UniVRM versions on both desktop targets.
 
 ## Output targets
 
