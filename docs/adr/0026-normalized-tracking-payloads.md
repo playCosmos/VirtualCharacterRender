@@ -27,7 +27,7 @@ The tracking domain must not expose Unity vector/quaternion types.
 
 - normalized head rotation
 - normalized head position when available
-- a fixed semantic facial-coefficient set compatible with the MediaPipe/ARKit-style coefficient names
+- a fixed MediaPipe/ARKit semantic superset, preserving MediaPipe `_neutral` and ARKit `tongueOut` where available
 
 The coefficient set includes eye blink/gaze, brows, jaw, mouth, cheek, and nose channels.
 
