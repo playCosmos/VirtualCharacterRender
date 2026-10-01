@@ -336,6 +336,29 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 }
             }
 
+            if (IPAddress.IsLoopback(address))
+            {
+                var receivers =
+                    FindObjectsByType<VmcUdpReceiver>(
+                        FindObjectsInactive.Exclude,
+                        FindObjectsSortMode.None);
+
+                foreach (var receiver in receivers)
+                {
+                    if (receiver != null &&
+                        receiver.isActiveAndEnabled &&
+                        receiver.LocalPort == remotePort)
+                    {
+                        Debug.LogError(
+                            "VCR VMC sender: destination points to this process's active VMC receiver. " +
+                            "Use a different destination port to avoid a self-feedback loop.",
+                            this);
+                        enabled = false;
+                        return;
+                    }
+                }
+            }
+
             _endpoint =
                 new IPEndPoint(address, remotePort);
             _client =
