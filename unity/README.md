@@ -62,6 +62,35 @@ VCR > P0 > Attach Tracking Target to Selected VRM
 
 The target auto-finds a routed provider when present, prefers UniVRM's ControlRig, and calibrates face/body on the first valid frames.
 
+### Transparent output P0 path
+
+The generated runtime test scene now includes the P0 transparent-window adapter and alpha-reference pattern.
+
+Create/recreate it with:
+
+```text
+VCR > P0 > Create Runtime Test Scene
+```
+
+This also applies the project-level output baseline:
+
+- URP Alpha Processing on
+- camera clear alpha 0
+- HDR off for the SDR RGBA8 P0 path
+- Windows D3D11 only
+- D3D11 flip-model swapchain off
+- windowed/resizable
+- run in background
+- automatic UniWinC opacity hit testing off
+
+Static validation:
+
+```text
+VCR > P0 > Validate Transparent Output Baseline
+```
+
+The static check is not a platform PASS. Build standalone players and validate Windows/macOS native alpha plus OBS capture separately.
+
 ### Optional ARKit/iPhone P0 path
 
 Run the source-free presence smoke check:
