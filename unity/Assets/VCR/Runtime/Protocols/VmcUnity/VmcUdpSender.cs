@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
 using VCR.Runtime.Protocols.Osc;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.Protocols.VmcUnity
 {
