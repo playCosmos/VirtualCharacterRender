@@ -80,6 +80,28 @@ namespace VCR.Editor.P0
                     source.shader == sourceShader &&
                     source.name == sourceName;
 
+                var sourceColorBefore =
+                    source.HasProperty("_BaseColor")
+                        ? source.GetColor("_BaseColor")
+                        : Color.white;
+
+                var parameterApplied =
+                    controller.TrySetColor(
+                        slot.Id,
+                        "_BaseColor",
+                        Color.magenta,
+                        out var parameterError);
+
+                var parameterIsolated =
+                    parameterApplied &&
+                    source.HasProperty("_BaseColor") &&
+                    source.GetColor("_BaseColor") ==
+                        sourceColorBefore &&
+                    renderer.sharedMaterial != source &&
+                    renderer.sharedMaterial.GetColor(
+                        "_BaseColor") ==
+                        Color.magenta;
+
                 var invalidApplied =
                     controller.TryApplyShaderId(
                         slot.Id,
@@ -100,21 +122,23 @@ namespace VCR.Editor.P0
                 var pass =
                     cloneApplied &&
                     sourcePreserved &&
+                    parameterIsolated &&
                     fallbackRestored &&
                     controller.ErrorCount >= 1;
 
                 if (pass)
                 {
                     Debug.Log(
-                        "VCR P0 material override: PASS - source material preserved, runtime clone applied, invalid shader fell back to source.");
+                        "VCR P0 material override: PASS - source material preserved, runtime clone parameter mutation isolated, invalid shader fell back to source.");
                 }
                 else
                 {
                     Debug.LogError(
                         "VCR P0 material override: FAIL - " +
                         $"applied={applied}, cloneApplied={cloneApplied}, " +
-                        $"sourcePreserved={sourcePreserved}, fallbackRestored={fallbackRestored}, " +
-                        $"applyError='{applyError}', invalidError='{invalidError}'.");
+                        $"sourcePreserved={sourcePreserved}, parameterIsolated={parameterIsolated}, " +
+                        $"fallbackRestored={fallbackRestored}, applyError='{applyError}', " +
+                        $"parameterError='{parameterError}', invalidError='{invalidError}'.");
                 }
             }
             finally
