@@ -20,6 +20,7 @@ Deliverables:
 - Apple ARKit-compatible mobile face-tracking input spike
 - VMC receive/send spike
 - normalized tracking-state prototype
+- tracking-derived subject-presence prototype
 - normalized event prototype
 - dynamic-environment abstraction prototype
 - capability/lazy-initialization bootstrap
@@ -40,6 +41,8 @@ Exit criteria:
 - webcam tracking produces usable normalized eye/mouth/face/head/hand/upper-body state according to source capability
 - mobile ARKit-compatible face data reaches desktop normalized state
 - tracking sources can switch without character reload
+- performer disappearance can be distinguished from source/device disconnection
+- brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
 - optional full-body services remain disabled in the baseline
 - disabled optional capabilities have no meaningful recurring frame cost
 - P0 ADRs are accepted, rejected, or explicitly deferred
@@ -62,12 +65,13 @@ Productionize:
 - upper body
 - Apple ARKit-compatible face input
 - optional audio-driven fallback motion
+- subject-presence derivation from webcam/ARKit tracking state
 
 Full-body tracking/IK is a separate optional capability and does not define baseline runtime cost.
 
 ## P4 — Tracking Abstraction and Routing
 
-Source health, timestamps, confidence, smoothing, source priority, region routing, and source hot switching for the one active performer.
+Source health, timestamps, confidence, subject validity, smoothing, source priority, region routing, source hot switching, and subject/source loss distinction for the one active performer.
 
 Multi-person identity tracking is not in scope.
 
@@ -91,7 +95,7 @@ VMC, OSC, and WebSocket plus normalized event injection.
 
 Introduce:
 
-- AFK/presence source
+- tracking-derived subject presence source
 - one broadcast chat integration
 - one donation/support integration
 
