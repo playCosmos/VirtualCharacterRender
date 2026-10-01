@@ -1,6 +1,6 @@
 # ADR-0017: Separate character-secondary and world physics domains
 
-- Status: Proposed
+- Status: Deferred
 - Date: 2026-10-01
 
 ## Context
@@ -19,6 +19,12 @@ Full-body tracking/IK is also independent from both physics domains.
 - measure fixed/update-loop interactions
 - define cross-domain collision requirements
 - define deterministic fallback when world physics is disabled
+
+## Deferral
+
+P0 does not require world physics or a custom secondary-physics service. UniVRM secondary motion may operate independently while environment/world physics remains disabled.
+
+Resume this ADR when environment physics, props, advanced full-body integration, or cross-domain collision becomes an active implementation requirement.
 
 ## Revisit conditions
 
