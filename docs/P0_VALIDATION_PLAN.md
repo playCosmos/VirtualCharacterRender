@@ -257,6 +257,61 @@ PASS when:
 - loss of one source does not incorrectly emit SubjectLost while another source still sees the performer
 - the compatibility path does not claim subject absence from an all-zero packet because the protocol lacks explicit tracking-valid state
 
+### V4A — Transparent desktop output
+
+Prepare the scene/project:
+
+```text
+VCR > P0 > Create Runtime Test Scene
+VCR > P0 > Configure Transparent Output Baseline
+VCR > P0 > Validate Transparent Output Baseline
+```
+
+Static PASS requires:
+
+- active URP asset
+- URP Alpha Processing enabled
+- camera Solid Color clear with alpha zero
+- camera HDR disabled for the P0 SDR alpha path
+- `UniWinCOverlayOutput` + `UniWindowController`
+- automatic per-pixel hit testing disabled
+- Alpha transparency mode
+- Windows explicit D3D11-only graphics API
+- D3D11 flip-model swapchain disabled
+- run-in-background enabled
+
+Static PASS is not a platform PASS.
+
+Build and run standalone on each platform.
+
+Visual reference:
+
+- alpha 100% patch is opaque
+- alpha 50% patch is visibly half-transparent
+- alpha 25% patch is visibly lighter
+- overlapping translucent patches blend without dark/bright halos
+- fully transparent background has no chroma key fringe
+
+Windows gate:
+
+- transparent standalone window works using the D3D11 baseline
+- topmost toggle works
+- manual click-through toggle works
+- window resize remains transparent
+- OBS Game Capture/window capture path is tested and result recorded
+- 720p60 and 1080p60 measurements recorded
+
+macOS M1+ gate:
+
+- transparent standalone window works
+- Retina/client dimensions are correct
+- topmost and manual click-through work
+- resize/monitor movement remains stable
+- OBS capture path is tested and result recorded
+- 720p60 and 1080p60 measurements recorded
+
+Record failures separately. Do not infer macOS PASS from Windows or vice versa.
+
 ### V4B — VMC interoperability
 
 Static/self-test gate:
