@@ -94,6 +94,37 @@ macOS M1+ PASS when:
 
 ADR-0007 remains Proposed until both platform gates pass.
 
+### V2B — Material/custom shader override
+
+Source-free gate:
+
+```text
+VCR > P0 > Validate Material Override Runtime
+```
+
+PASS when:
+
+- the source material object is not modified
+- a valid precompiled shader resolves by shader ID
+- the renderer receives a runtime material clone
+- runtime parameter setters affect only the clone
+- an unknown shader ID does not throw out of the material subsystem
+- invalid/unsupported shader resolution restores the original source material reference
+- fallback/error counters are reported through diagnostics
+
+External custom-shader gate:
+
+- build one trivial custom URP shader for Windows and macOS
+- package each target in its own AssetBundle
+- load/register through `RuntimeShaderBundleLoader`
+- apply the registered shader by ID to one VRM material slot
+- verify reload/clear restores the imported source material
+- verify missing/incorrect-platform bundle fails without breaking the VRM
+- verify required shader variants survive the build/content pipeline
+- measure enabled override cost; disabled material-package loading has no recurring frame cost
+
+ADR-0029 defines the P0 execution model. Raw HLSL source compilation is not a runtime requirement.
+
 ### V3 — Webcam tracking
 
 Source-free presence gate:
