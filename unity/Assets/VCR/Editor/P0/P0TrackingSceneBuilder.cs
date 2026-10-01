@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
+using VCR.Runtime.Events.Unity;
 using VCR.Runtime.Output.Unity;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Tracking.MediaPipe;
@@ -79,6 +80,22 @@ namespace VCR.Editor.P0
                 trackingRoot.AddComponent<
                     PriorityTrackingRouter>();
             router.SetFallbackProvider(mediaPipe);
+
+            var eventRoot =
+                new GameObject("Events");
+            eventRoot.transform.SetParent(
+                runtimeRoot.transform,
+                false);
+
+            var eventHub =
+                eventRoot.AddComponent<
+                    NormalizedEventHub>();
+
+            var presenceEvents =
+                eventRoot.AddComponent<
+                    TrackingPresenceEventAdapter>();
+            presenceEvents.SetProvider(router);
+            presenceEvents.SetSink(eventHub);
 
             var characterRoot =
                 new GameObject("Character");
