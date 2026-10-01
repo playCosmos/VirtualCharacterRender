@@ -228,14 +228,14 @@ VMC OSC/UDP
   ↓
 VmcTrackingSource
   ↓
-NormalizedHumanoidPose
+HumanoidPoseState
   ↓
 PriorityTrackingRouter external-pose slot
   ↓
 Vrm10HumanoidPoseTarget
 ```
 
-`NormalizedHumanoidPose` carries model-root transform plus local transforms for the Unity/VMC humanoid bone-name set. `NormalizedExpressionState` separately carries standard expressions and arbitrary custom expression name/value pairs.
+`HumanoidPoseState` carries model-root transform plus local transforms for the Unity/VMC humanoid bone-name set and an explicit `HumanoidPoseSpace`. VMC defaults to `OriginalLocal`; normalized ControlRig senders must opt into `NormalizedLocal`. `NormalizedExpressionState` separately carries standard expressions and arbitrary custom expression name/value pairs.
 
 The P0 VRM full-body target converts VMC original humanoid local rotations into UniVRM ControlRig normalized local rotations using the target model's initial `BoneInitialRotation` data. This preserves the sender's current pose instead of discarding the first received pose as a calibration baseline. Root translation/rotation remain separate opt-in policies.
 
