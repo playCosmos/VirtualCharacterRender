@@ -2,9 +2,22 @@
 
 ## Principle
 
-VirtualCharacterRender includes basic motion capture while also accepting higher-grade external tracking.
+VirtualCharacterRender provides built-in basic motion capture for one performer while accepting higher-grade external tracking.
 
-All tracking devices and algorithms are interchangeable input sources. No tracking implementation owns character transforms directly.
+No tracking implementation owns character transforms directly.
+
+## Product scope
+
+The baseline tracking set is:
+
+- face, with eye and mouth quality prioritized
+- head
+- hands
+- upper body
+
+Full-body tracking is separate and optional.
+
+Multi-person identity tracking from one webcam is not an initial feature.
 
 ## Pipeline
 
@@ -19,70 +32,96 @@ Validation / Timestamp / Confidence
            ↓
        Routing / Mixer
            ↓
-     Character Runtime
+     One Active Character
 ```
 
-## Built-in basic capture
-
-The initial product must support a simple setup without another VTuber application.
+## Built-in capture
 
 ### Webcam
 
-Target capabilities:
+The built-in webcam path targets:
 
+- facial landmarks/expressions
+- left/right eye openness and useful gaze estimation
+- mouth openness and mouth-shape estimation
 - head pose
-- basic facial landmarks/expressions
-- eye openness/gaze where reliable
-- mouth openness/shapes where reliable
-- optional hands/body after performance and quality validation
+- hands
+- upper-body landmarks/pose
 
-Webcam inference can be disabled completely and must obey Lightweight performance budgets.
+Quality may vary with camera, lighting, occlusion, and inference backend. Capability health/confidence must be observable.
+
+The webcam path may use separate inference models internally, but they emit one normalized subject state for the active performer.
 
 ### Apple mobile face tracking
 
 Support an iPhone/iPad ARKit-compatible facial tracking source.
 
-Internally this is treated as ARKit face-tracking data rather than Face ID authentication data.
+Internally this is ARKit face-tracking data rather than Face ID authentication.
 
-Expected data includes head pose and expression/face coefficients supported by the selected mobile capture implementation.
+Use it primarily for high-quality face/head/expression input, including eyes and mouth where the source provides suitable coefficients.
 
-Desktop transport/discovery is defined separately from the normalized tracking schema.
+### Mixed source routing
+
+Different body regions may come from different sources for the same performer.
+
+Example:
+
+```text
+Face/Eyes/Mouth = ARKit mobile
+Head            = ARKit mobile
+Hands           = Webcam
+Upper Body      = Webcam
+```
+
+or:
+
+```text
+Face/Head       = Webcam
+Hands/UpperBody = VMC or another adapter
+```
+
+Changing sources must not require character reload.
 
 ### Audio fallback
 
-Microphone-derived mouth/body motion can provide a fallback or low-cost mode when camera tracking is unavailable or intentionally disabled.
+Microphone-derived mouth/body motion can be used as an optional fallback when visual tracking is unavailable or intentionally disabled.
 
-## External/candidate sources
+## Full-body tracking
+
+Full-body tracking is a separate capability.
+
+It may use:
 
 - VMC
-- OpenSeeFace
-- MediaPipe-class face/hand/body tracking
 - SteamVR-class trackers
-- mocopi-class tracking
-- other protocol/plugin sources
+- mocopi-class devices
+- camera-based full-body solutions
+- future plugins/adapters
+
+Full-body solvers, leg tracking, floor/root calibration, and advanced IK do not belong to the baseline performance budget unless explicitly enabled.
 
 ## Normalized domains
 
 Face:
 
-- head position/rotation
+- head-related face transform where appropriate
 - left/right eye openness
 - gaze
 - brows
 - mouth openness
 - mouth-shape coefficients
-- smile/frown/generic expressions
+- generic expressions
 
 Body:
 
-- root transform
-- humanoid bone transforms
+- root/upper-body transforms appropriate to source capability
+- humanoid bone transforms where available
 - optional confidence per joint
 
 Hands:
 
 - wrist pose
-- finger curl or joint pose according to available source quality
+- finger curl or detailed joint pose according to source quality
 
 ## Source health
 
@@ -96,27 +135,16 @@ Each adapter reports:
 - error state
 - active inference/transport state
 
-## Mixing
-
-A character can route sources by region.
-
-```text
-Face  = ARKit mobile
-Eyes  = ARKit mobile
-Body  = VMC
-Hands = Webcam/other adapter
-```
-
-Routing policy is explicit and persisted.
-
-## Hot switching
-
-Changing between webcam, mobile face tracking, VMC, or another compatible source must not require the character to be reloaded.
-
-The mixer transitions according to configured fallback and smoothing policy.
-
 ## Timing
 
 Source timestamps are preserved where practical. Network and camera sources are not assumed to update at render-frame frequency.
 
-Interpolation/extrapolation policy belongs to mixer/runtime logic rather than source adapters.
+Interpolation/extrapolation belongs to mixer/runtime policy, not source adapters.
+
+## Explicit non-goals
+
+Current releases do not need:
+
+- multi-person detection-to-avatar assignment
+- stable identity tracking for several people in one webcam
+- multiple active character bindings
