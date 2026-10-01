@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Tracking.ArKitUnity",
+  "rootNamespace": "VCR.Runtime.Tracking.ArKitUnity",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
