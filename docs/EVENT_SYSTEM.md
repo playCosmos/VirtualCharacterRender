@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The event system turns broadcast, presence, application, and external events into character, environment, camera, shader, audio, prop, and effect actions.
+The event system turns broadcast, tracking-presence, application, and external events into character, environment, camera, shader, audio, prop, and effect actions.
 
 It is optional. A basic avatar session does not require the event runtime to be active.
 
@@ -10,15 +10,27 @@ It is optional. A basic avatar session does not require the event runtime to be 
 
 Initial source categories include:
 
-### Presence / local state
+### Tracking-derived presence
 
-- away / AFK
-- return from away
-- idle duration threshold
-- tracking lost/restored
+- subject lost
+- subject restored
+- tracking source lost
+- tracking source restored
+
+The product's "자리비움 / 복귀" behavior is based on the performer disappearing from the active webcam or ARKit-compatible tracking source.
+
+This is not a timer-based AFK concept.
+
+A brief face occlusion or confidence dip should not immediately become a presence event. Presence state uses configurable grace/recovery timing and source confidence.
+
+### Local/application state
+
 - microphone activity/silence
 - application state
 - timers
+- explicitly configured idle timers, if added later
+
+Any future time-based AFK/idle event is separate from tracking-derived subject presence.
 
 ### Broadcast interaction
 
@@ -45,17 +57,17 @@ Platform-specific integrations are adapters. The event runtime does not depend o
 ## Pipeline
 
 ```text
-External/Local Event
-       ↓
-Source Adapter
-       ↓
-Normalized Event
-       ↓
-Filter / Condition
-       ↓
-Transform / State
-       ↓
-Action
+External / Tracking / Local Event
+              ↓
+         Source Adapter
+              ↓
+        Normalized Event
+              ↓
+      Filter / Condition
+              ↓
+      Transform / State
+              ↓
+            Action
 ```
 
 ## Event envelope
@@ -92,24 +104,47 @@ Actions may target:
 - UI/overlay element
 - timer/state variable
 
-## Away / AFK
+## Subject presence
 
-Away is treated as a first-class local state rather than a hardcoded animation.
+Tracking adapters expose raw health/validity, while a presence-state layer derives stable performer-presence events.
+
+```text
+Tracking Frames
+      ↓
+Validity / Confidence
+      ↓
+Presence Debounce / Hysteresis
+      ↓
+SubjectLost / SubjectRestored
+      ↓
+Event Runtime
+```
 
 Example:
 
 ```text
-No presence activity for N minutes
-    ↓
-AFK state entered
-    ↓
-Idle expression
-    + optional seated/sleep motion
-    + environment lighting change
-    + optional overlay notice
+Performer leaves camera/ARKit view
+        ↓
+Lost grace period satisfied
+        ↓
+SubjectLost
+        ↓
+Configured away motion
++ environment change
++ optional overlay notice
 ```
 
-Return events can restore previous state or trigger a configured transition.
+When the performer returns and remains stably detectable for the configured recovery interval, `SubjectRestored` is emitted.
+
+Device/network loss is different:
+
+```text
+Camera disconnected / ARKit sender offline
+        ↓
+TrackingSourceLost
+```
+
+This allows the scene to react differently to the performer leaving versus the tracking hardware/source failing.
 
 ## Reliability and safety
 
@@ -123,11 +158,13 @@ Event adapters must:
 - make dropped events visible in diagnostics
 - keep secret credentials outside scene/profile assets
 
+Presence derivation must avoid event flapping during brief occlusion or low-confidence frames.
+
 ## Initial implementation order
 
 1. normalized event envelope
 2. internal/local test source
-3. AFK/presence source
+3. tracking-derived subject presence source
 4. WebSocket/OSC event injection
 5. one broadcast chat adapter
 6. one donation/support adapter
