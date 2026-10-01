@@ -10,8 +10,8 @@ namespace VCR.Editor.P0
 {
     public static class P0PackageBaselineCheck
     {
-        private const string UniWinCCommit =
-            "304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc";
+        private const string UniWinCManifestPin =
+            "https://github.com/kirurobo/UniWindowController.git?path=/UniWinC/Assets/Kirurobo/UniWindowController#v0.9.8";
         private static readonly IReadOnlyDictionary<string, string> Expected =
             new Dictionary<string, string>
             {
@@ -40,17 +40,12 @@ namespace VCR.Editor.P0
             }
 
             var manifest = File.ReadAllText(manifestPath);
-            var expectedUniWinC =
-                "https://github.com/kirurobo/UniWindowController.git#" +
-                UniWinCCommit;
-
             if (!manifest.Contains(
-                expectedUniWinC,
+                UniWinCManifestPin,
                 StringComparison.Ordinal))
             {
                 failures.Add(
-                    "UniWindowController must be pinned to release commit " +
-                    UniWinCCommit);
+                    "UniWindowController must be pinned to the v0.9.8 UPM subfolder URL.");
             }
         }
 
