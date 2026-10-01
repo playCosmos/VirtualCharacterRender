@@ -129,6 +129,8 @@ Tracking freshness is more important than processing every camera frame.
 
 Exact tracking/camera rates are selected after M1/Windows profiling.
 
+Source adapters may consume their own single-slot callback buffers, but `ITrackingFrameProvider` exposes the latest normalized frames non-destructively. Multiple consumers must use sequence/timestamp values rather than removing frames from each other.
+
 ## Apple mobile face tracking
 
 Support an iPhone/iPad ARKit-compatible facial tracking source.
