@@ -53,12 +53,6 @@ namespace VCR.Runtime.Tracking
             TrackingFrame bodyHandsFrame,
             bool bodyHandsConfigured)
         {
-            if (!_started)
-            {
-                _started = true;
-                _startedAtUs = nowUs;
-            }
-
             var faceAvailable =
                 faceConfigured &&
                 IsFresh(faceFrame, nowUs, _sourceStaleUs);
@@ -67,12 +61,51 @@ namespace VCR.Runtime.Tracking
                 bodyHandsConfigured &&
                 IsFresh(bodyHandsFrame, nowUs, _sourceStaleUs);
 
-            var anyConfigured = faceConfigured || bodyHandsConfigured;
-            var anySourceAvailable = faceAvailable || bodyHandsAvailable;
             var sourceDecisionReady =
                 faceFrame != null ||
                 bodyHandsFrame != null ||
-                nowUs - _startedAtUs >= _sourceStaleUs;
+                IsSourceDecisionReady(nowUs);
+
+            var faceSubjectEvidence =
+                faceAvailable &&
+                faceFrame != null &&
+                faceFrame.SubjectDetected;
+
+            var bodySubjectEvidence =
+                bodyHandsAvailable &&
+                bodyHandsFrame != null &&
+                bodyHandsFrame.SubjectDetected;
+
+            return UpdateResolved(
+                nowUs,
+                faceConfigured,
+                faceAvailable,
+                faceSubjectEvidence,
+                bodyHandsConfigured,
+                bodyHandsAvailable,
+                bodySubjectEvidence,
+                sourceDecisionReady);
+        }
+
+        /// <summary>
+        /// Updates presence from already-resolved source availability/evidence.
+        /// Use this when child providers have different local timestamp origins.
+        /// </summary>
+        public TrackingPresenceSnapshot UpdateResolved(
+            long nowUs,
+            bool faceConfigured,
+            bool faceSourceAvailable,
+            bool faceSubjectEvidence,
+            bool bodyHandsConfigured,
+            bool bodyHandsSourceAvailable,
+            bool bodyHandsSubjectEvidence,
+            bool sourceDecisionReady = true)
+        {
+            EnsureStarted(nowUs);
+
+            var anyConfigured = faceConfigured || bodyHandsConfigured;
+            var anySourceAvailable =
+                faceSourceAvailable || bodyHandsSourceAvailable;
 
             var events = TrackingPresenceEvents.None;
 
@@ -94,8 +127,7 @@ namespace VCR.Runtime.Tracking
             }
 
             var subjectEvidence =
-                (faceAvailable && faceFrame != null && faceFrame.SubjectDetected) ||
-                (bodyHandsAvailable && bodyHandsFrame != null && bodyHandsFrame.SubjectDetected);
+                faceSubjectEvidence || bodyHandsSubjectEvidence;
 
             if (!anySourceAvailable)
             {
@@ -118,10 +150,12 @@ namespace VCR.Runtime.Tracking
                         _restoreCandidateSinceUs = nowUs;
                     }
 
-                    if (nowUs - _restoreCandidateSinceUs >= _subjectRestoreStabilityUs)
+                    if (nowUs - _restoreCandidateSinceUs >=
+                        _subjectRestoreStabilityUs)
                     {
                         var wasEstablished = _subjectStateEstablished;
-                        var wasLost = _subjectState == SubjectPresenceState.Lost;
+                        var wasLost =
+                            _subjectState == SubjectPresenceState.Lost;
 
                         _subjectState = SubjectPresenceState.Present;
                         _subjectStateEstablished = true;
@@ -129,7 +163,8 @@ namespace VCR.Runtime.Tracking
 
                         if (wasEstablished && wasLost)
                         {
-                            events |= TrackingPresenceEvents.SubjectRestored;
+                            events |=
+                                TrackingPresenceEvents.SubjectRestored;
                         }
                     }
                 }
@@ -149,10 +184,12 @@ namespace VCR.Runtime.Tracking
                         _lostCandidateSinceUs = nowUs;
                     }
 
-                    if (nowUs - _lostCandidateSinceUs >= _subjectLostGraceUs)
+                    if (nowUs - _lostCandidateSinceUs >=
+                        _subjectLostGraceUs)
                     {
                         var wasEstablished = _subjectStateEstablished;
-                        var wasPresent = _subjectState == SubjectPresenceState.Present;
+                        var wasPresent =
+                            _subjectState == SubjectPresenceState.Present;
 
                         _subjectState = SubjectPresenceState.Lost;
                         _subjectStateEstablished = true;
@@ -175,8 +212,8 @@ namespace VCR.Runtime.Tracking
                 _sequence,
                 nowUs,
                 _subjectState,
-                faceAvailable,
-                bodyHandsAvailable,
+                faceSourceAvailable,
+                bodyHandsSourceAvailable,
                 anySourceAvailable,
                 subjectEvidence,
                 events);
@@ -204,6 +241,23 @@ namespace VCR.Runtime.Tracking
                 false,
                 false,
                 TrackingPresenceEvents.None);
+        }
+
+        private void EnsureStarted(long nowUs)
+        {
+            if (_started)
+            {
+                return;
+            }
+
+            _started = true;
+            _startedAtUs = nowUs;
+        }
+
+        private bool IsSourceDecisionReady(long nowUs)
+        {
+            EnsureStarted(nowUs);
+            return nowUs - _startedAtUs >= _sourceStaleUs;
         }
 
         private static bool IsFresh(
