@@ -1,0 +1,53 @@
+using UniVRM10;
+using UnityEditor;
+using UnityEngine;
+using VCR.Runtime.Character;
+
+namespace VCR.Editor.P0
+{
+    public static class P0VrmTrackingTargetMenu
+    {
+        [MenuItem("VCR/P0/Attach Tracking Target to Selected VRM", true)]
+        private static bool ValidateAttach()
+        {
+            return FindSelectedVrm() != null;
+        }
+
+        [MenuItem("VCR/P0/Attach Tracking Target to Selected VRM")]
+        private static void Attach()
+        {
+            var vrm = FindSelectedVrm();
+            if (vrm == null)
+            {
+                Debug.LogError("VCR P0: select a GameObject inside a Vrm10Instance.");
+                return;
+            }
+
+            var target = vrm.GetComponent<Vrm10TrackingTarget>();
+            if (target == null)
+            {
+                target = Undo.AddComponent<Vrm10TrackingTarget>(vrm.gameObject);
+            }
+
+            Selection.activeGameObject = vrm.gameObject;
+            EditorGUIUtility.PingObject(target);
+
+            Debug.Log(
+                "VCR P0: tracking target attached. " +
+                "It will auto-find an ITrackingFrameProvider in the scene and calibrate on first valid face/body frames.",
+                target);
+        }
+
+        private static Vrm10Instance FindSelectedVrm()
+        {
+            var selected = Selection.activeGameObject;
+            if (selected == null)
+            {
+                return null;
+            }
+
+            return selected.GetComponentInParent<Vrm10Instance>() ??
+                   selected.GetComponentInChildren<Vrm10Instance>();
+        }
+    }
+}
