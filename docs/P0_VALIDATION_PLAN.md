@@ -44,16 +44,54 @@ PASS when:
 
 ### V2 — Rendering/output
 
-Validate independently at 720p60 and 1080p60.
+Static setup:
 
-PASS when:
+```text
+VCR > P0 > Create Runtime Test Scene
+VCR > P0 > Validate Transparent Output Baseline
+```
 
-- true alpha path is demonstrated
-- OBS-compatible capture is demonstrated
-- resize/high-DPI behavior is stable
-- macOS Retina path is stable
-- Windows high-DPI path is stable
-- no persistent frame-time regression occurs with transparent output enabled
+The generated runtime scene includes:
+
+- transparent main camera
+- `DesktopRenderBootstrap`
+- `UniWinCOverlayOutput`
+- `P0AlphaTestPattern`
+- `P0RuntimeDiagnostics`
+
+Static PASS requires:
+
+- UniWindowController 0.9.8 package resolves
+- URP Alpha Processing enabled
+- SDR/HDR-off camera baseline with clear alpha 0
+- Windows explicit D3D11
+- Windows D3D11 flip-model swapchain disabled
+- automatic opacity hit testing disabled
+
+Then validate standalone players independently at 720p60 and 1080p60.
+
+Windows PASS when:
+
+- true alpha is demonstrated in the desktop window
+- the alpha test pattern shows correct opaque/50%/25%/overlap behavior
+- VRM hair/outline edges have no unacceptable black/white fringe
+- OBS Game Capture with transparency enabled preserves alpha
+- topmost and explicit click-through work
+- resize/high-DPI and multi-monitor behavior are stable
+- no persistent frame-time regression violates the P0 frame budget
+
+macOS M1+ PASS when:
+
+- true alpha is demonstrated in the desktop window
+- the alpha test pattern shows correct opaque/50%/25%/overlap behavior
+- VRM hair/outline edges have no unacceptable fringe
+- OBS macOS window/screen capture workflow is usable
+- topmost and explicit click-through work
+- Retina scaling, resize, and multi-monitor behavior are stable
+- sleep/wake and relaunch do not leave the window adapter broken
+- no persistent frame-time regression violates the P0 frame budget
+
+ADR-0007 remains Proposed until both platform gates pass.
 
 ### V3 — Webcam tracking
 
