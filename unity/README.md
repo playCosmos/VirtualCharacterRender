@@ -92,6 +92,32 @@ VCR > P0 > Validate Transparent Output Baseline
 
 The static check is not a platform PASS. Build standalone players and validate Windows/macOS native alpha plus OBS capture separately.
 
+### Material/custom shader P0 path
+
+Every VRM loaded by `Vrm10CharacterLoader` gets a `MaterialOverrideController`.
+
+Run the source-free safety test:
+
+```text
+VCR > P0 > Validate Material Override Runtime
+```
+
+The test verifies that the source Material is preserved, an override uses a runtime clone, and an invalid shader ID restores the source material.
+
+Runtime shader resolution is precompiled-only:
+
+```text
+shader ID
+  ↓
+RuntimeShaderRegistry
+  ├─ Shader.Find for player-included shaders
+  └─ Shader registered by RuntimeShaderBundleLoader
+```
+
+External bundles are platform-specific. Build and validate separate Windows/macOS shader bundles against the pinned Unity/URP baseline.
+
+Raw HLSL source is not compiled inside the application.
+
 ### Optional ARKit/iPhone P0 path
 
 Run the source-free presence smoke check:
@@ -181,6 +207,12 @@ Assets/VCR/
 │  │  ├─ Vrm10TrackingTarget
 │  │  ├─ Vrm10HumanoidPoseTarget
 │  │  └─ Vrm10MotionSnapshotProvider
+│  ├─ Materials/
+│  │  ├─ MaterialSlotDescriptor
+│  │  └─ Unity/
+│  │     ├─ MaterialOverrideController
+│  │     ├─ RuntimeShaderRegistry
+│  │     └─ RuntimeShaderBundleLoader
 │  ├─ Protocols/
 │  │  ├─ Osc/
 │  │  ├─ Vmc/
