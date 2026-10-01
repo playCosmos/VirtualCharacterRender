@@ -15,12 +15,14 @@ Use a transparent desktop window as the initial output abstraction.
 
 For P0, use UniWindowController 0.9.8 as the candidate native window adapter behind the project-owned `IOverlayOutputAdapter` boundary.
 
-The dependency is pinned by release tag and package subfolder:
+The dependency is pinned to the UPM release commit for 0.9.8 rather than the moving `upm` branch:
 
 ```text
 com.kirurobo.uniwinc
-https://github.com/kirurobo/UniWindowController.git?path=/UniWinC/Assets/Kirurobo/UniWindowController#v0.9.8
+https://github.com/kirurobo/UniWindowController.git#304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc
 ```
+
+The release commit contains the UPM package at repository root.
 
 The shared runtime does not expose Kirurobo, Win32, Cocoa, Metal, D3D, Unity Camera, or native window types.
 
@@ -107,7 +109,7 @@ Output does not own the 720p/1080p preset or the 60 FPS frame policy.
 
 Static checks:
 
-- package resolves at the pinned revision
+- package resolves as version 0.9.8 from pinned commit `304f9ba2aa4a8fae7f3c71f38118c44722a2f6cc`
 - camera background alpha is 0
 - HDR is disabled for the SDR baseline
 - URP Alpha Processing is enabled
