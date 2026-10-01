@@ -6,6 +6,27 @@ VirtualCharacterRender is optimized for one active 3D character.
 
 The runtime must defend 60 FPS when the host PC is otherwise not under meaningful load, using the validated baseline configuration.
 
+## Reference hardware status
+
+### macOS
+
+Minimum reference hardware class:
+
+- Apple Silicon
+- M1 or newer
+
+M1 is the current minimum macOS performance-validation floor.
+
+This does not mean every M1 configuration guarantees every optional advanced feature at 1080p60. Feature-specific guarantees remain tied to the validated baseline workload.
+
+### Windows
+
+Minimum/recommended Windows hardware is currently **TBD**.
+
+Do not publish a Windows CPU/GPU minimum until P0 measurements establish a defensible baseline.
+
+Windows hardware tiers will be defined from measured 720p60/1080p60 behavior rather than guessed specifications.
+
 ## Resolution tiers
 
 ### Minimum supported target
@@ -56,7 +77,9 @@ Performance measurements use an explicitly versioned reference workload:
 1 active VRM character
 1 primary camera
 1 environment
+MediaPipe webcam tracking
 basic face/head/hand/upper-body tracking
+optional ARKit face/head source
 basic expressions/motion
 MToon/default material path
 transparent overlay
