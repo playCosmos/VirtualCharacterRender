@@ -48,10 +48,7 @@ namespace VCR.Editor.P0
                 EditorUtility.SetDirty(controller);
             }
 
-            ConfigurePlayerSettings();
-            ConfigureUrpAlpha();
-
-            AssetDatabase.SaveAssets();
+            ConfigureProjectBaseline();
 
             Selection.activeGameObject =
                 output.gameObject;
@@ -60,6 +57,13 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: transparent-output baseline configured. " +
                 "Run 'Validate Transparent Output Baseline', then validate the built player on Windows and macOS.");
+        }
+
+        public static void ConfigureProjectBaseline()
+        {
+            ConfigurePlayerSettings();
+            ConfigureUrpAlpha();
+            AssetDatabase.SaveAssets();
         }
 
         [MenuItem("VCR/P0/Validate Transparent Output Baseline")]
