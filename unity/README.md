@@ -138,6 +138,15 @@ If `--vcr-material-slot` is omitted, the first discovered VRM material slot is u
 
 No command-line option means no model or shader bundle is loaded by this bootstrap, and it has no per-frame `Update()`.
 
+Convenience launchers are available from the repository root:
+
+```text
+tools/run-p0-player.ps1
+tools/run-p0-player.sh
+```
+
+See `../tools/README.md` for examples.
+
 ### Material/custom shader P0 path
 
 Every VRM loaded by `Vrm10CharacterLoader` gets a `MaterialOverrideController`.
