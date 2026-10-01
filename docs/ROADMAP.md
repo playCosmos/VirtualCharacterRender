@@ -36,9 +36,21 @@ Deliverables:
 - normalized face/upper-body/hand payload prototype
 - normalized tracking -> UniVRM ControlRig mapping prototype
 - tracking-derived subject-presence resolver with source-loss distinction and neutral fallback prototype
-- normalized event prototype
-- dynamic-environment abstraction prototype
-- capability/lazy-initialization bootstrap
+- normalized event prototype:
+  - canonical tracking/chat/donation event types
+  - bounded thread-safe ingress queue
+  - main-thread sequence-stamped dispatch
+  - tracking subject/source loss adapter
+- dynamic-environment abstraction prototype:
+  - environment ID/state/status
+  - world/camera/screen/character space mode
+  - static/event-driven/lower-rate/every-frame update policy
+  - Unity basic environment root with no per-frame cost in static/event-driven mode
+- capability/lazy-initialization bootstrap:
+  - factory registration without service creation
+  - enable=create
+  - disable=dispose
+  - repeatable re-enable lifecycle
 - early diagnostics/per-subsystem timing:
   - frame average/P95/P99
   - normalized channel update rates and snapshot age
@@ -68,6 +80,9 @@ Exit criteria:
 - iFacialMocap/FaceMotion3D ARKit-compatible face data reaches desktop normalized state
 - mixed ARKit + Holistic routing works without character reload and disables redundant MediaPipe face inference while ARKit is healthy
 - performer disappearance can be distinguished from source/device disconnection
+- tracking.subject_lost enters the normalized event pipeline without AFK/timer semantics
+- basic environment state can change without scene reload
+- lazy capability self-test proves disabled services are not instantiated
 - stable tracking loss returns the VRM tracking contribution toward neutral without a one-frame snap
 - brief tracking loss does not cause rapid SubjectLost/SubjectRestored flapping
 - VMC codec self-test passes and external receive/send interoperability is demonstrated before ADR-0006 acceptance
