@@ -16,7 +16,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     /// FaceLandmarker at a higher priority/rate, and HolisticLandmarker at a
     /// lower configurable rate for hands/upper body.
     /// </summary>
-    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider
+    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider
     {
         private const string FaceModelRelativePath =
             "VCR/Models/face_landmarker_v2_with_blendshapes.bytes";
@@ -35,6 +35,11 @@ namespace VCR.Runtime.Tracking.MediaPipe
         [SerializeField, Range(1, 120)] private int faceTargetFps = 30;
         [SerializeField, Range(1, 120)] private int holisticTargetFps = 15;
         [SerializeField] private bool mediaPipeFaceEnabled = true;
+
+        [Header("Presence - provisional P0 defaults")]
+        [SerializeField, Min(0f)] private float subjectLostGraceSeconds = 0.5f;
+        [SerializeField, Min(0f)] private float subjectRestoreStabilitySeconds = 0.15f;
+        [SerializeField, Min(0.1f)] private float sourceStaleSeconds = 1.0f;
 
         [Header("P0")]
         [SerializeField, Range(1, 4)] private int textureFramePoolSize = 2;
@@ -58,10 +63,13 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private TrackingFrame _latestFaceFrame;
         private TrackingFrame _latestBodyHandsFrame;
+        private TrackingPresenceResolver _presenceResolver;
+        private TrackingPresenceSnapshot _presence;
 
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
         public bool MediaPipeFaceEnabled => mediaPipeFaceEnabled;
+        public TrackingPresenceSnapshot Presence => _presence;
 
         public bool TryGetLatestFace(out TrackingFrame frame)
         {
@@ -155,6 +163,12 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 textureFramePoolSize);
 
             _clock.Restart();
+            _presenceResolver = new TrackingPresenceResolver(
+                SecondsToMicroseconds(subjectLostGraceSeconds),
+                SecondsToMicroseconds(subjectRestoreStabilitySeconds),
+                SecondsToMicroseconds(sourceStaleSeconds));
+            _presenceResolver.Reset(0);
+            _presence = _presenceResolver.Snapshot;
             _nextRateLogTime = Time.unscaledTime + 5f;
 
             _faceCoroutine = StartCoroutine(RunTask(
@@ -297,6 +311,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private void Update()
         {
             CaptureLatestSourceFrames();
+            UpdatePresence();
 
             if (!logTrackingRate || Time.unscaledTime < _nextRateLogTime)
             {
@@ -331,6 +346,34 @@ namespace VCR.Runtime.Tracking.MediaPipe
             {
                 _latestBodyHandsFrame = bodyFrame;
             }
+        }
+
+        private void UpdatePresence()
+        {
+            if (_presenceResolver == null)
+            {
+                return;
+            }
+
+            var nowUs = _clock.ElapsedMilliseconds * 1000L;
+            _presence = _presenceResolver.Update(
+                nowUs,
+                _latestFaceFrame,
+                mediaPipeFaceEnabled,
+                _latestBodyHandsFrame,
+                bodyHandsConfigured: true);
+
+            if (_presence.Events != TrackingPresenceEvents.None)
+            {
+                Debug.Log(
+                    $"VCR tracking presence: state={_presence.SubjectState}, " +
+                    $"events={_presence.Events}, sourceAvailable={_presence.AnySourceAvailable}");
+            }
+        }
+
+        private static long SecondsToMicroseconds(float seconds)
+        {
+            return (long)(Math.Max(0f, seconds) * 1_000_000.0);
         }
 
         private static byte[] LoadModel(string relativePath)
