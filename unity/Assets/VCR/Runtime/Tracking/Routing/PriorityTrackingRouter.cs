@@ -294,8 +294,12 @@ namespace VCR.Runtime.Tracking.Routing
                 _fallbackProvider != null;
 
             var decisionReady =
-                preferred.HasValue ||
-                fallback.HasValue ||
+                faceAvailable ||
+                bodyAvailable ||
+                (preferred.HasValue &&
+                 preferred.Value.SubjectState != SubjectPresenceState.Unknown) ||
+                (fallback.HasValue &&
+                 fallback.Value.SubjectState != SubjectPresenceState.Unknown) ||
                 _latestFace != null ||
                 _latestBodyHands != null;
 
