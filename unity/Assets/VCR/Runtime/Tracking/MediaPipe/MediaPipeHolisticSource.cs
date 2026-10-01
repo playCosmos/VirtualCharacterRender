@@ -8,11 +8,9 @@ using Mediapipe.Tasks.Vision.HolisticLandmarker;
 namespace VCR.Runtime.Tracking.MediaPipe
 {
     /// <summary>
-    /// One-performer MediaPipe Holistic source using LIVE_STREAM CPU inference.
+    /// MediaPipe Holistic source used only for hands and upper body.
     ///
-    /// Image ownership follows MediaPipe move semantics: DetectAsync transfers the
-    /// submitted Image into the native packet. Callers must not reuse or dispose
-    /// the Image after SubmitImage returns successfully.
+    /// Face/head ownership belongs to FaceLandmarker or ARKit (ADR-0025).
     /// </summary>
     public sealed class MediaPipeHolisticSource : ITrackingSource
     {
@@ -23,6 +21,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private HolisticLandmarker _landmarker;
         private TrackingSourceHealth _health;
         private int _acceptCallbacks;
+        private long _resultCount;
         private bool _disposed;
 
         public MediaPipeHolisticSource(byte[] modelBytes, string sourceId = "mediapipe-holistic-webcam")
@@ -45,7 +44,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public TrackingSourceKind Kind => TrackingSourceKind.MediaPipeHolisticWebcam;
 
-        public TrackingRegion Regions => TrackingRegion.Baseline;
+        public TrackingRegion Regions => TrackingRegion.Hands | TrackingRegion.UpperBody;
+
+        public long ResultCount => Interlocked.Read(ref _resultCount);
 
         public TrackingSourceHealth Health
         {
@@ -82,7 +83,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                             BaseOptions.Delegate.CPU,
                             modelAssetBuffer: _modelBytes),
                         runningMode: RunningMode.LIVE_STREAM,
-                        outputFaceBlendshapes: true,
+                        outputFaceBlendshapes: false,
                         outputSegmentationMask: false,
                         resultCallback: OnResult);
 
@@ -116,17 +117,17 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 throw new ArgumentNullException(nameof(image));
             }
 
+            HolisticLandmarker landmarker;
             lock (_sync)
             {
                 ThrowIfDisposed();
-
-                if (_landmarker == null)
-                {
+                landmarker = _landmarker ??
                     throw new InvalidOperationException("Tracking source is not started.");
-                }
-
-                _landmarker.DetectAsync(image, timestampMillisec);
             }
+
+            // Do not hold _sync while calling native code: LIVE_STREAM callbacks
+            // may arrive on another thread and also need to update source health.
+            landmarker.DetectAsync(image, timestampMillisec);
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
@@ -180,6 +181,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             _bridge.OnResult(in result, image, timestampMillisec);
+            Interlocked.Increment(ref _resultCount);
 
             lock (_sync)
             {
