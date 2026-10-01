@@ -44,3 +44,4 @@ ADR files record consequential technical decisions and their reasoning.
 | [0019](0019-3d-first-2d-extension.md) | 3D-first product; 2D as separate extension | Accepted |
 | [0020](0020-external-broadcast-event-adapters.md) | External broadcast events through normalized adapters | Accepted |
 | [0021](0021-tracking-derived-subject-presence.md) | Tracking-derived subject presence | Accepted |
+| [0022](0022-mediapipe-arkit-tracking-stack.md) | MediaPipe webcam tracking with ARKit face priority | Accepted |
