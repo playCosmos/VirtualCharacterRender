@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
+using VCR.Runtime.Output.Unity;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Runtime.Tracking.Routing;
@@ -93,6 +94,15 @@ namespace VCR.Editor.P0
                 runtimeRoot.AddComponent<
                     DesktopRenderBootstrap>();
 
+            var output =
+                runtimeRoot.AddComponent<
+                    UniWinCOverlayOutput>();
+            output.ConfigureForP0(camera);
+
+            var alphaPattern =
+                runtimeRoot.AddComponent<
+                    P0AlphaTestPattern>();
+
             var diagnostics =
                 runtimeRoot.AddComponent<
                     P0RuntimeDiagnostics>();
@@ -114,8 +124,8 @@ namespace VCR.Editor.P0
 
             Debug.Log(
                 $"VCR P0 runtime scene created: {ScenePath}. " +
-                "Enter Play mode, use 'VCR > P0 > Load VRM Into Runtime Scene', " +
-                "and inspect the five-second diagnostics reports.");
+                "Run 'VCR > P0 > Configure Transparent Output Baseline', then enter Play mode. " +
+                "Use 'VCR > P0 > Load VRM Into Runtime Scene' and inspect the alpha pattern plus five-second diagnostics.");
         }
     }
 }
