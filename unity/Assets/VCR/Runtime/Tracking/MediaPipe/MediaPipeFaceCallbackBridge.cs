@@ -7,8 +7,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
 {
     /// <summary>
     /// Thread-safe bridge for the independent webcam face task.
-    /// Detailed landmark/blendshape normalization is added after P0 coordinate
-    /// validation; this bridge currently establishes validity/timing semantics.
+    /// MediaPipe-owned callback buffers are converted immediately into immutable
+    /// source-neutral payloads before the callback returns.
     /// </summary>
     public sealed class MediaPipeFaceCallbackBridge
     {
@@ -22,11 +22,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             _ = image;
 
-            var hasFace =
-                result.faceLandmarks != null &&
-                result.faceLandmarks.Count > 0 &&
-                result.faceLandmarks[0].landmarks != null &&
-                result.faceLandmarks[0].landmarks.Count > 0;
+            var hasFace = MediaPipeFaceNormalizer.TryConvert(
+                in result,
+                out var face);
 
             var regions = hasFace
                 ? TrackingRegion.Face | TrackingRegion.Head
@@ -38,8 +36,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 sequence,
                 timestampMillisec * 1000L,
                 regions,
-                float.NaN,
-                hasFace));
+                hasFace ? 1f : 0f,
+                hasFace,
+                face: face));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
