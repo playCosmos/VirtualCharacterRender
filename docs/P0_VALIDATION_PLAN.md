@@ -97,12 +97,23 @@ PASS when:
 
 ### V4 — ARKit mixed tracking
 
+Initial compatibility transport: iFacialMocap/FaceMotion3D UDP v2.
+
 PASS when:
 
+- the built-in parser maps v2 `_L`/`_R`, jaw, tongueOut, and head fields correctly
+- desktop handshake to the configured iOS IPv4 address/port succeeds
 - ARKit-compatible face/head data reaches normalized tracking state
-- face/head ownership can switch between ARKit and MediaPipe without character reload
-- hands/upper body continue from webcam while ARKit owns face/head
+- physical head pitch/yaw/roll directions are verified; provisional axis signs are corrected if needed
+- blink, gaze, jaw/mouth, brow, and asymmetric coefficients are checked against actual performer motion
+- ARKit face becomes the preferred routed face source after stable reception
+- MediaPipe FaceLandmarker stops while ARKit owns face/head
+- Holistic hands/upper body continue while ARKit owns face/head
+- ARKit packet loss restarts MediaPipe face automatically
+- source-id change causes regional recalibration without character reload
+- source switching does not produce a large one-frame head snap
 - loss of one source does not incorrectly emit SubjectLost while another source still sees the performer
+- the compatibility path does not claim subject absence from an all-zero packet because the protocol lacks explicit tracking-valid state
 
 ### V5 — Performance
 
