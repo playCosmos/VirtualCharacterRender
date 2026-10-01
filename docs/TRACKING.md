@@ -237,7 +237,7 @@ Vrm10HumanoidPoseTarget
 
 `NormalizedHumanoidPose` carries model-root transform plus local transforms for the Unity/VMC humanoid bone-name set. `NormalizedExpressionState` separately carries standard expressions and arbitrary custom expression name/value pairs.
 
-The P0 VRM full-body target does not directly copy another model's bind-pose rotations. The first valid VMC pose establishes source/target references and later frames apply relative bone-rotation deltas to the target ControlRig. This is a feasibility retargeter, not the final production full-body solver.
+The P0 VRM full-body target converts VMC original humanoid local rotations into UniVRM ControlRig normalized local rotations using the target model's initial `BoneInitialRotation` data. This preserves the sender's current pose instead of discarding the first received pose as a calibration baseline. Root translation/rotation remain separate opt-in policies.
 
 Default routing behavior:
 
