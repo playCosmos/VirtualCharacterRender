@@ -28,7 +28,10 @@ namespace VCR.Runtime.Diagnostics
         [SerializeField, Range(120, 3600)] private int frameWindowFrames = 600;
         [SerializeField] private bool logToConsole = true;
         [SerializeField] private bool writeCsvEvidence = false;
+        [Tooltip("Standalone Development builds automatically write evidence; non-development performance builds do not.")]
+        [SerializeField] private bool writeCsvInDevelopmentBuild = true;
         [SerializeField] private string csvFileName = "vcr-p0-diagnostics.csv";
+        [SerializeField] private string systemEvidenceFileName = "vcr-p0-system.txt";
 
         private ITrackingFrameProvider _provider;
         private ITrackingPresenceProvider _presenceProvider;
@@ -70,6 +73,18 @@ namespace VCR.Runtime.Diagnostics
         {
             _lastReportTime =
                 Time.realtimeSinceStartupAsDouble;
+
+            if (!Application.isEditor &&
+                Debug.isDebugBuild &&
+                writeCsvInDevelopmentBuild)
+            {
+                writeCsvEvidence = true;
+            }
+
+            if (writeCsvEvidence)
+            {
+                WriteSystemEvidence();
+            }
 
             if (logToConsole)
             {
@@ -410,6 +425,84 @@ namespace VCR.Runtime.Diagnostics
             if (direct != null)
             {
                 SetTrackingProvider(direct);
+            }
+        }
+
+        private void WriteSystemEvidence()
+        {
+            try
+            {
+                var fileName =
+                    string.IsNullOrWhiteSpace(
+                        systemEvidenceFileName)
+                        ? "vcr-p0-system.txt"
+                        : systemEvidenceFileName;
+
+                var path =
+                    Path.Combine(
+                        Application.persistentDataPath,
+                        fileName);
+
+                var builder =
+                    new StringBuilder(512);
+
+                builder.AppendLine(
+                    "VirtualCharacterRender P0 evidence");
+                builder.AppendLine(
+                    "utc=" +
+                    DateTime.UtcNow.ToString("O"));
+                builder.AppendLine(
+                    "os=" +
+                    SystemInfo.operatingSystem);
+                builder.AppendLine(
+                    "cpu=" +
+                    SystemInfo.processorType);
+                builder.AppendLine(
+                    "cpu_count=" +
+                    SystemInfo.processorCount);
+                builder.AppendLine(
+                    "cpu_mhz=" +
+                    SystemInfo.processorFrequency);
+                builder.AppendLine(
+                    "gpu=" +
+                    SystemInfo.graphicsDeviceName);
+                builder.AppendLine(
+                    "gpu_api=" +
+                    SystemInfo.graphicsDeviceType);
+                builder.AppendLine(
+                    "gpu_memory_mb=" +
+                    SystemInfo.graphicsMemorySize);
+                builder.AppendLine(
+                    "ram_mb=" +
+                    SystemInfo.systemMemorySize);
+                builder.AppendLine(
+                    "unity=" +
+                    Application.unityVersion);
+                builder.AppendLine(
+                    "development_build=" +
+                    Debug.isDebugBuild);
+                builder.AppendLine(
+                    $"startup_screen={Screen.width}x{Screen.height}");
+                builder.AppendLine(
+                    "persistent_data_path=" +
+                    Application.persistentDataPath);
+
+                File.WriteAllText(
+                    path,
+                    builder.ToString());
+
+                if (logToConsole)
+                {
+                    Debug.Log(
+                        $"VCR P0 evidence: system='{path}', csv='{Path.Combine(Application.persistentDataPath, csvFileName)}'",
+                        this);
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"VCR P0 system evidence: {exception.Message}",
+                    this);
             }
         }
 
