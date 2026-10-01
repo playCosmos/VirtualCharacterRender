@@ -1,0 +1,19 @@
+{
+  "name": "VCR.Runtime.Protocols.VmcUnity",
+  "rootNamespace": "VCR.Runtime.Protocols.VmcUnity",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Protocols.Osc",
+    "VCR.Runtime.Protocols.Vmc"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
