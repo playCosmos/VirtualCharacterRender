@@ -13,6 +13,10 @@ Model Environment as an independent scene subsystem with state, transitions, lig
 
 A lightweight environment can still be only a static image.
 
+## Implementation note
+
+P0 implements an engine-independent environment/status/state contract plus a Unity `BasicEnvironmentRuntime`. Static/event-driven environments do not require a per-frame controller update. The P0 scene also places lighting under an explicit Environment root.
+
 ## Consequences
 
 - simple and advanced backgrounds share one interface
