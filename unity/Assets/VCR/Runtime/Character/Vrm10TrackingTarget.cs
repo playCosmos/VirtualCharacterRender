@@ -236,15 +236,33 @@ namespace VCR.Runtime.Character
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None);
 
+            ITrackingFrameProvider directProvider = null;
+            MonoBehaviour directBehaviour = null;
+
             foreach (var behaviour in behaviours)
             {
-                if (behaviour is ITrackingFrameProvider provider)
+                if (behaviour is ITrackingRouteProvider route)
                 {
-                    _provider = provider;
-                    _presenceProvider = behaviour as ITrackingPresenceProvider;
+                    _provider = route;
+                    _presenceProvider = route;
                     trackingProviderBehaviour = behaviour;
                     return;
                 }
+
+                if (directProvider == null &&
+                    behaviour is ITrackingFrameProvider provider)
+                {
+                    directProvider = provider;
+                    directBehaviour = behaviour;
+                }
+            }
+
+            if (directProvider != null)
+            {
+                _provider = directProvider;
+                _presenceProvider =
+                    directBehaviour as ITrackingPresenceProvider;
+                trackingProviderBehaviour = directBehaviour;
             }
         }
 
