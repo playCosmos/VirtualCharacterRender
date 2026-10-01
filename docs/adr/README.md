@@ -46,3 +46,4 @@ ADR files record consequential technical decisions and their reasoning.
 | [0021](0021-tracking-derived-subject-presence.md) | Tracking-derived subject presence | Accepted |
 | [0022](0022-mediapipe-arkit-tracking-stack.md) | MediaPipe webcam tracking with ARKit face priority | Accepted |
 | [0023](0023-mediapipe-holistic-live-stream-execution.md) | MediaPipe Holistic live-stream execution in Unity | Accepted |
+| [0024](0024-p0-unity-package-baseline.md) | P0 Unity package baseline | Accepted |
