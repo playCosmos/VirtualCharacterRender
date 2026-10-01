@@ -43,6 +43,14 @@ chmod +x ./tools/bootstrap-mediapipe.sh
 VCR > P0 > Validate Package Baseline
 ```
 
+Run all source-free checks after packages resolve:
+
+```text
+VCR > P0 > Run All Source-Free Checks
+```
+
+This includes package, presence, ARKit parser, VMC codec, diagnostics math, material fallback, normalized events, environment state, and lazy capability checks.
+
 Then create the tracking smoke-test scene with:
 
 ```text
