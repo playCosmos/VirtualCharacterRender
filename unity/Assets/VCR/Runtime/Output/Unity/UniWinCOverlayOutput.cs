@@ -30,13 +30,8 @@ namespace VCR.Runtime.Output.Unity
         [SerializeField] private bool clickThrough = false;
 
         [Header("Window")]
-        [SerializeField] private bool applyResolutionAtStartup = true;
         [SerializeField, Min(320)] private int width = 1920;
         [SerializeField, Min(180)] private int height = 1080;
-
-        [Header("Frame policy")]
-        [SerializeField] private bool limitFrameRate = true;
-        [SerializeField, Range(30, 240)] private int targetFrameRate = 60;
 
         private UniWindowController _controller;
         private string _lastError;
@@ -78,23 +73,6 @@ namespace VCR.Runtime.Output.Unity
             CaptureCameraState();
             ConfigureCameraForAlpha();
 
-            Application.runInBackground = true;
-
-            if (limitFrameRate)
-            {
-                QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate =
-                    Mathf.Max(30, targetFrameRate);
-            }
-
-            if (Screen.fullScreen)
-            {
-                Screen.fullScreen = false;
-            }
-
-            Screen.fullScreenMode =
-                FullScreenMode.Windowed;
-
             if (_controller != null)
             {
                 _controller.isHitTestEnabled = false;
@@ -113,14 +91,6 @@ namespace VCR.Runtime.Output.Unity
 
         private void Start()
         {
-            if (applyResolutionAtStartup)
-            {
-                Screen.SetResolution(
-                    Mathf.Max(320, width),
-                    Mathf.Max(180, height),
-                    FullScreenMode.Windowed);
-            }
-
             Apply(CurrentSettings());
         }
 
@@ -130,11 +100,8 @@ namespace VCR.Runtime.Output.Unity
             transparent = true;
             topmost = true;
             clickThrough = false;
-            applyResolutionAtStartup = true;
             width = 1920;
             height = 1080;
-            limitFrameRate = true;
-            targetFrameRate = 60;
         }
 
         public void Apply(OverlayOutputSettings settings)
