@@ -23,22 +23,17 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             _ = image;
 
+            var upperBody = MediaPipeHolisticNormalizer.ConvertUpperBody(in result);
+            var leftHand = MediaPipeHolisticNormalizer.ConvertLeftHand(in result);
+            var rightHand = MediaPipeHolisticNormalizer.ConvertRightHand(in result);
+
             var regions = TrackingRegion.None;
+            if (upperBody != null) regions |= TrackingRegion.UpperBody;
+            if (leftHand != null) regions |= TrackingRegion.LeftHand;
+            if (rightHand != null) regions |= TrackingRegion.RightHand;
 
-            if (HasLandmarks(result.poseLandmarks))
-            {
-                regions |= TrackingRegion.UpperBody;
-            }
-
-            if (HasLandmarks(result.leftHandLandmarks))
-            {
-                regions |= TrackingRegion.LeftHand;
-            }
-
-            if (HasLandmarks(result.rightHandLandmarks))
-            {
-                regions |= TrackingRegion.RightHand;
-            }
+            var confidence =
+                MediaPipeHolisticNormalizer.EstimateUpperBodyConfidence(upperBody);
 
             var sequence = Interlocked.Increment(ref _sequence);
 
@@ -46,20 +41,17 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 sequence,
                 timestampMillisec * 1000L,
                 regions,
-                float.NaN,
-                regions != TrackingRegion.None));
+                confidence,
+                regions != TrackingRegion.None,
+                upperBody: upperBody,
+                leftHand: leftHand,
+                rightHand: rightHand));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
         {
             frame = _latest.TakeLatest();
             return frame != null;
-        }
-
-        private static bool HasLandmarks(
-            Mediapipe.Tasks.Components.Containers.NormalizedLandmarks landmarks)
-        {
-            return landmarks.landmarks != null && landmarks.landmarks.Count > 0;
         }
     }
 }
