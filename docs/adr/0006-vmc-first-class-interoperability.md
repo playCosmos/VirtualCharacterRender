@@ -17,7 +17,7 @@ Current P0 implementation now has:
 
 - bounded OSC message/bundle codec for the types required by VMC P0
 - UDP VMC receiver with sender filtering and stale-source handling
-- normalized humanoid local-pose domain
+- source-neutral `HumanoidPoseState` with explicit `OriginalLocal` / `NormalizedLocal` pose space
 - normalized standard/custom expression domain
 - VRM0 and VRM1 expression-name compatibility mapping
 - optional full-body routing independent from face-source priority
@@ -27,6 +27,8 @@ Current P0 implementation now has:
 - VMC UDP sender using source-neutral snapshots
 - default VRM0 expression-name transmission for compatibility
 - runtime packet/error/latency diagnostics
+- region-specific presence evidence so VMC full-body presence does not mask face loss
+- neutral/reference fallback when full-body VMC tracking is lost
 
 The implementation follows the published VMC guidance that VRM1 senders should transmit original/non-normalized humanoid bones by default rather than ControlRig-normalized bones.
 

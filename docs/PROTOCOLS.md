@@ -31,7 +31,7 @@ Outbound:
 ```text
 Vrm10MotionSnapshotProvider
   ↓
-normalized pose / expressions
+source-neutral humanoid pose / expressions
   ↓
 VmcUdpSender
   ↓
@@ -49,7 +49,7 @@ Supported P0 receive messages:
 
 The OSC reader accepts only the argument types needed for this P0 path (`int32`, `float32`, UTF-8 string), accepts bundles, bounds packets to 16 KiB, and rejects malformed/unsupported packets rather than guessing.
 
-VMC bone transforms are represented as source-neutral local humanoid transforms. VMC/Unity uses +X right, +Y up, +Z forward, matching the normalized VCR convention for this domain. On receive, `HumanoidPoseSpace.OriginalLocal` rotations are converted into the target UniVRM ControlRig normalized local-rotation space from the target model's captured initial posture. A compatibility switch accepts senders that explicitly transmit already-normalized ControlRig bones.
+VMC bone transforms are represented as source-neutral local humanoid transforms. VMC/Unity uses +X right, +Y up, +Z forward, matching the VCR coordinate convention for this domain. The full-body envelope does not falsely claim every VMC bone rotation is normalized: `HumanoidPoseSpace` explicitly marks `OriginalLocal` versus `NormalizedLocal`. On receive, `HumanoidPoseSpace.OriginalLocal` rotations are converted into the target UniVRM ControlRig normalized local-rotation space from the target model's captured initial posture. A compatibility switch accepts senders that explicitly transmit already-normalized ControlRig bones.
 
 For VRM1 outbound compatibility, the snapshot provider reads original `target.Humanoid` bones rather than ControlRig bones. Standard expressions are sent using VRM0 VMC names by default (`Joy`, `A`, `Blink_L`, etc.); VRM1 expression names are an explicit sender option.
 

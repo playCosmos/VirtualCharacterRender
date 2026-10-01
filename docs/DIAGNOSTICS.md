@@ -8,6 +8,14 @@ The P0 runtime uses `P0RuntimeDiagnostics` plus subsystem implementations of `IR
 
 ## Frame timing
 
+The percentile implementation is shared with a source-free editor validation:
+
+```text
+VCR > P0 > Validate Diagnostics Math
+```
+
+The deterministic validation uses samples 1..100 and expects average 50.5, P95 95, and P99 99 before hardware evidence is trusted.
+
 The diagnostics component records a rolling frame-time window and reports:
 
 - average frame time

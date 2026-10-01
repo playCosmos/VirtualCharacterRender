@@ -70,6 +70,12 @@ Run the source-free presence smoke check:
 VCR > P0 > Validate Presence Resolver
 ```
 
+Validate diagnostics percentile math:
+
+```text
+VCR > P0 > Validate Diagnostics Math
+```
+
 Validate the ARKit packet parser:
 
 ```text
@@ -102,7 +108,7 @@ To receive optional VMC full-body motion:
 VCR > P0 > Add VMC Receiver
 ```
 
-The receiver defaults to UDP 39539 and accepts only `127.0.0.1`. Set an explicit sender IPv4 address for LAN use. The router treats VMC as an optional full-body provider; face/head priority remains ARKit then MediaPipe.
+The receiver defaults to UDP 39539 and accepts only `127.0.0.1`. Set an explicit sender IPv4 address for LAN use. The router treats VMC as an optional full-body provider; face/head priority remains ARKit then MediaPipe. Full-body loss returns the VMC-driven pose/expression contribution toward neutral/reference state instead of holding the last received pose.
 
 To send the selected VRM's final runtime pose:
 

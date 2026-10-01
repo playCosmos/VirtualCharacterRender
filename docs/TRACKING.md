@@ -217,6 +217,8 @@ Current configurable P0 starting values are 0.50 s lost grace, 0.15 s restore st
 
 During the grace period the character holds the last valid tracking state. On stable loss/source unavailability, the P0 VRM target discards stale payloads and smoothly returns tracking-driven head, expressions, torso, and arms toward neutral/reference state. Restoration recalibrates on fresh stable frames.
 
+Region evidence is preserved independently from overall performer presence. A VMC full-body source may keep the performer globally `Present` while face evidence is lost; in that case face/head returns toward neutral while VMC body motion continues. The same rule applies to webcam upper-body evidence independently of face evidence.
+
 ## Full-body tracking
 
 Full-body tracking is a separate optional capability.
@@ -246,6 +248,7 @@ Default routing behavior:
 - while VMC full body is available, the webcam upper-body mapper is suspended
 - the VMC target skips head/eye/jaw bones by default so the selected face source can override them
 - when VMC becomes unavailable, webcam upper-body mapping can resume
+- when the VMC full-body source becomes unavailable or loses performer evidence, its pose/expression contribution returns smoothly toward the target neutral/reference state instead of freezing the last VMC pose
 
 Other future full-body sources may include:
 

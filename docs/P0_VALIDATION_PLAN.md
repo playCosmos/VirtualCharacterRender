@@ -57,6 +57,12 @@ PASS when:
 
 ### V3 — Webcam tracking
 
+Source-free presence gate:
+
+- `VCR > P0 > Validate Presence Resolver` passes
+- mixed-domain check proves overall performer presence can remain Present from full-body evidence while face evidence is independently false
+- source-loss and subject-loss transitions remain distinct
+
 Baseline path:
 
 Webcam -> shared capture ->
@@ -137,6 +143,7 @@ External receive gate:
 - optional root position/rotation policy is tested separately
 - face/head source priority remains ARKit > MediaPipe when VMC full body is active
 - webcam upper-body mapping does not fight active VMC full body
+- full-body source loss returns its pose/expression contribution toward neutral/reference state instead of freezing the last pose
 
 External send gate:
 
@@ -182,6 +189,11 @@ Frame-time targets:
 - P99 <= 25 ms
 
 The generated P0 tracking scene includes `P0RuntimeDiagnostics`.
+
+Source-free diagnostics gate:
+
+- `VCR > P0 > Validate Diagnostics Math` passes
+- deterministic 1..100 ms sample produces average 50.5 ms, P95 95 ms, and P99 99 ms
 
 Record at minimum:
 
