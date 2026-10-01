@@ -72,6 +72,31 @@ VCR > P0 > Attach Tracking Target to Selected VRM
 
 The target auto-finds a routed provider when present, prefers UniVRM's ControlRig, and calibrates face/body on the first valid frames.
 
+### Material / custom shader P0 path
+
+Run the source-safety self-test:
+
+```text
+VCR > P0 > Validate Material Override Runtime
+```
+
+It verifies runtime cloning, generic color parameter mutation, source-material preservation, and invalid-shader fallback.
+
+Build precompiled validation bundles independently:
+
+```text
+VCR > P0 > Build Shader Bundle > Windows x64
+VCR > P0 > Build Shader Bundle > macOS
+```
+
+Then on the current Editor platform:
+
+```text
+VCR > P0 > Validate Current Platform Shader Bundle
+```
+
+The test shader is `Assets/VCR/P0/Shaders/P0TintUnlit.shader`. Runtime raw-HLSL compilation is intentionally unsupported.
+
 ### Transparent output P0 path
 
 The generated runtime test scene now includes the P0 transparent-window adapter and alpha-reference pattern.
