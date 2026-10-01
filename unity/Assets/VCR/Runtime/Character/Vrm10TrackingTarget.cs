@@ -36,6 +36,7 @@ namespace VCR.Runtime.Character
         [SerializeField, Range(0f, 1f)] private float minimumJointConfidence = 0.35f;
 
         private ITrackingFrameProvider _provider;
+        private float _nextProviderSearchTime;
 
         private Transform _head;
         private Transform _torso;
@@ -86,8 +87,9 @@ namespace VCR.Runtime.Character
 
         private void Update()
         {
-            if (_provider == null)
+            if (_provider == null && Time.unscaledTime >= _nextProviderSearchTime)
             {
+                _nextProviderSearchTime = Time.unscaledTime + 1f;
                 ResolveProvider();
             }
 
@@ -191,22 +193,35 @@ namespace VCR.Runtime.Character
 
         private void CacheBones()
         {
-            var humanoid = target.Humanoid;
-            _head = humanoid.GetBoneTransform(HumanBodyBones.Head);
+            // UniVRM runtime loading generates a normalized control rig by
+            // default. Write tracking to that rig so Runtime.Process() carries
+            // the pose into the model instead of overwriting raw-bone edits.
+            _head = GetDrivenBone(HumanBodyBones.Head);
             _torso =
-                humanoid.GetBoneTransform(HumanBodyBones.UpperChest) ??
-                humanoid.GetBoneTransform(HumanBodyBones.Chest) ??
-                humanoid.GetBoneTransform(HumanBodyBones.Spine);
+                GetDrivenBone(HumanBodyBones.UpperChest) ??
+                GetDrivenBone(HumanBodyBones.Chest) ??
+                GetDrivenBone(HumanBodyBones.Spine);
 
-            _leftUpperArm = humanoid.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            _leftLowerArm = humanoid.GetBoneTransform(HumanBodyBones.LeftLowerArm);
-            _rightUpperArm = humanoid.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            _rightLowerArm = humanoid.GetBoneTransform(HumanBodyBones.RightLowerArm);
+            _leftUpperArm = GetDrivenBone(HumanBodyBones.LeftUpperArm);
+            _leftLowerArm = GetDrivenBone(HumanBodyBones.LeftLowerArm);
+            _rightUpperArm = GetDrivenBone(HumanBodyBones.RightUpperArm);
+            _rightLowerArm = GetDrivenBone(HumanBodyBones.RightLowerArm);
 
             if (_head != null)
             {
                 _headInitialLocal = _head.localRotation;
             }
+        }
+
+        private Transform GetDrivenBone(HumanBodyBones bone)
+        {
+            var controlRigBone = target.Runtime.ControlRig?.GetBoneTransform(bone);
+            if (controlRigBone != null)
+            {
+                return controlRigBone;
+            }
+
+            return target.Humanoid.GetBoneTransform(bone);
         }
 
         private void ApplyFace(NormalizedFaceState face, float deltaTime)
