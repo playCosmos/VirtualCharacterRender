@@ -8,6 +8,7 @@ namespace VCR.Runtime.Tracking
             SubjectPresenceState subjectState,
             bool faceSourceAvailable,
             bool bodyHandsSourceAvailable,
+            bool fullBodySourceAvailable,
             bool anySourceAvailable,
             bool subjectEvidence,
             TrackingPresenceEvents events)
@@ -17,6 +18,7 @@ namespace VCR.Runtime.Tracking
             SubjectState = subjectState;
             FaceSourceAvailable = faceSourceAvailable;
             BodyHandsSourceAvailable = bodyHandsSourceAvailable;
+            FullBodySourceAvailable = fullBodySourceAvailable;
             AnySourceAvailable = anySourceAvailable;
             SubjectEvidence = subjectEvidence;
             Events = events;
@@ -27,6 +29,7 @@ namespace VCR.Runtime.Tracking
         public SubjectPresenceState SubjectState { get; }
         public bool FaceSourceAvailable { get; }
         public bool BodyHandsSourceAvailable { get; }
+        public bool FullBodySourceAvailable { get; }
         public bool AnySourceAvailable { get; }
         public bool SubjectEvidence { get; }
         public TrackingPresenceEvents Events { get; }
