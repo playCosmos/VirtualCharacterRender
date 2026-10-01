@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,7 +22,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
     public sealed class IFacialMocapUdpReceiver :
         MonoBehaviour,
         ITrackingFrameProvider,
-        ITrackingPresenceProvider
+        ITrackingPresenceProvider,
+        IRuntimeMetricsSource
     {
         [Header("iOS sender")]
         [SerializeField] private string iosIPv4Address = "";
@@ -343,6 +345,19 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             {
                 _source.MarkSourceLost();
             }
+        }
+
+        public void CollectMetrics(List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.packets",
+                PacketCount,
+                "count"));
         }
 
         private void StopReceiver()
