@@ -239,6 +239,13 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 OscArgument.FromFloat(rotation.W));
         }
 
+        public void SetSnapshotProvider(MonoBehaviour provider)
+        {
+            snapshotProviderBehaviour = provider;
+            _snapshotProvider =
+                provider as INormalizedMotionSnapshotProvider;
+        }
+
         private void ResolveProvider()
         {
             if (snapshotProviderBehaviour is
