@@ -72,6 +72,11 @@ PASS when:
 - callback/thread handoff is safe
 - eye and mouth response are usable
 - brief face loss does not crash the native plugin
+- a fresh no-subject callback is distinguished from a stale/dead callback stream
+- brief loss is held through configurable grace rather than instantly snapping to neutral
+- stable subject loss emits one SubjectLost transition and returns tracking-driven pose/expression toward neutral
+- stable restoration emits one SubjectRestored transition and recalibrates without a large pose snap
+- source disconnect produces TrackingSourceLost semantics without falsely declaring performer absence
 - SubjectLost/SubjectRestored behavior is stable
 
 ### V3B — Normalized tracking to VRM
