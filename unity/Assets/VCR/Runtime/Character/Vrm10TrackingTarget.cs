@@ -54,6 +54,8 @@ namespace VCR.Runtime.Character
 
         private NormalizedFaceState _latestFace;
         private NormalizedUpperBodyState _latestBody;
+        private long _lastFaceSequence = -1;
+        private long _lastBodySequence = -1;
 
         private float _blinkLeft;
         private float _blinkRight;
@@ -98,13 +100,19 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            if (_provider.TryTakeLatestFace(out var faceFrame) && faceFrame?.Face != null)
+            if (_provider.TryGetLatestFace(out var faceFrame) &&
+                faceFrame?.Face != null &&
+                faceFrame.Sequence != _lastFaceSequence)
             {
+                _lastFaceSequence = faceFrame.Sequence;
                 Submit(faceFrame);
             }
 
-            if (_provider.TryTakeLatestBodyHands(out var bodyFrame) && bodyFrame != null)
+            if (_provider.TryGetLatestBodyHands(out var bodyFrame) &&
+                bodyFrame != null &&
+                bodyFrame.Sequence != _lastBodySequence)
             {
+                _lastBodySequence = bodyFrame.Sequence;
                 Submit(bodyFrame);
             }
         }
