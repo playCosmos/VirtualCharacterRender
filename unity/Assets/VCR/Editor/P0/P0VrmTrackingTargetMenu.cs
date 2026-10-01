@@ -29,12 +29,25 @@ namespace VCR.Editor.P0
                 target = Undo.AddComponent<Vrm10TrackingTarget>(vrm.gameObject);
             }
 
+            var fullBodyTarget = vrm.GetComponent<Vrm10HumanoidPoseTarget>();
+            if (fullBodyTarget == null)
+            {
+                fullBodyTarget = Undo.AddComponent<Vrm10HumanoidPoseTarget>(vrm.gameObject);
+            }
+
+            var snapshotProvider = vrm.GetComponent<Vrm10MotionSnapshotProvider>();
+            if (snapshotProvider == null)
+            {
+                snapshotProvider = Undo.AddComponent<Vrm10MotionSnapshotProvider>(vrm.gameObject);
+            }
+
             Selection.activeGameObject = vrm.gameObject;
             EditorGUIUtility.PingObject(target);
 
             Debug.Log(
-                "VCR P0: tracking target attached. " +
-                "It will auto-find an ITrackingFrameProvider in the scene and calibrate on first valid face/body frames.",
+                "VCR P0: tracking targets attached. " +
+                "Face/upper-body, optional full-body VMC, and normalized VMC output snapshot are ready. " +
+                "Targets prefer a routed ITrackingFrameProvider when present.",
                 target);
         }
 
