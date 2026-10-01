@@ -52,7 +52,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 upperBody: upperBody,
                 leftHand: leftHand,
                 rightHand: rightHand,
-                sourceId: _sourceId));
+                sourceId: _sourceId,
+                runtimeTimestampUs: MonotonicClock.NowMicroseconds()));
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
