@@ -48,3 +48,5 @@ ADR files record consequential technical decisions and their reasoning.
 | [0023](0023-mediapipe-holistic-live-stream-execution.md) | MediaPipe Holistic live-stream execution in Unity | Superseded |
 | [0024](0024-p0-unity-package-baseline.md) | P0 Unity package baseline | Accepted |
 | [0025](0025-face-priority-dual-task-mediapipe.md) | Face-priority dual-task MediaPipe execution | Accepted |
+| [0026](0026-normalized-tracking-payloads.md) | Engine-independent normalized tracking payloads | Accepted |
+| [0027](0027-univrm-control-rig-tracking-target.md) | Apply normalized tracking through the UniVRM control rig | Accepted |
