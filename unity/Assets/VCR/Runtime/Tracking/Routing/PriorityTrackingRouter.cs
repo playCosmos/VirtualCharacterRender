@@ -20,6 +20,8 @@ namespace VCR.Runtime.Tracking.Routing
         [Header("Providers")]
         [SerializeField] private MonoBehaviour preferredFaceProviderBehaviour;
         [SerializeField] private MonoBehaviour fallbackProviderBehaviour;
+        [Tooltip("Optional VMC/full-body provider. Face priority remains ARKit > MediaPipe.")]
+        [SerializeField] private MonoBehaviour externalPoseProviderBehaviour;
         [SerializeField] private bool disableFallbackFaceWhenPreferred = true;
 
         [Header("Presence - provisional P0 defaults")]
@@ -33,11 +35,16 @@ namespace VCR.Runtime.Tracking.Routing
         private ITrackingPresenceProvider _fallbackPresence;
         private IFaceTrackingActivationControl _fallbackFaceActivation;
 
+        private ITrackingFrameProvider _externalPoseProvider;
+        private ITrackingPresenceProvider _externalPosePresence;
+
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
 
         private TrackingFrame _latestFace;
         private TrackingFrame _latestBodyHands;
+        private TrackingFrame _latestHumanoidPose;
+        private TrackingFrame _latestExpressions;
 
         private string _selectedFaceSourceId;
         private long _selectedFaceChildSequence = -1;
@@ -46,6 +53,14 @@ namespace VCR.Runtime.Tracking.Routing
         private string _selectedBodySourceId;
         private long _selectedBodyChildSequence = -1;
         private long _bodySequence;
+
+        private string _selectedPoseSourceId;
+        private long _selectedPoseChildSequence = -1;
+        private long _poseSequence;
+
+        private string _selectedExpressionSourceId;
+        private long _selectedExpressionChildSequence = -1;
+        private long _expressionSequence;
 
         public TrackingPresenceSnapshot Presence => _presence;
 
@@ -75,6 +90,7 @@ namespace VCR.Runtime.Tracking.Routing
             UpdateFallbackFaceActivation(preferredUsable);
             UpdateFaceSnapshot(preferredUsable);
             UpdateBodyHandsSnapshot();
+            UpdateExternalPoseSnapshots();
             UpdatePresence();
         }
 
@@ -87,6 +103,18 @@ namespace VCR.Runtime.Tracking.Routing
         public bool TryGetLatestBodyHands(out TrackingFrame frame)
         {
             frame = _latestBodyHands;
+            return frame != null;
+        }
+
+        public bool TryGetLatestHumanoidPose(out TrackingFrame frame)
+        {
+            frame = _latestHumanoidPose;
+            return frame != null;
+        }
+
+        public bool TryGetLatestExpressions(out TrackingFrame frame)
+        {
+            frame = _latestExpressions;
             return frame != null;
         }
 
@@ -112,6 +140,14 @@ namespace VCR.Runtime.Tracking.Routing
             ResetBodySelection();
         }
 
+        public void SetExternalPoseProvider(MonoBehaviour provider)
+        {
+            externalPoseProviderBehaviour = provider;
+            _externalPoseProvider = provider as ITrackingFrameProvider;
+            _externalPosePresence = provider as ITrackingPresenceProvider;
+            ResetPoseSelection();
+        }
+
         private void ResolveProviders()
         {
             if (preferredFaceProviderBehaviour != null)
@@ -130,6 +166,14 @@ namespace VCR.Runtime.Tracking.Routing
                     fallbackProviderBehaviour as ITrackingPresenceProvider;
                 _fallbackFaceActivation ??=
                     fallbackProviderBehaviour as IFaceTrackingActivationControl;
+            }
+
+            if (externalPoseProviderBehaviour != null)
+            {
+                _externalPoseProvider ??=
+                    externalPoseProviderBehaviour as ITrackingFrameProvider;
+                _externalPosePresence ??=
+                    externalPoseProviderBehaviour as ITrackingPresenceProvider;
             }
         }
 
@@ -250,6 +294,77 @@ namespace VCR.Runtime.Tracking.Routing
                 sourceId: selected.SourceId);
         }
 
+        private void UpdateExternalPoseSnapshots()
+        {
+            if (_externalPoseProvider == null)
+            {
+                _latestHumanoidPose = null;
+                _latestExpressions = null;
+                return;
+            }
+
+            var presence = _externalPosePresence?.Presence;
+            var usable =
+                !presence.HasValue ||
+                (presence.Value.FullBodySourceAvailable &&
+                 presence.Value.SubjectState ==
+                    SubjectPresenceState.Present);
+
+            if (!usable)
+            {
+                _latestHumanoidPose = null;
+                _latestExpressions = null;
+                return;
+            }
+
+            if (_externalPoseProvider.TryGetLatestHumanoidPose(
+                    out var poseFrame) &&
+                poseFrame?.HumanoidPose != null &&
+                (poseFrame.Sequence != _selectedPoseChildSequence ||
+                 !string.Equals(
+                     poseFrame.SourceId,
+                     _selectedPoseSourceId,
+                     StringComparison.Ordinal)))
+            {
+                _selectedPoseChildSequence = poseFrame.Sequence;
+                _selectedPoseSourceId = poseFrame.SourceId;
+
+                _latestHumanoidPose = new TrackingFrame(
+                    ++_poseSequence,
+                    poseFrame.SourceTimestampUs,
+                    poseFrame.ValidRegions,
+                    poseFrame.Confidence,
+                    poseFrame.SubjectDetected,
+                    humanoidPose: poseFrame.HumanoidPose,
+                    sourceId: poseFrame.SourceId);
+            }
+
+            if (_externalPoseProvider.TryGetLatestExpressions(
+                    out var expressionFrame) &&
+                expressionFrame?.Expressions != null &&
+                (expressionFrame.Sequence !=
+                    _selectedExpressionChildSequence ||
+                 !string.Equals(
+                     expressionFrame.SourceId,
+                     _selectedExpressionSourceId,
+                     StringComparison.Ordinal)))
+            {
+                _selectedExpressionChildSequence =
+                    expressionFrame.Sequence;
+                _selectedExpressionSourceId =
+                    expressionFrame.SourceId;
+
+                _latestExpressions = new TrackingFrame(
+                    ++_expressionSequence,
+                    expressionFrame.SourceTimestampUs,
+                    expressionFrame.ValidRegions,
+                    expressionFrame.Confidence,
+                    expressionFrame.SubjectDetected,
+                    expressions: expressionFrame.Expressions,
+                    sourceId: expressionFrame.SourceId);
+            }
+        }
+
         private void UpdatePresence()
         {
             if (_presenceResolver == null)
@@ -259,6 +374,7 @@ namespace VCR.Runtime.Tracking.Routing
 
             var preferred = _preferredPresence?.Presence;
             var fallback = _fallbackPresence?.Presence;
+            var external = _externalPosePresence?.Presence;
 
             var preferredFaceAvailable =
                 preferred.HasValue &&
@@ -293,15 +409,30 @@ namespace VCR.Runtime.Tracking.Routing
                 _preferredFaceProvider != null ||
                 _fallbackProvider != null;
 
+            var fullBodyConfigured =
+                _externalPoseProvider != null;
+
+            var fullBodyAvailable =
+                external.HasValue &&
+                external.Value.FullBodySourceAvailable;
+
+            var fullBodyEvidence =
+                fullBodyAvailable &&
+                external.Value.SubjectState ==
+                    SubjectPresenceState.Present;
+
             var decisionReady =
                 faceAvailable ||
                 bodyAvailable ||
+                fullBodyAvailable ||
                 (preferred.HasValue &&
                  preferred.Value.SubjectState != SubjectPresenceState.Unknown) ||
                 (fallback.HasValue &&
                  fallback.Value.SubjectState != SubjectPresenceState.Unknown) ||
                 _latestFace != null ||
-                _latestBodyHands != null;
+                _latestBodyHands != null ||
+                _latestHumanoidPose != null ||
+                _latestExpressions != null;
 
             _presence = _presenceResolver.UpdateResolved(
                 NowUs(),
@@ -311,7 +442,10 @@ namespace VCR.Runtime.Tracking.Routing
                 bodyConfigured,
                 bodyAvailable,
                 bodyEvidence,
-                decisionReady);
+                decisionReady,
+                fullBodyConfigured,
+                fullBodyAvailable,
+                fullBodyEvidence);
         }
 
         private void ResetFaceSelection()
@@ -324,6 +458,16 @@ namespace VCR.Runtime.Tracking.Routing
         {
             _selectedBodySourceId = null;
             _selectedBodyChildSequence = -1;
+        }
+
+        private void ResetPoseSelection()
+        {
+            _selectedPoseSourceId = null;
+            _selectedPoseChildSequence = -1;
+            _selectedExpressionSourceId = null;
+            _selectedExpressionChildSequence = -1;
+            _latestHumanoidPose = null;
+            _latestExpressions = null;
         }
 
         private void RestoreFallbackFace()
