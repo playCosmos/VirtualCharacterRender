@@ -115,6 +115,38 @@ PASS when:
 - loss of one source does not incorrectly emit SubjectLost while another source still sees the performer
 - the compatibility path does not claim subject absence from an all-zero packet because the protocol lacks explicit tracking-valid state
 
+### V4B — VMC interoperability
+
+Static/self-test gate:
+
+- `VCR > P0 > Validate OSC and VMC Codec` passes
+- OSC message and bundle parsing handles VMC P0 payloads
+- malformed/unsupported packet types are rejected without exception escape
+- VMC VRM0 expression names map to normalized standard expressions
+- normalized humanoid local pose carries root and bone transforms
+
+External receive gate:
+
+- receive from at least one external VMC Performer
+- default `127.0.0.1:39539` path works
+- explicit LAN sender IPv4 filtering works
+- `/OK` and stale packets produce stable source-health transitions
+- hips/spine/arms/legs/fingers are inspected for direction and retarget continuity
+- optional root position/rotation policy is tested separately
+- face/head source priority remains ARKit > MediaPipe when VMC full body is active
+- webcam upper-body mapping does not fight active VMC full body
+
+External send gate:
+
+- `Vrm10MotionSnapshotProvider` samples original/non-ControlRig humanoid bones
+- send to at least one external VMC Marionette
+- `/Root/Pos`, `/Bone/Pos`, `/Blend/Val`, `/Blend/Apply` are accepted
+- default VRM0 expression vocabulary works with a VRM1 runtime
+- optional VRM1 expression-name mode is verified separately
+- sender frame rate can be reduced without queue buildup
+
+ADR-0006 remains Proposed until these external interoperability checks pass.
+
 ### V5 — Performance
 
 Reference workload:
@@ -144,6 +176,20 @@ Frame-time targets:
 
 - P95 <= 16.67 ms
 - P99 <= 25 ms
+
+The generated P0 tracking scene includes `P0RuntimeDiagnostics`.
+
+Record at minimum:
+
+- frame average/P95/P99 over the rolling window
+- face/body/full-body/expression normalized update rates
+- normalized snapshot source-to-consumer age where monotonic timestamps are available
+- MediaPipe FaceLandmarker submit-to-callback latency
+- MediaPipe Holistic submit-to-callback latency
+- VMC receive packet/malformed counts when enabled
+- VMC send packet/error counts when enabled
+
+Optional CSV evidence can be written from the diagnostics component to `Application.persistentDataPath`.
 
 macOS:
 
