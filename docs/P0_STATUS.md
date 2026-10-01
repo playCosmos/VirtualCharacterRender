@@ -25,6 +25,8 @@ Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated s
 - one-character runtime loader
 - 720p/1080p render baseline component
 - evidence/performance standalone build menus
+- standalone `--vcr-vrm` real-model autoload
+- optional standalone shader bundle / shader ID / material-slot arguments
 
 ### Tracking
 
@@ -224,12 +226,13 @@ Neither should trigger speculative implementation during P0.
 2. `VCR > P0 > Run All Source-Free Checks`
 3. `VCR > P0 > Create Runtime Test Scene`
 4. `VCR > P0 > Validate Transparent Output Baseline`
-5. enter Play mode and `Load VRM Into Runtime Scene`
-6. webcam tracking check
-7. ARKit physical check
-8. VMC external interoperability check
-9. Windows/macOS Evidence Player builds
-10. Windows/macOS Performance Player builds
-11. record PASS/FAIL evidence
-12. resolve ADR-0003 / ADR-0006 / ADR-0007 from evidence
-13. only then decide P0 branch merge
+5. enter Play mode and `Load VRM Into Runtime Scene` for editor inspection
+6. build standalone player and launch with `--vcr-vrm=<absolute model path>` for end-to-end output evidence
+7. webcam tracking check
+8. ARKit physical check
+9. VMC external interoperability check
+10. Windows/macOS Evidence Player builds
+11. Windows/macOS Performance Player builds
+12. record PASS/FAIL evidence
+13. resolve ADR-0003 / ADR-0006 / ADR-0007 from evidence
+14. only then decide P0 branch merge
