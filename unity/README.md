@@ -132,7 +132,7 @@ Assets/VCR/
 │  │  ├─ NormalizedFaceState
 │  │  ├─ NormalizedUpperBodyState
 │  │  ├─ NormalizedHandState
-│  │  ├─ NormalizedHumanoidPose
+│  │  ├─ HumanoidPoseState
 │  │  ├─ NormalizedExpressionState
 │  │  ├─ Routing/
 │  │  └─ MediaPipe/
