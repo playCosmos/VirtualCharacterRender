@@ -168,7 +168,9 @@ namespace VCR.Runtime.Materials.Unity
                     slotId,
                     preset?.PresetId,
                     preset?.ShaderId,
-                    issues.ToArray());
+                    issues.ToArray(),
+                    Application.platform.ToString(),
+                    SystemInfo.graphicsDeviceType.ToString());
             }
 
             if (preset == null)
@@ -183,7 +185,9 @@ namespace VCR.Runtime.Materials.Unity
                     slotId,
                     null,
                     null,
-                    issues.ToArray());
+                    issues.ToArray(),
+                    Application.platform.ToString(),
+                    SystemInfo.graphicsDeviceType.ToString());
             }
 
             if (string.IsNullOrWhiteSpace(
@@ -214,7 +218,9 @@ namespace VCR.Runtime.Materials.Unity
                     slotId,
                     preset.PresetId,
                     preset.ShaderId,
-                    issues.ToArray());
+                    issues.ToArray(),
+                    Application.platform.ToString(),
+                    SystemInfo.graphicsDeviceType.ToString());
             }
 
             if (!shader.isSupported)
@@ -242,7 +248,9 @@ namespace VCR.Runtime.Materials.Unity
                 slotId,
                 preset.PresetId,
                 shader.name,
-                issues.ToArray());
+                issues.ToArray(),
+                Application.platform.ToString(),
+                SystemInfo.graphicsDeviceType.ToString());
         }
 
         public bool TryApplyPreset(
