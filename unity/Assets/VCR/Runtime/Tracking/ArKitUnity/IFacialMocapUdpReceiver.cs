@@ -23,6 +23,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         MonoBehaviour,
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
+        ITrackingSourceHealthProvider,
         IRuntimeMetricsSource
     {
         [Header("iOS sender")]
@@ -150,6 +151,30 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     ArKitReceiverLifecycleState.Running;
                 _lastError = null;
             }
+        }
+
+        public bool TryGetSourceHealth(
+            TrackingRegion region,
+            out TrackingSourceHealthSnapshot snapshot)
+        {
+            if (_source == null ||
+                (region &
+                 (TrackingRegion.Face |
+                  TrackingRegion.Head)) == 0)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            snapshot =
+                new TrackingSourceHealthSnapshot(
+                    _source.SourceId,
+                    _source.Kind,
+                    _source.Regions,
+                    _source.Health,
+                    _latestFace?
+                        .RuntimeTimestampUs ?? 0);
+            return true;
         }
 
         public bool TryGetLatestFace(out TrackingFrame frame)

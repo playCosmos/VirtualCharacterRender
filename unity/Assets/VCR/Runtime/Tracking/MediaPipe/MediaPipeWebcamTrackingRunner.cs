@@ -25,6 +25,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         MonoBehaviour,
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
+        ITrackingSourceHealthProvider,
         IFaceTrackingActivationControl,
         IRuntimeMetricsSource
     {
@@ -119,6 +120,46 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 Interlocked.Read(ref _holisticPoolDrops),
                 Interlocked.Read(ref _readbackErrors),
                 _lastError);
+
+        public bool TryGetSourceHealth(
+            TrackingRegion region,
+            out TrackingSourceHealthSnapshot snapshot)
+        {
+            if (_faceSource != null &&
+                (region &
+                 (TrackingRegion.Face |
+                  TrackingRegion.Head)) != 0)
+            {
+                snapshot =
+                    new TrackingSourceHealthSnapshot(
+                        _faceSource.SourceId,
+                        _faceSource.Kind,
+                        _faceSource.Regions,
+                        _faceSource.Health,
+                        _latestFaceFrame?
+                            .RuntimeTimestampUs ?? 0);
+                return true;
+            }
+
+            if (_holisticSource != null &&
+                (region &
+                 (TrackingRegion.Hands |
+                  TrackingRegion.UpperBody)) != 0)
+            {
+                snapshot =
+                    new TrackingSourceHealthSnapshot(
+                        _holisticSource.SourceId,
+                        _holisticSource.Kind,
+                        _holisticSource.Regions,
+                        _holisticSource.Health,
+                        _latestBodyHandsFrame?
+                            .RuntimeTimestampUs ?? 0);
+                return true;
+            }
+
+            snapshot = default;
+            return false;
+        }
 
         public bool TryGetLatestFace(out TrackingFrame frame)
         {

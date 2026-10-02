@@ -22,6 +22,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
         MonoBehaviour,
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
+        ITrackingSourceHealthProvider,
         IRuntimeMetricsSource
     {
         [Header("Receive")]
@@ -105,6 +106,36 @@ namespace VCR.Runtime.Protocols.VmcUnity
             }
 
             UpdatePresence();
+        }
+
+        public bool TryGetSourceHealth(
+            TrackingRegion region,
+            out TrackingSourceHealthSnapshot snapshot)
+        {
+            if (_source == null ||
+                (region & TrackingRegion.FullBody) == 0)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            var poseTimestamp =
+                _latestPoseFrame?
+                    .RuntimeTimestampUs ?? 0;
+            var expressionTimestamp =
+                _latestExpressionFrame?
+                    .RuntimeTimestampUs ?? 0;
+
+            snapshot =
+                new TrackingSourceHealthSnapshot(
+                    _source.SourceId,
+                    _source.Kind,
+                    _source.Regions,
+                    _source.Health,
+                    Math.Max(
+                        poseTimestamp,
+                        expressionTimestamp));
+            return true;
         }
 
         public bool TryGetLatestFace(out TrackingFrame frame)
