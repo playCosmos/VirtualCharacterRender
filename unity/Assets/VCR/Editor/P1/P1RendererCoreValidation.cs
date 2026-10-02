@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Application;
 using VCR.Runtime.Character;
 using VCR.Runtime.Environment;
 using VCR.Runtime.Environment.Unity;
@@ -31,6 +33,9 @@ namespace VCR.Editor.P1
                 QualitySettings.vSyncCount;
             var originalTargetFrameRate =
                 Application.targetFrameRate;
+
+
+            string configurationTestDirectory = null;
 
             try
             {
@@ -223,6 +228,31 @@ namespace VCR.Editor.P1
                 var outputAdapter =
                     root.AddComponent<
                         P1TestOverlayOutputAdapter>();
+
+                var launchOptions =
+                    ApplicationLaunchOptions.Parse(
+                        new[]
+                        {
+                            "player",
+                            "--vcr-config=/tmp/vcr-config.json",
+                            "--vcr-vrm",
+                            "/tmp/avatar.vrm",
+                            "--flag"
+                        });
+
+                Expect(
+                    launchOptions.GetOrDefault(
+                        "vcr-config") ==
+                    "/tmp/vcr-config.json" &&
+                    launchOptions.GetOrDefault(
+                        "vcr-vrm") ==
+                    "/tmp/avatar.vrm" &&
+                    launchOptions.TryGet(
+                        "flag",
+                        out var flagValue) &&
+                    flagValue == string.Empty,
+                    "application launch options must support equals, spaced values, and flag options",
+                    failures);
 
                 var scene =
                     root.AddComponent<
@@ -433,6 +463,93 @@ namespace VCR.Editor.P1
                     "individual overlay changes must update both adapter and configuration snapshot",
                     failures);
 
+                configurationTestDirectory =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p1-validation-" +
+                        Guid.NewGuid().ToString("N"));
+
+                var configurationPath =
+                    Path.Combine(
+                        configurationTestDirectory,
+                        "runtime-config.json");
+
+                var configurationStore =
+                    new RuntimeConfigurationStore(
+                        configurationPath);
+
+                Expect(
+                    configurationStore.TrySave(
+                        scene.CaptureConfiguration(),
+                        out var configurationSaveError) &&
+                    string.IsNullOrEmpty(
+                        configurationSaveError) &&
+                    File.Exists(
+                        configurationPath),
+                    "configuration store must persist the scene snapshot",
+                    failures);
+
+                Expect(
+                    configurationStore.TryLoad(
+                        out var loadedConfiguration,
+                        out var configurationLoadError) &&
+                    string.IsNullOrEmpty(
+                        configurationLoadError) &&
+                    loadedConfiguration.Rendering.Width ==
+                        captured.Rendering.Width &&
+                    loadedConfiguration.Rendering.Height ==
+                        captured.Rendering.Height &&
+                    loadedConfiguration.EnvironmentStateId ==
+                        "reactive" &&
+                    loadedConfiguration.Overlay.ClickThrough,
+                    "configuration store must round-trip the current version",
+                    failures);
+
+                var futureEnvelope =
+                    new RuntimeConfigurationEnvelope
+                    {
+                        Version =
+                            RuntimeConfigurationStore.CurrentVersion +
+                            1,
+                        Scene =
+                            SceneRuntimeConfiguration.Default
+                    };
+
+                File.WriteAllText(
+                    configurationPath,
+                    JsonUtility.ToJson(
+                        futureEnvelope,
+                        prettyPrint: true));
+
+                Expect(
+                    !configurationStore.TryLoad(
+                        out _,
+                        out var futureVersionError) &&
+                    !string.IsNullOrWhiteSpace(
+                        futureVersionError),
+                    "configuration store must reject unsupported future versions",
+                    failures);
+
+                Expect(
+                    scene.Suspend() &&
+                    scene.State ==
+                    SceneRuntimeState.Suspended &&
+                    outputAdapter.ShutdownCount == 1 &&
+                    capabilityDisposeCount == 0 &&
+                    capabilities != null &&
+                    capabilities.EnabledCount == 1,
+                    "suspend must stop overlay output without disposing active capabilities",
+                    failures);
+
+                Expect(
+                    scene.Resume() &&
+                    scene.State ==
+                    SceneRuntimeState.Ready &&
+                    outputAdapter.ApplyCount == 3 &&
+                    capabilityDisposeCount == 0,
+                    "resume must restore scene presentation without recreating capabilities",
+                    failures);
+
                 scene.UnloadCharacter();
 
                 Expect(
@@ -471,8 +588,8 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    outputAdapter.ShutdownCount == 1,
-                    "scene shutdown must shut down the overlay output adapter exactly once",
+                    outputAdapter.ShutdownCount == 2,
+                    "scene shutdown must shut down the overlay output adapter after the earlier suspend cycle",
                     failures);
 
                 Expect(
@@ -582,13 +699,23 @@ namespace VCR.Editor.P1
                     UnityEngine.Object.DestroyImmediate(
                         root);
                 }
+
+                if (!string.IsNullOrWhiteSpace(
+                        configurationTestDirectory) &&
+                    Directory.Exists(
+                        configurationTestDirectory))
+                {
+                    Directory.Delete(
+                        configurationTestDirectory,
+                        recursive: true);
+                }
             }
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P1 renderer core validation: PASS " +
-                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, capability lifecycle, configuration round-trip, runtime restore, no per-frame coordinator loops)");
+                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, capability lifecycle, suspend/resume, configuration persistence/versioning, runtime restore, no per-frame coordinator loops)");
                 return true;
             }
 
