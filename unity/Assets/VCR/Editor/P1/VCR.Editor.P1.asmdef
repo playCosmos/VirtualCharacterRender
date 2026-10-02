@@ -11,7 +11,8 @@
     "VCR.Runtime.Output",
     "VCR.Runtime.Environment",
     "VCR.Runtime.Environment.Unity",
-    "VCR.Runtime.Capabilities"
+    "VCR.Runtime.Capabilities",
+    "VCR.Runtime.Application"
   ],
   "includePlatforms": [
     "Editor"
