@@ -6,6 +6,7 @@ using UnityEngine;
 using UniVRM10;
 using VCR.Runtime.Character;
 using VCR.Runtime.Core;
+using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 
 namespace VCR.Runtime.Scene
@@ -26,6 +27,7 @@ namespace VCR.Runtime.Scene
         [SerializeField] private DesktopRenderBootstrap renderBootstrap;
         [SerializeField] private PrimaryCameraController cameraController;
         [SerializeField] private PrimaryLightController lightController;
+        [SerializeField] private MonoBehaviour overlayOutputBehaviour;
         [SerializeField] private bool initializeOnAwake = true;
         [SerializeField] private bool unloadCharacterOnShutdown = true;
 
@@ -34,11 +36,13 @@ namespace VCR.Runtime.Scene
         private SceneRuntimeState _state = SceneRuntimeState.Uninitialized;
         private string _lastError;
         private bool _applicationQuitting;
+        private IOverlayOutputAdapter _overlayOutput;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter => characterLoader?.Current;
         public PrimaryCameraController CameraController => cameraController;
         public PrimaryLightController LightController => lightController;
+        public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
 
         public SceneRuntimeStatus Status =>
@@ -189,6 +193,20 @@ namespace VCR.Runtime.Scene
             lightController?.Apply();
         }
 
+        public void ApplyOverlayOutput(
+            OverlayOutputSettings settings)
+        {
+            EnsureOperational();
+
+            if (_overlayOutput == null)
+            {
+                throw new InvalidOperationException(
+                    "No overlay output adapter is configured.");
+            }
+
+            _overlayOutput.Apply(settings);
+        }
+
         public void Shutdown()
         {
             if (_state == SceneRuntimeState.Stopped ||
@@ -206,6 +224,7 @@ namespace VCR.Runtime.Scene
                 characterLoader.Unload();
             }
 
+            _overlayOutput?.Shutdown();
             lightController?.Restore();
             cameraController?.Restore();
             renderBootstrap?.RestoreRuntimeOverrides();
@@ -244,6 +263,11 @@ namespace VCR.Runtime.Scene
             output.Add(new RuntimeMetric(
                 "scene.light.configured",
                 lightController != null ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "scene.output.configured",
+                _overlayOutput != null ? 1 : 0,
                 "bool"));
         }
 
@@ -326,6 +350,34 @@ namespace VCR.Runtime.Scene
                     GetComponentInChildren<PrimaryLightController>(true) ??
                     FindFirstObjectByType<PrimaryLightController>();
             }
+
+            ResolveOverlayOutput();
+        }
+
+        private void ResolveOverlayOutput()
+        {
+            if (overlayOutputBehaviour is
+                IOverlayOutputAdapter configured)
+            {
+                _overlayOutput = configured;
+                return;
+            }
+
+            var localBehaviours =
+                GetComponentsInChildren<MonoBehaviour>(true);
+
+            foreach (var behaviour in localBehaviours)
+            {
+                if (behaviour is
+                    IOverlayOutputAdapter adapter)
+                {
+                    overlayOutputBehaviour = behaviour;
+                    _overlayOutput = adapter;
+                    return;
+                }
+            }
+
+            _overlayOutput = null;
         }
 
         private void EnsureOperational()
