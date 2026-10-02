@@ -22,6 +22,7 @@ namespace VCR.Editor.P2
 
             GameObject root = null;
             Material source = null;
+            Texture2D registeredTexture = null;
 
             try
             {
@@ -208,6 +209,19 @@ namespace VCR.Editor.P2
                     "preflight-incompatible presets must leave the current material unchanged",
                     failures);
 
+                registeredTexture =
+                    new Texture2D(
+                        2,
+                        2)
+                    {
+                        name =
+                            "VCR P2 Registered Texture"
+                    };
+
+                RuntimeTextureRegistry.Register(
+                    "texture-id",
+                    registeredTexture);
+
                 var texturePreset =
                     new MaterialOverridePreset
                     {
@@ -234,13 +248,58 @@ namespace VCR.Editor.P2
                         texturePreset);
 
                 Expect(
-                    !textureReport.Compatible &&
+                    textureReport.Compatible,
+                    "registered texture ids must pass preset compatibility",
+                    failures);
+
+                Expect(
+                    controller.TryApplyPreset(
+                        slot.Id,
+                        texturePreset,
+                        out var textureApplyReport,
+                        out var textureApplyError) &&
+                    textureApplyReport.Compatible &&
+                    string.IsNullOrEmpty(
+                        textureApplyError) &&
+                    renderer.sharedMaterial.GetTexture(
+                        "_BaseMap") ==
+                        registeredTexture,
+                    "registered texture ids must apply through the preset resolver path",
+                    failures);
+
+                var missingTexturePreset =
+                    new MaterialOverridePreset
+                    {
+                        PresetId =
+                            "p2.texture-missing",
+                        Parameters =
+                            new[]
+                            {
+                                new MaterialParameterOverride
+                                {
+                                    Name =
+                                        "_BaseMap",
+                                    Kind =
+                                        ShaderParameterKind.Texture,
+                                    StringValue =
+                                        "missing-texture-id"
+                                }
+                            }
+                    };
+
+                var missingTextureReport =
+                    controller.EvaluatePreset(
+                        slot.Id,
+                        missingTexturePreset);
+
+                Expect(
+                    !missingTextureReport.Compatible &&
                     Array.Exists(
-                        textureReport.Issues,
+                        missingTextureReport.Issues,
                         issue =>
                             issue.Code ==
-                            "preset_texture_binding_unsupported"),
-                    "serialized texture preset bindings must fail explicitly until a texture resolver exists",
+                            "texture_unavailable"),
+                    "missing serialized texture ids must fail preflight explicitly",
                     failures);
 
                 var explicitShaderPreset =
@@ -311,6 +370,15 @@ namespace VCR.Editor.P2
                         .DestroyImmediate(source);
                 }
 
+                if (registeredTexture != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            registeredTexture);
+                }
+
+                RuntimeTextureRegistry
+                    .ClearRegistered();
                 RuntimeShaderRegistry
                     .ClearRegistered();
             }
@@ -325,7 +393,7 @@ namespace VCR.Editor.P2
             {
                 Debug.Log(
                     "VCR P2 material/shader runtime validation: PASS " +
-                    "(source shader preservation, preset compatibility, isolated parameters, explicit rejection, status, restore)");
+                    "(source shader preservation, preset compatibility, isolated parameters, texture resolution, explicit rejection, status, restore)");
                 return true;
             }
 
