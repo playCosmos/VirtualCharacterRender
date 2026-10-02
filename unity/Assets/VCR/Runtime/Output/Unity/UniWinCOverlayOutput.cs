@@ -39,6 +39,9 @@ namespace VCR.Runtime.Output.Unity
         private bool _originalAllowHdr;
         private bool _cameraStateCaptured;
 
+        public OverlayOutputSettings Settings =>
+            CurrentSettings();
+
         public OverlayOutputStatus Status
         {
             get
