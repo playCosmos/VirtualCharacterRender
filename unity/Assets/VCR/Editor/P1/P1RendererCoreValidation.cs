@@ -243,6 +243,86 @@ namespace VCR.Editor.P1
                     "scene runtime must resolve the overlay output adapter",
                     failures);
 
+                var configuration =
+                    SceneRuntimeConfiguration.Default;
+                configuration.Rendering.ResolutionPreset =
+                    RenderResolutionPreset.Custom;
+                configuration.Rendering.Width = 800;
+                configuration.Rendering.Height = 600;
+                configuration.Rendering.RenderScale = 0.75f;
+                configuration.Rendering.TargetFrameRate = 75;
+                configuration.Rendering.UseVSync = true;
+                configuration.Rendering.RunInBackground = false;
+                configuration.Camera =
+                    new SceneCameraSettings
+                    {
+                        LocalPosition =
+                            new Vector3(0.2f, 1.5f, -2.5f),
+                        LocalEulerAngles =
+                            new Vector3(5f, 25f, 0f),
+                        FieldOfView = 50f,
+                        NearClipPlane = 0.1f,
+                        FarClipPlane = 200f
+                    };
+                configuration.Light =
+                    SceneLightSettings.DefaultDirectional;
+                configuration.Light.Intensity = 0.6f;
+                configuration.Overlay =
+                    new OverlayOutputConfiguration
+                    {
+                        Transparent = true,
+                        Topmost = true,
+                        ClickThrough = false
+                    };
+
+                scene.ApplyConfiguration(
+                    configuration);
+
+                var captured =
+                    scene.CaptureConfiguration();
+
+                Expect(
+                    captured.Rendering.ResolutionPreset ==
+                    RenderResolutionPreset.Custom &&
+                    captured.Rendering.Width == 800 &&
+                    captured.Rendering.Height == 600 &&
+                    Math.Abs(
+                        captured.Rendering.RenderScale -
+                        0.75f) <
+                    0.0001f &&
+                    captured.Rendering.TargetFrameRate == 75 &&
+                    captured.Rendering.UseVSync &&
+                    !captured.Rendering.RunInBackground,
+                    "scene configuration must round-trip rendering settings",
+                    failures);
+
+                Expect(
+                    Math.Abs(
+                        captured.Camera.FieldOfView -
+                        50f) <
+                    0.0001f &&
+                    Approximately(
+                        captured.Camera.LocalPosition,
+                        configuration.Camera.LocalPosition),
+                    "scene configuration must round-trip camera settings",
+                    failures);
+
+                Expect(
+                    Math.Abs(
+                        captured.Light.Intensity -
+                        0.6f) <
+                    0.0001f,
+                    "scene configuration must round-trip light settings",
+                    failures);
+
+                Expect(
+                    outputAdapter.ApplyCount == 1 &&
+                    outputAdapter.LastSettings.Transparent &&
+                    outputAdapter.LastSettings.Topmost &&
+                    !outputAdapter.LastSettings.ClickThrough,
+                    "scene configuration must apply overlay settings through the adapter",
+                    failures);
+
                 var outputSettings =
                     new OverlayOutputSettings(
                         transparent: true,
@@ -252,12 +332,18 @@ namespace VCR.Editor.P1
                 scene.ApplyOverlayOutput(
                     outputSettings);
 
+                var overlayCapture =
+                    scene.CaptureConfiguration().Overlay;
+
                 Expect(
-                    outputAdapter.ApplyCount == 1 &&
+                    outputAdapter.ApplyCount == 2 &&
                     outputAdapter.LastSettings.Transparent &&
                     !outputAdapter.LastSettings.Topmost &&
-                    outputAdapter.LastSettings.ClickThrough,
-                    "scene runtime must route overlay output settings through the adapter",
+                    outputAdapter.LastSettings.ClickThrough &&
+                    overlayCapture.Transparent &&
+                    !overlayCapture.Topmost &&
+                    overlayCapture.ClickThrough,
+                    "individual overlay changes must update both adapter and configuration snapshot",
                     failures);
 
                 scene.UnloadCharacter();
