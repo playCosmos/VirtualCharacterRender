@@ -210,10 +210,7 @@ namespace VCR.Runtime.Scene
 
         public SceneRuntimeConfiguration CaptureConfiguration()
         {
-            if (renderBootstrap == null)
-            {
-                ResolveDependencies();
-            }
+            ResolveDependencies();
 
             return new SceneRuntimeConfiguration
             {
