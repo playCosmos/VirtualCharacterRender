@@ -239,6 +239,47 @@ namespace VCR.Editor.P1
                     "empty initialized scene must be Ready",
                     failures);
 
+                var capabilityCreateCount = 0;
+                var capabilityDisposeCount = 0;
+                var capabilities =
+                    scene.Capabilities;
+
+                Expect(
+                    capabilities != null,
+                    "scene runtime must create a capability registry",
+                    failures);
+
+                if (capabilities != null)
+                {
+                    Expect(
+                        capabilities.Register(
+                            "p1.validation",
+                            () =>
+                            {
+                                capabilityCreateCount++;
+                                return new ProbeDisposable(
+                                    () =>
+                                        capabilityDisposeCount++);
+                            }),
+                        "capability registration must succeed",
+                        failures);
+
+                    Expect(
+                        capabilityCreateCount == 0,
+                        "capability registration must remain lazy",
+                        failures);
+
+                    Expect(
+                        capabilities.Enable(
+                            "p1.validation",
+                            out var capabilityError) &&
+                        string.IsNullOrEmpty(
+                            capabilityError) &&
+                        capabilityCreateCount == 1,
+                        "capability enable must instantiate exactly once",
+                        failures);
+                }
+
                 Expect(
                     ReferenceEquals(
                         scene.CameraController,
@@ -435,6 +476,14 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
+                    capabilityDisposeCount == 1 &&
+                    scene.Capabilities == null &&
+                    (capabilities == null ||
+                     capabilities.RegisteredCount == 0),
+                    "scene shutdown must dispose and release enabled capabilities",
+                    failures);
+
+                Expect(
                     Application.runInBackground ==
                     originalRunInBackground,
                     "shutdown must restore Application.runInBackground",
@@ -539,7 +588,7 @@ namespace VCR.Editor.P1
             {
                 Debug.Log(
                     "VCR P1 renderer core validation: PASS " +
-                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, configuration round-trip, runtime restore, no per-frame coordinator loops)");
+                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, capability lifecycle, configuration round-trip, runtime restore, no per-frame coordinator loops)");
                 return true;
             }
 
@@ -601,6 +650,30 @@ namespace VCR.Editor.P1
                 Math.Abs(a.g - b.g) < 0.0001f &&
                 Math.Abs(a.b - b.b) < 0.0001f &&
                 Math.Abs(a.a - b.a) < 0.0001f;
+        }
+
+        private sealed class ProbeDisposable :
+            IDisposable
+        {
+            private readonly Action _onDispose;
+            private bool _disposed;
+
+            public ProbeDisposable(
+                Action onDispose)
+            {
+                _onDispose = onDispose;
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _onDispose?.Invoke();
+            }
         }
 
         private static void Expect(
