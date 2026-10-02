@@ -21,11 +21,20 @@ Passing P0 means the stack can render one VRM character, track one performer, re
 
 ## Source-free static suite
 
-Run:
+Run interactively:
 
 ```text
 VCR > P0 > Run All Source-Free Checks
 ```
+
+For repeatable command-line validation, run the matching launcher after the MediaPipe bootstrap:
+
+```text
+tools/validate-p0-source-free.ps1
+tools/validate-p0-source-free.sh
+```
+
+The launchers call `VCR.Editor.P0.P0BatchValidation.RunSourceFreeAndExit` and propagate PASS/FAIL through the Unity process exit code.
 
 The suite currently covers:
 
