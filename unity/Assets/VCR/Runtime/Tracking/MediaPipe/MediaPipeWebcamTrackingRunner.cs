@@ -51,6 +51,12 @@ namespace VCR.Runtime.Tracking.MediaPipe
         [SerializeField, Min(0f)] private float subjectRestoreStabilitySeconds = 0.15f;
         [SerializeField, Min(0.1f)] private float sourceStaleSeconds = 1.0f;
 
+        [Header("Preprocessing - default off until measured")]
+        [SerializeField] private WebcamPreprocessingMode preprocessingMode =
+            WebcamPreprocessingMode.Disabled;
+        [SerializeField, Range(0.5f, 3f)] private float lowLightExposure = 1.35f;
+        [SerializeField, Range(0.5f, 2f)] private float lowLightGamma = 1.15f;
+
         [Header("Capture budget")]
         [SerializeField, Range(1, 4)] private int textureFramePoolSize = 2;
         [SerializeField] private bool suspendOnApplicationPause = true;
@@ -64,6 +70,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private MediaPipeFaceSource _faceSource;
         private MediaPipeHolisticSource _holisticSource;
+        private WebcamFramePreprocessor _preprocessor;
 
         private Coroutine _startupCoroutine;
         private Coroutine _faceCoroutine;
@@ -105,6 +112,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 _webcam != null ? _webcam.height : 0,
                 requestedFps,
                 mediaPipeFaceEnabled,
+                preprocessingMode,
                 Interlocked.Read(ref _faceSubmitted),
                 Interlocked.Read(ref _holisticSubmitted),
                 Interlocked.Read(ref _facePoolDrops),
@@ -316,6 +324,11 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 "tracking.mediapipe.capture.height",
                 _webcam?.height ?? 0,
                 "px"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.preprocessing.mode",
+                (int)preprocessingMode,
+                "enum"));
 
             output.Add(new RuntimeMetric(
                 "tracking.mediapipe.face.latency",
@@ -624,9 +637,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     continue;
                 }
 
+                _preprocessor ??=
+                    new WebcamFramePreprocessor();
+
+                var inferenceTexture =
+                    _preprocessor.Prepare(
+                        _webcam,
+                        preprocessingMode,
+                        lowLightExposure,
+                        lowLightGamma);
+
                 readback =
                     textureFrame.ReadTextureAsync(
-                        _webcam,
+                        inferenceTexture,
                         flipHorizontally,
                         flipVertically);
 
@@ -844,6 +867,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     _webcam);
                 _webcam = null;
             }
+
+            _preprocessor?.Dispose();
+            _preprocessor = null;
 
             _clock.Reset();
             _latestFaceFrame = null;
