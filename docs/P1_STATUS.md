@@ -29,6 +29,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
   - LoadingCharacter
   - CharacterReady
   - Faulted
+  - Suspended
   - ShuttingDown
   - Stopped
 - model replacement delegates to the existing atomic `Vrm10CharacterLoader`
@@ -78,11 +79,33 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - enabled capabilities are disposed before scene teardown
 - capability counts are exposed through runtime metrics
 
+### Application lifecycle and persistence
+
+- new `VCR.Runtime.Application` assembly
+- product `ApplicationRuntimeBootstrap`
+- startup order: saved configuration -> scene runtime -> optional VRM
+- `--vcr-vrm` and `--vcr-config` command-line options
+- explicit application shutdown API
+- platform pause/resume delegates to non-destructive scene suspend/resume
+- active character and capability registrations remain intact across suspend
+- versioned runtime configuration envelope
+- current configuration schema version: 1
+- unsupported future/legacy versions fail explicitly
+- atomic replace for existing configuration files
+- P1 runtime scene path: `Assets/VCR/P1/P1Runtime.unity`
+- P1 build outputs are isolated under `Builds/P1`
+- P1 Windows/macOS launchers support optional VRM and configuration path
+
 ### Diagnostics
 
 - P0 diagnostics implementation promoted to reusable `RuntimeDiagnostics`
 - `P0RuntimeDiagnostics` retained only as a compatibility wrapper
-- generated P1 validation scene uses `RuntimeDiagnostics`
+- generated P1 runtime scene uses `RuntimeDiagnostics`
+- immutable low-frequency `RuntimeDiagnosticsSnapshot`
+- `LatestSnapshot` polling API
+- `SnapshotUpdated` event for later UI
+- frame/tracking/subsystem metrics copied only at report cadence, not every frame
+- reporting options exposed without coupling UI to the diagnostics `Update()` loop
 
 ### Validation
 
@@ -117,16 +140,27 @@ Current P1 source-free checks cover:
 - environment state routing and snapshot capture
 - lazy capability create/dispose lifecycle
 - renderer/scene configuration round-trip
+- application launch-option parsing
+- configuration save/load round-trip
+- unsupported future configuration version rejection
+- non-destructive suspend/resume
+- application bootstrap configuration-load/start/shutdown lifecycle
 
-Actual Unity compilation/package resolution still requires a Unity 6000.3.25f1 environment.
+## P1 implementation status
 
-## Next P1 work
+The planned P1 renderer-core source implementation is complete enough to proceed to P2.
 
-1. platform suspend/resume and relaunch-sensitive resource lifecycle
-2. promote standalone startup from the P0 evidence bootstrap into a P1 application bootstrap
-3. persistent configuration file format and migration boundary for the scene snapshot
-4. diagnostics configuration/API cleanup for UI consumption
-5. source-free tests for suspend/resume and configuration persistence
-6. Unity compile/package-resolution validation when an Editor environment is available
+Still unresolved:
+
+- Unity 6000.3.25f1 compile/package-resolution execution
+- actual P1 Windows/macOS standalone build execution
+- real platform suspend/resume behavior
+- all hardware-dependent P0 evidence carried forward from the preserved P0 checkpoint
+
+These remain validation items, not reasons to expand P1 architecture further without evidence.
+
+## Next phase
+
+Proceed to P2 — Material and Shader Runtime.
 
 Hardware-specific P0 evidence remains deferred and should be resumed from the preserved checkpoint when test equipment becomes available.
