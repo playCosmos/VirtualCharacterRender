@@ -373,6 +373,80 @@ namespace VCR.Editor.P2
                     "missing shader bundles must fail through a platform-context status snapshot instead of throwing",
                     failures);
 
+                var metadataBundleDirectory =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p2-bundle-metadata-" +
+                        Guid.NewGuid().ToString("N"));
+
+                Directory.CreateDirectory(
+                    metadataBundleDirectory);
+
+                var metadataBundlePath =
+                    Path.Combine(
+                        metadataBundleDirectory,
+                        "wrong-target.bundle");
+
+                File.WriteAllBytes(
+                    metadataBundlePath,
+                    Array.Empty<byte>());
+
+                var wrongTargetMetadata =
+                    new ShaderBundleMetadata
+                    {
+                        BundleId =
+                            "p2.wrong-target",
+                        TargetPlatform =
+                            "definitely-not-" +
+                            RuntimeShaderBundleLoader
+                                .RuntimeTargetPlatformId,
+                        UnityVersion =
+                            Application.unityVersion,
+                        ShaderIds =
+                            new[]
+                            {
+                                "VCR/P2/Expected"
+                            }
+                    };
+
+                File.WriteAllText(
+                    metadataBundlePath +
+                    ".vcr.json",
+                    JsonUtility.ToJson(
+                        wrongTargetMetadata,
+                        prettyPrint: true));
+
+                var wrongTargetLoaded =
+                    bundleLoader.TryLoadFromFile(
+                        metadataBundlePath,
+                        out var wrongTargetRegistered,
+                        out var wrongTargetError);
+
+                var wrongTargetStatus =
+                    bundleLoader.Status;
+
+                Expect(
+                    !wrongTargetLoaded &&
+                    wrongTargetRegistered == 0 &&
+                    wrongTargetStatus.MetadataPresent &&
+                    wrongTargetStatus.BundleId ==
+                        wrongTargetMetadata.BundleId &&
+                    wrongTargetStatus.TargetPlatform ==
+                        wrongTargetMetadata.TargetPlatform &&
+                    wrongTargetStatus.BundleUnityVersion ==
+                        Application.unityVersion &&
+                    !string.IsNullOrWhiteSpace(
+                        wrongTargetError) &&
+                    wrongTargetError.Contains(
+                        "does not match runtime target",
+                        StringComparison.Ordinal),
+                    "wrong-target shader bundle metadata must be rejected before AssetBundle parsing",
+                    failures);
+
+                Directory.Delete(
+                    metadataBundleDirectory,
+                    recursive: true);
+
                 var explicitShaderPreset =
                     new MaterialOverridePreset
                     {
@@ -570,7 +644,7 @@ namespace VCR.Editor.P2
             {
                 Debug.Log(
                     "VCR P2 material/shader runtime validation: PASS " +
-                    "(source shader preservation, preset compatibility, all-slot summary, preset persistence, texture resolution, shader registry, bundle status, explicit rejection, restore)");
+                    "(source shader preservation, preset compatibility, all-slot summary, preset persistence, texture resolution, shader registry, bundle metadata preflight, explicit rejection, restore)");
                 return true;
             }
 
