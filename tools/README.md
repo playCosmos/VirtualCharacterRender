@@ -106,7 +106,7 @@ The entrypoint is:
 VCR.Editor.P2.P2BatchValidation.RunSourceFreeAndExit
 ```
 
-A PASS validates source-free material preset behavior only. Real VRM/MToon, external platform bundles, and GPU-specific compatibility still require Unity/player execution evidence.
+A PASS validates source-free material preset behavior, texture-ID resolution, preset persistence, registry reporting, and guarded bundle-failure status. Real VRM/MToon, successful external platform bundle loading, and GPU-specific compatibility still require Unity/player execution evidence.
 
 ## P1 application player
 
