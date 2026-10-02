@@ -1,20 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
 namespace VCR.Runtime.Materials.Unity
 {
     /// <summary>
-    /// P0 loader for precompiled shader assets delivered in a platform-specific
-    /// AssetBundle. Loading is explicit and synchronous; there is no recurring
-    /// frame work after registration. P7 may replace this with package/async
-    /// orchestration without changing MaterialOverrideController.
+    /// Loads precompiled shader assets from platform-specific AssetBundles.
+    /// Loading is explicit and has no recurring frame cost after registration.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class RuntimeShaderBundleLoader : MonoBehaviour
     {
+        private long _sequence;
+
         public int LoadedShaderCount { get; private set; }
         public string LastError { get; private set; }
+        public ShaderBundleLoadStatus Status { get; private set; }
 
         public bool TryLoadFromFile(
             string path,
@@ -25,92 +27,156 @@ namespace VCR.Runtime.Materials.Unity
             error = null;
             LastError = null;
 
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return Fail(
-                    "Shader bundle path is required.",
-                    out error);
-            }
-
-            path = Path.GetFullPath(path);
-
-            if (!File.Exists(path))
-            {
-                return Fail(
-                    $"Shader bundle was not found: {path}",
-                    out error);
-            }
-
-            AssetBundle bundle = null;
+            var normalizedPath =
+                string.IsNullOrWhiteSpace(path)
+                    ? null
+                    : path;
 
             try
             {
-                bundle = AssetBundle.LoadFromFile(path);
-                if (bundle == null)
+                if (string.IsNullOrWhiteSpace(
+                        normalizedPath))
                 {
                     return Fail(
-                        "Unity could not load the shader bundle. " +
-                        "Verify target platform and Unity/URP compatibility.",
+                        normalizedPath,
+                        "Shader bundle path is required.",
+                        Array.Empty<string>(),
                         out error);
                 }
 
-                var shaders =
-                    bundle.LoadAllAssets<Shader>();
+                normalizedPath =
+                    Path.GetFullPath(
+                        normalizedPath);
 
-                if (shaders == null ||
-                    shaders.Length == 0)
+                if (!File.Exists(
+                        normalizedPath))
                 {
                     return Fail(
-                        "Shader bundle contains no Shader assets.",
+                        normalizedPath,
+                        $"Shader bundle was not found: {normalizedPath}",
+                        Array.Empty<string>(),
                         out error);
                 }
 
-                foreach (var shader in shaders)
+                AssetBundle bundle = null;
+
+                try
                 {
-                    if (shader == null)
+                    bundle =
+                        AssetBundle.LoadFromFile(
+                            normalizedPath);
+
+                    if (bundle == null)
                     {
-                        continue;
+                        return Fail(
+                            normalizedPath,
+                            "Unity could not load the shader bundle. " +
+                            $"platform={Application.platform}, " +
+                            $"graphicsApi={SystemInfo.graphicsDeviceType}. " +
+                            "Verify the bundle target platform, Unity version, URP version, and shader variants.",
+                            Array.Empty<string>(),
+                            out error);
                     }
 
-                    if (RuntimeShaderRegistry.Register(shader))
+                    var shaders =
+                        bundle.LoadAllAssets<Shader>();
+
+                    if (shaders == null ||
+                        shaders.Length == 0)
                     {
+                        return Fail(
+                            normalizedPath,
+                            "Shader bundle contains no Shader assets.",
+                            Array.Empty<string>(),
+                            out error);
+                    }
+
+                    var shaderIds =
+                        new List<string>(
+                            shaders.Length);
+
+                    foreach (var shader in shaders)
+                    {
+                        if (shader == null)
+                        {
+                            continue;
+                        }
+
+                        if (!RuntimeShaderRegistry.Register(
+                                shader))
+                        {
+                            continue;
+                        }
+
                         registeredCount++;
+                        shaderIds.Add(
+                            shader.name);
                     }
-                }
 
-                if (registeredCount == 0)
+                    if (registeredCount == 0)
+                    {
+                        return Fail(
+                            normalizedPath,
+                            "No shader assets could be registered.",
+                            Array.Empty<string>(),
+                            out error);
+                    }
+
+                    LoadedShaderCount +=
+                        registeredCount;
+
+                    Status =
+                        new ShaderBundleLoadStatus(
+                            ++_sequence,
+                            normalizedPath,
+                            success: true,
+                            registeredCount,
+                            shaderIds.ToArray(),
+                            Application.platform.ToString(),
+                            SystemInfo.graphicsDeviceType.ToString(),
+                            null);
+
+                    return true;
+                }
+                finally
                 {
-                    return Fail(
-                        "No shader assets could be registered.",
-                        out error);
+                    // Loaded Shader objects remain alive because the registry
+                    // holds references. Release only bundle container metadata.
+                    bundle?.Unload(
+                        unloadAllLoadedObjects: false);
                 }
-
-                LoadedShaderCount += registeredCount;
-                return true;
             }
             catch (Exception exception)
             {
                 return Fail(
+                    normalizedPath,
                     exception.Message,
+                    Array.Empty<string>(),
                     out error);
-            }
-            finally
-            {
-                // Loaded Shader objects remain alive because the registry holds
-                // references. Release only the AssetBundle container metadata.
-                bundle?.Unload(
-                    unloadAllLoadedObjects: false);
             }
         }
 
         private bool Fail(
+            string path,
             string message,
+            string[] shaderIds,
             out string error)
         {
             LastError =
                 string.IsNullOrWhiteSpace(message)
                     ? "Shader bundle load failed."
                     : message;
+
+            Status =
+                new ShaderBundleLoadStatus(
+                    ++_sequence,
+                    path,
+                    success: false,
+                    registeredShaderCount: 0,
+                    shaderIds,
+                    Application.platform.ToString(),
+                    SystemInfo.graphicsDeviceType.ToString(),
+                    LastError);
 
             error = LastError;
             return false;
