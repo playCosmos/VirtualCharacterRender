@@ -4,5 +4,6 @@ namespace VCR.Runtime.Output
     {
         OverlayOutputStatus Status { get; }
         void Apply(OverlayOutputSettings settings);
+        void Shutdown();
     }
 }
