@@ -4,6 +4,8 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Character;
+using VCR.Runtime.Environment;
+using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
@@ -203,6 +205,21 @@ namespace VCR.Editor.P1
                     "target frame rate must clamp to 30 FPS minimum",
                     failures);
 
+                var environmentRoot =
+                    new GameObject("Environment");
+                environmentRoot.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var environment =
+                    environmentRoot.AddComponent<
+                        BasicEnvironmentRuntime>();
+                environment.Configure(
+                    "environment.p1.validation",
+                    "default",
+                    EnvironmentUpdatePolicy.Static,
+                    EnvironmentSpaceMode.World);
+
                 var outputAdapter =
                     root.AddComponent<
                         P1TestOverlayOutputAdapter>();
@@ -243,6 +260,13 @@ namespace VCR.Editor.P1
                     "scene runtime must resolve the overlay output adapter",
                     failures);
 
+                Expect(
+                    ReferenceEquals(
+                        scene.EnvironmentRuntime,
+                        environment),
+                    "scene runtime must resolve the environment runtime",
+                    failures);
+
                 var configuration =
                     SceneRuntimeConfiguration.Default;
                 configuration.Rendering.ResolutionPreset =
@@ -274,6 +298,8 @@ namespace VCR.Editor.P1
                         Topmost = true,
                         ClickThrough = false
                     };
+                configuration.EnvironmentStateId =
+                    "configured";
 
                 scene.ApplyConfiguration(
                     configuration);
@@ -316,11 +342,31 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
+                    captured.EnvironmentStateId ==
+                    "configured" &&
+                    environment.Status.StateId ==
+                    "configured",
+                    "scene configuration must apply and capture environment state",
+                    failures);
+
+                Expect(
                     outputAdapter.ApplyCount == 1 &&
                     outputAdapter.LastSettings.Transparent &&
                     outputAdapter.LastSettings.Topmost &&
                     !outputAdapter.LastSettings.ClickThrough,
                     "scene configuration must apply overlay settings through the adapter",
+                    failures);
+
+                Expect(
+                    scene.SetEnvironmentState(
+                        "reactive",
+                        out var environmentError) &&
+                    string.IsNullOrEmpty(
+                        environmentError) &&
+                    scene.CaptureConfiguration()
+                        .EnvironmentStateId ==
+                    "reactive",
+                    "direct environment state changes must flow through the scene runtime and snapshot",
                     failures);
 
                 var outputSettings =
@@ -369,6 +415,10 @@ namespace VCR.Editor.P1
                 ExpectNoUpdate<
                     PrimaryLightController>(
                     "light controller",
+                    failures);
+                ExpectNoUpdate<
+                    BasicEnvironmentRuntime>(
+                    "basic environment runtime",
                     failures);
 
                 scene.Shutdown();
@@ -489,7 +539,7 @@ namespace VCR.Editor.P1
             {
                 Debug.Log(
                     "VCR P1 renderer core validation: PASS " +
-                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, runtime restore, no per-frame coordinator loops)");
+                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, configuration round-trip, runtime restore, no per-frame coordinator loops)");
                 return true;
             }
 
