@@ -113,6 +113,45 @@ namespace VCR.Editor.P4
                     "route status must expose a non-negative face age",
                     failures);
 
+                var fallbackFirst =
+                    TrackingRoutePolicy.CreateDefault();
+                fallbackFirst.SetFacePriorityOrder(
+                    TrackingSourceKind.MediaPipeFaceWebcam,
+                    TrackingSourceKind.ArKitFace);
+
+                router.SetRoutePolicy(
+                    fallbackFirst);
+                InvokeUpdate(router);
+
+                var policyStatus =
+                    router.RouteStatus;
+
+                Expect(
+                    policyStatus.FaceSourceId ==
+                    fallback.SourceId &&
+                    !policyStatus.PreferredFaceActive,
+                    "explicit face priority policy must be able to select MediaPipe ahead of ARKit without rewiring providers",
+                    failures);
+
+                Expect(
+                    fallback.FaceTrackingEnabled,
+                    "policy-selected MediaPipe face source must be re-enabled before route selection",
+                    failures);
+
+                router.SetRoutePolicy(
+                    TrackingRoutePolicy.CreateDefault());
+                InvokeUpdate(router);
+
+                var restoredPolicyStatus =
+                    router.RouteStatus;
+
+                Expect(
+                    restoredPolicyStatus.FaceSourceId ==
+                    preferred.SourceId &&
+                    restoredPolicyStatus.PreferredFaceActive,
+                    "restoring default policy must return face ownership to the healthy ARKit source",
+                    failures);
+
                 preferred.HealthState =
                     TrackingSourceHealthState.SourceLost;
 
@@ -150,9 +189,9 @@ namespace VCR.Editor.P4
                         "tracking.route.face_switches",
                         out var faceSwitches) &&
                     Math.Abs(
-                        faceSwitches - 1.0) <
+                        faceSwitches - 3.0) <
                     0.001,
-                    "preferred-to-fallback transition must increment the face source-switch metric exactly once",
+                    "policy reversal, policy restore, and preferred-source loss must produce exactly three face source switches",
                     failures);
 
                 Expect(
@@ -195,7 +234,7 @@ namespace VCR.Editor.P4
             {
                 Debug.Log(
                     "VCR P4 tracking routing validation: PASS " +
-                    "(preferred/fallback hot switching, common source health, face-inference suspension, route age, switch metrics)");
+                    "(data-driven face priority, preferred/fallback hot switching, common source health, face-inference suspension, route age, switch metrics)");
                 return true;
             }
 

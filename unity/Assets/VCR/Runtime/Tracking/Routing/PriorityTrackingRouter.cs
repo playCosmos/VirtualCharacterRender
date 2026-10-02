@@ -26,6 +26,10 @@ namespace VCR.Runtime.Tracking.Routing
         [SerializeField] private MonoBehaviour fallbackProviderBehaviour;
         [Tooltip("Optional VMC/full-body provider. Face priority remains ARKit > MediaPipe.")]
         [SerializeField] private MonoBehaviour externalPoseProviderBehaviour;
+
+        [Header("Routing policy")]
+        [SerializeField] private TrackingRoutePolicy routePolicy =
+            TrackingRoutePolicy.CreateDefault();
         [SerializeField] private bool disableFallbackFaceWhenPreferred = true;
 
         [Header("Presence - provisional P0 defaults")]
@@ -102,13 +106,16 @@ namespace VCR.Runtime.Tracking.Routing
         {
             ResolveProviders();
 
-            var preferredUsable = IsPreferredFaceUsable();
-            UpdateFallbackFaceActivation(preferredUsable);
-            UpdateFaceSnapshot(preferredUsable);
+            UpdateFallbackFaceActivation();
+            var faceSelection =
+                SelectFaceSource();
+            UpdateFaceSnapshot(faceSelection);
             UpdateBodyHandsSnapshot();
             UpdateExternalPoseSnapshots();
             UpdatePresence();
-            UpdateRouteStatus(preferredUsable);
+            UpdateRouteStatus(
+                faceSelection ==
+                FaceSourceSelection.Preferred);
         }
 
         public bool TryGetLatestFace(out TrackingFrame frame)
@@ -133,6 +140,15 @@ namespace VCR.Runtime.Tracking.Routing
         {
             frame = _latestExpressions;
             return frame != null;
+        }
+
+        public void SetRoutePolicy(
+            TrackingRoutePolicy policy)
+        {
+            routePolicy =
+                policy ??
+                TrackingRoutePolicy.CreateDefault();
+            ResetFaceSelection();
         }
 
         public void SetPreferredFaceProvider(MonoBehaviour provider)
@@ -206,38 +222,108 @@ namespace VCR.Runtime.Tracking.Routing
             }
         }
 
-        private bool IsPreferredFaceUsable()
+        private FaceSourceSelection SelectFaceSource()
         {
-            if (_preferredFaceProvider == null)
+            var preferredUsable =
+                IsFaceCandidateUsable(
+                    _preferredFaceProvider,
+                    _preferredPresence,
+                    _preferredFaceHealth);
+
+            var fallbackUsable =
+                IsFaceCandidateUsable(
+                    _fallbackProvider,
+                    _fallbackPresence,
+                    _fallbackHealth);
+
+            if (preferredUsable &&
+                fallbackUsable)
             {
-                return false;
+                return
+                    PreferredFaceOutranksFallback()
+                        ? FaceSourceSelection.Preferred
+                        : FaceSourceSelection.Fallback;
             }
 
-            if (!IsSourceHealthUsable(
-                    _preferredFaceHealth,
+            if (preferredUsable)
+            {
+                return FaceSourceSelection.Preferred;
+            }
+
+            return
+                fallbackUsable
+                    ? FaceSourceSelection.Fallback
+                    : FaceSourceSelection.None;
+        }
+
+        private bool IsFaceCandidateUsable(
+            ITrackingFrameProvider provider,
+            ITrackingPresenceProvider presenceProvider,
+            ITrackingSourceHealthProvider healthProvider)
+        {
+            if (provider == null ||
+                !IsSourceHealthUsable(
+                    healthProvider,
                     TrackingRegion.Face))
             {
                 return false;
             }
 
-            if (_preferredPresence != null)
+            if (presenceProvider != null)
             {
-                var presence = _preferredPresence.Presence;
-                return
-                    presence.FaceSourceAvailable &&
-                    presence.FaceSubjectEvidence &&
-                    _preferredFaceProvider.TryGetLatestFace(out var frame) &&
-                    frame?.Face != null &&
-                    frame.SubjectDetected;
+                var presence =
+                    presenceProvider.Presence;
+
+                if (!presence.FaceSourceAvailable ||
+                    !presence.FaceSubjectEvidence)
+                {
+                    return false;
+                }
             }
 
             return
-                _preferredFaceProvider.TryGetLatestFace(out var fallbackFrame) &&
-                fallbackFrame?.Face != null &&
-                fallbackFrame.SubjectDetected;
+                provider.TryGetLatestFace(
+                    out var frame) &&
+                frame?.Face != null &&
+                frame.SubjectDetected;
         }
 
-        private void UpdateFallbackFaceActivation(bool preferredUsable)
+        private bool PreferredFaceOutranksFallback()
+        {
+            var policy =
+                routePolicy ??
+                TrackingRoutePolicy.CreateDefault();
+
+            var preferredKind =
+                GetSourceKind(
+                    _preferredFaceHealth,
+                    TrackingRegion.Face);
+            var fallbackKind =
+                GetSourceKind(
+                    _fallbackHealth,
+                    TrackingRegion.Face);
+
+            var preferredPriority =
+                policy.GetFacePriority(
+                    preferredKind);
+            var fallbackPriority =
+                policy.GetFacePriority(
+                    fallbackKind);
+
+            // Missing/legacy health metadata preserves the historical
+            // preferred-then-fallback behavior.
+            if (preferredPriority == int.MaxValue &&
+                fallbackPriority == int.MaxValue)
+            {
+                return true;
+            }
+
+            return
+                preferredPriority <=
+                fallbackPriority;
+        }
+
+        private void UpdateFallbackFaceActivation()
         {
             if (!disableFallbackFaceWhenPreferred ||
                 _fallbackFaceActivation == null)
@@ -245,7 +331,16 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            var shouldEnableFallback = !preferredUsable;
+            var preferredUsable =
+                IsFaceCandidateUsable(
+                    _preferredFaceProvider,
+                    _preferredPresence,
+                    _preferredFaceHealth);
+
+            var shouldEnableFallback =
+                !preferredUsable ||
+                !PreferredFaceOutranksFallback();
+
             if (_fallbackFaceActivation.FaceTrackingEnabled !=
                 shouldEnableFallback)
             {
@@ -254,26 +349,22 @@ namespace VCR.Runtime.Tracking.Routing
             }
         }
 
-        private void UpdateFaceSnapshot(bool preferredUsable)
+        private void UpdateFaceSnapshot(
+            FaceSourceSelection selection)
         {
-            TrackingFrame selected = null;
+            ITrackingFrameProvider selectedProvider =
+                selection ==
+                    FaceSourceSelection.Preferred
+                    ? _preferredFaceProvider
+                    : selection ==
+                        FaceSourceSelection.Fallback
+                        ? _fallbackProvider
+                        : null;
 
-            if (preferredUsable &&
-                _preferredFaceProvider != null)
-            {
-                _preferredFaceProvider.TryGetLatestFace(out selected);
-            }
-
-            if ((selected == null || selected.Face == null) &&
-                _fallbackProvider != null &&
-                IsSourceHealthUsable(
-                    _fallbackHealth,
-                    TrackingRegion.Face))
-            {
-                _fallbackProvider.TryGetLatestFace(out selected);
-            }
-
-            if (selected?.Face == null)
+            if (selectedProvider == null ||
+                !selectedProvider.TryGetLatestFace(
+                    out var selected) ||
+                selected?.Face == null)
             {
                 return;
             }
@@ -644,6 +735,21 @@ namespace VCR.Runtime.Tracking.Routing
                 1000.0);
         }
 
+        private static TrackingSourceKind GetSourceKind(
+            ITrackingSourceHealthProvider provider,
+            TrackingRegion region)
+        {
+            if (provider != null &&
+                provider.TryGetSourceHealth(
+                    region,
+                    out var snapshot))
+            {
+                return snapshot.Kind;
+            }
+
+            return TrackingSourceKind.Unknown;
+        }
+
         private static bool IsSourceHealthUsable(
             ITrackingSourceHealthProvider provider,
             TrackingRegion region)
@@ -713,6 +819,13 @@ namespace VCR.Runtime.Tracking.Routing
             {
                 counter++;
             }
+        }
+
+        private enum FaceSourceSelection
+        {
+            None = 0,
+            Preferred = 1,
+            Fallback = 2
         }
 
         private void ResetFaceSelection()
