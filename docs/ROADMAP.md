@@ -106,6 +106,8 @@ Material-slot abstraction, MToon preservation, runtime overrides, generic shader
 
 ## P3 — Built-in Basic Motion Capture
 
+Status: Active. See `P3_STATUS.md`.
+
 Productionize:
 
 - MediaPipe FaceLandmarker + HolisticLandmarker live-stream webcam paths
