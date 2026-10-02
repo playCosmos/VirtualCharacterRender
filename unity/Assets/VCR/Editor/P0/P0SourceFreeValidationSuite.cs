@@ -10,6 +10,16 @@ namespace VCR.Editor.P0
         [MenuItem("VCR/P0/Run All Source-Free Checks", priority = 0)]
         public static void RunAll()
         {
+            RunAllChecks();
+        }
+
+        /// <summary>
+        /// Runs the complete source-free P0 validation set and returns a process-friendly
+        /// PASS/FAIL result. Menu execution ignores the return value; batch-mode callers
+        /// use it to select the Unity process exit code.
+        /// </summary>
+        public static bool RunAllChecks()
+        {
             var failures = new List<string>();
             var currentCheck = string.Empty;
 
@@ -103,12 +113,13 @@ namespace VCR.Editor.P0
                 Debug.Log(
                     "VCR P0 source-free validation suite: PASS " +
                     "(package baseline, presence, ARKit parser, OSC/VMC codec, diagnostics math, material override, normalized events, environment, lazy capabilities)");
-                return;
+                return true;
             }
 
             Debug.LogError(
                 "VCR P0 source-free validation suite: FAIL\n" +
                 string.Join("\n", failures));
+            return false;
         }
 
         private static void Run(
