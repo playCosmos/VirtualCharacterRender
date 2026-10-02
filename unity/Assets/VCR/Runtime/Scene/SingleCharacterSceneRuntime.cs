@@ -514,6 +514,9 @@ namespace VCR.Runtime.Scene
                 IOverlayOutputAdapter configured)
             {
                 _overlayOutput = configured;
+                _overlayConfiguration =
+                    OverlayOutputConfiguration.FromSettings(
+                        configured.Settings);
                 return;
             }
 
@@ -527,6 +530,9 @@ namespace VCR.Runtime.Scene
                 {
                     overlayOutputBehaviour = behaviour;
                     _overlayOutput = adapter;
+                    _overlayConfiguration =
+                        OverlayOutputConfiguration.FromSettings(
+                            adapter.Settings);
                     return;
                 }
             }
