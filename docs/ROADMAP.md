@@ -94,6 +94,8 @@ Exit criteria:
 
 ## P1 — Cross-platform Renderer Core
 
+Status: Active. See `P1_STATUS.md`.
+
 One-character scene/character lifecycle, camera/light abstraction, frame timing, model hot reload, dynamic-environment hook, resolution/render scale, diagnostics, safe shutdown, platform adapters, and capability lifecycle.
 
 ## P2 — Material and Shader Runtime
