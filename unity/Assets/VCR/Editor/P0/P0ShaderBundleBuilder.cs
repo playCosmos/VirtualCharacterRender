@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Materials;
 using VCR.Runtime.Materials.Unity;
 
 namespace VCR.Editor.P0
@@ -15,7 +16,8 @@ namespace VCR.Editor.P0
         {
             Build(
                 BuildTarget.StandaloneWindows64,
-                "windows");
+                "windows",
+                ShaderBundleTargetPlatform.WindowsX64);
         }
 
         [MenuItem("VCR/P0/Build Shader Bundle/macOS")]
@@ -23,7 +25,8 @@ namespace VCR.Editor.P0
         {
             Build(
                 BuildTarget.StandaloneOSX,
-                "macos");
+                "macos",
+                ShaderBundleTargetPlatform.MacOS);
         }
 
         [MenuItem("VCR/P0/Validate Current Platform Shader Bundle")]
@@ -105,7 +108,8 @@ namespace VCR.Editor.P0
 
         private static void Build(
             BuildTarget target,
-            string platformFolder)
+            string platformFolder,
+            string targetPlatform)
         {
             var shader =
                 AssetDatabase.LoadAssetAtPath<Shader>(
@@ -165,8 +169,33 @@ namespace VCR.Editor.P0
                     outputDirectory,
                     "vcr-p0-shaders.bundle");
 
+            var metadata =
+                new ShaderBundleMetadata
+                {
+                    BundleId =
+                        "vcr-p0-shaders",
+                    TargetPlatform =
+                        targetPlatform,
+                    UnityVersion =
+                        Application.unityVersion,
+                    ShaderIds =
+                        new[]
+                        {
+                            "VCR/P0/TintUnlit"
+                        }
+                };
+
+            File.WriteAllText(
+                bundlePath + ".vcr.json",
+                JsonUtility.ToJson(
+                    metadata,
+                    prettyPrint: true));
+
+            AssetDatabase.Refresh();
+
             Debug.Log(
                 $"VCR P0 shader bundle: PASS - {target} -> {bundlePath}. " +
+                $"Metadata target={targetPlatform}, Unity={Application.unityVersion}. " +
                 "Build the other target separately; bundles are platform-specific.");
         }
     }
