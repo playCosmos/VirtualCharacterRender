@@ -330,18 +330,18 @@ namespace VCR.Runtime.Tracking.Mixing
             _targetDirty = false;
             _outputDirty = true;
 
-            if (baseFrame?.Expressions == null &&
-                (layerFrame?.Expressions == null ||
-                 expressionLayerWeight <= 0f))
+            if (layerFrame?.Expressions == null ||
+                expressionLayerWeight <= 0f)
             {
-                _targetExpressions = null;
+                _targetExpressions =
+                    baseFrame?.Expressions;
                 return;
             }
 
             _targetExpressions =
                 ExpressionMixerMath.Blend(
                     baseFrame?.Expressions,
-                    layerFrame?.Expressions,
+                    layerFrame.Expressions,
                     expressionLayerWeight,
                     expressionDeadzone,
                     expressionBlendMode);
