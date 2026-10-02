@@ -10,7 +10,8 @@
     "VRM10",
     "VCR.Runtime.Output",
     "VCR.Runtime.Environment",
-    "VCR.Runtime.Environment.Unity"
+    "VCR.Runtime.Environment.Unity",
+    "VCR.Runtime.Capabilities"
   ],
   "includePlatforms": [
     "Editor"
