@@ -1,0 +1,24 @@
+{
+  "name": "VCR.Editor.P3",
+  "rootNamespace": "VCR.Editor.P3",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Editor.P1",
+    "VCR.Editor.P2",
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Tracking.ArKit",
+    "VCR.Runtime.Tracking.ArKitUnity",
+    "VCR.Runtime.Tracking.MediaPipe"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
