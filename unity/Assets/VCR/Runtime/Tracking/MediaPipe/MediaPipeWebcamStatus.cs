@@ -9,6 +9,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             int height,
             int requestedFps,
             bool faceEnabled,
+            WebcamPreprocessingMode preprocessingMode,
             long faceSubmitted,
             long holisticSubmitted,
             long facePoolDrops,
@@ -22,6 +23,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             Height = height;
             RequestedFps = requestedFps;
             FaceEnabled = faceEnabled;
+            PreprocessingMode = preprocessingMode;
             FaceSubmitted = faceSubmitted;
             HolisticSubmitted = holisticSubmitted;
             FacePoolDrops = facePoolDrops;
@@ -36,6 +38,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         public int Height { get; }
         public int RequestedFps { get; }
         public bool FaceEnabled { get; }
+        public WebcamPreprocessingMode PreprocessingMode { get; }
         public long FaceSubmitted { get; }
         public long HolisticSubmitted { get; }
         public long FacePoolDrops { get; }
