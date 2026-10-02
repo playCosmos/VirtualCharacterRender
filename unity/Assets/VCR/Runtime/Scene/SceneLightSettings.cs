@@ -23,7 +23,7 @@ namespace VCR.Runtime.Scene
                     new Vector3(45f, -30f, 0f),
                 Color = Color.white,
                 Intensity = 1f,
-                Shadows = LightShadows.Soft
+                Shadows = LightShadows.None
             };
     }
 }
