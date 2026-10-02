@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UniVRM10;
+using VCR.Runtime.Capabilities;
 using VCR.Runtime.Character;
 using VCR.Runtime.Core;
 using VCR.Runtime.Environment;
@@ -40,6 +41,7 @@ namespace VCR.Runtime.Scene
         private bool _applicationQuitting;
         private IOverlayOutputAdapter _overlayOutput;
         private IEnvironmentRuntime _environmentRuntime;
+        private CapabilityRegistry _capabilities;
         private OverlayOutputConfiguration _overlayConfiguration =
             OverlayOutputConfiguration.Default;
 
@@ -49,6 +51,7 @@ namespace VCR.Runtime.Scene
         public PrimaryLightController LightController => lightController;
         public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
         public IEnvironmentRuntime EnvironmentRuntime => _environmentRuntime;
+        public CapabilityRegistry Capabilities => _capabilities;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
 
         public SceneRuntimeConfiguration Configuration =>
@@ -95,6 +98,9 @@ namespace VCR.Runtime.Scene
                     "VCR P1 scene runtime requires a DesktopRenderBootstrap.");
                 return false;
             }
+
+            _capabilities ??=
+                new CapabilityRegistry();
 
             renderBootstrap.Apply();
             cameraController?.Apply();
@@ -321,6 +327,9 @@ namespace VCR.Runtime.Scene
             SetState(SceneRuntimeState.ShuttingDown);
             CancelActiveOperation();
 
+            _capabilities?.Dispose();
+            _capabilities = null;
+
             if (unloadCharacterOnShutdown &&
                 characterLoader != null)
             {
@@ -377,6 +386,16 @@ namespace VCR.Runtime.Scene
                 "scene.environment.configured",
                 _environmentRuntime != null ? 1 : 0,
                 "bool"));
+
+            output.Add(new RuntimeMetric(
+                "scene.capabilities.registered",
+                _capabilities?.RegisteredCount ?? 0,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "scene.capabilities.enabled",
+                _capabilities?.EnabledCount ?? 0,
+                "count"));
         }
 
         private int BeginOperation(
@@ -570,6 +589,9 @@ namespace VCR.Runtime.Scene
         private void OnDestroy()
         {
             CancelActiveOperation();
+
+            _capabilities?.Dispose();
+            _capabilities = null;
         }
     }
 }
