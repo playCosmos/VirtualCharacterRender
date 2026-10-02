@@ -7,7 +7,8 @@ namespace VCR.Runtime.Scene
         LoadingCharacter = 2,
         CharacterReady = 3,
         Faulted = 4,
-        ShuttingDown = 5,
-        Stopped = 6
+        Suspended = 5,
+        ShuttingDown = 6,
+        Stopped = 7
     }
 }
