@@ -67,6 +67,23 @@ namespace VCR.Runtime.Materials.Unity
             return shader != null;
         }
 
+        public static string[] GetRegisteredIds()
+        {
+            var ids =
+                new string[
+                    Shaders.Count];
+
+            Shaders.Keys.CopyTo(
+                ids,
+                0);
+
+            Array.Sort(
+                ids,
+                StringComparer.Ordinal);
+
+            return ids;
+        }
+
         public static void ClearRegistered()
         {
             Shaders.Clear();
