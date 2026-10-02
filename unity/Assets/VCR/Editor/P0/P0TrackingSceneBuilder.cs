@@ -10,6 +10,7 @@ using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.Output.Unity;
 using VCR.Runtime.P0;
 using VCR.Runtime.Rendering;
+using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Runtime.Tracking.Routing;
 
@@ -134,6 +135,9 @@ namespace VCR.Editor.P0
             var renderBootstrap =
                 runtimeRoot.AddComponent<
                     DesktopRenderBootstrap>();
+
+            runtimeRoot.AddComponent<
+                SingleCharacterSceneRuntime>();
 
             var output =
                 runtimeRoot.AddComponent<
