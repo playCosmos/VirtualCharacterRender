@@ -83,6 +83,44 @@ VCR.Editor.P1.P1BatchValidation.RunSourceFreeAndExit
 
 A batch PASS proves source-free invariants only. It does not replace the deferred physical-device P0 evidence.
 
+## P1 application player
+
+Create the P1 runtime scene first:
+
+```text
+VCR > P1 > Create Application Runtime Scene
+```
+
+Then build from:
+
+```text
+VCR > P1 > Build > Windows x64 Development Player
+VCR > P1 > Build > Windows x64 Player
+VCR > P1 > Build > macOS Development Player
+VCR > P1 > Build > macOS Player
+```
+
+Windows launch examples:
+
+```powershell
+./tools/run-p1-player.ps1
+./tools/run-p1-player.ps1 -Vrm "C:\\models\\avatar.vrm"
+./tools/run-p1-player.ps1 -Config "C:\\configs\\vcr-runtime-config.json"
+./tools/run-p1-player.ps1 -Mode Development -Vrm "C:\\models\\avatar.vrm"
+```
+
+macOS launch examples:
+
+```bash
+chmod +x ./tools/run-p1-player.sh
+./tools/run-p1-player.sh
+./tools/run-p1-player.sh --vrm /Users/me/models/avatar.vrm
+./tools/run-p1-player.sh --config /Users/me/configs/vcr-runtime-config.json
+./tools/run-p1-player.sh --mode development --vrm /Users/me/models/avatar.vrm
+```
+
+The P1 application bootstrap uses `--vcr-vrm` and `--vcr-config`. A VRM path is optional; the renderer can start with an empty character slot.
+
 ## P0 standalone player launcher
 
 Build the corresponding player from Unity first.
