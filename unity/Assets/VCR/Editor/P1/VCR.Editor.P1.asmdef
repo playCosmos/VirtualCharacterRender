@@ -1,0 +1,22 @@
+{
+  "name": "VCR.Editor.P1",
+  "rootNamespace": "VCR.Editor.P1",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Character",
+    "VCR.Runtime.Rendering",
+    "VCR.Runtime.Scene"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
