@@ -6,6 +6,7 @@ using UnityEngine;
 using UniVRM10;
 using VCR.Runtime.Character;
 using VCR.Runtime.Core;
+using VCR.Runtime.Environment;
 using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 
@@ -28,6 +29,7 @@ namespace VCR.Runtime.Scene
         [SerializeField] private PrimaryCameraController cameraController;
         [SerializeField] private PrimaryLightController lightController;
         [SerializeField] private MonoBehaviour overlayOutputBehaviour;
+        [SerializeField] private MonoBehaviour environmentRuntimeBehaviour;
         [SerializeField] private bool initializeOnAwake = true;
         [SerializeField] private bool unloadCharacterOnShutdown = true;
 
@@ -37,6 +39,7 @@ namespace VCR.Runtime.Scene
         private string _lastError;
         private bool _applicationQuitting;
         private IOverlayOutputAdapter _overlayOutput;
+        private IEnvironmentRuntime _environmentRuntime;
         private OverlayOutputConfiguration _overlayConfiguration =
             OverlayOutputConfiguration.Default;
 
@@ -45,6 +48,7 @@ namespace VCR.Runtime.Scene
         public PrimaryCameraController CameraController => cameraController;
         public PrimaryLightController LightController => lightController;
         public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
+        public IEnvironmentRuntime EnvironmentRuntime => _environmentRuntime;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
 
         public SceneRuntimeConfiguration Configuration =>
@@ -220,7 +224,9 @@ namespace VCR.Runtime.Scene
                         ? lightController.Settings
                         : SceneLightSettings.DefaultDirectional,
                 Overlay =
-                    _overlayConfiguration
+                    _overlayConfiguration,
+                EnvironmentStateId =
+                    _environmentRuntime?.Status.StateId
             };
         }
 
@@ -228,6 +234,18 @@ namespace VCR.Runtime.Scene
             SceneRuntimeConfiguration configuration)
         {
             EnsureOperational();
+
+            if (_environmentRuntime != null &&
+                !string.IsNullOrWhiteSpace(
+                    configuration.EnvironmentStateId) &&
+                !_environmentRuntime.SetState(
+                    configuration.EnvironmentStateId,
+                    out var environmentError))
+            {
+                throw new InvalidOperationException(
+                    "Environment state apply failed: " +
+                    environmentError);
+            }
 
             renderBootstrap.Apply(
                 configuration.Rendering);
@@ -254,6 +272,24 @@ namespace VCR.Runtime.Scene
                 _overlayOutput.Apply(
                     _overlayConfiguration.ToSettings());
             }
+        }
+
+        public bool SetEnvironmentState(
+            string stateId,
+            out string error)
+        {
+            EnsureOperational();
+
+            if (_environmentRuntime == null)
+            {
+                error =
+                    "No environment runtime is configured.";
+                return false;
+            }
+
+            return _environmentRuntime.SetState(
+                stateId,
+                out error);
         }
 
         public void ApplyOverlayOutput(
@@ -335,6 +371,11 @@ namespace VCR.Runtime.Scene
             output.Add(new RuntimeMetric(
                 "scene.output.configured",
                 _overlayOutput != null ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "scene.environment.configured",
+                _environmentRuntime != null ? 1 : 0,
                 "bool"));
         }
 
@@ -419,6 +460,33 @@ namespace VCR.Runtime.Scene
             }
 
             ResolveOverlayOutput();
+            ResolveEnvironmentRuntime();
+        }
+
+        private void ResolveEnvironmentRuntime()
+        {
+            if (environmentRuntimeBehaviour is
+                IEnvironmentRuntime configured)
+            {
+                _environmentRuntime = configured;
+                return;
+            }
+
+            var localBehaviours =
+                GetComponentsInChildren<MonoBehaviour>(true);
+
+            foreach (var behaviour in localBehaviours)
+            {
+                if (behaviour is
+                    IEnvironmentRuntime runtime)
+                {
+                    environmentRuntimeBehaviour = behaviour;
+                    _environmentRuntime = runtime;
+                    return;
+                }
+            }
+
+            _environmentRuntime = null;
         }
 
         private void ResolveOverlayOutput()
