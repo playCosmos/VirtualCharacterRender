@@ -83,6 +83,31 @@ VCR.Editor.P1.P1BatchValidation.RunSourceFreeAndExit
 
 A batch PASS proves source-free invariants only. It does not replace the deferred physical-device P0 evidence.
 
+## P3 source-free batch validation
+
+P3 validation includes the inherited P0/P1/P2 suites plus built-in tracking lifecycle checks.
+
+Windows:
+
+```powershell
+./tools/validate-p3-source-free.ps1
+```
+
+macOS M1+:
+
+```bash
+chmod +x ./tools/validate-p3-source-free.sh
+./tools/validate-p3-source-free.sh
+```
+
+The entrypoint is:
+
+```text
+VCR.Editor.P3.P3BatchValidation.RunSourceFreeAndExit
+```
+
+A PASS validates source-free lifecycle/contracts only. Webcam quality, low-light benefit, Apple ARKit input, device recovery, and tracking performance still require physical execution evidence.
+
 ## P2 source-free batch validation
 
 P2 validation includes the inherited P0/P1 source-free suites plus material preset and compatibility checks.
