@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Tracking.Routing
 {
@@ -15,7 +17,9 @@ namespace VCR.Runtime.Tracking.Routing
     [DefaultExecutionOrder(5000)]
     public sealed class PriorityTrackingRouter :
         MonoBehaviour,
-        ITrackingRouteProvider
+        ITrackingRouteProvider,
+        ITrackingRouteStatusProvider,
+        IRuntimeMetricsSource
     {
         [Header("Providers")]
         [SerializeField] private MonoBehaviour preferredFaceProviderBehaviour;
@@ -62,7 +66,15 @@ namespace VCR.Runtime.Tracking.Routing
         private long _selectedExpressionChildSequence = -1;
         private long _expressionSequence;
 
+        private long _faceSourceSwitches;
+        private long _bodySourceSwitches;
+        private long _poseSourceSwitches;
+        private long _expressionSourceSwitches;
+
+        private TrackingRouteStatus _routeStatus;
+
         public TrackingPresenceSnapshot Presence => _presence;
+        public TrackingRouteStatus RouteStatus => _routeStatus;
 
         private void Awake()
         {
@@ -75,6 +87,7 @@ namespace VCR.Runtime.Tracking.Routing
 
             _presenceResolver.Reset(NowUs());
             _presence = _presenceResolver.Snapshot;
+            UpdateRouteStatus(preferredFaceActive: false);
         }
 
         private void OnEnable()
@@ -92,6 +105,7 @@ namespace VCR.Runtime.Tracking.Routing
             UpdateBodyHandsSnapshot();
             UpdateExternalPoseSnapshots();
             UpdatePresence();
+            UpdateRouteStatus(preferredUsable);
         }
 
         public bool TryGetLatestFace(out TrackingFrame frame)
@@ -248,6 +262,11 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
+            CountSourceSwitch(
+                _selectedFaceSourceId,
+                selected.SourceId,
+                ref _faceSourceSwitches);
+
             _selectedFaceChildSequence = selected.Sequence;
             _selectedFaceSourceId = selected.SourceId;
 
@@ -279,6 +298,11 @@ namespace VCR.Runtime.Tracking.Routing
             {
                 return;
             }
+
+            CountSourceSwitch(
+                _selectedBodySourceId,
+                selected.SourceId,
+                ref _bodySourceSwitches);
 
             _selectedBodyChildSequence = selected.Sequence;
             _selectedBodySourceId = selected.SourceId;
@@ -327,6 +351,11 @@ namespace VCR.Runtime.Tracking.Routing
                      _selectedPoseSourceId,
                      StringComparison.Ordinal)))
             {
+                CountSourceSwitch(
+                    _selectedPoseSourceId,
+                    poseFrame.SourceId,
+                    ref _poseSourceSwitches);
+
                 _selectedPoseChildSequence = poseFrame.Sequence;
                 _selectedPoseSourceId = poseFrame.SourceId;
 
@@ -351,6 +380,11 @@ namespace VCR.Runtime.Tracking.Routing
                      _selectedExpressionSourceId,
                      StringComparison.Ordinal)))
             {
+                CountSourceSwitch(
+                    _selectedExpressionSourceId,
+                    expressionFrame.SourceId,
+                    ref _expressionSourceSwitches);
+
                 _selectedExpressionChildSequence =
                     expressionFrame.Sequence;
                 _selectedExpressionSourceId =
@@ -445,6 +479,151 @@ namespace VCR.Runtime.Tracking.Routing
                 fullBodyConfigured,
                 fullBodyAvailable,
                 fullBodyEvidence);
+        }
+
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            var status = _routeStatus;
+
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.preferred_face_active",
+                    status.PreferredFaceActive ? 1.0 : 0.0,
+                    "bool"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.fallback_face_inference_enabled",
+                    status.FallbackFaceInferenceEnabled ? 1.0 : 0.0,
+                    "bool"));
+
+            AddAgeMetric(
+                output,
+                "tracking.route.face_age",
+                status.FaceAgeMs);
+            AddAgeMetric(
+                output,
+                "tracking.route.body_age",
+                status.BodyHandsAgeMs);
+            AddAgeMetric(
+                output,
+                "tracking.route.fullbody_age",
+                status.FullBodyAgeMs);
+            AddAgeMetric(
+                output,
+                "tracking.route.expression_age",
+                status.ExpressionAgeMs);
+
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.face_switches",
+                    _faceSourceSwitches,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.body_switches",
+                    _bodySourceSwitches,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.fullbody_switches",
+                    _poseSourceSwitches,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.expression_switches",
+                    _expressionSourceSwitches,
+                    "count"));
+        }
+
+        private void UpdateRouteStatus(
+            bool preferredFaceActive)
+        {
+            var nowUs =
+                MonotonicClock.NowMicroseconds();
+
+            var fallbackFaceInferenceEnabled =
+                _fallbackProvider != null &&
+                (_fallbackFaceActivation == null ||
+                 _fallbackFaceActivation.FaceTrackingEnabled);
+
+            _routeStatus =
+                new TrackingRouteStatus(
+                    _latestFace?.SourceId,
+                    _latestBodyHands?.SourceId,
+                    _latestHumanoidPose?.SourceId,
+                    _latestExpressions?.SourceId,
+                    preferredFaceActive,
+                    fallbackFaceInferenceEnabled,
+                    FrameAgeMs(
+                        _latestFace,
+                        nowUs),
+                    FrameAgeMs(
+                        _latestBodyHands,
+                        nowUs),
+                    FrameAgeMs(
+                        _latestHumanoidPose,
+                        nowUs),
+                    FrameAgeMs(
+                        _latestExpressions,
+                        nowUs));
+        }
+
+        private static double FrameAgeMs(
+            TrackingFrame frame,
+            long nowUs)
+        {
+            if (frame == null ||
+                frame.RuntimeTimestampUs <= 0)
+            {
+                return double.NaN;
+            }
+
+            return Math.Max(
+                0.0,
+                (nowUs -
+                 frame.RuntimeTimestampUs) /
+                1000.0);
+        }
+
+        private static void AddAgeMetric(
+            List<RuntimeMetric> output,
+            string name,
+            double value)
+        {
+            if (double.IsNaN(value) ||
+                double.IsInfinity(value))
+            {
+                return;
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    name,
+                    value,
+                    "ms"));
+        }
+
+        private static void CountSourceSwitch(
+            string previousSourceId,
+            string nextSourceId,
+            ref long counter)
+        {
+            if (!string.IsNullOrEmpty(
+                    previousSourceId) &&
+                !string.Equals(
+                    previousSourceId,
+                    nextSourceId,
+                    StringComparison.Ordinal))
+            {
+                counter++;
+            }
         }
 
         private void ResetFaceSelection()
