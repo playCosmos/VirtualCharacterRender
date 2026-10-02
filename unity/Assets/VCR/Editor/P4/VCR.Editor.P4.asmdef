@@ -1,0 +1,24 @@
+{
+  "name": "VCR.Editor.P4",
+  "rootNamespace": "VCR.Editor.P4",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Editor.P1",
+    "VCR.Editor.P2",
+    "VCR.Editor.P3",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Tracking.Routing"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
