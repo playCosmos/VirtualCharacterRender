@@ -21,7 +21,7 @@ namespace VCR.Runtime.Application
                     nameof(path));
             }
 
-            _path = Path.GetFullPath(path);
+            _path = System.IO.Path.GetFullPath(path);
         }
 
         public string Path => _path;
