@@ -30,6 +30,9 @@ namespace VCR.Runtime.Materials.Unity
         }
 
         [SerializeField] private bool discoverOnAwake = true;
+        [SerializeField] private MonoBehaviour textureResolverBehaviour;
+
+        private IMaterialTextureResolver _textureResolver;
 
         private readonly Dictionary<string, SlotRecord> _slots =
             new(StringComparer.Ordinal);
@@ -42,10 +45,25 @@ namespace VCR.Runtime.Materials.Unity
 
         private void Awake()
         {
+            if (textureResolverBehaviour is
+                IMaterialTextureResolver configuredResolver)
+            {
+                _textureResolver =
+                    configuredResolver;
+            }
+
             if (discoverOnAwake)
             {
                 RefreshSlots();
             }
+        }
+
+        public void SetTextureResolver(
+            IMaterialTextureResolver resolver)
+        {
+            _textureResolver = resolver;
+            textureResolverBehaviour =
+                resolver as MonoBehaviour;
         }
 
         [ContextMenu("Refresh Material Slots")]
@@ -663,7 +681,7 @@ namespace VCR.Runtime.Materials.Unity
             return shader;
         }
 
-        private static void ValidateParameterCompatibility(
+        private void ValidateParameterCompatibility(
             Shader shader,
             MaterialParameterOverride parameter,
             List<MaterialCompatibilityIssue> issues)
@@ -676,17 +694,6 @@ namespace VCR.Runtime.Materials.Unity
                         "property_name_required",
                         null,
                         "Shader property name is required."));
-                return;
-            }
-
-            if (parameter.Kind ==
-                ShaderParameterKind.Texture)
-            {
-                issues.Add(
-                    new MaterialCompatibilityIssue(
-                        "preset_texture_binding_unsupported",
-                        parameter.Name,
-                        "Serialized texture bindings are not supported by the P2 preset contract yet; use the runtime texture API."));
                 return;
             }
 
@@ -712,6 +719,35 @@ namespace VCR.Runtime.Materials.Unity
                         "property_type_mismatch",
                         parameter.Name,
                         $"Preset kind '{parameter.Kind}' is incompatible with shader property type '{propertyType}' for '{parameter.Name}'."));
+                return;
+            }
+
+            if (parameter.Kind !=
+                ShaderParameterKind.Texture)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    parameter.StringValue))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "texture_id_required",
+                        parameter.Name,
+                        $"Texture property '{parameter.Name}' requires a texture id."));
+                return;
+            }
+
+            if (!TryResolveTexture(
+                    parameter.StringValue,
+                    out _))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "texture_unavailable",
+                        parameter.Name,
+                        $"Texture id '{parameter.StringValue}' could not be resolved."));
             }
         }
 
@@ -780,7 +816,7 @@ namespace VCR.Runtime.Materials.Unity
             };
         }
 
-        private static void ApplyParameter(
+        private void ApplyParameter(
             Material material,
             MaterialParameterOverride parameter)
         {
@@ -834,8 +870,18 @@ namespace VCR.Runtime.Materials.Unity
                     break;
 
                 case ShaderParameterKind.Texture:
-                    throw new NotSupportedException(
-                        "Serialized texture preset bindings are not supported yet.");
+                    if (!TryResolveTexture(
+                            parameter.StringValue,
+                            out var texture))
+                    {
+                        throw new InvalidOperationException(
+                            $"Texture id '{parameter.StringValue}' could not be resolved.");
+                    }
+
+                    material.SetTexture(
+                        parameter.Name,
+                        texture);
+                    break;
 
                 default:
                     throw new ArgumentOutOfRangeException(
@@ -843,6 +889,32 @@ namespace VCR.Runtime.Materials.Unity
                         parameter.Kind,
                         "Unsupported shader parameter kind.");
             }
+        }
+
+        private bool TryResolveTexture(
+            string textureId,
+            out Texture texture)
+        {
+            texture = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    textureId))
+            {
+                return false;
+            }
+
+            if (_textureResolver != null &&
+                _textureResolver.TryResolve(
+                    textureId,
+                    out texture) &&
+                texture != null)
+            {
+                return true;
+            }
+
+            return RuntimeTextureRegistry.TryResolve(
+                textureId,
+                out texture);
         }
 
         private bool TrySet(
