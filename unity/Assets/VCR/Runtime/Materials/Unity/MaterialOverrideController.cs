@@ -164,6 +164,26 @@ namespace VCR.Runtime.Materials.Unity
             return statuses;
         }
 
+        public MaterialCompatibilityReport[] EvaluatePresetForAllSlots(
+            MaterialOverridePreset preset)
+        {
+            var reports =
+                new MaterialCompatibilityReport[
+                    _descriptors.Count];
+
+            for (var i = 0;
+                 i < _descriptors.Count;
+                 i++)
+            {
+                reports[i] =
+                    EvaluatePreset(
+                        _descriptors[i].Id,
+                        preset);
+            }
+
+            return reports;
+        }
+
         public MaterialCompatibilityReport EvaluatePreset(
             string slotId,
             MaterialOverridePreset preset)
