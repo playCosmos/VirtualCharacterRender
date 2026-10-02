@@ -11,6 +11,9 @@ namespace VCR.Editor.P1
         public int ShutdownCount { get; private set; }
         public OverlayOutputSettings LastSettings { get; private set; }
 
+        public OverlayOutputSettings Settings =>
+            LastSettings;
+
         public OverlayOutputStatus Status =>
             new(
                 supported: true,
