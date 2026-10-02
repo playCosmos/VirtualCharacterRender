@@ -38,7 +38,8 @@ namespace VCR.Runtime.Protocols.Vmc
         public string SourceId { get; }
         public TrackingSourceKind Kind => TrackingSourceKind.Vmc;
         public TrackingRegion Regions =>
-            TrackingRegion.FullBody;
+            TrackingRegion.FullBody |
+            TrackingRegion.Expressions;
 
         public bool LastSubjectDetected =>
             Volatile.Read(ref _lastSubjectDetected) != 0;

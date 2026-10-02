@@ -112,8 +112,12 @@ namespace VCR.Runtime.Protocols.VmcUnity
             TrackingRegion region,
             out TrackingSourceHealthSnapshot snapshot)
         {
+            var supported =
+                TrackingRegion.FullBody |
+                TrackingRegion.Expressions;
+
             if (_source == null ||
-                (region & TrackingRegion.FullBody) == 0)
+                (region & supported) == 0)
             {
                 snapshot = default;
                 return false;
@@ -126,15 +130,19 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 _latestExpressionFrame?
                     .RuntimeTimestampUs ?? 0;
 
+            var runtimeTimestamp =
+                (region &
+                 TrackingRegion.Expressions) != 0
+                    ? expressionTimestamp
+                    : poseTimestamp;
+
             snapshot =
                 new TrackingSourceHealthSnapshot(
                     _source.SourceId,
                     _source.Kind,
                     _source.Regions,
                     _source.Health,
-                    Math.Max(
-                        poseTimestamp,
-                        expressionTimestamp));
+                    runtimeTimestamp);
             return true;
         }
 

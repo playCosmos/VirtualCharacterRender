@@ -12,6 +12,7 @@ namespace VCR.Runtime.Tracking
         RightHand = 1 << 3,
         UpperBody = 1 << 4,
         FullBody = 1 << 5,
+        Expressions = 1 << 6,
 
         Hands = LeftHand | RightHand,
         Baseline = Face | Head | Hands | UpperBody

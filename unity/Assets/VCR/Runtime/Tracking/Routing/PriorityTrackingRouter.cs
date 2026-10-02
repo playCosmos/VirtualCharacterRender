@@ -24,8 +24,10 @@ namespace VCR.Runtime.Tracking.Routing
         [Header("Providers")]
         [SerializeField] private MonoBehaviour preferredFaceProviderBehaviour;
         [SerializeField] private MonoBehaviour fallbackProviderBehaviour;
-        [Tooltip("Optional VMC/full-body provider. Face priority remains ARKit > MediaPipe.")]
+        [Tooltip("Optional VMC/full-body provider. Face source priority is controlled by the routing policy.")]
         [SerializeField] private MonoBehaviour externalPoseProviderBehaviour;
+        [Tooltip("Optional expression-only fallback such as AudioDrivenExpressionSource. It is never used as performer-presence evidence.")]
+        [SerializeField] private MonoBehaviour expressionFallbackProviderBehaviour;
 
         [Header("Routing policy")]
         [SerializeField] private TrackingRoutePolicy routePolicy =
@@ -48,6 +50,9 @@ namespace VCR.Runtime.Tracking.Routing
         private ITrackingFrameProvider _externalPoseProvider;
         private ITrackingPresenceProvider _externalPosePresence;
         private ITrackingSourceHealthProvider _externalPoseHealth;
+
+        private ITrackingFrameProvider _expressionFallbackProvider;
+        private ITrackingSourceHealthProvider _expressionFallbackHealth;
 
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
@@ -187,6 +192,17 @@ namespace VCR.Runtime.Tracking.Routing
             ResetPoseSelection();
         }
 
+        public void SetExpressionFallbackProvider(
+            MonoBehaviour provider)
+        {
+            expressionFallbackProviderBehaviour = provider;
+            _expressionFallbackProvider =
+                provider as ITrackingFrameProvider;
+            _expressionFallbackHealth =
+                provider as ITrackingSourceHealthProvider;
+            ResetExpressionSelection();
+        }
+
         private void ResolveProviders()
         {
             if (preferredFaceProviderBehaviour != null)
@@ -219,6 +235,14 @@ namespace VCR.Runtime.Tracking.Routing
                     externalPoseProviderBehaviour as ITrackingPresenceProvider;
                 _externalPoseHealth ??=
                     externalPoseProviderBehaviour as ITrackingSourceHealthProvider;
+            }
+
+            if (expressionFallbackProviderBehaviour != null)
+            {
+                _expressionFallbackProvider ??=
+                    expressionFallbackProviderBehaviour as ITrackingFrameProvider;
+                _expressionFallbackHealth ??=
+                    expressionFallbackProviderBehaviour as ITrackingSourceHealthProvider;
             }
         }
 
@@ -441,14 +465,20 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void UpdateExternalPoseSnapshots()
         {
+            UpdateExternalPoseSnapshot();
+            UpdateExpressionSnapshot();
+        }
+
+        private void UpdateExternalPoseSnapshot()
+        {
             if (_externalPoseProvider == null)
             {
                 _latestHumanoidPose = null;
-                _latestExpressions = null;
                 return;
             }
 
-            var presence = _externalPosePresence?.Presence;
+            var presence =
+                _externalPosePresence?.Presence;
             var usable =
                 IsSourceHealthUsable(
                     _externalPoseHealth,
@@ -460,7 +490,6 @@ namespace VCR.Runtime.Tracking.Routing
             if (!usable)
             {
                 _latestHumanoidPose = null;
-                _latestExpressions = null;
                 return;
             }
 
@@ -478,50 +507,154 @@ namespace VCR.Runtime.Tracking.Routing
                     poseFrame.SourceId,
                     ref _poseSourceSwitches);
 
-                _selectedPoseChildSequence = poseFrame.Sequence;
-                _selectedPoseSourceId = poseFrame.SourceId;
+                _selectedPoseChildSequence =
+                    poseFrame.Sequence;
+                _selectedPoseSourceId =
+                    poseFrame.SourceId;
 
-                _latestHumanoidPose = new TrackingFrame(
-                    ++_poseSequence,
-                    poseFrame.SourceTimestampUs,
-                    poseFrame.ValidRegions,
-                    poseFrame.Confidence,
-                    poseFrame.SubjectDetected,
-                    humanoidPose: poseFrame.HumanoidPose,
-                    sourceId: poseFrame.SourceId,
-                    runtimeTimestampUs: poseFrame.RuntimeTimestampUs);
+                _latestHumanoidPose =
+                    new TrackingFrame(
+                        ++_poseSequence,
+                        poseFrame.SourceTimestampUs,
+                        poseFrame.ValidRegions,
+                        poseFrame.Confidence,
+                        poseFrame.SubjectDetected,
+                        humanoidPose:
+                            poseFrame.HumanoidPose,
+                        sourceId:
+                            poseFrame.SourceId,
+                        runtimeTimestampUs:
+                            poseFrame.RuntimeTimestampUs);
             }
+        }
 
-            if (_externalPoseProvider.TryGetLatestExpressions(
-                    out var expressionFrame) &&
-                expressionFrame?.Expressions != null &&
-                (expressionFrame.Sequence !=
-                    _selectedExpressionChildSequence ||
-                 !string.Equals(
-                     expressionFrame.SourceId,
-                     _selectedExpressionSourceId,
-                     StringComparison.Ordinal)))
+        private void UpdateExpressionSnapshot()
+        {
+            var externalUsable =
+                TryGetUsableExpression(
+                    _externalPoseProvider,
+                    _externalPoseHealth,
+                    out var externalFrame);
+
+            var fallbackUsable =
+                TryGetUsableExpression(
+                    _expressionFallbackProvider,
+                    _expressionFallbackHealth,
+                    out var fallbackFrame);
+
+            TrackingFrame selected = null;
+
+            if (externalUsable &&
+                fallbackUsable)
             {
-                CountSourceSwitch(
-                    _selectedExpressionSourceId,
-                    expressionFrame.SourceId,
-                    ref _expressionSourceSwitches);
-
-                _selectedExpressionChildSequence =
-                    expressionFrame.Sequence;
-                _selectedExpressionSourceId =
-                    expressionFrame.SourceId;
-
-                _latestExpressions = new TrackingFrame(
-                    ++_expressionSequence,
-                    expressionFrame.SourceTimestampUs,
-                    expressionFrame.ValidRegions,
-                    expressionFrame.Confidence,
-                    expressionFrame.SubjectDetected,
-                    expressions: expressionFrame.Expressions,
-                    sourceId: expressionFrame.SourceId,
-                    runtimeTimestampUs: expressionFrame.RuntimeTimestampUs);
+                selected =
+                    ExternalExpressionOutranksFallback()
+                        ? externalFrame
+                        : fallbackFrame;
             }
+            else if (externalUsable)
+            {
+                selected = externalFrame;
+            }
+            else if (fallbackUsable)
+            {
+                selected = fallbackFrame;
+            }
+
+            if (selected?.Expressions == null)
+            {
+                ResetExpressionSelection();
+                return;
+            }
+
+            if (selected.Sequence ==
+                    _selectedExpressionChildSequence &&
+                string.Equals(
+                    selected.SourceId,
+                    _selectedExpressionSourceId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            CountSourceSwitch(
+                _selectedExpressionSourceId,
+                selected.SourceId,
+                ref _expressionSourceSwitches);
+
+            _selectedExpressionChildSequence =
+                selected.Sequence;
+            _selectedExpressionSourceId =
+                selected.SourceId;
+
+            _latestExpressions =
+                new TrackingFrame(
+                    ++_expressionSequence,
+                    selected.SourceTimestampUs,
+                    selected.ValidRegions |
+                        TrackingRegion.Expressions,
+                    selected.Confidence,
+                    selected.SubjectDetected,
+                    expressions:
+                        selected.Expressions,
+                    sourceId:
+                        selected.SourceId,
+                    runtimeTimestampUs:
+                        selected.RuntimeTimestampUs);
+        }
+
+        private static bool TryGetUsableExpression(
+            ITrackingFrameProvider provider,
+            ITrackingSourceHealthProvider healthProvider,
+            out TrackingFrame frame)
+        {
+            frame = null;
+
+            if (provider == null ||
+                !IsSourceHealthUsable(
+                    healthProvider,
+                    TrackingRegion.Expressions))
+            {
+                return false;
+            }
+
+            return
+                provider.TryGetLatestExpressions(
+                    out frame) &&
+                frame?.Expressions != null;
+        }
+
+        private bool ExternalExpressionOutranksFallback()
+        {
+            var policy =
+                routePolicy ??
+                TrackingRoutePolicy.CreateDefault();
+
+            var externalKind =
+                GetSourceKind(
+                    _externalPoseHealth,
+                    TrackingRegion.Expressions);
+            var fallbackKind =
+                GetSourceKind(
+                    _expressionFallbackHealth,
+                    TrackingRegion.Expressions);
+
+            var externalPriority =
+                policy.GetExpressionPriority(
+                    externalKind);
+            var fallbackPriority =
+                policy.GetExpressionPriority(
+                    fallbackKind);
+
+            if (externalPriority == int.MaxValue &&
+                fallbackPriority == int.MaxValue)
+            {
+                return true;
+            }
+
+            return
+                externalPriority <=
+                fallbackPriority;
         }
 
         private void UpdatePresence()
@@ -683,6 +816,16 @@ namespace VCR.Runtime.Tracking.Routing
                 "tracking.route.fullbody_health",
                 _externalPoseHealth,
                 TrackingRegion.FullBody);
+            AddHealthMetric(
+                output,
+                "tracking.route.external_expression_health",
+                _externalPoseHealth,
+                TrackingRegion.Expressions);
+            AddHealthMetric(
+                output,
+                "tracking.route.fallback_expression_health",
+                _expressionFallbackHealth,
+                TrackingRegion.Expressions);
         }
 
         private void UpdateRouteStatus(
@@ -844,9 +987,14 @@ namespace VCR.Runtime.Tracking.Routing
         {
             _selectedPoseSourceId = null;
             _selectedPoseChildSequence = -1;
+            _latestHumanoidPose = null;
+            ResetExpressionSelection();
+        }
+
+        private void ResetExpressionSelection()
+        {
             _selectedExpressionSourceId = null;
             _selectedExpressionChildSequence = -1;
-            _latestHumanoidPose = null;
             _latestExpressions = null;
         }
 

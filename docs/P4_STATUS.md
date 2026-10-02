@@ -30,14 +30,14 @@ The existing `PriorityTrackingRouter` remains the one-performer region router:
 
 P4 now exposes a common region-addressable source-health contract through `ITrackingSourceHealthProvider` / `TrackingSourceHealthSnapshot`. MediaPipe returns independent FaceLandmarker and Holistic health snapshots; ARKit and VMC expose the same contract without router-side type checks. Runtime frame timestamps are kept separate from source/device timestamps so age calculations do not assume a shared epoch.
 
-Face source priority is now explicit policy data through `TrackingRoutePolicy`. The default order remains ARKit face first and MediaPipe FaceLandmarker second. Existing serialized provider fields remain scene wiring for compatibility; changing priority no longer requires rewiring those references. Providers without source-kind health metadata retain the historical preferred-then-fallback behavior.
+Face and expression source priority are now explicit policy data through `TrackingRoutePolicy`. The default face order remains ARKit face first and MediaPipe FaceLandmarker second. The default expression order is VMC first and optional audio mouth fallback second. Existing serialized provider fields remain scene wiring for compatibility; changing priority no longer requires rewiring those references. Providers without source-kind health metadata retain the historical preferred-then-fallback behavior.
 
 P4 also exposes a route-status contract through `ITrackingRouteStatusProvider` / `TrackingRouteStatus`:
 
 - selected face source ID
 - selected body/hands source ID
 - selected full-body source ID
-- selected expression source ID
+- selected expression source ID, including VMC -> audio fallback changes
 - preferred-face active state
 - fallback face-inference enabled state
 - per-region routed-frame age
@@ -74,6 +74,8 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 - non-negative routed face age
 - deterministic source-switch metrics across policy reversal, policy restore, and preferred-source loss
 - runtime reversal of the face priority policy without provider rewiring
+- VMC expression selection with automatic audio-expression fallback after VMC expression health loss
+- expression source-switch diagnostics
 - route diagnostics emission
 - preferred source rejection when common health reports `SourceLost` even if cached presence/frame state remains
 
@@ -89,7 +91,6 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 
 ## Next P4 work
 
-The next source implementation slice is:
+The P4 source implementation now covers the planned source-health, region routing, hot-switching, route diagnostics, source-priority policy, and expression-fallback routing contracts.
 
-- route optional expression fallback as a source choice, not as expression mixing; weighted mixing remains P5
-- keep region-level loss semantics and one-performer scope intact
+Weighted pose/expression mixing, masks, deadzones, smoothing policy, and fallback blending remain P5. P4 intentionally exposes one selected expression source at a time; it does not combine VMC and audio values. Audio fallback is not included in performer-presence resolution.

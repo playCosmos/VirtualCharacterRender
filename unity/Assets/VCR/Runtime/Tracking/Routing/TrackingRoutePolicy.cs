@@ -21,6 +21,13 @@ namespace VCR.Runtime.Tracking.Routing
             TrackingSourceKind.MediaPipeFaceWebcam
         };
 
+        [SerializeField]
+        private TrackingSourceKind[] expressionPriorityOrder =
+        {
+            TrackingSourceKind.Vmc,
+            TrackingSourceKind.AudioFallback
+        };
+
         public TrackingSourceKind[] FacePriorityOrder
         {
             get
@@ -35,10 +42,40 @@ namespace VCR.Runtime.Tracking.Routing
             }
         }
 
+        public TrackingSourceKind[] ExpressionPriorityOrder
+        {
+            get
+            {
+                if (expressionPriorityOrder == null ||
+                    expressionPriorityOrder.Length == 0)
+                {
+                    return DefaultExpressionPriority();
+                }
+
+                return expressionPriorityOrder;
+            }
+        }
+
         public int GetFacePriority(
             TrackingSourceKind kind)
         {
             var order = FacePriorityOrder;
+
+            for (var i = 0; i < order.Length; i++)
+            {
+                if (order[i] == kind)
+                {
+                    return i;
+                }
+            }
+
+            return int.MaxValue;
+        }
+
+        public int GetExpressionPriority(
+            TrackingSourceKind kind)
+        {
+            var order = ExpressionPriorityOrder;
 
             for (var i = 0; i < order.Length; i++)
             {
@@ -67,6 +104,22 @@ namespace VCR.Runtime.Tracking.Routing
                 order.Clone();
         }
 
+        public void SetExpressionPriorityOrder(
+            params TrackingSourceKind[] order)
+        {
+            if (order == null ||
+                order.Length == 0)
+            {
+                expressionPriorityOrder =
+                    DefaultExpressionPriority();
+                return;
+            }
+
+            expressionPriorityOrder =
+                (TrackingSourceKind[])
+                order.Clone();
+        }
+
         public static TrackingRoutePolicy CreateDefault()
         {
             return new TrackingRoutePolicy();
@@ -79,6 +132,16 @@ namespace VCR.Runtime.Tracking.Routing
             {
                 TrackingSourceKind.ArKitFace,
                 TrackingSourceKind.MediaPipeFaceWebcam
+            };
+        }
+
+        private static TrackingSourceKind[]
+            DefaultExpressionPriority()
+        {
+            return new[]
+            {
+                TrackingSourceKind.Vmc,
+                TrackingSourceKind.AudioFallback
             };
         }
     }

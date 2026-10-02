@@ -15,6 +15,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
     public sealed class AudioDrivenExpressionSource :
         MonoBehaviour,
         ITrackingFrameProvider,
+        ITrackingSourceHealthProvider,
         IRuntimeMetricsSource
     {
         [SerializeField] private AudioSource audioSource;
@@ -68,6 +69,39 @@ namespace VCR.Runtime.Tracking.AudioUnity
 
             UpdateValue(
                 target);
+        }
+
+        public bool TryGetSourceHealth(
+            TrackingRegion region,
+            out TrackingSourceHealthSnapshot snapshot)
+        {
+            if ((region &
+                 TrackingRegion.Expressions) == 0)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            var state =
+                !isActiveAndEnabled
+                    ? TrackingSourceHealthState.Stopped
+                    : audioSource == null ||
+                      !audioSource.isActiveAndEnabled
+                        ? TrackingSourceHealthState.Degraded
+                        : TrackingSourceHealthState.Healthy;
+
+            snapshot =
+                new TrackingSourceHealthSnapshot(
+                    "audio-mouth-fallback",
+                    TrackingSourceKind.AudioFallback,
+                    TrackingRegion.Expressions,
+                    new TrackingSourceHealth(
+                        state,
+                        _latest?.SourceTimestampUs ?? 0,
+                        _value,
+                        null),
+                    _latest?.RuntimeTimestampUs ?? 0);
+            return true;
         }
 
         public bool TryGetLatestFace(
@@ -146,7 +180,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
                         MonotonicClock
                             .NowMicroseconds(),
                     validRegions:
-                        TrackingRegion.None,
+                        TrackingRegion.Expressions,
                     confidence:
                         _value,
                     subjectDetected:

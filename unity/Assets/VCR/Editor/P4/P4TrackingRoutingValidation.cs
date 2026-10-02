@@ -32,6 +32,10 @@ namespace VCR.Editor.P4
                     root.AddComponent<P4FakeTrackingProvider>();
                 var router =
                     root.AddComponent<PriorityTrackingRouter>();
+                var externalExpressions =
+                    root.AddComponent<P4FakeTrackingProvider>();
+                var audioExpressions =
+                    root.AddComponent<P4FakeTrackingProvider>();
 
                 preferred.SourceId = "arkit-face";
                 preferred.Kind =
@@ -51,6 +55,24 @@ namespace VCR.Editor.P4
                 fallback.HealthState =
                     TrackingSourceHealthState.Healthy;
 
+                externalExpressions.SourceId =
+                    "vmc-expressions";
+                externalExpressions.Kind =
+                    TrackingSourceKind.Vmc;
+                externalExpressions.Regions =
+                    TrackingRegion.Expressions;
+                externalExpressions.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
+                audioExpressions.SourceId =
+                    "audio-mouth-fallback";
+                audioExpressions.Kind =
+                    TrackingSourceKind.AudioFallback;
+                audioExpressions.Regions =
+                    TrackingRegion.Expressions;
+                audioExpressions.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
                 var nowUs =
                     MonotonicClock.NowMicroseconds();
 
@@ -65,6 +87,20 @@ namespace VCR.Editor.P4
                         fallback.SourceId,
                         sequence: 1,
                         nowUs);
+
+                externalExpressions.ExpressionFrame =
+                    CreateExpressionFrame(
+                        externalExpressions.SourceId,
+                        sequence: 1,
+                        nowUs,
+                        value: 0.8f);
+
+                audioExpressions.ExpressionFrame =
+                    CreateExpressionFrame(
+                        audioExpressions.SourceId,
+                        sequence: 1,
+                        nowUs,
+                        value: 0.4f);
 
                 preferred.Presence =
                     CreatePresence(
@@ -82,6 +118,10 @@ namespace VCR.Editor.P4
                     preferred);
                 router.SetFallbackProvider(
                     fallback);
+                router.SetExternalPoseProvider(
+                    externalExpressions);
+                router.SetExpressionFallbackProvider(
+                    audioExpressions);
 
                 InvokeUpdate(router);
 
@@ -152,6 +192,26 @@ namespace VCR.Editor.P4
                     "restoring default policy must return face ownership to the healthy ARKit source",
                     failures);
 
+                Expect(
+                    restoredPolicyStatus.ExpressionSourceId ==
+                    externalExpressions.SourceId,
+                    "default expression routing must prefer VMC over audio fallback",
+                    failures);
+
+                externalExpressions.HealthState =
+                    TrackingSourceHealthState.SourceLost;
+
+                InvokeUpdate(router);
+
+                var expressionFallbackStatus =
+                    router.RouteStatus;
+
+                Expect(
+                    expressionFallbackStatus.ExpressionSourceId ==
+                    audioExpressions.SourceId,
+                    "expression routing must select audio fallback when VMC expression health is lost",
+                    failures);
+
                 preferred.HealthState =
                     TrackingSourceHealthState.SourceLost;
 
@@ -197,6 +257,17 @@ namespace VCR.Editor.P4
                 Expect(
                     TryGetMetric(
                         metrics,
+                        "tracking.route.expression_switches",
+                        out var expressionSwitches) &&
+                    Math.Abs(
+                        expressionSwitches - 1.0) <
+                    0.001,
+                    "VMC-to-audio fallback must produce exactly one expression source switch",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
                         "tracking.route.fallback_face_inference_enabled",
                         out var fallbackEnabled) &&
                     fallbackEnabled > 0.5,
@@ -234,7 +305,7 @@ namespace VCR.Editor.P4
             {
                 Debug.Log(
                     "VCR P4 tracking routing validation: PASS " +
-                    "(data-driven face priority, preferred/fallback hot switching, common source health, face-inference suspension, route age, switch metrics)");
+                    "(data-driven priority, face hot switching, VMC-to-audio expression fallback, common source health, inference suspension, route age, switch metrics)");
                 return true;
             }
 
@@ -273,6 +344,39 @@ namespace VCR.Editor.P4
                 subjectDetected: true,
                 face: face,
                 sourceId: sourceId,
+                runtimeTimestampUs:
+                    runtimeTimestampUs);
+        }
+
+        private static TrackingFrame CreateExpressionFrame(
+            string sourceId,
+            long sequence,
+            long runtimeTimestampUs,
+            float value)
+        {
+            var standard =
+                new float[
+                    (int)StandardExpression.Count];
+
+            standard[
+                (int)StandardExpression.Aa] =
+                value;
+
+            return new TrackingFrame(
+                sequence,
+                sourceTimestampUs:
+                    runtimeTimestampUs,
+                validRegions:
+                    TrackingRegion.Expressions,
+                confidence:
+                    value,
+                subjectDetected:
+                    false,
+                expressions:
+                    new NormalizedExpressionState(
+                        standard),
+                sourceId:
+                    sourceId,
                 runtimeTimestampUs:
                     runtimeTimestampUs);
         }
@@ -378,6 +482,7 @@ namespace VCR.Editor.P4
         public TrackingRegion Regions { get; set; }
         public TrackingSourceHealthState HealthState { get; set; }
         public TrackingFrame FaceFrame { get; set; }
+        public TrackingFrame ExpressionFrame { get; set; }
 
         public TrackingPresenceSnapshot Presence
         {
@@ -401,6 +506,12 @@ namespace VCR.Editor.P4
                 return false;
             }
 
+            var latest =
+                (region &
+                 TrackingRegion.Expressions) != 0
+                    ? ExpressionFrame
+                    : FaceFrame;
+
             snapshot =
                 new TrackingSourceHealthSnapshot(
                     SourceId,
@@ -408,10 +519,10 @@ namespace VCR.Editor.P4
                     Regions,
                     new TrackingSourceHealth(
                         HealthState,
-                        FaceFrame?.SourceTimestampUs ?? 0,
-                        FaceFrame?.Confidence ?? float.NaN,
+                        latest?.SourceTimestampUs ?? 0,
+                        latest?.Confidence ?? float.NaN,
                         null),
-                    FaceFrame?.RuntimeTimestampUs ?? 0);
+                    latest?.RuntimeTimestampUs ?? 0);
             return true;
         }
 
@@ -449,8 +560,8 @@ namespace VCR.Editor.P4
         public bool TryGetLatestExpressions(
             out TrackingFrame frame)
         {
-            frame = null;
-            return false;
+            frame = ExpressionFrame;
+            return frame != null;
         }
     }
 }
