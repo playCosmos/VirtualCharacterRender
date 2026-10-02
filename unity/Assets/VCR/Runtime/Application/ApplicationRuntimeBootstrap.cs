@@ -40,6 +40,9 @@ namespace VCR.Runtime.Application
         public string ConfigurationPath =>
             _configurationStore?.Path;
 
+        public bool IsStarted =>
+            _started;
+
         private async void Start()
         {
             if (Application.isEditor)
@@ -239,28 +242,50 @@ namespace VCR.Runtime.Application
             }
         }
 
-        private void OnApplicationQuit()
+        public bool Shutdown(
+            bool saveConfiguration,
+            out string error)
         {
+            error = null;
+
             if (_quitting)
             {
-                return;
+                return true;
             }
 
             _quitting = true;
 
-            if (saveConfigurationOnQuit &&
+            if (saveConfiguration &&
                 _started &&
                 !SaveConfiguration(
-                    out var saveError))
+                    out error))
             {
-                Debug.LogWarning(
-                    "VCR configuration save on quit failed: " +
-                    saveError,
-                    this);
+                _quitting = false;
+                return false;
             }
 
             sceneRuntime?.Shutdown();
             _started = false;
+            return true;
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (!Shutdown(
+                    saveConfigurationOnQuit,
+                    out var error) &&
+                !string.IsNullOrWhiteSpace(
+                    error))
+            {
+                Debug.LogWarning(
+                    "VCR configuration save on quit failed: " +
+                    error,
+                    this);
+
+                sceneRuntime?.Shutdown();
+                _started = false;
+                _quitting = true;
+            }
         }
     }
 }
