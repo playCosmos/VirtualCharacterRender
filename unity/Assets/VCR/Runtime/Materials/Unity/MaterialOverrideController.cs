@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Materials.Unity
@@ -127,6 +128,205 @@ namespace VCR.Runtime.Materials.Unity
 
             status = default;
             return false;
+        }
+
+        public MaterialOverrideStatus[] GetStatuses()
+        {
+            var statuses =
+                new MaterialOverrideStatus[
+                    _slots.Count];
+
+            var index = 0;
+            foreach (var record in _slots.Values)
+            {
+                statuses[index++] =
+                    record.Status;
+            }
+
+            return statuses;
+        }
+
+        public MaterialCompatibilityReport EvaluatePreset(
+            string slotId,
+            MaterialOverridePreset preset)
+        {
+            var issues =
+                new List<MaterialCompatibilityIssue>();
+
+            if (!TryGetRecord(
+                    slotId,
+                    out var record,
+                    out var slotError))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "slot_not_found",
+                        null,
+                        slotError));
+
+                return new MaterialCompatibilityReport(
+                    slotId,
+                    preset?.PresetId,
+                    preset?.ShaderId,
+                    issues.ToArray());
+            }
+
+            if (preset == null)
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "preset_required",
+                        null,
+                        "Material preset is required."));
+
+                return new MaterialCompatibilityReport(
+                    slotId,
+                    null,
+                    null,
+                    issues.ToArray());
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    preset.PresetId))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "preset_id_required",
+                        null,
+                        "Material preset id is required."));
+            }
+
+            var shader =
+                ResolvePresetShader(
+                    record,
+                    preset,
+                    out var shaderError);
+
+            if (shader == null)
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "shader_unavailable",
+                        null,
+                        shaderError));
+
+                return new MaterialCompatibilityReport(
+                    slotId,
+                    preset.PresetId,
+                    preset.ShaderId,
+                    issues.ToArray());
+            }
+
+            if (!shader.isSupported)
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "shader_unsupported",
+                        null,
+                        $"Shader '{shader.name}' is not supported on the current graphics device."));
+            }
+
+            var parameters =
+                preset.Parameters ??
+                Array.Empty<MaterialParameterOverride>();
+
+            foreach (var parameter in parameters)
+            {
+                ValidateParameterCompatibility(
+                    shader,
+                    parameter,
+                    issues);
+            }
+
+            return new MaterialCompatibilityReport(
+                slotId,
+                preset.PresetId,
+                shader.name,
+                issues.ToArray());
+        }
+
+        public bool TryApplyPreset(
+            string slotId,
+            MaterialOverridePreset preset,
+            out MaterialCompatibilityReport report,
+            out string error)
+        {
+            report =
+                EvaluatePreset(
+                    slotId,
+                    preset);
+
+            if (!report.Compatible)
+            {
+                error =
+                    report.Issues.Length > 0
+                        ? report.Issues[0].Message
+                        : "Material preset is incompatible.";
+                return false;
+            }
+
+            if (!TryGetRecord(
+                    slotId,
+                    out var record,
+                    out error))
+            {
+                return false;
+            }
+
+            var shader =
+                ResolvePresetShader(
+                    record,
+                    preset,
+                    out var shaderError);
+
+            if (shader == null)
+            {
+                return FailAndFallback(
+                    record,
+                    shaderError,
+                    out error);
+            }
+
+            if (!TryApplyShader(
+                    slotId,
+                    shader,
+                    out error))
+            {
+                return false;
+            }
+
+            try
+            {
+                var runtimeMaterial =
+                    record.RuntimeMaterial;
+
+                foreach (var parameter in
+                         preset.Parameters ??
+                         Array.Empty<MaterialParameterOverride>())
+                {
+                    ApplyParameter(
+                        runtimeMaterial,
+                        parameter);
+                }
+
+                record.Status =
+                    new MaterialOverrideStatus(
+                        record.Id,
+                        MaterialOverrideHealth.Active,
+                        shader.name,
+                        null,
+                        preset.PresetId);
+
+                error = null;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                return FailAndFallback(
+                    record,
+                    exception.Message,
+                    out error);
+            }
         }
 
         public bool TryApplyShaderId(
@@ -413,6 +613,228 @@ namespace VCR.Runtime.Materials.Unity
                 "materials.override.errors",
                 _errorCount,
                 "count"));
+        }
+
+        private static Shader ResolvePresetShader(
+            SlotRecord record,
+            MaterialOverridePreset preset,
+            out string error)
+        {
+            error = null;
+
+            if (preset == null)
+            {
+                error =
+                    "Material preset is required.";
+                return null;
+            }
+
+            if (preset.PreserveSourceShader)
+            {
+                var sourceShader =
+                    record.SourceMaterial?.shader;
+
+                if (sourceShader == null)
+                {
+                    error =
+                        "Source material has no shader to preserve.";
+                }
+
+                return sourceShader;
+            }
+
+            if (!RuntimeShaderRegistry.TryResolve(
+                    preset.ShaderId,
+                    out var shader))
+            {
+                error =
+                    $"Precompiled shader '{preset.ShaderId}' was not found.";
+                return null;
+            }
+
+            return shader;
+        }
+
+        private static void ValidateParameterCompatibility(
+            Shader shader,
+            MaterialParameterOverride parameter,
+            List<MaterialCompatibilityIssue> issues)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    parameter.Name))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "property_name_required",
+                        null,
+                        "Shader property name is required."));
+                return;
+            }
+
+            if (parameter.Kind ==
+                ShaderParameterKind.Texture)
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "preset_texture_binding_unsupported",
+                        parameter.Name,
+                        "Serialized texture bindings are not supported by the P2 preset contract yet; use the runtime texture API."));
+                return;
+            }
+
+            if (!TryGetShaderPropertyType(
+                    shader,
+                    parameter.Name,
+                    out var propertyType))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "property_missing",
+                        parameter.Name,
+                        $"Shader '{shader.name}' does not expose property '{parameter.Name}'."));
+                return;
+            }
+
+            if (!IsCompatiblePropertyType(
+                    parameter.Kind,
+                    propertyType))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "property_type_mismatch",
+                        parameter.Name,
+                        $"Preset kind '{parameter.Kind}' is incompatible with shader property type '{propertyType}' for '{parameter.Name}'."));
+            }
+        }
+
+        private static bool TryGetShaderPropertyType(
+            Shader shader,
+            string propertyName,
+            out ShaderPropertyType propertyType)
+        {
+            propertyType = default;
+
+            if (shader == null ||
+                string.IsNullOrWhiteSpace(
+                    propertyName))
+            {
+                return false;
+            }
+
+            var count =
+                shader.GetPropertyCount();
+
+            for (var i = 0; i < count; i++)
+            {
+                if (!string.Equals(
+                        shader.GetPropertyName(i),
+                        propertyName,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                propertyType =
+                    shader.GetPropertyType(i);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsCompatiblePropertyType(
+            ShaderParameterKind kind,
+            ShaderPropertyType propertyType)
+        {
+            return kind switch
+            {
+                ShaderParameterKind.Float =>
+                    propertyType == ShaderPropertyType.Float ||
+                    propertyType == ShaderPropertyType.Range,
+
+                ShaderParameterKind.Int ||
+                ShaderParameterKind.Bool ||
+                ShaderParameterKind.Enum =>
+                    propertyType == ShaderPropertyType.Int ||
+                    propertyType == ShaderPropertyType.Float ||
+                    propertyType == ShaderPropertyType.Range,
+
+                ShaderParameterKind.Color =>
+                    propertyType == ShaderPropertyType.Color,
+
+                ShaderParameterKind.Vector =>
+                    propertyType == ShaderPropertyType.Vector,
+
+                ShaderParameterKind.Texture =>
+                    propertyType == ShaderPropertyType.Texture,
+
+                _ => false
+            };
+        }
+
+        private static void ApplyParameter(
+            Material material,
+            MaterialParameterOverride parameter)
+        {
+            if (material == null)
+            {
+                throw new InvalidOperationException(
+                    "Runtime override material is missing.");
+            }
+
+            switch (parameter.Kind)
+            {
+                case ShaderParameterKind.Float:
+                    material.SetFloat(
+                        parameter.Name,
+                        parameter.X);
+                    break;
+
+                case ShaderParameterKind.Int:
+                case ShaderParameterKind.Enum:
+                    material.SetInteger(
+                        parameter.Name,
+                        parameter.IntValue);
+                    break;
+
+                case ShaderParameterKind.Bool:
+                    material.SetInteger(
+                        parameter.Name,
+                        parameter.BoolValue
+                            ? 1
+                            : 0);
+                    break;
+
+                case ShaderParameterKind.Color:
+                    material.SetColor(
+                        parameter.Name,
+                        new Color(
+                            parameter.X,
+                            parameter.Y,
+                            parameter.Z,
+                            parameter.W));
+                    break;
+
+                case ShaderParameterKind.Vector:
+                    material.SetVector(
+                        parameter.Name,
+                        new Vector4(
+                            parameter.X,
+                            parameter.Y,
+                            parameter.Z,
+                            parameter.W));
+                    break;
+
+                case ShaderParameterKind.Texture:
+                    throw new NotSupportedException(
+                        "Serialized texture preset bindings are not supported yet.");
+
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(parameter.Kind),
+                        parameter.Kind,
+                        "Unsupported shader parameter kind.");
+            }
         }
 
         private bool TrySet(
