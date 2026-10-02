@@ -6,7 +6,8 @@
     "VCR.Runtime.Character",
     "VCR.Runtime.Rendering",
     "VRM10",
-    "VCR.Runtime.Output"
+    "VCR.Runtime.Output",
+    "VCR.Runtime.Environment"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
