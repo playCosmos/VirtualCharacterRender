@@ -274,6 +274,13 @@ namespace VCR.Runtime.Character
 
             foreach (var behaviour in behaviours)
             {
+                if (behaviour is ITrackingMixProvider mixer)
+                {
+                    SetTrackingProvider(mixer);
+                    trackingProviderBehaviour = behaviour;
+                    return;
+                }
+
                 if (behaviour is ITrackingRouteProvider route)
                 {
                     SetTrackingProvider(route);
