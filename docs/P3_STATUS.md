@@ -171,7 +171,7 @@ With real webcam / Apple device / Unity player environment:
 
 ## P3 source implementation status
 
-The main P3 productionization source paths are implemented.
+The planned P3 source implementation is complete enough to proceed to P4.
 
 Still unresolved items are primarily device-quality and performance evidence. Do not tune low-light exposure/gamma, confidence thresholds, Face/Holistic rates, or presence timing from synthetic assumptions.
 
