@@ -111,11 +111,20 @@ Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated s
 
 ## Consolidated source-free validation
 
-Run:
+Run interactively:
 
 ```text
 VCR > P0 > Run All Source-Free Checks
 ```
+
+Or run the same suite in Unity batch mode with process exit codes:
+
+```text
+tools/validate-p0-source-free.ps1
+tools/validate-p0-source-free.sh
+```
+
+Run the MediaPipe bootstrap first so the pinned local package can resolve.
 
 Current suite:
 
