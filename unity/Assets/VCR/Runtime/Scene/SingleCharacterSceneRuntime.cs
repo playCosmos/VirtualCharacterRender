@@ -24,6 +24,8 @@ namespace VCR.Runtime.Scene
     {
         [SerializeField] private Vrm10CharacterLoader characterLoader;
         [SerializeField] private DesktopRenderBootstrap renderBootstrap;
+        [SerializeField] private PrimaryCameraController cameraController;
+        [SerializeField] private PrimaryLightController lightController;
         [SerializeField] private bool initializeOnAwake = true;
         [SerializeField] private bool unloadCharacterOnShutdown = true;
 
@@ -35,6 +37,8 @@ namespace VCR.Runtime.Scene
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter => characterLoader?.Current;
+        public PrimaryCameraController CameraController => cameraController;
+        public PrimaryLightController LightController => lightController;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
 
         public SceneRuntimeStatus Status =>
@@ -80,6 +84,9 @@ namespace VCR.Runtime.Scene
             }
 
             renderBootstrap.Apply();
+            cameraController?.Apply();
+            lightController?.Apply();
+
             _lastError = null;
             SetState(
                 characterLoader.Current != null
@@ -175,6 +182,13 @@ namespace VCR.Runtime.Scene
             renderBootstrap.Apply();
         }
 
+        public void ApplySceneViewSettings()
+        {
+            EnsureOperational();
+            cameraController?.Apply();
+            lightController?.Apply();
+        }
+
         public void Shutdown()
         {
             if (_state == SceneRuntimeState.Stopped ||
@@ -192,6 +206,8 @@ namespace VCR.Runtime.Scene
                 characterLoader.Unload();
             }
 
+            lightController?.Restore();
+            cameraController?.Restore();
             renderBootstrap?.RestoreRuntimeOverrides();
 
             _lastError = null;
@@ -219,6 +235,16 @@ namespace VCR.Runtime.Scene
                 "scene.operation_generation",
                 _operationGeneration,
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "scene.camera.configured",
+                cameraController != null ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "scene.light.configured",
+                lightController != null ? 1 : 0,
+                "bool"));
         }
 
         private int BeginOperation(
@@ -285,6 +311,20 @@ namespace VCR.Runtime.Scene
                 renderBootstrap =
                     GetComponent<DesktopRenderBootstrap>() ??
                     FindFirstObjectByType<DesktopRenderBootstrap>();
+            }
+
+            if (cameraController == null)
+            {
+                cameraController =
+                    GetComponentInChildren<PrimaryCameraController>(true) ??
+                    FindFirstObjectByType<PrimaryCameraController>();
+            }
+
+            if (lightController == null)
+            {
+                lightController =
+                    GetComponentInChildren<PrimaryLightController>(true) ??
+                    FindFirstObjectByType<PrimaryLightController>();
             }
         }
 
