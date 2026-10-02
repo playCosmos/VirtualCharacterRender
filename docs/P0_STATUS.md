@@ -2,6 +2,9 @@
 
 Updated: 2026-10-02
 
+> Hardware-dependent P0 validation is currently deferred because the required physical test equipment is unavailable. The implementation checkpoint is preserved at `checkpoint/p0-hardware-validation-deferred` on commit `79bbbe3e0b826c5fe791abe1cd5b17d47a8d94f9`. Remaining evidence gates stay unresolved rather than being marked PASS. P1 development continues from that exact checkpoint.
+
+
 ## Current branch
 
 Implementation work is on:
