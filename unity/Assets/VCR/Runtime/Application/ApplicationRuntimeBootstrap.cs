@@ -97,20 +97,22 @@ namespace VCR.Runtime.Application
                     "Scene runtime initialization failed.");
             }
 
-            if (loadSavedConfiguration &&
-                !_configurationStore.TryLoad(
-                    out var configuration,
-                    out var loadError))
+            if (loadSavedConfiguration)
             {
-                Debug.LogWarning(
-                    "VCR configuration was not applied: " +
-                    loadError,
-                    this);
-            }
-            else if (loadSavedConfiguration)
-            {
-                sceneRuntime.ApplyConfiguration(
-                    configuration);
+                if (_configurationStore.TryLoad(
+                        out var configuration,
+                        out var loadError))
+                {
+                    sceneRuntime.ApplyConfiguration(
+                        configuration);
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        "VCR configuration was not applied: " +
+                        loadError,
+                        this);
+                }
             }
 
             var vrmPath =
