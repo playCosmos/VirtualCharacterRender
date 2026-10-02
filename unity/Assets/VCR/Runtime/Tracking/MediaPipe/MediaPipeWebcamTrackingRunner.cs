@@ -1,8 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Stopwatch = System.Diagnostics.Stopwatch;
 using System.IO;
+using System.Threading;
+using Stopwatch = System.Diagnostics.Stopwatch;
 using Mediapipe;
 using Mediapipe.Unity.Experimental;
 using UnityEngine;
@@ -12,13 +13,20 @@ using VCR.Runtime.Core;
 namespace VCR.Runtime.Tracking.MediaPipe
 {
     /// <summary>
-    /// P0 desktop webcam runner for ADR-0025.
+    /// Production webcam capture runner for the face-priority dual-task stack.
     ///
-    /// One WebCamTexture feeds two independent LIVE_STREAM tasks:
-    /// FaceLandmarker at a higher priority/rate, and HolisticLandmarker at a
-    /// lower configurable rate for hands/upper body.
+    /// One WebCamTexture feeds independent LIVE_STREAM FaceLandmarker and
+    /// HolisticLandmarker tasks. Backpressure is drop-only: the runner never
+    /// queues unbounded camera work. Runtime resources are restartable across
+    /// enable/disable and application suspend/resume.
     /// </summary>
-    public sealed class MediaPipeWebcamTrackingRunner : MonoBehaviour, ITrackingFrameProvider, ITrackingPresenceProvider, IFaceTrackingActivationControl, IRuntimeMetricsSource
+    [DisallowMultipleComponent]
+    public sealed class MediaPipeWebcamTrackingRunner :
+        MonoBehaviour,
+        ITrackingFrameProvider,
+        ITrackingPresenceProvider,
+        IFaceTrackingActivationControl,
+        IRuntimeMetricsSource
     {
         private const string FaceModelRelativePath =
             "VCR/Models/face_landmarker_v2_with_blendshapes.bytes";
@@ -38,13 +46,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
         [SerializeField, Range(1, 120)] private int holisticTargetFps = 15;
         [SerializeField] private bool mediaPipeFaceEnabled = true;
 
-        [Header("Presence - provisional P0 defaults")]
+        [Header("Presence")]
         [SerializeField, Min(0f)] private float subjectLostGraceSeconds = 0.5f;
         [SerializeField, Min(0f)] private float subjectRestoreStabilitySeconds = 0.15f;
         [SerializeField, Min(0.1f)] private float sourceStaleSeconds = 1.0f;
 
-        [Header("P0")]
+        [Header("Capture budget")]
         [SerializeField, Range(1, 4)] private int textureFramePoolSize = 2;
+        [SerializeField] private bool suspendOnApplicationPause = true;
         [SerializeField] private bool logTrackingRate = true;
 
         private readonly Stopwatch _clock = new();
@@ -56,6 +65,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private MediaPipeFaceSource _faceSource;
         private MediaPipeHolisticSource _holisticSource;
 
+        private Coroutine _startupCoroutine;
         private Coroutine _faceCoroutine;
         private Coroutine _holisticCoroutine;
 
@@ -63,16 +73,44 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private long _lastHolisticResultCount;
         private float _nextRateLogTime;
 
+        private long _faceSubmitted;
+        private long _holisticSubmitted;
+        private long _facePoolDrops;
+        private long _holisticPoolDrops;
+        private long _readbackErrors;
+
         private TrackingFrame _latestFaceFrame;
         private TrackingFrame _latestBodyHandsFrame;
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
+
+        private MediaPipeWebcamLifecycleState _state =
+            MediaPipeWebcamLifecycleState.Stopped;
+        private string _selectedDeviceName;
+        private string _lastError;
+        private bool _applicationSuspended;
+        private bool _destroying;
 
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
         public bool MediaPipeFaceEnabled => mediaPipeFaceEnabled;
         public bool FaceTrackingEnabled => mediaPipeFaceEnabled;
         public TrackingPresenceSnapshot Presence => _presence;
+
+        public MediaPipeWebcamStatus Status =>
+            new(
+                _state,
+                _selectedDeviceName,
+                _webcam != null ? _webcam.width : 0,
+                _webcam != null ? _webcam.height : 0,
+                requestedFps,
+                mediaPipeFaceEnabled,
+                Interlocked.Read(ref _faceSubmitted),
+                Interlocked.Read(ref _holisticSubmitted),
+                Interlocked.Read(ref _facePoolDrops),
+                Interlocked.Read(ref _holisticPoolDrops),
+                Interlocked.Read(ref _readbackErrors),
+                _lastError);
 
         public bool TryGetLatestFace(out TrackingFrame frame)
         {
@@ -98,125 +136,74 @@ namespace VCR.Runtime.Tracking.MediaPipe
             return false;
         }
 
-
-        private IEnumerator Start()
+        private void OnEnable()
         {
-            yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
-
-            if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
+            if (!Application.isPlaying ||
+                _destroying ||
+                _applicationSuspended)
             {
-                Debug.LogError("VCR P0: webcam permission was not granted.");
-                yield break;
+                return;
             }
 
-            var devices = WebCamTexture.devices;
-            if (devices.Length == 0)
-            {
-                Debug.LogError("VCR P0: no webcam devices were found.");
-                yield break;
-            }
-
-            var selectedDevice = SelectDeviceName(devices);
-            _webcam = new WebCamTexture(
-                selectedDevice,
-                requestedWidth,
-                requestedHeight,
-                requestedFps);
-            _webcam.Play();
-
-            // macOS can report a placeholder size until camera frames arrive.
-            yield return new WaitUntil(() =>
-                _webcam != null &&
-                _webcam.isPlaying &&
-                _webcam.width > 16 &&
-                _webcam.height > 16);
-
-            byte[] faceModel;
-            byte[] holisticModel;
-            try
-            {
-                faceModel = LoadModel(FaceModelRelativePath);
-                holisticModel = LoadModel(HolisticModelRelativePath);
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError(
-                    "VCR P0: MediaPipe models are missing or unreadable. " +
-                    "Run tools/bootstrap-mediapipe before opening Unity.");
-                Debug.LogException(exception);
-                yield break;
-            }
-
-            _faceSource = new MediaPipeFaceSource(faceModel);
-            _holisticSource = new MediaPipeHolisticSource(holisticModel);
-
-            try
-            {
-                if (mediaPipeFaceEnabled)
-                {
-                    _faceSource.Start();
-                }
-
-                _holisticSource.Start();
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError("VCR P0: failed to start MediaPipe tracking.");
-                Debug.LogException(exception);
-                yield break;
-            }
-
-            _faceFramePool = new TextureFramePool(
-                _webcam.width,
-                _webcam.height,
-                TextureFormat.RGBA32,
-                textureFramePoolSize);
-
-            _holisticFramePool = new TextureFramePool(
-                _webcam.width,
-                _webcam.height,
-                TextureFormat.RGBA32,
-                textureFramePoolSize);
-
-            _clock.Restart();
-            _presenceResolver = new TrackingPresenceResolver(
-                SecondsToMicroseconds(subjectLostGraceSeconds),
-                SecondsToMicroseconds(subjectRestoreStabilitySeconds),
-                SecondsToMicroseconds(sourceStaleSeconds));
-            _presenceResolver.Reset(0);
-            _presence = _presenceResolver.Snapshot;
-            _nextRateLogTime = Time.unscaledTime + 5f;
-
-            _faceCoroutine = StartCoroutine(RunTask(
-                _faceFramePool,
-                faceTargetFps,
-                () => mediaPipeFaceEnabled,
-                SubmitFace));
-
-            _holisticCoroutine = StartCoroutine(RunTask(
-                _holisticFramePool,
-                holisticTargetFps,
-                () => true,
-                SubmitHolistic));
-
-            Debug.Log(
-                $"VCR P0 MediaPipe started: device='{selectedDevice}', " +
-                $"actual={_webcam.width}x{_webcam.height}, " +
-                $"cameraRequestedFps={requestedFps}, faceTargetFps={faceTargetFps}, " +
-                $"holisticTargetFps={holisticTargetFps}");
+            BeginStart();
         }
 
-        /// <summary>
-        /// ARKit routing can disable webcam face inference without stopping the
-        /// shared webcam or body/hand task. Re-enabling lazily starts FaceLandmarker
-        /// if it was disabled at startup.
-        /// </summary>
-        public void SetFaceTrackingEnabled(bool enabled)
+        private void Update()
+        {
+            if (_state !=
+                MediaPipeWebcamLifecycleState.Running)
+            {
+                return;
+            }
+
+            CaptureLatestSourceFrames();
+            UpdatePresence();
+
+            if (!logTrackingRate ||
+                Time.unscaledTime <
+                _nextRateLogTime)
+            {
+                return;
+            }
+
+            var faceResults =
+                _faceSource?.ResultCount ?? 0L;
+            var holisticResults =
+                _holisticSource?.ResultCount ?? 0L;
+
+            var faceDelta =
+                faceResults -
+                _lastFaceResultCount;
+            var holisticDelta =
+                holisticResults -
+                _lastHolisticResultCount;
+
+            _lastFaceResultCount =
+                faceResults;
+            _lastHolisticResultCount =
+                holisticResults;
+            _nextRateLogTime =
+                Time.unscaledTime + 5f;
+
+            Debug.Log(
+                "VCR tracking/5s: " +
+                $"face={faceDelta}, holistic={holisticDelta}, " +
+                $"faceState={_faceSource?.Health.State}, " +
+                $"holisticState={_holisticSource?.Health.State}, " +
+                $"faceDrops={Interlocked.Read(ref _facePoolDrops)}, " +
+                $"holisticDrops={Interlocked.Read(ref _holisticPoolDrops)}, " +
+                $"readbackErrors={Interlocked.Read(ref _readbackErrors)}",
+                this);
+        }
+
+        public void SetFaceTrackingEnabled(
+            bool enabled)
         {
             SetMediaPipeFaceEnabled(enabled);
         }
 
-        public void SetMediaPipeFaceEnabled(bool enabled)
+        public void SetMediaPipeFaceEnabled(
+            bool enabled)
         {
             mediaPipeFaceEnabled = enabled;
 
@@ -227,7 +214,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
             if (!enabled)
             {
-                if (_faceSource.Health.State != TrackingSourceHealthState.Stopped)
+                if (_faceSource.Health.State !=
+                    TrackingSourceHealthState.Stopped)
                 {
                     _faceSource.Stop();
                 }
@@ -236,168 +224,78 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 return;
             }
 
-            if (_faceSource.Health.State == TrackingSourceHealthState.Stopped)
-            {
-                try
-                {
-                    _faceSource.Start();
-                }
-                catch (Exception exception)
-                {
-                    Debug.LogError("VCR P0: failed to enable MediaPipe face tracking.");
-                    Debug.LogException(exception);
-                    mediaPipeFaceEnabled = false;
-                }
-            }
-        }
-
-        private IEnumerator RunTask(
-            TextureFramePool framePool,
-            int targetFps,
-            Func<bool> shouldSubmit,
-            Action<Image, long> submit)
-        {
-            AsyncGPUReadbackRequest readback = default;
-            var waitForReadback = new WaitUntil(() => readback.done);
-            var intervalMs = Math.Max(1L, 1000L / Math.Max(1, targetFps));
-            var nextDueMs = 0L;
-
-            while (enabled)
-            {
-                if (!shouldSubmit())
-                {
-                    yield return null;
-                    continue;
-                }
-
-                var nowMs = _clock.ElapsedMilliseconds;
-                if (nowMs < nextDueMs ||
-                    _webcam == null ||
-                    !_webcam.isPlaying ||
-                    !_webcam.didUpdateThisFrame)
-                {
-                    yield return null;
-                    continue;
-                }
-
-                if (!framePool.TryGetTextureFrame(out var textureFrame))
-                {
-                    // Keep latency bounded: skip instead of allocating/queuing.
-                    yield return null;
-                    continue;
-                }
-
-                readback = textureFrame.ReadTextureAsync(
-                    _webcam,
-                    flipHorizontally,
-                    flipVertically);
-
-                yield return waitForReadback;
-
-                if (readback.hasError)
-                {
-                    textureFrame.Release();
-                    yield return null;
-                    continue;
-                }
-
-                // The source may have been disabled while readback was pending.
-                if (!shouldSubmit())
-                {
-                    textureFrame.Release();
-                    yield return null;
-                    continue;
-                }
-
-                var image = textureFrame.BuildCPUImage();
-                textureFrame.Release();
-
-                // Packet.CreateImageAt inside DetectAsync takes Image ownership.
-                var timestampMs = _clock.ElapsedMilliseconds;
-                submit(image, timestampMs);
-                nextDueMs = timestampMs + intervalMs;
-            }
-        }
-
-        private void SubmitFace(Image image, long timestampMs)
-        {
-            _faceSource.SubmitImage(image, timestampMs);
-        }
-
-        private void SubmitHolistic(Image image, long timestampMs)
-        {
-            _holisticSource.SubmitImage(image, timestampMs);
-        }
-
-        private void Update()
-        {
-            CaptureLatestSourceFrames();
-            UpdatePresence();
-
-            if (!logTrackingRate || Time.unscaledTime < _nextRateLogTime)
+            if (_state !=
+                    MediaPipeWebcamLifecycleState.Running ||
+                _faceSource.Health.State !=
+                    TrackingSourceHealthState.Stopped)
             {
                 return;
             }
 
-            var faceResults = _faceSource?.ResultCount ?? 0L;
-            var holisticResults = _holisticSource?.ResultCount ?? 0L;
-
-            var faceDelta = faceResults - _lastFaceResultCount;
-            var holisticDelta = holisticResults - _lastHolisticResultCount;
-
-            _lastFaceResultCount = faceResults;
-            _lastHolisticResultCount = holisticResults;
-            _nextRateLogTime = Time.unscaledTime + 5f;
-
-            Debug.Log(
-                "VCR P0 tracking/5s: " +
-                $"face={faceDelta}, holistic={holisticDelta}, " +
-                $"faceState={_faceSource?.Health.State}, " +
-                $"holisticState={_holisticSource?.Health.State}");
-        }
-
-        private void CaptureLatestSourceFrames()
-        {
-            if (_faceSource != null && _faceSource.TryTakeLatest(out var faceFrame))
+            try
             {
-                _latestFaceFrame = faceFrame;
+                _faceSource.Start();
             }
-
-            if (_holisticSource != null && _holisticSource.TryTakeLatest(out var bodyFrame))
+            catch (Exception exception)
             {
-                _latestBodyHandsFrame = bodyFrame;
+                mediaPipeFaceEnabled = false;
+                _lastError =
+                    "Failed to enable MediaPipe face tracking: " +
+                    exception.Message;
+                Debug.LogError(
+                    _lastError,
+                    this);
             }
         }
 
-        private void UpdatePresence()
+        public void Restart()
         {
-            if (_presenceResolver == null)
+            if (!Application.isPlaying ||
+                _destroying)
             {
                 return;
             }
 
-            var nowUs = _clock.ElapsedMilliseconds * 1000L;
-            _presence = _presenceResolver.Update(
-                nowUs,
-                _latestFaceFrame,
-                mediaPipeFaceEnabled,
-                _latestBodyHandsFrame,
-                bodyHandsConfigured: true);
-
-            if (_presence.Events != TrackingPresenceEvents.None)
-            {
-                Debug.Log(
-                    $"VCR tracking presence: state={_presence.SubjectState}, " +
-                    $"events={_presence.Events}, sourceAvailable={_presence.AnySourceAvailable}");
-            }
+            _applicationSuspended = false;
+            StopRuntime(
+                MediaPipeWebcamLifecycleState.Stopped);
+            BeginStart();
         }
 
-        private static long SecondsToMicroseconds(float seconds)
+        public void Suspend()
         {
-            return (long)(Math.Max(0f, seconds) * 1_000_000.0);
+            if (_state ==
+                    MediaPipeWebcamLifecycleState.Suspended ||
+                _destroying)
+            {
+                return;
+            }
+
+            _applicationSuspended = true;
+            StopRuntime(
+                MediaPipeWebcamLifecycleState.Suspended);
         }
 
-        public void CollectMetrics(List<RuntimeMetric> output)
+        public void Resume()
+        {
+            if (_destroying)
+            {
+                return;
+            }
+
+            _applicationSuspended = false;
+
+            if (!isActiveAndEnabled ||
+                !Application.isPlaying)
+            {
+                return;
+            }
+
+            BeginStart();
+        }
+
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
         {
             if (output == null)
             {
@@ -405,13 +303,30 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             output.Add(new RuntimeMetric(
+                "tracking.mediapipe.capture.state",
+                (int)_state,
+                "enum"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.capture.width",
+                _webcam?.width ?? 0,
+                "px"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.capture.height",
+                _webcam?.height ?? 0,
+                "px"));
+
+            output.Add(new RuntimeMetric(
                 "tracking.mediapipe.face.latency",
-                (_faceSource?.LastProcessingLatencyUs ?? 0L) / 1000.0,
+                (_faceSource?.LastProcessingLatencyUs ?? 0L) /
+                1000.0,
                 "ms"));
 
             output.Add(new RuntimeMetric(
                 "tracking.mediapipe.holistic.latency",
-                (_holisticSource?.LastProcessingLatencyUs ?? 0L) / 1000.0,
+                (_holisticSource?.LastProcessingLatencyUs ?? 0L) /
+                1000.0,
                 "ms"));
 
             output.Add(new RuntimeMetric(
@@ -423,49 +338,486 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 "tracking.mediapipe.holistic.results",
                 _holisticSource?.ResultCount ?? 0L,
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.submitted",
+                Interlocked.Read(ref _faceSubmitted),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.submitted",
+                Interlocked.Read(ref _holisticSubmitted),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.pool_drops",
+                Interlocked.Read(ref _facePoolDrops),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.pool_drops",
+                Interlocked.Read(ref _holisticPoolDrops),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.readback_errors",
+                Interlocked.Read(ref _readbackErrors),
+                "count"));
         }
 
-        private static byte[] LoadModel(string relativePath)
+        private void BeginStart()
         {
-            var path = Path.Combine(Application.streamingAssetsPath, relativePath);
-            if (!File.Exists(path))
+            if (_state ==
+                    MediaPipeWebcamLifecycleState.Running ||
+                _state ==
+                    MediaPipeWebcamLifecycleState.Starting ||
+                _applicationSuspended ||
+                _destroying)
             {
-                throw new FileNotFoundException("MediaPipe model not found.", path);
+                return;
             }
 
-            return File.ReadAllBytes(path);
+            CleanupRuntimeResources(
+                stopStartupCoroutine: false);
+
+            _lastError = null;
+            _state =
+                MediaPipeWebcamLifecycleState.Starting;
+
+            _startupCoroutine =
+                StartCoroutine(
+                    StartRuntimeRoutine());
         }
 
-        private string SelectDeviceName(WebCamDevice[] devices)
+        private IEnumerator StartRuntimeRoutine()
         {
-            if (!string.IsNullOrWhiteSpace(deviceName))
+            yield return
+                Application.RequestUserAuthorization(
+                    UserAuthorization.WebCam);
+
+            if (!Application.HasUserAuthorization(
+                    UserAuthorization.WebCam))
             {
-                foreach (var device in devices)
+                FailStartup(
+                    "Webcam permission was not granted.");
+                yield break;
+            }
+
+            var devices =
+                WebCamTexture.devices;
+
+            if (devices == null ||
+                devices.Length == 0)
+            {
+                FailStartup(
+                    "No webcam devices were found.");
+                yield break;
+            }
+
+            _selectedDeviceName =
+                SelectDeviceName(devices);
+
+            _webcam =
+                new WebCamTexture(
+                    _selectedDeviceName,
+                    requestedWidth,
+                    requestedHeight,
+                    requestedFps);
+            _webcam.Play();
+
+            var startupDeadline =
+                Time.realtimeSinceStartup + 5f;
+
+            while (_webcam != null &&
+                   _webcam.isPlaying &&
+                   (_webcam.width <= 16 ||
+                    _webcam.height <= 16) &&
+                   Time.realtimeSinceStartup <
+                   startupDeadline)
+            {
+                yield return null;
+            }
+
+            if (_webcam == null ||
+                !_webcam.isPlaying ||
+                _webcam.width <= 16 ||
+                _webcam.height <= 16)
+            {
+                FailStartup(
+                    "Webcam did not produce a valid frame within the startup timeout.");
+                yield break;
+            }
+
+            byte[] faceModel;
+            byte[] holisticModel;
+
+            try
+            {
+                faceModel =
+                    LoadModel(
+                        FaceModelRelativePath);
+                holisticModel =
+                    LoadModel(
+                        HolisticModelRelativePath);
+            }
+            catch (Exception exception)
+            {
+                FailStartup(
+                    "MediaPipe models are missing or unreadable. " +
+                    "Run tools/bootstrap-mediapipe first. " +
+                    exception.Message);
+                yield break;
+            }
+
+            try
+            {
+                _faceSource =
+                    new MediaPipeFaceSource(
+                        faceModel);
+                _holisticSource =
+                    new MediaPipeHolisticSource(
+                        holisticModel);
+
+                if (mediaPipeFaceEnabled)
                 {
-                    if (device.name == deviceName)
-                    {
-                        return device.name;
-                    }
+                    _faceSource.Start();
                 }
 
-                Debug.LogWarning(
-                    $"VCR P0: requested webcam '{deviceName}' not found; using the first device.");
+                _holisticSource.Start();
+
+                _faceFramePool =
+                    new TextureFramePool(
+                        _webcam.width,
+                        _webcam.height,
+                        TextureFormat.RGBA32,
+                        textureFramePoolSize);
+
+                _holisticFramePool =
+                    new TextureFramePool(
+                        _webcam.width,
+                        _webcam.height,
+                        TextureFormat.RGBA32,
+                        textureFramePoolSize);
+            }
+            catch (Exception exception)
+            {
+                FailStartup(
+                    "Failed to initialize MediaPipe tracking: " +
+                    exception.Message);
+                yield break;
             }
 
-            return devices[0].name;
+            _clock.Restart();
+
+            _presenceResolver =
+                new TrackingPresenceResolver(
+                    SecondsToMicroseconds(
+                        subjectLostGraceSeconds),
+                    SecondsToMicroseconds(
+                        subjectRestoreStabilitySeconds),
+                    SecondsToMicroseconds(
+                        sourceStaleSeconds));
+            _presenceResolver.Reset(0);
+            _presence =
+                _presenceResolver.Snapshot;
+
+            _lastFaceResultCount =
+                _faceSource?.ResultCount ?? 0L;
+            _lastHolisticResultCount =
+                _holisticSource?.ResultCount ?? 0L;
+            _nextRateLogTime =
+                Time.unscaledTime + 5f;
+
+            _state =
+                MediaPipeWebcamLifecycleState.Running;
+            _startupCoroutine = null;
+
+            _faceCoroutine =
+                StartCoroutine(
+                    RunTask(
+                        _faceFramePool,
+                        faceTargetFps,
+                        () =>
+                            mediaPipeFaceEnabled,
+                        SubmitFace,
+                        faceTask: true));
+
+            _holisticCoroutine =
+                StartCoroutine(
+                    RunTask(
+                        _holisticFramePool,
+                        holisticTargetFps,
+                        () => true,
+                        SubmitHolistic,
+                        faceTask: false));
+
+            Debug.Log(
+                $"VCR MediaPipe started: device='{_selectedDeviceName}', " +
+                $"actual={_webcam.width}x{_webcam.height}, " +
+                $"cameraRequestedFps={requestedFps}, " +
+                $"faceTargetFps={faceTargetFps}, " +
+                $"holisticTargetFps={holisticTargetFps}.",
+                this);
         }
 
-        private void OnDestroy()
+        private IEnumerator RunTask(
+            TextureFramePool framePool,
+            int targetFps,
+            Func<bool> shouldSubmit,
+            Action<Image, long> submit,
+            bool faceTask)
         {
+            AsyncGPUReadbackRequest readback =
+                default;
+
+            var waitForReadback =
+                new WaitUntil(
+                    () => readback.done);
+
+            var intervalMs =
+                Math.Max(
+                    1L,
+                    1000L /
+                    Math.Max(
+                        1,
+                        targetFps));
+
+            var nextDueMs = 0L;
+
+            while (enabled &&
+                   _state ==
+                   MediaPipeWebcamLifecycleState.Running)
+            {
+                if (!shouldSubmit())
+                {
+                    yield return null;
+                    continue;
+                }
+
+                var nowMs =
+                    _clock.ElapsedMilliseconds;
+
+                if (nowMs < nextDueMs ||
+                    _webcam == null ||
+                    !_webcam.isPlaying ||
+                    !_webcam.didUpdateThisFrame)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                if (!framePool.TryGetTextureFrame(
+                        out var textureFrame))
+                {
+                    if (faceTask)
+                    {
+                        Interlocked.Increment(
+                            ref _facePoolDrops);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(
+                            ref _holisticPoolDrops);
+                    }
+
+                    yield return null;
+                    continue;
+                }
+
+                readback =
+                    textureFrame.ReadTextureAsync(
+                        _webcam,
+                        flipHorizontally,
+                        flipVertically);
+
+                yield return waitForReadback;
+
+                if (readback.hasError)
+                {
+                    Interlocked.Increment(
+                        ref _readbackErrors);
+                    textureFrame.Release();
+                    yield return null;
+                    continue;
+                }
+
+                if (_state !=
+                        MediaPipeWebcamLifecycleState.Running ||
+                    !shouldSubmit())
+                {
+                    textureFrame.Release();
+                    yield return null;
+                    continue;
+                }
+
+                var image =
+                    textureFrame.BuildCPUImage();
+
+                textureFrame.Release();
+
+                var timestampMs =
+                    _clock.ElapsedMilliseconds;
+
+                try
+                {
+                    submit(
+                        image,
+                        timestampMs);
+
+                    if (faceTask)
+                    {
+                        Interlocked.Increment(
+                            ref _faceSubmitted);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(
+                            ref _holisticSubmitted);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    image?.Dispose();
+                    _lastError =
+                        "MediaPipe frame submission failed: " +
+                        exception.Message;
+                    Debug.LogWarning(
+                        _lastError,
+                        this);
+                }
+
+                nextDueMs =
+                    timestampMs +
+                    intervalMs;
+            }
+        }
+
+        private void SubmitFace(
+            Image image,
+            long timestampMs)
+        {
+            _faceSource.SubmitImage(
+                image,
+                timestampMs);
+        }
+
+        private void SubmitHolistic(
+            Image image,
+            long timestampMs)
+        {
+            _holisticSource.SubmitImage(
+                image,
+                timestampMs);
+        }
+
+        private void CaptureLatestSourceFrames()
+        {
+            if (_faceSource != null &&
+                _faceSource.TryTakeLatest(
+                    out var faceFrame))
+            {
+                _latestFaceFrame =
+                    faceFrame;
+            }
+
+            if (_holisticSource != null &&
+                _holisticSource.TryTakeLatest(
+                    out var bodyFrame))
+            {
+                _latestBodyHandsFrame =
+                    bodyFrame;
+            }
+        }
+
+        private void UpdatePresence()
+        {
+            if (_presenceResolver == null)
+            {
+                return;
+            }
+
+            var nowUs =
+                _clock.ElapsedMilliseconds *
+                1000L;
+
+            _presence =
+                _presenceResolver.Update(
+                    nowUs,
+                    _latestFaceFrame,
+                    mediaPipeFaceEnabled,
+                    _latestBodyHandsFrame,
+                    bodyHandsConfigured: true);
+
+            if (_presence.Events !=
+                TrackingPresenceEvents.None)
+            {
+                Debug.Log(
+                    $"VCR tracking presence: state={_presence.SubjectState}, " +
+                    $"events={_presence.Events}, " +
+                    $"sourceAvailable={_presence.AnySourceAvailable}",
+                    this);
+            }
+        }
+
+        private void FailStartup(
+            string error)
+        {
+            _lastError =
+                string.IsNullOrWhiteSpace(error)
+                    ? "MediaPipe webcam startup failed."
+                    : error;
+
+            Debug.LogError(
+                "VCR MediaPipe: " +
+                _lastError,
+                this);
+
+            CleanupRuntimeResources(
+                stopStartupCoroutine: false);
+
+            _startupCoroutine = null;
+            _state =
+                MediaPipeWebcamLifecycleState.Faulted;
+        }
+
+        private void StopRuntime(
+            MediaPipeWebcamLifecycleState finalState)
+        {
+            CleanupRuntimeResources(
+                stopStartupCoroutine: true);
+
+            _state = finalState;
+
+            if (finalState ==
+                MediaPipeWebcamLifecycleState.Stopped)
+            {
+                _lastError = null;
+            }
+        }
+
+        private void CleanupRuntimeResources(
+            bool stopStartupCoroutine)
+        {
+            if (stopStartupCoroutine &&
+                _startupCoroutine != null)
+            {
+                StopCoroutine(
+                    _startupCoroutine);
+            }
+
+            _startupCoroutine = null;
+
             if (_faceCoroutine != null)
             {
-                StopCoroutine(_faceCoroutine);
+                StopCoroutine(
+                    _faceCoroutine);
                 _faceCoroutine = null;
             }
 
             if (_holisticCoroutine != null)
             {
-                StopCoroutine(_holisticCoroutine);
+                StopCoroutine(
+                    _holisticCoroutine);
                 _holisticCoroutine = null;
             }
 
@@ -488,9 +840,108 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     _webcam.Stop();
                 }
 
-                Destroy(_webcam);
+                Destroy(
+                    _webcam);
                 _webcam = null;
             }
+
+            _clock.Reset();
+            _latestFaceFrame = null;
+            _latestBodyHandsFrame = null;
+            _presenceResolver = null;
+            _presence = default;
+        }
+
+        private static byte[] LoadModel(
+            string relativePath)
+        {
+            var path =
+                Path.Combine(
+                    Application.streamingAssetsPath,
+                    relativePath);
+
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException(
+                    "MediaPipe model not found.",
+                    path);
+            }
+
+            return File.ReadAllBytes(path);
+        }
+
+        private string SelectDeviceName(
+            WebCamDevice[] devices)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    deviceName))
+            {
+                foreach (var device in
+                         devices)
+                {
+                    if (device.name ==
+                        deviceName)
+                    {
+                        return device.name;
+                    }
+                }
+
+                Debug.LogWarning(
+                    $"VCR: requested webcam '{deviceName}' was not found; using the first device.",
+                    this);
+            }
+
+            return devices[0].name;
+        }
+
+        private static long SecondsToMicroseconds(
+            float seconds)
+        {
+            return (long)(
+                Math.Max(
+                    0f,
+                    seconds) *
+                1_000_000.0);
+        }
+
+        private void OnApplicationPause(
+            bool paused)
+        {
+            if (!suspendOnApplicationPause)
+            {
+                return;
+            }
+
+            if (paused)
+            {
+                Suspend();
+            }
+            else
+            {
+                Resume();
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (_destroying)
+            {
+                return;
+            }
+
+            StopRuntime(
+                _applicationSuspended
+                    ? MediaPipeWebcamLifecycleState.Suspended
+                    : MediaPipeWebcamLifecycleState.Stopped);
+        }
+
+        private void OnDestroy()
+        {
+            _destroying = true;
+            CleanupRuntimeResources(
+                stopStartupCoroutine: true);
+            _state =
+                MediaPipeWebcamLifecycleState.Stopped;
         }
     }
 }
