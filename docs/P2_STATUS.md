@@ -116,8 +116,19 @@ If mutation begins and then throws, the controller restores the source material 
 - unsupported schema versions rejected
 - all-slot compatibility summary through `EvaluatePresetForAllSlots`
 
-### Shader bundle diagnostics
+### Shader bundle compatibility metadata and diagnostics
 
+- optional `<bundle>.vcr.json` sidecar metadata
+- metadata format version 1
+- bundle ID
+- target platform
+- Unity version
+- declared shader IDs
+- wrong-target metadata rejected before AssetBundle parsing
+- Unity-version mismatch rejected before AssetBundle parsing
+- declared shader IDs verified after load
+- metadata-free legacy bundles remain allowed
+- P0 validation bundle builder now emits sidecar metadata
 - `ShaderBundleLoadStatus`
 - per-attempt sequence
 - normalized bundle path
@@ -125,6 +136,7 @@ If mutation begins and then throws, the controller restores the source material 
 - registered shader count and IDs
 - current RuntimePlatform
 - current graphics API
+- metadata presence/path/bundle/target/Unity context
 - guarded invalid/missing path handling
 - runtime shader registry exposes registered shader IDs for later UI
 
@@ -166,6 +178,7 @@ Current P2 checks cover:
 - explicit shader-ID preset path
 - shader registry ID snapshot
 - missing bundle failure status with platform/API context
+- wrong-target bundle metadata preflight rejection
 - all-slot compatibility summary
 - preset JSON save/load round-trip
 - atomic preset document replacement
@@ -175,11 +188,39 @@ Current P2 checks cover:
 
 Actual Unity compilation/package resolution and real VRM/MToon execution remain unverified in this environment.
 
-## Next P2 work
+## P2 implementation status
 
-1. shader-bundle sidecar metadata and wrong-target preflight rejection
-2. package-level shader/texture resource manifest
-3. preset-to-character binding persistence strategy across VRM reloads
-4. compatibility summary aggregation suitable for UI badges/messages
-5. real external bundle load validation on Windows/macOS
-6. real VRM/MToon validation when Unity and model assets are available
+The planned P2 material/shader runtime source implementation is complete enough to proceed to P3.
+
+Implemented source scope now covers:
+
+- slot abstraction
+- source/MToon-preserving runtime clones
+- runtime shader replacement
+- generic scalar/color/vector/texture parameters
+- serializable presets
+- texture-ID resolver/registry
+- deterministic source-material fallback
+- current-platform compatibility reports
+- all-slot compatibility summaries
+- preset persistence
+- shader registry diagnostics
+- sidecar bundle compatibility metadata
+- wrong-target / wrong-Unity preflight rejection
+- explicit error/status surfaces
+
+Still unresolved:
+
+- Unity 6000.3.25f1 compile/package-resolution execution
+- successful real external shader bundle loading on Windows/macOS
+- real VRM 0.x / VRM 1.0 MToon preservation checks
+- shader variant/stripping behavior in built players
+- GPU-specific visual/performance evidence
+
+These remain execution evidence, not reasons to expand P2 architecture further without measured failures.
+
+## Next phase
+
+Proceed to P3 — Built-in Basic Motion Capture.
+
+Hardware-dependent validation remains deferred until test devices are available.
