@@ -2,13 +2,13 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using VCR.Runtime.Application;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Events.Unity;
 using VCR.Runtime.Environment;
 using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.Output.Unity;
-using VCR.Runtime.P0;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking.MediaPipe;
@@ -141,10 +141,8 @@ namespace VCR.Editor.P0
                     Vrm10CharacterLoader>();
             loader.SetTrackingProvider(router);
 
-            var standaloneBootstrap =
-                runtimeRoot.AddComponent<
-                    P0StandaloneBootstrap>();
-            standaloneBootstrap.Configure(loader);
+            runtimeRoot.AddComponent<
+                ApplicationRuntimeBootstrap>();
 
             var renderBootstrap =
                 runtimeRoot.AddComponent<
