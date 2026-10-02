@@ -61,6 +61,13 @@ namespace VCR.Runtime.Diagnostics
 
         private readonly List<RuntimeMetric> _metrics = new(64);
         private bool _csvHeaderWritten;
+        private long _snapshotSequence;
+        private RuntimeDiagnosticsSnapshot _latestSnapshot;
+
+        public RuntimeDiagnosticsSnapshot LatestSnapshot =>
+            _latestSnapshot;
+
+        public event Action<RuntimeDiagnosticsSnapshot> SnapshotUpdated;
 
         protected virtual void Awake()
         {
@@ -123,6 +130,26 @@ namespace VCR.Runtime.Diagnostics
                 reportIntervalSeconds)
             {
                 Report(now);
+            }
+        }
+
+        public void ConfigureReporting(
+            float intervalSeconds,
+            bool consoleLogging,
+            bool csvEvidence)
+        {
+            reportIntervalSeconds =
+                Mathf.Max(
+                    1f,
+                    intervalSeconds);
+            logToConsole =
+                consoleLogging;
+            writeCsvEvidence =
+                csvEvidence;
+
+            if (writeCsvEvidence)
+            {
+                WriteSystemEvidence();
             }
         }
 
@@ -263,6 +290,30 @@ namespace VCR.Runtime.Diagnostics
 
             var presence =
                 _presenceProvider?.Presence;
+
+            var metricSnapshot =
+                _metrics.ToArray();
+
+            _latestSnapshot =
+                new RuntimeDiagnosticsSnapshot(
+                    ++_snapshotSequence,
+                    now,
+                    averageMs,
+                    p95Ms,
+                    p99Ms,
+                    faceHz,
+                    bodyHz,
+                    poseHz,
+                    expressionHz,
+                    _faceAgeMs,
+                    _bodyAgeMs,
+                    _poseAgeMs,
+                    _expressionAgeMs,
+                    presence,
+                    metricSnapshot);
+
+            SnapshotUpdated?.Invoke(
+                _latestSnapshot);
 
             var builder = new StringBuilder(512);
             builder.Append(
