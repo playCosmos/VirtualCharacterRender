@@ -18,14 +18,43 @@ namespace VCR.Editor.P0
 {
     public static class P0TrackingSceneBuilder
     {
-        private const string SceneDirectory = "Assets/VCR/P0";
-        private const string ScenePath =
-            SceneDirectory + "/P0Runtime.unity";
+        public const string P0ScenePath =
+            "Assets/VCR/P0/P0Runtime.unity";
 
         [MenuItem("VCR/P0/Create Runtime Test Scene")]
         public static void CreateRuntimeTestScene()
         {
-            Directory.CreateDirectory(SceneDirectory);
+            CreateRuntimeScene(
+                P0ScenePath,
+                "VCR P0 Runtime",
+                "environment.p0.basic",
+                "P0");
+        }
+
+        public static bool CreateRuntimeScene(
+            string scenePath,
+            string rootName,
+            string environmentId,
+            string logContext)
+        {
+            if (string.IsNullOrWhiteSpace(scenePath))
+            {
+                Debug.LogError(
+                    $"VCR {logContext}: scene path is required.");
+                return false;
+            }
+
+            var sceneDirectory =
+                Path.GetDirectoryName(scenePath);
+
+            if (string.IsNullOrWhiteSpace(sceneDirectory))
+            {
+                Debug.LogError(
+                    $"VCR {logContext}: invalid scene path '{scenePath}'.");
+                return false;
+            }
+
+            Directory.CreateDirectory(sceneDirectory);
             AssetDatabase.Refresh();
 
             var scene = EditorSceneManager.NewScene(
@@ -33,24 +62,20 @@ namespace VCR.Editor.P0
                 NewSceneMode.Single);
 
             var runtimeRoot =
-                new GameObject("VCR P0 Runtime");
+                new GameObject(
+                    string.IsNullOrWhiteSpace(rootName)
+                        ? "VCR Runtime"
+                        : rootName);
 
             var cameraObject =
                 new GameObject("Main Camera");
             cameraObject.transform.SetParent(
                 runtimeRoot.transform,
                 false);
-            cameraObject.transform.localPosition =
-                new Vector3(0f, 1.35f, -3f);
-            cameraObject.transform.localRotation =
-                Quaternion.identity;
             cameraObject.tag = "MainCamera";
 
             var camera =
                 cameraObject.AddComponent<Camera>();
-            camera.fieldOfView = 35f;
-            camera.nearClipPlane = 0.05f;
-            camera.farClipPlane = 100f;
             camera.clearFlags =
                 CameraClearFlags.SolidColor;
             camera.backgroundColor =
@@ -74,7 +99,9 @@ namespace VCR.Editor.P0
                 environmentRoot.AddComponent<
                     BasicEnvironmentRuntime>();
             environment.Configure(
-                "environment.p0.basic",
+                string.IsNullOrWhiteSpace(environmentId)
+                    ? "environment.basic"
+                    : environmentId,
                 "default",
                 EnvironmentUpdatePolicy.Static,
                 EnvironmentSpaceMode.World);
@@ -84,13 +111,10 @@ namespace VCR.Editor.P0
             lightObject.transform.SetParent(
                 environmentRoot.transform,
                 false);
-            lightObject.transform.localRotation =
-                Quaternion.Euler(45f, -30f, 0f);
 
             var light =
                 lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1f;
 
             var lightController =
                 lightObject.AddComponent<
@@ -141,15 +165,15 @@ namespace VCR.Editor.P0
                     Vrm10CharacterLoader>();
             loader.SetTrackingProvider(router);
 
-            runtimeRoot.AddComponent<
-                ApplicationRuntimeBootstrap>();
-
             var renderBootstrap =
                 runtimeRoot.AddComponent<
                     DesktopRenderBootstrap>();
 
             runtimeRoot.AddComponent<
                 SingleCharacterSceneRuntime>();
+
+            runtimeRoot.AddComponent<
+                ApplicationRuntimeBootstrap>();
 
             var output =
                 runtimeRoot.AddComponent<
@@ -171,13 +195,13 @@ namespace VCR.Editor.P0
             P0TransparentOutputMenu.ConfigureProjectBaseline();
 
             if (!EditorSceneManager.SaveScene(
-                scene,
-                ScenePath))
+                    scene,
+                    scenePath))
             {
                 Object.DestroyImmediate(runtimeRoot);
                 Debug.LogError(
-                    $"VCR P0: failed to save runtime test scene at {ScenePath}");
-                return;
+                    $"VCR {logContext}: failed to save runtime scene at {scenePath}");
+                return false;
             }
 
             Selection.activeGameObject =
@@ -185,10 +209,10 @@ namespace VCR.Editor.P0
             EditorGUIUtility.PingObject(runtimeRoot);
 
             Debug.Log(
-                $"VCR P0 runtime scene created: {ScenePath}. " +
-                "Transparent-output project settings were applied automatically. " +
-                "Run 'VCR > P0 > Validate Transparent Output Baseline', then enter Play mode. " +
-                "Use 'VCR > P0 > Load VRM Into Runtime Scene' and inspect the alpha pattern plus five-second diagnostics.");
+                $"VCR {logContext} runtime scene created: {scenePath}. " +
+                "Transparent-output project settings were applied automatically.");
+
+            return true;
         }
     }
 }
