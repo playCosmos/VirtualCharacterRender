@@ -146,7 +146,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
                         MonotonicClock
                             .NowMicroseconds(),
                     validRegions:
-                        TrackingRegion.Expressions,
+                        TrackingRegion.None,
                     confidence:
                         _value,
                     subjectDetected:
