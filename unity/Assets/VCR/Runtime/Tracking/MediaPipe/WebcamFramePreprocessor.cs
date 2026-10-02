@@ -10,6 +10,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
     /// </summary>
     public sealed class WebcamFramePreprocessor
     {
+        private const string ShaderResourcePath =
+            "TrackingLowLight";
         private const string ShaderName =
             "Hidden/VCR/TrackingLowLight";
 
@@ -124,6 +126,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             var shader =
+                Resources.Load<Shader>(
+                    ShaderResourcePath) ??
                 Shader.Find(
                     ShaderName);
 
