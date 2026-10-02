@@ -296,7 +296,7 @@ namespace VCR.Runtime.Output.Unity
                     RuntimePlatform.OSXPlayer;
         }
 
-        private void OnDisable()
+        public void Shutdown()
         {
             _pendingNativeApply = false;
             _nativeApplied = false;
@@ -310,6 +310,11 @@ namespace VCR.Runtime.Output.Unity
             }
 
             RestoreCameraState();
+        }
+
+        private void OnDisable()
+        {
+            Shutdown();
         }
 
         private void RestoreCameraState()
@@ -326,6 +331,7 @@ namespace VCR.Runtime.Output.Unity
                 _originalBackground;
             targetCamera.allowHDR =
                 _originalAllowHdr;
+            _cameraStateCaptured = false;
         }
     }
 }
