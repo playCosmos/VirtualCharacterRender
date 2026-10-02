@@ -322,8 +322,7 @@ namespace VCR.Runtime.Scene
                 return true;
             }
 
-            if (_state == SceneRuntimeState.Suspended ||
-                _state == SceneRuntimeState.ShuttingDown ||
+            if (_state == SceneRuntimeState.ShuttingDown ||
                 _state == SceneRuntimeState.Stopped ||
                 _applicationQuitting)
             {
@@ -611,12 +610,13 @@ namespace VCR.Runtime.Scene
                 }
             }
 
-            if (_state == SceneRuntimeState.ShuttingDown ||
+            if (_state == SceneRuntimeState.Suspended ||
+                _state == SceneRuntimeState.ShuttingDown ||
                 _state == SceneRuntimeState.Stopped ||
                 _applicationQuitting)
             {
                 throw new InvalidOperationException(
-                    "Scene runtime is shutting down or stopped.");
+                    "Scene runtime is suspended, shutting down, or stopped.");
             }
 
             if (characterLoader == null ||
