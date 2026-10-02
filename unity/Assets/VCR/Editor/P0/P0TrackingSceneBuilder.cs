@@ -167,7 +167,7 @@ namespace VCR.Editor.P0
 
             var diagnostics =
                 runtimeRoot.AddComponent<
-                    P0RuntimeDiagnostics>();
+                    RuntimeDiagnostics>();
             diagnostics.SetTrackingProvider(router);
 
             P0TransparentOutputMenu.ConfigureProjectBaseline();
