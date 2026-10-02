@@ -336,9 +336,15 @@ namespace VCR.Runtime.Scene
             }
 
             _stateBeforeSuspend =
-                _state == SceneRuntimeState.CharacterReady
-                    ? SceneRuntimeState.CharacterReady
-                    : SceneRuntimeState.Ready;
+                _state switch
+                {
+                    SceneRuntimeState.CharacterReady =>
+                        SceneRuntimeState.CharacterReady,
+                    SceneRuntimeState.Faulted =>
+                        SceneRuntimeState.Faulted,
+                    _ =>
+                        SceneRuntimeState.Ready
+                };
 
             CancelActiveOperation();
             _overlayOutput?.Shutdown();
