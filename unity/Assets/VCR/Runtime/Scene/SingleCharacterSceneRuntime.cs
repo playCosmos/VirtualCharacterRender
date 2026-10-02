@@ -37,6 +37,8 @@ namespace VCR.Runtime.Scene
         private string _lastError;
         private bool _applicationQuitting;
         private IOverlayOutputAdapter _overlayOutput;
+        private OverlayOutputConfiguration _overlayConfiguration =
+            OverlayOutputConfiguration.Default;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter => characterLoader?.Current;
@@ -44,6 +46,9 @@ namespace VCR.Runtime.Scene
         public PrimaryLightController LightController => lightController;
         public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
+
+        public SceneRuntimeConfiguration Configuration =>
+            CaptureConfiguration();
 
         public SceneRuntimeStatus Status =>
             new(
@@ -193,6 +198,64 @@ namespace VCR.Runtime.Scene
             lightController?.Apply();
         }
 
+        public SceneRuntimeConfiguration CaptureConfiguration()
+        {
+            if (renderBootstrap == null)
+            {
+                ResolveDependencies();
+            }
+
+            return new SceneRuntimeConfiguration
+            {
+                Rendering =
+                    renderBootstrap != null
+                        ? renderBootstrap.CaptureSettings()
+                        : RenderRuntimeSettings.Default1080p,
+                Camera =
+                    cameraController != null
+                        ? cameraController.Settings
+                        : SceneCameraSettings.Default,
+                Light =
+                    lightController != null
+                        ? lightController.Settings
+                        : SceneLightSettings.DefaultDirectional,
+                Overlay =
+                    _overlayConfiguration
+            };
+        }
+
+        public void ApplyConfiguration(
+            SceneRuntimeConfiguration configuration)
+        {
+            EnsureOperational();
+
+            renderBootstrap.Apply(
+                configuration.Rendering);
+
+            if (cameraController != null)
+            {
+                cameraController.Configure(
+                    cameraController.TargetCamera,
+                    configuration.Camera);
+            }
+
+            if (lightController != null)
+            {
+                lightController.Configure(
+                    lightController.TargetLight,
+                    configuration.Light);
+            }
+
+            _overlayConfiguration =
+                configuration.Overlay;
+
+            if (_overlayOutput != null)
+            {
+                _overlayOutput.Apply(
+                    _overlayConfiguration.ToSettings());
+            }
+        }
+
         public void ApplyOverlayOutput(
             OverlayOutputSettings settings)
         {
@@ -203,6 +266,10 @@ namespace VCR.Runtime.Scene
                 throw new InvalidOperationException(
                     "No overlay output adapter is configured.");
             }
+
+            _overlayConfiguration =
+                OverlayOutputConfiguration
+                    .FromSettings(settings);
 
             _overlayOutput.Apply(settings);
         }
