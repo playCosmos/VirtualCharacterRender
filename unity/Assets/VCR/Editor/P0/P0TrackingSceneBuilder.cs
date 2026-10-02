@@ -57,6 +57,13 @@ namespace VCR.Editor.P0
                 new Color(0f, 0f, 0f, 0f);
             camera.allowHDR = false;
 
+            var cameraController =
+                cameraObject.AddComponent<
+                    PrimaryCameraController>();
+            cameraController.Configure(
+                camera,
+                SceneCameraSettings.Default);
+
             var environmentRoot =
                 new GameObject("Environment");
             environmentRoot.transform.SetParent(
@@ -84,6 +91,13 @@ namespace VCR.Editor.P0
                 lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
             light.intensity = 1f;
+
+            var lightController =
+                lightObject.AddComponent<
+                    PrimaryLightController>();
+            lightController.Configure(
+                light,
+                SceneLightSettings.DefaultDirectional);
 
             var trackingRoot =
                 new GameObject("Tracking");
