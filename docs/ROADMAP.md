@@ -100,6 +100,8 @@ One-character scene/character lifecycle, camera/light abstraction, frame timing,
 
 ## P2 — Material and Shader Runtime
 
+Status: Active. See `P2_STATUS.md`.
+
 Material-slot abstraction, MToon preservation, runtime overrides, generic shader parameters, presets, fallback material, cross-platform compatibility reporting, and error handling.
 
 ## P3 — Built-in Basic Motion Capture
