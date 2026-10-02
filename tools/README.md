@@ -83,6 +83,31 @@ VCR.Editor.P1.P1BatchValidation.RunSourceFreeAndExit
 
 A batch PASS proves source-free invariants only. It does not replace the deferred physical-device P0 evidence.
 
+## P2 source-free batch validation
+
+P2 validation includes the inherited P0/P1 source-free suites plus material preset and compatibility checks.
+
+Windows:
+
+```powershell
+./tools/validate-p2-source-free.ps1
+```
+
+macOS M1+:
+
+```bash
+chmod +x ./tools/validate-p2-source-free.sh
+./tools/validate-p2-source-free.sh
+```
+
+The entrypoint is:
+
+```text
+VCR.Editor.P2.P2BatchValidation.RunSourceFreeAndExit
+```
+
+A PASS validates source-free material preset behavior only. Real VRM/MToon, external platform bundles, and GPU-specific compatibility still require Unity/player execution evidence.
+
 ## P1 application player
 
 Create the P1 runtime scene first:
