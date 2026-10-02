@@ -2,10 +2,7 @@
   "name": "VCR.Runtime.Application",
   "rootNamespace": "VCR.Runtime.Application",
   "references": [
-    "VCR.Runtime.Scene",
-    "VCR.Runtime.Materials",
-    "VCR.Runtime.Materials.Unity",
-    "VRM10"
+    "VCR.Runtime.Scene"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
