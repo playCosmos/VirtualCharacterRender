@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Materials;
@@ -302,6 +303,63 @@ namespace VCR.Editor.P2
                     "missing serialized texture ids must fail preflight explicitly",
                     failures);
 
+                Expect(
+                    RuntimeShaderRegistry.Register(
+                        "p2.registry-test",
+                        shader),
+                    "runtime shader registry must accept an explicit shader id",
+                    failures);
+
+                var registeredShaderIds =
+                    RuntimeShaderRegistry
+                        .GetRegisteredIds();
+
+                Expect(
+                    Array.Exists(
+                        registeredShaderIds,
+                        id =>
+                            id ==
+                            "p2.registry-test"),
+                    "runtime shader registry must expose registered ids for diagnostics/UI",
+                    failures);
+
+                var bundleLoader =
+                    root.AddComponent<
+                        RuntimeShaderBundleLoader>();
+
+                var missingBundlePath =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p2-missing-" +
+                        Guid.NewGuid().ToString("N") +
+                        ".bundle");
+
+                var missingBundleLoaded =
+                    bundleLoader.TryLoadFromFile(
+                        missingBundlePath,
+                        out var missingRegisteredCount,
+                        out var missingBundleError);
+
+                var bundleStatus =
+                    bundleLoader.Status;
+
+                Expect(
+                    !missingBundleLoaded &&
+                    missingRegisteredCount == 0 &&
+                    !bundleStatus.Success &&
+                    bundleStatus.Sequence > 0 &&
+                    bundleStatus.Path ==
+                        Path.GetFullPath(
+                            missingBundlePath) &&
+                    !string.IsNullOrWhiteSpace(
+                        bundleStatus.Platform) &&
+                    !string.IsNullOrWhiteSpace(
+                        bundleStatus.GraphicsApi) &&
+                    !string.IsNullOrWhiteSpace(
+                        missingBundleError),
+                    "missing shader bundles must fail through a platform-context status snapshot instead of throwing",
+                    failures);
+
                 var explicitShaderPreset =
                     new MaterialOverridePreset
                     {
@@ -393,7 +451,7 @@ namespace VCR.Editor.P2
             {
                 Debug.Log(
                     "VCR P2 material/shader runtime validation: PASS " +
-                    "(source shader preservation, preset compatibility, isolated parameters, texture resolution, explicit rejection, status, restore)");
+                    "(source shader preservation, preset compatibility, isolated parameters, texture resolution, shader registry, bundle status, explicit rejection, restore)");
                 return true;
             }
 
