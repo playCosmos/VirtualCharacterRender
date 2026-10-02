@@ -59,13 +59,36 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         private volatile bool _running;
         private IPEndPoint _iosEndpoint;
 
+        private long _datagramCount;
         private long _packetCount;
+        private long _rejectedSenderCount;
+        private long _parseFailureCount;
+        private long _handshakeCount;
+        private long _socketErrorCount;
+
         private float _nextHandshakeTime;
         private string _backgroundError;
+        private string _lastError;
+        private ArKitReceiverLifecycleState _state =
+            ArKitReceiverLifecycleState.Stopped;
 
         public TrackingPresenceSnapshot Presence => _presence;
         public long PacketCount => Interlocked.Read(ref _packetCount);
         public ITrackingSource FaceTrackingSource => _source;
+
+        public ArKitReceiverStatus Status =>
+            new(
+                _state,
+                iosIPv4Address,
+                remotePort,
+                localPort,
+                Interlocked.Read(ref _datagramCount),
+                Interlocked.Read(ref _packetCount),
+                Interlocked.Read(ref _rejectedSenderCount),
+                Interlocked.Read(ref _parseFailureCount),
+                Interlocked.Read(ref _handshakeCount),
+                Interlocked.Read(ref _socketErrorCount),
+                _lastError);
 
         private void OnEnable()
         {
@@ -83,6 +106,10 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 Interlocked.Exchange(ref _backgroundError, null);
             if (!string.IsNullOrEmpty(backgroundError))
             {
+                _lastError = backgroundError;
+                Interlocked.Increment(
+                    ref _socketErrorCount);
+
                 Debug.LogWarning(
                     $"VCR ARKit/iFacialMocap receiver: {backgroundError}",
                     this);
@@ -101,10 +128,27 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
             UpdatePresence();
 
-            if (!_presence.AnySourceAvailable &&
-                Time.unscaledTime >= _nextHandshakeTime)
+            if (!_presence.AnySourceAvailable)
             {
-                SendHandshake();
+                if (_state ==
+                    ArKitReceiverLifecycleState.Running)
+                {
+                    _state =
+                        ArKitReceiverLifecycleState.SourceLost;
+                }
+
+                if (Time.unscaledTime >=
+                    _nextHandshakeTime)
+                {
+                    SendHandshake();
+                }
+            }
+            else if (_state ==
+                     ArKitReceiverLifecycleState.SourceLost)
+            {
+                _state =
+                    ArKitReceiverLifecycleState.Running;
+                _lastError = null;
             }
         }
 
@@ -150,6 +194,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 var bytes = Encoding.UTF8.GetBytes(
                     IFacialMocapFrameParser.StartStreamingV2Command);
                 sender.Send(bytes, bytes.Length, _iosEndpoint);
+                Interlocked.Increment(
+                    ref _handshakeCount);
             }
             catch (Exception exception)
             {
@@ -162,14 +208,23 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         private void StartReceiver()
         {
             StopReceiver();
+            _state =
+                ArKitReceiverLifecycleState.Starting;
+            _lastError = null;
 
             if (!IPAddress.TryParse(
                 iosIPv4Address,
                 out var iosAddress) ||
                 iosAddress.AddressFamily != AddressFamily.InterNetwork)
             {
+                _lastError =
+                    "Enter the iPhone/iPad IPv4 address before enabling the receiver.";
+                _state =
+                    ArKitReceiverLifecycleState.Faulted;
+
                 Debug.LogWarning(
-                    "VCR ARKit/iFacialMocap: enter the iPhone/iPad IPv4 address before enabling the receiver.",
+                    "VCR ARKit/iFacialMocap: " +
+                    _lastError,
                     this);
                 enabled = false;
                 return;
@@ -199,6 +254,10 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             catch (Exception exception)
             {
                 _source.MarkSourceLost(exception.Message);
+                _lastError = exception.Message;
+                _state =
+                    ArKitReceiverLifecycleState.Faulted;
+
                 Debug.LogError(
                     $"VCR ARKit/iFacialMocap: failed to bind UDP {localPort}: {exception.Message}",
                     this);
@@ -214,6 +273,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             };
             _receiveThread.Start();
 
+            _state =
+                ArKitReceiverLifecycleState.Running;
             _nextHandshakeTime = 0f;
             SendHandshake();
         }
@@ -232,9 +293,14 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         continue;
                     }
 
+                    Interlocked.Increment(
+                        ref _datagramCount);
+
                     if (_iosEndpoint != null &&
                         !remote.Address.Equals(_iosEndpoint.Address))
                     {
+                        Interlocked.Increment(
+                            ref _rejectedSenderCount);
                         continue;
                     }
 
@@ -245,6 +311,11 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     {
                         _rawFrames.Publish(frame);
                         Interlocked.Increment(ref _packetCount);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(
+                            ref _parseFailureCount);
                     }
                 }
                 catch (SocketException exception)
@@ -355,8 +426,38 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             }
 
             output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.state",
+                (int)_state,
+                "enum"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.datagrams",
+                Interlocked.Read(ref _datagramCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "tracking.arkit.ifacialmocap.packets",
                 PacketCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.rejected_sender",
+                Interlocked.Read(ref _rejectedSenderCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.parse_failures",
+                Interlocked.Read(ref _parseFailureCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.handshakes",
+                Interlocked.Read(ref _handshakeCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.socket_errors",
+                Interlocked.Read(ref _socketErrorCount),
                 "count"));
         }
 
@@ -388,6 +489,13 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
             _latestFace = null;
             _iosEndpoint = null;
+
+            if (_state !=
+                ArKitReceiverLifecycleState.Faulted)
+            {
+                _state =
+                    ArKitReceiverLifecycleState.Stopped;
+            }
         }
 
         private void OnDisable()
