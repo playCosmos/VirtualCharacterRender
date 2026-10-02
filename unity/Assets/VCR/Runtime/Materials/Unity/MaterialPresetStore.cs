@@ -1,0 +1,246 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
+
+namespace VCR.Runtime.Materials.Unity
+{
+    public sealed class MaterialPresetStore
+    {
+        public const int CurrentVersion = 1;
+
+        private readonly string _path;
+
+        public MaterialPresetStore(
+            string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException(
+                    "Preset path is required.",
+                    nameof(path));
+            }
+
+            _path =
+                System.IO.Path.GetFullPath(
+                    path);
+        }
+
+        public string Path =>
+            _path;
+
+        public bool TryLoad(
+            out MaterialPresetDocument document,
+            out string error)
+        {
+            document =
+                new MaterialPresetDocument
+                {
+                    Version =
+                        CurrentVersion
+                };
+            error = null;
+
+            if (!File.Exists(_path))
+            {
+                return true;
+            }
+
+            try
+            {
+                var json =
+                    File.ReadAllText(
+                        _path);
+
+                var loaded =
+                    JsonUtility.FromJson<
+                        MaterialPresetDocument>(
+                        json);
+
+                if (!TryValidate(
+                        loaded,
+                        out error))
+                {
+                    return false;
+                }
+
+                document = loaded;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Material preset load failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        public bool TrySave(
+            MaterialPresetDocument document,
+            out string error)
+        {
+            error = null;
+
+            if (!TryValidate(
+                    document,
+                    out error))
+            {
+                return false;
+            }
+
+            try
+            {
+                var directory =
+                    System.IO.Path.GetDirectoryName(
+                        _path);
+
+                if (!string.IsNullOrWhiteSpace(
+                        directory))
+                {
+                    Directory.CreateDirectory(
+                        directory);
+                }
+
+                var json =
+                    JsonUtility.ToJson(
+                        document,
+                        prettyPrint: true);
+
+                var temporaryPath =
+                    _path + ".tmp";
+                var backupPath =
+                    _path + ".bak";
+
+                File.WriteAllText(
+                    temporaryPath,
+                    json);
+
+                if (File.Exists(_path))
+                {
+                    if (File.Exists(
+                            backupPath))
+                    {
+                        File.Delete(
+                            backupPath);
+                    }
+
+                    File.Replace(
+                        temporaryPath,
+                        _path,
+                        backupPath);
+
+                    if (File.Exists(
+                            backupPath))
+                    {
+                        File.Delete(
+                            backupPath);
+                    }
+                }
+                else
+                {
+                    File.Move(
+                        temporaryPath,
+                        _path);
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                TryDeleteTemporary();
+
+                error =
+                    "Material preset save failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        private bool TryValidate(
+            MaterialPresetDocument document,
+            out string error)
+        {
+            error = null;
+
+            if (document == null)
+            {
+                error =
+                    "Material preset document is required.";
+                return false;
+            }
+
+            if (document.Version !=
+                CurrentVersion)
+            {
+                error =
+                    document.Version >
+                    CurrentVersion
+                        ? $"Material preset version {document.Version} is newer than supported version {CurrentVersion}."
+                        : $"Material preset version {document.Version} is unsupported and has no migration path.";
+                return false;
+            }
+
+            document.Presets ??=
+                Array.Empty<
+                    MaterialOverridePreset>();
+
+            var ids =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var preset in
+                     document.Presets)
+            {
+                if (preset == null)
+                {
+                    error =
+                        "Material preset document contains a null preset.";
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(
+                        preset.PresetId))
+                {
+                    error =
+                        "Every material preset requires a preset id.";
+                    return false;
+                }
+
+                if (!ids.Add(
+                        preset.PresetId))
+                {
+                    error =
+                        $"Duplicate material preset id '{preset.PresetId}'.";
+                    return false;
+                }
+
+                preset.Parameters ??=
+                    Array.Empty<
+                        MaterialParameterOverride>();
+            }
+
+            return true;
+        }
+
+        private void TryDeleteTemporary()
+        {
+            try
+            {
+                var temporaryPath =
+                    _path + ".tmp";
+
+                if (File.Exists(
+                        temporaryPath))
+                {
+                    File.Delete(
+                        temporaryPath);
+                }
+            }
+            catch
+            {
+                // Preserve the original error.
+            }
+        }
+    }
+}
