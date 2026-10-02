@@ -24,6 +24,7 @@ namespace VCR.Editor.P2
             GameObject root = null;
             Material source = null;
             Texture2D registeredTexture = null;
+            string presetTestDirectory = null;
 
             try
             {
@@ -118,6 +119,18 @@ namespace VCR.Editor.P2
                 Expect(
                     preserveReport.Compatible,
                     "source-shader preset must pass compatibility when its property exists",
+                    failures);
+
+
+                var allSlotReports =
+                    controller.EvaluatePresetForAllSlots(
+                        preservePreset);
+
+                Expect(
+                    allSlotReports.Length ==
+                        slots.Length &&
+                    allSlotReports[0].Compatible,
+                    "all-slot compatibility summary must return one report per discovered slot",
                     failures);
 
                 var preserveApplied =
@@ -394,6 +407,102 @@ namespace VCR.Editor.P2
                     "status snapshot must report the latest active preset",
                     failures);
 
+
+                presetTestDirectory =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p2-presets-" +
+                        Guid.NewGuid().ToString("N"));
+
+                var presetPath =
+                    Path.Combine(
+                        presetTestDirectory,
+                        "material-presets.json");
+
+                var presetStore =
+                    new MaterialPresetStore(
+                        presetPath);
+
+                var presetDocument =
+                    new MaterialPresetDocument
+                    {
+                        Version =
+                            MaterialPresetStore.CurrentVersion,
+                        Presets =
+                            new[]
+                            {
+                                preservePreset,
+                                explicitShaderPreset
+                            }
+                    };
+
+                Expect(
+                    presetStore.TrySave(
+                        presetDocument,
+                        out var presetSaveError) &&
+                    string.IsNullOrEmpty(
+                        presetSaveError) &&
+                    File.Exists(
+                        presetPath),
+                    "material preset document must save",
+                    failures);
+
+                Expect(
+                    presetStore.TryLoad(
+                        out var loadedPresetDocument,
+                        out var presetLoadError) &&
+                    string.IsNullOrEmpty(
+                        presetLoadError) &&
+                    loadedPresetDocument.Presets.Length == 2 &&
+                    loadedPresetDocument.Presets[0].PresetId ==
+                        preservePreset.PresetId &&
+                    loadedPresetDocument.Presets[0].Parameters.Length == 1,
+                    "material preset document must round-trip presets and parameters",
+                    failures);
+
+                presetDocument.Presets =
+                    new[]
+                    {
+                        preservePreset
+                    };
+
+                Expect(
+                    presetStore.TrySave(
+                        presetDocument,
+                        out var presetReplaceError) &&
+                    string.IsNullOrEmpty(
+                        presetReplaceError) &&
+                    presetStore.TryLoad(
+                        out var replacedPresetDocument,
+                        out var presetReplaceLoadError) &&
+                    string.IsNullOrEmpty(
+                        presetReplaceLoadError) &&
+                    replacedPresetDocument.Presets.Length == 1,
+                    "material preset store must atomically replace an existing document",
+                    failures);
+
+                var duplicatePresetDocument =
+                    new MaterialPresetDocument
+                    {
+                        Version =
+                            MaterialPresetStore.CurrentVersion,
+                        Presets =
+                            new[]
+                            {
+                                preservePreset,
+                                preservePreset
+                            }
+                    };
+
+                Expect(
+                    !presetStore.TrySave(
+                        duplicatePresetDocument,
+                        out var duplicatePresetError) &&
+                    !string.IsNullOrWhiteSpace(
+                        duplicatePresetError),
+                    "duplicate material preset ids must be rejected before persistence",
+                    failures);
+
                 Expect(
                     controller.ClearOverride(
                         slot.Id) &&
@@ -435,6 +544,16 @@ namespace VCR.Editor.P2
                             registeredTexture);
                 }
 
+                if (!string.IsNullOrWhiteSpace(
+                        presetTestDirectory) &&
+                    Directory.Exists(
+                        presetTestDirectory))
+                {
+                    Directory.Delete(
+                        presetTestDirectory,
+                        recursive: true);
+                }
+
                 RuntimeTextureRegistry
                     .ClearRegistered();
                 RuntimeShaderRegistry
@@ -451,7 +570,7 @@ namespace VCR.Editor.P2
             {
                 Debug.Log(
                     "VCR P2 material/shader runtime validation: PASS " +
-                    "(source shader preservation, preset compatibility, isolated parameters, texture resolution, shader registry, bundle status, explicit rejection, restore)");
+                    "(source shader preservation, preset compatibility, all-slot summary, preset persistence, texture resolution, shader registry, bundle status, explicit rejection, restore)");
                 return true;
             }
 
