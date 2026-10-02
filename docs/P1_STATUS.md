@@ -53,6 +53,37 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - controlled shutdown restores captured runtime/camera state
 - no per-frame `Update()` loop in the render bootstrap
 
+### Camera/light abstraction
+
+- explicit primary camera adapter for transform/projection state
+- explicit primary light adapter for directional-light state
+- no per-frame update loops
+- apply/restore lifecycle owned by the scene runtime
+- baseline light shadows remain disabled by default
+
+### Scene/output/environment configuration
+
+- serializable renderer settings snapshot
+- serializable camera/light/output scene configuration
+- capture and reapply without storing Unity object references
+- overlay output lifecycle owned through `IOverlayOutputAdapter`
+- explicit overlay shutdown contract
+- dynamic environment state routed through the existing `IEnvironmentRuntime`
+- environment state included in scene configuration snapshots
+
+### Capability lifecycle
+
+- scene runtime owns the P0 lazy `CapabilityRegistry`
+- registration remains non-instantiating
+- enabled capabilities are disposed before scene teardown
+- capability counts are exposed through runtime metrics
+
+### Diagnostics
+
+- P0 diagnostics implementation promoted to reusable `RuntimeDiagnostics`
+- `P0RuntimeDiagnostics` retained only as a compatibility wrapper
+- generated P1 validation scene uses `RuntimeDiagnostics`
+
 ### Validation
 
 Interactive:
@@ -80,18 +111,22 @@ Current P1 source-free checks cover:
 - shutdown state transition
 - restoration of process-global frame settings
 - absence of per-frame coordinator/render-bootstrap `Update()` loops
+- camera projection/transform apply and restore
+- light state apply and restore
+- overlay Apply/Shutdown lifecycle
+- environment state routing and snapshot capture
+- lazy capability create/dispose lifecycle
+- renderer/scene configuration round-trip
 
 Actual Unity compilation/package resolution still requires a Unity 6000.3.25f1 environment.
 
 ## Next P1 work
 
-1. camera abstraction
-2. light abstraction
-3. renderer/scene configuration snapshot suitable for later UI and persistence
-4. output-adapter lifecycle integration with scene startup/shutdown
-5. diagnostics promotion from P0-specific naming into reusable renderer diagnostics
-6. dynamic-environment hook promotion into the scene runtime
-7. platform lifecycle hooks for suspend/resume/relaunch-sensitive resources
-8. source-free lifecycle tests for the new abstractions
+1. platform suspend/resume and relaunch-sensitive resource lifecycle
+2. promote standalone startup from the P0 evidence bootstrap into a P1 application bootstrap
+3. persistent configuration file format and migration boundary for the scene snapshot
+4. diagnostics configuration/API cleanup for UI consumption
+5. source-free tests for suspend/resume and configuration persistence
+6. Unity compile/package-resolution validation when an Editor environment is available
 
 Hardware-specific P0 evidence remains deferred and should be resumed from the preserved checkpoint when test equipment becomes available.
