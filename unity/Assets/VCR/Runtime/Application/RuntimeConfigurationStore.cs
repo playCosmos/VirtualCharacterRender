@@ -105,6 +105,8 @@ namespace VCR.Runtime.Application
 
                 var temporaryPath =
                     _path + ".tmp";
+                var backupPath =
+                    _path + ".bak";
 
                 File.WriteAllText(
                     temporaryPath,
@@ -112,17 +114,46 @@ namespace VCR.Runtime.Application
 
                 if (File.Exists(_path))
                 {
-                    File.Delete(_path);
-                }
+                    File.Replace(
+                        temporaryPath,
+                        _path,
+                        backupPath);
 
-                File.Move(
-                    temporaryPath,
-                    _path);
+                    if (File.Exists(
+                            backupPath))
+                    {
+                        File.Delete(
+                            backupPath);
+                    }
+                }
+                else
+                {
+                    File.Move(
+                        temporaryPath,
+                        _path);
+                }
 
                 return true;
             }
             catch (Exception exception)
             {
+                try
+                {
+                    var temporaryPath =
+                        _path + ".tmp";
+
+                    if (File.Exists(
+                            temporaryPath))
+                    {
+                        File.Delete(
+                            temporaryPath);
+                    }
+                }
+                catch
+                {
+                    // Keep the original save error.
+                }
+
                 error =
                     "Configuration save failed: " +
                     exception.Message;
