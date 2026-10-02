@@ -58,6 +58,31 @@ Exit code `0` means the consolidated source-free suite passed. Any suite failure
 
 Batch PASS is still not a substitute for physical webcam, ARKit device, transparent-window, OBS, external VMC, real-VRM, or frame-time evidence.
 
+## P1 source-free batch validation
+
+P1 validation includes the inherited P0 source-free suite and the P1 renderer-core lifecycle checks.
+
+Windows:
+
+```powershell
+./tools/validate-p1-source-free.ps1
+```
+
+macOS M1+:
+
+```bash
+chmod +x ./tools/validate-p1-source-free.sh
+./tools/validate-p1-source-free.sh
+```
+
+The entrypoint is:
+
+```text
+VCR.Editor.P1.P1BatchValidation.RunSourceFreeAndExit
+```
+
+A batch PASS proves source-free invariants only. It does not replace the deferred physical-device P0 evidence.
+
 ## P0 standalone player launcher
 
 Build the corresponding player from Unity first.
