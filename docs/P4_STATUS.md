@@ -28,7 +28,9 @@ The existing `PriorityTrackingRouter` remains the one-performer region router:
 - fallback face inference is suspended while the preferred face source is healthy
 - source/device loss remains distinct from performer absence
 
-P4 now exposes a route-status contract through `ITrackingRouteStatusProvider` / `TrackingRouteStatus`:
+P4 now exposes a common region-addressable source-health contract through `ITrackingSourceHealthProvider` / `TrackingSourceHealthSnapshot`. MediaPipe returns independent FaceLandmarker and Holistic health snapshots; ARKit and VMC expose the same contract without router-side type checks. Runtime frame timestamps are kept separate from source/device timestamps so age calculations do not assume a shared epoch.
+
+P4 also exposes a route-status contract through `ITrackingRouteStatusProvider` / `TrackingRouteStatus`:
 
 - selected face source ID
 - selected body/hands source ID
@@ -70,6 +72,7 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 - non-negative routed face age
 - exactly one face source-switch metric for the preferred-to-fallback transition
 - route diagnostics emission
+- preferred source rejection when common health reports `SourceLost` even if cached presence/frame state remains
 
 ## Still deferred to real devices / players
 
@@ -85,8 +88,6 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 
 The next source implementation slice is:
 
-- introduce a common source-health provider contract over the existing per-source health states
-- expose health/staleness snapshots to the router without source-specific type checks
 - move source-priority decisions to explicit policy data rather than hard-coded provider roles where this can be done without adding multi-person complexity
 - route optional expression fallback as a source choice, not as expression mixing; weighted mixing remains P5
 - keep region-level loss semantics and one-performer scope intact

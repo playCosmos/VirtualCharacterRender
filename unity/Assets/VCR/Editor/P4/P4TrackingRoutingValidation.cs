@@ -34,7 +34,22 @@ namespace VCR.Editor.P4
                     root.AddComponent<PriorityTrackingRouter>();
 
                 preferred.SourceId = "arkit-face";
+                preferred.Kind =
+                    TrackingSourceKind.ArKitFace;
+                preferred.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                preferred.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
                 fallback.SourceId = "mediapipe-webcam";
+                fallback.Kind =
+                    TrackingSourceKind.MediaPipeFaceWebcam;
+                fallback.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                fallback.HealthState =
+                    TrackingSourceHealthState.Healthy;
 
                 var nowUs =
                     MonotonicClock.NowMicroseconds();
@@ -98,12 +113,8 @@ namespace VCR.Editor.P4
                     "route status must expose a non-negative face age",
                     failures);
 
-                preferred.Presence =
-                    CreatePresence(
-                        MonotonicClock
-                            .NowMicroseconds(),
-                        faceAvailable: false,
-                        faceEvidence: false);
+                preferred.HealthState =
+                    TrackingSourceHealthState.SourceLost;
 
                 InvokeUpdate(router);
 
@@ -112,7 +123,7 @@ namespace VCR.Editor.P4
 
                 Expect(
                     !fallbackStatus.PreferredFaceActive,
-                    "preferred face route must deactivate when its source becomes unavailable",
+                    "preferred face route must deactivate when common source health reports SourceLost",
                     failures);
 
                 Expect(
@@ -152,6 +163,18 @@ namespace VCR.Editor.P4
                     fallbackEnabled > 0.5,
                     "routing metrics must report fallback face inference state",
                     failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "tracking.route.preferred_face_health",
+                        out var preferredHealth) &&
+                    Math.Abs(
+                        preferredHealth -
+                        (int)TrackingSourceHealthState.SourceLost) <
+                    0.001,
+                    "routing metrics must expose common source health state",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -172,7 +195,7 @@ namespace VCR.Editor.P4
             {
                 Debug.Log(
                     "VCR P4 tracking routing validation: PASS " +
-                    "(preferred/fallback hot switching, face-inference suspension, route age, switch metrics)");
+                    "(preferred/fallback hot switching, common source health, face-inference suspension, route age, switch metrics)");
                 return true;
             }
 
@@ -308,9 +331,13 @@ namespace VCR.Editor.P4
         MonoBehaviour,
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
+        ITrackingSourceHealthProvider,
         IFaceTrackingActivationControl
     {
         public string SourceId { get; set; }
+        public TrackingSourceKind Kind { get; set; }
+        public TrackingRegion Regions { get; set; }
+        public TrackingSourceHealthState HealthState { get; set; }
         public TrackingFrame FaceFrame { get; set; }
 
         public TrackingPresenceSnapshot Presence
@@ -324,6 +351,30 @@ namespace VCR.Editor.P4
             get;
             private set;
         } = true;
+
+        public bool TryGetSourceHealth(
+            TrackingRegion region,
+            out TrackingSourceHealthSnapshot snapshot)
+        {
+            if ((Regions & region) == 0)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            snapshot =
+                new TrackingSourceHealthSnapshot(
+                    SourceId,
+                    Kind,
+                    Regions,
+                    new TrackingSourceHealth(
+                        HealthState,
+                        FaceFrame?.SourceTimestampUs ?? 0,
+                        FaceFrame?.Confidence ?? float.NaN,
+                        null),
+                    FaceFrame?.RuntimeTimestampUs ?? 0);
+            return true;
+        }
 
         public void SetFaceTrackingEnabled(
             bool enabled)

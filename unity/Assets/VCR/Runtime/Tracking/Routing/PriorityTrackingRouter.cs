@@ -34,13 +34,16 @@ namespace VCR.Runtime.Tracking.Routing
 
         private ITrackingFrameProvider _preferredFaceProvider;
         private ITrackingPresenceProvider _preferredPresence;
+        private ITrackingSourceHealthProvider _preferredFaceHealth;
 
         private ITrackingFrameProvider _fallbackProvider;
         private ITrackingPresenceProvider _fallbackPresence;
+        private ITrackingSourceHealthProvider _fallbackHealth;
         private IFaceTrackingActivationControl _fallbackFaceActivation;
 
         private ITrackingFrameProvider _externalPoseProvider;
         private ITrackingPresenceProvider _externalPosePresence;
+        private ITrackingSourceHealthProvider _externalPoseHealth;
 
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
@@ -137,6 +140,8 @@ namespace VCR.Runtime.Tracking.Routing
             preferredFaceProviderBehaviour = provider;
             _preferredFaceProvider = provider as ITrackingFrameProvider;
             _preferredPresence = provider as ITrackingPresenceProvider;
+            _preferredFaceHealth =
+                provider as ITrackingSourceHealthProvider;
             ResetFaceSelection();
         }
 
@@ -147,6 +152,8 @@ namespace VCR.Runtime.Tracking.Routing
             fallbackProviderBehaviour = provider;
             _fallbackProvider = provider as ITrackingFrameProvider;
             _fallbackPresence = provider as ITrackingPresenceProvider;
+            _fallbackHealth =
+                provider as ITrackingSourceHealthProvider;
             _fallbackFaceActivation =
                 provider as IFaceTrackingActivationControl;
 
@@ -159,6 +166,8 @@ namespace VCR.Runtime.Tracking.Routing
             externalPoseProviderBehaviour = provider;
             _externalPoseProvider = provider as ITrackingFrameProvider;
             _externalPosePresence = provider as ITrackingPresenceProvider;
+            _externalPoseHealth =
+                provider as ITrackingSourceHealthProvider;
             ResetPoseSelection();
         }
 
@@ -170,6 +179,8 @@ namespace VCR.Runtime.Tracking.Routing
                     preferredFaceProviderBehaviour as ITrackingFrameProvider;
                 _preferredPresence ??=
                     preferredFaceProviderBehaviour as ITrackingPresenceProvider;
+                _preferredFaceHealth ??=
+                    preferredFaceProviderBehaviour as ITrackingSourceHealthProvider;
             }
 
             if (fallbackProviderBehaviour != null)
@@ -178,6 +189,8 @@ namespace VCR.Runtime.Tracking.Routing
                     fallbackProviderBehaviour as ITrackingFrameProvider;
                 _fallbackPresence ??=
                     fallbackProviderBehaviour as ITrackingPresenceProvider;
+                _fallbackHealth ??=
+                    fallbackProviderBehaviour as ITrackingSourceHealthProvider;
                 _fallbackFaceActivation ??=
                     fallbackProviderBehaviour as IFaceTrackingActivationControl;
             }
@@ -188,12 +201,21 @@ namespace VCR.Runtime.Tracking.Routing
                     externalPoseProviderBehaviour as ITrackingFrameProvider;
                 _externalPosePresence ??=
                     externalPoseProviderBehaviour as ITrackingPresenceProvider;
+                _externalPoseHealth ??=
+                    externalPoseProviderBehaviour as ITrackingSourceHealthProvider;
             }
         }
 
         private bool IsPreferredFaceUsable()
         {
             if (_preferredFaceProvider == null)
+            {
+                return false;
+            }
+
+            if (!IsSourceHealthUsable(
+                    _preferredFaceHealth,
+                    TrackingRegion.Face))
             {
                 return false;
             }
@@ -243,7 +265,10 @@ namespace VCR.Runtime.Tracking.Routing
             }
 
             if ((selected == null || selected.Face == null) &&
-                _fallbackProvider != null)
+                _fallbackProvider != null &&
+                IsSourceHealthUsable(
+                    _fallbackHealth,
+                    TrackingRegion.Face))
             {
                 _fallbackProvider.TryGetLatestFace(out selected);
             }
@@ -284,6 +309,9 @@ namespace VCR.Runtime.Tracking.Routing
         private void UpdateBodyHandsSnapshot()
         {
             if (_fallbackProvider == null ||
+                !IsSourceHealthUsable(
+                    _fallbackHealth,
+                    TrackingRegion.UpperBody) ||
                 !_fallbackProvider.TryGetLatestBodyHands(out var selected) ||
                 selected == null)
             {
@@ -331,9 +359,12 @@ namespace VCR.Runtime.Tracking.Routing
 
             var presence = _externalPosePresence?.Presence;
             var usable =
-                !presence.HasValue ||
-                (presence.Value.FullBodySourceAvailable &&
-                 presence.Value.FullBodySubjectEvidence);
+                IsSourceHealthUsable(
+                    _externalPoseHealth,
+                    TrackingRegion.FullBody) &&
+                (!presence.HasValue ||
+                 (presence.Value.FullBodySourceAvailable &&
+                  presence.Value.FullBodySubjectEvidence));
 
             if (!usable)
             {
@@ -540,6 +571,27 @@ namespace VCR.Runtime.Tracking.Routing
                     "tracking.route.expression_switches",
                     _expressionSourceSwitches,
                     "count"));
+
+            AddHealthMetric(
+                output,
+                "tracking.route.preferred_face_health",
+                _preferredFaceHealth,
+                TrackingRegion.Face);
+            AddHealthMetric(
+                output,
+                "tracking.route.fallback_face_health",
+                _fallbackHealth,
+                TrackingRegion.Face);
+            AddHealthMetric(
+                output,
+                "tracking.route.body_health",
+                _fallbackHealth,
+                TrackingRegion.UpperBody);
+            AddHealthMetric(
+                output,
+                "tracking.route.fullbody_health",
+                _externalPoseHealth,
+                TrackingRegion.FullBody);
         }
 
         private void UpdateRouteStatus(
@@ -590,6 +642,43 @@ namespace VCR.Runtime.Tracking.Routing
                 (nowUs -
                  frame.RuntimeTimestampUs) /
                 1000.0);
+        }
+
+        private static bool IsSourceHealthUsable(
+            ITrackingSourceHealthProvider provider,
+            TrackingRegion region)
+        {
+            if (provider == null)
+            {
+                return true;
+            }
+
+            return
+                provider.TryGetSourceHealth(
+                    region,
+                    out var snapshot) &&
+                snapshot.IsUsable;
+        }
+
+        private static void AddHealthMetric(
+            List<RuntimeMetric> output,
+            string name,
+            ITrackingSourceHealthProvider provider,
+            TrackingRegion region)
+        {
+            if (provider == null ||
+                !provider.TryGetSourceHealth(
+                    region,
+                    out var snapshot))
+            {
+                return;
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    name,
+                    (int)snapshot.Health.State,
+                    "enum"));
         }
 
         private static void AddAgeMetric(
