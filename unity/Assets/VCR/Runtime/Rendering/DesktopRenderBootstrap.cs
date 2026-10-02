@@ -65,17 +65,14 @@ namespace VCR.Runtime.Rendering
 
         private void Awake()
         {
-            if (targetCamera == null)
-            {
-                targetCamera = Camera.main;
-            }
-
+            ResolveTargetCamera();
             Apply();
         }
 
         [ContextMenu("Apply Render Baseline")]
         public void Apply()
         {
+            ResolveTargetCamera();
             CaptureRuntimeState();
 
             Application.runInBackground = runInBackground;
@@ -249,6 +246,14 @@ namespace VCR.Runtime.Rendering
                 _originalAllowMsaa =
                     targetCamera.allowMSAA;
                 _cameraStateCaptured = true;
+            }
+        }
+
+        private void ResolveTargetCamera()
+        {
+            if (targetCamera == null)
+            {
+                targetCamera = Camera.main;
             }
         }
 
