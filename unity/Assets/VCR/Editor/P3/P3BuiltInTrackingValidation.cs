@@ -5,6 +5,7 @@ using UnityEngine;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Tracking.ArKit;
 using VCR.Runtime.Tracking.ArKitUnity;
+using VCR.Runtime.Tracking.AudioUnity;
 using VCR.Runtime.Tracking.MediaPipe;
 
 namespace VCR.Editor.P3
@@ -157,6 +158,68 @@ namespace VCR.Editor.P3
                     "ARKit receiver status must retain transport counters during source loss",
                     failures);
 
+                var rms =
+                    AudioDrivenExpressionMath
+                        .ComputeRms(
+                            new[]
+                            {
+                                0.5f,
+                                -0.5f,
+                                0.5f,
+                                -0.5f
+                            });
+
+                Expect(
+                    Math.Abs(
+                        rms -
+                        0.5f) <
+                    0.0001f,
+                    "audio fallback RMS math must be deterministic",
+                    failures);
+
+                var normalizedAudio =
+                    AudioDrivenExpressionMath
+                        .NormalizeLevel(
+                            rms: 0.06f,
+                            threshold: 0.01f,
+                            gain: 10f);
+
+                Expect(
+                    Math.Abs(
+                        normalizedAudio -
+                        0.5f) <
+                    0.0001f,
+                    "audio fallback level normalization must apply threshold and gain",
+                    failures);
+
+                var attack =
+                    AudioDrivenExpressionMath
+                        .Smooth(
+                            current: 0f,
+                            target: 1f,
+                            deltaSeconds: 0.05f,
+                            attackSeconds: 0.05f,
+                            releaseSeconds: 0.2f);
+
+                var release =
+                    AudioDrivenExpressionMath
+                        .Smooth(
+                            current: 1f,
+                            target: 0f,
+                            deltaSeconds: 0.05f,
+                            attackSeconds: 0.05f,
+                            releaseSeconds: 0.2f);
+
+                Expect(
+                    attack > 0f &&
+                    attack < 1f &&
+                    release > 0f &&
+                    release < 1f &&
+                    attack >
+                        (1f - release),
+                    "audio fallback attack/release smoothing must use separate time constants",
+                    failures);
+
                 texture =
                     new Texture2D(
                         2,
@@ -208,7 +271,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(ARKit lifecycle/no-subject/source-loss distinction, capture status, disabled preprocessing path)");
+                    "(ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
