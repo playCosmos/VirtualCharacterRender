@@ -1,8 +1,8 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$UnityEditor = $env:UNITY_EDITOR
 )
+
+$ErrorActionPreference = "Stop"
 
 $UnityVersion = "6000.3.25f1"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
