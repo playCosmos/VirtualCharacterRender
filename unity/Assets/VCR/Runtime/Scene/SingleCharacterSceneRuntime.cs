@@ -39,6 +39,8 @@ namespace VCR.Runtime.Scene
         private SceneRuntimeState _state = SceneRuntimeState.Uninitialized;
         private string _lastError;
         private bool _applicationQuitting;
+        private SceneRuntimeState _stateBeforeSuspend =
+            SceneRuntimeState.Ready;
         private IOverlayOutputAdapter _overlayOutput;
         private IEnvironmentRuntime _environmentRuntime;
         private CapabilityRegistry _capabilities;
@@ -311,6 +313,66 @@ namespace VCR.Runtime.Scene
                     .FromSettings(settings);
 
             _overlayOutput.Apply(settings);
+        }
+
+        public bool Suspend()
+        {
+            if (_state == SceneRuntimeState.Suspended)
+            {
+                return true;
+            }
+
+            if (_state == SceneRuntimeState.Suspended ||
+                _state == SceneRuntimeState.ShuttingDown ||
+                _state == SceneRuntimeState.Stopped ||
+                _applicationQuitting)
+            {
+                return false;
+            }
+
+            if (_state == SceneRuntimeState.Uninitialized &&
+                !Initialize())
+            {
+                return false;
+            }
+
+            _stateBeforeSuspend =
+                _state == SceneRuntimeState.CharacterReady
+                    ? SceneRuntimeState.CharacterReady
+                    : SceneRuntimeState.Ready;
+
+            CancelActiveOperation();
+            _overlayOutput?.Shutdown();
+            SetState(SceneRuntimeState.Suspended);
+            return true;
+        }
+
+        public bool Resume()
+        {
+            if (_state != SceneRuntimeState.Suspended ||
+                _applicationQuitting)
+            {
+                return false;
+            }
+
+            ResolveDependencies();
+
+            renderBootstrap?.Apply();
+            cameraController?.Apply();
+            lightController?.Apply();
+
+            if (_overlayOutput != null)
+            {
+                _overlayOutput.Apply(
+                    _overlayConfiguration.ToSettings());
+            }
+
+            _lastError = null;
+            SetState(
+                CurrentCharacter != null
+                    ? SceneRuntimeState.CharacterReady
+                    : _stateBeforeSuspend);
+            return true;
         }
 
         public void Shutdown()
