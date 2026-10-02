@@ -49,7 +49,9 @@ P2 does not duplicate these paths.
   - vector
   - enum
 - texture remains available through the direct runtime API
-- serialized texture preset binding is explicitly rejected until a resolver contract exists
+- serialized texture preset binding is supported through texture IDs
+- custom texture resolvers can implement `IMaterialTextureResolver`
+- `RuntimeTextureRegistry` provides the default lightweight resolver fallback
 
 ### Source shader / MToon preservation
 
@@ -72,7 +74,7 @@ This path is intended to preserve MToon and other source shader behavior instead
 - current-device shader support
 - shader property existence
 - shader property type compatibility
-- unsupported serialized texture bindings
+- missing/unknown texture IDs
 
 Reports include:
 
@@ -85,6 +87,14 @@ Reports include:
 
 A preflight-incompatible preset leaves the currently active material unchanged.
 
+### Texture resolver
+
+- serialized presets store texture IDs rather than Unity object references
+- optional custom resolver injection through `IMaterialTextureResolver`
+- fallback resolution through `RuntimeTextureRegistry`
+- unresolved texture IDs fail during compatibility preflight
+- resolved textures are applied only to the runtime clone
+
 ### Atomic preset application
 
 `TryApplyPreset` performs:
@@ -95,6 +105,28 @@ A preflight-incompatible preset leaves the currently active material unchanged.
 4. active status update with preset ID
 
 If mutation begins and then throws, the controller restores the source material through the existing fallback path.
+
+### Preset persistence
+
+- versioned `MaterialPresetDocument`
+- current preset schema version: 1
+- JSON store with atomic replace
+- duplicate preset IDs rejected
+- null/invalid presets rejected
+- unsupported schema versions rejected
+- all-slot compatibility summary through `EvaluatePresetForAllSlots`
+
+### Shader bundle diagnostics
+
+- `ShaderBundleLoadStatus`
+- per-attempt sequence
+- normalized bundle path
+- success/failure
+- registered shader count and IDs
+- current RuntimePlatform
+- current graphics API
+- guarded invalid/missing path handling
+- runtime shader registry exposes registered shader IDs for later UI
 
 ### Status and restore
 
@@ -129,8 +161,15 @@ Current P2 checks cover:
 - active preset status
 - invalid property rejection before mutation
 - current material unchanged on preflight failure
-- explicit rejection of serialized texture preset bindings
+- registered texture-ID preset application
+- unresolved texture-ID preflight rejection
 - explicit shader-ID preset path
+- shader registry ID snapshot
+- missing bundle failure status with platform/API context
+- all-slot compatibility summary
+- preset JSON save/load round-trip
+- atomic preset document replacement
+- duplicate preset ID rejection
 - status snapshot
 - exact source-material restore
 
@@ -138,10 +177,9 @@ Actual Unity compilation/package resolution and real VRM/MToon execution remain 
 
 ## Next P2 work
 
-1. texture resolver contract for serialized presets
-2. shader-bundle compatibility metadata and loaded-bundle status
-3. preset persistence/package representation
-4. per-preset compatibility summary suitable for UI
-5. external bundle wrong-platform / missing-shader diagnostics
-6. source-free tests for resolver and metadata behavior
-7. real VRM/MToon validation when Unity and model assets are available
+1. shader-bundle sidecar metadata and wrong-target preflight rejection
+2. package-level shader/texture resource manifest
+3. preset-to-character binding persistence strategy across VRM reloads
+4. compatibility summary aggregation suitable for UI badges/messages
+5. real external bundle load validation on Windows/macOS
+6. real VRM/MToon validation when Unity and model assets are available
