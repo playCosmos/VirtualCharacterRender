@@ -99,6 +99,41 @@ namespace VCR.Runtime.Rendering
             }
         }
 
+        public RenderRuntimeSettings CaptureSettings()
+        {
+            var resolution = GetResolution();
+
+            return new RenderRuntimeSettings
+            {
+                ResolutionPreset = resolutionPreset,
+                Width = resolution.width,
+                Height = resolution.height,
+                RenderScale = renderScale,
+                TargetFrameRate = targetFrameRate,
+                UseVSync = useVSync,
+                RunInBackground = runInBackground
+            };
+        }
+
+        public void Apply(RenderRuntimeSettings settings)
+        {
+            resolutionPreset = settings.ResolutionPreset;
+            customWidth = Math.Max(320, settings.Width);
+            customHeight = Math.Max(240, settings.Height);
+            renderScale = Mathf.Clamp(
+                settings.RenderScale,
+                0.5f,
+                2.0f);
+            targetFrameRate = Math.Clamp(
+                settings.TargetFrameRate,
+                30,
+                240);
+            useVSync = settings.UseVSync;
+            runInBackground = settings.RunInBackground;
+
+            Apply();
+        }
+
         public void SetPreset(RenderResolutionPreset preset)
         {
             resolutionPreset = preset;
