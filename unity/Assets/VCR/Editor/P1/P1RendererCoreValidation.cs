@@ -4,6 +4,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Character;
+using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 
@@ -202,6 +203,10 @@ namespace VCR.Editor.P1
                     "target frame rate must clamp to 30 FPS minimum",
                     failures);
 
+                var outputAdapter =
+                    root.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+
                 var scene =
                     root.AddComponent<
                         SingleCharacterSceneRuntime>();
@@ -229,6 +234,30 @@ namespace VCR.Editor.P1
                         scene.LightController,
                         lightController),
                     "scene runtime must resolve the primary light adapter",
+                    failures);
+
+                Expect(
+                    ReferenceEquals(
+                        scene.OverlayOutput,
+                        outputAdapter),
+                    "scene runtime must resolve the overlay output adapter",
+                    failures);
+
+                var outputSettings =
+                    new OverlayOutputSettings(
+                        transparent: true,
+                        topmost: false,
+                        clickThrough: true);
+
+                scene.ApplyOverlayOutput(
+                    outputSettings);
+
+                Expect(
+                    outputAdapter.ApplyCount == 1 &&
+                    outputAdapter.LastSettings.Transparent &&
+                    !outputAdapter.LastSettings.Topmost &&
+                    outputAdapter.LastSettings.ClickThrough,
+                    "scene runtime must route overlay output settings through the adapter",
                     failures);
 
                 scene.UnloadCharacter();
@@ -262,6 +291,11 @@ namespace VCR.Editor.P1
                     scene.State ==
                     SceneRuntimeState.Stopped,
                     "scene shutdown must end in Stopped state",
+                    failures);
+
+                Expect(
+                    outputAdapter.ShutdownCount == 1,
+                    "scene shutdown must shut down the overlay output adapter exactly once",
                     failures);
 
                 Expect(
@@ -369,7 +403,7 @@ namespace VCR.Editor.P1
             {
                 Debug.Log(
                     "VCR P1 renderer core validation: PASS " +
-                    "(graphics clamps, scene lifecycle, camera/light adapters, runtime restore, no per-frame coordinator loops)");
+                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, runtime restore, no per-frame coordinator loops)");
                 return true;
             }
 
