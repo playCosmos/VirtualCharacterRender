@@ -10,6 +10,7 @@ namespace VCR.Runtime.Scene
         public SceneCameraSettings Camera;
         public SceneLightSettings Light;
         public OverlayOutputConfiguration Overlay;
+        public string EnvironmentStateId;
 
         public static SceneRuntimeConfiguration Default =>
             new()
@@ -21,7 +22,9 @@ namespace VCR.Runtime.Scene
                 Light =
                     SceneLightSettings.DefaultDirectional,
                 Overlay =
-                    OverlayOutputConfiguration.Default
+                    OverlayOutputConfiguration.Default,
+                EnvironmentStateId =
+                    "default"
             };
     }
 }
