@@ -26,6 +26,7 @@ namespace VCR.Editor.P1
         {
             var failures = new List<string>();
             GameObject root = null;
+            GameObject applicationRoot = null;
 
             var originalRunInBackground =
                 Application.runInBackground;
@@ -678,6 +679,121 @@ namespace VCR.Editor.P1
                     originalLightShadows,
                     "shutdown must restore primary light settings",
                     failures);
+
+
+                applicationRoot =
+                    new GameObject(
+                        "VCR P1 Application Bootstrap Validation");
+
+                var applicationCharacter =
+                    new GameObject("Character");
+                applicationCharacter.transform.SetParent(
+                    applicationRoot.transform,
+                    false);
+                applicationCharacter.AddComponent<
+                    Vrm10CharacterLoader>();
+
+                applicationRoot.AddComponent<
+                    DesktopRenderBootstrap>();
+
+                var applicationScene =
+                    applicationRoot.AddComponent<
+                        SingleCharacterSceneRuntime>();
+
+                var applicationBootstrap =
+                    applicationRoot.AddComponent<
+                        ApplicationRuntimeBootstrap>();
+
+                var applicationConfiguration =
+                    SceneRuntimeConfiguration.Default;
+                applicationConfiguration.Rendering.ResolutionPreset =
+                    RenderResolutionPreset.Custom;
+                applicationConfiguration.Rendering.Width = 960;
+                applicationConfiguration.Rendering.Height = 540;
+
+                var applicationConfigurationPath =
+                    Path.Combine(
+                        configurationTestDirectory,
+                        "application-config.json");
+
+                var applicationStore =
+                    new RuntimeConfigurationStore(
+                        applicationConfigurationPath);
+
+                Expect(
+                    applicationStore.TrySave(
+                        applicationConfiguration,
+                        out var applicationSeedError) &&
+                    string.IsNullOrEmpty(
+                        applicationSeedError),
+                    "application bootstrap validation config must be seeded",
+                    failures);
+
+                var applicationOptions =
+                    ApplicationLaunchOptions.Parse(
+                        new[]
+                        {
+                            "--vcr-config=" +
+                            applicationConfigurationPath
+                        });
+
+                var applicationStarted =
+                    applicationBootstrap
+                        .StartRuntimeAsync(
+                            applicationOptions)
+                        .GetAwaiter()
+                        .GetResult();
+
+                Expect(
+                    applicationStarted &&
+                    applicationBootstrap.IsStarted &&
+                    applicationBootstrap.ConfigurationPath ==
+                        Path.GetFullPath(
+                            applicationConfigurationPath) &&
+                    applicationScene.CaptureConfiguration()
+                        .Rendering.Width ==
+                        960 &&
+                    applicationScene.CaptureConfiguration()
+                        .Rendering.Height ==
+                        540,
+                    "application bootstrap must load persisted configuration before normal runtime use",
+                    failures);
+
+                applicationBootstrap.Suspend();
+
+                Expect(
+                    applicationScene.State ==
+                    SceneRuntimeState.Suspended,
+                    "application bootstrap suspend must suspend the scene runtime",
+                    failures);
+
+                applicationBootstrap.Resume();
+
+                Expect(
+                    applicationScene.State ==
+                    SceneRuntimeState.Ready,
+                    "application bootstrap resume must restore the scene runtime",
+                    failures);
+
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var applicationSaveError) &&
+                    string.IsNullOrEmpty(
+                        applicationSaveError),
+                    "application bootstrap must save the current scene configuration",
+                    failures);
+
+                Expect(
+                    applicationBootstrap.Shutdown(
+                        saveConfiguration: false,
+                        out var applicationShutdownError) &&
+                    string.IsNullOrEmpty(
+                        applicationShutdownError) &&
+                    !applicationBootstrap.IsStarted &&
+                    applicationScene.State ==
+                        SceneRuntimeState.Stopped,
+                    "application bootstrap explicit shutdown must stop the scene runtime",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -700,6 +816,12 @@ namespace VCR.Editor.P1
                         root);
                 }
 
+                if (applicationRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        applicationRoot);
+                }
+
                 if (!string.IsNullOrWhiteSpace(
                         configurationTestDirectory) &&
                     Directory.Exists(
@@ -715,7 +837,7 @@ namespace VCR.Editor.P1
             {
                 Debug.Log(
                     "VCR P1 renderer core validation: PASS " +
-                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, capability lifecycle, suspend/resume, configuration persistence/versioning, runtime restore, no per-frame coordinator loops)");
+                    "(graphics clamps, scene lifecycle, camera/light adapters, overlay lifecycle, environment hook, capability lifecycle, application bootstrap, suspend/resume, configuration persistence/versioning, runtime restore, no per-frame coordinator loops)");
                 return true;
             }
 
