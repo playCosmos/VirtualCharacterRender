@@ -2,7 +2,8 @@
   "name": "VCR.Runtime.Tracking.Routing",
   "rootNamespace": "VCR.Runtime.Tracking.Routing",
   "references": [
-    "VCR.Runtime.Tracking"
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
