@@ -94,19 +94,19 @@ Exit criteria:
 
 ## P1 — Cross-platform Renderer Core
 
-Status: Active. See `P1_STATUS.md`.
+Status: Source implementation checkpointed; runtime/device evidence remains deferred. See `P1_STATUS.md`.
 
 One-character scene/character lifecycle, camera/light abstraction, frame timing, model hot reload, dynamic-environment hook, resolution/render scale, diagnostics, safe shutdown, platform adapters, and capability lifecycle.
 
 ## P2 — Material and Shader Runtime
 
-Status: Active. See `P2_STATUS.md`.
+Status: Source implementation checkpointed; runtime/device evidence remains deferred. See `P2_STATUS.md`.
 
 Material-slot abstraction, MToon preservation, runtime overrides, generic shader parameters, presets, fallback material, cross-platform compatibility reporting, and error handling.
 
 ## P3 — Built-in Basic Motion Capture
 
-Status: Active. See `P3_STATUS.md`.
+Status: Source implementation checkpointed; real webcam/ARKit quality and performance evidence remains deferred. See `P3_STATUS.md`.
 
 Productionize:
 
@@ -126,7 +126,9 @@ Do not split Holistic into separate Hand/Pose tasks unless measured profiling or
 
 ## P4 — Tracking Abstraction and Routing
 
-Source health, timestamps, confidence, subject validity, smoothing, source priority, region routing, source hot switching, and subject/source loss distinction for the one active performer.
+Status: Source implementation complete enough for a checkpoint; Unity source-free validation and real-device transition evidence are still required. See `P4_STATUS.md`.
+
+Implemented source scope includes common source health, timestamps/route age, subject validity, explicit source-priority policy, region routing, hot switching, route diagnostics, and VMC-to-audio expression fallback selection for the one active performer.
 
 Multi-person identity tracking is not in scope.
 

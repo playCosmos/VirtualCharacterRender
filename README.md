@@ -70,11 +70,15 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The Unity P0 implementation is scaffolded on `feature/p0-unity-bootstrap`. Source-free feasibility paths are implemented; Windows/macOS standalone, hardware, tracking-quality, OBS, and performance evidence remain required before P0 closeout.
+The source implementation has progressed through P4 tracking abstraction/routing. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
 
 ## Architecture documents
 
 - [P0 status](docs/P0_STATUS.md)
+- [P1 status](docs/P1_STATUS.md)
+- [P2 status](docs/P2_STATUS.md)
+- [P3 status](docs/P3_STATUS.md)
+- [P4 status](docs/P4_STATUS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -104,6 +108,6 @@ The Unity P0 implementation is scaffolded on `feature/p0-unity-bootstrap`. Sourc
 
 ## Status
 
-P0 architecture/feasibility implementation is active on `feature/p0-unity-bootstrap`.
+P1-P3 source implementations are preserved as source checkpoints. P4 tracking abstraction/routing is the current implementation phase and now includes common source health, policy-driven face routing, route diagnostics, and VMC-to-audio expression fallback selection.
 
-The remaining closeout work is evidence-driven: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements.
+Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.

@@ -8,10 +8,10 @@ namespace VCR.Runtime.Tracking.Routing
     /// <summary>
     /// Region router for one performer.
     ///
-    /// Preferred face provider (ARKit) wins only while it is stably present.
-    /// Body/hands remain on the fallback provider (MediaPipe). When preferred
-    /// face is active, an optional activation control suspends expensive
-    /// fallback face inference.
+    /// Face ownership is selected from explicit source-kind priority policy.
+    /// Body/hands remain on the MediaPipe fallback provider, while optional
+    /// full-body and expression sources route independently. When the selected
+    /// face policy favors ARKit, redundant MediaPipe face inference can sleep.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(5000)]
@@ -90,6 +90,8 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void Awake()
         {
+            routePolicy ??=
+                TrackingRoutePolicy.CreateDefault();
             ResolveProviders();
 
             _presenceResolver = new TrackingPresenceResolver(
@@ -390,6 +392,7 @@ namespace VCR.Runtime.Tracking.Routing
                     out var selected) ||
                 selected?.Face == null)
             {
+                _latestFace = null;
                 return;
             }
 
@@ -430,6 +433,7 @@ namespace VCR.Runtime.Tracking.Routing
                 !_fallbackProvider.TryGetLatestBodyHands(out var selected) ||
                 selected == null)
             {
+                _latestBodyHands = null;
                 return;
             }
 
