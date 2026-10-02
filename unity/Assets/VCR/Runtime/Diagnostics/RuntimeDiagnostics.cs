@@ -62,14 +62,14 @@ namespace VCR.Runtime.Diagnostics
         private readonly List<RuntimeMetric> _metrics = new(64);
         private bool _csvHeaderWritten;
 
-        private void Awake()
+        protected virtual void Awake()
         {
             _frameMs = new float[frameWindowFrames];
             _sortScratch = new float[frameWindowFrames];
             ResolveProvider();
         }
 
-        private void Start()
+        protected virtual void Start()
         {
             _lastReportTime =
                 Time.realtimeSinceStartupAsDouble;
@@ -99,7 +99,7 @@ namespace VCR.Runtime.Diagnostics
             }
         }
 
-        private void Update()
+        protected virtual void Update()
         {
             SampleFrameTime();
 
