@@ -7,7 +7,8 @@
     "VCR.Runtime.Character",
     "VCR.Runtime.Rendering",
     "VCR.Runtime.Scene",
-    "VRM10"
+    "VRM10",
+    "VCR.Runtime.Output"
   ],
   "includePlatforms": [
     "Editor"
