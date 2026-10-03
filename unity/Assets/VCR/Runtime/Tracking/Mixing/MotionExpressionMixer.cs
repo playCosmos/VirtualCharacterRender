@@ -90,6 +90,20 @@ namespace VCR.Runtime.Tracking.Mixing
             poseLayerProviderBehaviour is
                 ITrackingFrameProvider;
 
+        public float ExpressionLayerWeight =>
+            Mathf.Clamp01(
+                expressionLayerWeight);
+
+        public ExpressionBlendMode ExpressionLayerBlendMode =>
+            expressionBlendMode;
+
+        public bool IsExpressionLayerProvider(
+            MonoBehaviour provider) =>
+                provider != null &&
+                ReferenceEquals(
+                    expressionLayerProviderBehaviour,
+                    provider);
+
         private void Awake()
         {
             ResolveProviders();
