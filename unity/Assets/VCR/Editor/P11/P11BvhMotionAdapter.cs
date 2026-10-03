@@ -678,9 +678,13 @@ namespace VCR.Editor.P11
                 return false;
             }
 
-            var mapped =
-                BuildHumanoidMapping(
-                    bvh.Joints);
+            if (!TryBuildHumanoidMapping(
+                    bvh.Joints,
+                    out var mapped,
+                    out error))
+            {
+                return false;
+            }
 
             if (!mapped.ContainsKey(
                     HumanoidBoneId.Hips))
@@ -1025,11 +1029,14 @@ namespace VCR.Editor.P11
             }
         }
 
-        private static Dictionary<
-            HumanoidBoneId,
-            Joint> BuildHumanoidMapping(
-            IEnumerable<Joint> joints)
+        private static bool TryBuildHumanoidMapping(
+            IEnumerable<Joint> joints,
+            out Dictionary<
+                HumanoidBoneId,
+                Joint> result,
+            out string error)
         {
+            error = null;
             var selected =
                 new Dictionary<
                     HumanoidBoneId,
@@ -1057,17 +1064,37 @@ namespace VCR.Editor.P11
 
                 if (!selected.TryGetValue(
                         bone,
-                        out var current) ||
-                    priority >
+                        out var current))
+                {
+                    selected[
+                        bone] =
+                            (joint, priority);
+                    continue;
+                }
+
+                if (priority >
                     current.Priority)
                 {
                     selected[
                         bone] =
                             (joint, priority);
+                    continue;
+                }
+
+                if (priority ==
+                        current.Priority &&
+                    !ReferenceEquals(
+                        current.Joint,
+                        joint))
+                {
+                    result = null;
+                    error =
+                        $"BVH joints '{current.Joint.Name}' and '{joint.Name}' ambiguously map to humanoid bone '{bone}' with equal priority.";
+                    return false;
                 }
             }
 
-            var result =
+            result =
                 new Dictionary<
                     HumanoidBoneId,
                     Joint>();
@@ -1080,7 +1107,7 @@ namespace VCR.Editor.P11
                     pair.Value.Joint);
             }
 
-            return result;
+            return true;
         }
 
         private static int GetMappingPriority(
