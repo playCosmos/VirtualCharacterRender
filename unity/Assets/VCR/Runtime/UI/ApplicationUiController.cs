@@ -2700,6 +2700,94 @@ namespace VCR.Runtime.UI
             return true;
         }
 
+        private void SelectNextEnvironmentTransitionMode()
+        {
+            _environmentTransitionMode =
+                (EnvironmentTransitionMode)(
+                    ((int)_environmentTransitionMode +
+                     1) %
+                    (int)EnvironmentTransitionMode.Dissolve +
+                    0);
+
+            if (_environmentTransitionMode <
+                    EnvironmentTransitionMode.Cut ||
+                _environmentTransitionMode >
+                    EnvironmentTransitionMode.Dissolve)
+            {
+                _environmentTransitionMode =
+                    EnvironmentTransitionMode.Cut;
+            }
+
+            RefreshContextActions();
+        }
+
+        private void ApplyEnvironmentState()
+        {
+            var runtime =
+                sceneRuntime?.EnvironmentRuntime;
+            var stateId =
+                _environmentStateInput
+                    ?.text
+                    ?.Trim();
+
+            if (runtime == null ||
+                string.IsNullOrWhiteSpace(
+                    stateId))
+            {
+                _lastActionMessage =
+                    "Enter an environment state ID while the environment runtime is available.";
+                RefreshAll();
+                return;
+            }
+
+            var rawDuration =
+                _environmentTransitionDurationInput
+                    ?.text
+                    ?.Trim();
+            var duration =
+                0f;
+
+            if (!string.IsNullOrWhiteSpace(
+                    rawDuration) &&
+                (!float.TryParse(
+                     rawDuration,
+                     NumberStyles.Float,
+                     CultureInfo.InvariantCulture,
+                     out duration) ||
+                 float.IsNaN(
+                     duration) ||
+                 float.IsInfinity(
+                     duration) ||
+                 duration < 0f))
+            {
+                _lastActionMessage =
+                    "Environment transition duration must be a finite non-negative number.";
+                RefreshAll();
+                return;
+            }
+
+            var transition =
+                new EnvironmentTransitionSpec(
+                    _environmentTransitionMode,
+                    duration);
+
+            if (!runtime.SetState(
+                    stateId,
+                    transition,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Environment state apply failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Environment state '{stateId}' requested with {_environmentTransitionMode} ({duration:0.###}s).";
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -4151,7 +4239,9 @@ namespace VCR.Runtime.UI
                     if (_model.SelectedSection ==
                             ApplicationUiSection.Character ||
                         _model.SelectedSection ==
-                            ApplicationUiSection.MotionExpression)
+                            ApplicationUiSection.MotionExpression ||
+                        _model.SelectedSection ==
+                            ApplicationUiSection.Environment)
                     {
                         RefreshContextActions();
                     }
