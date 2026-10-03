@@ -41,7 +41,14 @@ namespace VCR.Runtime.Tracking.Mixing
                 basePose?.RootRotation ??
                 TrackingQuaternion.Identity;
 
-            if (settings.AffectRootPosition)
+            var rootPositionWeight =
+                weight *
+                settings.Mask.RootPositionWeight;
+            var rootRotationWeight =
+                weight *
+                settings.Mask.RootRotationWeight;
+
+            if (rootPositionWeight > 0f)
             {
                 rootPosition =
                     settings.BlendMode ==
@@ -50,14 +57,14 @@ namespace VCR.Runtime.Tracking.Mixing
                             rootPosition,
                             Scale(
                                 layerPose.RootPosition,
-                                weight))
+                                rootPositionWeight))
                         : Lerp(
                             rootPosition,
                             layerPose.RootPosition,
-                            weight);
+                            rootPositionWeight);
             }
 
-            if (settings.AffectRootRotation)
+            if (rootRotationWeight > 0f)
             {
                 rootRotation =
                     settings.BlendMode ==
@@ -68,11 +75,11 @@ namespace VCR.Runtime.Tracking.Mixing
                                 Nlerp(
                                     TrackingQuaternion.Identity,
                                     layerPose.RootRotation,
-                                    weight)))
+                                    rootRotationWeight)))
                         : Nlerp(
                             rootRotation,
                             layerPose.RootRotation,
-                            weight);
+                            rootRotationWeight);
             }
 
             var bones =
@@ -98,9 +105,13 @@ namespace VCR.Runtime.Tracking.Mixing
                         bone,
                         out var layerBone);
 
+                var boneWeight =
+                    weight *
+                    settings.Mask.GetBoneWeight(
+                        bone);
+
                 if (!hasLayer ||
-                    !settings.BoneMask
-                        .Includes(bone))
+                    boneWeight <= 0f)
                 {
                     if (hasBase)
                     {
@@ -131,7 +142,7 @@ namespace VCR.Runtime.Tracking.Mixing
                             basePosition,
                             Scale(
                                 layerBone.LocalPosition,
-                                weight));
+                                boneWeight));
 
                     rotation =
                         Normalize(
@@ -148,13 +159,13 @@ namespace VCR.Runtime.Tracking.Mixing
                         Lerp(
                             basePosition,
                             layerBone.LocalPosition,
-                            weight);
+                            boneWeight);
 
                     rotation =
                         Nlerp(
                             baseRotation,
                             layerBone.LocalRotation,
-                            weight);
+                            boneWeight);
                 }
 
                 bones[i] =
