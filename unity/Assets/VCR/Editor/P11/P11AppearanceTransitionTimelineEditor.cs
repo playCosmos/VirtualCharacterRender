@@ -293,20 +293,28 @@ namespace VCR.Editor.P11
                         "QueuePolicy")
                     .enumValueIndex;
 
-            if (queue ==
-                AppearanceTransitionQueuePolicy
-                    .Interrupt)
-            {
-                var cleanup =
-                    transition.FindPropertyRelative(
-                        "CancellationSteps");
+            var cleanup =
+                transition.FindPropertyRelative(
+                    "CancellationSteps");
 
-                if (cleanup.arraySize == 0)
-                {
-                    EditorGUILayout.HelpBox(
-                        "Interrupt requires at least one explicit cancellation cleanup action. Add motion.release, effect.stop, audio.stop, or another non-appearance cleanup action below.",
-                        MessageType.Warning);
-                }
+            if (queue ==
+                    AppearanceTransitionQueuePolicy
+                        .Interrupt &&
+                cleanup.arraySize == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Interrupt requires at least one explicit cancellation cleanup action. Add motion.release, effect.stop, audio.stop, or another non-appearance cleanup action below.",
+                    MessageType.Warning);
+            }
+
+            if (HasBlockingStep(
+                    transition.FindPropertyRelative(
+                        "Steps")) &&
+                cleanup.arraySize == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Blocking actions also require cancellation cleanup so timeout/failure cannot leave motion, particles, or audio running.",
+                    MessageType.Warning);
             }
         }
 
@@ -1499,6 +1507,34 @@ namespace VCR.Editor.P11
                                 "TimeSeconds")
                             .floatValue;
             }
+        }
+
+        private static bool HasBlockingStep(
+            SerializedProperty steps)
+        {
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+
+                if ((AppearanceTransitionStepKind)
+                        step.FindPropertyRelative(
+                                "Kind")
+                            .enumValueIndex ==
+                    AppearanceTransitionStepKind
+                        .Action &&
+                    step.FindPropertyRelative(
+                            "Blocking")
+                        .boolValue)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool HasCommit(
