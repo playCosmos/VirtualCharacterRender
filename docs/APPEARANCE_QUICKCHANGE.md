@@ -211,7 +211,7 @@ Examples include:
 - bow
 - pose-and-hold
 - Unity-project `AnimationClip` baked to a normalized additive cue asset through the P11 cue baker
-- externally imported motion files remain a P12 import/tooling concern
+- Unity-native external `.fbx`, `.dae`, and `.anim` motion files can be imported through the P11 external motion importer; non-native BVH/glTF-style formats still require dedicated adapters
 - user-authored procedural/additive pose sequence (runtime cue path implemented)
 
 Custom effect support uses registered effect presets and character/world anchors.
@@ -367,9 +367,9 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
 - richer transition timeline authoring: dependency visualization beyond the implemented StepId-based All/Any graph, package libraries, and non-scene workflows
-- external custom motion import/registration beyond the implemented Unity AnimationClip baker
+- external motion adapters for formats Unity does not natively import, such as BVH/glTF motion workflows
 - custom particle/effect preset import/registration
-- automatic import of markers/events from compatible motion assets
+- richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
 - transition interruption/fallback policy editing
 
 ## Current implementation status
@@ -444,9 +444,9 @@ Implemented built-in motion presentation now also includes:
 
 Not yet implemented as built-ins:
 
-- external motion-file import into Unity/AnimationClip assets
+- external motion adapters for non-Unity-native formats such as BVH/glTF; `.fbx`, `.dae`, and `.anim` import is implemented
 - richer user-preset management UI such as rename/reorder/duplicate
-- automatic marker/event extraction from external motion-file formats before they become Unity AnimationClips; Unity AnimationClip VCR marker extraction and baked-cue marker preservation are implemented
+- automatic marker/event extraction from non-native external motion formats before they become Unity AnimationClips; explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
 - richer dependency visualization/grouping beyond the implemented StepId-based `All` / `Any` completion graph
 - richer transition package management beyond the implemented v2 JSON import/export and v1 migration, such as package libraries/metadata/migration UI
 - external appearance package import
