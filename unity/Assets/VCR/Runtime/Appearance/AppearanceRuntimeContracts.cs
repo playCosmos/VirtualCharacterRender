@@ -83,6 +83,8 @@ namespace VCR.Runtime.Appearance
             AppearanceTransitionFallbackPolicy.Immediate;
         public AppearanceTransitionStep[] Steps =
             Array.Empty<AppearanceTransitionStep>();
+        public AppearanceTransitionStep[] CancellationSteps =
+            Array.Empty<AppearanceTransitionStep>();
     }
 
     public readonly struct AppearanceStateSnapshot
@@ -114,6 +116,33 @@ namespace VCR.Runtime.Appearance
             string activeTransitionId,
             bool transitionCommitted,
             string lastError)
+            : this(
+                runtimeId,
+                state,
+                currentPresetId,
+                currentOutfitId,
+                activeTransitionId,
+                transitionCommitted,
+                0.0,
+                0.0,
+                0.0,
+                false,
+                lastError)
+        {
+        }
+
+        public AppearanceRuntimeStatus(
+            string runtimeId,
+            AppearanceRuntimeState state,
+            string currentPresetId,
+            string currentOutfitId,
+            string activeTransitionId,
+            bool transitionCommitted,
+            double transitionElapsedSeconds,
+            double transitionDurationSeconds,
+            double transitionProgress01,
+            bool canCancelTransition,
+            string lastError)
         {
             RuntimeId = runtimeId;
             State = state;
@@ -121,6 +150,14 @@ namespace VCR.Runtime.Appearance
             CurrentOutfitId = currentOutfitId;
             ActiveTransitionId = activeTransitionId;
             TransitionCommitted = transitionCommitted;
+            TransitionElapsedSeconds =
+                transitionElapsedSeconds;
+            TransitionDurationSeconds =
+                transitionDurationSeconds;
+            TransitionProgress01 =
+                transitionProgress01;
+            CanCancelTransition =
+                canCancelTransition;
             LastError = lastError;
         }
 
@@ -130,6 +167,10 @@ namespace VCR.Runtime.Appearance
         public string CurrentOutfitId { get; }
         public string ActiveTransitionId { get; }
         public bool TransitionCommitted { get; }
+        public double TransitionElapsedSeconds { get; }
+        public double TransitionDurationSeconds { get; }
+        public double TransitionProgress01 { get; }
+        public bool CanCancelTransition { get; }
         public string LastError { get; }
         public bool Busy =>
             State == AppearanceRuntimeState.Transitioning ||
@@ -169,6 +210,9 @@ namespace VCR.Runtime.Appearance
 
         bool RestoreDefault(
             string transitionId,
+            out string error);
+
+        bool CancelTransition(
             out string error);
     }
 
