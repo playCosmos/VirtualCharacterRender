@@ -166,6 +166,10 @@ namespace VCR.Editor.P11
                 "broadcast target actions must follow operational scene state",
                 failures);
 
+            P11AppearanceRuntimeValidation
+                .RunChecks(
+                    failures);
+
             var unavailable =
                 model.CaptureSections();
 
@@ -185,7 +189,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, fallback selection, stable labels, action availability policy)");
+                    "(section order, availability, fallback selection, stable labels, action availability policy, transactional appearance quick change)");
                 return true;
             }
 
