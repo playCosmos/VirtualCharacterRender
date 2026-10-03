@@ -1840,10 +1840,15 @@ namespace VCR.Runtime.UI
 
             if (characterSelected)
             {
+                var appearanceState =
+                    _appearanceRuntime != null
+                        ? _appearanceRuntime.Status.State
+                        : AppearanceRuntimeState.Unconfigured;
                 var appearanceAvailable =
-                    _appearanceRuntime != null &&
-                    _appearanceRuntime.Status.State !=
-                        AppearanceRuntimeState.Unconfigured;
+                    ApplicationUiActionPolicy
+                        .CanMutateAppearance(
+                            _appearanceRuntime != null,
+                            appearanceState);
 
                 if (_appearancePreviousButton != null)
                 {
@@ -1882,11 +1887,6 @@ namespace VCR.Runtime.UI
                         appearanceAvailable &&
                         !_appearanceRuntime.Status.Busy;
                 }
-
-                var appearanceState =
-                    _appearanceRuntime != null
-                        ? _appearanceRuntime.Status.State
-                        : AppearanceRuntimeState.Unconfigured;
 
                 if (_appearanceRuntime != null)
                 {
