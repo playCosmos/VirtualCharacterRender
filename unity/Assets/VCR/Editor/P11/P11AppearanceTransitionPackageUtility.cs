@@ -123,16 +123,34 @@ namespace VCR.Editor.P11
                 return false;
             }
 
+            if (package.Version >
+                AppearanceTransitionPackage
+                    .CurrentVersion)
+            {
+                error =
+                    $"Transition package version {package.Version} is newer than supported version {AppearanceTransitionPackage.CurrentVersion}.";
+                return false;
+            }
+
+            if (package.Version < 1)
+            {
+                error =
+                    $"Transition package version {package.Version} is unsupported and has no migration path.";
+                return false;
+            }
+
+            if (package.Version == 1)
+            {
+                MigrateV1ToV2(
+                    package);
+            }
+
             if (package.Version !=
                 AppearanceTransitionPackage
                     .CurrentVersion)
             {
                 error =
-                    package.Version >
-                    AppearanceTransitionPackage
-                        .CurrentVersion
-                        ? $"Transition package version {package.Version} is newer than supported version {AppearanceTransitionPackage.CurrentVersion}."
-                        : $"Transition package version {package.Version} is unsupported and has no migration path.";
+                    $"Transition package version {package.Version} could not be migrated to supported version {AppearanceTransitionPackage.CurrentVersion}.";
                 return false;
             }
 
@@ -188,6 +206,68 @@ namespace VCR.Editor.P11
             }
 
             return true;
+        }
+
+        private static void MigrateV1ToV2(
+            AppearanceTransitionPackage package)
+        {
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                if (transition == null)
+                {
+                    continue;
+                }
+
+                transition.Markers ??=
+                    Array.Empty<
+                        AppearanceTransitionMarker>();
+                transition.Steps ??=
+                    Array.Empty<
+                        AppearanceTransitionStep>();
+                transition.CancellationSteps ??=
+                    Array.Empty<
+                        AppearanceTransitionStep>();
+
+                NormalizeV2Defaults(
+                    transition.Steps);
+                NormalizeV2Defaults(
+                    transition.CancellationSteps);
+            }
+
+            package.Version =
+                AppearanceTransitionPackage
+                    .CurrentVersion;
+        }
+
+        private static void NormalizeV2Defaults(
+            AppearanceTransitionStep[] steps)
+        {
+            foreach (var step in
+                     steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null)
+                {
+                    continue;
+                }
+
+                step.DependsOnStepIds ??=
+                    Array.Empty<string>();
+
+                if (step.DependencyMode ==
+                        AppearanceTransitionDependencyMode.None &&
+                    step.DependencyTimeoutSeconds <= 0.0)
+                {
+                    step.DependencyTimeoutSeconds =
+                        5.0;
+                }
+            }
         }
 
         public static AppearanceTransitionPreset
