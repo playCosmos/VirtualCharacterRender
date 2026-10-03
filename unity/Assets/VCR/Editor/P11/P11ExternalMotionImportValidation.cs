@@ -299,6 +299,13 @@ Frame Time: 0.5
                             bvhSidecarPath,
                             autoDetectSidecar:
                                 false,
+                            new P11ExternalMotionImportOptions
+                            {
+                                BvhPositionScale =
+                                    0.02f,
+                                BvhMirrorX =
+                                    false
+                            },
                             out var bvhResult,
                             out var bvhError),
                     "BVH adapter import must succeed through the shared external motion pipeline: " +
@@ -346,6 +353,12 @@ Frame Time: 0.5
                     Expect(
                         bvhResult.AdapterId ==
                             "bvh" &&
+                        bvhResult.SourceAssetPath !=
+                            null &&
+                        bvhResult.SourceAssetPath
+                            .EndsWith(
+                                ".bvh.bytes",
+                                StringComparison.OrdinalIgnoreCase) &&
                         cue != null &&
                         cue.FrameCount ==
                             3 &&
@@ -358,8 +371,8 @@ Frame Time: 0.5
                             3 &&
                         Math.Abs(
                             cue.RootPositionOffsets[1]
-                                .x +
-                            1.0f) <
+                                .x -
+                            2.0f) <
                             0.001f &&
                         hipsFound &&
                         chestFound &&
@@ -373,7 +386,7 @@ Frame Time: 0.5
                                 .TimeSeconds -
                             0.5f) <
                             0.001f,
-                        "BVH adapter must create a three-frame additive humanoid cue, mirror root X, map common bones, and preserve sidecar markers",
+                        "BVH adapter must create a three-frame additive humanoid cue, honor position-scale/handedness options, archive source bytes, map common bones, and preserve sidecar markers",
                         failures);
                 }
                 else
