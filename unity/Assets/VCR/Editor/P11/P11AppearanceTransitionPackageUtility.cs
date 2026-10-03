@@ -290,6 +290,16 @@ namespace VCR.Editor.P11
                             step.MarkerName,
                         MarkerOffsetSeconds =
                             step.MarkerOffsetSeconds,
+                        StepId =
+                            step.StepId,
+                        DependencyMode =
+                            step.DependencyMode,
+                        DependsOnStepIds =
+                            step.DependsOnStepIds != null
+                                ? (string[])step.DependsOnStepIds.Clone()
+                                : Array.Empty<string>(),
+                        DependencyTimeoutSeconds =
+                            step.DependencyTimeoutSeconds,
                         Kind =
                             step.Kind,
                         ActionType =
