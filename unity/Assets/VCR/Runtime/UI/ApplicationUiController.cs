@@ -7,11 +7,13 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VCR.Runtime.Application;
 using VCR.Runtime.Appearance;
+using VCR.Runtime.Capabilities;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Environment;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Materials.Unity;
 using VCR.Runtime.Output;
+using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Tracking.Mixing;
@@ -98,6 +100,15 @@ namespace VCR.Runtime.UI
         private Button _eventApplyMaxCommandsButton;
         private Button _eventSaveRulesButton;
         private Button _eventReloadRulesButton;
+        private Button _settingsPreviousCapabilityButton;
+        private Button _settingsNextCapabilityButton;
+        private Button _settingsToggleCapabilityButton;
+        private InputField _settingsRenderScaleInput;
+        private Button _settingsApplyRenderScaleButton;
+        private InputField _settingsFpsInput;
+        private Button _settingsApplyFpsButton;
+        private Button _settingsVsyncButton;
+        private Button _settingsRunInBackgroundButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -147,6 +158,7 @@ namespace VCR.Runtime.UI
             EnvironmentTransitionMode.Cut;
         private int _materialSlotIndex;
         private int _eventRuleIndex;
+        private int _settingsCapabilityIndex;
 
         public ApplicationUiModel Model => _model;
 
@@ -267,6 +279,15 @@ namespace VCR.Runtime.UI
             _eventApplyMaxCommandsButton = null;
             _eventSaveRulesButton = null;
             _eventReloadRulesButton = null;
+            _settingsPreviousCapabilityButton = null;
+            _settingsNextCapabilityButton = null;
+            _settingsToggleCapabilityButton = null;
+            _settingsRenderScaleInput = null;
+            _settingsApplyRenderScaleButton = null;
+            _settingsFpsInput = null;
+            _settingsApplyFpsButton = null;
+            _settingsVsyncButton = null;
+            _settingsRunInBackgroundButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -1141,6 +1162,87 @@ namespace VCR.Runtime.UI
             _eventReloadRulesButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 110f;
+
+            _settingsPreviousCapabilityButton =
+                CreateButton(
+                    "Prev Capability",
+                    _contextActions,
+                    SelectPreviousCapability);
+            _settingsPreviousCapabilityButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 125f;
+
+            _settingsNextCapabilityButton =
+                CreateButton(
+                    "Next Capability",
+                    _contextActions,
+                    SelectNextCapability);
+            _settingsNextCapabilityButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 125f;
+
+            _settingsToggleCapabilityButton =
+                CreateButton(
+                    "Capability",
+                    _contextActions,
+                    ToggleSelectedCapability);
+            _settingsToggleCapabilityButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 220f;
+
+            _settingsRenderScaleInput =
+                CreateInputField(
+                    "Settings Render Scale",
+                    _contextActions,
+                    "Scale 0.5..2");
+            _settingsRenderScaleInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 105f;
+
+            _settingsApplyRenderScaleButton =
+                CreateButton(
+                    "Set Scale",
+                    _contextActions,
+                    ApplySettingsRenderScale);
+            _settingsApplyRenderScaleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 95f;
+
+            _settingsFpsInput =
+                CreateInputField(
+                    "Settings FPS",
+                    _contextActions,
+                    "FPS 30..240");
+            _settingsFpsInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 105f;
+
+            _settingsApplyFpsButton =
+                CreateButton(
+                    "Set FPS",
+                    _contextActions,
+                    ApplySettingsFps);
+            _settingsApplyFpsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 85f;
+
+            _settingsVsyncButton =
+                CreateButton(
+                    "VSync",
+                    _contextActions,
+                    ToggleSettingsVsync);
+            _settingsVsyncButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 105f;
+
+            _settingsRunInBackgroundButton =
+                CreateButton(
+                    "Background",
+                    _contextActions,
+                    ToggleSettingsRunInBackground);
+            _settingsRunInBackgroundButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 145f;
 
             _appearanceActions =
                 CreateRect(
