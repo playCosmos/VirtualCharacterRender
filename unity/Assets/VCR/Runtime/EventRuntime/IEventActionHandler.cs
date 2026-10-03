@@ -9,4 +9,15 @@ namespace VCR.Runtime.EventRuntime
             EventActionCommand command,
             out string error);
     }
+
+    public interface IEventActionCompletionProbe
+    {
+        bool CanTrackCompletion(
+            EventActionCommand command);
+
+        bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error);
+    }
 }
