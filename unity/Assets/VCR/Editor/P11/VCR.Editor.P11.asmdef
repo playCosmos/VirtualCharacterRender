@@ -16,6 +16,8 @@
     "VCR.Runtime.Application",
     "VCR.Runtime.Appearance",
     "VCR.Runtime.Appearance.Unity",
+    "VCR.Runtime.EventRuntime",
+    "VCR.Runtime.EventRuntime.Unity",
     "VCR.Runtime.Scene",
     "VCR.Runtime.UI"
   ],
