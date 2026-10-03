@@ -104,7 +104,7 @@ Implemented source contracts:
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
 - `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
-- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
+- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
 - selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
@@ -185,7 +185,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - recursive appearance.* transition action rejection
 - built-in effect.play/effect.stop root activation/deactivation through transition actions
 - procedural motion cue sampling plus motion.play/motion.release state changes through the transition bridge
-- AnimationClip bake to additive pose frames, baked cue interpolation, and cue-owner routing across multiple motion runtimes
+- AnimationClip bake to additive pose frames, explicit VCR marker-event extraction/preservation, baked cue interpolation, and cue-owner routing across multiple motion runtimes
 - user-defined custom transition action dispatch
 - direct appearance UI action gating for preset/outfit/accessory set/clear
 - transition preview gating rejects Immediate, busy/faulted states, and missing active outfits
@@ -196,7 +196,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
 - transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
-- named marker resolution, unknown-marker rejection, blocking timeout validation, and completion-probe bridging
+- named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, and completion-probe bridging
 - procedural motion completion state before/after release through the transition bridge
 - transition package JSON version/marker/blocking/action/commit/cleanup round trip and newer-version rejection
 
@@ -206,7 +206,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: timeline authoring, named markers, linear Blocking completion dependencies, and versioned JSON import/export are implemented; remaining work is marker extraction/snapping from motion assets, richer dependency graph UX, package-library UX/migration, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/blocking behavior
+- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, linear Blocking completion dependencies, and versioned JSON import/export are implemented; remaining work is external motion-format marker import, richer dependency graph UX, package-library UX/migration, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/blocking behavior
 - Motion import: Unity-project AnimationClip baking is implemented; external motion-file import remains later tooling
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
