@@ -3,6 +3,7 @@
   "rootNamespace": "VCR.Runtime.UI",
   "references": [
     "VCR.Runtime.Application",
+    "VCR.Runtime.Appearance",
     "VCR.Runtime.Scene",
     "VCR.Runtime.Output",
     "VCR.Runtime.Diagnostics",
