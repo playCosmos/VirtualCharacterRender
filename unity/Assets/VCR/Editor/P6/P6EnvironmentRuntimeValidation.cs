@@ -384,6 +384,92 @@ namespace VCR.Editor.P6
                     EnvironmentUpdatePolicy.EventDriven,
                     EnvironmentSpaceMode.World);
 
+                var lightingObject =
+                    new GameObject(
+                        "Environment Light");
+                lightingObject.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var light =
+                    lightingObject.AddComponent<Light>();
+                light.type =
+                    LightType.Directional;
+                light.color =
+                    Color.white;
+                light.intensity =
+                    2f;
+
+                var lightingTarget =
+                    lightingObject.AddComponent<
+                        EnvironmentLightInfluenceTarget>();
+                lightingTarget.Configure(
+                    light);
+
+                runtime.SetLightingTargets(
+                    lightingTarget,
+                    lightingTarget);
+
+                var lightingProfile =
+                    new EnvironmentLightingProfile(
+                        red: 0f,
+                        green: 0.5f,
+                        blue: 1f,
+                        intensityMultiplier: 2f,
+                        weight: 0.5f);
+
+                Expect(
+                    runtime.SetLightingProfile(
+                        lightingProfile,
+                        out var lightingError) &&
+                    string.IsNullOrEmpty(
+                        lightingError) &&
+                    runtime.LightingTargetCount == 1 &&
+                    Mathf.Abs(
+                        light.color.r - 0.5f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.g - 0.75f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.b - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.intensity - 3f) <
+                        0.001f,
+                    "environment lighting profile must apply weighted color/intensity without duplicating targets",
+                    failures);
+
+                var invalidLightingObject =
+                    new GameObject(
+                        "Invalid Environment Light Target");
+                invalidLightingObject.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var invalidLightingTarget =
+                    invalidLightingObject.AddComponent<
+                        EnvironmentLightInfluenceTarget>();
+
+                var invalidLightingAccepted =
+                    runtime.ConfigureLightingTargets(
+                        new MonoBehaviour[]
+                        {
+                            invalidLightingTarget
+                        },
+                        out var invalidLightingError);
+
+                Expect(
+                    !invalidLightingAccepted &&
+                    !string.IsNullOrEmpty(
+                        invalidLightingError) &&
+                    runtime.LightingTargetCount == 1 &&
+                    Mathf.Abs(
+                        light.intensity - 3f) <
+                        0.001f,
+                    "invalid lighting target must be rejected atomically without replacing the active valid target",
+                    failures);
+
                 runtime.SetSpaceTargets(
                     spaceTarget,
                     spaceTarget);
@@ -839,6 +925,37 @@ namespace VCR.Editor.P6
                         (int)EnvironmentSpaceMode.Character) <
                     0.001,
                     "environment diagnostics must expose the active space mode",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.lighting_targets",
+                        out var lightingTargets) &&
+                    Math.Abs(
+                        lightingTargets - 1.0) <
+                    0.001,
+                    "environment diagnostics must expose de-duplicated lighting target count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.lighting_weight",
+                        out var lightingWeight) &&
+                    Math.Abs(
+                        lightingWeight - 0.5) <
+                    0.001,
+                    "environment diagnostics must expose lighting profile weight",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.lighting_failures",
+                        out var lightingFailures) &&
+                    lightingFailures < 0.5,
+                    "valid environment lighting application must not report failures",
                     failures);
 
                 Expect(
