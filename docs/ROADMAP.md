@@ -217,7 +217,7 @@ UI areas:
 
 Advanced controls may remain collapsed/disabled when their capabilities are unused.
 
-Character UI now has the first Appearance / Quick Change source implementation: registered outfit variants, accessory slots, named authored/user presets, previous/next/default controls, direct preset/outfit/accessory ID apply/clear controls, per-character user-preset save/load/delete, event-compatible switching, reusable transition definitions, transition preview/progress/cancel, cleanup-gated Interrupt, one atomic appearance-commit point, named marker + offset timing, linear Blocking completion dependencies, logical particle/effect and audio action handlers, a procedural P5 Mixer motion-cue source, an AnimationClip-to-baked-cue workflow that avoids Animator sampling during runtime playback, and a Unity Editor transition timeline for action/commit/cleanup authoring. Immediate change remains available. Timed choreography evidence and real VRM switching still require Unity runtime evidence. See `APPEARANCE_QUICKCHANGE.md`.
+Character UI now has the first Appearance / Quick Change source implementation: registered outfit variants, accessory slots, named authored/user presets, previous/next/default controls, direct preset/outfit/accessory ID apply/clear controls, per-character user-preset save/load/delete, event-compatible switching, reusable transition definitions, transition preview/progress/cancel, cleanup-gated Interrupt, one atomic appearance-commit point, named marker + offset timing, Blocking plus StepId-based All/Any completion dependencies, logical particle/effect and audio action handlers, a procedural P5 Mixer motion-cue source, an AnimationClip-to-baked-cue workflow that avoids Animator sampling during runtime playback, and a Unity Editor transition timeline for action/commit/cleanup authoring. Immediate change remains available. Timed choreography evidence and real VRM switching still require Unity runtime evidence. See `APPEARANCE_QUICKCHANGE.md`.
 
 ## P12 — Advanced One-Character Scene Tooling
 
@@ -228,7 +228,7 @@ Character UI now has the first Appearance / Quick Change source implementation: 
 - advanced plugin workflows
 - full-body tracking integration as optional capability
 - wardrobe/accessory authoring and import tooling: outfit-root registration, accessory slots/anchors, preset authoring, validated external accessory packages, and optional compatible skinned-outfit packages
-- appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, linear Blocking dependencies, and versioned JSON package import/export with external-format marker import, richer dependency graphs, package library/migration UX, external motion-file import beyond the implemented Unity AnimationClip baker, particle/effect preset registration, and richer interruption/fallback policy editing
+- appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, Blocking plus StepId-based All/Any dependencies, and versioned JSON v2 package import/export with external-format marker import, richer dependency visualization/grouping, package library UX, external motion-file import beyond the implemented Unity AnimationClip baker, particle/effect preset registration, and richer interruption/fallback policy editing
 
 ## P13 — 2D Extension
 
