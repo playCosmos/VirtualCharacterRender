@@ -177,13 +177,17 @@ Additional broadcast platforms use adapters rather than changing event-runtime c
 
 ## P9 — Event Runtime
 
+Status: Active. See `P9_STATUS.md`.
+
 Implement event execution before the visual graph editor.
 
 ```text
 Event → Filter/Condition → Transform/State → Action
 ```
 
-Targets include character, expressions, motion, environment, shader/material parameters, camera, props, effects, audio, and overlay elements.
+The first source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, and `environment.set_state` as the first application-level action.
+
+Targets will expand to character, expressions, motion, environment transitions, shader/material parameters, camera, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
 
 ## P10 — Broadcast Output
 
