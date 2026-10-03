@@ -1082,6 +1082,9 @@ namespace VCR.Runtime.Appearance.Unity
 
             var started =
                 Time.unscaledTimeAsDouble;
+            var executedActions =
+                new Dictionary<string, AppearanceTransitionStep>(
+                    StringComparer.Ordinal);
 
             foreach (var step in steps)
             {
@@ -1102,6 +1105,60 @@ namespace VCR.Runtime.Appearance.Unity
                        scheduledTime)
                 {
                     yield return null;
+                }
+
+                if (step.DependencyMode !=
+                    AppearanceTransitionDependencyMode.None)
+                {
+                    var dependencyStarted =
+                        Time.unscaledTimeAsDouble;
+
+                    while (true)
+                    {
+                        if (!TryEvaluateDependencies(
+                                step,
+                                executedActions,
+                                out var dependenciesSatisfied,
+                                out var dependencyError))
+                        {
+                            if (HandleTransitionStepFailure(
+                                    request,
+                                    transition,
+                                    step,
+                                    dependencyError))
+                            {
+                                yield break;
+                            }
+
+                            break;
+                        }
+
+                        if (dependenciesSatisfied)
+                        {
+                            break;
+                        }
+
+                        if (Time.unscaledTimeAsDouble -
+                                dependencyStarted >=
+                            step.DependencyTimeoutSeconds)
+                        {
+                            var timeoutError =
+                                $"Transition step '{DescribeStep(step)}' dependencies did not satisfy within {step.DependencyTimeoutSeconds:0.###} seconds.";
+
+                            if (HandleTransitionStepFailure(
+                                    request,
+                                    transition,
+                                    step,
+                                    timeoutError))
+                            {
+                                yield break;
+                            }
+
+                            break;
+                        }
+
+                        yield return null;
+                    }
                 }
 
                 if (step.Kind ==
@@ -1145,6 +1202,14 @@ namespace VCR.Runtime.Appearance.Unity
                     }
 
                     continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        step.StepId))
+                {
+                    executedActions[
+                        step.StepId] =
+                            step;
                 }
 
                 if (!step.Blocking)
@@ -1813,6 +1878,10 @@ namespace VCR.Runtime.Appearance.Unity
 
             var commitCount = 0;
             var hasBlockingStep = false;
+            var hasDependencyStep = false;
+            var authoredActionSteps =
+                new Dictionary<string, AppearanceTransitionStep>(
+                    StringComparer.Ordinal);
             var previousTime = 0.0;
             var hasPreviousStep = false;
             var lastStepTime = 0.0;
@@ -1849,6 +1918,22 @@ namespace VCR.Runtime.Appearance.Unity
                     resolvedTime;
                 hasPreviousStep =
                     true;
+
+                if (!ValidateStepDependencies(
+                        transition,
+                        step,
+                        authoredActionSteps,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (step.DependencyMode !=
+                    AppearanceTransitionDependencyMode.None)
+                {
+                    hasDependencyStep =
+                        true;
+                }
 
                 if (step.Blocking)
                 {
@@ -1900,6 +1985,19 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
+                if (!string.IsNullOrWhiteSpace(
+                        step.StepId))
+                {
+                    if (!authoredActionSteps.TryAdd(
+                            step.StepId,
+                            step))
+                    {
+                        error =
+                            $"Transition '{transition.Id}' contains duplicate action StepId '{step.StepId}'.";
+                        return false;
+                    }
+                }
+
             }
 
             if (commitCount != 1)
@@ -1917,12 +2015,13 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
-            if (hasBlockingStep &&
+            if ((hasBlockingStep ||
+                 hasDependencyStep) &&
                 (transition.CancellationSteps == null ||
                  transition.CancellationSteps.Length == 0))
             {
                 error =
-                    $"Transition '{transition.Id}' contains blocking actions and requires explicit cancellation cleanup steps.";
+                    $"Transition '{transition.Id}' contains completion waits and requires explicit cancellation cleanup steps.";
                 return false;
             }
 
@@ -1970,10 +2069,14 @@ namespace VCR.Runtime.Appearance.Unity
                 if (step.TimingMode !=
                         AppearanceTransitionTimingMode.AbsoluteTime ||
                     step.TimeSeconds != 0.0 ||
-                    step.Blocking)
+                    step.Blocking ||
+                    step.DependencyMode !=
+                        AppearanceTransitionDependencyMode.None ||
+                    (step.DependsOnStepIds != null &&
+                     step.DependsOnStepIds.Length > 0))
                 {
                     error =
-                        $"Transition '{transition.Id}' cancellation cleanup steps execute immediately, must use absolute time 0, and cannot block.";
+                        $"Transition '{transition.Id}' cancellation cleanup steps execute immediately, must use absolute time 0, cannot block, and cannot declare dependencies.";
                     return false;
                 }
 
@@ -2259,6 +2362,180 @@ namespace VCR.Runtime.Appearance.Unity
                     exception.Message;
                 return false;
             }
+        }
+
+        private bool TryEvaluateDependencies(
+            AppearanceTransitionStep waitingStep,
+            IReadOnlyDictionary<string, AppearanceTransitionStep>
+                executedActions,
+            out bool satisfied,
+            out string error)
+        {
+            satisfied = false;
+            error = null;
+
+            var dependencyIds =
+                waitingStep.DependsOnStepIds ??
+                Array.Empty<string>();
+
+            if (waitingStep.DependencyMode ==
+                    AppearanceTransitionDependencyMode.None ||
+                dependencyIds.Length == 0)
+            {
+                satisfied = true;
+                return true;
+            }
+
+            var completedCount = 0;
+
+            foreach (var dependencyId in dependencyIds)
+            {
+                if (!executedActions.TryGetValue(
+                        dependencyId,
+                        out var dependencyStep))
+                {
+                    error =
+                        $"Dependency action '{dependencyId}' was not successfully started before step '{DescribeStep(waitingStep)}'.";
+                    return false;
+                }
+
+                if (!TryIsStepComplete(
+                        dependencyStep,
+                        out var complete,
+                        out var completionError))
+                {
+                    error =
+                        $"Dependency action '{dependencyId}' completion check failed: {completionError}";
+                    return false;
+                }
+
+                if (complete)
+                {
+                    completedCount++;
+                }
+                else if (waitingStep.DependencyMode ==
+                         AppearanceTransitionDependencyMode.All)
+                {
+                    satisfied = false;
+                    return true;
+                }
+            }
+
+            satisfied =
+                waitingStep.DependencyMode ==
+                    AppearanceTransitionDependencyMode.All
+                    ? completedCount ==
+                      dependencyIds.Length
+                    : completedCount > 0;
+            return true;
+        }
+
+        private static bool ValidateStepDependencies(
+            AppearanceTransitionPreset transition,
+            AppearanceTransitionStep step,
+            IReadOnlyDictionary<string, AppearanceTransitionStep>
+                previousActionSteps,
+            out string error)
+        {
+            error = null;
+            var dependencyIds =
+                step.DependsOnStepIds ??
+                Array.Empty<string>();
+
+            if (step.DependencyMode ==
+                AppearanceTransitionDependencyMode.None)
+            {
+                if (dependencyIds.Length > 0)
+                {
+                    error =
+                        $"Transition '{transition.Id}' step '{DescribeStep(step)}' lists dependencies but DependencyMode is None.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (step.DependencyMode !=
+                    AppearanceTransitionDependencyMode.All &&
+                step.DependencyMode !=
+                    AppearanceTransitionDependencyMode.Any)
+            {
+                error =
+                    $"Transition '{transition.Id}' step '{DescribeStep(step)}' has unsupported dependency mode '{step.DependencyMode}'.";
+                return false;
+            }
+
+            if (dependencyIds.Length == 0)
+            {
+                error =
+                    $"Transition '{transition.Id}' step '{DescribeStep(step)}' requires at least one dependency.";
+                return false;
+            }
+
+            if (double.IsNaN(
+                    step.DependencyTimeoutSeconds) ||
+                double.IsInfinity(
+                    step.DependencyTimeoutSeconds) ||
+                step.DependencyTimeoutSeconds <= 0.0)
+            {
+                error =
+                    $"Transition '{transition.Id}' step '{DescribeStep(step)}' requires a finite positive dependency timeout.";
+                return false;
+            }
+
+            var seen =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var dependencyId in dependencyIds)
+            {
+                if (string.IsNullOrWhiteSpace(
+                        dependencyId))
+                {
+                    error =
+                        $"Transition '{transition.Id}' step '{DescribeStep(step)}' contains an empty dependency id.";
+                    return false;
+                }
+
+                if (!seen.Add(
+                        dependencyId))
+                {
+                    error =
+                        $"Transition '{transition.Id}' step '{DescribeStep(step)}' repeats dependency '{dependencyId}'.";
+                    return false;
+                }
+
+                if (!previousActionSteps.ContainsKey(
+                        dependencyId))
+                {
+                    error =
+                        $"Transition '{transition.Id}' step '{DescribeStep(step)}' dependency '{dependencyId}' must reference an earlier Action step with a StepId.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string DescribeStep(
+            AppearanceTransitionStep step)
+        {
+            if (step == null)
+            {
+                return "<null>";
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    step.StepId))
+            {
+                return step.StepId;
+            }
+
+            return step.Kind ==
+                AppearanceTransitionStepKind.Commit
+                ? "appearance.commit"
+                : step.ActionType ??
+                  "<action>";
         }
 
         private bool TryIsStepComplete(
