@@ -106,10 +106,16 @@ namespace VCR.Editor.P11
                 NormalizeAssetFolder(
                     destinationAssetFolder);
 
+            var createdFolders =
+                new List<string>();
+
             if (!TryEnsureAssetFolder(
                     destinationAssetFolder,
+                    createdFolders,
                     out error))
             {
+                RollbackFolders(
+                    createdFolders);
                 return false;
             }
 
@@ -179,8 +185,9 @@ namespace VCR.Editor.P11
                 {
                     error =
                         $"Imported source '{Path.GetFileName(sourceFilePath)}' contains no usable AnimationClip.";
-                    RollbackAssets(
-                        createdAssets);
+                    RollbackImport(
+                        createdAssets,
+                        createdFolders);
                     return false;
                 }
 
@@ -241,8 +248,9 @@ namespace VCR.Editor.P11
                                 out var markers,
                                 out error))
                         {
-                            RollbackAssets(
-                                createdAssets);
+                            RollbackImport(
+                                createdAssets,
+                                createdFolders);
                             return false;
                         }
 
@@ -296,8 +304,9 @@ namespace VCR.Editor.P11
             }
             catch (Exception exception)
             {
-                RollbackAssets(
-                    createdAssets);
+                RollbackImport(
+                    createdAssets,
+                    createdFolders);
                 error =
                     "External motion import failed: " +
                     exception.Message;
@@ -699,6 +708,7 @@ namespace VCR.Editor.P11
 
         private static bool TryEnsureAssetFolder(
             string assetFolder,
+            ICollection<string> createdFolders,
             out string error)
         {
             error = null;
@@ -769,6 +779,9 @@ namespace VCR.Editor.P11
                             $"Could not create asset folder '{next}'.";
                         return false;
                     }
+
+                    createdFolders?.Add(
+                        next);
                 }
 
                 current =
@@ -821,22 +834,84 @@ namespace VCR.Editor.P11
             return value;
         }
 
-        private static void RollbackAssets(
-            IEnumerable<string> assetPaths)
+        private static void RollbackImport(
+            IEnumerable<string> assetPaths,
+            IEnumerable<string> createdFolders)
         {
             foreach (var path in
                      assetPaths
                          .Reverse())
             {
-                if (!string.IsNullOrWhiteSpace(
+                if (string.IsNullOrWhiteSpace(
                         path))
                 {
+                    continue;
+                }
+
+                var removed =
                     AssetDatabase.DeleteAsset(
                         path);
+
+                if (removed)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var absolute =
+                        AssetPathToAbsolutePath(
+                            path);
+
+                    if (File.Exists(
+                            absolute))
+                    {
+                        File.Delete(
+                            absolute);
+                    }
+
+                    var meta =
+                        absolute +
+                        ".meta";
+
+                    if (File.Exists(
+                            meta))
+                    {
+                        File.Delete(
+                            meta);
+                    }
+                }
+                catch
+                {
                 }
             }
 
+            RollbackFolders(
+                createdFolders);
             AssetDatabase.Refresh();
+        }
+
+        private static void RollbackFolders(
+            IEnumerable<string> createdFolders)
+        {
+            if (createdFolders == null)
+            {
+                return;
+            }
+
+            foreach (var folder in
+                     createdFolders
+                         .Reverse())
+            {
+                if (!string.IsNullOrWhiteSpace(
+                        folder) &&
+                    AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                }
+            }
         }
     }
 }
