@@ -116,7 +116,7 @@ appearance.restore_default
 
 Transition presentation is intentionally handler-driven. A user or later built-in module can register logical actions such as `motion.play` or `effect.play` without the appearance runtime owning Animator, ParticleSystem, material, camera, or environment objects.
 
-The generic transition sequencer/bridge, particle/effect action path, and procedural motion action path are implemented. The default `spin` motion cue plus a registered confetti/flower-petal/sparkle effect can now be referenced directly by a transition definition. `audio.play` and imported AnimationClip conversion remain pending.
+The generic transition sequencer/bridge, particle/effect action path, audio action path, and procedural motion action path are implemented. The default `spin` motion cue plus registered confetti/flower-petal/sparkle effects and logical audio cues can now be referenced directly by a transition definition. Imported AnimationClip conversion remains pending.
 
 Timed coroutine execution, queue behavior, visual commit timing, cancellation cleanup, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
@@ -180,6 +180,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - user-defined custom transition action dispatch
 - direct appearance UI action gating for preset/outfit/accessory set/clear
 - transition preview gating rejects Immediate, busy/faulted states, and missing active outfits
+- audio.play/audio.stop transition dispatch, logical audio binding, loop and optional volume override
 - user preset registry save/replace/collision behavior
 - per-character appearance profile JSON save/load round trip
 - saved preset UI gating requires a ready runtime, user preset id, and active character path
@@ -190,7 +191,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: add audio action handler, imported AnimationClip cue conversion/registration, richer preview/test choreography, and transition progress/cancel UX
+- Appearance transitions: add imported AnimationClip cue conversion/registration, richer preview/test choreography, and transition progress/cancel UX
 - define explicit cancellation-cleanup steps before enabling Interrupt policy
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
