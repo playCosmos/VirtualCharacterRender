@@ -45,6 +45,14 @@ namespace VCR.Runtime.UI
         private Button _saveButton;
         private Button _recoverOutputButton;
 
+        private RectTransform _contextActions;
+        private InputField _characterPathInput;
+        private Button _loadCharacterButton;
+        private Button _reloadCharacterButton;
+        private Button _unloadCharacterButton;
+        private Button _apply720p60Button;
+        private Button _apply1080p60Button;
+
         private ITrackingPresenceProvider _trackingPresence;
         private MotionExpressionMixer _mixer;
         private MaterialOverrideController _materialController;
@@ -126,6 +134,13 @@ namespace VCR.Runtime.UI
             _contentText = null;
             _saveButton = null;
             _recoverOutputButton = null;
+            _contextActions = null;
+            _characterPathInput = null;
+            _loadCharacterButton = null;
+            _reloadCharacterButton = null;
+            _unloadCharacterButton = null;
+            _apply720p60Button = null;
+            _apply1080p60Button = null;
 
             BuildUi();
             RefreshAll();
@@ -526,10 +541,92 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 78f);
+                    new Vector2(24f, 132f);
             _contentText.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -84f);
+
+            _contextActions =
+                CreateRect(
+                    "Section Actions",
+                    content);
+
+            _contextActions.anchorMin =
+                new Vector2(0f, 0f);
+            _contextActions.anchorMax =
+                new Vector2(1f, 0f);
+            _contextActions.pivot =
+                new Vector2(0.5f, 0f);
+            _contextActions.offsetMin =
+                new Vector2(24f, 72f);
+            _contextActions.offsetMax =
+                new Vector2(-24f, 122f);
+
+            var contextLayout =
+                _contextActions.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            contextLayout.spacing = 10f;
+            contextLayout.childForceExpandWidth = false;
+            contextLayout.childControlWidth = true;
+            contextLayout.childControlHeight = true;
+
+            _characterPathInput =
+                CreateInputField(
+                    "Character Path",
+                    _contextActions,
+                    "VRM path");
+
+            var pathLayout =
+                _characterPathInput.gameObject
+                    .AddComponent<
+                        LayoutElement>();
+            pathLayout.preferredWidth = 440f;
+
+            _loadCharacterButton =
+                CreateButton(
+                    "Load Character",
+                    _contextActions,
+                    LoadCharacterFromPath);
+            _loadCharacterButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _reloadCharacterButton =
+                CreateButton(
+                    "Reload Character",
+                    _contextActions,
+                    ReloadCharacter);
+            _reloadCharacterButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 160f;
+
+            _unloadCharacterButton =
+                CreateButton(
+                    "Unload Character",
+                    _contextActions,
+                    UnloadCharacter);
+            _unloadCharacterButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 160f;
+
+            _apply720p60Button =
+                CreateButton(
+                    "Apply 720p60",
+                    _contextActions,
+                    Apply720p60);
+            _apply720p60Button.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 140f;
+
+            _apply1080p60Button =
+                CreateButton(
+                    "Apply 1080p60",
+                    _contextActions,
+                    Apply1080p60);
+            _apply1080p60Button.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
 
             var actions =
                 CreateRect(
@@ -636,6 +733,204 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private async void LoadCharacterFromPath()
+        {
+            if (sceneRuntime == null ||
+                _characterPathInput == null)
+            {
+                _lastActionMessage =
+                    "Character load unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var path =
+                _characterPathInput.text?.Trim();
+
+            if (!ApplicationUiActionPolicy
+                    .CanLoadCharacter(
+                        true,
+                        sceneRuntime.State,
+                        path))
+            {
+                _lastActionMessage =
+                    string.IsNullOrWhiteSpace(path)
+                        ? "Enter a VRM path first."
+                        : "Character load is unavailable in the current runtime state.";
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                "Loading character...";
+            RefreshAll();
+
+            try
+            {
+                var loaded =
+                    await sceneRuntime
+                        .LoadCharacterAsync(path);
+
+                _lastActionMessage =
+                    loaded != null
+                        ? "Character loaded."
+                        : "Character load completed without a model.";
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Character load failed: " +
+                    exception.Message;
+            }
+
+            RefreshAll();
+        }
+
+        private async void ReloadCharacter()
+        {
+            if (sceneRuntime == null)
+            {
+                _lastActionMessage =
+                    "Character reload unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var status =
+                sceneRuntime.Status;
+
+            if (!ApplicationUiActionPolicy
+                    .CanReloadCharacter(
+                        true,
+                        status.State,
+                        status.HasCharacter,
+                        status.CurrentCharacterPath))
+            {
+                _lastActionMessage =
+                    "Character reload is unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                "Reloading character...";
+            RefreshAll();
+
+            try
+            {
+                var loaded =
+                    await sceneRuntime
+                        .ReloadCharacterAsync();
+
+                _lastActionMessage =
+                    loaded != null
+                        ? "Character reloaded."
+                        : "Character reload completed without a model.";
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Character reload failed: " +
+                    exception.Message;
+            }
+
+            RefreshAll();
+        }
+
+        private void UnloadCharacter()
+        {
+            if (sceneRuntime == null)
+            {
+                _lastActionMessage =
+                    "Character unload unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var status =
+                sceneRuntime.Status;
+
+            if (!ApplicationUiActionPolicy
+                    .CanUnloadCharacter(
+                        true,
+                        status.State,
+                        status.HasCharacter))
+            {
+                _lastActionMessage =
+                    "Character unload is unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            try
+            {
+                sceneRuntime.UnloadCharacter();
+                _lastActionMessage =
+                    "Character unloaded.";
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Character unload failed: " +
+                    exception.Message;
+            }
+
+            RefreshAll();
+        }
+
+        private void Apply720p60()
+        {
+            ApplyBroadcastTarget(
+                BroadcastCaptureTarget
+                    .Minimum720p60,
+                "720p60");
+        }
+
+        private void Apply1080p60()
+        {
+            ApplyBroadcastTarget(
+                BroadcastCaptureTarget
+                    .Recommended1080p60,
+                "1080p60");
+        }
+
+        private void ApplyBroadcastTarget(
+            BroadcastCaptureTarget target,
+            string label)
+        {
+            if (sceneRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        sceneRuntime.State))
+            {
+                _lastActionMessage =
+                    label +
+                    " target apply unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (sceneRuntime
+                .TryApplyBroadcastCaptureTarget(
+                    target,
+                    out var error))
+            {
+                _lastActionMessage =
+                    label +
+                    " target applied.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    label +
+                    " target apply failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
         private void RefreshAll()
         {
             if (_root == null)
@@ -680,8 +975,112 @@ namespace VCR.Runtime.UI
                     sceneRuntime?.OverlayOutput != null;
             }
 
+            RefreshContextActions();
+
             RefreshStatus();
             RefreshContent();
+        }
+
+        private void RefreshContextActions()
+        {
+            var selected =
+                _model.SelectedSection;
+            var characterSelected =
+                selected ==
+                ApplicationUiSection.Character;
+            var outputSelected =
+                selected ==
+                ApplicationUiSection.CameraOutput;
+
+            SetActive(
+                _characterPathInput,
+                characterSelected);
+            SetActive(
+                _loadCharacterButton,
+                characterSelected);
+            SetActive(
+                _reloadCharacterButton,
+                characterSelected);
+            SetActive(
+                _unloadCharacterButton,
+                characterSelected);
+            SetActive(
+                _apply720p60Button,
+                outputSelected);
+            SetActive(
+                _apply1080p60Button,
+                outputSelected);
+
+            if (characterSelected &&
+                sceneRuntime != null)
+            {
+                var status =
+                    sceneRuntime.Status;
+
+                if (_characterPathInput != null &&
+                    !_characterPathInput.isFocused &&
+                    string.IsNullOrWhiteSpace(
+                        _characterPathInput.text) &&
+                    !string.IsNullOrWhiteSpace(
+                        status.CurrentCharacterPath))
+                {
+                    _characterPathInput.text =
+                        status.CurrentCharacterPath;
+                }
+
+                if (_loadCharacterButton != null)
+                {
+                    _loadCharacterButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanLoadCharacter(
+                                true,
+                                status.State,
+                                _characterPathInput?.text);
+                }
+
+                if (_reloadCharacterButton != null)
+                {
+                    _reloadCharacterButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanReloadCharacter(
+                                true,
+                                status.State,
+                                status.HasCharacter,
+                                status.CurrentCharacterPath);
+                }
+
+                if (_unloadCharacterButton != null)
+                {
+                    _unloadCharacterButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanUnloadCharacter(
+                                true,
+                                status.State,
+                                status.HasCharacter);
+                }
+            }
+
+            if (outputSelected &&
+                sceneRuntime != null)
+            {
+                var canApply =
+                    ApplicationUiActionPolicy
+                        .CanApplyBroadcastTarget(
+                            true,
+                            sceneRuntime.State);
+
+                if (_apply720p60Button != null)
+                {
+                    _apply720p60Button.interactable =
+                        canApply;
+                }
+
+                if (_apply1080p60Button != null)
+                {
+                    _apply1080p60Button.interactable =
+                        canApply;
+                }
+            }
         }
 
         private void RefreshStatus()
@@ -999,6 +1398,87 @@ namespace VCR.Runtime.UI
             return button;
         }
 
+        private InputField CreateInputField(
+            string name,
+            Transform parent,
+            string placeholder)
+        {
+            var rect =
+                CreateRect(
+                    name,
+                    parent);
+
+            var image =
+                rect.gameObject
+                    .AddComponent<Image>();
+            image.color =
+                new Color(
+                    0.10f,
+                    0.11f,
+                    0.13f,
+                    1f);
+
+            var input =
+                rect.gameObject
+                    .AddComponent<InputField>();
+            input.targetGraphic = image;
+
+            var text =
+                CreateText(
+                    "Text",
+                    rect,
+                    16,
+                    TextAnchor.MiddleLeft);
+            text.raycastTarget = true;
+
+            Stretch(
+                text.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 2f),
+                new Vector2(-10f, -2f));
+
+            var placeholderText =
+                CreateText(
+                    "Placeholder",
+                    rect,
+                    16,
+                    TextAnchor.MiddleLeft);
+            placeholderText.text =
+                placeholder;
+            placeholderText.color =
+                new Color(
+                    0.55f,
+                    0.58f,
+                    0.63f,
+                    1f);
+
+            Stretch(
+                placeholderText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 2f),
+                new Vector2(-10f, -2f));
+
+            input.textComponent = text;
+            input.placeholder =
+                placeholderText;
+            input.lineType =
+                InputField.LineType.SingleLine;
+
+            input.onValueChanged.AddListener(
+                _ =>
+                {
+                    if (_model.SelectedSection ==
+                        ApplicationUiSection.Character)
+                    {
+                        RefreshContextActions();
+                    }
+                });
+
+            return input;
+        }
+
         private Text CreateText(
             string name,
             Transform parent,
@@ -1095,6 +1575,18 @@ namespace VCR.Runtime.UI
                 EventSystem>();
             eventSystem.AddComponent<
                 StandaloneInputModule>();
+        }
+
+        private static void SetActive(
+            Component component,
+            bool active)
+        {
+            if (component != null &&
+                component.gameObject.activeSelf != active)
+            {
+                component.gameObject.SetActive(
+                    active);
+            }
         }
 
         private static void DestroyObject(
