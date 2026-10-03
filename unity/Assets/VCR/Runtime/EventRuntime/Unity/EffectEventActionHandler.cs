@@ -9,6 +9,7 @@ namespace VCR.Runtime.EventRuntime.Unity
     public sealed class EffectEventActionHandler :
         MonoBehaviour,
         IEventActionHandler,
+        IEventActionCompletionProbe,
         IRuntimeMetricsSource
     {
         [Serializable]
@@ -171,6 +172,75 @@ namespace VCR.Runtime.EventRuntime.Unity
                     $"Effect '{effectId}' action failed: {exception.Message}";
                 return Fail(error);
             }
+        }
+
+        public bool CanTrackCompletion(
+            EventActionCommand command)
+        {
+            if (!CanHandle(
+                    command) ||
+                string.IsNullOrWhiteSpace(
+                    command.Text) ||
+                !_effects.TryGetValue(
+                    command.Text,
+                    out var binding))
+            {
+                return false;
+            }
+
+            if (command.ActionType ==
+                EventActionTypes.EffectStop)
+            {
+                return true;
+            }
+
+            return binding.ParticleSystems != null &&
+                   binding.ParticleSystems.Length > 0;
+        }
+
+        public bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+
+            if (!CanTrackCompletion(
+                    command))
+            {
+                error =
+                    "Effect action completion cannot be tracked for this binding.";
+                return false;
+            }
+
+            if (command.ActionType ==
+                EventActionTypes.EffectStop)
+            {
+                complete = true;
+                return true;
+            }
+
+            var binding =
+                _effects[
+                    command.Text];
+
+            complete = true;
+
+            foreach (var system in
+                     binding.ParticleSystems ??
+                     Array.Empty<ParticleSystem>())
+            {
+                if (system != null &&
+                    system.IsAlive(
+                        withChildren: true))
+                {
+                    complete = false;
+                    break;
+                }
+            }
+
+            return true;
         }
 
         private static void Play(
