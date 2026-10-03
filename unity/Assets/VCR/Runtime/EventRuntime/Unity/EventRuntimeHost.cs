@@ -39,12 +39,14 @@ namespace VCR.Runtime.EventRuntime.Unity
         private long _executedActions;
         private long _failedActions;
         private long _unhandledActions;
+        private long _ambiguousActions;
         private string _lastError;
 
         public EventRuntimeEngine Engine => _engine;
         public long ExecutedActions => _executedActions;
         public long FailedActions => _failedActions;
         public long UnhandledActions => _unhandledActions;
+        public long AmbiguousActions => _ambiguousActions;
         public string LastError => _lastError;
 
         private void Awake()
@@ -197,22 +199,38 @@ namespace VCR.Runtime.EventRuntime.Unity
             EventActionCommand command)
         {
             IEventActionHandler handler = null;
+            var handlerCount = 0;
 
             foreach (var candidate in _handlers)
             {
-                if (candidate != null &&
-                    candidate.CanHandle(command))
+                if (candidate == null ||
+                    !candidate.CanHandle(command))
+                {
+                    continue;
+                }
+
+                handlerCount++;
+
+                if (handler == null)
                 {
                     handler = candidate;
-                    break;
                 }
             }
 
-            if (handler == null)
+            if (handlerCount == 0)
             {
                 _unhandledActions++;
                 _lastError =
                     $"No event action handler for '{command.ActionType}'.";
+                return;
+            }
+
+            if (handlerCount > 1)
+            {
+                _ambiguousActions++;
+                _failedActions++;
+                _lastError =
+                    $"Multiple event action handlers ({handlerCount}) claim '{command.ActionType}'.";
                 return;
             }
 
@@ -292,6 +310,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                 new RuntimeMetric(
                     "events.runtime.actions_unhandled",
                     _unhandledActions,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "events.runtime.actions_ambiguous",
+                    _ambiguousActions,
                     "count"));
         }
     }

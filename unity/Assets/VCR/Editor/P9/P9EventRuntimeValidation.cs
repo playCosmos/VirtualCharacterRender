@@ -36,7 +36,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material action dispatch, unhandled diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -602,6 +602,57 @@ namespace VCR.Editor.P9
                     !string.IsNullOrWhiteSpace(
                         host.LastError),
                     "unknown application action types must be contained and reported instead of invoking scene objects directly",
+                    failures);
+
+                var duplicateHandler =
+                    root.AddComponent<
+                        EnvironmentStateEventActionHandler>();
+                duplicateHandler.SetEnvironmentRuntime(
+                    environment);
+
+                host.SetActionHandlers(
+                    handler,
+                    duplicateHandler,
+                    cameraHandler);
+
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "ambiguous-environment",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                EnvironmentAction(
+                                    "environment.main",
+                                    "must-not-apply")
+                            }
+                    });
+
+                var stateBeforeAmbiguous =
+                    environment.Status.StateId;
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        12));
+
+                InvokeUpdate(hub);
+
+                Expect(
+                    host.AmbiguousActions == 1 &&
+                    environment.Status.StateId ==
+                        stateBeforeAmbiguous,
+                    "multiple matching action handlers must fail closed without mutating the target",
                     failures);
             }
             catch (Exception exception)

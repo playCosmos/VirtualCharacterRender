@@ -76,7 +76,7 @@ material.set_float
 
 `MaterialFloatEventActionHandler` maps `TargetId` to a discovered material slot, `Name` to a shader property, and the numeric command value to `MaterialOverrideController.TrySetFloat`. It only mutates an already-active runtime override; it does not edit the source material or create an override implicitly.
 
-Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics.
+Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. If more than one configured handler claims the same command, the host fails closed, increments the ambiguous-action metric, and executes none of them.
 
 ## Source-free validation
 
@@ -108,6 +108,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - camera.set_fov execution through PrimaryCameraController
 - material.set_float mutation of an active runtime override without source-material mutation
 - unknown-action containment and diagnostics
+- multiple-handler ambiguity fails closed without target mutation
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
@@ -119,7 +120,6 @@ The next source slices are:
 - add text transform operators beyond direct value mapping
 - add application handlers for expression/motion and expand material/shader actions beyond float parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
-- define deterministic handler selection when multiple handlers claim the same command
 - version persisted rule configuration before P11 exposes editing UI
 - add rule-level diagnostics and optional tracing that stays disabled by default
 - validate allocation/frame-time cost under event bursts
