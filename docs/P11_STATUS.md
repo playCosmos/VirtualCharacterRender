@@ -109,6 +109,11 @@ Implemented source contracts:
 - transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
+- `VCR/P11/Open External Motion Importer` imports Unity-native `.fbx`, `.dae`, and `.anim` motion sources into project assets
+- FBX/DAE embedded clips are copied to standalone `.anim` assets before marker editing
+- optional versioned `.vcrmarkers.json` sidecars support wildcard/exact clip selectors and seconds/normalized marker time
+- imported clips can be routed directly to the Cue Baker or Transition Timeline
+- external motion import rolls back newly created assets on parse/marker/import failure
 
 Implemented event action types:
 
