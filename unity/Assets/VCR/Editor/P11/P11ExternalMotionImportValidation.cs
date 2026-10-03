@@ -374,9 +374,15 @@ Frame Time: 0.5
                                 .x -
                             2.0f) <
                             0.001f &&
-                        hipsFound &&
+                        !hipsFound &&
                         chestFound &&
                         headFound &&
+                        cue.RootRotationOffsets.Length ==
+                            3 &&
+                        Math.Abs(
+                            cue.RootRotationOffsets[1]
+                                .x) >
+                            0.05f &&
                         cue.Markers.Length ==
                             1 &&
                         cue.Markers[0].Name ==
@@ -386,7 +392,7 @@ Frame Time: 0.5
                                 .TimeSeconds -
                             0.5f) <
                             0.001f,
-                        "BVH adapter must create a three-frame additive humanoid cue, honor position-scale/handedness options, archive source bytes, map common bones, and preserve sidecar markers",
+                        "BVH adapter must create a three-frame additive humanoid cue, honor position-scale/handedness options, archive source bytes, avoid duplicating ROOT as a Hips track, preserve root rotation, map common bones, and preserve sidecar markers",
                         failures);
                 }
                 else
