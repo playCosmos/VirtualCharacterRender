@@ -187,7 +187,7 @@ Event → Filter/Condition → Transform/State → Action
 
 The current source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, numeric scale/offset transforms, per-rule cooldown, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, `environment.set_state`, `camera.set_fov`, `material.set_float`, and `expression.set`.
 
-Targets will expand to character motion, environment transitions, broader shader/material parameters, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
+Targets will expand to character motion, appearance/wardrobe quick change, environment transitions, broader shader/material parameters, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
 
 ## P10 — Broadcast Output
 
@@ -217,6 +217,8 @@ UI areas:
 
 Advanced controls may remain collapsed/disabled when their capabilities are unused.
 
+Character UI also includes a planned Appearance / Quick Change area for named outfit variants, accessory slots, named presets, restore-default, and event-compatible switching without reloading the active VRM. See `APPEARANCE_QUICKCHANGE.md`.
+
 ## P12 — Advanced One-Character Scene Tooling
 
 - visual event/node editor
@@ -225,6 +227,7 @@ Advanced controls may remain collapsed/disabled when their capabilities are unus
 - advanced shader bindings
 - advanced plugin workflows
 - full-body tracking integration as optional capability
+- wardrobe/accessory authoring and import tooling: outfit-root registration, accessory slots/anchors, preset authoring, validated external accessory packages, and optional compatible skinned-outfit packages
 
 ## P13 — 2D Extension
 
