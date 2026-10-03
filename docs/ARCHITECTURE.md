@@ -30,6 +30,9 @@ Built-in / External Inputs
              │
         Appearance
        Outfit/Accessory
+             │
+      Transition Runtime
+   Motion / FX / Commit Marker
              └─────────────┼─────────────┘
                            ↓
                  Rendering Abstractions
@@ -156,6 +159,9 @@ tools/      Build, validation, conversion, diagnostics
 - Runtime overrides never destructively rewrite source model materials.
 - Appearance quick changes preserve the active character runtime and must not reset tracking, motion/expression, environment, event, or output state.
 - Outfit/accessory changes are transactional: invalid or incompatible requests leave the previous complete appearance active.
+- Choreographed appearance transitions are presentation orchestration around one atomic appearance commit; motion/effects cannot partially mutate wardrobe state.
+- Appearance transition definitions reference logical motion/effect/action IDs, never Unity object instance references.
+- User-authored transition actions execute through registered application-level handlers and must not recursively emit arbitrary normalized events to drive the same transition.
 - Custom shaders are overrides, not prerequisites for model load.
 - A bad custom shader always has a deterministic fallback.
 - Tracking sources can be replaced or mixed without changing renderer code.
