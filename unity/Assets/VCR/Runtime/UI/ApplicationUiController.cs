@@ -3230,6 +3230,9 @@ namespace VCR.Runtime.UI
             var environmentSelected =
                 selected ==
                 ApplicationUiSection.Environment;
+            var materialSelected =
+                selected ==
+                ApplicationUiSection.MaterialShader;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -3333,6 +3336,37 @@ namespace VCR.Runtime.UI
                 _environmentApplyStateButton,
                 environmentSelected);
 
+            SetActive(
+                _materialPreviousSlotButton,
+                materialSelected);
+            SetActive(
+                _materialNextSlotButton,
+                materialSelected);
+            SetActive(
+                _materialSlotInput,
+                materialSelected);
+            SetActive(
+                _materialShaderInput,
+                materialSelected);
+            SetActive(
+                _materialApplyShaderButton,
+                materialSelected);
+            SetActive(
+                _materialPropertyInput,
+                materialSelected);
+            SetActive(
+                _materialValueInput,
+                materialSelected);
+            SetActive(
+                _materialSetFloatButton,
+                materialSelected);
+            SetActive(
+                _materialClearOverrideButton,
+                materialSelected);
+            SetActive(
+                _materialRefreshSlotsButton,
+                materialSelected);
+
             if (motionSelected)
             {
                 RefreshMotionControlState();
@@ -3341,6 +3375,11 @@ namespace VCR.Runtime.UI
             if (environmentSelected)
             {
                 RefreshEnvironmentControlState();
+            }
+
+            if (materialSelected)
+            {
+                RefreshMaterialControlState();
             }
 
             if (characterSelected &&
@@ -3774,6 +3813,105 @@ namespace VCR.Runtime.UI
                     _apply1080p60Button.interactable =
                         canApply;
                 }
+            }
+        }
+
+        private void RefreshMaterialControlState()
+        {
+            var slots =
+                _materialController != null
+                    ? _materialController.GetSlots()
+                    : Array.Empty<
+                        VCR.Runtime.Materials
+                            .MaterialSlotDescriptor>();
+
+            _materialSlotIndex =
+                Mathf.Clamp(
+                    _materialSlotIndex,
+                    0,
+                    Mathf.Max(
+                        0,
+                        slots.Length - 1));
+
+            if (_materialSlotInput != null &&
+                !_materialSlotInput.isFocused &&
+                string.IsNullOrWhiteSpace(
+                    _materialSlotInput.text) &&
+                slots.Length > 0)
+            {
+                _materialSlotInput.text =
+                    slots[
+                        _materialSlotIndex].Id;
+            }
+
+            var slotId =
+                _materialSlotInput
+                    ?.text
+                    ?.Trim();
+            var slotValid =
+                _materialController != null &&
+                !string.IsNullOrWhiteSpace(
+                    slotId) &&
+                _materialController.TryGetStatus(
+                    slotId,
+                    out _);
+
+            if (_materialPreviousSlotButton != null)
+            {
+                _materialPreviousSlotButton.interactable =
+                    slots.Length >
+                    1;
+            }
+
+            if (_materialNextSlotButton != null)
+            {
+                _materialNextSlotButton.interactable =
+                    slots.Length >
+                    1;
+            }
+
+            if (_materialApplyShaderButton != null)
+            {
+                _materialApplyShaderButton.interactable =
+                    slotValid &&
+                    !string.IsNullOrWhiteSpace(
+                        _materialShaderInput
+                            ?.text);
+            }
+
+            var floatValueValid =
+                float.TryParse(
+                    _materialValueInput
+                        ?.text
+                        ?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var floatValue) &&
+                !float.IsNaN(
+                    floatValue) &&
+                !float.IsInfinity(
+                    floatValue);
+
+            if (_materialSetFloatButton != null)
+            {
+                _materialSetFloatButton.interactable =
+                    slotValid &&
+                    !string.IsNullOrWhiteSpace(
+                        _materialPropertyInput
+                            ?.text) &&
+                    floatValueValid;
+            }
+
+            if (_materialClearOverrideButton != null)
+            {
+                _materialClearOverrideButton.interactable =
+                    slotValid;
+            }
+
+            if (_materialRefreshSlotsButton != null)
+            {
+                _materialRefreshSlotsButton.interactable =
+                    _materialController != null;
             }
         }
 
@@ -4279,10 +4417,41 @@ namespace VCR.Runtime.UI
                 return "Material controller unavailable.";
             }
 
+            var slots =
+                _materialController.GetSlots();
+            var slotId =
+                _materialSlotInput
+                    ?.text
+                    ?.Trim();
+            var slotSummary =
+                "<none>";
+
+            if (!string.IsNullOrWhiteSpace(
+                    slotId) &&
+                _materialController.TryGetStatus(
+                    slotId,
+                    out var status))
+            {
+                slotSummary =
+                    $"{status.SlotId}: {status.Health}, shader={status.ShaderId ?? "<none>"}, preset={status.PresetId ?? "<none>"}, error={status.Error ?? "<none>"}";
+            }
+            else if (slots.Length > 0)
+            {
+                var slot =
+                    slots[
+                        Mathf.Clamp(
+                            _materialSlotIndex,
+                            0,
+                            slots.Length - 1)];
+                slotSummary =
+                    $"{slot.Id}: source={slot.SourceMaterialName}, shader={slot.SourceShaderName}";
+            }
+
             return
                 $"Material slots: {_materialController.SlotCount}\n" +
+                $"Selected slot: {slotSummary}\n" +
                 $"Override errors: {_materialController.ErrorCount}\n" +
-                "Detailed slot/preset controls are added in later P11 slices.";
+                "Controls: cycle slot, apply registered shader ID, set a float property, clear override, or refresh discovered slots.";
         }
 
         private string EventsSummary()
