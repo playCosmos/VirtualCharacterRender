@@ -228,7 +228,7 @@ Character UI now has the first Appearance / Quick Change source implementation: 
 - advanced plugin workflows
 - full-body tracking integration as optional capability
 - wardrobe/accessory authoring and import tooling: outfit-root registration, accessory slots/anchors, preset authoring, validated external accessory packages, and optional compatible skinned-outfit packages
-- appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, Unity-native `.fbx`/`.dae`/`.anim` import, built-in `.bvh` → additive humanoid cue conversion, Blocking plus StepId-based All/Any dependencies, and versioned JSON v2 package import/export with additional external-format adapters (for example glTF motion), richer dependency visualization/grouping, package library UX, particle/effect preset registration, and richer interruption/fallback policy editing
+- appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, Unity-native `.fbx`/`.dae`/`.anim` import, built-in `.bvh` → additive humanoid cue conversion, Blocking plus StepId-based All/Any dependencies, versioned JSON v2 package import/export, and the project package-library browser with additional external-format adapters (for example glTF motion), richer interactive dependency editing/grouping, particle/effect preset registration, and richer interruption/fallback policy editing
 
 ## P13 — 2D Extension
 
