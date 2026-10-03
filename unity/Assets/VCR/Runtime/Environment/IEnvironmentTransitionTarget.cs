@@ -4,6 +4,8 @@ namespace VCR.Runtime.Environment
     {
         bool ValidateEnvironmentTransition(
             EnvironmentTransitionSpec transition,
+            string previousStateId,
+            string nextStateId,
             out string error);
 
         void ApplyEnvironmentTransition(
