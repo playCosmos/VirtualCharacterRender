@@ -351,17 +351,24 @@ The first source implementation now exists:
 - P11 Character UI previous/next/transition/default controls
 - appearance Event Runtime action handler
 
+Implemented built-in presentation actions now also include:
+
+- `effect.play`
+- `effect.stop`
+- logical effect-id registry over a root and/or ParticleSystem set
+- optional restart-on-play and deactivate-on-stop behavior
+- reuse from both normal Event Runtime rules and appearance transition steps
+
 Not yet implemented as built-ins:
 
 - `motion.play` / `motion.release` clip/procedural-motion action handler
-- `effect.play` / `effect.stop` particle/effect registry action handler
 - `audio.play` action handler
 - transition timeline authoring UI
 - external appearance package import
 - compatible external skinned-garment workflow
 - transition cancellation cleanup contract
 
-A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive.
+A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive. P11 runtime scene generation now places the shared appearance-transition executor, the default effect handler, and the appearance event handler; the appearance runtime auto-discovers transition executors when a character is loaded.
 
 ## Deferred evidence
 
