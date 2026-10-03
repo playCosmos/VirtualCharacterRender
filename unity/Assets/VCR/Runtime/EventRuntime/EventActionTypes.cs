@@ -37,5 +37,20 @@ namespace VCR.Runtime.EventRuntime
 
         public const string MotionPoseWeight =
             "motion.pose_weight";
+
+        public const string AppearanceSetPreset =
+            "appearance.set_preset";
+
+        public const string AppearanceSetOutfit =
+            "appearance.set_outfit";
+
+        public const string AppearanceSetAccessory =
+            "appearance.set_accessory";
+
+        public const string AppearanceClearAccessory =
+            "appearance.clear_accessory";
+
+        public const string AppearanceRestoreDefault =
+            "appearance.restore_default";
     }
 }
