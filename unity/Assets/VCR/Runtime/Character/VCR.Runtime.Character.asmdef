@@ -3,6 +3,7 @@
   "rootNamespace": "VCR.Runtime.Character",
   "references": [
     "VCR.Runtime.Tracking",
+    "VCR.Runtime.Appearance.Unity",
     "VCR.Runtime.Tracking.Mixing",
     "UniGLTF",
     "VRM10",
