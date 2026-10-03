@@ -164,7 +164,7 @@ The planned built-in step classes are:
 
 - `motion.play` / `motion.release`
 - `effect.play` / `effect.stop`
-- `audio.play`
+- `audio.play` / `audio.stop`
 - `expression.set`
 - `material.apply_preset` or transition-safe material cue
 - `environment.set_state` where explicitly allowed
@@ -392,6 +392,15 @@ Implemented built-in presentation actions now also include:
 - optional restart-on-play and deactivate-on-stop behavior
 - reuse from both normal Event Runtime rules and appearance transition steps
 
+Implemented built-in audio presentation now also includes:
+
+- `audio.play`
+- `audio.stop`
+- logical audio-id bindings over an `AudioSource` and optional bound `AudioClip`
+- optional restart-on-play and loop behavior
+- optional `Value` volume override clamped to 0..1
+- reuse from both normal Event Runtime rules and appearance transition steps
+
 Implemented built-in motion presentation now also includes:
 
 - `motion.play`
@@ -405,14 +414,13 @@ Implemented built-in motion presentation now also includes:
 Not yet implemented as built-ins:
 
 - imported AnimationClip -> normalized motion cue conversion/registration
-- `audio.play` action handler
 - richer user-preset management UI such as rename/reorder/duplicate
 - transition timeline authoring UI
 - external appearance package import
 - compatible external skinned-garment workflow
 - transition cancellation cleanup contract
 
-A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive. P11 runtime scene generation now places the shared appearance-transition executor, the default effect handler, and the appearance event handler; the appearance runtime auto-discovers transition executors when a character is loaded.
+A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive. P11 runtime scene generation now places the shared appearance-transition executor, the default effect/audio handlers, and the appearance event handler; the appearance runtime auto-discovers transition executors when a character is loaded.
 
 ## Deferred evidence
 
