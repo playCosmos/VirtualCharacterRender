@@ -120,7 +120,7 @@ Action
  └ Overlay
 ```
 
-Rules emit only application-level `EventActionCommand` values. Concrete handlers now include environment, camera, material/shader, expression/motion, appearance, effect, and audio actions. Quick-change audio uses `audio.play` / `audio.stop` with a logical audio id in command text; `audio.play` may optionally carry a normalized volume in `Value`. Rule definitions never receive a Unity `GameObject`, `Material`, `AudioSource`, Camera, native window handle, or streaming-service SDK object.
+Rules emit only application-level `EventActionCommand` values. Concrete handlers now include environment, camera, material/shader, expression/motion, appearance, effect, and audio actions. Quick-change audio uses `audio.play` / `audio.stop` with a logical audio id in command text; `audio.play` may optionally carry a normalized volume in `Value`. `motion.play` / `motion.release` route through one handler that can select procedural or baked AnimationClip cue runtimes by explicit runtime id or unique cue id. Rule definitions never receive a Unity `GameObject`, `Material`, `AudioSource`, `AnimationClip`, Camera, native window handle, or streaming-service SDK object.
 
 `expression.set` writes only to a `ManualExpressionLayerSource`; the source has no recurring Update loop and does not implement performer presence. It is intended to enter `MotionExpressionMixer` as an expression-only overlay, with Maximum blending available to preserve routed lip-sync/eye channels.
 
