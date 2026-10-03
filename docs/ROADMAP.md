@@ -150,9 +150,11 @@ Real media decode, transition visual quality, shader-specific Dissolve, VRM ligh
 
 ## P7 — Material/Shader Package and Plugin Layer
 
-Manifest, resources, compatibility metadata, validation, hot reload where supported, failure containment, and capability registration.
+Status: Source implementation checkpoint-ready; cross-platform package/performance evidence remains deferred. See `P7_STATUS.md`.
 
-Executable plugin support remains gated by ADR-0015.
+Implemented source scope includes validated shader-package manifests/resources, Unity/URP/platform compatibility metadata, transactional load/unload/explicit reload, shader/texture registry rollback, unsafe/undeclared executable-source rejection, declarative capability registration, failure containment, and diagnostics.
+
+Executable third-party plugin loading remains gated by deferred ADR-0015 and is not part of the P7 source checkpoint.
 
 ## P8 — Protocols and Event Adapters
 
