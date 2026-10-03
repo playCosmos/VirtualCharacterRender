@@ -1,0 +1,30 @@
+{
+  "name": "VCR.Editor.P11",
+  "rootNamespace": "VCR.Editor.P11",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Editor.P1",
+    "VCR.Editor.P2",
+    "VCR.Editor.P3",
+    "VCR.Editor.P4",
+    "VCR.Editor.P5",
+    "VCR.Editor.P6",
+    "VCR.Editor.P7",
+    "VCR.Editor.P8",
+    "VCR.Editor.P9",
+    "VCR.Editor.P10",
+    "VCR.Runtime.Application",
+    "VCR.Runtime.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
