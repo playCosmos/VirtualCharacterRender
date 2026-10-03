@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Protocols.OscEvents",
+  "rootNamespace": "VCR.Runtime.Protocols.OscEvents",
+  "references": [
+    "VCR.Runtime.Events",
+    "VCR.Runtime.Protocols.Osc"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}
