@@ -500,6 +500,36 @@ Resolved markers are written as explicit `VCRMarker` AnimationEvents. Existing u
 
 Formats without either Unity-native import or a registered adapter intentionally fail with an adapter-required error instead of being guessed or partially converted. BVH is now covered by the built-in `bvh` adapter; glTF motion remains adapter work.
 
+### Built-in BVH adapter
+
+The built-in `bvh` adapter parses the BVH hierarchy, channel declaration order, frame count, frame time, and per-frame channel values without requiring a third-party runtime package.
+
+Conversion policy:
+
+- common BVH joint aliases are mapped to `HumanoidBoneId` values for hips, legs, feet/toes, spine/chest/upper-chest, neck/head, shoulders, arms, forearms, and hands
+- namespace/prefix forms such as `mixamorig:Hips` are normalized before alias lookup
+- more than one BVH joint resolving to the same humanoid bone fails closed instead of silently choosing one
+- a hips/root mapping is mandatory
+- the first BVH frame is the additive reference pose
+- static BVH skeleton `OFFSET` values are parsed for hierarchy validity but are not copied into the active VRM bind pose
+- root translation is stored as first-frame-relative root motion
+- per-bone translation channels are stored as first-frame-relative local offsets; hips translation is not duplicated into the hips bone track because root translation already owns it
+- per-bone rotations are stored as first-frame-relative local quaternion deltas
+- BVH rotation channel order is respected when composing each joint rotation
+- generated data uses `HumanoidPoseSpace.NormalizedLocal` and is saved directly as a `BakedMotionCueAsset`
+- the external `.bvh` source is archived in the project as `*.bvh.bytes` so Unity tracks the original file even though BVH is not a native animation importer
+
+Adapter options exposed in the importer:
+
+- `Position Scale` — default `0.01`; intended for the common centimeters-to-meters case
+- `Mirror X` — default enabled; mirrors root/bone position and quaternion basis across X for the common BVH-to-Unity handedness conversion
+
+These values are explicit authoring options rather than universal BVH assumptions. Sources already authored in meters can use scale `1.0`, and sources whose coordinate convention already matches the target basis can disable `Mirror X`.
+
+Sidecar markers are resolved against the BVH cue id and written directly into the generated baked cue, so BVH does not need an intermediate AnimationClip just to participate in quick-change marker/timeline authoring.
+
+The current adapter intentionally does not provide automatic IK foot locking, source-skeleton bind-pose replacement, arbitrary unmapped-joint retargeting, or heuristic resolution of ambiguous duplicate humanoid joints. Those remain explicit future retarget-quality work rather than hidden corrections.
+
 Not yet implemented as built-ins:
 
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
