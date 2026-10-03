@@ -17,6 +17,7 @@ namespace VCR.Editor.P11
             List<string> failures)
         {
             GameObject root = null;
+            AudioClip audioClip = null;
 
             try
             {
@@ -591,6 +592,102 @@ namespace VCR.Editor.P11
                     stopError,
                     failures);
 
+                var audioSource =
+                    root.AddComponent<
+                        AudioSource>();
+                audioClip =
+                    AudioClip.Create(
+                        "Wardrobe Chime",
+                        441,
+                        1,
+                        44100,
+                        false);
+
+                var audioHandler =
+                    root.AddComponent<
+                        AudioEventActionHandler>();
+                audioHandler.ConfigureBindings(
+                    new AudioEventActionHandler
+                        .AudioBinding
+                    {
+                        AudioId =
+                            "wardrobe-chime",
+                        Source =
+                            audioSource,
+                        Clip =
+                            audioClip,
+                        RestartOnPlay =
+                            true,
+                        Loop =
+                            true
+                    });
+
+                transitionExecutor.SetActionHandlers(
+                    fakeAction,
+                    effectHandler,
+                    audioHandler);
+
+                var audioPlayStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .AudioPlay,
+                        TargetId =
+                            "audio.main",
+                        Text =
+                            "wardrobe-chime",
+                        Value =
+                            0.35,
+                        HasValue =
+                            true
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        audioPlayStep) &&
+                    transitionExecutor.TryExecute(
+                        audioPlayStep,
+                        out var audioPlayError) &&
+                    audioSource.clip ==
+                        audioClip &&
+                    audioSource.loop &&
+                    Math.Abs(
+                        audioSource.volume -
+                        0.35f) <
+                        0.001f,
+                    "appearance transition must be able to play registered audio and apply optional volume through audio.play: " +
+                    audioPlayError,
+                    failures);
+
+                var audioStopStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .AudioStop,
+                        TargetId =
+                            "audio.main",
+                        Text =
+                            "wardrobe-chime"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        audioStopStep) &&
+                    transitionExecutor.TryExecute(
+                        audioStopStep,
+                        out var audioStopError),
+                    "appearance transition must stop registered audio through audio.stop: " +
+                    audioStopError,
+                    failures);
+
                 var motionMixer =
                     root.AddComponent<
                         MotionExpressionMixer>();
@@ -656,6 +753,7 @@ namespace VCR.Editor.P11
                 transitionExecutor.SetActionHandlers(
                     fakeAction,
                     effectHandler,
+                    audioHandler,
                     motionHandler);
 
                 var motionPlayStep =
@@ -994,6 +1092,13 @@ namespace VCR.Editor.P11
                 {
                     UnityEngine.Object
                         .DestroyImmediate(root);
+                }
+
+                if (audioClip != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            audioClip);
                 }
             }
         }
