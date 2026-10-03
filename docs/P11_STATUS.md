@@ -1,0 +1,123 @@
+# P11 Status
+
+Updated: 2026-10-03
+
+## Active branch
+
+```text
+feature/p11-application-ui
+```
+
+P11 starts from the preserved P10 source checkpoint:
+
+```text
+checkpoint/p10-source-implementation
+83325fffe496c3b8c18bc82852a271e0784e7109
+```
+
+P0-P10 runtime/device/platform evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
+
+## First P11 source slice
+
+P11 introduces a dedicated `VCR.Runtime.UI` assembly rather than moving UI concerns into scene, tracking, materials, events, or diagnostics.
+
+The application navigation model exposes the roadmap sections in stable order:
+
+```text
+Character
+Tracking
+Motion / Expression
+Environment
+Material / Shader
+Events
+Camera / Output
+Settings
+Diagnostics
+```
+
+`ApplicationUiModel` owns section selection and availability only. If the selected section becomes unavailable, it deterministically moves to the first available section. Unavailable sections preserve an explicit reason rather than silently disappearing.
+
+`ApplicationUiController` is a first runtime shell built programmatically with uGUI:
+
+- no prefab/UXML dependency for the initial shell
+- one screen-space overlay canvas
+- fixed navigation section order
+- unavailable sections disabled with a visible reason
+- low-rate 0.5-second refresh by default rather than expensive frame-by-frame data reconstruction
+- scene-status and diagnostics events also trigger refresh
+- application configuration save action
+- settings-preserving overlay recovery action
+- no direct mutation of tracking/material/event internals outside their existing public contracts
+
+The first bound summaries are:
+
+- Character: scene state, model loaded/path, runtime error
+- Tracking: subject/source availability and presence events
+- Motion / Expression: mixer availability
+- Environment: environment/state/space/active/error
+- Material / Shader: slot/error counts
+- Events: processed/matched/executed/failed/unhandled/ambiguous counts
+- Camera / Output: output state, transparency/topmost/click-through, capture readiness, 720p60/1080p60 configuration readiness
+- Settings: application start/config path and capability counts
+- Diagnostics: frame average/P95/P99 and tracking update rates
+
+Detailed editing controls are intentionally added incrementally instead of duplicating subsystem logic inside the UI.
+
+## Runtime scene
+
+Interactive scene generation:
+
+```text
+VCR > P11 > Create Application UI Runtime Scene
+```
+
+Output:
+
+```text
+Assets/VCR/P11/P11Runtime.unity
+```
+
+The builder reuses the established runtime-scene builder and adds `ApplicationUiController` to the application bootstrap object. It does not fork the renderer/tracking/output bootstrap logic.
+
+## Source-free validation
+
+Interactive:
+
+```text
+VCR > P11 > Validate Application UI
+```
+
+Batch:
+
+```text
+tools/validate-p11-source-free.ps1
+tools/validate-p11-source-free.sh
+```
+
+The P11 batch entry runs P0-P10 source-free suites first and then checks:
+
+- exactly nine roadmap UI sections
+- stable Character -> Diagnostics order
+- default Character selection
+- selected-section fallback after capability loss
+- navigation rejection for unavailable sections
+- navigation to available sections
+- stable user-facing section titles
+- unavailable-reason preservation
+
+These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
+
+## Next P11 work
+
+- Character: model load/reload/unload controls and file-selection boundary
+- Tracking: source enable/status/recovery controls without exposing tracker implementation details
+- Motion / Expression: pose-layer weight and manual-expression controls
+- Environment: state and transition controls
+- Material / Shader: slot/preset/shader/parameter controls over existing P2/P7 contracts
+- Events: persisted P9 rule document list/edit/enable controls
+- Camera / Output: camera state, transparent/topmost/click-through and broadcast-target controls
+- Settings: capability enable/disable and graphics/runtime settings
+- Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence
+- define save/apply UX and validation messaging before enabling destructive-looking actions
+
+One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.

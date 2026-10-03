@@ -199,6 +199,10 @@ Windows/macOS standalone transparency, OBS alpha capture, resize/high-DPI behavi
 
 ## P11 — Application UI
 
+Status: Active. See `P11_STATUS.md`.
+
+The first source slice establishes a programmatic uGUI shell, stable navigation/availability model, runtime status summaries, configuration save, overlay recovery, and a dedicated P11 runtime-scene builder.
+
 UI areas:
 
 - Character
