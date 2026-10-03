@@ -6,11 +6,11 @@ using VCR.Runtime.Core;
 namespace VCR.Runtime.Environment.Unity
 {
     /// <summary>
-    /// One-environment runtime with explicit state roots and update classes.
+    /// One-environment runtime controller.
     ///
-    /// Static/EventDriven policies keep this component free of Update().
-    /// Recurring work is delegated to EnvironmentUpdateDriver, which is created
-    /// only when a Hz10/Hz30/EveryFrame policy is selected.
+    /// State changes are event-driven. Recurring work is delegated to a small
+    /// driver that is enabled only for Hz10, Hz30, or EveryFrame policies, so
+    /// Static/EventDriven environments have no recurring Update callback.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BasicEnvironmentRuntime :
@@ -19,7 +19,7 @@ namespace VCR.Runtime.Environment.Unity
         IRuntimeMetricsSource
     {
         [SerializeField] private string environmentId =
-            "environment.p0.basic";
+            "environment.basic";
 
         [SerializeField] private string stateId =
             "default";
@@ -35,21 +35,23 @@ namespace VCR.Runtime.Environment.Unity
             Array.Empty<EnvironmentStateBinding>();
 
         [Header("Update targets")]
+        [Tooltip("Explicit components implementing IEnvironmentUpdateTarget. Static/EventDriven environments do not poll these every frame.")]
         [SerializeField] private MonoBehaviour[] updateTargetBehaviours =
             Array.Empty<MonoBehaviour>();
 
-        private readonly List<IEnvironmentUpdateTarget> _updateTargets =
-            new();
         private readonly EnvironmentUpdateScheduler _scheduler =
             new();
 
+        private IEnvironmentUpdateTarget[] _updateTargets =
+            Array.Empty<IEnvironmentUpdateTarget>();
+
         private EnvironmentUpdateDriver _updateDriver;
+
         private long _stateChangeCount;
+        private long _stateDispatchCount;
+        private long _scheduledDispatchCount;
+        private long _manualDispatchCount;
         private long _updateSequence;
-        private long _scheduledUpdateCount;
-        private long _eventUpdateCount;
-        private long _manualUpdateCount;
-        private long _updateFailureCount;
         private string _lastError;
 
         public event Action<EnvironmentStateChange> StateChanged;
@@ -68,24 +70,36 @@ namespace VCR.Runtime.Environment.Unity
         public long StateChangeCount =>
             _stateChangeCount;
 
-        public long ScheduledUpdateCount =>
-            _scheduledUpdateCount;
+        public long StateDispatchCount =>
+            _stateDispatchCount;
+
+        public long ScheduledDispatchCount =>
+            _scheduledDispatchCount;
+
+        public long ManualDispatchCount =>
+            _manualDispatchCount;
 
         public int UpdateTargetCount =>
-            _updateTargets.Count;
+            _updateTargets?.Length ?? 0;
+
+        public bool RecurringUpdatesActive =>
+            _updateDriver != null &&
+            _updateDriver.enabled &&
+            _scheduler.HasRecurringUpdates;
+
+        private void Awake()
+        {
+            RebuildUpdateTargets();
+            ApplyStateBindings();
+            ConfigureScheduler(
+                MonotonicClock.NowMicroseconds());
+        }
 
         private void OnEnable()
         {
-            ResolveUpdateTargets();
-
-            if (!TryApplyStateBinding(
-                    stateId,
-                    out var bindingError))
-            {
-                _lastError = bindingError;
-            }
-
-            ApplyUpdatePolicy(
+            RebuildUpdateTargets();
+            ApplyStateBindings();
+            ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
 
@@ -120,94 +134,35 @@ namespace VCR.Runtime.Environment.Unity
             spaceMode = mode;
             _lastError = null;
 
-            if (!TryApplyStateBinding(
-                    stateId,
-                    out var bindingError))
-            {
-                _lastError = bindingError;
-            }
-
-            ApplyUpdatePolicy(
+            RebuildUpdateTargets();
+            ApplyStateBindings();
+            ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
 
-        public bool ConfigureStateBindings(
-            EnvironmentStateBinding[] bindings,
-            out string error)
+        public void SetStateBindings(
+            params EnvironmentStateBinding[] bindings)
         {
-            error = null;
-
-            var next =
+            stateBindings =
                 bindings == null
-                    ? Array.Empty<EnvironmentStateBinding>()
+                    ? Array.Empty<
+                        EnvironmentStateBinding>()
                     : (EnvironmentStateBinding[])
                         bindings.Clone();
 
-            if (!ValidateStateBindings(
-                    next,
-                    out error))
-            {
-                _lastError = error;
-                return false;
-            }
-
-            if (next.Length > 0 &&
-                !ContainsState(
-                    next,
-                    stateId))
-            {
-                error =
-                    $"Environment state '{stateId}' has no binding.";
-                _lastError = error;
-                return false;
-            }
-
-            stateBindings = next;
-
-            if (!TryApplyStateBinding(
-                    stateId,
-                    out error))
-            {
-                _lastError = error;
-                return false;
-            }
-
-            _lastError = null;
-            return true;
+            ApplyStateBindings();
         }
 
-        public void ConfigureUpdateTargets(
+        public void SetUpdateTargets(
             params MonoBehaviour[] targets)
         {
             updateTargetBehaviours =
                 targets == null
                     ? Array.Empty<MonoBehaviour>()
-                    : (MonoBehaviour[])targets.Clone();
+                    : (MonoBehaviour[])
+                        targets.Clone();
 
-            ResolveUpdateTargets();
-        }
-
-        public void RegisterUpdateTarget(
-            IEnvironmentUpdateTarget target)
-        {
-            if (target == null ||
-                _updateTargets.Contains(target))
-            {
-                return;
-            }
-
-            _updateTargets.Add(target);
-        }
-
-        public void UnregisterUpdateTarget(
-            IEnvironmentUpdateTarget target)
-        {
-            if (target == null)
-            {
-                return;
-            }
-
-            _updateTargets.Remove(target);
+            RebuildUpdateTargets();
         }
 
         public bool SetState(
@@ -234,46 +189,55 @@ namespace VCR.Runtime.Environment.Unity
                 return true;
             }
 
-            if (!TryApplyStateBinding(
-                    nextStateId,
-                    out error))
-            {
-                _lastError = error;
-                return false;
-            }
-
             var previous = stateId;
             stateId = nextStateId;
             _lastError = null;
             _stateChangeCount++;
+
+            ApplyStateBindings();
 
             StateChanged?.Invoke(
                 new EnvironmentStateChange(
                     previous,
                     stateId));
 
-            DispatchUpdate(
-                EnvironmentUpdateReason.StateChanged,
-                MonotonicClock.NowMicroseconds(),
-                0f);
+            if (isActiveAndEnabled)
+            {
+                DispatchUpdate(
+                    EnvironmentUpdateReason.StateChanged,
+                    MonotonicClock.NowMicroseconds(),
+                    deltaSeconds: 0f);
+                _stateDispatchCount++;
+            }
 
             return true;
         }
 
-        public void RequestUpdate()
+        public bool RequestManualUpdate()
         {
+            if (!isActiveAndEnabled)
+            {
+                return false;
+            }
+
             DispatchUpdate(
                 EnvironmentUpdateReason.Manual,
                 MonotonicClock.NowMicroseconds(),
-                0f);
+                deltaSeconds: 0f);
+            _manualDispatchCount++;
+            return true;
         }
 
-        internal void TickScheduled(
-            long nowUs)
+        /// <summary>
+        /// Called by EnvironmentUpdateDriver. Returns true only when a recurring
+        /// update was actually due and dispatched.
+        /// </summary>
+        public bool TickScheduled(long nowUs)
         {
-            if (!_scheduler.IsDue(nowUs))
+            if (!isActiveAndEnabled ||
+                !_scheduler.IsDue(nowUs))
             {
-                return;
+                return false;
             }
 
             var deltaSeconds =
@@ -284,6 +248,9 @@ namespace VCR.Runtime.Environment.Unity
                 EnvironmentUpdateReason.Scheduled,
                 nowUs,
                 deltaSeconds);
+
+            _scheduledDispatchCount++;
+            return true;
         }
 
         public void CollectMetrics(
@@ -311,31 +278,31 @@ namespace VCR.Runtime.Environment.Unity
 
             output.Add(new RuntimeMetric(
                 "environment.update_targets",
-                _updateTargets.Count,
+                UpdateTargetCount,
                 "count"));
 
             output.Add(new RuntimeMetric(
-                "environment.scheduled_updates",
-                _scheduledUpdateCount,
+                "environment.state_dispatches",
+                _stateDispatchCount,
                 "count"));
 
             output.Add(new RuntimeMetric(
-                "environment.event_updates",
-                _eventUpdateCount,
+                "environment.scheduled_dispatches",
+                _scheduledDispatchCount,
                 "count"));
 
             output.Add(new RuntimeMetric(
-                "environment.manual_updates",
-                _manualUpdateCount,
+                "environment.manual_dispatches",
+                _manualDispatchCount,
                 "count"));
 
             output.Add(new RuntimeMetric(
-                "environment.update_failures",
-                _updateFailureCount,
-                "count"));
+                "environment.recurring_updates_active",
+                RecurringUpdatesActive ? 1 : 0,
+                "bool"));
         }
 
-        private void ApplyUpdatePolicy(
+        private void ConfigureScheduler(
             long nowUs)
         {
             _scheduler.Configure(
@@ -352,18 +319,15 @@ namespace VCR.Runtime.Environment.Unity
                 return;
             }
 
+            _updateDriver ??=
+                GetComponent<
+                    EnvironmentUpdateDriver>();
+
             if (_updateDriver == null)
             {
                 _updateDriver =
-                    GetComponent<
+                    gameObject.AddComponent<
                         EnvironmentUpdateDriver>();
-
-                if (_updateDriver == null)
-                {
-                    _updateDriver =
-                        gameObject.AddComponent<
-                            EnvironmentUpdateDriver>();
-                }
             }
 
             _updateDriver.Bind(this);
@@ -371,25 +335,107 @@ namespace VCR.Runtime.Environment.Unity
                 isActiveAndEnabled;
         }
 
-        private void ResolveUpdateTargets()
+        private void ApplyStateBindings()
         {
-            _updateTargets.Clear();
-
-            if (updateTargetBehaviours == null)
+            if (stateBindings == null)
             {
                 return;
             }
 
+            foreach (var binding in stateBindings)
+            {
+                if (binding?.Root == null ||
+                    ReferenceEquals(
+                        binding.Root,
+                        gameObject))
+                {
+                    continue;
+                }
+
+                var active =
+                    string.Equals(
+                        binding.StateId,
+                        stateId,
+                        StringComparison.Ordinal);
+
+                if (binding.Root.activeSelf !=
+                    active)
+                {
+                    binding.Root.SetActive(
+                        active);
+                }
+            }
+        }
+
+        private void RebuildUpdateTargets()
+        {
+            if (updateTargetBehaviours == null ||
+                updateTargetBehaviours.Length == 0)
+            {
+                _updateTargets =
+                    Array.Empty<
+                        IEnvironmentUpdateTarget>();
+                return;
+            }
+
+            var targets =
+                new IEnvironmentUpdateTarget[
+                    updateTargetBehaviours.Length];
+            var count = 0;
+
             foreach (var behaviour in
                      updateTargetBehaviours)
             {
-                if (behaviour is
-                        IEnvironmentUpdateTarget target &&
-                    !_updateTargets.Contains(target))
+                if (behaviour == null ||
+                    behaviour is not
+                        IEnvironmentUpdateTarget target ||
+                    ReferenceEquals(
+                        behaviour,
+                        this))
                 {
-                    _updateTargets.Add(target);
+                    continue;
                 }
+
+                var duplicate = false;
+
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    if (ReferenceEquals(
+                            targets[i],
+                            target))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (duplicate)
+                {
+                    continue;
+                }
+
+                targets[count++] =
+                    target;
             }
+
+            if (count == 0)
+            {
+                _updateTargets =
+                    Array.Empty<
+                        IEnvironmentUpdateTarget>();
+                return;
+            }
+
+            if (count != targets.Length)
+            {
+                Array.Resize(
+                    ref targets,
+                    count);
+            }
+
+            _updateTargets = targets;
         }
 
         private void DispatchUpdate(
@@ -397,179 +443,28 @@ namespace VCR.Runtime.Environment.Unity
             long timestampUs,
             float deltaSeconds)
         {
-            switch (reason)
+            if (_updateTargets == null ||
+                _updateTargets.Length == 0)
             {
-                case EnvironmentUpdateReason.Scheduled:
-                    _scheduledUpdateCount++;
-                    break;
-                case EnvironmentUpdateReason.StateChanged:
-                    _eventUpdateCount++;
-                    break;
-                case EnvironmentUpdateReason.Manual:
-                    _manualUpdateCount++;
-                    break;
+                return;
             }
 
             var context =
                 new EnvironmentUpdateContext(
                     ++_updateSequence,
                     timestampUs,
-                    deltaSeconds,
+                    Math.Max(
+                        0f,
+                        deltaSeconds),
                     reason,
                     stateId);
 
-            for (var i = 0;
-                 i < _updateTargets.Count;
-                 i++)
+            foreach (var target in
+                     _updateTargets)
             {
-                var target =
-                    _updateTargets[i];
-
-                if (target == null)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    target.UpdateEnvironment(
-                        context);
-                }
-                catch (Exception exception)
-                {
-                    _updateFailureCount++;
-                    _lastError =
-                        "Environment update target failed: " +
-                        exception.Message;
-
-                    Debug.LogWarning(
-                        _lastError,
-                        this);
-                }
+                target?.UpdateEnvironment(
+                    context);
             }
-        }
-
-        private bool TryApplyStateBinding(
-            string nextStateId,
-            out string error)
-        {
-            error = null;
-
-            if (stateBindings == null ||
-                stateBindings.Length == 0)
-            {
-                return true;
-            }
-
-            if (!ValidateStateBindings(
-                    stateBindings,
-                    out error))
-            {
-                return false;
-            }
-
-            var found =
-                ContainsState(
-                    stateBindings,
-                    nextStateId);
-
-            if (!found)
-            {
-                error =
-                    $"Environment state '{nextStateId}' has no binding.";
-                return false;
-            }
-
-            for (var i = 0;
-                 i < stateBindings.Length;
-                 i++)
-            {
-                var binding =
-                    stateBindings[i];
-
-                var isTarget =
-                    string.Equals(
-                        binding.StateId,
-                        nextStateId,
-                        StringComparison.Ordinal);
-
-                var root =
-                    binding.Root;
-
-                if (root.activeSelf != isTarget)
-                {
-                    root.SetActive(
-                        isTarget);
-                }
-            }
-
-            return true;
-        }
-
-        private bool ValidateStateBindings(
-            EnvironmentStateBinding[] bindings,
-            out string error)
-        {
-            error = null;
-            var ids =
-                new HashSet<string>(
-                    StringComparer.Ordinal);
-
-            foreach (var binding in bindings)
-            {
-                if (binding == null ||
-                    string.IsNullOrWhiteSpace(
-                        binding.StateId))
-                {
-                    error =
-                        "Environment state bindings require a non-empty state id.";
-                    return false;
-                }
-
-                if (binding.Root == null)
-                {
-                    error =
-                        $"Environment state '{binding.StateId}' requires a root GameObject.";
-                    return false;
-                }
-
-                if (!ids.Add(
-                        binding.StateId))
-                {
-                    error =
-                        $"Duplicate environment state binding '{binding.StateId}'.";
-                    return false;
-                }
-
-                if (transform.IsChildOf(
-                        binding.Root.transform))
-                {
-                    error =
-                        $"Environment state root '{binding.Root.name}' contains the environment runtime and cannot be toggled safely.";
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool ContainsState(
-            EnvironmentStateBinding[] bindings,
-            string id)
-        {
-            foreach (var binding in bindings)
-            {
-                if (binding != null &&
-                    string.Equals(
-                        binding.StateId,
-                        id,
-                        StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 }
