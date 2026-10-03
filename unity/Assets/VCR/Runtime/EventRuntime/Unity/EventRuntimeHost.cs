@@ -51,6 +51,10 @@ namespace VCR.Runtime.EventRuntime.Unity
         public long UnhandledActions => _unhandledActions;
         public long AmbiguousActions => _ambiguousActions;
         public string LastError => _lastError;
+        public int MaxCommandsPerEvent =>
+            maxCommandsPerEvent;
+        public int RuleCount =>
+            rules?.Length ?? 0;
 
         public EventRuntimeRuleDiagnostics[]
             GetRuleDiagnostics() =>
@@ -103,6 +107,92 @@ namespace VCR.Runtime.EventRuntime.Unity
                         nextRules.Clone();
 
             ApplyRules();
+        }
+
+        public EventRuntimeRule[] CaptureRules()
+        {
+            return rules == null
+                ? Array.Empty<EventRuntimeRule>()
+                : (EventRuntimeRule[])
+                    rules.Clone();
+        }
+
+        public bool TrySetRuleEnabled(
+            string ruleId,
+            bool enabled,
+            out string error)
+        {
+            error = null;
+            var id =
+                ruleId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    id))
+            {
+                error =
+                    "Event rule id is required.";
+                return false;
+            }
+
+            EventRuntimeRule match =
+                null;
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<
+                         EventRuntimeRule>())
+            {
+                if (rule == null ||
+                    !string.Equals(
+                        rule.Id,
+                        id,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (match != null)
+                {
+                    error =
+                        $"Event rule id '{id}' is ambiguous.";
+                    return false;
+                }
+
+                match =
+                    rule;
+            }
+
+            if (match == null)
+            {
+                error =
+                    $"Unknown event rule '{id}'.";
+                return false;
+            }
+
+            match.Enabled =
+                enabled;
+            ApplyRules();
+            return true;
+        }
+
+        public bool TrySetMaxCommandsPerEvent(
+            int value,
+            out string error)
+        {
+            error = null;
+
+            if (value < 1 ||
+                value > 256)
+            {
+                error =
+                    "Max commands per event must be in the 1..256 range.";
+                return false;
+            }
+
+            maxCommandsPerEvent =
+                value;
+            ApplyRules();
+            return true;
         }
 
         public void SetActionHandlers(
