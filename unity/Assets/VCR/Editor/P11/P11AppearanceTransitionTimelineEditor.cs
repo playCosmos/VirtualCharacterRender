@@ -1168,6 +1168,22 @@ namespace VCR.Editor.P11
                                 "Blocking")
                             .boolValue = false;
                         step.FindPropertyRelative(
+                                "StepId")
+                            .stringValue =
+                                string.Empty;
+                        step.FindPropertyRelative(
+                                "DependencyMode")
+                            .enumValueIndex =
+                                (int)
+                                AppearanceTransitionDependencyMode
+                                    .None;
+                        step.FindPropertyRelative(
+                                "DependsOnStepIds")
+                            .arraySize = 0;
+                        step.FindPropertyRelative(
+                                "DependencyTimeoutSeconds")
+                            .floatValue = 5f;
+                        step.FindPropertyRelative(
                                 "Kind")
                             .enumValueIndex =
                                 (int)
@@ -1204,7 +1220,24 @@ namespace VCR.Editor.P11
                     }
                     else
                     {
+                        if (!cleanup)
+                        {
+                            EditorGUILayout.PropertyField(
+                                step.FindPropertyRelative(
+                                    "StepId"),
+                                new GUIContent(
+                                    "Step ID"));
+                        }
+
                         DrawActionStep(
+                            step);
+                    }
+
+                    if (!cleanup)
+                    {
+                        DrawDependencies(
+                            steps,
+                            i,
                             step);
                     }
                 }
@@ -1515,6 +1548,221 @@ namespace VCR.Editor.P11
             }
         }
 
+        private void DrawDependencies(
+            SerializedProperty steps,
+            int stepIndex,
+            SerializedProperty step)
+        {
+            var mode =
+                step.FindPropertyRelative(
+                    "DependencyMode");
+
+            EditorGUILayout.Space();
+            EditorGUILayout.PropertyField(
+                mode,
+                new GUIContent(
+                    "Wait For"));
+
+            if ((AppearanceTransitionDependencyMode)
+                    mode.enumValueIndex ==
+                AppearanceTransitionDependencyMode.None)
+            {
+                step.FindPropertyRelative(
+                        "DependsOnStepIds")
+                    .arraySize = 0;
+                return;
+            }
+
+            var eligible =
+                BuildPreviousActionStepIds(
+                    steps,
+                    stepIndex);
+
+            if (eligible.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No earlier Action step has a Step ID. Dependencies may only reference earlier actions.",
+                    MessageType.Warning);
+            }
+
+            var dependencies =
+                step.FindPropertyRelative(
+                    "DependsOnStepIds");
+
+            for (var i = 0;
+                 i < dependencies.arraySize;
+                 i++)
+            {
+                var dependency =
+                    dependencies
+                        .GetArrayElementAtIndex(
+                            i);
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    var current =
+                        Array.IndexOf(
+                            eligible,
+                            dependency.stringValue);
+
+                    if (eligible.Length > 0)
+                    {
+                        var next =
+                            EditorGUILayout.Popup(
+                                i == 0
+                                    ? "Dependencies"
+                                    : GUIContent.none.text,
+                                Mathf.Max(
+                                    0,
+                                    current),
+                                eligible);
+                        dependency.stringValue =
+                            eligible[
+                                next];
+                    }
+                    else
+                    {
+                        EditorGUILayout.PropertyField(
+                            dependency,
+                            i == 0
+                                ? new GUIContent(
+                                    "Dependencies")
+                                : GUIContent.none);
+                    }
+
+                    if (GUILayout.Button(
+                            "×",
+                            GUILayout.Width(28f)))
+                    {
+                        dependencies
+                            .DeleteArrayElementAtIndex(
+                                i);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(
+                       eligible.Length == 0 ||
+                       dependencies.arraySize >=
+                           eligible.Length))
+            {
+                if (GUILayout.Button(
+                        "Add Dependency"))
+                {
+                    var nextId =
+                        FindFirstUnusedDependency(
+                            eligible,
+                            dependencies);
+
+                    if (nextId != null)
+                    {
+                        var index =
+                            dependencies.arraySize;
+                        dependencies.arraySize =
+                            index + 1;
+                        dependencies
+                            .GetArrayElementAtIndex(
+                                index)
+                            .stringValue =
+                                nextId;
+                    }
+                }
+            }
+
+            EditorGUILayout.PropertyField(
+                step.FindPropertyRelative(
+                    "DependencyTimeoutSeconds"),
+                new GUIContent(
+                    "Dependency Timeout (s)"));
+
+            EditorGUILayout.HelpBox(
+                (AppearanceTransitionDependencyMode)
+                    mode.enumValueIndex ==
+                AppearanceTransitionDependencyMode.All
+                    ? "This step waits until every referenced earlier action reports completion."
+                    : "This step waits until any referenced earlier action reports completion.",
+                MessageType.None);
+        }
+
+        private static string[] BuildPreviousActionStepIds(
+            SerializedProperty steps,
+            int stepIndex)
+        {
+            var ids =
+                new System.Collections.Generic
+                    .List<string>();
+
+            for (var i = 0;
+                 i < stepIndex;
+                 i++)
+            {
+                var candidate =
+                    steps.GetArrayElementAtIndex(
+                        i);
+
+                if ((AppearanceTransitionStepKind)
+                        candidate.FindPropertyRelative(
+                                "Kind")
+                            .enumValueIndex !=
+                    AppearanceTransitionStepKind.Action)
+                {
+                    continue;
+                }
+
+                var id =
+                    candidate.FindPropertyRelative(
+                            "StepId")
+                        .stringValue;
+
+                if (!string.IsNullOrWhiteSpace(
+                        id) &&
+                    !ids.Contains(
+                        id))
+                {
+                    ids.Add(
+                        id);
+                }
+            }
+
+            return ids.ToArray();
+        }
+
+        private static string FindFirstUnusedDependency(
+            string[] eligible,
+            SerializedProperty dependencies)
+        {
+            foreach (var id in eligible)
+            {
+                var used = false;
+
+                for (var i = 0;
+                     i < dependencies.arraySize;
+                     i++)
+                {
+                    if (string.Equals(
+                            dependencies
+                                .GetArrayElementAtIndex(
+                                    i)
+                                .stringValue,
+                            id,
+                            StringComparison.Ordinal))
+                    {
+                        used = true;
+                        break;
+                    }
+                }
+
+                if (!used)
+                {
+                    return id;
+                }
+            }
+
+            return null;
+        }
+
         private void DrawFooterActions()
         {
             EditorGUILayout.Space();
@@ -1713,6 +1961,19 @@ namespace VCR.Editor.P11
                 kind,
                 cleanup);
 
+            if (!cleanup &&
+                kind ==
+                    AppearanceTransitionStepKind.Action)
+            {
+                step.FindPropertyRelative(
+                        "StepId")
+                    .stringValue =
+                        BuildUniqueActionStepId(
+                            steps,
+                            "action",
+                            index);
+            }
+
             _serializedRuntime
                 .ApplyModifiedProperties();
         }
@@ -1787,6 +2048,22 @@ namespace VCR.Editor.P11
             step.FindPropertyRelative(
                     "MarkerOffsetSeconds")
                 .floatValue = 0f;
+            step.FindPropertyRelative(
+                    "StepId")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "DependencyMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionDependencyMode
+                        .None;
+            step.FindPropertyRelative(
+                    "DependsOnStepIds")
+                .arraySize = 0;
+            step.FindPropertyRelative(
+                    "DependencyTimeoutSeconds")
+                .floatValue = 5f;
             step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
@@ -1920,6 +2197,29 @@ namespace VCR.Editor.P11
                                 "MarkerOffsetSeconds")
                             .floatValue;
                 to.FindPropertyRelative(
+                        "StepId")
+                    .stringValue =
+                        from.FindPropertyRelative(
+                                "StepId")
+                            .stringValue;
+                to.FindPropertyRelative(
+                        "DependencyMode")
+                    .enumValueIndex =
+                        from.FindPropertyRelative(
+                                "DependencyMode")
+                            .enumValueIndex;
+                CopyStringArray(
+                    from.FindPropertyRelative(
+                        "DependsOnStepIds"),
+                    to.FindPropertyRelative(
+                        "DependsOnStepIds"));
+                to.FindPropertyRelative(
+                        "DependencyTimeoutSeconds")
+                    .floatValue =
+                        from.FindPropertyRelative(
+                                "DependencyTimeoutSeconds")
+                            .floatValue;
+                to.FindPropertyRelative(
                         "Kind")
                     .enumValueIndex =
                         from.FindPropertyRelative(
@@ -1979,6 +2279,28 @@ namespace VCR.Editor.P11
                         from.FindPropertyRelative(
                                 "CompletionTimeoutSeconds")
                             .floatValue;
+            }
+        }
+
+        private static void CopyStringArray(
+            SerializedProperty source,
+            SerializedProperty destination)
+        {
+            destination.arraySize =
+                source.arraySize;
+
+            for (var i = 0;
+                 i < source.arraySize;
+                 i++)
+            {
+                destination
+                    .GetArrayElementAtIndex(
+                        i)
+                    .stringValue =
+                        source
+                            .GetArrayElementAtIndex(
+                                i)
+                            .stringValue;
             }
         }
 
