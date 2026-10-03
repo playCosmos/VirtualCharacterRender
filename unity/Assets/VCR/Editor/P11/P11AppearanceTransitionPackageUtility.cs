@@ -136,14 +136,16 @@ namespace VCR.Editor.P11
                 return false;
             }
 
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
             var ids =
                 new HashSet<string>(
                     StringComparer.Ordinal);
 
             foreach (var transition in
-                     package.Transitions ??
-                     Array.Empty<
-                         AppearanceTransitionPreset>())
+                     package.Transitions)
             {
                 if (transition == null ||
                     string.IsNullOrWhiteSpace(
