@@ -142,14 +142,18 @@ namespace VCR.Editor.P11
 
             DrawTransitionHeader(
                 transition);
+            DrawMarkers(
+                transition);
             DrawTimeline(
                 transition);
             DrawSteps(
+                transition,
                 transition.FindPropertyRelative(
                     "Steps"),
                 cleanup:
                     false);
             DrawSteps(
+                transition,
                 transition.FindPropertyRelative(
                     "CancellationSteps"),
                 cleanup:
@@ -306,6 +310,92 @@ namespace VCR.Editor.P11
             }
         }
 
+        private void DrawMarkers(
+            SerializedProperty transition)
+        {
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(
+                "Named Markers",
+                EditorStyles.boldLabel);
+
+            if (markers.arraySize == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Markers are optional. Add names such as 'swap' or 'spin-end' and let steps reference them instead of duplicating absolute times.",
+                    MessageType.None);
+            }
+
+            for (var i = 0;
+                 i < markers.arraySize;
+                 i++)
+            {
+                var marker =
+                    markers.GetArrayElementAtIndex(
+                        i);
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    EditorGUILayout.PropertyField(
+                        marker.FindPropertyRelative(
+                            "Name"),
+                        GUIContent.none);
+                    EditorGUILayout.PropertyField(
+                        marker.FindPropertyRelative(
+                            "TimeSeconds"),
+                        GUIContent.none,
+                        GUILayout.Width(
+                            100f));
+
+                    if (GUILayout.Button(
+                            "×",
+                            GUILayout.Width(28f)))
+                    {
+                        Undo.RecordObject(
+                            _runtime,
+                            "Delete Transition Marker");
+                        markers.DeleteArrayElementAtIndex(
+                            i);
+                        _serializedRuntime
+                            .ApplyModifiedProperties();
+                        EditorUtility.SetDirty(
+                            _runtime);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+            }
+
+            if (GUILayout.Button(
+                    "Add Marker"))
+            {
+                Undo.RecordObject(
+                    _runtime,
+                    "Add Transition Marker");
+
+                var index =
+                    markers.arraySize;
+                markers.arraySize =
+                    index + 1;
+                var marker =
+                    markers.GetArrayElementAtIndex(
+                        index);
+                marker.FindPropertyRelative(
+                        "Name")
+                    .stringValue =
+                        BuildUniqueMarkerName(
+                            markers,
+                            "marker",
+                            index);
+                marker.FindPropertyRelative(
+                        "TimeSeconds")
+                    .floatValue = 0f;
+            }
+        }
+
         private void DrawTimeline(
             SerializedProperty transition)
         {
@@ -451,6 +541,7 @@ namespace VCR.Editor.P11
         }
 
         private void DrawSteps(
+            SerializedProperty transition,
             SerializedProperty steps,
             bool cleanup)
         {
@@ -500,11 +591,9 @@ namespace VCR.Editor.P11
                     }
                     else
                     {
-                        EditorGUILayout.PropertyField(
-                            step.FindPropertyRelative(
-                                "TimeSeconds"),
-                            new GUIContent(
-                                "Time (s)"));
+                        DrawStepTiming(
+                            transition,
+                            step);
                         EditorGUILayout.PropertyField(
                             step.FindPropertyRelative(
                                 "Kind"));
@@ -579,7 +668,8 @@ namespace VCR.Editor.P11
                             Undo.RecordObject(
                                 _runtime,
                                 "Sort Transition Steps");
-                            SortStepsByTime(
+                            SortStepsByResolvedTime(
+                                transition,
                                 steps);
                         }
                     }
@@ -742,6 +832,101 @@ namespace VCR.Editor.P11
                 EditorGUILayout.PropertyField(
                     step.FindPropertyRelative(
                         "Value"));
+            }
+
+            var blocking =
+                step.FindPropertyRelative(
+                    "Blocking");
+            EditorGUILayout.PropertyField(
+                blocking,
+                new GUIContent(
+                    "Blocking"));
+
+            if (blocking.boolValue)
+            {
+                EditorGUILayout.PropertyField(
+                    step.FindPropertyRelative(
+                        "CompletionTimeoutSeconds"),
+                    new GUIContent(
+                        "Completion Timeout (s)"));
+                EditorGUILayout.HelpBox(
+                    "The next timeline step waits until this action reports completion. A positive timeout is mandatory.",
+                    MessageType.None);
+            }
+        }
+
+        private void DrawStepTiming(
+            SerializedProperty transition,
+            SerializedProperty step)
+        {
+            var timingMode =
+                step.FindPropertyRelative(
+                    "TimingMode");
+
+            EditorGUILayout.PropertyField(
+                timingMode,
+                new GUIContent(
+                    "Timing"));
+
+            var mode =
+                (AppearanceTransitionTimingMode)
+                timingMode.enumValueIndex;
+
+            if (mode ==
+                AppearanceTransitionTimingMode
+                    .Marker)
+            {
+                var markers =
+                    transition.FindPropertyRelative(
+                        "Markers");
+                var markerName =
+                    step.FindPropertyRelative(
+                        "MarkerName");
+                var names =
+                    BuildMarkerLabels(
+                        markers);
+                var selected =
+                    Array.IndexOf(
+                        names,
+                        markerName.stringValue);
+
+                if (names.Length > 0)
+                {
+                    selected =
+                        EditorGUILayout.Popup(
+                            "Marker",
+                            Mathf.Max(
+                                0,
+                                selected),
+                            names);
+                    markerName.stringValue =
+                        names[
+                            selected];
+                }
+                else
+                {
+                    EditorGUILayout.PropertyField(
+                        markerName,
+                        new GUIContent(
+                            "Marker"));
+                    EditorGUILayout.HelpBox(
+                        "This step references a marker but the transition has no markers.",
+                        MessageType.Warning);
+                }
+
+                EditorGUILayout.PropertyField(
+                    step.FindPropertyRelative(
+                        "MarkerOffsetSeconds"),
+                    new GUIContent(
+                        "Marker Offset (s)"));
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(
+                    step.FindPropertyRelative(
+                        "TimeSeconds"),
+                    new GUIContent(
+                        "Time (s)"));
             }
         }
 
