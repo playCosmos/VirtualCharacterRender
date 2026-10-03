@@ -96,7 +96,11 @@ Implemented source contracts:
 - recursive `appearance.*` transition actions are rejected
 - event actions for preset/outfit/accessory/default changes
 - loaded VRM characters receive an appearance runtime component without forcing any appearance configuration
-- Character UI exposes Previous Look / Next Look / transition selection / Restore Default, direct preset/outfit/accessory ID controls, and transition preview
+- Character UI exposes Previous Look / Next Look / transition selection / Restore Default, direct preset/outfit/accessory ID controls, transition preview, and per-character user preset save/delete
+- user presets are restored automatically from a versioned per-character appearance profile
+- authored preset ids cannot be overwritten by user presets
+- profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
+- persistence failure rolls the in-memory user-preset mutation back
 
 Implemented event action types:
 
@@ -176,13 +180,16 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - user-defined custom transition action dispatch
 - direct appearance UI action gating for preset/outfit/accessory set/clear
 - transition preview gating rejects Immediate, busy/faulted states, and missing active outfits
+- user preset registry save/replace/collision behavior
+- per-character appearance profile JSON save/load round trip
+- saved preset UI gating requires a ready runtime, user preset id, and active character path
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
 ## Next P11 work
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
-- Character > Appearance / Quick Change: durable per-character user-preset save remains; direct preset/outfit/accessory controls are now implemented
+- Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
 - Appearance transitions: add audio action handler, imported AnimationClip cue conversion/registration, richer preview/test choreography, and transition progress/cancel UX
 - define explicit cancellation-cleanup steps before enabling Interrupt policy
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
@@ -202,8 +209,8 @@ Appearance quick change now has a source implementation foundation but is not ru
 
 ## Appearance quick-change implementation update
 
-Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named presets, atomic immediate switching, transition presets with exactly one appearance commit point, QueueLatest/QueueAll/IgnoreWhileBusy policies, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, motion/effect action bridging, procedural quick-change motion cues, effect play/stop handlers, direct P11 preset/outfit/accessory controls, and transition preview by replaying the selected transition against the current appearance. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
+Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named authored and user presets, atomic immediate switching, transition presets with exactly one appearance commit point, QueueLatest/QueueAll/IgnoreWhileBusy policies, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, motion/effect action bridging, procedural quick-change motion cues, effect play/stop handlers, direct P11 preset/outfit/accessory controls, transition preview, and per-character user-preset persistence. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
 
-Transition validation now rejects missing/multiple commit points, recursive `appearance.*` steps, decreasing step times, and durations that end before the final step. The source-free validator covers atomic outfit/accessory changes, event-driven changes, custom transition actions, procedural spin cues, effect play/stop, convention discovery, transition timing guards, direct appearance control gating, and transition preview gating.
+Transition validation now rejects missing/multiple commit points, recursive `appearance.*` steps, decreasing step times, and durations that end before the final step. The source-free validator covers atomic outfit/accessory changes, authored/user preset separation, user-preset persistence round trips, event-driven changes, custom transition actions, procedural spin cues, effect play/stop, convention discovery, transition timing guards, direct appearance control gating, and transition preview gating.
 
 This is not a runtime/device validation PASS. Unity Editor execution, real VRM hierarchy switching, custom effect visuals, motion/particle synchronization, cancellation cleanup, memory/frame-time behavior, and external user-authored asset import remain evidence/tooling work. Arbitrary external skinned garments are still deferred until character/skeleton compatibility can be validated.
