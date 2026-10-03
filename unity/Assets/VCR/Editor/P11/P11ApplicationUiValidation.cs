@@ -93,6 +93,79 @@ namespace VCR.Editor.P11
                 "section titles must use stable user-facing labels",
                 failures);
 
+            Expect(
+                !ApplicationUiActionPolicy
+                    .CanLoadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        "   "),
+                "character load action must reject a blank path",
+                failures);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanLoadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        "C:/avatar.vrm"),
+                "character load action must allow a non-empty path while the scene is operational",
+                failures);
+
+            Expect(
+                !ApplicationUiActionPolicy
+                    .CanLoadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.LoadingCharacter,
+                        "C:/avatar.vrm") &&
+                !ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.LoadingCharacter),
+                "scene-mutating UI actions must be disabled while a character load is in progress",
+                failures);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanReloadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.CharacterReady,
+                        true,
+                        "C:/avatar.vrm") &&
+                ApplicationUiActionPolicy
+                    .CanUnloadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.CharacterReady,
+                        true),
+                "reload and unload actions must require an active character in an operational state",
+                failures);
+
+            Expect(
+                !ApplicationUiActionPolicy
+                    .CanReloadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        false,
+                        null) &&
+                !ApplicationUiActionPolicy
+                    .CanUnloadCharacter(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        false),
+                "reload and unload actions must be disabled when no character is loaded",
+                failures);
+
+            Expect(
+                !ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Suspended) &&
+                ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready),
+                "broadcast target actions must follow operational scene state",
+                failures);
+
             var unavailable =
                 model.CaptureSections();
 
@@ -112,7 +185,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, fallback selection, stable labels)");
+                    "(section order, availability, fallback selection, stable labels, action availability policy)");
                 return true;
             }
 
