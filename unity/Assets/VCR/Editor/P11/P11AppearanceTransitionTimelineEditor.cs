@@ -633,12 +633,24 @@ namespace VCR.Editor.P11
                     "DurationSeconds");
             var previousDuration =
                 duration.floatValue;
+            var latestMarkerTime =
+                0f;
+
+            foreach (var marker in imported)
+            {
+                if (marker != null)
+                {
+                    latestMarkerTime =
+                        Mathf.Max(
+                            latestMarkerTime,
+                            (float)marker.TimeSeconds);
+                }
+            }
+
             duration.floatValue =
                 Mathf.Max(
                     previousDuration,
-                    Mathf.Max(
-                        0f,
-                        sourceDurationSeconds));
+                    latestMarkerTime);
 
             _serializedRuntime
                 .ApplyModifiedProperties();
