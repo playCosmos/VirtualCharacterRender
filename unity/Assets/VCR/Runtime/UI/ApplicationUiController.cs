@@ -2706,8 +2706,8 @@ namespace VCR.Runtime.UI
                 (EnvironmentTransitionMode)(
                     ((int)_environmentTransitionMode +
                      1) %
-                    (int)EnvironmentTransitionMode.Dissolve +
-                    0);
+                    ((int)EnvironmentTransitionMode.Dissolve +
+                     1));
 
             if (_environmentTransitionMode <
                     EnvironmentTransitionMode.Cut ||
