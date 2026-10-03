@@ -1069,14 +1069,37 @@ namespace VCR.Runtime.Appearance.Unity
                 (AppearanceTransitionStep[])
                     transition.Steps.Clone();
 
+            if (!TryBuildMarkerTimes(
+                    transition,
+                    out var markerTimes,
+                    out var markerError))
+            {
+                _transitionFailureCount++;
+                FinishTransition(
+                    markerError);
+                yield break;
+            }
+
             var started =
                 Time.unscaledTimeAsDouble;
 
             foreach (var step in steps)
             {
+                if (!TryResolveStepTime(
+                        step,
+                        markerTimes,
+                        out var scheduledTime,
+                        out var timingError))
+                {
+                    _transitionFailureCount++;
+                    FinishTransition(
+                        timingError);
+                    yield break;
+                }
+
                 while (Time.unscaledTimeAsDouble -
                        started <
-                       step.TimeSeconds)
+                       scheduledTime)
                 {
                     yield return null;
                 }
@@ -1108,47 +1131,75 @@ namespace VCR.Runtime.Appearance.Unity
                     continue;
                 }
 
-                if (TryExecuteStep(
+                if (!TryExecuteStep(
                         step,
                         out var stepError))
                 {
-                    continue;
-                }
-
-                if (!step.Required)
-                {
-                    _lastError =
-                        stepError;
-                    continue;
-                }
-
-                _transitionFailureCount++;
-
-                if (!_transitionCommitted &&
-                    transition.FallbackPolicy ==
-                        AppearanceTransitionFallbackPolicy
-                            .Immediate)
-                {
-                    if (!CommitRequest(
+                    if (HandleTransitionStepFailure(
                             request,
-                            out var fallbackError,
-                            preserveTransition: true))
+                            transition,
+                            step,
+                            stepError))
                     {
-                        FinishTransition(
-                            fallbackError);
                         yield break;
                     }
 
-                    _transitionCommitted = true;
-                    _transitionCommitCount++;
-                    FinishTransition(
-                        stepError);
-                    yield break;
+                    continue;
                 }
 
-                FinishTransition(
-                    stepError);
-                yield break;
+                if (!step.Blocking)
+                {
+                    continue;
+                }
+
+                var completionStarted =
+                    Time.unscaledTimeAsDouble;
+
+                while (true)
+                {
+                    if (!TryIsStepComplete(
+                            step,
+                            out var complete,
+                            out var completionError))
+                    {
+                        if (HandleTransitionStepFailure(
+                                request,
+                                transition,
+                                step,
+                                completionError))
+                        {
+                            yield break;
+                        }
+
+                        break;
+                    }
+
+                    if (complete)
+                    {
+                        break;
+                    }
+
+                    if (Time.unscaledTimeAsDouble -
+                            completionStarted >=
+                        step.CompletionTimeoutSeconds)
+                    {
+                        var timeoutError =
+                            $"Transition action '{step.ActionType}' did not complete within {step.CompletionTimeoutSeconds:0.###} seconds.";
+
+                        if (HandleTransitionStepFailure(
+                                request,
+                                transition,
+                                step,
+                                timeoutError))
+                        {
+                            yield break;
+                        }
+
+                        break;
+                    }
+
+                    yield return null;
+                }
             }
 
             var remaining =
@@ -1167,6 +1218,48 @@ namespace VCR.Runtime.Appearance.Unity
 
             FinishTransition(
                 _lastError);
+        }
+
+        private bool HandleTransitionStepFailure(
+            AppearanceChangeRequest request,
+            AppearanceTransitionPreset transition,
+            AppearanceTransitionStep step,
+            string stepError)
+        {
+            if (!step.Required)
+            {
+                _lastError =
+                    stepError;
+                return false;
+            }
+
+            _transitionFailureCount++;
+
+            if (!_transitionCommitted &&
+                transition.FallbackPolicy ==
+                    AppearanceTransitionFallbackPolicy
+                        .Immediate)
+            {
+                if (!CommitRequest(
+                        request,
+                        out var fallbackError,
+                        preserveTransition: true))
+                {
+                    FinishTransition(
+                        fallbackError);
+                    return true;
+                }
+
+                _transitionCommitted = true;
+                _transitionCommitCount++;
+                FinishTransition(
+                    stepError);
+                return true;
+            }
+
+            FinishTransition(
+                stepError);
+            return true;
         }
 
         private bool CommitRequest(
@@ -1698,6 +1791,14 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
+            if (!TryBuildMarkerTimes(
+                    transition,
+                    out var markerTimes,
+                    out error))
+            {
+                return false;
+            }
+
             var commitCount = 0;
             var previousTime = 0.0;
             var hasPreviousStep = false;
@@ -1709,32 +1810,54 @@ namespace VCR.Runtime.Appearance.Unity
                          AppearanceTransitionStep>())
             {
                 if (step == null ||
-                    double.IsNaN(
-                        step.TimeSeconds) ||
-                    double.IsInfinity(
-                        step.TimeSeconds) ||
-                    step.TimeSeconds < 0.0)
+                    !TryResolveStepTime(
+                        step,
+                        markerTimes,
+                        out var resolvedTime,
+                        out error))
                 {
                     error =
-                        $"Transition '{transition.Id}' contains an invalid step time.";
+                        $"Transition '{transition.Id}' contains invalid step timing: {error}";
                     return false;
                 }
 
                 if (hasPreviousStep &&
-                    step.TimeSeconds <
+                    resolvedTime <
                         previousTime)
                 {
                     error =
-                        $"Transition '{transition.Id}' steps must be ordered by non-decreasing time.";
+                        $"Transition '{transition.Id}' steps must be ordered by non-decreasing resolved time.";
                     return false;
                 }
 
                 previousTime =
-                    step.TimeSeconds;
+                    resolvedTime;
                 lastStepTime =
-                    step.TimeSeconds;
+                    resolvedTime;
                 hasPreviousStep =
                     true;
+
+                if (step.Blocking)
+                {
+                    if (step.Kind !=
+                        AppearanceTransitionStepKind.Action)
+                    {
+                        error =
+                            $"Transition '{transition.Id}' commit steps cannot be blocking.";
+                        return false;
+                    }
+
+                    if (double.IsNaN(
+                            step.CompletionTimeoutSeconds) ||
+                        double.IsInfinity(
+                            step.CompletionTimeoutSeconds) ||
+                        step.CompletionTimeoutSeconds <= 0.0)
+                    {
+                        error =
+                            $"Transition '{transition.Id}' blocking action '{step.ActionType ?? "<none>"}' requires a finite positive completion timeout.";
+                        return false;
+                    }
+                }
 
                 if (step.Kind ==
                     AppearanceTransitionStepKind.Commit)
@@ -1820,10 +1943,13 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
-                if (step.TimeSeconds != 0.0)
+                if (step.TimingMode !=
+                        AppearanceTransitionTimingMode.AbsoluteTime ||
+                    step.TimeSeconds != 0.0 ||
+                    step.Blocking)
                 {
                     error =
-                        $"Transition '{transition.Id}' cancellation cleanup steps execute immediately and must use time 0.";
+                        $"Transition '{transition.Id}' cancellation cleanup steps execute immediately, must use absolute time 0, and cannot block.";
                     return false;
                 }
 
@@ -2016,6 +2142,15 @@ namespace VCR.Runtime.Appearance.Unity
                             : $"Multiple transition executors handle '{step.ActionType}'.";
                     return false;
                 }
+
+                if (step.Blocking &&
+                    CountCompletionProbes(
+                        step) != 1)
+                {
+                    error =
+                        $"Blocking transition action '{step.ActionType}' requires exactly one completion probe.";
+                    return false;
+                }
             }
 
             if (transition.QueuePolicy !=
@@ -2100,6 +2235,205 @@ namespace VCR.Runtime.Appearance.Unity
                     exception.Message;
                 return false;
             }
+        }
+
+        private bool TryIsStepComplete(
+            AppearanceTransitionStep step,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+            IAppearanceTransitionStepCompletionProbe
+                selected = null;
+            var count = 0;
+
+            foreach (var executor in
+                     _executors)
+            {
+                if (executor is not
+                        IAppearanceTransitionStepCompletionProbe
+                            probe ||
+                    !executor.CanExecute(
+                        step) ||
+                    !probe.CanTrackCompletion(
+                        step))
+                {
+                    continue;
+                }
+
+                selected =
+                    probe;
+                count++;
+            }
+
+            if (count == 0)
+            {
+                error =
+                    $"No completion probe tracks transition action '{step.ActionType}'.";
+                return false;
+            }
+
+            if (count > 1)
+            {
+                error =
+                    $"Multiple completion probes track transition action '{step.ActionType}'.";
+                return false;
+            }
+
+            try
+            {
+                return selected.TryIsComplete(
+                    step,
+                    out complete,
+                    out error);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    exception.Message;
+                return false;
+            }
+        }
+
+        private int CountCompletionProbes(
+            AppearanceTransitionStep step)
+        {
+            var count = 0;
+
+            foreach (var executor in
+                     _executors)
+            {
+                if (executor is
+                        IAppearanceTransitionStepCompletionProbe
+                            probe &&
+                    executor.CanExecute(
+                        step) &&
+                    probe.CanTrackCompletion(
+                        step))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static bool TryBuildMarkerTimes(
+            AppearanceTransitionPreset transition,
+            out Dictionary<string, double> markerTimes,
+            out string error)
+        {
+            markerTimes =
+                new Dictionary<string, double>(
+                    StringComparer.Ordinal);
+            error = null;
+
+            foreach (var marker in
+                     transition.Markers ??
+                     Array.Empty<
+                         AppearanceTransitionMarker>())
+            {
+                if (marker == null ||
+                    string.IsNullOrWhiteSpace(
+                        marker.Name))
+                {
+                    error =
+                        $"Transition '{transition.Id}' contains a marker without a name.";
+                    return false;
+                }
+
+                if (double.IsNaN(
+                        marker.TimeSeconds) ||
+                    double.IsInfinity(
+                        marker.TimeSeconds) ||
+                    marker.TimeSeconds < 0.0 ||
+                    marker.TimeSeconds >
+                        transition.DurationSeconds)
+                {
+                    error =
+                        $"Transition '{transition.Id}' marker '{marker.Name}' must be within transition duration.";
+                    return false;
+                }
+
+                if (!markerTimes.TryAdd(
+                        marker.Name,
+                        marker.TimeSeconds))
+                {
+                    error =
+                        $"Transition '{transition.Id}' contains duplicate marker '{marker.Name}'.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryResolveStepTime(
+            AppearanceTransitionStep step,
+            IReadOnlyDictionary<string, double> markerTimes,
+            out double resolvedTime,
+            out string error)
+        {
+            resolvedTime = 0.0;
+            error = null;
+
+            if (step == null)
+            {
+                error =
+                    "Transition step is null.";
+                return false;
+            }
+
+            switch (step.TimingMode)
+            {
+                case AppearanceTransitionTimingMode
+                    .Marker:
+                    if (string.IsNullOrWhiteSpace(
+                            step.MarkerName) ||
+                        markerTimes == null ||
+                        !markerTimes.TryGetValue(
+                            step.MarkerName,
+                            out var markerTime))
+                    {
+                        error =
+                            $"Unknown transition marker '{step.MarkerName ?? "<null>"}'.";
+                        return false;
+                    }
+
+                    if (double.IsNaN(
+                            step.MarkerOffsetSeconds) ||
+                        double.IsInfinity(
+                            step.MarkerOffsetSeconds))
+                    {
+                        error =
+                            $"Marker offset for '{step.MarkerName}' must be finite.";
+                        return false;
+                    }
+
+                    resolvedTime =
+                        markerTime +
+                        step.MarkerOffsetSeconds;
+                    break;
+
+                default:
+                    resolvedTime =
+                        step.TimeSeconds;
+                    break;
+            }
+
+            if (double.IsNaN(
+                    resolvedTime) ||
+                double.IsInfinity(
+                    resolvedTime) ||
+                resolvedTime < 0.0)
+            {
+                error =
+                    "Resolved transition step time must be finite and non-negative.";
+                return false;
+            }
+
+            return true;
         }
 
         private int CountExecutors(
