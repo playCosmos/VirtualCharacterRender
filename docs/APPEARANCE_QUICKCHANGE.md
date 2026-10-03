@@ -373,7 +373,8 @@ The first source implementation now exists:
 - QueueLatest / QueueAll / IgnoreWhileBusy
 - Interrupt rejected until cancellation cleanup is explicitly implemented
 - generic transition-action bridge to existing application-level event handlers
-- P11 Character UI previous/next/transition/default controls
+- P11 Character UI previous/next/transition/default controls plus direct preset/outfit/accessory ID apply/clear controls
+- P11 transition preview by replaying the selected non-Immediate transition against the current appearance without changing the requested look
 - appearance Event Runtime action handler
 
 Implemented built-in presentation actions now also include:
@@ -398,6 +399,7 @@ Not yet implemented as built-ins:
 
 - imported AnimationClip -> normalized motion cue conversion/registration
 - `audio.play` action handler
+- durable per-character user-preset persistence UI
 - transition timeline authoring UI
 - external appearance package import
 - compatible external skinned-garment workflow
