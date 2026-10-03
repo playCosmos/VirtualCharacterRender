@@ -319,6 +319,16 @@ namespace VCR.Runtime.Appearance.Unity
                     preset.Id);
             }
 
+            if (!string.IsNullOrWhiteSpace(
+                    defaultPresetId) &&
+                !_presets.ContainsKey(
+                    defaultPresetId))
+            {
+                error =
+                    $"Default appearance preset '{defaultPresetId}' is not registered.";
+                return false;
+            }
+
             foreach (var binding in
                      transitions ??
                      Array.Empty<AppearanceTransitionBinding>())
@@ -349,6 +359,28 @@ namespace VCR.Runtime.Appearance.Unity
 
                 _transitionIds.Add(
                     transition.Id);
+            }
+
+            foreach (var preset in
+                     _presets.Values)
+            {
+                if (string.IsNullOrWhiteSpace(
+                        preset.PreferredTransitionId) ||
+                    string.Equals(
+                        preset.PreferredTransitionId,
+                        "Immediate",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!_transitions.ContainsKey(
+                        preset.PreferredTransitionId))
+                {
+                    error =
+                        $"Preset '{preset.Id}' references unknown transition '{preset.PreferredTransitionId}'.";
+                    return false;
+                }
             }
 
             // Preserve authoring order for previous/next quick-change UI.
@@ -694,12 +726,6 @@ namespace VCR.Runtime.Appearance.Unity
                 (AppearanceTransitionStep[])
                     transition.Steps.Clone();
 
-            Array.Sort(
-                steps,
-                (left, right) =>
-                    left.TimeSeconds.CompareTo(
-                        right.TimeSeconds));
-
             var started =
                 Time.unscaledTimeAsDouble;
 
@@ -711,6 +737,21 @@ namespace VCR.Runtime.Appearance.Unity
                 {
                     yield return null;
                 }
+
+                if (hasPreviousStep &&
+                    step.TimeSeconds <
+                    previousTime)
+                {
+                    error =
+                        $"Transition '{transition.Id}' steps must be authored in non-decreasing time order.";
+                    return false;
+                }
+
+                previousTime =
+                    step.TimeSeconds;
+                lastStepTime =
+                    step.TimeSeconds;
+                hasPreviousStep = true;
 
                 if (step.Kind ==
                     AppearanceTransitionStepKind.Commit)
@@ -1057,6 +1098,9 @@ namespace VCR.Runtime.Appearance.Unity
             }
 
             var commitCount = 0;
+            var previousTime = 0.0;
+            var hasPreviousStep = false;
+            var lastStepTime = 0.0;
 
             foreach (var step in
                      transition.Steps ??
@@ -1104,6 +1148,14 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 error =
                     $"Transition '{transition.Id}' must contain exactly one appearance commit step.";
+                return false;
+            }
+
+            if (transition.DurationSeconds <
+                lastStepTime)
+            {
+                error =
+                    $"Transition '{transition.Id}' duration cannot end before its last step.";
                 return false;
             }
 
