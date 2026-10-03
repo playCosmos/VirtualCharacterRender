@@ -105,14 +105,23 @@ namespace VCR.Editor.P11
                     importResult.Clips.Length ==
                         1)
                 {
-                    Expect(
-                        importResult.ImportedMarkerCount ==
-                            2 &&
+                    BakedMotionCueMarker[]
+                        importedMarkers =
+                            Array.Empty<
+                                BakedMotionCueMarker>();
+                    string markerError =
+                        null;
+                    var markersExtracted =
                         P11MotionMarkerUtility
                             .TryExtractFromAnimationClip(
                                 importResult.Clips[0],
-                                out var importedMarkers,
-                                out var markerError) &&
+                                out importedMarkers,
+                                out markerError);
+
+                    Expect(
+                        importResult.ImportedMarkerCount ==
+                            2 &&
+                        markersExtracted &&
                         importedMarkers.Length ==
                             2 &&
                         importedMarkers[0].Name ==
@@ -158,19 +167,30 @@ namespace VCR.Editor.P11
   ]
 }";
 
-                Expect(
+                P11ExternalMotionMarkerFile
+                    duplicateFile = null;
+                string duplicateParseError =
+                    null;
+                string duplicateResolveError =
+                    null;
+                var duplicateParsed =
                     P11ExternalMotionImportUtility
                         .TryParseMarkerFileJson(
                             duplicateJson,
-                            out var duplicateFile,
-                            out var duplicateParseError) &&
+                            out duplicateFile,
+                            out duplicateParseError);
+                var duplicateRejected =
+                    duplicateParsed &&
                     !P11ExternalMotionImportUtility
                         .TryResolveMarkers(
                             duplicateFile,
                             "ExternalMotionValidation",
                             1f,
                             out _,
-                            out var duplicateResolveError) &&
+                            out duplicateResolveError);
+
+                Expect(
+                    duplicateRejected &&
                     duplicateResolveError != null &&
                     duplicateResolveError.Contains(
                         "duplicate",
