@@ -1,0 +1,223 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using VCR.Runtime.Appearance;
+
+namespace VCR.Runtime.EventRuntime.Unity
+{
+    /// <summary>
+    /// Reuses registered application-level event action handlers for wardrobe
+    /// transition presentation steps. appearance.* actions are deliberately
+    /// rejected to prevent recursive appearance transitions.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class AppearanceTransitionActionExecutor :
+        MonoBehaviour,
+        IAppearanceTransitionStepExecutor
+    {
+        [SerializeField] private MonoBehaviour[] actionHandlerBehaviours =
+            Array.Empty<MonoBehaviour>();
+        [SerializeField] private bool autoFindHandlers = true;
+
+        private IEventActionHandler[] _handlers =
+            Array.Empty<IEventActionHandler>();
+
+        private void Awake()
+        {
+            RebuildHandlers();
+        }
+
+        public void SetActionHandlers(
+            params MonoBehaviour[] behaviours)
+        {
+            actionHandlerBehaviours =
+                behaviours ??
+                Array.Empty<MonoBehaviour>();
+            RebuildHandlers();
+        }
+
+        public bool CanExecute(
+            AppearanceTransitionStep step)
+        {
+            if (step == null ||
+                step.Kind !=
+                    AppearanceTransitionStepKind.Action ||
+                string.IsNullOrWhiteSpace(
+                    step.ActionType) ||
+                step.ActionType.StartsWith(
+                    "appearance.",
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            EnsureHandlers();
+
+            return
+                FindHandlerCount(
+                    ToCommand(step),
+                    out _) == 1;
+        }
+
+        public bool TryExecute(
+            AppearanceTransitionStep step,
+            out string error)
+        {
+            error = null;
+
+            if (step == null ||
+                step.Kind !=
+                    AppearanceTransitionStepKind.Action)
+            {
+                error =
+                    "Appearance transition step is not an action.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    step.ActionType) ||
+                step.ActionType.StartsWith(
+                    "appearance.",
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "Appearance transitions cannot recursively execute appearance actions.";
+                return false;
+            }
+
+            EnsureHandlers();
+
+            var command =
+                ToCommand(step);
+            var count =
+                FindHandlerCount(
+                    command,
+                    out var handler);
+
+            if (count == 0)
+            {
+                error =
+                    $"No event action handler accepts '{step.ActionType}'.";
+                return false;
+            }
+
+            if (count > 1)
+            {
+                error =
+                    $"Multiple event action handlers accept '{step.ActionType}'.";
+                return false;
+            }
+
+            try
+            {
+                return handler.TryExecute(
+                    command,
+                    out error);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    exception.Message;
+                return false;
+            }
+        }
+
+        private static EventActionCommand ToCommand(
+            AppearanceTransitionStep step)
+        {
+            return new EventActionCommand(
+                ruleId:
+                    "appearance-transition",
+                actionType:
+                    step.ActionType,
+                targetId:
+                    step.TargetId,
+                name:
+                    step.Name,
+                text:
+                    step.Text,
+                value:
+                    step.Value,
+                hasValue:
+                    step.HasValue,
+                eventSequence:
+                    0);
+        }
+
+        private void EnsureHandlers()
+        {
+            if (_handlers.Length == 0 &&
+                autoFindHandlers)
+            {
+                RebuildHandlers();
+            }
+        }
+
+        private void RebuildHandlers()
+        {
+            var list =
+                new List<IEventActionHandler>();
+
+            foreach (var behaviour in
+                     actionHandlerBehaviours ??
+                     Array.Empty<MonoBehaviour>())
+            {
+                if (behaviour is
+                    IEventActionHandler handler)
+                {
+                    list.Add(handler);
+                }
+            }
+
+            if (autoFindHandlers)
+            {
+                var behaviours =
+                    FindObjectsByType<MonoBehaviour>(
+                        FindObjectsInactive.Exclude,
+                        FindObjectsSortMode.None);
+
+                foreach (var behaviour in behaviours)
+                {
+                    if (behaviour is not
+                            IEventActionHandler handler ||
+                        list.Contains(handler))
+                    {
+                        continue;
+                    }
+
+                    list.Add(handler);
+                }
+            }
+
+            _handlers =
+                list.ToArray();
+        }
+
+        private int FindHandlerCount(
+            EventActionCommand command,
+            out IEventActionHandler handler)
+        {
+            handler = null;
+            var count = 0;
+
+            foreach (var candidate in _handlers)
+            {
+                if (candidate == null ||
+                    !candidate.CanHandle(
+                        command))
+                {
+                    continue;
+                }
+
+                count++;
+
+                if (handler == null)
+                {
+                    handler = candidate;
+                }
+            }
+
+            return count;
+        }
+    }
+}
