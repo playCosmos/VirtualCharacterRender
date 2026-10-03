@@ -24,6 +24,13 @@ namespace VCR.Runtime.Appearance
         Marker = 1
     }
 
+    public enum AppearanceTransitionDependencyMode
+    {
+        None = 0,
+        All = 1,
+        Any = 2
+    }
+
     public enum AppearanceTransitionQueuePolicy
     {
         QueueLatest = 0,
@@ -78,6 +85,12 @@ namespace VCR.Runtime.Appearance
             AppearanceTransitionTimingMode.AbsoluteTime;
         public string MarkerName;
         public double MarkerOffsetSeconds;
+        public string StepId;
+        public AppearanceTransitionDependencyMode DependencyMode =
+            AppearanceTransitionDependencyMode.None;
+        public string[] DependsOnStepIds =
+            Array.Empty<string>();
+        public double DependencyTimeoutSeconds = 5.0;
         public AppearanceTransitionStepKind Kind =
             AppearanceTransitionStepKind.Action;
         public string ActionType;
