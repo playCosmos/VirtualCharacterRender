@@ -716,7 +716,12 @@ namespace VCR.Runtime.Appearance.Unity
             string presetId,
             out string error)
         {
-            error = null;
+            if (!CanEditUserPresets(
+                    out error))
+            {
+                return false;
+            }
+
             var id =
                 presetId?.Trim();
 
@@ -760,7 +765,12 @@ namespace VCR.Runtime.Appearance.Unity
             out string error)
         {
             preset = null;
-            error = null;
+
+            if (!CanEditUserPresets(
+                    out error))
+            {
+                return false;
+            }
 
             var sourceId =
                 presetId?.Trim();
@@ -873,7 +883,12 @@ namespace VCR.Runtime.Appearance.Unity
             out string error)
         {
             preset = null;
-            error = null;
+
+            if (!CanEditUserPresets(
+                    out error))
+            {
+                return false;
+            }
 
             var sourceId =
                 presetId?.Trim();
@@ -986,7 +1001,12 @@ namespace VCR.Runtime.Appearance.Unity
             int offset,
             out string error)
         {
-            error = null;
+            if (!CanEditUserPresets(
+                    out error))
+            {
+                return false;
+            }
+
             var id =
                 presetId?.Trim();
 
@@ -1075,6 +1095,24 @@ namespace VCR.Runtime.Appearance.Unity
             return ReplaceUserPresets(
                 next,
                 out error);
+        }
+
+        private bool CanEditUserPresets(
+            out string error)
+        {
+            error = null;
+
+            if (_state ==
+                    AppearanceRuntimeState.Transitioning ||
+                _state ==
+                    AppearanceRuntimeState.Committing)
+            {
+                error =
+                    "User appearance presets cannot be modified during an appearance transition.";
+                return false;
+            }
+
+            return true;
         }
 
         public AppearancePreset[] CaptureUserPresets()
