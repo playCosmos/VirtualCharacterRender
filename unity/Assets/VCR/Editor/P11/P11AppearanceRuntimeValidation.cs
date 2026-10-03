@@ -571,6 +571,54 @@ namespace VCR.Editor.P11
                     customError,
                     failures);
 
+                var blockingCustomStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            "custom.transition",
+                        Text =
+                            "blocking-action",
+                        Blocking =
+                            true,
+                        CompletionTimeoutSeconds =
+                            1.0
+                    };
+
+                fakeAction.ResetCompletion(
+                    checksBeforeComplete:
+                        2);
+
+                var firstCompletionTracked =
+                    transitionExecutor
+                        .CanTrackCompletion(
+                            blockingCustomStep) &&
+                    transitionExecutor
+                        .TryIsComplete(
+                            blockingCustomStep,
+                            out var firstComplete,
+                            out var firstCompletionError);
+
+                var secondCompletionTracked =
+                    transitionExecutor
+                        .TryIsComplete(
+                            blockingCustomStep,
+                            out var secondComplete,
+                            out var secondCompletionError);
+
+                Expect(
+                    firstCompletionTracked &&
+                    !firstComplete &&
+                    secondCompletionTracked &&
+                    secondComplete,
+                    "transition completion bridge must poll a custom action completion probe until it reports complete: " +
+                    firstCompletionError +
+                    " / " +
+                    secondCompletionError,
+                    failures);
+
                 var effectStep =
                     new AppearanceTransitionStep
                     {
@@ -1396,10 +1444,24 @@ namespace VCR.Editor.P11
 
     internal sealed class P11FakeTransitionActionHandler :
         MonoBehaviour,
-        IEventActionHandler
+        IEventActionHandler,
+        IEventActionCompletionProbe
     {
+        private int _checksBeforeComplete;
+        private int _completionChecks;
+
         public int ExecutionCount { get; private set; }
         public string LastText { get; private set; }
+
+        public void ResetCompletion(
+            int checksBeforeComplete)
+        {
+            _checksBeforeComplete =
+                Math.Max(
+                    0,
+                    checksBeforeComplete);
+            _completionChecks = 0;
+        }
 
         public bool CanHandle(
             EventActionCommand command)
@@ -1424,6 +1486,36 @@ namespace VCR.Editor.P11
             ExecutionCount++;
             LastText =
                 command.Text;
+            return true;
+        }
+
+        public bool CanTrackCompletion(
+            EventActionCommand command)
+        {
+            return CanHandle(
+                command);
+        }
+
+        public bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+
+            if (!CanTrackCompletion(
+                    command))
+            {
+                error =
+                    "Unsupported fake transition completion action.";
+                return false;
+            }
+
+            _completionChecks++;
+            complete =
+                _completionChecks >=
+                _checksBeforeComplete;
             return true;
         }
     }
