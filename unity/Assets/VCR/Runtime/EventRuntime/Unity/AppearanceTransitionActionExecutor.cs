@@ -13,7 +13,8 @@ namespace VCR.Runtime.EventRuntime.Unity
     [DisallowMultipleComponent]
     public sealed class AppearanceTransitionActionExecutor :
         MonoBehaviour,
-        IAppearanceTransitionStepExecutor
+        IAppearanceTransitionStepExecutor,
+        IAppearanceTransitionStepCompletionProbe
     {
         [SerializeField] private MonoBehaviour[] actionHandlerBehaviours =
             Array.Empty<MonoBehaviour>();
@@ -113,6 +114,74 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return handler.TryExecute(
                     command,
                     out error);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    exception.Message;
+                return false;
+            }
+        }
+
+        public bool CanTrackCompletion(
+            AppearanceTransitionStep step)
+        {
+            if (!CanExecute(
+                    step))
+            {
+                return false;
+            }
+
+            EnsureHandlers();
+
+            var command =
+                ToCommand(
+                    step);
+            var count =
+                FindHandlerCount(
+                    command,
+                    out var handler);
+
+            return
+                count == 1 &&
+                handler is
+                    IEventActionCompletionProbe
+                        probe &&
+                probe.CanTrackCompletion(
+                    command);
+        }
+
+        public bool TryIsComplete(
+            AppearanceTransitionStep step,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+
+            if (!CanTrackCompletion(
+                    step))
+            {
+                error =
+                    $"Transition action '{step?.ActionType ?? "<null>"}' does not expose completion tracking.";
+                return false;
+            }
+
+            var command =
+                ToCommand(
+                    step);
+            FindHandlerCount(
+                command,
+                out var handler);
+
+            try
+            {
+                return ((IEventActionCompletionProbe)
+                        handler)
+                    .TryIsComplete(
+                        command,
+                        out complete,
+                        out error);
             }
             catch (Exception exception)
             {
