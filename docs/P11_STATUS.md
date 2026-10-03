@@ -104,7 +104,7 @@ Implemented source contracts:
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
 - `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
-- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
+- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, a dependency overview panel with missing/forward-reference warnings, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
 - selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
 - transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
@@ -205,6 +205,9 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, completion-probe bridging, StepId uniqueness, All/Any dependency validation, forward-reference rejection, and dependency timeout validation
 - procedural motion completion state before/after release through the transition bridge
 - transition package JSON v2 marker/blocking/dependency/action/commit/cleanup round trip, v1→v2 migration, and newer-version rejection
+- external standalone `.anim` file copy/import with wildcard + exact sidecar marker resolution
+- normalized/seconds sidecar marker conversion into `VCRMarker` AnimationEvents
+- duplicate resolved marker rejection, newer-sidecar-version rejection, and failed-import asset/folder rollback
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
@@ -212,7 +215,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is external motion-format marker import, richer dependency graph visualization/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
+- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, dependency overview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is non-native motion adapters/marker conversion, richer graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking plus external Unity-native `.fbx`, `.dae`, and `.anim` import are implemented. FBX/DAE embedded clips are extracted to standalone `.anim` assets before marker editing. BVH/glTF-style non-native formats remain adapter work.
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
