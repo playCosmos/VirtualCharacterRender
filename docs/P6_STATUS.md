@@ -8,32 +8,94 @@ Updated: 2026-10-03
 feature/p6-environment-runtime
 ```
 
-P6 starts from the preserved P5 source implementation line. P0-P5 hardware/runtime evidence remains deferred where previously documented; source checkpoints are not validation PASS results.
+P6 starts from the preserved P5 source checkpoint:
 
-## Current source implementation
+```text
+checkpoint/p5-source-implementation
+50c71f07c7170bd7c5fef4f4fd134e4f0cdff829
+```
 
-The environment runtime now has an explicit engine-neutral update contract:
+P0-P5 real-device/runtime evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
+
+## Source implementation checkpoint
+
+The P6 source implementation now covers the planned one-character environment runtime boundaries.
+
+### Environment state and update policy
 
 - `EnvironmentUpdatePolicy`: Static / EventDriven / Hz10 / Hz30 / EveryFrame
-- `EnvironmentUpdateReason`: StateChanged / Scheduled / Manual
-- `EnvironmentUpdateContext`
-- `IEnvironmentUpdateTarget`
-- drop-only `EnvironmentUpdateScheduler`
+- `EnvironmentUpdateScheduler`: drop-only recurring scheduling without catch-up bursts
+- state-root bindings with duplicate/unsafe-root rejection
+- atomic state switching without scene reload
+- explicit StateChanged / Scheduled / Manual update dispatch
+- lazy `EnvironmentUpdateDriver` creation only for recurring policies
+- update-target registration/de-duplication/failure isolation
 
-Unity `BasicEnvironmentRuntime` now:
+Static and EventDriven environments still do not add an `Update()` loop to `BasicEnvironmentRuntime`.
 
-- owns one environment ID/state and explicit World/Camera/Screen/Character space mode
-- validates state bindings before applying them
-- rejects duplicate/invalid/unsafe state roots without partially changing the active visual state
-- switches bound state roots without scene reload
-- dispatches state-driven and manual environment updates explicitly
-- lazily creates/enables `EnvironmentUpdateDriver` only for recurring Hz10/Hz30/EveryFrame policies
-- disables the recurring driver again for Static/EventDriven policies
-- de-duplicates update targets and supports runtime register/unregister
-- isolates update-target exceptions and reports failure metrics
-- emits state/update/driver diagnostics
+### Coordinate spaces
 
-Static/EventDriven environments still have no `Update()` method on the runtime itself; recurring work exists only in the optional driver.
+- World / Camera / Screen / Character environment spaces
+- explicit `IEnvironmentSpaceTarget`
+- Unity `EnvironmentSpaceAnchor`
+- validation before reparenting
+- failed space changes do not partially move content or change the active mode
+
+### State transitions
+
+Engine-neutral transition contracts now include:
+
+- Cut
+- Fade
+- Crossfade
+- Dissolve capability identifier
+- transition specification/status/context
+- explicit `IEnvironmentTransitionTarget`
+
+`BasicEnvironmentRuntime`:
+
+- performs Cut immediately
+- requires an explicit transition target for non-Cut modes
+- keeps previous and next state roots active while a non-Cut transition is running
+- creates/enables `EnvironmentTransitionDriver` only while a transition is active
+- completes to one active state root and disables the driver
+- completes an active transition before transition-target replacement
+- reports transition count/progress/failure/cost diagnostics
+
+Unity `CanvasGroupEnvironmentTransitionTarget` provides lightweight Fade/Crossfade for screen/UI environments. It intentionally rejects Dissolve; shader-driven dissolve remains an explicit optional target/capability instead of being silently approximated.
+
+### Lightweight 2D environments
+
+`Environment2DLayerTarget` supports preconfigured:
+
+- StaticImage
+- Video
+- Parallax
+
+The component has no recurring `Update()` method. Static image and video lifecycle do not require environment scheduler ticks. Parallax moves only when an environment update is dispatched, so Hz10/Hz30/EveryFrame policy owns that cost.
+
+Actual media decoding/loading remains Unity/asset responsibility rather than being duplicated inside the environment state runtime.
+
+### Lighting influence
+
+Environment lighting is exposed through:
+
+- `EnvironmentLightingProfile`
+- `IEnvironmentLightingTarget`
+- Unity `EnvironmentLightInfluenceTarget`
+
+The Unity target captures source Light color/intensity, applies weighted environment color and intensity multiplier, and restores the source Light when the target is removed/disabled/destroyed. It does not rewrite character materials.
+
+### Diagnostics
+
+Environment diagnostics now expose:
+
+- state/update/space target counts and modes
+- lighting target count/profile weight/failures
+- transition target count/mode/progress/failures
+- update dispatch last/total/average milliseconds
+- transition dispatch last/total/average milliseconds
+- recurring-driver state
 
 ## Source-free validation
 
@@ -50,28 +112,36 @@ tools/validate-p6-source-free.ps1
 tools/validate-p6-source-free.sh
 ```
 
-The P6 suite checks:
+The P6 suite covers:
 
-- Static/EventDriven no-recurring scheduler behavior
+- Static/EventDriven no-recurring behavior
 - Hz10 interval and drop-only stall behavior
 - EveryFrame due behavior
-- immediate state-root application
-- atomic state switching and unknown-state rejection
-- duplicate/unsafe binding rejection without replacing the valid set
-- idempotent same-state assignment
-- manual and scheduled dispatch
-- lazy recurring-driver creation/disable
-- update-target de-duplication, register/unregister, and exception isolation
-- environment diagnostics
+- state-root application, atomic switching, duplicate/unsafe binding rejection
+- manual/scheduled/state-change update dispatch
+- update-target de-duplication/register/unregister/failure isolation
+- World/Camera/Screen/Character anchors
+- non-Cut transition rejection without a target
+- Crossfade start/midpoint/completion root semantics
+- CanvasGroup Cut/Fade/Crossfade alpha behavior and Dissolve rejection
+- transition-target de-duplication and diagnostics
+- parallax update math and no-self-Update contract
+- static-image invalid configuration guard
+- VideoPlayer-backed video-layer configuration
+- weighted environment Light influence
+- invalid lighting-target atomic rejection and source-Light restoration
+- update/transition dispatch cost metrics
 
-These validation paths are implemented but have not been executed here because a Unity Editor/runtime is not available in this environment.
+These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
-## Next P6 work
+## Deferred P6 evidence
 
-- turn EnvironmentSpaceMode into an actual Unity anchor/transform policy for World/Camera/Screen/Character environments
-- add transition contracts (Cut first; Fade/Crossfade/Dissolve as optional capabilities)
-- add lightweight 2D image/video/parallax environment targets without forcing them into 3D scene semantics
-- add explicit environment-lighting influence hooks without mutating character source materials
-- attribute environment update/transition cost in runtime diagnostics
+- execute the P0-P6 Unity source-free batch suites
+- validate image/video environments with real assets and video decode on Windows/macOS
+- validate Fade/Crossfade visual quality in actual overlay/scene configurations
+- implement/measure a shader-specific Dissolve target only when an environment package needs it
+- validate lighting influence on real VRM + MToon scenes
+- measure Hz10/Hz30/EveryFrame parallax and transition cost on target hardware
+- tune defaults only from measured evidence
 
-One active performer/character remains the product scope.
+The source architecture is complete enough for a checkpoint, but these evidence items are not marked PASS.
