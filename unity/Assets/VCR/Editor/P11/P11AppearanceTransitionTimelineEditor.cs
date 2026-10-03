@@ -402,6 +402,9 @@ namespace VCR.Editor.P11
             var steps =
                 transition.FindPropertyRelative(
                     "Steps");
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
             var duration =
                 Math.Max(
                     0.01f,
@@ -440,6 +443,58 @@ namespace VCR.Editor.P11
                         0.35f,
                         1f));
 
+            for (var markerIndex = 0;
+                 markerIndex < markers.arraySize;
+                 markerIndex++)
+            {
+                var marker =
+                    markers.GetArrayElementAtIndex(
+                        markerIndex);
+                var markerTime =
+                    Mathf.Max(
+                        0f,
+                        marker.FindPropertyRelative(
+                                "TimeSeconds")
+                            .floatValue);
+                var markerT =
+                    Mathf.Clamp01(
+                        markerTime /
+                        duration);
+                var markerX =
+                    Mathf.Lerp(
+                        rect.x,
+                        rect.xMax,
+                        markerT);
+
+                EditorGUI.DrawRect(
+                    new Rect(
+                        markerX - 1f,
+                        rect.y + 18f,
+                        2f,
+                        rect.height - 36f),
+                    new Color(
+                        0.55f,
+                        0.85f,
+                        0.55f,
+                        0.85f));
+
+                GUI.Label(
+                    new Rect(
+                        Mathf.Clamp(
+                            markerX - 42f,
+                            rect.x,
+                            Math.Max(
+                                rect.x,
+                                rect.xMax - 84f)),
+                        rect.y + 18f,
+                        84f,
+                        18f),
+                    marker.FindPropertyRelative(
+                            "Name")
+                        .stringValue,
+                    EditorStyles.miniLabel);
+            }
+
             for (var i = 0;
                  i < steps.arraySize;
                  i++)
@@ -450,9 +505,9 @@ namespace VCR.Editor.P11
                 var time =
                     Mathf.Max(
                         0f,
-                        step.FindPropertyRelative(
-                                "TimeSeconds")
-                            .floatValue);
+                        ResolveSerializedStepTime(
+                            transition,
+                            step));
                 var t =
                     Mathf.Clamp01(
                         time /
@@ -583,6 +638,22 @@ namespace VCR.Editor.P11
                                 "TimeSeconds")
                             .floatValue = 0f;
                         step.FindPropertyRelative(
+                                "TimingMode")
+                            .enumValueIndex =
+                                (int)
+                                AppearanceTransitionTimingMode
+                                    .AbsoluteTime;
+                        step.FindPropertyRelative(
+                                "MarkerName")
+                            .stringValue =
+                                string.Empty;
+                        step.FindPropertyRelative(
+                                "MarkerOffsetSeconds")
+                            .floatValue = 0f;
+                        step.FindPropertyRelative(
+                                "Blocking")
+                            .boolValue = false;
+                        step.FindPropertyRelative(
                                 "Kind")
                             .enumValueIndex =
                                 (int)
@@ -663,7 +734,7 @@ namespace VCR.Editor.P11
                                    steps.arraySize < 2))
                     {
                         if (GUILayout.Button(
-                                "Sort by Time"))
+                                "Sort by Resolved Time"))
                         {
                             Undo.RecordObject(
                                 _runtime,
@@ -1174,6 +1245,9 @@ namespace VCR.Editor.P11
                 .floatValue = 0.5f;
 
             transition.FindPropertyRelative(
+                    "Markers")
+                .arraySize = 0;
+            transition.FindPropertyRelative(
                     "CancellationSteps")
                 .arraySize = 0;
         }
@@ -1185,10 +1259,20 @@ namespace VCR.Editor.P11
         {
             step.FindPropertyRelative(
                     "TimeSeconds")
-                .floatValue =
-                    cleanup
-                        ? 0f
-                        : 0f;
+                .floatValue = 0f;
+            step.FindPropertyRelative(
+                    "TimingMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionTimingMode
+                        .AbsoluteTime;
+            step.FindPropertyRelative(
+                    "MarkerName")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "MarkerOffsetSeconds")
+                .floatValue = 0f;
             step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
@@ -1223,6 +1307,12 @@ namespace VCR.Editor.P11
             step.FindPropertyRelative(
                     "Required")
                 .boolValue = true;
+            step.FindPropertyRelative(
+                    "Blocking")
+                .boolValue = false;
+            step.FindPropertyRelative(
+                    "CompletionTimeoutSeconds")
+                .floatValue = 5f;
         }
 
         private static void CopyTransition(
@@ -1253,6 +1343,12 @@ namespace VCR.Editor.P11
                     source.FindPropertyRelative(
                             "FallbackPolicy")
                         .enumValueIndex;
+
+            CopyMarkerArray(
+                source.FindPropertyRelative(
+                    "Markers"),
+                destination.FindPropertyRelative(
+                    "Markers"));
 
             CopyStepArray(
                 source.FindPropertyRelative(
@@ -1290,6 +1386,24 @@ namespace VCR.Editor.P11
                     .floatValue =
                         from.FindPropertyRelative(
                                 "TimeSeconds")
+                            .floatValue;
+                to.FindPropertyRelative(
+                        "TimingMode")
+                    .enumValueIndex =
+                        from.FindPropertyRelative(
+                                "TimingMode")
+                            .enumValueIndex;
+                to.FindPropertyRelative(
+                        "MarkerName")
+                    .stringValue =
+                        from.FindPropertyRelative(
+                                "MarkerName")
+                            .stringValue;
+                to.FindPropertyRelative(
+                        "MarkerOffsetSeconds")
+                    .floatValue =
+                        from.FindPropertyRelative(
+                                "MarkerOffsetSeconds")
                             .floatValue;
                 to.FindPropertyRelative(
                         "Kind")
@@ -1339,6 +1453,51 @@ namespace VCR.Editor.P11
                         from.FindPropertyRelative(
                                 "Required")
                             .boolValue;
+                to.FindPropertyRelative(
+                        "Blocking")
+                    .boolValue =
+                        from.FindPropertyRelative(
+                                "Blocking")
+                            .boolValue;
+                to.FindPropertyRelative(
+                        "CompletionTimeoutSeconds")
+                    .floatValue =
+                        from.FindPropertyRelative(
+                                "CompletionTimeoutSeconds")
+                            .floatValue;
+            }
+        }
+
+        private static void CopyMarkerArray(
+            SerializedProperty source,
+            SerializedProperty destination)
+        {
+            destination.arraySize =
+                source.arraySize;
+
+            for (var i = 0;
+                 i < source.arraySize;
+                 i++)
+            {
+                var from =
+                    source.GetArrayElementAtIndex(
+                        i);
+                var to =
+                    destination.GetArrayElementAtIndex(
+                        i);
+
+                to.FindPropertyRelative(
+                        "Name")
+                    .stringValue =
+                        from.FindPropertyRelative(
+                                "Name")
+                            .stringValue;
+                to.FindPropertyRelative(
+                        "TimeSeconds")
+                    .floatValue =
+                        from.FindPropertyRelative(
+                                "TimeSeconds")
+                            .floatValue;
             }
         }
 
