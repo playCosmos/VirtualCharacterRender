@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
+using VCR.Runtime.EventRuntime;
+using VCR.Runtime.EventRuntime.Unity;
 
 namespace VCR.Editor.P11
 {
@@ -173,6 +175,15 @@ namespace VCR.Editor.P11
                     failures);
 
                 Expect(
+                    runtime.PresetIds.Count == 2 &&
+                    runtime.PresetIds[0] ==
+                        "casual-hat" &&
+                    runtime.PresetIds[1] ==
+                        "formal-crown",
+                    "appearance quick-change order must preserve authoring order",
+                    failures);
+
+                Expect(
                     runtime.SetPreset(
                         "casual-hat",
                         "Immediate",
@@ -275,6 +286,106 @@ namespace VCR.Editor.P11
                     "rejected appearance request must leave the previous appearance intact",
                     failures);
 
+                var appearanceHandler =
+                    root.AddComponent<
+                        AppearanceEventActionHandler>();
+                appearanceHandler.SetAppearanceRuntime(
+                    runtime);
+
+                var eventCommand =
+                    new EventActionCommand(
+                        ruleId:
+                            "appearance-validation",
+                        actionType:
+                            EventActionTypes
+                                .AppearanceSetPreset,
+                        targetId:
+                            runtime.Status.RuntimeId,
+                        name:
+                            "Immediate",
+                        text:
+                            "formal-crown",
+                        value:
+                            0.0,
+                        hasValue:
+                            false,
+                        eventSequence:
+                            1);
+
+                Expect(
+                    appearanceHandler.CanHandle(
+                        eventCommand) &&
+                    appearanceHandler.TryExecute(
+                        eventCommand,
+                        out var eventError),
+                    "event runtime appearance.set_preset must reach the same appearance runtime contract: " +
+                    eventError,
+                    failures);
+
+                Expect(
+                    runtime.Status.CurrentPresetId ==
+                        "formal-crown" &&
+                    formal.activeSelf &&
+                    crown.activeSelf,
+                    "event-driven appearance preset change must produce the same atomic outfit/accessory state",
+                    failures);
+
+                var fakeAction =
+                    root.AddComponent<
+                        P11FakeTransitionActionHandler>();
+                var transitionExecutor =
+                    root.AddComponent<
+                        AppearanceTransitionActionExecutor>();
+                transitionExecutor.SetActionHandlers(
+                    fakeAction);
+
+                var effectStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            "effect.play",
+                        Text =
+                            "confetti"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        effectStep) &&
+                    transitionExecutor.TryExecute(
+                        effectStep,
+                        out var effectError) &&
+                    fakeAction.ExecutionCount == 1 &&
+                    fakeAction.LastText ==
+                        "confetti",
+                    "appearance transition action executor must reuse exactly one registered application action handler: " +
+                    effectError,
+                    failures);
+
+                var recursiveStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .AppearanceSetPreset,
+                        Text =
+                            "casual-hat"
+                    };
+
+                Expect(
+                    !transitionExecutor.CanExecute(
+                        recursiveStep) &&
+                    !transitionExecutor.TryExecute(
+                        recursiveStep,
+                        out _),
+                    "appearance transition executor must reject recursive appearance.* actions",
+                    failures);
+
                 var invalidRoot =
                     new GameObject(
                         "Invalid Appearance Runtime");
@@ -351,6 +462,40 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11FakeTransitionActionHandler :
+        MonoBehaviour,
+        IEventActionHandler
+    {
+        public int ExecutionCount { get; private set; }
+        public string LastText { get; private set; }
+
+        public bool CanHandle(
+            EventActionCommand command)
+        {
+            return command.ActionType ==
+                "effect.play";
+        }
+
+        public bool TryExecute(
+            EventActionCommand command,
+            out string error)
+        {
+            error = null;
+
+            if (!CanHandle(command))
+            {
+                error =
+                    "Unsupported fake transition action.";
+                return false;
+            }
+
+            ExecutionCount++;
+            LastText =
+                command.Text;
+            return true;
         }
     }
 }
