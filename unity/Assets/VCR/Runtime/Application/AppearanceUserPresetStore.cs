@@ -207,6 +207,26 @@ namespace VCR.Runtime.Application
             }
             catch (Exception exception)
             {
+                try
+                {
+                    var path =
+                        GetProfilePath(
+                            normalized);
+                    var temporaryPath =
+                        path + ".tmp";
+
+                    if (File.Exists(
+                            temporaryPath))
+                    {
+                        File.Delete(
+                            temporaryPath);
+                    }
+                }
+                catch
+                {
+                    // Preserve the original persistence failure.
+                }
+
                 error =
                     "Appearance profile save failed: " +
                     exception.Message;
