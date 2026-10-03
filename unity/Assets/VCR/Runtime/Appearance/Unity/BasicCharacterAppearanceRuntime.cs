@@ -2244,6 +2244,26 @@ namespace VCR.Runtime.Appearance.Unity
             out string error)
         {
             error = null;
+            var actionStepsById =
+                new Dictionary<string, AppearanceTransitionStep>(
+                    StringComparer.Ordinal);
+
+            foreach (var candidate in
+                     transition.Steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (candidate != null &&
+                    candidate.Kind ==
+                        AppearanceTransitionStepKind.Action &&
+                    !string.IsNullOrWhiteSpace(
+                        candidate.StepId))
+                {
+                    actionStepsById[
+                        candidate.StepId] =
+                            candidate;
+                }
+            }
 
             foreach (var step in
                      transition.Steps ??
@@ -2277,6 +2297,48 @@ namespace VCR.Runtime.Appearance.Unity
                     error =
                         $"Blocking transition action '{step.ActionType}' requires exactly one completion probe.";
                     return false;
+                }
+            }
+
+            foreach (var waitingStep in
+                     transition.Steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (waitingStep == null ||
+                    waitingStep.DependencyMode ==
+                        AppearanceTransitionDependencyMode.None)
+                {
+                    continue;
+                }
+
+                foreach (var dependencyId in
+                         waitingStep.DependsOnStepIds ??
+                         Array.Empty<string>())
+                {
+                    if (!actionStepsById.TryGetValue(
+                            dependencyId,
+                            out var dependencyStep))
+                    {
+                        error =
+                            $"Dependency source '{dependencyId}' is unavailable.";
+                        return false;
+                    }
+
+                    var executorCount =
+                        CountExecutors(
+                            dependencyStep);
+                    var completionCount =
+                        CountCompletionProbes(
+                            dependencyStep);
+
+                    if (executorCount != 1 ||
+                        completionCount != 1)
+                    {
+                        error =
+                            $"Dependency source '{dependencyId}' requires exactly one executor and one completion probe.";
+                        return false;
+                    }
                 }
             }
 
