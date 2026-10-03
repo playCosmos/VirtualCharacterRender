@@ -253,8 +253,41 @@ namespace VCR.Editor.P11
                         true,
                         AppearanceRuntimeState.Transitioning,
                         "stream-look",
+                        "C:/avatar.vrm") &&
+                ApplicationUiActionPolicy
+                    .CanRenameAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        "stream-look-2",
+                        "C:/avatar.vrm") &&
+                !ApplicationUiActionPolicy
+                    .CanRenameAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        "   ",
+                        "C:/avatar.vrm") &&
+                ApplicationUiActionPolicy
+                    .CanDuplicateAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        "stream-look-copy",
+                        "C:/avatar.vrm") &&
+                ApplicationUiActionPolicy
+                    .CanMoveAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        "C:/avatar.vrm") &&
+                !ApplicationUiActionPolicy
+                    .CanMoveAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Transitioning,
+                        "stream-look",
                         "C:/avatar.vrm"),
-                "saved appearance preset actions must require a ready runtime, preset id, and active character path",
+                "saved appearance preset save/delete/rename/duplicate/reorder actions must require a ready runtime, valid ids, and active character path",
                 failures);
 
             var cancelableTransitionStatus =
