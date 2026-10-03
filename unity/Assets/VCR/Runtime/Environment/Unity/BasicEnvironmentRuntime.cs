@@ -94,6 +94,7 @@ namespace VCR.Runtime.Environment.Unity
         private long _transitionSequence;
         private long _transitionLastTickUs;
         private long _transitionDispatchStopwatchTicks;
+        private long _transitionDispatchCount;
         private double _lastTransitionDispatchMs;
         private long _lightingFailureCount;
         private string _lastError;
@@ -632,6 +633,9 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
+            ApplyLightingProfileToTargets(
+                EnvironmentLightingProfile.Neutral);
+
             lightingTargetBehaviours =
                 nextBehaviours;
             _lightingTargets =
@@ -682,6 +686,12 @@ namespace VCR.Runtime.Environment.Unity
             out string error)
         {
             error = null;
+
+            if (_transitionStatus.Active)
+            {
+                CompleteTransition(
+                    MonotonicClock.NowMicroseconds());
+            }
 
             var nextBehaviours =
                 targets == null
@@ -967,6 +977,11 @@ namespace VCR.Runtime.Environment.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "environment.transition_dispatch_count",
+                _transitionDispatchCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "environment.transition_dispatch_ms_last",
                 _lastTransitionDispatchMs,
                 "ms"));
@@ -979,12 +994,10 @@ namespace VCR.Runtime.Environment.Unity
 
             output.Add(new RuntimeMetric(
                 "environment.transition_dispatch_ms_avg",
-                _transitionTickCount +
-                    _transitionCount > 0
+                _transitionDispatchCount > 0
                     ? StopwatchTicksToMilliseconds(
                         _transitionDispatchStopwatchTicks) /
-                        (_transitionTickCount +
-                         _transitionCount)
+                        _transitionDispatchCount
                     : 0.0,
                 "ms"));
         }
@@ -1366,6 +1379,7 @@ namespace VCR.Runtime.Environment.Unity
                     .GetTimestamp() -
                 started;
 
+            _transitionDispatchCount++;
             _transitionDispatchStopwatchTicks +=
                 elapsedTicks;
             _lastTransitionDispatchMs =
