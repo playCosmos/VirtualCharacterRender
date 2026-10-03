@@ -62,7 +62,24 @@ namespace VCR.Runtime.Tracking.Mixing
         [SerializeField] private MotionExpressionMixer mixer;
         [SerializeField] private bool autoFindMixer = true;
         [SerializeField] private ProceduralMotionCueDefinition[] cues =
-            Array.Empty<ProceduralMotionCueDefinition>();
+        {
+            new ProceduralMotionCueDefinition
+            {
+                CueId = "spin",
+                DurationSeconds = 0.9f,
+                RootEulerDegrees =
+                    new Vector3(
+                        0f,
+                        360f,
+                        0f),
+                ProgressCurve =
+                    AnimationCurve.EaseInOut(
+                        0f,
+                        0f,
+                        1f,
+                        1f)
+            }
+        };
 
         private readonly Dictionary<string, ProceduralMotionCueDefinition>
             _cues =
