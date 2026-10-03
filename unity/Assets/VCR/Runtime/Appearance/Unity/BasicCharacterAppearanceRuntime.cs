@@ -2412,6 +2412,12 @@ namespace VCR.Runtime.Appearance.Unity
             switch (step.TimingMode)
             {
                 case AppearanceTransitionTimingMode
+                    .AbsoluteTime:
+                    resolvedTime =
+                        step.TimeSeconds;
+                    break;
+
+                case AppearanceTransitionTimingMode
                     .Marker:
                     if (string.IsNullOrWhiteSpace(
                             step.MarkerName) ||
@@ -2441,9 +2447,9 @@ namespace VCR.Runtime.Appearance.Unity
                     break;
 
                 default:
-                    resolvedTime =
-                        step.TimeSeconds;
-                    break;
+                    error =
+                        $"Unsupported transition timing mode '{step.TimingMode}'.";
+                    return false;
             }
 
             if (double.IsNaN(
