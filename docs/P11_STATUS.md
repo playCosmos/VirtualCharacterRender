@@ -103,6 +103,9 @@ Implemented source contracts:
 - authored preset ids cannot be overwritten by user presets
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
+- `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
+- transition editor supports add/duplicate/delete, ordered action/commit steps, custom action payloads, cleanup actions, marker visualization, sort/reorder, runtime validation, and Play Mode preview
+- spin+confetti and Interrupt-cleanup starter templates are provided
 
 Implemented event action types:
 
@@ -190,6 +193,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - saved preset UI gating requires a ready runtime, user preset id, and active character path
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
+- transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
@@ -197,7 +201,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: richer preview/test choreography, transition timeline authoring, and real-runtime verification of progress/cancel/Interrupt behavior
+- Appearance transitions: first timeline authoring UI is implemented; remaining work is named markers/blocking dependencies, reusable transition import/export, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt behavior
 - Motion import: Unity-project AnimationClip baking is implemented; external motion-file import remains later tooling
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
@@ -216,7 +220,7 @@ Appearance quick change now has a source implementation foundation but is not ru
 
 ## Appearance quick-change implementation update
 
-Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named authored and user presets, atomic immediate switching, transition presets with exactly one appearance commit point, QueueLatest/QueueAll/IgnoreWhileBusy plus cleanup-gated Interrupt, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, procedural and baked AnimationClip motion cues, effect/audio handlers, direct P11 preset/outfit/accessory controls, transition preview/progress/cancel UI, and per-character user-preset persistence. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
+Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named authored and user presets, atomic immediate switching, transition presets with exactly one appearance commit point, QueueLatest/QueueAll/IgnoreWhileBusy plus cleanup-gated Interrupt, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, procedural and baked AnimationClip motion cues, effect/audio handlers, direct P11 preset/outfit/accessory controls, transition preview/progress/cancel UI, per-character user-preset persistence, and a Unity Editor transition timeline authoring surface. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
 
 Transition validation now rejects missing/multiple commit points, recursive `appearance.*` steps, decreasing step times, durations that end before the final step, and Interrupt definitions without explicit cleanup. The source-free validator covers atomic outfit/accessory changes, authored/user preset separation, user-preset persistence round trips, event-driven changes, custom transition actions, procedural and baked clip cues, effect/audio play/stop, convention discovery, transition timing guards, direct appearance control gating, preview gating, and cancel gating.
 
