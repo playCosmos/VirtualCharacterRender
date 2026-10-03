@@ -4,7 +4,7 @@
 
 Events enter the application through normalized adapters. Tracking, broadcast chat, donations/support, manual controls, protocols, and future platform integrations do not call renderer objects directly.
 
-The P0 implementation establishes the source/event boundary and bounded dispatch path. Action execution and the visual node editor remain later phases.
+P8 extends the source/event boundary with validated external WebSocket/OSC ingress and a SOOP chat/donation bridge. Action execution and the visual node editor remain P9/P12 concerns.
 
 ## Canonical P0 event types
 
@@ -30,7 +30,7 @@ It does **not** mean:
 
 A source/device failure is emitted separately as `tracking.source_lost`.
 
-## P0 flow
+## Tracking flow
 
 ```text
 TrackingPresenceResolver
@@ -46,7 +46,21 @@ NormalizedEventBus main-thread dispatch
 future Event Runtime actions
 ```
 
-Broadcast adapters will feed the same `INormalizedEventSink` boundary.
+External adapters feed the same `INormalizedEventSink` boundary:
+
+```text
+WebSocket bridge client / OSC UDP / SOOP bridge
+                    ↓
+             ingress validation
+                    ↓
+              NormalizedEvent
+                    ↓
+        NormalizedEventHub bounded queue
+                    ↓
+          main-thread event dispatch
+```
+
+External adapters cannot inject `tracking.*` event types. Tracking-derived events remain owned by `TrackingPresenceEventAdapter`.
 
 ## Payload
 
@@ -57,10 +71,11 @@ The initial normalized payload carries:
 - monotonic timestamp
 - sequence assigned at main-thread dispatch
 - optional actor ID
+- optional actor display name
 - optional text
 - optional amount/currency
 
-Service-specific credentials and raw payloads remain inside their adapters.
+Service-specific credentials and raw payloads remain inside their adapters/connectors. External source IDs and receive timestamps are assigned locally rather than trusted from remote payloads.
 
 ## Queue policy
 
