@@ -201,6 +201,9 @@ namespace VCR.Editor.P11
                     source.QueuePolicy,
                 FallbackPolicy =
                     source.FallbackPolicy,
+                Markers =
+                    CloneMarkers(
+                        source.Markers),
                 Steps =
                     CloneSteps(
                         source.Steps),
@@ -208,6 +211,40 @@ namespace VCR.Editor.P11
                     CloneSteps(
                         source.CancellationSteps)
             };
+        }
+
+        private static AppearanceTransitionMarker[]
+            CloneMarkers(
+                AppearanceTransitionMarker[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceTransitionMarker>();
+
+            var result =
+                new AppearanceTransitionMarker[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var marker =
+                    source[i];
+
+                result[i] =
+                    marker == null
+                        ? null
+                        : new AppearanceTransitionMarker
+                        {
+                            Name =
+                                marker.Name,
+                            TimeSeconds =
+                                marker.TimeSeconds
+                        };
+            }
+
+            return result;
         }
 
         private static AppearanceTransitionStep[]
@@ -240,6 +277,12 @@ namespace VCR.Editor.P11
                     {
                         TimeSeconds =
                             step.TimeSeconds,
+                        TimingMode =
+                            step.TimingMode,
+                        MarkerName =
+                            step.MarkerName,
+                        MarkerOffsetSeconds =
+                            step.MarkerOffsetSeconds,
                         Kind =
                             step.Kind,
                         ActionType =
@@ -255,7 +298,11 @@ namespace VCR.Editor.P11
                         HasValue =
                             step.HasValue,
                         Required =
-                            step.Required
+                            step.Required,
+                        Blocking =
+                            step.Blocking,
+                        CompletionTimeoutSeconds =
+                            step.CompletionTimeoutSeconds
                     };
             }
 
