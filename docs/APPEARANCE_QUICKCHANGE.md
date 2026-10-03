@@ -236,12 +236,15 @@ A transition step may be scheduled by:
 
 - absolute time from transition start
 - delay after the previous step
-- a named motion marker/event
-- completion of a previous blocking step
+- absolute time from transition start remains the compatibility/default mode
+- a named marker plus a signed time offset
+- completion of a previous Blocking action before the runner advances to the next authored step
 
-The appearance commit can therefore be synchronized to the exact frame/marker intended by a custom motion.
+Named markers are transition-owned time anchors such as `swap` or `spin-end`. A step may use `TimingMode=Marker`, reference the marker by name, and add an optional offset. The resolved step times must still be non-decreasing and remain within the transition duration.
 
-The runtime remains deterministic ordered/timed execution. The P11 editor visualizes timed markers and edits their order directly; named markers, blocking-step dependencies, and a full cinematic timeline remain later tooling.
+Action steps may be marked `Blocking`. Blocking requires a finite positive completion timeout and an explicit cancellation-cleanup contract. The transition executor polls a completion probe every frame; on completion it advances, while timeout/probe failure follows the normal Required/Fallback policy after cleanup. Built-in motion, particle-effect, and audio handlers expose completion probes, and custom handlers may implement the same completion interface.
+
+The appearance commit can therefore be synchronized to a stable `swap` marker while a later `spin-end` marker releases the motion, or a later step can wait on actual action completion instead of a guessed fixed delay. The runtime remains deterministic and ordered; a full cinematic timeline is still not required.
 
 ## Concurrent quick-change requests
 
@@ -352,7 +355,7 @@ Add the Character > Appearance / Quick Change controls and application-facing ap
 
 ### P12 — Advanced One-Character Scene Tooling
 
-The first transition timeline editor has been pulled forward into P11. P12 extends it with broader appearance authoring/import tooling:
+The transition timeline editor, named markers, Blocking dependencies, and JSON transition packages have been pulled forward into P11. P12 extends them with broader appearance authoring/import tooling:
 
 - register outfit roots
 - create/edit accessory slots and anchors
@@ -360,10 +363,10 @@ The first transition timeline editor has been pulled forward into P11. P12 exten
 - import validated external accessory packages
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
-- richer transition timeline authoring: named markers, blocking dependencies, reusable/importable transition packages, and non-scene workflows
+- richer transition timeline authoring: motion-asset event/marker extraction, marker snapping, dependency graphs beyond linear blocking, package libraries, and non-scene workflows
 - external custom motion import/registration beyond the implemented Unity AnimationClip baker
 - custom particle/effect preset import/registration
-- named motion-marker placement for appearance.commit synchronization
+- automatic import of markers/events from compatible motion assets
 - transition interruption/fallback policy editing
 
 ## Current implementation status
@@ -388,7 +391,10 @@ The first source implementation now exists:
 - authored preset ids protected from user-preset overwrite
 - `VCR/P11/Open Appearance Transition Timeline` editor with add/duplicate/delete transition operations
 - direct editing of duration, queue/fallback policy, ordered action/commit steps, custom action type/target/name/text/value fields, and cancellation cleanup
-- timeline marker visualization, step reorder/delete, sort-by-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
+- named marker create/edit/delete plus timeline marker visualization
+- per-step Absolute Time or Marker + Offset timing
+- per-action Blocking + completion timeout controls
+- step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
 - versioned JSON export for the selected transition or all transitions
 - transactional JSON import with duplicate-ID replacement confirmation and full rollback when runtime validation fails
 - built-in `Spin + Confetti` and Interrupt cleanup starter templates
@@ -430,7 +436,8 @@ Not yet implemented as built-ins:
 
 - external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
-- named motion markers / blocking-step dependency authoring
+- automatic marker/event extraction from imported motion assets
+- richer dependency authoring beyond the implemented linear Blocking rule
 - richer transition package management beyond the implemented versioned JSON import/export, such as package libraries/metadata/migration UI
 - external appearance package import
 - compatible external skinned-garment workflow
