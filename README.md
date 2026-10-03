@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed into P11 Application UI. P10 broadcast output is preserved as a source checkpoint, and P11 now provides the first runtime navigation/status shell over the existing subsystem contracts. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
+The source implementation has progressed into P11 Application UI. P10 broadcast output is preserved as a source checkpoint, and P11 now provides the runtime navigation/status shell plus character/output/tracking controls and the first Appearance / Quick Change runtime slice. Registered outfit/accessory presets can switch atomically, transition definitions can sequence logical actions around one commit marker, and built-in effect plus procedural motion-cue actions are wired through the shared event-action boundary. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, timed appearance choreography, and measured performance still require evidence before those gates can be called complete.
 
 ## Architecture documents
 
@@ -115,6 +115,6 @@ The source implementation has progressed into P11 Application UI. P10 broadcast 
 
 ## Status
 
-P1-P10 source implementations are preserved as source checkpoints. P11 Application UI is active with a nine-section navigation model, runtime status summaries, configuration save, and overlay recovery controls. Executable third-party plugins remain deferred under ADR-0015.
+P1-P10 source implementations are preserved as source checkpoints. P11 Application UI is active with a nine-section navigation model, runtime status summaries, configuration save/output recovery, character and tracking controls, broadcast-target actions, and a source-level Appearance / Quick Change runtime with effect/procedural-motion transition hooks. Timed transition behavior and real VRM appearance switching are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
