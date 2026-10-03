@@ -13,5 +13,8 @@ namespace VCR.Runtime.EventRuntime
 
         public const string ExpressionSet =
             "expression.set";
+
+        public const string MotionPoseWeight =
+            "motion.pose_weight";
     }
 }

@@ -82,6 +82,14 @@ namespace VCR.Runtime.Tracking.Mixing
         public bool ExpressionsPreSmoothed =>
             expressionSmoothing > 0f;
 
+        public float PrimaryPoseLayerWeight =>
+            poseLayerSettings?.Weight ?? 0f;
+
+        public bool PrimaryPoseLayerConfigured =>
+            _poseLayerProvider != null ||
+            poseLayerProviderBehaviour is
+                ITrackingFrameProvider;
+
         private void Awake()
         {
             ResolveProviders();
@@ -141,6 +149,43 @@ namespace VCR.Runtime.Tracking.Mixing
                 settings ??
                 new HumanoidPoseLayerSettings();
             _poseDirty = true;
+        }
+
+        public bool TrySetPrimaryPoseLayerWeight(
+            float weight,
+            out string error)
+        {
+            error = null;
+
+            if (float.IsNaN(weight) ||
+                float.IsInfinity(weight) ||
+                weight < 0f ||
+                weight > 1f)
+            {
+                error =
+                    "Primary pose layer weight must be finite and in the 0..1 range.";
+                return false;
+            }
+
+            if (!PrimaryPoseLayerConfigured)
+            {
+                error =
+                    "No primary humanoid-pose layer is configured.";
+                return false;
+            }
+
+            poseLayerSettings ??=
+                new HumanoidPoseLayerSettings();
+
+            poseLayerSettings.Configure(
+                poseLayerSettings.Enabled,
+                poseLayerSettings.Role,
+                poseLayerSettings.BlendMode,
+                weight,
+                poseLayerSettings.Mask);
+
+            _poseDirty = true;
+            return true;
         }
 
         public void SetAdditionalPoseLayers(
