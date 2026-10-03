@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VCR.Runtime.Application;
+using VCR.Runtime.Appearance;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Materials.Unity;
@@ -50,6 +51,7 @@ namespace VCR.Runtime.UI
         private Button _recoverOutputButton;
 
         private RectTransform _contextActions;
+        private RectTransform _appearanceActions;
         private InputField _characterPathInput;
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
@@ -60,14 +62,20 @@ namespace VCR.Runtime.UI
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
         private Button _trackingNextButton;
+        private Button _appearancePreviousButton;
+        private Button _appearanceNextButton;
+        private Button _appearanceTransitionButton;
+        private Button _appearanceRestoreButton;
 
         private ITrackingPresenceProvider _trackingPresence;
+        private IAppearanceRuntime _appearanceRuntime;
         private MotionExpressionMixer _mixer;
         private MaterialOverrideController _materialController;
 
         private float _nextRefreshTime;
         private string _lastActionMessage;
         private int _trackingControlIndex;
+        private int _appearanceTransitionIndex;
 
         public ApplicationUiModel Model => _model;
 
@@ -144,6 +152,7 @@ namespace VCR.Runtime.UI
             _saveButton = null;
             _recoverOutputButton = null;
             _contextActions = null;
+            _appearanceActions = null;
             _characterPathInput = null;
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
@@ -154,6 +163,10 @@ namespace VCR.Runtime.UI
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
             _trackingNextButton = null;
+            _appearancePreviousButton = null;
+            _appearanceNextButton = null;
+            _appearanceTransitionButton = null;
+            _appearanceRestoreButton = null;
 
             BuildUi();
             RefreshAll();
@@ -193,6 +206,7 @@ namespace VCR.Runtime.UI
                     FindObjectsInactive.Exclude);
 
             ResolveTrackingControls();
+            ResolveAppearanceRuntime();
 
             if (_trackingPresence == null)
             {
@@ -557,7 +571,7 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 132f);
+                    new Vector2(24f, 188f);
             _contentText.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -84f);
@@ -679,6 +693,67 @@ namespace VCR.Runtime.UI
             _apply1080p60Button.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 150f;
+
+            _appearanceActions =
+                CreateRect(
+                    "Appearance Actions",
+                    content);
+
+            _appearanceActions.anchorMin =
+                new Vector2(0f, 0f);
+            _appearanceActions.anchorMax =
+                new Vector2(1f, 0f);
+            _appearanceActions.pivot =
+                new Vector2(0.5f, 0f);
+            _appearanceActions.offsetMin =
+                new Vector2(24f, 128f);
+            _appearanceActions.offsetMax =
+                new Vector2(-24f, 178f);
+
+            var appearanceLayout =
+                _appearanceActions.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            appearanceLayout.spacing = 10f;
+            appearanceLayout.childForceExpandWidth = false;
+            appearanceLayout.childControlWidth = true;
+            appearanceLayout.childControlHeight = true;
+
+            _appearancePreviousButton =
+                CreateButton(
+                    "Previous Look",
+                    _appearanceActions,
+                    ApplyPreviousAppearancePreset);
+            _appearancePreviousButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _appearanceNextButton =
+                CreateButton(
+                    "Next Look",
+                    _appearanceActions,
+                    ApplyNextAppearancePreset);
+            _appearanceNextButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _appearanceTransitionButton =
+                CreateButton(
+                    "Transition: Immediate",
+                    _appearanceActions,
+                    SelectNextAppearanceTransition);
+            _appearanceTransitionButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 240f;
+
+            _appearanceRestoreButton =
+                CreateButton(
+                    "Restore Default",
+                    _appearanceActions,
+                    RestoreDefaultAppearance);
+            _appearanceRestoreButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 170f;
 
             var actions =
                 CreateRect(
@@ -1028,6 +1103,149 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void ApplyPreviousAppearancePreset()
+        {
+            ApplyRelativeAppearancePreset(
+                -1);
+        }
+
+        private void ApplyNextAppearancePreset()
+        {
+            ApplyRelativeAppearancePreset(
+                1);
+        }
+
+        private void ApplyRelativeAppearancePreset(
+            int direction)
+        {
+            if (_appearanceRuntime == null ||
+                _appearanceRuntime.PresetIds.Count == 0)
+            {
+                _lastActionMessage =
+                    "No appearance presets are configured.";
+                RefreshAll();
+                return;
+            }
+
+            var ids =
+                _appearanceRuntime.PresetIds;
+            var currentIndex = -1;
+
+            for (var i = 0;
+                 i < ids.Count;
+                 i++)
+            {
+                if (string.Equals(
+                        ids[i],
+                        _appearanceRuntime.Status
+                            .CurrentPresetId,
+                        StringComparison.Ordinal))
+                {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            if (currentIndex < 0)
+            {
+                currentIndex =
+                    direction >= 0
+                        ? -1
+                        : 0;
+            }
+
+            var nextIndex =
+                (currentIndex +
+                 direction +
+                 ids.Count) %
+                ids.Count;
+
+            var presetId =
+                ids[nextIndex];
+
+            if (_appearanceRuntime.SetPreset(
+                    presetId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Appearance '{presetId}' requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Appearance change failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void SelectNextAppearanceTransition()
+        {
+            if (_appearanceRuntime == null)
+            {
+                return;
+            }
+
+            var count =
+                _appearanceRuntime.TransitionIds.Count +
+                1;
+
+            _appearanceTransitionIndex =
+                (_appearanceTransitionIndex + 1) %
+                Mathf.Max(1, count);
+
+            RefreshAll();
+        }
+
+        private string GetSelectedAppearanceTransitionId()
+        {
+            if (_appearanceRuntime == null ||
+                _appearanceTransitionIndex <= 0 ||
+                _appearanceRuntime.TransitionIds.Count == 0)
+            {
+                return "Immediate";
+            }
+
+            var index =
+                Mathf.Clamp(
+                    _appearanceTransitionIndex - 1,
+                    0,
+                    _appearanceRuntime.TransitionIds.Count - 1);
+
+            return
+                _appearanceRuntime.TransitionIds[
+                    index];
+        }
+
+        private void RestoreDefaultAppearance()
+        {
+            if (_appearanceRuntime == null)
+            {
+                _lastActionMessage =
+                    "Appearance runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.RestoreDefault(
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Default appearance requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Restore appearance failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -1144,6 +1362,14 @@ namespace VCR.Runtime.UI
             var trackingSelected =
                 selected ==
                 ApplicationUiSection.Tracking;
+
+            if (_appearanceActions != null &&
+                _appearanceActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearanceActions.gameObject.SetActive(
+                    characterSelected);
+            }
 
             SetActive(
                 _characterPathInput,
@@ -1264,6 +1490,52 @@ namespace VCR.Runtime.UI
                 {
                     _trackingRecoverButton.interactable =
                         hasControl;
+                }
+            }
+
+            if (characterSelected)
+            {
+                var appearanceAvailable =
+                    _appearanceRuntime != null &&
+                    _appearanceRuntime.Status.State !=
+                        AppearanceRuntimeState.Unconfigured;
+
+                if (_appearancePreviousButton != null)
+                {
+                    _appearancePreviousButton.interactable =
+                        appearanceAvailable &&
+                        _appearanceRuntime.PresetIds.Count > 0 &&
+                        !_appearanceRuntime.Status.Busy;
+                }
+
+                if (_appearanceNextButton != null)
+                {
+                    _appearanceNextButton.interactable =
+                        appearanceAvailable &&
+                        _appearanceRuntime.PresetIds.Count > 0 &&
+                        !_appearanceRuntime.Status.Busy;
+                }
+
+                if (_appearanceTransitionButton != null)
+                {
+                    _appearanceTransitionButton.interactable =
+                        appearanceAvailable &&
+                        !_appearanceRuntime.Status.Busy;
+
+                    var transitionLabel =
+                        GetSelectedAppearanceTransitionId();
+
+                    SetButtonLabel(
+                        _appearanceTransitionButton,
+                        "Transition: " +
+                        transitionLabel);
+                }
+
+                if (_appearanceRestoreButton != null)
+                {
+                    _appearanceRestoreButton.interactable =
+                        appearanceAvailable &&
+                        !_appearanceRuntime.Status.Busy;
                 }
             }
 
@@ -1391,11 +1663,27 @@ namespace VCR.Runtime.UI
             var status =
                 sceneRuntime.Status;
 
-            return
+            var text =
                 $"Runtime state: {status.State}\n" +
                 $"Character loaded: {status.HasCharacter}\n" +
                 $"Model path: {status.CurrentCharacterPath ?? "<none>"}\n" +
                 $"Last runtime error: {status.LastError ?? "<none>"}";
+
+            if (_appearanceRuntime == null)
+            {
+                return text +
+                    "\nAppearance: runtime unavailable";
+            }
+
+            var appearance =
+                _appearanceRuntime.Status;
+
+            return text +
+                $"\nAppearance state: {appearance.State}" +
+                $"\nAppearance preset: {appearance.CurrentPresetId ?? "<none>"}" +
+                $"\nOutfit: {appearance.CurrentOutfitId ?? "<none>"}" +
+                $"\nTransition: {appearance.ActiveTransitionId ?? "<none>"}" +
+                $"\nAppearance error: {appearance.LastError ?? "<none>"}";
         }
 
         private string TrackingSummary()
@@ -1637,6 +1925,34 @@ namespace VCR.Runtime.UI
                 new Vector2(-8f, -2f));
 
             return button;
+        }
+
+        private void ResolveAppearanceRuntime()
+        {
+            if (_appearanceRuntime is
+                    MonoBehaviour current &&
+                current != null)
+            {
+                return;
+            }
+
+            _appearanceRuntime = null;
+
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour is
+                    IAppearanceRuntime runtime)
+                {
+                    _appearanceRuntime =
+                        runtime;
+                    return;
+                }
+            }
         }
 
         private void ResolveTrackingControls()
