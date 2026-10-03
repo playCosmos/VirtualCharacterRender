@@ -369,9 +369,15 @@ namespace VCR.Editor.P11
             }
             catch (Exception exception)
             {
-                UnityEngine.Object
-                    .DestroyImmediate(
-                        asset);
+                AssetDatabase.DeleteAsset(
+                    outputPath);
+
+                if (asset != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            asset);
+                }
 
                 error =
                     $"BVH cue asset creation failed after mapping {mappedBoneCount} humanoid bones: {exception.Message}";
