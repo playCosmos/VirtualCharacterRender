@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.Protocols.WebSocket",
+  "rootNamespace": "VCR.Runtime.Protocols.WebSocket",
+  "references": [
+    "VCR.Runtime.Events"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}
