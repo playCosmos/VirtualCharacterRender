@@ -10,5 +10,8 @@ namespace VCR.Runtime.EventRuntime
 
         public const string MaterialSetFloat =
             "material.set_float";
+
+        public const string ExpressionSet =
+            "expression.set";
     }
 }
