@@ -6,6 +6,7 @@ using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Materials.Unity;
+using VCR.Runtime.Appearance.Unity;
 
 namespace VCR.Runtime.Character
 {
@@ -30,6 +31,9 @@ namespace VCR.Runtime.Character
 
         [Header("Materials")]
         [SerializeField] private bool attachMaterialOverrideController = true;
+
+        [Header("Appearance")]
+        [SerializeField] private bool attachAppearanceRuntime = true;
 
         private CancellationTokenSource _loadCancellation;
         private int _loadGeneration;
@@ -215,6 +219,15 @@ namespace VCR.Runtime.Character
                         MaterialOverrideController>();
 
                 materials.RefreshSlots();
+            }
+
+            if (attachAppearanceRuntime &&
+                instance.GetComponent<
+                    BasicCharacterAppearanceRuntime>() ==
+                null)
+            {
+                instance.gameObject.AddComponent<
+                    BasicCharacterAppearanceRuntime>();
             }
 
             if (!attachTrackingTargets)
