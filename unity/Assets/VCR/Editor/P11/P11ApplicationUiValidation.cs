@@ -637,6 +637,10 @@ namespace VCR.Editor.P11
                 .RunChecks(
                     failures);
 
+            P11DiagnosticsEvidenceValidation
+                .RunChecks(
+                    failures);
+
             var unavailable =
                 model.CaptureSections();
 
