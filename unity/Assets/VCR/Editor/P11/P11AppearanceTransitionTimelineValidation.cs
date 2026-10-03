@@ -353,6 +353,8 @@ namespace VCR.Editor.P11
                                                         .MotionPlay,
                                                 TargetId =
                                                     "motion.quickchange",
+                                                StepId =
+                                                    "spin-start",
                                                 Text =
                                                     "spin",
                                                 Required =
@@ -369,6 +371,16 @@ namespace VCR.Editor.P11
                                                         .Marker,
                                                 MarkerName =
                                                     "swap",
+                                                DependencyMode =
+                                                    AppearanceTransitionDependencyMode
+                                                        .All,
+                                                DependsOnStepIds =
+                                                    new[]
+                                                    {
+                                                        "spin-start"
+                                                    },
+                                                DependencyTimeoutSeconds =
+                                                    3.0,
                                                 Kind =
                                                     AppearanceTransitionStepKind
                                                         .Commit
@@ -452,6 +464,29 @@ namespace VCR.Editor.P11
                         .Steps[1]
                         .MarkerName ==
                         "swap" &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[0]
+                        .StepId ==
+                        "spin-start" &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[1]
+                        .DependencyMode ==
+                        AppearanceTransitionDependencyMode
+                            .All &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[1]
+                        .DependsOnStepIds.Length ==
+                        1 &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[1]
+                        .DependsOnStepIds[0] ==
+                        "spin-start" &&
+                    Math.Abs(
+                        packageRoundTrip.Transitions[0]
+                            .Steps[1]
+                            .DependencyTimeoutSeconds -
+                        3.0) <
+                        0.001 &&
                     packageRoundTrip.Transitions[0]
                         .CancellationSteps.Length ==
                         1 &&
@@ -593,6 +628,22 @@ namespace VCR.Editor.P11
                     "MarkerOffsetSeconds")
                 .floatValue = 0f;
             step.FindPropertyRelative(
+                    "StepId")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "DependencyMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionDependencyMode
+                        .None;
+            step.FindPropertyRelative(
+                    "DependsOnStepIds")
+                .arraySize = 0;
+            step.FindPropertyRelative(
+                    "DependencyTimeoutSeconds")
+                .floatValue = 5f;
+            step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
                     (int)
@@ -656,6 +707,22 @@ namespace VCR.Editor.P11
             step.FindPropertyRelative(
                     "MarkerOffsetSeconds")
                 .floatValue = 0f;
+            step.FindPropertyRelative(
+                    "StepId")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "DependencyMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionDependencyMode
+                        .None;
+            step.FindPropertyRelative(
+                    "DependsOnStepIds")
+                .arraySize = 0;
+            step.FindPropertyRelative(
+                    "DependencyTimeoutSeconds")
+                .floatValue = 5f;
             step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
