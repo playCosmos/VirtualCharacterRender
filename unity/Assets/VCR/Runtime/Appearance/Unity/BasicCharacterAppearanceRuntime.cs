@@ -81,6 +81,7 @@ namespace VCR.Runtime.Appearance.Unity
         private string _activeTransitionId;
         private string _lastError;
         private bool _transitionCommitted;
+        private double _transitionStartedAt;
         private Coroutine _transitionCoroutine;
         private AppearanceTransitionPreset _activeTransition;
         private AppearanceChangeRequest _activeRequest;
@@ -91,16 +92,50 @@ namespace VCR.Runtime.Appearance.Unity
         private long _transitionFailureCount;
         private long _transitionQueuedCount;
         private long _transitionInterruptedCount;
+        private long _transitionCancelledCount;
 
-        public AppearanceRuntimeStatus Status =>
-            new(
-                runtimeId,
-                _state,
-                _currentPresetId,
-                _currentOutfitId,
-                _activeTransitionId,
-                _transitionCommitted,
-                _lastError);
+        public AppearanceRuntimeStatus Status
+        {
+            get
+            {
+                var duration =
+                    _activeTransition?.DurationSeconds ??
+                    0.0;
+                var elapsed =
+                    _activeTransition != null &&
+                    _transitionStartedAt > 0.0
+                        ? Math.Max(
+                            0.0,
+                            Time.unscaledTimeAsDouble -
+                            _transitionStartedAt)
+                        : 0.0;
+                var progress =
+                    _activeTransition == null
+                        ? 0.0
+                        : duration <= 0.0
+                            ? 1.0
+                            : Math.Max(
+                                0.0,
+                                Math.Min(
+                                    1.0,
+                                    elapsed /
+                                    duration));
+
+                return new AppearanceRuntimeStatus(
+                    runtimeId,
+                    _state,
+                    _currentPresetId,
+                    _currentOutfitId,
+                    _activeTransitionId,
+                    _transitionCommitted,
+                    elapsed,
+                    duration,
+                    progress,
+                    CanCancel(
+                        _activeTransition),
+                    _lastError);
+            }
+        }
 
         public AppearanceStateSnapshot Current =>
             new(
