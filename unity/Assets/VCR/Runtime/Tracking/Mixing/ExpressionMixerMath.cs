@@ -77,6 +77,71 @@ namespace VCR.Runtime.Tracking.Mixing
             return Clamp01((v - d) / (1f - d));
         }
 
+        public static bool ApproximatelyEqual(
+            NormalizedExpressionState a,
+            NormalizedExpressionState b,
+            float epsilon = 0.001f)
+        {
+            if (ReferenceEquals(a, b))
+            {
+                return true;
+            }
+
+            if (a == null || b == null)
+            {
+                return false;
+            }
+
+            var threshold =
+                Math.Max(
+                    0f,
+                    epsilon);
+
+            for (var i = 0;
+                 i < (int)StandardExpression.Count;
+                 i++)
+            {
+                var expression =
+                    (StandardExpression)i;
+
+                if (Math.Abs(
+                        a.Get(expression) -
+                        b.Get(expression)) >
+                    threshold)
+                {
+                    return false;
+                }
+            }
+
+            foreach (var item in a.Custom)
+            {
+                if (Math.Abs(
+                        item.Value -
+                        GetCustomValue(
+                            b,
+                            item.Name)) >
+                    threshold)
+                {
+                    return false;
+                }
+            }
+
+            foreach (var item in b.Custom)
+            {
+                if (Math.Abs(
+                        item.Value -
+                        GetCustomValue(
+                            a,
+                            item.Name)) >
+                    threshold)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static float SmoothAlpha(
             float smoothingRate,
             float deltaSeconds)
@@ -154,6 +219,30 @@ namespace VCR.Runtime.Tracking.Mixing
             }
 
             return result;
+        }
+
+        private static float GetCustomValue(
+            NormalizedExpressionState state,
+            string name)
+        {
+            if (state == null ||
+                string.IsNullOrWhiteSpace(name))
+            {
+                return 0f;
+            }
+
+            foreach (var item in state.Custom)
+            {
+                if (string.Equals(
+                    item.Name,
+                    name,
+                    StringComparison.Ordinal))
+                {
+                    return item.Value;
+                }
+            }
+
+            return 0f;
         }
 
         private static void AddCustom(
