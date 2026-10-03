@@ -306,6 +306,10 @@ The transition runtime may internally reuse the same application-level action-ha
 
 Appearance presets are stored per character profile, keyed by a stable character identity/path profile rather than globally mutating the VRM.
 
+The P11 implementation currently uses the normalized character path as the profile identity and stores the profile under a SHA-256-derived filename inside the application `appearance-profiles` directory. The source path is retained inside the versioned JSON document for diagnostics/migration, but is not exposed in the profile filename. Save/update/delete uses an atomic temporary-file replacement path, and the UI rolls back the in-memory user-preset registry when persistence fails.
+
+Authored presets and user presets are separate namespaces at runtime. A user preset may replace an existing user preset with the same id, but it may not override an authored preset id.
+
 Persist:
 
 - preset id/name
@@ -375,6 +379,9 @@ The first source implementation now exists:
 - generic transition-action bridge to existing application-level event handlers
 - P11 Character UI previous/next/transition/default controls plus direct preset/outfit/accessory ID apply/clear controls
 - P11 transition preview by replaying the selected non-Immediate transition against the current appearance without changing the requested look
+- per-character user preset save/load/delete through a versioned appearance profile store
+- automatic user-preset restore when the same character profile is loaded
+- authored preset ids protected from user-preset overwrite
 - appearance Event Runtime action handler
 
 Implemented built-in presentation actions now also include:
@@ -399,7 +406,7 @@ Not yet implemented as built-ins:
 
 - imported AnimationClip -> normalized motion cue conversion/registration
 - `audio.play` action handler
-- durable per-character user-preset persistence UI
+- richer user-preset management UI such as rename/reorder/duplicate
 - transition timeline authoring UI
 - external appearance package import
 - compatible external skinned-garment workflow
