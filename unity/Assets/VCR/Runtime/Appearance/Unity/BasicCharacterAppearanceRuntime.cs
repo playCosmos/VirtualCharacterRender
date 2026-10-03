@@ -1235,6 +1235,18 @@ namespace VCR.Runtime.Appearance.Unity
 
             _transitionFailureCount++;
 
+            var cleanupSucceeded =
+                TryRunCancellationCleanup(
+                    transition,
+                    out var cleanupError);
+
+            if (!cleanupSucceeded)
+            {
+                FinishTransition(
+                    cleanupError);
+                return true;
+            }
+
             if (!_transitionCommitted &&
                 transition.FallbackPolicy ==
                     AppearanceTransitionFallbackPolicy
@@ -1800,6 +1812,7 @@ namespace VCR.Runtime.Appearance.Unity
             }
 
             var commitCount = 0;
+            var hasBlockingStep = false;
             var previousTime = 0.0;
             var hasPreviousStep = false;
             var lastStepTime = 0.0;
@@ -1839,6 +1852,8 @@ namespace VCR.Runtime.Appearance.Unity
 
                 if (step.Blocking)
                 {
+                    hasBlockingStep = true;
+
                     if (step.Kind !=
                         AppearanceTransitionStepKind.Action)
                     {
@@ -1899,6 +1914,15 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 error =
                     $"Transition '{transition.Id}' duration cannot end before its last step.";
+                return false;
+            }
+
+            if (hasBlockingStep &&
+                (transition.CancellationSteps == null ||
+                 transition.CancellationSteps.Length == 0))
+            {
+                error =
+                    $"Transition '{transition.Id}' contains blocking actions and requires explicit cancellation cleanup steps.";
                 return false;
             }
 
