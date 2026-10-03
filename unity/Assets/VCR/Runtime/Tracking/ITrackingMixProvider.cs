@@ -8,5 +8,7 @@ namespace VCR.Runtime.Tracking
     public interface ITrackingMixProvider :
         ITrackingRouteProvider
     {
+        bool HumanoidPosePreSmoothed { get; }
+        bool ExpressionsPreSmoothed { get; }
     }
 }

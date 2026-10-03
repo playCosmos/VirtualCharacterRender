@@ -381,8 +381,14 @@ namespace VCR.Runtime.Character
             HumanoidPoseState pose,
             float deltaTime)
         {
+            var smoothingRate =
+                _provider is ITrackingMixProvider mix &&
+                mix.HumanoidPosePreSmoothed
+                    ? 0f
+                    : poseSmoothing;
+
             var alpha = SmoothAlpha(
-                poseSmoothing,
+                smoothingRate,
                 deltaTime);
 
             ApplyRoot(pose, alpha);
@@ -596,8 +602,14 @@ namespace VCR.Runtime.Character
             NormalizedExpressionState state,
             float deltaTime)
         {
+            var smoothingRate =
+                _provider is ITrackingMixProvider mix &&
+                mix.ExpressionsPreSmoothed
+                    ? 0f
+                    : expressionSmoothing;
+
             var alpha = SmoothAlpha(
-                expressionSmoothing,
+                smoothingRate,
                 deltaTime);
             var runtime = target.Runtime.Expression;
 

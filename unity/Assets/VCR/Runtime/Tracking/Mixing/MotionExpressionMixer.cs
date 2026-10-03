@@ -70,6 +70,10 @@ namespace VCR.Runtime.Tracking.Mixing
             _presenceProvider?.Presence ??
             default;
 
+        public bool HumanoidPosePreSmoothed => false;
+        public bool ExpressionsPreSmoothed =>
+            expressionSmoothing > 0f;
+
         private void Awake()
         {
             ResolveProviders();
@@ -89,6 +93,7 @@ namespace VCR.Runtime.Tracking.Mixing
 
             if (_routedProvider == null)
             {
+                ResetPoseState();
                 ResetExpressionState();
                 return;
             }

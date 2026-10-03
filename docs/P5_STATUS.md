@@ -29,7 +29,7 @@ The first P5 slice introduces `ITrackingMixProvider` as the final one-performer 
 - blends standard and named/custom expressions
 - supports Override, Additive, and Maximum modes
 - applies weight and a rescaled deadzone
-- exposes a smoothing-rate contract
+- exposes a smoothing-rate contract and declares smoothing ownership so the VRM target does not smooth the same mixed channel twice
 - emits mixer diagnostics
 - never treats the expression overlay as performer-presence evidence
 
@@ -52,9 +52,7 @@ These validation paths are implemented but have not been executed here because a
 ## Next P5 work
 
 - extend the first pose-layer slot into an ordered multi-layer stack only where a concrete base/tracking/additive/procedural use case requires it
-- avoid duplicate smoothing between mixer and target layers
 - define deterministic fallback-to-base/neutral behavior
-- add pose weighting/mask source-free validation
 - measure allocation/update cost before enabling always-on smoothing by default
 
 One active performer remains the product scope.

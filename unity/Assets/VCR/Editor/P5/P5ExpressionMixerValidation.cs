@@ -196,37 +196,96 @@ namespace VCR.Editor.P5
                 "same-space pose layers must blend",
                 failures);
 
-            Expect(
+            var hasLeft =
+                mixed != null &&
                 mixed.TryGet(
                     HumanoidBoneId.LeftUpperArm,
-                    out var left),
+                    out var left);
+
+            Expect(
+                hasLeft,
                 "masked left-arm pose must remain present",
                 failures);
 
-            ExpectClose(
-                left.LocalPosition.X,
-                1f,
-                "0.5 override weight must interpolate included bone position",
-                failures);
+            if (hasLeft)
+            {
+                ExpectClose(
+                    left.LocalPosition.X,
+                    1f,
+                    "0.5 override weight must interpolate included bone position",
+                    failures);
+            }
 
-            Expect(
+            var hasRight =
+                mixed != null &&
                 mixed.TryGet(
                     HumanoidBoneId.RightUpperArm,
-                    out var right),
+                    out var right);
+
+            Expect(
+                hasRight,
                 "base right-arm pose must remain present",
                 failures);
 
-            ExpectClose(
-                right.LocalPosition.X,
-                0.25f,
-                "mask-excluded bones must preserve base pose",
+            if (hasRight)
+            {
+                ExpectClose(
+                    right.LocalPosition.X,
+                    0.25f,
+                    "mask-excluded bones must preserve base pose",
+                    failures);
+            }
+
+            settings.Configure(
+                layerEnabled: true,
+                layerRole:
+                    MotionLayerRole.Additive,
+                mode:
+                    HumanoidPoseBlendMode.Additive,
+                layerWeight: 0.5f,
+                mask: mask);
+
+            var additive =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    layerPose,
+                    settings,
+                    out mismatch);
+
+            var hasAdditiveLeft =
+                additive != null &&
+                additive.TryGet(
+                    HumanoidBoneId.LeftUpperArm,
+                    out var additiveLeft);
+
+            Expect(
+                hasAdditiveLeft,
+                "additive pose layer must produce the included bone",
                 failures);
+
+            if (hasAdditiveLeft)
+            {
+                ExpectClose(
+                    additiveLeft.LocalPosition.X,
+                    1f,
+                    "0.5 additive weight must add half the layer translation",
+                    failures);
+            }
 
             var differentSpace =
                 CreateTwoBonePose(
                     HumanoidPoseSpace.OriginalLocal,
                     leftX: 5f,
                     rightX: 5f);
+
+            settings.Configure(
+                layerEnabled: true,
+                layerRole:
+                    MotionLayerRole.Tracking,
+                mode:
+                    HumanoidPoseBlendMode.Override,
+                layerWeight: 0.5f,
+                mask: mask);
 
             var preserved =
                 HumanoidPoseMixerMath.Blend(
@@ -465,34 +524,50 @@ namespace VCR.Editor.P5
                     "face frames must pass through unchanged in the first P5 mixer slice",
                     failures);
 
-                Expect(
+                var hasMixedPose =
                     mixer.TryGetLatestHumanoidPose(
                         out var mixedPoseFrame) &&
-                    mixedPoseFrame?.HumanoidPose != null &&
+                    mixedPoseFrame?.HumanoidPose != null;
+
+                var hasMixedLeft =
+                    hasMixedPose &&
                     mixedPoseFrame.HumanoidPose.TryGet(
                         HumanoidBoneId.LeftUpperArm,
-                        out var mixedLeft),
+                        out var mixedLeft);
+
+                Expect(
+                    hasMixedLeft,
                     "mixer must emit a weighted humanoid-pose frame when a pose layer is configured",
                     failures);
 
-                ExpectClose(
-                    mixedLeft.LocalPosition.X,
-                    1f,
-                    "component pose layer must honor configured weight and mask",
-                    failures);
+                if (hasMixedLeft)
+                {
+                    ExpectClose(
+                        mixedLeft.LocalPosition.X,
+                        1f,
+                        "component pose layer must honor configured weight and mask",
+                        failures);
+                }
 
-                Expect(
+                var hasMixedRight =
+                    hasMixedPose &&
                     mixedPoseFrame.HumanoidPose.TryGet(
                         HumanoidBoneId.RightUpperArm,
-                        out var mixedRight),
+                        out var mixedRight);
+
+                Expect(
+                    hasMixedRight,
                     "component pose mix must preserve base bones outside the mask",
                     failures);
 
-                ExpectClose(
-                    mixedRight.LocalPosition.X,
-                    0.25f,
-                    "component pose mix must leave mask-excluded bones unchanged",
-                    failures);
+                if (hasMixedRight)
+                {
+                    ExpectClose(
+                        mixedRight.LocalPosition.X,
+                        0.25f,
+                        "component pose mix must leave mask-excluded bones unchanged",
+                        failures);
+                }
 
                 Expect(
                     mixer.TryGetLatestExpressions(
@@ -528,6 +603,12 @@ namespace VCR.Editor.P5
                     "missing overlay must preserve routed base expressions exactly",
                     failures);
 
+                Expect(
+                    !mixer.HumanoidPosePreSmoothed &&
+                    !mixer.ExpressionsPreSmoothed,
+                    "default mixer configuration must not claim pre-smoothed pose or expressions",
+                    failures);
+
                 var metrics =
                     new List<RuntimeMetric>();
                 mixer.CollectMetrics(metrics);
@@ -560,6 +641,17 @@ namespace VCR.Editor.P5
                     Math.Abs(weight - 0.5) <
                     0.001,
                     "mixer diagnostics must expose expression layer weight",
+                    failures);
+
+                mixer.ConfigureExpressionLayer(
+                    ExpressionBlendMode.Additive,
+                    weight: 0.5f,
+                    deadzone: 0f,
+                    smoothing: 8f);
+
+                Expect(
+                    mixer.ExpressionsPreSmoothed,
+                    "enabling mixer expression smoothing must transfer smoothing ownership to the final mix provider",
                     failures);
             }
             catch (Exception exception)
