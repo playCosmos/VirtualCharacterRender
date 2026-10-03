@@ -31,6 +31,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateWebSocketProtocol(
                 failures);
+            ValidateWebSocketTransport(
+                failures);
             ValidateOscMapping(
                 failures);
             ValidateSoopMapping(
@@ -204,6 +206,56 @@ namespace VCR.Editor.P8
                 !string.IsNullOrEmpty(
                     versionError),
                 "WebSocket injection must reject unsupported protocol versions",
+                failures);
+        }
+
+        private static void ValidateWebSocketTransport(
+            List<string> failures)
+        {
+            Expect(
+                WebSocketEventClientTransport
+                    .TryValidateEndpoint(
+                        "ws://127.0.0.1:39541/vcr/events",
+                        out var loopbackUri,
+                        out var loopbackError) &&
+                loopbackUri != null &&
+                string.IsNullOrEmpty(
+                    loopbackError),
+                "loopback ws endpoint must be allowed for local bridge operation",
+                failures);
+
+            Expect(
+                !WebSocketEventClientTransport
+                    .TryValidateEndpoint(
+                        "ws://example.com/vcr/events",
+                        out _,
+                        out var remotePlainError) &&
+                !string.IsNullOrEmpty(
+                    remotePlainError),
+                "remote plaintext ws endpoint must be rejected",
+                failures);
+
+            Expect(
+                WebSocketEventClientTransport
+                    .TryValidateEndpoint(
+                        "wss://example.com/vcr/events",
+                        out var secureRemoteUri,
+                        out var secureRemoteError) &&
+                secureRemoteUri != null &&
+                string.IsNullOrEmpty(
+                    secureRemoteError),
+                "remote wss endpoint must be accepted",
+                failures);
+
+            Expect(
+                !WebSocketEventClientTransport
+                    .TryValidateEndpoint(
+                        "wss://user:password@example.com/vcr/events",
+                        out _,
+                        out var credentialError) &&
+                !string.IsNullOrEmpty(
+                    credentialError),
+                "WebSocket endpoint URI user-info credentials must be rejected",
                 failures);
         }
 
@@ -467,6 +519,9 @@ namespace VCR.Editor.P8
                 var osc =
                     host.AddComponent<
                         OscNormalizedEventUdpReceiver>();
+                var webSocketTransport =
+                    host.AddComponent<
+                        WebSocketEventClientTransport>();
 
                 webSocket.SetSink(
                     sink);
@@ -474,6 +529,8 @@ namespace VCR.Editor.P8
                     sink);
                 osc.SetSink(
                     sink);
+                webSocketTransport.SetHandler(
+                    webSocket);
 
                 var webSocketJson =
                     JsonUtility.ToJson(
@@ -637,6 +694,28 @@ namespace VCR.Editor.P8
                     "SOOP Unity adapter must reject invalid donation bridge message without publishing",
                     failures);
 
+                Expect(
+                    webSocketTransport.TryQueueText(
+                        webSocketJson,
+                        out var transportQueueError) &&
+                    string.IsNullOrEmpty(
+                        transportQueueError) &&
+                    webSocketTransport.QueuedCount == 1,
+                    "WebSocket transport source-free path must queue a complete text message before main-thread delivery",
+                    failures);
+
+                InvokeUpdate(
+                    webSocketTransport);
+
+                Expect(
+                    sink.Events.Count == 5 &&
+                    sink.Events[4].Type ==
+                        NormalizedEventTypes
+                            .LocalManual &&
+                    webSocketTransport.QueuedCount == 0,
+                    "WebSocket transport must deliver queued text to its handler only from main-thread Update",
+                    failures);
+
                 var oscMessage =
                     new OscMessage(
                         OscNormalizedEventMapper
@@ -670,7 +749,7 @@ namespace VCR.Editor.P8
                     sink.Events[3].Type ==
                         NormalizedEventTypes
                             .LocalManual &&
-                    sink.Events[3].SourceId ==
+                    sink.Events[4].SourceId ==
                         "osc.udp" &&
                     osc.QueuedCount == 0 &&
                     osc.DispatchedEventCount == 1,
@@ -700,6 +779,8 @@ namespace VCR.Editor.P8
 
                 webSocket.CollectMetrics(
                     metrics);
+                webSocketTransport.CollectMetrics(
+                    metrics);
                 soop.CollectMetrics(
                     metrics);
                 osc.CollectMetrics(
@@ -711,7 +792,7 @@ namespace VCR.Editor.P8
                         "protocol.websocket.events.accepted",
                         out var wsAccepted) &&
                     Math.Abs(
-                        wsAccepted - 1.0) <
+                        wsAccepted - 2.0) <
                     0.001 &&
                     TryGetMetric(
                         metrics,
@@ -721,6 +802,29 @@ namespace VCR.Editor.P8
                         wsRejected - 1.0) <
                     0.001,
                     "WebSocket adapter diagnostics must expose accepted/rejected counts",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "protocol.websocket.transport.received",
+                        out var transportReceived) &&
+                    Math.Abs(
+                        transportReceived - 1.0) <
+                    0.001 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.websocket.transport.dispatched",
+                        out var transportDispatched) &&
+                    Math.Abs(
+                        transportDispatched - 1.0) <
+                    0.001 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.websocket.transport.dropped",
+                        out var transportDropped) &&
+                    transportDropped < 0.5,
+                    "WebSocket transport diagnostics must expose queued/main-thread delivery counters",
                     failures);
 
                 Expect(
@@ -788,6 +892,33 @@ namespace VCR.Editor.P8
                             host);
                 }
             }
+        }
+
+        private static void InvokeUpdate(
+            WebSocketEventClientTransport transport)
+        {
+            var method =
+                typeof(
+                    WebSocketEventClientTransport)
+                    .GetMethod(
+                        "Update",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(
+                        WebSocketEventClientTransport)
+                        .FullName,
+                    "Update");
+            }
+
+            method.Invoke(
+                transport,
+                null);
         }
 
         private static void InvokeUpdate(
