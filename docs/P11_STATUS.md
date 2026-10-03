@@ -68,7 +68,7 @@ The next control slice is now also implemented:
 - Character: manual VRM path boundary plus Load / Reload / Unload actions over `SingleCharacterSceneRuntime`
 - Character keeps direct path input and now also exposes a Browse action through `ICharacterFileSelectionAdapter`; Unity Editor, Windows standalone, and macOS standalone adapters are implemented. The selected path is validated as an existing `.vrm` before it is copied into the path field.
 - scene-mutating buttons are disabled while a character load is already in progress and while the scene is suspended/shutting down/stopped
-- Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract
+- Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract; Transparent / Topmost / Click-through buttons preserve the other overlay flags and apply through `SingleCharacterSceneRuntime.ApplyOverlayOutput`
 - Save Configuration and Recover Output remain global actions
 - action availability rules are centralized in `ApplicationUiActionPolicy` rather than duplicated across button callbacks
 
@@ -228,7 +228,7 @@ These validation paths are implemented but have not been executed in this enviro
 - Environment: state and transition controls
 - Material / Shader: slot/preset/shader/parameter controls over existing P2/P7 contracts
 - Events: persisted P9 rule document list/edit/enable controls
-- Camera / Output: camera state plus transparent/topmost/click-through controls; 720p60/1080p60 broadcast-target apply actions are implemented
+- Camera / Output: output state plus transparent/topmost/click-through controls and 720p60/1080p60 broadcast-target apply actions are implemented; remaining work is real standalone/OBS verification and any justified camera-edit controls beyond the existing summary
 - Settings: capability enable/disable and graphics/runtime settings
 - Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence
 - define save/apply UX and validation messaging before enabling destructive-looking actions
