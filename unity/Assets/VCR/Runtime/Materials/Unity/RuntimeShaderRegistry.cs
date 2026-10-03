@@ -44,6 +44,59 @@ namespace VCR.Runtime.Materials.Unity
                 Shaders.Remove(shaderId);
         }
 
+        public static bool TryGetRegistered(
+            string shaderId,
+            out Shader shader)
+        {
+            shader = null;
+
+            return
+                !string.IsNullOrWhiteSpace(shaderId) &&
+                Shaders.TryGetValue(
+                    shaderId,
+                    out shader) &&
+                shader != null;
+        }
+
+        public static KeyValuePair<string, Shader>[]
+            CaptureRegistered()
+        {
+            var snapshot =
+                new KeyValuePair<string, Shader>[
+                    Shaders.Count];
+
+            var index = 0;
+            foreach (var item in Shaders)
+            {
+                snapshot[index++] =
+                    item;
+            }
+
+            return snapshot;
+        }
+
+        public static void RestoreRegistered(
+            KeyValuePair<string, Shader>[] snapshot)
+        {
+            Shaders.Clear();
+
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            foreach (var item in snapshot)
+            {
+                if (!string.IsNullOrWhiteSpace(
+                        item.Key) &&
+                    item.Value != null)
+                {
+                    Shaders[item.Key] =
+                        item.Value;
+                }
+            }
+        }
+
         public static bool TryResolve(
             string shaderId,
             out Shader shader)
