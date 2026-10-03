@@ -26,6 +26,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
+        ITrackingRuntimeControl,
         IFaceTrackingActivationControl,
         IRuntimeMetricsSource
     {
@@ -98,6 +99,25 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private string _lastError;
         private bool _applicationSuspended;
         private bool _destroying;
+
+        public string ControlId => "mediapipe-webcam";
+        public string DisplayName => "MediaPipe Webcam";
+        public bool ControlEnabled => enabled;
+        public TrackingSourceHealthState ControlHealthState =>
+            _state switch
+            {
+                MediaPipeWebcamLifecycleState.Starting =>
+                    TrackingSourceHealthState.Starting,
+                MediaPipeWebcamLifecycleState.Running =>
+                    TrackingSourceHealthState.Healthy,
+                MediaPipeWebcamLifecycleState.Suspended =>
+                    TrackingSourceHealthState.Stopped,
+                MediaPipeWebcamLifecycleState.Faulted =>
+                    TrackingSourceHealthState.Faulted,
+                _ =>
+                    TrackingSourceHealthState.Stopped
+            };
+        public string ControlError => _lastError;
 
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
@@ -243,6 +263,72 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 $"holisticDrops={Interlocked.Read(ref _holisticPoolDrops)}, " +
                 $"readbackErrors={Interlocked.Read(ref _readbackErrors)}",
                 this);
+        }
+
+        public bool TrySetControlEnabled(
+            bool enabledValue,
+            out string error)
+        {
+            error = null;
+
+            if (_destroying)
+            {
+                error =
+                    "MediaPipe tracking is shutting down.";
+                return false;
+            }
+
+            enabled = enabledValue;
+
+            if (enabledValue &&
+                !enabled)
+            {
+                error =
+                    _lastError ??
+                    "MediaPipe tracking could not be enabled.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryRecover(
+            out string error)
+        {
+            error = null;
+
+            if (_destroying)
+            {
+                error =
+                    "MediaPipe tracking is shutting down.";
+                return false;
+            }
+
+            if (!Application.isPlaying)
+            {
+                error =
+                    "Tracking recovery requires play mode.";
+                return false;
+            }
+
+            if (!enabled)
+            {
+                enabled = true;
+                return enabled;
+            }
+
+            Restart();
+
+            if (_state ==
+                MediaPipeWebcamLifecycleState.Faulted)
+            {
+                error =
+                    _lastError ??
+                    "MediaPipe tracking recovery failed.";
+                return false;
+            }
+
+            return true;
         }
 
         public void SetFaceTrackingEnabled(
