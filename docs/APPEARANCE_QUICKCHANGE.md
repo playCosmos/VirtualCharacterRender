@@ -211,7 +211,8 @@ Examples include:
 - bow
 - pose-and-hold
 - Unity-project `AnimationClip` baked to a normalized additive cue asset through the P11 cue baker
-- Unity-native external `.fbx`, `.dae`, and `.anim` motion files can be imported through the P11 external motion importer; non-native BVH/glTF-style formats still require dedicated adapters
+- Unity-native external `.fbx`, `.dae`, and `.anim` motion files can be imported through the P11 external motion importer
+- `.bvh` is supported through the built-in BVH adapter, which converts motion directly to an additive humanoid `BakedMotionCueAsset`; glTF-style motion still requires a dedicated adapter
 - user-authored procedural/additive pose sequence (runtime cue path implemented)
 
 Custom effect support uses registered effect presets and character/world anchors.
@@ -367,7 +368,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
 - richer transition timeline authoring: dependency visualization beyond the implemented StepId-based All/Any graph, package libraries, and non-scene workflows
-- external motion adapters for formats Unity does not natively import, such as BVH/glTF motion workflows
+- additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
 - custom particle/effect preset import/registration
 - richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
 - transition interruption/fallback policy editing
@@ -497,13 +498,13 @@ The optional marker sidecar is discovered next to the source as either `<basenam
 
 Resolved markers are written as explicit `VCRMarker` AnimationEvents. Existing unrelated AnimationEvents are preserved. A sidecar marker with the same VCR marker name replaces that marker on the imported standalone clip. Invalid times, duplicate resolved marker names, duplicate clip selectors, unsupported sidecar versions, or source files with no usable AnimationClip fail the import and roll back newly created assets.
 
-Formats that Unity does not import natively, such as BVH or a glTF motion workflow without an installed importer, intentionally fail with an adapter-required error instead of being guessed or partially converted.
+Formats without either Unity-native import or a registered adapter intentionally fail with an adapter-required error instead of being guessed or partially converted. BVH is now covered by the built-in `bvh` adapter; glTF motion remains adapter work.
 
 Not yet implemented as built-ins:
 
-- external motion adapters for non-Unity-native formats such as BVH/glTF; `.fbx`, `.dae`, and `.anim` import is implemented
+- external motion adapters beyond the implemented BVH path, such as glTF motion workflows
 - richer user-preset management UI such as rename/reorder/duplicate
-- automatic marker/event extraction from non-native external motion formats before they become Unity AnimationClips; explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
+- automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
 - richer dependency visualization/grouping beyond the implemented StepId-based `All` / `Any` completion graph
 - richer transition package management beyond the implemented v2 JSON import/export and v1 migration, such as package libraries/metadata/migration UI
 - external appearance package import
