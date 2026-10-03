@@ -67,9 +67,27 @@ namespace VCR.Runtime.Appearance.Unity
     }
 
     [Serializable]
+    public sealed class AppearanceTransitionMarkerBinding
+    {
+        public string Name;
+        [Min(0f)] public float TimeSeconds;
+
+        public AppearanceTransitionMarker ToMarker() =>
+            new()
+            {
+                Name = Name,
+                TimeSeconds = TimeSeconds
+            };
+    }
+
+    [Serializable]
     public sealed class AppearanceTransitionStepBinding
     {
         [Min(0f)] public float TimeSeconds;
+        public AppearanceTransitionTimingMode TimingMode =
+            AppearanceTransitionTimingMode.AbsoluteTime;
+        public string MarkerName;
+        public float MarkerOffsetSeconds;
         public AppearanceTransitionStepKind Kind =
             AppearanceTransitionStepKind.Action;
         public string ActionType;
@@ -79,11 +97,16 @@ namespace VCR.Runtime.Appearance.Unity
         public double Value;
         public bool HasValue;
         public bool Required = true;
+        public bool Blocking = false;
+        [Min(0.01f)] public float CompletionTimeoutSeconds = 5f;
 
         public AppearanceTransitionStep ToStep() =>
             new()
             {
                 TimeSeconds = TimeSeconds,
+                TimingMode = TimingMode,
+                MarkerName = MarkerName,
+                MarkerOffsetSeconds = MarkerOffsetSeconds,
                 Kind = Kind,
                 ActionType = ActionType,
                 TargetId = TargetId,
@@ -91,7 +114,10 @@ namespace VCR.Runtime.Appearance.Unity
                 Text = Text,
                 Value = Value,
                 HasValue = HasValue,
-                Required = Required
+                Required = Required,
+                Blocking = Blocking,
+                CompletionTimeoutSeconds =
+                    CompletionTimeoutSeconds
             };
     }
 
@@ -104,6 +130,8 @@ namespace VCR.Runtime.Appearance.Unity
             AppearanceTransitionQueuePolicy.QueueLatest;
         public AppearanceTransitionFallbackPolicy FallbackPolicy =
             AppearanceTransitionFallbackPolicy.Immediate;
+        public AppearanceTransitionMarkerBinding[] Markers =
+            Array.Empty<AppearanceTransitionMarkerBinding>();
         public AppearanceTransitionStepBinding[] Steps =
             Array.Empty<AppearanceTransitionStepBinding>();
         public AppearanceTransitionStepBinding[] CancellationSteps =
@@ -111,6 +139,9 @@ namespace VCR.Runtime.Appearance.Unity
 
         public AppearanceTransitionPreset ToPreset()
         {
+            var markers =
+                ConvertMarkers(
+                    Markers);
             var steps =
                 ConvertSteps(
                     Steps);
@@ -124,10 +155,29 @@ namespace VCR.Runtime.Appearance.Unity
                 DurationSeconds = DurationSeconds,
                 QueuePolicy = QueuePolicy,
                 FallbackPolicy = FallbackPolicy,
+                Markers = markers,
                 Steps = steps,
                 CancellationSteps =
                     cancellationSteps
             };
+        }
+
+        private static AppearanceTransitionMarker[]
+            ConvertMarkers(
+                AppearanceTransitionMarkerBinding[] source)
+        {
+            var markers =
+                new AppearanceTransitionMarker[
+                    source?.Length ?? 0];
+
+            for (var i = 0; i < markers.Length; i++)
+            {
+                markers[i] =
+                    source[i]?.ToMarker() ??
+                    new AppearanceTransitionMarker();
+            }
+
+            return markers;
         }
 
         private static AppearanceTransitionStep[]
