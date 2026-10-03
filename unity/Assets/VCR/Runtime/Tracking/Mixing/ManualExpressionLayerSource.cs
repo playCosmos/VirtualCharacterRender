@@ -30,6 +30,19 @@ namespace VCR.Runtime.Tracking.Mixing
         public string SourceId => sourceId;
         public long Sequence => _sequence;
 
+        public float GetExpression(
+            StandardExpression expression)
+        {
+            var index =
+                (int)expression;
+
+            return index >= 0 &&
+                   index <
+                       (int)StandardExpression.Count
+                ? _values[index]
+                : 0f;
+        }
+
         public bool SetExpression(
             StandardExpression expression,
             float value)
