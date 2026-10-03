@@ -159,6 +159,98 @@ namespace VCR.Editor.P6
                     worldAnchor.transform,
                     false);
 
+                var dayCanvas =
+                    day.AddComponent<CanvasGroup>();
+                var nightCanvas =
+                    night.AddComponent<CanvasGroup>();
+
+                var dayCanvasBinding =
+                    new EnvironmentCanvasGroupBinding();
+                dayCanvasBinding.Configure(
+                    "day",
+                    dayCanvas);
+
+                var nightCanvasBinding =
+                    new EnvironmentCanvasGroupBinding();
+                nightCanvasBinding.Configure(
+                    "night",
+                    nightCanvas);
+
+                var canvasTransition =
+                    root.AddComponent<
+                        CanvasGroupEnvironmentTransitionTarget>();
+                canvasTransition.Configure(
+                    dayCanvasBinding,
+                    nightCanvasBinding);
+
+                Expect(
+                    canvasTransition
+                        .ValidateEnvironmentTransition(
+                            new EnvironmentTransitionSpec(
+                                EnvironmentTransitionMode.Crossfade,
+                                0.5f),
+                            "day",
+                            "night",
+                            out var canvasTransitionError) &&
+                    string.IsNullOrEmpty(
+                        canvasTransitionError),
+                    "CanvasGroup transition target must validate a complete Crossfade binding",
+                    failures);
+
+                canvasTransition.ApplyEnvironmentTransition(
+                    new EnvironmentTransitionContext(
+                        sequence: 1,
+                        timestampUs: 0,
+                        previousStateId: "day",
+                        stateId: "night",
+                        EnvironmentTransitionMode.Crossfade,
+                        progress: 0.25f,
+                        deltaSeconds: 0f));
+
+                Expect(
+                    Math.Abs(
+                        dayCanvas.alpha - 0.75f) <
+                        0.001f &&
+                    Math.Abs(
+                        nightCanvas.alpha - 0.25f) <
+                        0.001f,
+                    "CanvasGroup Crossfade must apply complementary outgoing/incoming alpha",
+                    failures);
+
+                canvasTransition.ApplyEnvironmentTransition(
+                    new EnvironmentTransitionContext(
+                        sequence: 2,
+                        timestampUs: 0,
+                        previousStateId: "night",
+                        stateId: "day",
+                        EnvironmentTransitionMode.Cut,
+                        progress: 1f,
+                        deltaSeconds: 0f));
+
+                Expect(
+                    Math.Abs(
+                        dayCanvas.alpha - 1f) <
+                        0.001f &&
+                    Math.Abs(
+                        nightCanvas.alpha) <
+                        0.001f,
+                    "Cut notification must restore the active CanvasGroup alpha and clear inactive state alpha",
+                    failures);
+
+                Expect(
+                    !canvasTransition
+                        .ValidateEnvironmentTransition(
+                            new EnvironmentTransitionSpec(
+                                EnvironmentTransitionMode.Dissolve,
+                                0.5f),
+                            "day",
+                            "night",
+                            out var dissolveError) &&
+                    !string.IsNullOrEmpty(
+                        dissolveError),
+                    "CanvasGroup transition target must explicitly reject shader-driven Dissolve",
+                    failures);
+
                 var spaceTarget =
                     spaceContent.AddComponent<
                         EnvironmentSpaceAnchor>();
