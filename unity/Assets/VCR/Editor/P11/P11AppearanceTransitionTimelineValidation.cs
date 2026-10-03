@@ -500,6 +500,60 @@ namespace VCR.Editor.P11
                     packageLoadError,
                     failures);
 
+                var legacyPackage =
+                    new AppearanceTransitionPackage
+                    {
+                        Version = 1,
+                        PackageId =
+                            "legacy-v1",
+                        Transitions =
+                            new[]
+                            {
+                                new AppearanceTransitionPreset
+                                {
+                                    Id =
+                                        "legacy-transition",
+                                    DurationSeconds =
+                                        0.5,
+                                    Steps =
+                                        new[]
+                                        {
+                                            new AppearanceTransitionStep
+                                            {
+                                                TimeSeconds =
+                                                    0.25,
+                                                Kind =
+                                                    AppearanceTransitionStepKind
+                                                        .Commit,
+                                                DependsOnStepIds =
+                                                    null,
+                                                DependencyTimeoutSeconds =
+                                                    0.0
+                                            }
+                                        }
+                                }
+                            }
+                    };
+
+                Expect(
+                    P11AppearanceTransitionPackageUtility
+                        .Validate(
+                            legacyPackage,
+                            out var legacyMigrationError) &&
+                    legacyPackage.Version ==
+                        AppearanceTransitionPackage
+                            .CurrentVersion &&
+                    legacyPackage.Transitions[0]
+                        .Steps[0]
+                        .DependsOnStepIds != null &&
+                    legacyPackage.Transitions[0]
+                        .Steps[0]
+                        .DependencyTimeoutSeconds >
+                        0.0,
+                    "transition package v1 must migrate to v2 dependency defaults: " +
+                    legacyMigrationError,
+                    failures);
+
                 package.Version =
                     AppearanceTransitionPackage
                         .CurrentVersion +
