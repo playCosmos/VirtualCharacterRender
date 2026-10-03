@@ -335,9 +335,37 @@ Add appearance authoring/import tooling:
 - named motion-marker placement for appearance.commit synchronization
 - transition interruption/fallback policy editing
 
+## Current implementation status
+
+The first source implementation now exists:
+
+- `IAppearanceRuntime`, appearance status/state, preset, transition, and executor contracts
+- `BasicCharacterAppearanceRuntime`
+- registered outfit/accessory root bindings
+- immediate transactional switching and default restore
+- timed transition runner with a single commit step
+- deterministic authored step order
+- QueueLatest / QueueAll / IgnoreWhileBusy
+- Interrupt rejected until cancellation cleanup is explicitly implemented
+- generic transition-action bridge to existing application-level event handlers
+- P11 Character UI previous/next/transition/default controls
+- appearance Event Runtime action handler
+
+Not yet implemented as built-ins:
+
+- `motion.play` / `motion.release` clip/procedural-motion action handler
+- `effect.play` / `effect.stop` particle/effect registry action handler
+- `audio.play` action handler
+- transition timeline authoring UI
+- external appearance package import
+- compatible external skinned-garment workflow
+- transition cancellation cleanup contract
+
+A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive.
+
 ## Deferred evidence
 
-The feature is planned, not yet validated.
+The feature has source implementation but is not yet runtime-validated.
 
 Required evidence includes:
 
