@@ -679,32 +679,8 @@ namespace VCR.Editor.P11
             }
 
             var mapped =
-                new Dictionary<
-                    HumanoidBoneId,
-                    Joint>();
-
-            foreach (var joint in
-                     bvh.Joints)
-            {
-                if (!TryMapBone(
-                        joint.Name,
-                        out var bone))
-                {
-                    continue;
-                }
-
-                if (mapped.ContainsKey(
-                        bone))
-                {
-                    error =
-                        $"BVH maps more than one joint to humanoid bone '{bone}'. Rename or simplify the source skeleton before import.";
-                    return false;
-                }
-
-                mapped.Add(
-                    bone,
-                    joint);
-            }
+                BuildHumanoidMapping(
+                    bvh.Joints);
 
             if (!mapped.ContainsKey(
                     HumanoidBoneId.Hips))
@@ -756,9 +732,27 @@ namespace VCR.Editor.P11
                     HumanoidBoneId,
                     BakedBoneMotionCueTrack>();
 
+            var mappedPairs =
+                new List<
+                    KeyValuePair<
+                        HumanoidBoneId,
+                        Joint>>(
+                    mapped);
+            mappedPairs.Sort(
+                (left, right) =>
+                    ((int)left.Key).CompareTo(
+                        (int)right.Key));
+
             foreach (var pair in
-                     mapped)
+                     mappedPairs)
             {
+                if (ReferenceEquals(
+                        pair.Value,
+                        bvh.Root))
+                {
+                    continue;
+                }
+
                 var track =
                     new BakedBoneMotionCueTrack
                     {
@@ -784,6 +778,10 @@ namespace VCR.Editor.P11
                     bvh.Root,
                     bvh.Frames[0]) *
                 positionScale;
+            var baseRootRotation =
+                ReadRotation(
+                    bvh.Root,
+                    bvh.Frames[0]);
             var basePositions =
                 new Dictionary<
                     HumanoidBoneId,
@@ -794,7 +792,7 @@ namespace VCR.Editor.P11
                     Quaternion>();
 
             foreach (var pair in
-                     mapped)
+                     mappedPairs)
             {
                 basePositions[
                     pair.Key] =
@@ -825,10 +823,17 @@ namespace VCR.Editor.P11
                             mirrorX);
                 rootRotations[
                     frame] =
-                        Quaternion.identity;
+                        ConvertRotation(
+                            Quaternion.Inverse(
+                                baseRootRotation) *
+                            ReadRotation(
+                                bvh.Root,
+                                bvh.Frames[
+                                    frame]),
+                            mirrorX);
 
                 foreach (var pair in
-                         mapped)
+                         mappedPairs)
                 {
                     var bone =
                         pair.Key;
@@ -845,20 +850,20 @@ namespace VCR.Editor.P11
                             joint,
                             bvh.Frames[
                                 frame]);
-                    var track =
-                        trackByBone[
-                            bone];
+                    if (!trackByBone.TryGetValue(
+                            bone,
+                            out var track))
+                    {
+                        continue;
+                    }
 
                     track.LocalPositionOffsets[
                         frame] =
-                            bone ==
-                            HumanoidBoneId.Hips
-                                ? Vector3.zero
-                                : ConvertPosition(
-                                    currentPosition -
-                                    basePositions[
-                                        bone],
-                                    mirrorX);
+                            ConvertPosition(
+                                currentPosition -
+                                basePositions[
+                                    bone],
+                                mirrorX);
                     track.LocalRotationOffsets[
                         frame] =
                             ConvertRotation(
@@ -1017,6 +1022,107 @@ namespace VCR.Editor.P11
                     return true;
                 default:
                     return false;
+            }
+        }
+
+        private static Dictionary<
+            HumanoidBoneId,
+            Joint> BuildHumanoidMapping(
+            IEnumerable<Joint> joints)
+        {
+            var selected =
+                new Dictionary<
+                    HumanoidBoneId,
+                    (Joint Joint, int Priority)>();
+
+            foreach (var joint in
+                     joints ??
+                     Array.Empty<Joint>())
+            {
+                if (joint == null ||
+                    !TryMapBone(
+                        joint.Name,
+                        out var bone))
+                {
+                    continue;
+                }
+
+                var normalized =
+                    NormalizeJointName(
+                        joint.Name);
+                var priority =
+                    GetMappingPriority(
+                        normalized,
+                        bone);
+
+                if (!selected.TryGetValue(
+                        bone,
+                        out var current) ||
+                    priority >
+                    current.Priority)
+                {
+                    selected[
+                        bone] =
+                            (joint, priority);
+                }
+            }
+
+            var result =
+                new Dictionary<
+                    HumanoidBoneId,
+                    Joint>();
+
+            foreach (var pair in
+                     selected)
+            {
+                result.Add(
+                    pair.Key,
+                    pair.Value.Joint);
+            }
+
+            return result;
+        }
+
+        private static int GetMappingPriority(
+            string normalized,
+            HumanoidBoneId bone)
+        {
+            if (string.Equals(
+                    normalized,
+                    NormalizeJointName(
+                        bone.ToString()),
+                    StringComparison.Ordinal))
+            {
+                return 100;
+            }
+
+            switch (normalized)
+            {
+                case "hips":
+                case "pelvis":
+                case "chest":
+                case "upperchest":
+                case "neck":
+                case "head":
+                case "leftupperarm":
+                case "rightupperarm":
+                case "leftlowerarm":
+                case "rightlowerarm":
+                case "lefthand":
+                case "righthand":
+                case "leftupperleg":
+                case "rightupperleg":
+                case "leftlowerleg":
+                case "rightlowerleg":
+                case "leftfoot":
+                case "rightfoot":
+                    return 90;
+
+                case "root":
+                    return 20;
+
+                default:
+                    return 50;
             }
         }
 
