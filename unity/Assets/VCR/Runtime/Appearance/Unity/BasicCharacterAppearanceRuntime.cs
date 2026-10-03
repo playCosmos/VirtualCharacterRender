@@ -32,6 +32,7 @@ namespace VCR.Runtime.Appearance.Unity
         [Tooltip("Components implementing IAppearanceTransitionStepExecutor.")]
         [SerializeField] private MonoBehaviour[] transitionExecutorBehaviours =
             Array.Empty<MonoBehaviour>();
+        [SerializeField] private bool autoFindTransitionExecutors = true;
 
         private readonly Dictionary<string, AppearanceOutfitBinding>
             _outfits =
@@ -1277,8 +1278,33 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 if (behaviour is
                     IAppearanceTransitionStepExecutor
-                        executor)
+                        executor &&
+                    !list.Contains(executor))
                 {
+                    list.Add(executor);
+                }
+            }
+
+            if (autoFindTransitionExecutors)
+            {
+                var behaviours =
+                    FindObjectsByType<MonoBehaviour>(
+                        FindObjectsInactive.Exclude,
+                        FindObjectsSortMode.None);
+
+                foreach (var behaviour in behaviours)
+                {
+                    if (ReferenceEquals(
+                            behaviour,
+                            this) ||
+                        behaviour is not
+                            IAppearanceTransitionStepExecutor
+                                executor ||
+                        list.Contains(executor))
+                    {
+                        continue;
+                    }
+
                     list.Add(executor);
                 }
             }
