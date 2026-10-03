@@ -31,7 +31,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression convergence/blend modes, pose weighting/masks, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, weighted ordered pose layers/masks, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -689,18 +689,19 @@ namespace VCR.Editor.P5
 
                 Expect(
                     hasMixedRight,
-                    "component pose mix must preserve base bones outside the mask",
+                    "ordered pose layers must produce the right-arm result",
                     failures);
 
                 if (hasMixedRight)
                 {
                     ExpectClose(
                         mixedRight.LocalPosition.X,
-                        0.25f,
-                        "component pose mix must leave mask-excluded bones unchanged",
+                        1.5f,
+                        "ordered pose layers must apply override before additive in array order",
                         failures);
                 }
 
+                mixer.SetAdditionalPoseLayers();
                 mixer.SetPoseLayerProvider(
                     null);
                 InvokeUpdate(mixer);
