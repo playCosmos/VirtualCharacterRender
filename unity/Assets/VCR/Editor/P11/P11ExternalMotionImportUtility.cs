@@ -264,8 +264,9 @@ namespace VCR.Editor.P11
                                         true,
                                     out error))
                             {
-                                RollbackAssets(
-                                    createdAssets);
+                                RollbackImport(
+                                    createdAssets,
+                                    createdFolders);
                                 return false;
                             }
 
