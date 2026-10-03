@@ -58,8 +58,8 @@ The first bound summaries are:
 - Material / Shader: slot/error counts
 - Events: processed/matched/executed/failed/unhandled/ambiguous counts
 - Camera / Output: output state, transparency/topmost/click-through, capture readiness, 720p60/1080p60 configuration readiness
-- Settings: application start/config path and capability counts
-- Diagnostics: frame average/P95/P99 and tracking update rates
+- Settings: application start/config path, sorted capability state/error, render scale, target FPS, VSync, and run-in-background state
+- Diagnostics: frame average/P95/P99, tracking update/age/presence data, and paged subsystem `RuntimeMetric` table
 
 Detailed editing controls are intentionally added incrementally instead of duplicating subsystem logic inside the UI.
 
@@ -189,6 +189,8 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - overlay-setting and runtime-Settings action availability by scene state
 - sorted capability status snapshots including enabled/disabled state
 - event rule configuration JSON save/load round trip with rule enabled state/order and max commands
+- capability status snapshot ordering and enabled/disabled state
+- Diagnostics paged metric view reads existing snapshots only and does not change report cadence
 - transactional registered outfit/accessory switching
 - authored appearance preset order
 - default appearance restore
@@ -239,7 +241,7 @@ These validation paths are implemented but have not been executed in this enviro
 - Events: persisted rule browse/enable, trace, max-command, save, and reload controls are implemented; full rule filter/condition/action editing remains later tooling rather than hidden mutation in P11
 - Camera / Output: output state plus transparent/topmost/click-through controls and 720p60/1080p60 broadcast-target apply actions are implemented; remaining work is real standalone/OBS verification and any justified camera-edit controls beyond the existing summary
 - Settings: capability enable/disable and Render Scale / FPS / VSync / Run in Background controls are implemented; remaining work is real capability lifecycle/render verification and any additional settings justified by runtime contracts
-- Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence remain the main unfinished P11 UI slice
+- Diagnostics: paged subsystem metric table is implemented without changing core diagnostics cadence; optional charts remain future-only unless they prove useful enough to justify extra UI complexity
 - destructive-looking actions remain gated by centralized validation/policy and explicit status messages
 
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
