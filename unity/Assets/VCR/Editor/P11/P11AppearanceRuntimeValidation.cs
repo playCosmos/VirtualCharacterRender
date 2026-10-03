@@ -333,11 +333,63 @@ namespace VCR.Editor.P11
                 var fakeAction =
                     root.AddComponent<
                         P11FakeTransitionActionHandler>();
+                var effectRoot =
+                    new GameObject(
+                        "Confetti Effect Root");
+                effectRoot.transform.SetParent(
+                    root.transform,
+                    false);
+                effectRoot.SetActive(false);
+
+                var effectHandler =
+                    root.AddComponent<
+                        EffectEventActionHandler>();
+                effectHandler.ConfigureBindings(
+                    new EffectEventActionHandler
+                        .EffectBinding
+                    {
+                        EffectId =
+                            "confetti",
+                        Root =
+                            effectRoot,
+                        ParticleSystems =
+                            Array.Empty<
+                                ParticleSystem>(),
+                        DeactivateOnStop =
+                            true
+                    });
+
                 var transitionExecutor =
                     root.AddComponent<
                         AppearanceTransitionActionExecutor>();
                 transitionExecutor.SetActionHandlers(
-                    fakeAction);
+                    fakeAction,
+                    effectHandler);
+
+                var customStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            "custom.transition",
+                        Text =
+                            "user-action"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        customStep) &&
+                    transitionExecutor.TryExecute(
+                        customStep,
+                        out var customError) &&
+                    fakeAction.ExecutionCount == 1 &&
+                    fakeAction.LastText ==
+                        "user-action",
+                    "appearance transition action executor must reuse exactly one user-registered application action handler: " +
+                    customError,
+                    failures);
 
                 var effectStep =
                     new AppearanceTransitionStep
@@ -346,7 +398,10 @@ namespace VCR.Editor.P11
                             AppearanceTransitionStepKind
                                 .Action,
                         ActionType =
-                            "effect.play",
+                            EventActionTypes
+                                .EffectPlay,
+                        TargetId =
+                            "effects.main",
                         Text =
                             "confetti"
                     };
@@ -357,11 +412,38 @@ namespace VCR.Editor.P11
                     transitionExecutor.TryExecute(
                         effectStep,
                         out var effectError) &&
-                    fakeAction.ExecutionCount == 1 &&
-                    fakeAction.LastText ==
-                        "confetti",
-                    "appearance transition action executor must reuse exactly one registered application action handler: " +
+                    effectRoot.activeSelf,
+                    "appearance transition must be able to play a registered built-in effect through the shared action bridge: " +
                     effectError,
+                    failures);
+
+                var stopEffect =
+                    new EventActionCommand(
+                        ruleId:
+                            "appearance-validation",
+                        actionType:
+                            EventActionTypes
+                                .EffectStop,
+                        targetId:
+                            "effects.main",
+                        name:
+                            null,
+                        text:
+                            "confetti",
+                        value:
+                            0.0,
+                        hasValue:
+                            false,
+                        eventSequence:
+                            2);
+
+                Expect(
+                    effectHandler.TryExecute(
+                        stopEffect,
+                        out var stopError) &&
+                    !effectRoot.activeSelf,
+                    "effect.stop must stop/deactivate a registered quick-change effect: " +
+                    stopError,
                     failures);
 
                 var recursiveStep =
@@ -476,7 +558,7 @@ namespace VCR.Editor.P11
             EventActionCommand command)
         {
             return command.ActionType ==
-                "effect.play";
+                "custom.transition";
         }
 
         public bool TryExecute(
