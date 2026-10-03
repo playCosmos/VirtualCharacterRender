@@ -557,15 +557,10 @@ namespace VCR.Runtime.Appearance.Unity
             UpsertUserPreset(
                 next);
 
-            _currentPresetId =
-                id;
-
             preset =
                 ClonePreset(
                     next);
 
-            AppearanceChanged?.Invoke(
-                Current);
             SetState(
                 _state,
                 _lastError);
