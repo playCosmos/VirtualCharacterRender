@@ -44,6 +44,11 @@ namespace VCR.Runtime.Environment.Unity
         [SerializeField] private MonoBehaviour[] spaceTargetBehaviours =
             Array.Empty<MonoBehaviour>();
 
+        [Header("Lighting")]
+        [Tooltip("Explicit components implementing IEnvironmentLightingTarget.")]
+        [SerializeField] private MonoBehaviour[] lightingTargetBehaviours =
+            Array.Empty<MonoBehaviour>();
+
         [Header("Transitions")]
         [SerializeField] private EnvironmentTransitionMode defaultTransitionMode =
             EnvironmentTransitionMode.Cut;
@@ -64,6 +69,12 @@ namespace VCR.Runtime.Environment.Unity
         private IEnvironmentTransitionTarget[] _transitionTargets =
             Array.Empty<IEnvironmentTransitionTarget>();
 
+        private IEnvironmentLightingTarget[] _lightingTargets =
+            Array.Empty<IEnvironmentLightingTarget>();
+
+        private EnvironmentLightingProfile _lightingProfile =
+            EnvironmentLightingProfile.Neutral;
+
         private EnvironmentUpdateDriver _updateDriver;
         private EnvironmentTransitionDriver _transitionDriver;
         private EnvironmentTransitionStatus _transitionStatus;
@@ -80,6 +91,7 @@ namespace VCR.Runtime.Environment.Unity
         private long _transitionSequence;
         private long _transitionLastTickUs;
         private long _transitionDispatchStopwatchTicks;
+        private long _lightingFailureCount;
         private string _lastError;
 
         public event Action<EnvironmentStateChange> StateChanged;
@@ -97,6 +109,9 @@ namespace VCR.Runtime.Environment.Unity
 
         public EnvironmentTransitionStatus TransitionStatus =>
             _transitionStatus;
+
+        public EnvironmentLightingProfile LightingProfile =>
+            _lightingProfile;
 
         public long StateChangeCount =>
             _stateChangeCount;
@@ -122,6 +137,9 @@ namespace VCR.Runtime.Environment.Unity
         public int TransitionTargetCount =>
             _transitionTargets?.Length ?? 0;
 
+        public int LightingTargetCount =>
+            _lightingTargets?.Length ?? 0;
+
         public bool RecurringUpdatesActive =>
             _updateDriver != null &&
             _updateDriver.enabled &&
@@ -132,7 +150,9 @@ namespace VCR.Runtime.Environment.Unity
             RebuildUpdateTargets();
             RebuildSpaceTargets();
             RebuildTransitionTargets();
+            RebuildLightingTargets();
             ApplyCurrentStateBinding();
+            ApplyCurrentLighting();
             ApplyCurrentSpaceMode();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
@@ -143,7 +163,9 @@ namespace VCR.Runtime.Environment.Unity
             RebuildUpdateTargets();
             RebuildSpaceTargets();
             RebuildTransitionTargets();
+            RebuildLightingTargets();
             ApplyCurrentStateBinding();
+            ApplyCurrentLighting();
             ApplyCurrentSpaceMode();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
@@ -168,6 +190,9 @@ namespace VCR.Runtime.Environment.Unity
             {
                 _transitionDriver.enabled = false;
             }
+
+            ApplyLightingProfileToTargets(
+                EnvironmentLightingProfile.Neutral);
         }
 
         public void Configure(
@@ -195,7 +220,9 @@ namespace VCR.Runtime.Environment.Unity
             RebuildUpdateTargets();
             RebuildSpaceTargets();
             RebuildTransitionTargets();
+            RebuildLightingTargets();
             ApplyCurrentStateBinding();
+            ApplyCurrentLighting();
 
             if (!SetSpaceMode(
                     mode,
@@ -576,6 +603,76 @@ namespace VCR.Runtime.Environment.Unity
             return true;
         }
 
+        public bool ConfigureLightingTargets(
+            MonoBehaviour[] targets,
+            out string error)
+        {
+            error = null;
+
+            var nextBehaviours =
+                targets == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        targets.Clone();
+
+            var nextTargets =
+                BuildLightingTargets(
+                    nextBehaviours);
+
+            if (!ValidateLightingTargets(
+                    nextTargets,
+                    _lightingProfile,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            lightingTargetBehaviours =
+                nextBehaviours;
+            _lightingTargets =
+                nextTargets;
+
+            ApplyLightingProfileToTargets(
+                _lightingProfile);
+
+            _lastError = null;
+            return true;
+        }
+
+        public void SetLightingTargets(
+            params MonoBehaviour[] targets)
+        {
+            ConfigureLightingTargets(
+                targets,
+                out _);
+        }
+
+        public bool SetLightingProfile(
+            EnvironmentLightingProfile profile,
+            out string error)
+        {
+            error = null;
+
+            if (!ValidateLightingTargets(
+                    _lightingTargets,
+                    profile,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            _lightingProfile =
+                profile;
+
+            ApplyLightingProfileToTargets(
+                _lightingProfile);
+
+            _lastError = null;
+            return true;
+        }
+
         public bool ConfigureTransitionTargets(
             MonoBehaviour[] targets,
             out string error)
@@ -791,6 +888,26 @@ namespace VCR.Runtime.Environment.Unity
                 "bool"));
 
             output.Add(new RuntimeMetric(
+                "environment.lighting_targets",
+                LightingTargetCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.lighting_weight",
+                _lightingProfile.Weight,
+                "ratio"));
+
+            output.Add(new RuntimeMetric(
+                "environment.lighting_intensity_multiplier",
+                _lightingProfile.IntensityMultiplier,
+                "ratio"));
+
+            output.Add(new RuntimeMetric(
+                "environment.lighting_failures",
+                _lightingFailureCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "environment.transition_targets",
                 TransitionTargetCount,
                 "count"));
@@ -864,6 +981,150 @@ namespace VCR.Runtime.Environment.Unity
             _updateDriver.Bind(this);
             _updateDriver.enabled =
                 isActiveAndEnabled;
+        }
+
+        private void RebuildLightingTargets()
+        {
+            _lightingTargets =
+                BuildLightingTargets(
+                    lightingTargetBehaviours);
+        }
+
+        private static IEnvironmentLightingTarget[]
+            BuildLightingTargets(
+                MonoBehaviour[] behaviours)
+        {
+            if (behaviours == null ||
+                behaviours.Length == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentLightingTarget>();
+            }
+
+            var targets =
+                new IEnvironmentLightingTarget[
+                    behaviours.Length];
+            var count = 0;
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour == null ||
+                    behaviour is not
+                        IEnvironmentLightingTarget target)
+                {
+                    continue;
+                }
+
+                var duplicate = false;
+
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    if (ReferenceEquals(
+                            targets[i],
+                            target))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (duplicate)
+                {
+                    continue;
+                }
+
+                targets[count++] =
+                    target;
+            }
+
+            if (count == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentLightingTarget>();
+            }
+
+            if (count != targets.Length)
+            {
+                Array.Resize(
+                    ref targets,
+                    count);
+            }
+
+            return targets;
+        }
+
+        private static bool ValidateLightingTargets(
+            IEnvironmentLightingTarget[] targets,
+            EnvironmentLightingProfile profile,
+            out string error)
+        {
+            error = null;
+
+            if (targets == null)
+            {
+                return true;
+            }
+
+            foreach (var target in targets)
+            {
+                if (target == null)
+                {
+                    continue;
+                }
+
+                if (!target.ValidateEnvironmentLighting(
+                        profile,
+                        out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void ApplyCurrentLighting()
+        {
+            ApplyLightingProfileToTargets(
+                _lightingProfile);
+        }
+
+        private void ApplyLightingProfileToTargets(
+            EnvironmentLightingProfile profile)
+        {
+            if (_lightingTargets == null ||
+                _lightingTargets.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var target in
+                     _lightingTargets)
+            {
+                if (target == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    target.ApplyEnvironmentLighting(
+                        profile);
+                }
+                catch (Exception exception)
+                {
+                    _lightingFailureCount++;
+                    _lastError =
+                        "Environment lighting target failed: " +
+                        exception.Message;
+
+                    Debug.LogWarning(
+                        _lastError,
+                        this);
+                }
+            }
         }
 
         private void EnsureTransitionDriver()
