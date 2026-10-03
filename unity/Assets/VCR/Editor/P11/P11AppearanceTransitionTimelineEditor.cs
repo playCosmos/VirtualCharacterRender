@@ -1164,6 +1164,12 @@ namespace VCR.Editor.P11
                 return;
             }
 
+            DrawDependencyGraphPreview(
+                transition,
+                steps);
+
+            EditorGUILayout.Space();
+
             var knownActionIds =
                 new System.Collections.Generic
                     .HashSet<string>(
@@ -1316,6 +1322,337 @@ namespace VCR.Editor.P11
                         MessageType.Info);
                 }
             }
+        }
+
+        private static void DrawDependencyGraphPreview(
+            SerializedProperty transition,
+            SerializedProperty steps)
+        {
+            if (steps == null ||
+                steps.arraySize == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No transition steps are available for dependency visualization.",
+                    MessageType.None);
+                return;
+            }
+
+            var nodeHeight =
+                22f;
+            var nodeWidth =
+                136f;
+            var rowGap =
+                8f;
+            var canvasHeight =
+                Mathf.Clamp(
+                    28f +
+                    steps.arraySize *
+                    (nodeHeight + rowGap),
+                    110f,
+                    460f);
+            var canvas =
+                GUILayoutUtility.GetRect(
+                    100f,
+                    canvasHeight,
+                    GUILayout.ExpandWidth(
+                        true));
+            GUI.Box(
+                canvas,
+                GUIContent.none,
+                EditorStyles.helpBox);
+
+            var inner =
+                new Rect(
+                    canvas.x + 10f,
+                    canvas.y + 10f,
+                    Mathf.Max(
+                        1f,
+                        canvas.width - 20f),
+                    Mathf.Max(
+                        1f,
+                        canvas.height - 20f));
+            var duration =
+                Mathf.Max(
+                    0.001f,
+                    transition.FindPropertyRelative(
+                            "DurationSeconds")
+                        .floatValue);
+            var nodeRects =
+                new Rect[
+                    steps.arraySize];
+            var idRects =
+                new System.Collections.Generic
+                    .Dictionary<string, Rect>(
+                        StringComparer.Ordinal);
+            var idIndices =
+                new System.Collections.Generic
+                    .Dictionary<string, int>(
+                        StringComparer.Ordinal);
+
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+                var resolved =
+                    ResolveSerializedStepTime(
+                        transition,
+                        step);
+
+                if (float.IsNaN(
+                        resolved) ||
+                    float.IsInfinity(
+                        resolved))
+                {
+                    resolved =
+                        duration *
+                        (i /
+                         Mathf.Max(
+                             1f,
+                             steps.arraySize - 1f));
+                }
+
+                var normalized =
+                    Mathf.Clamp01(
+                        resolved /
+                        duration);
+                var x =
+                    Mathf.Lerp(
+                        inner.x,
+                        Mathf.Max(
+                            inner.x,
+                            inner.xMax -
+                            nodeWidth),
+                        normalized);
+                var y =
+                    inner.y +
+                    i *
+                    (nodeHeight + rowGap);
+
+                nodeRects[
+                    i] =
+                        new Rect(
+                            x,
+                            y,
+                            nodeWidth,
+                            nodeHeight);
+
+                var kind =
+                    (AppearanceTransitionStepKind)
+                    step.FindPropertyRelative(
+                            "Kind")
+                        .enumValueIndex;
+                var stepId =
+                    step.FindPropertyRelative(
+                            "StepId")
+                        .stringValue;
+
+                if (kind ==
+                        AppearanceTransitionStepKind
+                            .Action &&
+                    !string.IsNullOrWhiteSpace(
+                        stepId) &&
+                    !idRects.ContainsKey(
+                        stepId))
+                {
+                    idRects.Add(
+                        stepId,
+                        nodeRects[
+                            i]);
+                    idIndices.Add(
+                        stepId,
+                        i);
+                }
+            }
+
+            Handles.BeginGUI();
+
+            for (var targetIndex = 0;
+                 targetIndex < steps.arraySize;
+                 targetIndex++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        targetIndex);
+                var dependencies =
+                    step.FindPropertyRelative(
+                        "DependsOnStepIds");
+
+                for (var dependencyIndex = 0;
+                     dependencyIndex <
+                     dependencies.arraySize;
+                     dependencyIndex++)
+                {
+                    var dependencyId =
+                        dependencies
+                            .GetArrayElementAtIndex(
+                                dependencyIndex)
+                            .stringValue;
+
+                    if (string.IsNullOrWhiteSpace(
+                            dependencyId) ||
+                        !idRects.TryGetValue(
+                            dependencyId,
+                            out var sourceRect) ||
+                        !idIndices.TryGetValue(
+                            dependencyId,
+                            out var sourceIndex) ||
+                        sourceIndex >=
+                            targetIndex)
+                    {
+                        continue;
+                    }
+
+                    var targetRect =
+                        nodeRects[
+                            targetIndex];
+                    var from =
+                        new Vector3(
+                            sourceRect.xMax,
+                            sourceRect.center.y,
+                            0f);
+                    var to =
+                        new Vector3(
+                            targetRect.x,
+                            targetRect.center.y,
+                            0f);
+                    var tangent =
+                        Mathf.Max(
+                            28f,
+                            Mathf.Abs(
+                                to.x -
+                                from.x) *
+                            0.45f);
+
+                    Handles.DrawBezier(
+                        from,
+                        to,
+                        from +
+                        Vector3.right *
+                        tangent,
+                        to +
+                        Vector3.left *
+                        tangent,
+                        EditorGUIUtility.isProSkin
+                            ? new Color(
+                                0.65f,
+                                0.72f,
+                                0.82f,
+                                0.9f)
+                            : new Color(
+                                0.25f,
+                                0.32f,
+                                0.42f,
+                                0.9f),
+                        null,
+                        2f);
+                }
+            }
+
+            Handles.EndGUI();
+
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+                var kind =
+                    (AppearanceTransitionStepKind)
+                    step.FindPropertyRelative(
+                            "Kind")
+                        .enumValueIndex;
+                var stepId =
+                    step.FindPropertyRelative(
+                            "StepId")
+                        .stringValue;
+                var actionType =
+                    step.FindPropertyRelative(
+                            "ActionType")
+                        .stringValue;
+                var mode =
+                    (AppearanceTransitionDependencyMode)
+                    step.FindPropertyRelative(
+                            "DependencyMode")
+                        .enumValueIndex;
+                var blocking =
+                    step.FindPropertyRelative(
+                            "Blocking")
+                        .boolValue;
+                var resolved =
+                    ResolveSerializedStepTime(
+                        transition,
+                        step);
+                var baseLabel =
+                    kind ==
+                        AppearanceTransitionStepKind.Commit
+                        ? "commit"
+                        : !string.IsNullOrWhiteSpace(
+                              stepId)
+                            ? stepId
+                            : ShortActionLabel(
+                                actionType);
+                var flags =
+                    string.Empty;
+
+                if (blocking)
+                {
+                    flags +=
+                        " B";
+                }
+
+                if (mode ==
+                    AppearanceTransitionDependencyMode.All)
+                {
+                    flags +=
+                        " ALL";
+                }
+                else if (mode ==
+                         AppearanceTransitionDependencyMode.Any)
+                {
+                    flags +=
+                        " ANY";
+                }
+
+                var label =
+                    float.IsInfinity(
+                        resolved)
+                        ? $"{baseLabel}{flags}"
+                        : $"{baseLabel}{flags}  {resolved:0.##}s";
+
+                GUI.Label(
+                    nodeRects[
+                        i],
+                    label,
+                    EditorStyles.miniButton);
+            }
+
+            GUI.Label(
+                new Rect(
+                    inner.x,
+                    inner.yMax - 14f,
+                    90f,
+                    14f),
+                "0s",
+                EditorStyles.miniLabel);
+            GUI.Label(
+                new Rect(
+                    inner.xMax - 90f,
+                    inner.yMax - 14f,
+                    90f,
+                    14f),
+                duration.ToString(
+                    "0.##") +
+                "s",
+                new GUIStyle(
+                    EditorStyles.miniLabel)
+                {
+                    alignment =
+                        TextAnchor.MiddleRight
+                });
         }
 
         private void DrawSteps(
