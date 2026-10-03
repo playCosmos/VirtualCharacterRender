@@ -3760,10 +3760,15 @@ namespace VCR.Editor.P11
             AppearanceTransitionPackage package,
             string sourceLabel)
         {
-            if (package == null)
+            if (!P11AppearanceTransitionPackageUtility
+                .Validate(
+                    package,
+                    out var error))
             {
                 _lastMessage =
-                    "Transition import failed: package is missing.";
+                    "Transition import failed: " +
+                    (error ??
+                     "package validation failed.");
                 _lastMessageType =
                     MessageType.Error;
                 return;
