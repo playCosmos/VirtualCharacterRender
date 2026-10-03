@@ -864,6 +864,34 @@ namespace VCR.Editor.P11
                         0f,
                         1f,
                         1f));
+                motionClip.AddEvent(
+                    new AnimationEvent
+                    {
+                        functionName =
+                            "VCRMarker",
+                        stringParameter =
+                            "swap",
+                        time =
+                            0.55f
+                    });
+                motionClip.AddEvent(
+                    new AnimationEvent
+                    {
+                        functionName =
+                            "VCRMarker_spin-end",
+                        time =
+                            0.90f
+                    });
+                motionClip.AddEvent(
+                    new AnimationEvent
+                    {
+                        functionName =
+                            "UnrelatedAnimationEvent",
+                        stringParameter =
+                            "ignore-me",
+                        time =
+                            0.20f
+                    });
 
                 Expect(
                     P11AnimationClipMotionCueBaker
@@ -878,6 +906,52 @@ namespace VCR.Editor.P11
                             out var bakeError),
                     "AnimationClip quick-change cue must bake against a reference humanoid hierarchy: " +
                     bakeError,
+                    failures);
+
+                Expect(
+                    bakedCue != null &&
+                    bakedCue.Markers != null &&
+                    bakedCue.Markers.Length ==
+                        2 &&
+                    bakedCue.Markers[0].Name ==
+                        "swap" &&
+                    Math.Abs(
+                        bakedCue.Markers[0]
+                            .TimeSeconds -
+                        0.55f) <
+                        0.001f &&
+                    bakedCue.Markers[1].Name ==
+                        "spin-end" &&
+                    Math.Abs(
+                        bakedCue.Markers[1]
+                            .TimeSeconds -
+                        0.90f) <
+                        0.001f,
+                    "AnimationClip baker must preserve only explicit VCRMarker events as sorted baked cue markers",
+                    failures);
+
+                motionClip.AddEvent(
+                    new AnimationEvent
+                    {
+                        functionName =
+                            "VCRMarker",
+                        stringParameter =
+                            "swap",
+                        time =
+                            0.70f
+                    });
+
+                Expect(
+                    !P11MotionMarkerUtility
+                        .TryExtractFromAnimationClip(
+                            motionClip,
+                            out _,
+                            out var duplicateMarkerError) &&
+                    duplicateMarkerError != null &&
+                    duplicateMarkerError.Contains(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase),
+                    "AnimationClip marker extraction must reject duplicate marker names",
                     failures);
 
                 var bakedSource =
