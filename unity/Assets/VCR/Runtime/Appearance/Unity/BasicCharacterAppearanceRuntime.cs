@@ -351,11 +351,7 @@ namespace VCR.Runtime.Appearance.Unity
                     transition.Id);
             }
 
-            _presetIds.Sort(
-                StringComparer.Ordinal);
-            _transitionIds.Sort(
-                StringComparer.Ordinal);
-
+            // Preserve authoring order for previous/next quick-change UI.
             RebuildExecutors();
 
             var configured =
