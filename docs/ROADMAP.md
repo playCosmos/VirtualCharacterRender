@@ -217,7 +217,7 @@ UI areas:
 
 Advanced controls may remain collapsed/disabled when their capabilities are unused.
 
-Character UI also includes a planned Appearance / Quick Change area for named outfit variants, accessory slots, named presets, restore-default, and event-compatible switching without reloading the active VRM. See `APPEARANCE_QUICKCHANGE.md`.
+Character UI also includes a planned Appearance / Quick Change area for named outfit variants, accessory slots, named presets, restore-default, and event-compatible switching without reloading the active VRM. Quick changes may use reusable transition presets that sequence motion, particles/effects, audio, expression/material/camera cues, and an explicit atomic appearance-commit marker. Immediate change remains available. See `APPEARANCE_QUICKCHANGE.md`.
 
 ## P12 — Advanced One-Character Scene Tooling
 
@@ -228,6 +228,7 @@ Character UI also includes a planned Appearance / Quick Change area for named ou
 - advanced plugin workflows
 - full-body tracking integration as optional capability
 - wardrobe/accessory authoring and import tooling: outfit-root registration, accessory slots/anchors, preset authoring, validated external accessory packages, and optional compatible skinned-outfit packages
+- appearance-transition authoring: ordered/timed transition editor, custom motion registration/import, particle/effect preset registration, motion markers for the atomic outfit-swap point, and interruption/fallback policy editing
 
 ## P13 — 2D Extension
 
