@@ -60,6 +60,9 @@ namespace VCR.Editor.P11
                 var fallback =
                     transition.FindPropertyRelative(
                         "FallbackPolicy");
+                var markers =
+                    transition.FindPropertyRelative(
+                        "Markers");
                 var steps =
                     transition.FindPropertyRelative(
                         "Steps");
@@ -72,6 +75,7 @@ namespace VCR.Editor.P11
                     duration != null &&
                     queue != null &&
                     fallback != null &&
+                    markers != null &&
                     steps != null &&
                     cleanup != null,
                     "transition timeline editor serialized property paths must remain stable",
@@ -81,6 +85,7 @@ namespace VCR.Editor.P11
                     duration == null ||
                     queue == null ||
                     fallback == null ||
+                    markers == null ||
                     steps == null ||
                     cleanup == null)
                 {
@@ -100,6 +105,18 @@ namespace VCR.Editor.P11
                     AppearanceTransitionFallbackPolicy
                         .Immediate;
 
+                markers.arraySize = 2;
+                ConfigureMarker(
+                    markers.GetArrayElementAtIndex(
+                        0),
+                    "swap",
+                    0.5f);
+                ConfigureMarker(
+                    markers.GetArrayElementAtIndex(
+                        1),
+                    "spin-end",
+                    0.9f);
+
                 steps.arraySize = 3;
 
                 ConfigureAction(
@@ -112,15 +129,17 @@ namespace VCR.Editor.P11
                     required:
                         false);
 
-                ConfigureCommit(
+                ConfigureMarkerCommit(
                     steps.GetArrayElementAtIndex(
                         1),
-                    0.5f);
+                    "swap",
+                    0f);
 
-                ConfigureAction(
+                ConfigureMarkerAction(
                     steps.GetArrayElementAtIndex(
                         2),
-                    0.9f,
+                    "spin-end",
+                    0f,
                     EventActionTypes.MotionRelease,
                     "motion.quickchange",
                     "spin",
@@ -134,8 +153,102 @@ namespace VCR.Editor.P11
                 Expect(
                     runtime.RebuildConfiguration(
                         out var timelineError),
-                    "timeline-authored transition must rebuild through the same runtime contract: " +
+                    "timeline-authored transition with named marker timing must rebuild through the same runtime contract: " +
                     timelineError,
+                    failures);
+
+                serialized.Update();
+                transition =
+                    transitions
+                        .GetArrayElementAtIndex(
+                            0);
+                steps =
+                    transition.FindPropertyRelative(
+                        "Steps");
+
+                steps.GetArrayElementAtIndex(
+                        1)
+                    .FindPropertyRelative(
+                        "MarkerName")
+                    .stringValue =
+                        "missing-marker";
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                Expect(
+                    !runtime.RebuildConfiguration(
+                        out var markerError) &&
+                    markerError != null &&
+                    markerError.Contains(
+                        "marker",
+                        StringComparison.OrdinalIgnoreCase),
+                    "timeline-authored step must reject an unknown named marker",
+                    failures);
+
+                serialized.Update();
+                transition =
+                    transitions
+                        .GetArrayElementAtIndex(
+                            0);
+                steps =
+                    transition.FindPropertyRelative(
+                        "Steps");
+                steps.GetArrayElementAtIndex(
+                        1)
+                    .FindPropertyRelative(
+                        "MarkerName")
+                    .stringValue =
+                        "swap";
+                steps.GetArrayElementAtIndex(
+                        0)
+                    .FindPropertyRelative(
+                        "Blocking")
+                    .boolValue =
+                        true;
+                steps.GetArrayElementAtIndex(
+                        0)
+                    .FindPropertyRelative(
+                        "CompletionTimeoutSeconds")
+                    .floatValue =
+                        0f;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                Expect(
+                    !runtime.RebuildConfiguration(
+                        out var timeoutError) &&
+                    timeoutError != null &&
+                    timeoutError.Contains(
+                        "timeout",
+                        StringComparison.OrdinalIgnoreCase),
+                    "blocking timeline action must require a finite positive completion timeout",
+                    failures);
+
+                serialized.Update();
+                transition =
+                    transitions
+                        .GetArrayElementAtIndex(
+                            0);
+                steps =
+                    transition.FindPropertyRelative(
+                        "Steps");
+                steps.GetArrayElementAtIndex(
+                        0)
+                    .FindPropertyRelative(
+                        "Blocking")
+                    .boolValue =
+                        false;
+                steps.GetArrayElementAtIndex(
+                        0)
+                    .FindPropertyRelative(
+                        "CompletionTimeoutSeconds")
+                    .floatValue =
+                        5f;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                Expect(
+                    runtime.RebuildConfiguration(
+                        out var restoredTimelineError),
+                    "timeline must rebuild after marker/timeout validation repair: " +
+                    restoredTimelineError,
                     failures);
 
                 serialized.Update();
@@ -214,6 +327,17 @@ namespace VCR.Editor.P11
                                     FallbackPolicy =
                                         AppearanceTransitionFallbackPolicy
                                             .Immediate,
+                                    Markers =
+                                        new[]
+                                        {
+                                            new AppearanceTransitionMarker
+                                            {
+                                                Name =
+                                                    "swap",
+                                                TimeSeconds =
+                                                    0.55
+                                            }
+                                        },
                                     Steps =
                                         new[]
                                         {
@@ -232,12 +356,19 @@ namespace VCR.Editor.P11
                                                 Text =
                                                     "spin",
                                                 Required =
-                                                    false
+                                                    false,
+                                                Blocking =
+                                                    true,
+                                                CompletionTimeoutSeconds =
+                                                    2.5
                                             },
                                             new AppearanceTransitionStep
                                             {
-                                                TimeSeconds =
-                                                    0.55,
+                                                TimingMode =
+                                                    AppearanceTransitionTimingMode
+                                                        .Marker,
+                                                MarkerName =
+                                                    "swap",
                                                 Kind =
                                                     AppearanceTransitionStepKind
                                                         .Commit
@@ -297,6 +428,31 @@ namespace VCR.Editor.P11
                         .Id ==
                         "portable-transition" &&
                     packageRoundTrip.Transitions[0]
+                        .Markers.Length ==
+                        1 &&
+                    packageRoundTrip.Transitions[0]
+                        .Markers[0]
+                        .Name ==
+                        "swap" &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[0]
+                        .Blocking &&
+                    Math.Abs(
+                        packageRoundTrip.Transitions[0]
+                            .Steps[0]
+                            .CompletionTimeoutSeconds -
+                        2.5) <
+                        0.001 &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[1]
+                        .TimingMode ==
+                        AppearanceTransitionTimingMode
+                            .Marker &&
+                    packageRoundTrip.Transitions[0]
+                        .Steps[1]
+                        .MarkerName ==
+                        "swap" &&
+                    packageRoundTrip.Transitions[0]
                         .CancellationSteps.Length ==
                         1 &&
                     packageRoundTrip.Transitions[0]
@@ -343,6 +499,78 @@ namespace VCR.Editor.P11
             }
         }
 
+        private static void ConfigureMarker(
+            SerializedProperty marker,
+            string name,
+            float timeSeconds)
+        {
+            marker.FindPropertyRelative(
+                    "Name")
+                .stringValue =
+                    name;
+            marker.FindPropertyRelative(
+                    "TimeSeconds")
+                .floatValue =
+                    timeSeconds;
+        }
+
+        private static void ConfigureMarkerCommit(
+            SerializedProperty step,
+            string markerName,
+            float offsetSeconds)
+        {
+            ConfigureCommit(
+                step,
+                0f);
+            ConfigureMarkerTiming(
+                step,
+                markerName,
+                offsetSeconds);
+        }
+
+        private static void ConfigureMarkerAction(
+            SerializedProperty step,
+            string markerName,
+            float offsetSeconds,
+            string actionType,
+            string targetId,
+            string text,
+            bool required)
+        {
+            ConfigureAction(
+                step,
+                0f,
+                actionType,
+                targetId,
+                text,
+                required);
+            ConfigureMarkerTiming(
+                step,
+                markerName,
+                offsetSeconds);
+        }
+
+        private static void ConfigureMarkerTiming(
+            SerializedProperty step,
+            string markerName,
+            float offsetSeconds)
+        {
+            step.FindPropertyRelative(
+                    "TimingMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionTimingMode
+                        .Marker;
+            step.FindPropertyRelative(
+                    "MarkerName")
+                .stringValue =
+                    markerName;
+            step.FindPropertyRelative(
+                    "MarkerOffsetSeconds")
+                .floatValue =
+                    offsetSeconds;
+        }
+
         private static void ConfigureCommit(
             SerializedProperty step,
             float timeSeconds)
@@ -351,6 +579,19 @@ namespace VCR.Editor.P11
                     "TimeSeconds")
                 .floatValue =
                     timeSeconds;
+            step.FindPropertyRelative(
+                    "TimingMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionTimingMode
+                        .AbsoluteTime;
+            step.FindPropertyRelative(
+                    "MarkerName")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "MarkerOffsetSeconds")
+                .floatValue = 0f;
             step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
@@ -382,6 +623,12 @@ namespace VCR.Editor.P11
             step.FindPropertyRelative(
                     "Required")
                 .boolValue = true;
+            step.FindPropertyRelative(
+                    "Blocking")
+                .boolValue = false;
+            step.FindPropertyRelative(
+                    "CompletionTimeoutSeconds")
+                .floatValue = 5f;
         }
 
         private static void ConfigureAction(
@@ -396,6 +643,19 @@ namespace VCR.Editor.P11
                     "TimeSeconds")
                 .floatValue =
                     timeSeconds;
+            step.FindPropertyRelative(
+                    "TimingMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionTimingMode
+                        .AbsoluteTime;
+            step.FindPropertyRelative(
+                    "MarkerName")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "MarkerOffsetSeconds")
+                .floatValue = 0f;
             step.FindPropertyRelative(
                     "Kind")
                 .enumValueIndex =
@@ -428,6 +688,12 @@ namespace VCR.Editor.P11
                     "Required")
                 .boolValue =
                     required;
+            step.FindPropertyRelative(
+                    "Blocking")
+                .boolValue = false;
+            step.FindPropertyRelative(
+                    "CompletionTimeoutSeconds")
+                .floatValue = 5f;
         }
 
         private static void Expect(
