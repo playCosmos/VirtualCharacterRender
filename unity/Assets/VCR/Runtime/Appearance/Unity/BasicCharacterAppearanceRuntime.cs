@@ -18,6 +18,12 @@ namespace VCR.Runtime.Appearance.Unity
         [SerializeField] private string defaultPresetId = "";
         [SerializeField] private bool applyDefaultOnAwake = false;
 
+        [Header("Convention discovery")]
+        [SerializeField] private bool autoDiscoverHierarchy = true;
+        [SerializeField] private string appearanceRootName = "VCRAppearance";
+        [SerializeField] private string outfitsRootName = "Outfits";
+        [SerializeField] private string accessoriesRootName = "Accessories";
+
         [Header("Registered appearance")]
         [SerializeField] private AppearanceOutfitBinding[] outfits =
             Array.Empty<AppearanceOutfitBinding>();
@@ -158,6 +164,13 @@ namespace VCR.Runtime.Appearance.Unity
             out string error)
         {
             error = null;
+
+            if (autoDiscoverHierarchy &&
+                IsBindingConfigurationEmpty())
+            {
+                TryDiscoverConventionBindings(
+                    out _);
+            }
 
             _outfits.Clear();
             _accessories.Clear();
@@ -1005,6 +1018,162 @@ namespace VCR.Runtime.Appearance.Unity
             }
         }
 
+        public bool TryDiscoverConventionBindings(
+            out string error)
+        {
+            error = null;
+
+            var appearanceRoot =
+                transform.Find(
+                    appearanceRootName);
+
+            if (appearanceRoot == null)
+            {
+                error =
+                    $"Convention appearance root '{appearanceRootName}' was not found.";
+                return false;
+            }
+
+            var discoveredOutfits =
+                new List<AppearanceOutfitBinding>();
+            var discoveredAccessories =
+                new List<AppearanceAccessoryBinding>();
+            var discoveredPresets =
+                new List<AppearancePresetBinding>();
+
+            var outfitRoot =
+                appearanceRoot.Find(
+                    outfitsRootName);
+
+            if (outfitRoot != null)
+            {
+                for (var i = 0;
+                     i < outfitRoot.childCount;
+                     i++)
+                {
+                    var child =
+                        outfitRoot.GetChild(i);
+
+                    if (string.IsNullOrWhiteSpace(
+                            child.name))
+                    {
+                        continue;
+                    }
+
+                    discoveredOutfits.Add(
+                        new AppearanceOutfitBinding
+                        {
+                            OutfitId = child.name,
+                            Roots =
+                                new[]
+                                {
+                                    child.gameObject
+                                }
+                        });
+
+                    discoveredPresets.Add(
+                        new AppearancePresetBinding
+                        {
+                            PresetId = child.name,
+                            OutfitId = child.name,
+                            Accessories =
+                                Array.Empty<
+                                    AppearanceAccessorySelectionBinding>()
+                        });
+
+                    if (string.IsNullOrWhiteSpace(
+                            defaultPresetId) &&
+                        child.gameObject.activeSelf)
+                    {
+                        defaultPresetId =
+                            child.name;
+                    }
+                }
+            }
+
+            var accessoryRoot =
+                appearanceRoot.Find(
+                    accessoriesRootName);
+
+            if (accessoryRoot != null)
+            {
+                for (var slotIndex = 0;
+                     slotIndex < accessoryRoot.childCount;
+                     slotIndex++)
+                {
+                    var slot =
+                        accessoryRoot.GetChild(
+                            slotIndex);
+
+                    if (string.IsNullOrWhiteSpace(
+                            slot.name))
+                    {
+                        continue;
+                    }
+
+                    for (var itemIndex = 0;
+                         itemIndex < slot.childCount;
+                         itemIndex++)
+                    {
+                        var item =
+                            slot.GetChild(
+                                itemIndex);
+
+                        if (string.IsNullOrWhiteSpace(
+                                item.name))
+                        {
+                            continue;
+                        }
+
+                        discoveredAccessories.Add(
+                            new AppearanceAccessoryBinding
+                            {
+                                SlotId = slot.name,
+                                AccessoryId = item.name,
+                                Root = item.gameObject
+                            });
+                    }
+                }
+            }
+
+            if (discoveredOutfits.Count == 0 &&
+                discoveredAccessories.Count == 0)
+            {
+                error =
+                    $"No convention bindings were found under '{appearanceRootName}'.";
+                return false;
+            }
+
+            outfits =
+                discoveredOutfits.ToArray();
+            accessories =
+                discoveredAccessories.ToArray();
+            presets =
+                discoveredPresets.ToArray();
+
+            if (string.IsNullOrWhiteSpace(
+                    defaultPresetId) &&
+                discoveredPresets.Count > 0)
+            {
+                defaultPresetId =
+                    discoveredPresets[0]
+                        .PresetId;
+            }
+
+            return true;
+        }
+
+        private bool IsBindingConfigurationEmpty()
+        {
+            return
+                (outfits == null ||
+                 outfits.Length == 0) &&
+                (accessories == null ||
+                 accessories.Length == 0) &&
+                (presets == null ||
+                 presets.Length == 0);
+        }
+
         private bool ValidateTarget(
             string outfitId,
             AppearanceAccessorySelection[] selections,
@@ -1135,7 +1304,9 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
-                if (step.ActionType.StartsWith(
+                if (step.Kind !=
+                        AppearanceTransitionStepKind.Commit &&
+                    step.ActionType.StartsWith(
                         "appearance.",
                         StringComparison.Ordinal))
                 {
@@ -1143,6 +1314,22 @@ namespace VCR.Runtime.Appearance.Unity
                         $"Transition '{transition.Id}' cannot recursively execute appearance actions.";
                     return false;
                 }
+
+                if (hasPreviousStep &&
+                    step.TimeSeconds <
+                        previousTime)
+                {
+                    error =
+                        $"Transition '{transition.Id}' steps must be ordered by non-decreasing time.";
+                    return false;
+                }
+
+                previousTime =
+                    step.TimeSeconds;
+                lastStepTime =
+                    step.TimeSeconds;
+                hasPreviousStep =
+                    true;
             }
 
             if (commitCount != 1)
