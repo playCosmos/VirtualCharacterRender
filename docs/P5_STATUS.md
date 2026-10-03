@@ -52,8 +52,13 @@ The suite covers expression blend modes, deadzone behavior, custom expressions, 
 
 These validation paths are implemented but have not been executed here because a Unity Editor/runtime is not available in this environment.
 
-## Next P5 work
+## Deferred P5 evidence
 
-- measure allocation/update cost of active smoothing and multi-layer pose mixing before changing their opt-in defaults
+- execute the P0-P5 Unity source-free batch suites
+- measure allocation/update cost with active smoothing and multiple pose layers
+- validate mixed pose/expression behavior on real VRM models
+- tune defaults only from measured evidence
+
+The source architecture is complete enough for a checkpoint, but these evidence items are not marked PASS.
 
 One active performer remains the product scope.
