@@ -98,6 +98,24 @@ namespace VCR.Editor.P11
                 failures);
 
             Expect(
+                document.FaceAgeAvailable &&
+                document.BodyHandsAgeAvailable &&
+                !document.FullBodyAgeAvailable &&
+                document.ExpressionAgeAvailable &&
+                Math.Abs(
+                    document.FullBodyAgeMs) <
+                    0.0001,
+                "diagnostics evidence must normalize non-finite age values into availability flags plus finite JSON numbers",
+                failures);
+
+            Expect(
+                roundTrip != null &&
+                roundTrip.Metrics[0].ValueAvailable &&
+                roundTrip.Metrics[1].ValueAvailable,
+                "diagnostics evidence metrics must carry explicit finite-value availability",
+                failures);
+
+            Expect(
                 !document.HasPresence &&
                 document.PresenceState == null &&
                 !document.AnySourceAvailable &&
