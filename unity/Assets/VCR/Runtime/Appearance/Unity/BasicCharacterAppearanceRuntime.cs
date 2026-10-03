@@ -189,13 +189,14 @@ namespace VCR.Runtime.Appearance.Unity
                 StopCoroutine(
                     _transitionCoroutine);
                 _transitionCoroutine = null;
+
+                TryRunCancellationCleanup(
+                    _activeTransition,
+                    out _);
             }
 
             _pending.Clear();
-            _activeTransition = null;
-            _activeRequest = null;
-            _activeTransitionId = null;
-            _transitionCommitted = false;
+            ClearActiveTransition();
 
             if (_state !=
                 AppearanceRuntimeState.Unconfigured)
@@ -905,6 +906,15 @@ namespace VCR.Runtime.Appearance.Unity
                 out error);
         }
 
+        public bool CancelTransition(
+            out string error)
+        {
+            return CancelActiveTransition(
+                interrupted: false,
+                clearPending: true,
+                out error);
+        }
+
         private bool Submit(
             AppearanceChangeRequest request,
             out string error)
@@ -966,17 +976,14 @@ namespace VCR.Runtime.Appearance.Unity
 
                 case AppearanceTransitionQueuePolicy
                     .Interrupt:
-                    StopCoroutine(
-                        _transitionCoroutine);
-                    _transitionCoroutine = null;
-                    _activeTransition = null;
-                    _activeRequest = null;
-                    _activeTransitionId = null;
-                    _transitionCommitted = false;
-                    _transitionInterruptedCount++;
-                    SetState(
-                        AppearanceRuntimeState.Ready,
-                        null);
+                    if (!CancelActiveTransition(
+                            interrupted: true,
+                            clearPending: true,
+                            out error))
+                    {
+                        return false;
+                    }
+
                     return StartRequest(
                         request,
                         out error);
@@ -1037,6 +1044,8 @@ namespace VCR.Runtime.Appearance.Unity
             _activeTransitionId =
                 transition.Id;
             _transitionCommitted = false;
+            _transitionStartedAt =
+                Time.unscaledTimeAsDouble;
             _lastError = null;
             _transitionStartCount++;
 
@@ -1678,14 +1687,6 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
-            if (transition.QueuePolicy ==
-                AppearanceTransitionQueuePolicy.Interrupt)
-            {
-                error =
-                    $"Transition '{transition.Id}' requests Interrupt, which is deferred until explicit cancellation cleanup steps are implemented.";
-                return false;
-            }
-
             if (double.IsNaN(
                     transition.DurationSeconds) ||
                 double.IsInfinity(
@@ -1778,7 +1779,207 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
+            if (!ValidateCancellationDefinition(
+                    transition,
+                    out error))
+            {
+                return false;
+            }
+
             return true;
+        }
+
+        private static bool ValidateCancellationDefinition(
+            AppearanceTransitionPreset transition,
+            out string error)
+        {
+            error = null;
+
+            var cleanup =
+                transition.CancellationSteps ??
+                Array.Empty<
+                    AppearanceTransitionStep>();
+
+            if (transition.QueuePolicy ==
+                    AppearanceTransitionQueuePolicy.Interrupt &&
+                cleanup.Length == 0)
+            {
+                error =
+                    $"Transition '{transition.Id}' uses Interrupt but has no explicit cancellation cleanup steps.";
+                return false;
+            }
+
+            foreach (var step in cleanup)
+            {
+                if (step == null ||
+                    step.Kind !=
+                        AppearanceTransitionStepKind.Action)
+                {
+                    error =
+                        $"Transition '{transition.Id}' cancellation cleanup may contain action steps only.";
+                    return false;
+                }
+
+                if (step.TimeSeconds != 0.0)
+                {
+                    error =
+                        $"Transition '{transition.Id}' cancellation cleanup steps execute immediately and must use time 0.";
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(
+                        step.ActionType) ||
+                    step.ActionType.StartsWith(
+                        "appearance.",
+                        StringComparison.Ordinal))
+                {
+                    error =
+                        $"Transition '{transition.Id}' cancellation cleanup requires non-appearance action types.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool CanCancel(
+            AppearanceTransitionPreset transition)
+        {
+            if (transition == null ||
+                transition.CancellationSteps == null ||
+                transition.CancellationSteps.Length == 0)
+            {
+                return false;
+            }
+
+            foreach (var step in
+                     transition.CancellationSteps)
+            {
+                if (step == null ||
+                    (step.Required &&
+                     CountExecutors(step) != 1))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool CancelActiveTransition(
+            bool interrupted,
+            bool clearPending,
+            out string error)
+        {
+            error = null;
+
+            if (_transitionCoroutine == null ||
+                _activeTransition == null)
+            {
+                error =
+                    "No appearance transition is active.";
+                return false;
+            }
+
+            if (!CanCancel(
+                    _activeTransition))
+            {
+                error =
+                    $"Transition '{_activeTransition.Id}' has no executable cancellation cleanup contract.";
+                return false;
+            }
+
+            StopCoroutine(
+                _transitionCoroutine);
+            _transitionCoroutine = null;
+
+            var cleanupSucceeded =
+                TryRunCancellationCleanup(
+                    _activeTransition,
+                    out var cleanupError);
+
+            if (clearPending)
+            {
+                _pending.Clear();
+            }
+
+            ClearActiveTransition();
+
+            if (!cleanupSucceeded)
+            {
+                _transitionFailureCount++;
+                error =
+                    cleanupError;
+                SetState(
+                    AppearanceRuntimeState.Faulted,
+                    cleanupError);
+                return false;
+            }
+
+            if (interrupted)
+            {
+                _transitionInterruptedCount++;
+            }
+            else
+            {
+                _transitionCancelledCount++;
+            }
+
+            SetState(
+                AppearanceRuntimeState.Ready,
+                cleanupError);
+            return true;
+        }
+
+        private bool TryRunCancellationCleanup(
+            AppearanceTransitionPreset transition,
+            out string error)
+        {
+            error = null;
+
+            if (transition == null)
+            {
+                return true;
+            }
+
+            string firstOptionalError = null;
+
+            foreach (var step in
+                     transition.CancellationSteps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (TryExecuteStep(
+                        step,
+                        out var stepError))
+                {
+                    continue;
+                }
+
+                if (step.Required)
+                {
+                    error =
+                        stepError;
+                    return false;
+                }
+
+                firstOptionalError ??=
+                    stepError;
+            }
+
+            error =
+                firstOptionalError;
+            return true;
+        }
+
+        private void ClearActiveTransition()
+        {
+            _transitionCoroutine = null;
+            _activeTransition = null;
+            _activeRequest = null;
+            _activeTransitionId = null;
+            _transitionCommitted = false;
+            _transitionStartedAt = 0.0;
         }
 
         private bool ValidateRequiredExecutors(
@@ -1939,11 +2140,7 @@ namespace VCR.Runtime.Appearance.Unity
                     ? null
                     : error;
 
-            _transitionCoroutine = null;
-            _activeTransition = null;
-            _activeRequest = null;
-            _activeTransitionId = null;
-            _transitionCommitted = false;
+            ClearActiveTransition();
 
             SetState(
                 AppearanceRuntimeState.Ready,
@@ -2121,6 +2318,16 @@ namespace VCR.Runtime.Appearance.Unity
                     "appearance.transition.interrupted",
                     _transitionInterruptedCount,
                     "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.cancelled",
+                    _transitionCancelledCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.progress",
+                    Status.TransitionProgress01,
+                    "ratio"));
         }
 
         private sealed class AppearanceChangeRequest
