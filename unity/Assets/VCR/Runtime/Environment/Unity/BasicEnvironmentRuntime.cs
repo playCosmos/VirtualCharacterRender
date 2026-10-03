@@ -51,6 +51,7 @@ namespace VCR.Runtime.Environment.Unity
         private long _stateDispatchCount;
         private long _scheduledDispatchCount;
         private long _manualDispatchCount;
+        private long _updateFailureCount;
         private long _updateSequence;
         private string _lastError;
 
@@ -79,6 +80,9 @@ namespace VCR.Runtime.Environment.Unity
         public long ManualDispatchCount =>
             _manualDispatchCount;
 
+        public long UpdateFailureCount =>
+            _updateFailureCount;
+
         public int UpdateTargetCount =>
             _updateTargets?.Length ?? 0;
 
@@ -90,7 +94,7 @@ namespace VCR.Runtime.Environment.Unity
         private void Awake()
         {
             RebuildUpdateTargets();
-            ApplyStateBindings();
+            ApplyCurrentStateBinding();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
@@ -98,7 +102,7 @@ namespace VCR.Runtime.Environment.Unity
         private void OnEnable()
         {
             RebuildUpdateTargets();
-            ApplyStateBindings();
+            ApplyCurrentStateBinding();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
@@ -135,22 +139,63 @@ namespace VCR.Runtime.Environment.Unity
             _lastError = null;
 
             RebuildUpdateTargets();
-            ApplyStateBindings();
+            ApplyCurrentStateBinding();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
 
-        public void SetStateBindings(
-            params EnvironmentStateBinding[] bindings)
+        public bool ConfigureStateBindings(
+            EnvironmentStateBinding[] bindings,
+            out string error)
         {
-            stateBindings =
+            error = null;
+
+            var next =
                 bindings == null
                     ? Array.Empty<
                         EnvironmentStateBinding>()
                     : (EnvironmentStateBinding[])
                         bindings.Clone();
 
-            ApplyStateBindings();
+            if (!ValidateStateBindings(
+                    next,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            if (next.Length > 0 &&
+                !ContainsState(
+                    next,
+                    stateId))
+            {
+                error =
+                    $"Environment state '{stateId}' has no binding.";
+                _lastError = error;
+                return false;
+            }
+
+            stateBindings = next;
+
+            if (!TryApplyStateBinding(
+                    stateId,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            _lastError = null;
+            return true;
+        }
+
+        public void SetStateBindings(
+            params EnvironmentStateBinding[] bindings)
+        {
+            ConfigureStateBindings(
+                bindings,
+                out _);
         }
 
         public void SetUpdateTargets(
@@ -163,6 +208,104 @@ namespace VCR.Runtime.Environment.Unity
                         targets.Clone();
 
             RebuildUpdateTargets();
+        }
+
+        public void RegisterUpdateTarget(
+            IEnvironmentUpdateTarget target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            for (var i = 0;
+                 i < _updateTargets.Length;
+                 i++)
+            {
+                if (ReferenceEquals(
+                        _updateTargets[i],
+                        target))
+                {
+                    return;
+                }
+            }
+
+            var next =
+                new IEnvironmentUpdateTarget[
+                    _updateTargets.Length + 1];
+
+            Array.Copy(
+                _updateTargets,
+                next,
+                _updateTargets.Length);
+
+            next[next.Length - 1] =
+                target;
+            _updateTargets = next;
+        }
+
+        public void UnregisterUpdateTarget(
+            IEnvironmentUpdateTarget target)
+        {
+            if (target == null ||
+                _updateTargets.Length == 0)
+            {
+                return;
+            }
+
+            var index = -1;
+
+            for (var i = 0;
+                 i < _updateTargets.Length;
+                 i++)
+            {
+                if (ReferenceEquals(
+                        _updateTargets[i],
+                        target))
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index < 0)
+            {
+                return;
+            }
+
+            if (_updateTargets.Length == 1)
+            {
+                _updateTargets =
+                    Array.Empty<
+                        IEnvironmentUpdateTarget>();
+                return;
+            }
+
+            var next =
+                new IEnvironmentUpdateTarget[
+                    _updateTargets.Length - 1];
+
+            if (index > 0)
+            {
+                Array.Copy(
+                    _updateTargets,
+                    0,
+                    next,
+                    0,
+                    index);
+            }
+
+            if (index < next.Length)
+            {
+                Array.Copy(
+                    _updateTargets,
+                    index + 1,
+                    next,
+                    index,
+                    next.Length - index);
+            }
+
+            _updateTargets = next;
         }
 
         public bool SetState(
@@ -189,12 +332,18 @@ namespace VCR.Runtime.Environment.Unity
                 return true;
             }
 
+            if (!TryApplyStateBinding(
+                    nextStateId,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
             var previous = stateId;
             stateId = nextStateId;
             _lastError = null;
             _stateChangeCount++;
-
-            ApplyStateBindings();
 
             StateChanged?.Invoke(
                 new EnvironmentStateChange(
@@ -297,6 +446,11 @@ namespace VCR.Runtime.Environment.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "environment.update_failures",
+                _updateFailureCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "environment.recurring_updates_active",
                 RecurringUpdatesActive ? 1 : 0,
                 "bool"));
@@ -335,27 +489,51 @@ namespace VCR.Runtime.Environment.Unity
                 isActiveAndEnabled;
         }
 
-        private void ApplyStateBindings()
+        private void ApplyCurrentStateBinding()
         {
-            if (stateBindings == null)
+            if (!TryApplyStateBinding(
+                    stateId,
+                    out var error))
             {
-                return;
+                _lastError = error;
+            }
+        }
+
+        private bool TryApplyStateBinding(
+            string nextStateId,
+            out string error)
+        {
+            error = null;
+
+            if (stateBindings == null ||
+                stateBindings.Length == 0)
+            {
+                return true;
             }
 
-            foreach (var binding in stateBindings)
+            if (!ValidateStateBindings(
+                    stateBindings,
+                    out error))
             {
-                if (binding?.Root == null ||
-                    ReferenceEquals(
-                        binding.Root,
-                        gameObject))
-                {
-                    continue;
-                }
+                return false;
+            }
 
+            if (!ContainsState(
+                    stateBindings,
+                    nextStateId))
+            {
+                error =
+                    $"Environment state '{nextStateId}' has no binding.";
+                return false;
+            }
+
+            foreach (var binding in
+                     stateBindings)
+            {
                 var active =
                     string.Equals(
                         binding.StateId,
-                        stateId,
+                        nextStateId,
                         StringComparison.Ordinal);
 
                 if (binding.Root.activeSelf !=
@@ -365,6 +543,75 @@ namespace VCR.Runtime.Environment.Unity
                         active);
                 }
             }
+
+            return true;
+        }
+
+        private bool ValidateStateBindings(
+            EnvironmentStateBinding[] bindings,
+            out string error)
+        {
+            error = null;
+
+            var ids =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var binding in bindings)
+            {
+                if (binding == null ||
+                    string.IsNullOrWhiteSpace(
+                        binding.StateId))
+                {
+                    error =
+                        "Environment state bindings require a non-empty state id.";
+                    return false;
+                }
+
+                if (binding.Root == null)
+                {
+                    error =
+                        $"Environment state '{binding.StateId}' requires a root GameObject.";
+                    return false;
+                }
+
+                if (!ids.Add(
+                        binding.StateId))
+                {
+                    error =
+                        $"Duplicate environment state binding '{binding.StateId}'.";
+                    return false;
+                }
+
+                if (transform.IsChildOf(
+                        binding.Root.transform))
+                {
+                    error =
+                        $"Environment state root '{binding.Root.name}' contains the environment runtime and cannot be toggled safely.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool ContainsState(
+            EnvironmentStateBinding[] bindings,
+            string id)
+        {
+            foreach (var binding in bindings)
+            {
+                if (binding != null &&
+                    string.Equals(
+                        binding.StateId,
+                        id,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void RebuildUpdateTargets()
@@ -462,8 +709,27 @@ namespace VCR.Runtime.Environment.Unity
             foreach (var target in
                      _updateTargets)
             {
-                target?.UpdateEnvironment(
-                    context);
+                if (target == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    target.UpdateEnvironment(
+                        context);
+                }
+                catch (Exception exception)
+                {
+                    _updateFailureCount++;
+                    _lastError =
+                        "Environment update target failed: " +
+                        exception.Message;
+
+                    Debug.LogWarning(
+                        _lastError,
+                        this);
+                }
             }
         }
     }
