@@ -181,9 +181,14 @@ namespace VCR.Editor.P5
             List<string> failures)
         {
             var mask =
-                new HumanoidBoneMask();
-            mask.SetIncluded(
-                HumanoidBoneId.LeftUpperArm);
+                new HumanoidPoseLayerMask();
+            mask.SetDefaultBoneWeight(0f);
+            mask.SetRootWeights(
+                positionWeight: 0f,
+                rotationWeight: 0f);
+            mask.SetBoneWeight(
+                HumanoidBoneId.LeftUpperArm,
+                0.5f);
 
             var settings =
                 new HumanoidPoseLayerSettings();
@@ -194,7 +199,7 @@ namespace VCR.Editor.P5
                 mode:
                     HumanoidPoseBlendMode.Override,
                 layerWeight: 0.5f,
-                mask: mask);
+                layerMask: mask);
 
             var basePose =
                 CreateTwoBonePose(
@@ -236,8 +241,8 @@ namespace VCR.Editor.P5
             {
                 ExpectClose(
                     left.LocalPosition.X,
-                    1f,
-                    "0.5 override weight must interpolate included bone position",
+                    0.5f,
+                    "global 0.5 weight multiplied by per-bone 0.5 weight must produce 0.25 effective override weight",
                     failures);
             }
 
@@ -268,7 +273,7 @@ namespace VCR.Editor.P5
                 mode:
                     HumanoidPoseBlendMode.Additive,
                 layerWeight: 0.5f,
-                mask: mask);
+                layerMask: mask);
 
             var additive =
                 HumanoidPoseMixerMath.Blend(
@@ -292,10 +297,38 @@ namespace VCR.Editor.P5
             {
                 ExpectClose(
                     additiveLeft.LocalPosition.X,
-                    1f,
-                    "0.5 additive weight must add half the layer translation",
+                    0.5f,
+                    "global and per-bone weights must multiply for additive translation",
                     failures);
             }
+
+            mask.SetRootWeights(
+                positionWeight: 0.5f,
+                rotationWeight: 0f);
+
+            var rootLayerPose =
+                CreateTwoBonePose(
+                    HumanoidPoseSpace.NormalizedLocal,
+                    leftX: 0f,
+                    rightX: 0f,
+                    rootX: 4f);
+
+            var rootWeighted =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    rootLayerPose,
+                    settings,
+                    out mismatch);
+
+            ExpectClose(
+                rootWeighted?.RootPosition.X ?? -1f,
+                1f,
+                "global 0.5 weight multiplied by root-position 0.5 weight must produce 0.25 effective root weight",
+                failures);
+
+            mask.SetRootWeights(
+                positionWeight: 0f,
+                rotationWeight: 0f);
 
             var differentSpace =
                 CreateTwoBonePose(
@@ -310,7 +343,7 @@ namespace VCR.Editor.P5
                 mode:
                     HumanoidPoseBlendMode.Override,
                 layerWeight: 0.5f,
-                mask: mask);
+                layerMask: mask);
 
             var preserved =
                 HumanoidPoseMixerMath.Blend(
@@ -497,9 +530,14 @@ namespace VCR.Editor.P5
                         rightX: 4f);
 
                 var poseMask =
-                    new HumanoidBoneMask();
-                poseMask.SetIncluded(
-                    HumanoidBoneId.LeftUpperArm);
+                    new HumanoidPoseLayerMask();
+                poseMask.SetDefaultBoneWeight(0f);
+                poseMask.SetRootWeights(
+                    positionWeight: 0f,
+                    rotationWeight: 0f);
+                poseMask.SetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm,
+                    0.5f);
 
                 var poseSettings =
                     new HumanoidPoseLayerSettings();
@@ -510,7 +548,7 @@ namespace VCR.Editor.P5
                     mode:
                         HumanoidPoseBlendMode.Override,
                     layerWeight: 0.5f,
-                    mask: poseMask);
+                    layerMask: poseMask);
 
                 mixer.SetRoutedProvider(
                     route);
@@ -569,8 +607,8 @@ namespace VCR.Editor.P5
                 {
                     ExpectClose(
                         mixedLeft.LocalPosition.X,
-                        1f,
-                        "component pose layer must honor configured weight and mask",
+                        0.5f,
+                        "component pose layer must multiply global and per-bone weights",
                         failures);
                 }
 
@@ -748,7 +786,8 @@ namespace VCR.Editor.P5
             CreateTwoBonePose(
                 HumanoidPoseSpace poseSpace,
                 float leftX,
-                float rightX)
+                float rightX,
+                float rootX = 0f)
         {
             var bones =
                 new NormalizedBonePose[
@@ -782,7 +821,10 @@ namespace VCR.Editor.P5
 
             return new HumanoidPoseState(
                 poseSpace,
-                TrackingVector3.Zero,
+                new TrackingVector3(
+                    rootX,
+                    0f,
+                    0f),
                 TrackingQuaternion.Identity,
                 bones,
                 hasBone);
