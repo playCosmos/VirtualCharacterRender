@@ -67,6 +67,18 @@ namespace VCR.Runtime.Diagnostics
         public RuntimeDiagnosticsSnapshot LatestSnapshot =>
             _latestSnapshot;
 
+        public float ReportIntervalSeconds =>
+            reportIntervalSeconds;
+
+        public bool ConsoleLoggingEnabled =>
+            logToConsole;
+
+        public bool CsvEvidenceEnabled =>
+            writeCsvEvidence;
+
+        public string EvidenceDirectory =>
+            Application.persistentDataPath;
+
         public event Action<RuntimeDiagnosticsSnapshot> SnapshotUpdated;
 
         protected virtual void Awake()
@@ -150,6 +162,87 @@ namespace VCR.Runtime.Diagnostics
             if (writeCsvEvidence)
             {
                 WriteSystemEvidence();
+            }
+        }
+
+        public RuntimeDiagnosticsSnapshot CaptureNow()
+        {
+            var now =
+                Time.realtimeSinceStartupAsDouble;
+
+            Report(
+                now);
+
+            return _latestSnapshot;
+        }
+
+        public void SetConsoleLogging(
+            bool enabled)
+        {
+            logToConsole =
+                enabled;
+        }
+
+        public void SetCsvEvidence(
+            bool enabled)
+        {
+            writeCsvEvidence =
+                enabled;
+
+            if (writeCsvEvidence)
+            {
+                WriteSystemEvidence();
+            }
+        }
+
+        public bool TryWriteLatestSnapshotJson(
+            out string path,
+            out string error)
+        {
+            path = null;
+            error = null;
+
+            if (_latestSnapshot.Sequence <= 0)
+            {
+                error =
+                    "No diagnostics snapshot is available yet.";
+                return false;
+            }
+
+            try
+            {
+                var document =
+                    RuntimeDiagnosticsEvidenceDocument
+                        .FromSnapshot(
+                            _latestSnapshot);
+                var json =
+                    JsonUtility.ToJson(
+                        document,
+                        prettyPrint:
+                            true);
+                var fileName =
+                    "vcr-runtime-snapshot-" +
+                    DateTime.UtcNow.ToString(
+                        "yyyyMMdd-HHmmss-fff") +
+                    "Z.json";
+
+                path =
+                    Path.Combine(
+                        Application.persistentDataPath,
+                        fileName);
+
+                File.WriteAllText(
+                    path,
+                    json);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Diagnostics snapshot JSON write failed: " +
+                    exception.Message;
+                path = null;
+                return false;
             }
         }
 
