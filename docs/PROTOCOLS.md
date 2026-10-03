@@ -72,29 +72,47 @@ P0 checks:
 
 ## OSC
 
-Generic integration path for external controls, runtime values, and events.
+The existing bounded OSC codec remains shared with VMC.
+
+P8 adds generic normalized-event injection on UDP 39540 by default:
+
+```text
+/vcr/event type [actorId] [text] [amount] [currency] [actorName]
+```
+
+`OscNormalizedEventUdpReceiver` is loopback-only by default, parses off the main thread, queues valid events in a bounded buffer, and publishes them to `INormalizedEventSink` on the main thread. VMC remains on its separate default UDP 39539 path.
+
+External OSC cannot inject `tracking.*` event types.
 
 ## WebSocket
 
-Application control/event API candidate.
+P8 freezes only the normalized-event ingress slice.
 
-Initial conceptual operations:
+Version 1 message:
 
-- load/unload/query the active character
-- get/set runtime parameters
-- set expressions
-- play/stop motion
-- set material/shader parameters
-- control camera/environment
-- inject/query normalized events
-- query health/diagnostics
-- subscribe to events
+```json
+{
+  "version": 1,
+  "op": "event.inject",
+  "type": "local.manual",
+  "actorId": "optional",
+  "actorName": "optional",
+  "text": "optional",
+  "amount": 0,
+  "currency": "optional",
+  "hasAmount": false
+}
+```
 
-The concrete API is not frozen during bootstrap.
+`WebSocketEventClientTransport` is an outbound bridge client built on `ClientWebSocket`. It connects to `ws://127.0.0.1:39541/vcr/events` by default. Plain `ws://` is restricted to loopback; remote endpoints require `wss://`. Complete text messages are queued and delivered to `IWebSocketTextMessageHandler` on the Unity main thread.
+
+The broader application-control API remains unfrozen. Future operations such as character loading, runtime parameter control, expressions/motion, environment/material control, diagnostics, and event subscriptions require a separate versioned surface rather than being silently added to `event.inject`.
 
 ## Broadcast integrations
 
 Streaming-service chat, donation/support, and other interaction APIs are not core protocols.
+
+P8's first service adapter is SOOP. The VCR runtime consumes a small bridge schema containing event id, user id, nickname, text, and donation count. SOOP credentials, login/session state, reconnect behavior, and raw service packets stay outside the normalized runtime. Chat maps to `broadcast.chat.message`; star-balloon support maps to `broadcast.donation` with unit `SOOP_STAR_BALLOON`. Replayed event ids are suppressed by the Unity bridge adapter.
 
 Each service uses an adapter:
 
