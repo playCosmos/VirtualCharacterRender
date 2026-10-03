@@ -105,6 +105,36 @@ namespace VCR.Runtime.UI
                     slotId);
         }
 
+        public static bool CanSaveAppearanceUserPreset(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string presetId,
+            string characterPath)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    presetId) &&
+                !string.IsNullOrWhiteSpace(
+                    characterPath);
+        }
+
+        public static bool CanDeleteAppearanceUserPreset(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string presetId,
+            string characterPath)
+        {
+            return
+                CanSaveAppearanceUserPreset(
+                    runtimeAvailable,
+                    state,
+                    presetId,
+                    characterPath);
+        }
+
         public static bool CanPreviewAppearanceTransition(
             bool runtimeAvailable,
             AppearanceRuntimeState state,
