@@ -633,6 +633,10 @@ namespace VCR.Editor.P11
                 .RunChecks(
                     failures);
 
+            P11AppearanceTransitionPackageLibraryValidation
+                .RunChecks(
+                    failures);
+
             P11ExternalMotionImportValidation
                 .RunChecks(
                     failures);
@@ -660,7 +664,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, character file browse policy, overlay/settings policy, capability snapshots, event-rule persistence, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
+                    "(section order, availability, character file browse policy, overlay/settings policy, capability snapshots, event-rule persistence, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, transition package library, external motion import, cancellation policy, serialized timeline authoring contract)");
                 return true;
             }
 
