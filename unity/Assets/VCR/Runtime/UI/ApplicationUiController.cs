@@ -52,6 +52,7 @@ namespace VCR.Runtime.UI
 
         private RectTransform _contextActions;
         private RectTransform _appearanceActions;
+        private RectTransform _appearanceDirectActions;
         private InputField _characterPathInput;
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
@@ -66,6 +67,15 @@ namespace VCR.Runtime.UI
         private Button _appearanceNextButton;
         private Button _appearanceTransitionButton;
         private Button _appearanceRestoreButton;
+        private Button _appearancePreviewButton;
+        private InputField _appearancePresetInput;
+        private Button _appearanceApplyPresetButton;
+        private InputField _appearanceOutfitInput;
+        private Button _appearanceApplyOutfitButton;
+        private InputField _appearanceAccessorySlotInput;
+        private InputField _appearanceAccessoryInput;
+        private Button _appearanceSetAccessoryButton;
+        private Button _appearanceClearAccessoryButton;
 
         private ITrackingPresenceProvider _trackingPresence;
         private IAppearanceRuntime _appearanceRuntime;
@@ -153,6 +163,7 @@ namespace VCR.Runtime.UI
             _recoverOutputButton = null;
             _contextActions = null;
             _appearanceActions = null;
+            _appearanceDirectActions = null;
             _characterPathInput = null;
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
@@ -167,6 +178,15 @@ namespace VCR.Runtime.UI
             _appearanceNextButton = null;
             _appearanceTransitionButton = null;
             _appearanceRestoreButton = null;
+            _appearancePreviewButton = null;
+            _appearancePresetInput = null;
+            _appearanceApplyPresetButton = null;
+            _appearanceOutfitInput = null;
+            _appearanceApplyOutfitButton = null;
+            _appearanceAccessorySlotInput = null;
+            _appearanceAccessoryInput = null;
+            _appearanceSetAccessoryButton = null;
+            _appearanceClearAccessoryButton = null;
 
             BuildUi();
             RefreshAll();
@@ -571,7 +591,7 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 188f);
+                    new Vector2(24f, 244f);
             _contentText.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -84f);
@@ -754,6 +774,112 @@ namespace VCR.Runtime.UI
             _appearanceRestoreButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 170f;
+
+            _appearancePreviewButton =
+                CreateButton(
+                    "Preview Transition",
+                    _appearanceActions,
+                    PreviewSelectedAppearanceTransition);
+            _appearancePreviewButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 170f;
+
+            _appearanceDirectActions =
+                CreateRect(
+                    "Appearance Direct Actions",
+                    content);
+
+            _appearanceDirectActions.anchorMin =
+                new Vector2(0f, 0f);
+            _appearanceDirectActions.anchorMax =
+                new Vector2(1f, 0f);
+            _appearanceDirectActions.pivot =
+                new Vector2(0.5f, 0f);
+            _appearanceDirectActions.offsetMin =
+                new Vector2(24f, 184f);
+            _appearanceDirectActions.offsetMax =
+                new Vector2(-24f, 234f);
+
+            var appearanceDirectLayout =
+                _appearanceDirectActions.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            appearanceDirectLayout.spacing = 8f;
+            appearanceDirectLayout.childForceExpandWidth = false;
+            appearanceDirectLayout.childControlWidth = true;
+            appearanceDirectLayout.childControlHeight = true;
+
+            _appearancePresetInput =
+                CreateInputField(
+                    "Appearance Preset Id",
+                    _appearanceDirectActions,
+                    "Preset ID");
+            _appearancePresetInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 170f;
+
+            _appearanceApplyPresetButton =
+                CreateButton(
+                    "Apply Preset",
+                    _appearanceDirectActions,
+                    ApplyAppearancePresetFromInput);
+            _appearanceApplyPresetButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _appearanceOutfitInput =
+                CreateInputField(
+                    "Appearance Outfit Id",
+                    _appearanceDirectActions,
+                    "Outfit ID");
+            _appearanceOutfitInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 160f;
+
+            _appearanceApplyOutfitButton =
+                CreateButton(
+                    "Apply Outfit",
+                    _appearanceDirectActions,
+                    ApplyAppearanceOutfitFromInput);
+            _appearanceApplyOutfitButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _appearanceAccessorySlotInput =
+                CreateInputField(
+                    "Appearance Accessory Slot",
+                    _appearanceDirectActions,
+                    "Slot ID");
+            _appearanceAccessorySlotInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _appearanceAccessoryInput =
+                CreateInputField(
+                    "Appearance Accessory Id",
+                    _appearanceDirectActions,
+                    "Accessory ID");
+            _appearanceAccessoryInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _appearanceSetAccessoryButton =
+                CreateButton(
+                    "Set",
+                    _appearanceDirectActions,
+                    SetAppearanceAccessoryFromInput);
+            _appearanceSetAccessoryButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _appearanceClearAccessoryButton =
+                CreateButton(
+                    "Clear",
+                    _appearanceDirectActions,
+                    ClearAppearanceAccessoryFromInput);
+            _appearanceClearAccessoryButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
 
             var actions =
                 CreateRect(
@@ -1246,6 +1372,208 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void ApplyAppearancePresetFromInput()
+        {
+            var presetId =
+                _appearancePresetInput?.text?.Trim();
+
+            if (_appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyAppearancePreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        presetId))
+            {
+                _lastActionMessage =
+                    "Enter a preset ID while the appearance runtime is ready.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.SetPreset(
+                    presetId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Appearance preset '{presetId}' requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Preset apply failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void ApplyAppearanceOutfitFromInput()
+        {
+            var outfitId =
+                _appearanceOutfitInput?.text?.Trim();
+
+            if (_appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyAppearanceOutfit(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        outfitId))
+            {
+                _lastActionMessage =
+                    "Enter an outfit ID while the appearance runtime is ready.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.SetOutfit(
+                    outfitId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Outfit '{outfitId}' requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Outfit apply failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void SetAppearanceAccessoryFromInput()
+        {
+            var slotId =
+                _appearanceAccessorySlotInput?.text?.Trim();
+            var accessoryId =
+                _appearanceAccessoryInput?.text?.Trim();
+
+            if (_appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanSetAppearanceAccessory(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        slotId,
+                        accessoryId))
+            {
+                _lastActionMessage =
+                    "Enter both accessory slot and accessory IDs while the appearance runtime is ready.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.SetAccessory(
+                    slotId,
+                    accessoryId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Accessory '{slotId}/{accessoryId}' requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Accessory apply failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void ClearAppearanceAccessoryFromInput()
+        {
+            var slotId =
+                _appearanceAccessorySlotInput?.text?.Trim();
+
+            if (_appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanClearAppearanceAccessory(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        slotId))
+            {
+                _lastActionMessage =
+                    "Enter an accessory slot ID while the appearance runtime is ready.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.ClearAccessory(
+                    slotId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Accessory slot '{slotId}' clear requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Accessory clear failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void PreviewSelectedAppearanceTransition()
+        {
+            if (_appearanceRuntime == null)
+            {
+                _lastActionMessage =
+                    "Appearance runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var transitionId =
+                GetSelectedAppearanceTransitionId();
+            var current =
+                _appearanceRuntime.Current;
+
+            if (!ApplicationUiActionPolicy
+                .CanPreviewAppearanceTransition(
+                    true,
+                    _appearanceRuntime.Status.State,
+                    transitionId,
+                    current.OutfitId))
+            {
+                _lastActionMessage =
+                    string.Equals(
+                        transitionId,
+                        "Immediate",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "Select a transition preset before previewing."
+                        : "Transition preview requires an active outfit and a ready appearance runtime.";
+                RefreshAll();
+                return;
+            }
+
+            var requested =
+                !string.IsNullOrWhiteSpace(
+                    current.PresetId)
+                    ? _appearanceRuntime.SetPreset(
+                        current.PresetId,
+                        transitionId,
+                        out var error)
+                    : _appearanceRuntime.SetOutfit(
+                        current.OutfitId,
+                        transitionId,
+                        out error);
+
+            _lastActionMessage =
+                requested
+                    ? $"Transition '{transitionId}' preview requested."
+                    : "Transition preview failed: " +
+                      (error ?? "unknown error");
+
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -1368,6 +1696,14 @@ namespace VCR.Runtime.UI
                     characterSelected)
             {
                 _appearanceActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            if (_appearanceDirectActions != null &&
+                _appearanceDirectActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearanceDirectActions.gameObject.SetActive(
                     characterSelected);
             }
 
@@ -1536,6 +1872,116 @@ namespace VCR.Runtime.UI
                     _appearanceRestoreButton.interactable =
                         appearanceAvailable &&
                         !_appearanceRuntime.Status.Busy;
+                }
+
+                var appearanceState =
+                    _appearanceRuntime != null
+                        ? _appearanceRuntime.Status.State
+                        : AppearanceRuntimeState.Unconfigured;
+
+                if (_appearanceRuntime != null)
+                {
+                    var current =
+                        _appearanceRuntime.Current;
+
+                    if (_appearancePresetInput != null &&
+                        !_appearancePresetInput.isFocused &&
+                        string.IsNullOrWhiteSpace(
+                            _appearancePresetInput.text) &&
+                        !string.IsNullOrWhiteSpace(
+                            current.PresetId))
+                    {
+                        _appearancePresetInput.text =
+                            current.PresetId;
+                    }
+
+                    if (_appearanceOutfitInput != null &&
+                        !_appearanceOutfitInput.isFocused &&
+                        string.IsNullOrWhiteSpace(
+                            _appearanceOutfitInput.text) &&
+                        !string.IsNullOrWhiteSpace(
+                            current.OutfitId))
+                    {
+                        _appearanceOutfitInput.text =
+                            current.OutfitId;
+                    }
+
+                    if (current.Accessories != null &&
+                        current.Accessories.Length > 0)
+                    {
+                        var accessory =
+                            current.Accessories[0];
+
+                        if (_appearanceAccessorySlotInput != null &&
+                            !_appearanceAccessorySlotInput.isFocused &&
+                            string.IsNullOrWhiteSpace(
+                                _appearanceAccessorySlotInput.text))
+                        {
+                            _appearanceAccessorySlotInput.text =
+                                accessory?.SlotId ?? string.Empty;
+                        }
+
+                        if (_appearanceAccessoryInput != null &&
+                            !_appearanceAccessoryInput.isFocused &&
+                            string.IsNullOrWhiteSpace(
+                                _appearanceAccessoryInput.text))
+                        {
+                            _appearanceAccessoryInput.text =
+                                accessory?.AccessoryId ?? string.Empty;
+                        }
+                    }
+                }
+
+                if (_appearanceApplyPresetButton != null)
+                {
+                    _appearanceApplyPresetButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanApplyAppearancePreset(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearancePresetInput?.text);
+                }
+
+                if (_appearanceApplyOutfitButton != null)
+                {
+                    _appearanceApplyOutfitButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanApplyAppearanceOutfit(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceOutfitInput?.text);
+                }
+
+                if (_appearanceSetAccessoryButton != null)
+                {
+                    _appearanceSetAccessoryButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanSetAppearanceAccessory(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceAccessorySlotInput?.text,
+                                _appearanceAccessoryInput?.text);
+                }
+
+                if (_appearanceClearAccessoryButton != null)
+                {
+                    _appearanceClearAccessoryButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanClearAppearanceAccessory(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceAccessorySlotInput?.text);
+                }
+
+                if (_appearancePreviewButton != null)
+                {
+                    _appearancePreviewButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanPreviewAppearanceTransition(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                GetSelectedAppearanceTransitionId(),
+                                _appearanceRuntime?.Current.OutfitId);
                 }
             }
 
