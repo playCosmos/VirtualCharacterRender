@@ -3170,6 +3170,26 @@ namespace VCR.Editor.P11
             return result;
         }
 
+        private static string[] CaptureStringArray(
+            SerializedProperty array)
+        {
+            var result =
+                new string[
+                    array?.arraySize ?? 0];
+
+            for (var i = 0;
+                 i < result.Length;
+                 i++)
+            {
+                result[i] =
+                    array.GetArrayElementAtIndex(
+                            i)
+                        .stringValue;
+            }
+
+            return result;
+        }
+
         private static AppearanceTransitionStep[]
             CaptureSteps(
                 SerializedProperty steps)
@@ -3205,6 +3225,23 @@ namespace VCR.Editor.P11
                         MarkerOffsetSeconds =
                             step.FindPropertyRelative(
                                     "MarkerOffsetSeconds")
+                                .floatValue,
+                        StepId =
+                            step.FindPropertyRelative(
+                                    "StepId")
+                                .stringValue,
+                        DependencyMode =
+                            (AppearanceTransitionDependencyMode)
+                            step.FindPropertyRelative(
+                                    "DependencyMode")
+                                .enumValueIndex,
+                        DependsOnStepIds =
+                            CaptureStringArray(
+                                step.FindPropertyRelative(
+                                    "DependsOnStepIds")),
+                        DependencyTimeoutSeconds =
+                            step.FindPropertyRelative(
+                                    "DependencyTimeoutSeconds")
                                 .floatValue,
                         Kind =
                             (AppearanceTransitionStepKind)
@@ -3339,6 +3376,23 @@ namespace VCR.Editor.P11
                     .floatValue =
                         (float)step.MarkerOffsetSeconds;
                 property.FindPropertyRelative(
+                        "StepId")
+                    .stringValue =
+                        step.StepId ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "DependencyMode")
+                    .enumValueIndex =
+                        (int)step.DependencyMode;
+                WriteStringArray(
+                    property.FindPropertyRelative(
+                        "DependsOnStepIds"),
+                    step.DependsOnStepIds);
+                property.FindPropertyRelative(
+                        "DependencyTimeoutSeconds")
+                    .floatValue =
+                        (float)step.DependencyTimeoutSeconds;
+                property.FindPropertyRelative(
                         "Kind")
                     .enumValueIndex =
                         (int)step.Kind;
@@ -3382,6 +3436,28 @@ namespace VCR.Editor.P11
                         "CompletionTimeoutSeconds")
                     .floatValue =
                         (float)step.CompletionTimeoutSeconds;
+            }
+        }
+
+        private static void WriteStringArray(
+            SerializedProperty destination,
+            string[] source)
+        {
+            source ??=
+                Array.Empty<string>();
+            destination.arraySize =
+                source.Length;
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                destination
+                    .GetArrayElementAtIndex(
+                        i)
+                    .stringValue =
+                        source[i] ??
+                        string.Empty;
             }
         }
 
@@ -3514,6 +3590,71 @@ namespace VCR.Editor.P11
             EditorUtility.SetDirty(
                 _runtime);
             Repaint();
+        }
+
+        private static string BuildUniqueActionStepId(
+            SerializedProperty steps,
+            string preferred,
+            int ignoreIndex)
+        {
+            var baseId =
+                string.IsNullOrWhiteSpace(
+                    preferred)
+                    ? "action"
+                    : preferred.Trim();
+            var candidate =
+                baseId;
+            var suffix = 2;
+
+            while (ContainsActionStepId(
+                       steps,
+                       candidate,
+                       ignoreIndex))
+            {
+                candidate =
+                    baseId +
+                    "-" +
+                    suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static bool ContainsActionStepId(
+            SerializedProperty steps,
+            string candidate,
+            int ignoreIndex)
+        {
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                if (i == ignoreIndex)
+                {
+                    continue;
+                }
+
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+
+                if ((AppearanceTransitionStepKind)
+                        step.FindPropertyRelative(
+                                "Kind")
+                            .enumValueIndex ==
+                        AppearanceTransitionStepKind.Action &&
+                    string.Equals(
+                        step.FindPropertyRelative(
+                                "StepId")
+                            .stringValue,
+                        candidate,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string[] BuildMarkerLabels(
