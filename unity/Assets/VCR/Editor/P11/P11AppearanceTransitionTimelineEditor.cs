@@ -288,6 +288,13 @@ namespace VCR.Editor.P11
                     ApplyInterruptCleanupTemplate(
                         transition);
                 }
+
+                if (GUILayout.Button(
+                        "Generate Step IDs"))
+                {
+                    GenerateMissingStepIds(
+                        transition);
+                }
             }
 
             var queue =
@@ -2386,6 +2393,118 @@ namespace VCR.Editor.P11
             }
 
             return false;
+        }
+
+        private void GenerateMissingStepIds(
+            SerializedProperty transition)
+        {
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+            var changed = 0;
+
+            Undo.RecordObject(
+                _runtime,
+                "Generate Transition Step IDs");
+
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+
+                if ((AppearanceTransitionStepKind)
+                        step.FindPropertyRelative(
+                                "Kind")
+                            .enumValueIndex !=
+                    AppearanceTransitionStepKind.Action)
+                {
+                    continue;
+                }
+
+                var id =
+                    step.FindPropertyRelative(
+                        "StepId");
+
+                if (!string.IsNullOrWhiteSpace(
+                        id.stringValue))
+                {
+                    continue;
+                }
+
+                var actionType =
+                    step.FindPropertyRelative(
+                            "ActionType")
+                        .stringValue;
+                var text =
+                    step.FindPropertyRelative(
+                            "Text")
+                        .stringValue;
+                var preferred =
+                    ShortActionLabel(
+                        actionType);
+
+                if (!string.IsNullOrWhiteSpace(
+                        text))
+                {
+                    preferred +=
+                        "-" +
+                        SanitizeLogicalId(
+                            text);
+                }
+
+                id.stringValue =
+                    BuildUniqueActionStepId(
+                        steps,
+                        preferred,
+                        i);
+                changed++;
+            }
+
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                changed > 0
+                    ? $"Generated {changed} missing action Step ID(s)."
+                    : "All action steps already have Step IDs.";
+            _lastMessageType =
+                MessageType.Info;
+        }
+
+        private static string SanitizeLogicalId(
+            string value)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    value))
+            {
+                return "action";
+            }
+
+            var chars =
+                value.Trim()
+                    .ToLowerInvariant()
+                    .ToCharArray();
+
+            for (var i = 0;
+                 i < chars.Length;
+                 i++)
+            {
+                if (!char.IsLetterOrDigit(
+                        chars[i]) &&
+                    chars[i] != '-' &&
+                    chars[i] != '_')
+                {
+                    chars[i] = '-';
+                }
+            }
+
+            return new string(
+                chars);
         }
 
         private void ApplySpinConfettiTemplate(
