@@ -23,6 +23,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
+        ITrackingRuntimeControl,
         IRuntimeMetricsSource
     {
         [Header("Receive")]
@@ -58,6 +59,18 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
+
+        public string ControlId => "vmc-udp";
+        public string DisplayName => "VMC UDP";
+        public bool ControlEnabled => enabled;
+        public TrackingSourceHealthState ControlHealthState =>
+            _source?.Health.State ??
+            (enabled
+                ? TrackingSourceHealthState.Starting
+                : TrackingSourceHealthState.Stopped);
+        public string ControlError =>
+            _source?.Health.Error ??
+            _backgroundError;
 
         public ITrackingSource TrackingSource => _source;
         public TrackingPresenceSnapshot Presence => _presence;
@@ -106,6 +119,65 @@ namespace VCR.Runtime.Protocols.VmcUnity
             }
 
             UpdatePresence();
+        }
+
+        public bool TrySetControlEnabled(
+            bool enabledValue,
+            out string error)
+        {
+            error = null;
+            enabled = enabledValue;
+
+            if (enabledValue &&
+                !enabled)
+            {
+                error =
+                    ControlError ??
+                    "VMC receiver could not be enabled.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryRecover(
+            out string error)
+        {
+            error = null;
+
+            if (!Application.isPlaying)
+            {
+                error =
+                    "Tracking recovery requires play mode.";
+                return false;
+            }
+
+            if (!enabled)
+            {
+                enabled = true;
+
+                if (!enabled)
+                {
+                    error =
+                        ControlError ??
+                        "VMC receiver recovery failed.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            StartReceiver();
+
+            if (!enabled)
+            {
+                error =
+                    ControlError ??
+                    "VMC receiver recovery failed.";
+                return false;
+            }
+
+            return true;
         }
 
         public bool TryGetSourceHealth(
