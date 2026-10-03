@@ -10,6 +10,7 @@ namespace VCR.Runtime.Appearance.Unity
     public sealed class BasicCharacterAppearanceRuntime :
         MonoBehaviour,
         IAppearanceRuntime,
+        IAppearanceUserPresetRegistry,
         IRuntimeMetricsSource
     {
         [SerializeField] private string runtimeId =
@@ -52,6 +53,13 @@ namespace VCR.Runtime.Appearance.Unity
         private readonly Dictionary<string, AppearancePreset>
             _presets =
                 new(StringComparer.Ordinal);
+        private readonly HashSet<string> _authoredPresetIds =
+            new(StringComparer.Ordinal);
+        private readonly Dictionary<string, AppearancePreset>
+            _userPresets =
+                new(StringComparer.Ordinal);
+        private readonly List<string> _userPresetIds =
+            new();
         private readonly Dictionary<string, AppearanceTransitionPreset>
             _transitions =
                 new(StringComparer.Ordinal);
@@ -105,6 +113,9 @@ namespace VCR.Runtime.Appearance.Unity
 
         public IReadOnlyList<string> TransitionIds =>
             _transitionIds;
+
+        public IReadOnlyList<string> UserPresetIds =>
+            _userPresetIds;
 
         public event Action<AppearanceRuntimeStatus>
             StatusChanged;
@@ -176,6 +187,7 @@ namespace VCR.Runtime.Appearance.Unity
             _accessories.Clear();
             _accessoriesBySlot.Clear();
             _presets.Clear();
+            _authoredPresetIds.Clear();
             _transitions.Clear();
             _presetIds.Clear();
             _transitionIds.Clear();
@@ -331,6 +343,8 @@ namespace VCR.Runtime.Appearance.Unity
 
                 _presetIds.Add(
                     preset.Id);
+                _authoredPresetIds.Add(
+                    preset.Id);
             }
 
             if (!string.IsNullOrWhiteSpace(
@@ -378,23 +392,47 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var preset in
                      _presets.Values)
             {
-                if (string.IsNullOrWhiteSpace(
-                        preset.PreferredTransitionId) ||
-                    string.Equals(
-                        preset.PreferredTransitionId,
-                        "Immediate",
-                        StringComparison.OrdinalIgnoreCase))
+                if (!ValidatePreferredTransition(
+                        preset,
+                        out error))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var presetId in
+                     _userPresetIds)
+            {
+                if (!_userPresets.TryGetValue(
+                        presetId,
+                        out var userPreset))
                 {
                     continue;
                 }
 
-                if (!_transitions.ContainsKey(
-                        preset.PreferredTransitionId))
+                if (_presets.ContainsKey(
+                        presetId))
                 {
                     error =
-                        $"Preset '{preset.Id}' references unknown transition '{preset.PreferredTransitionId}'.";
+                        $"User appearance preset '{presetId}' conflicts with an authored preset.";
                     return false;
                 }
+
+                if (!ValidateUserPreset(
+                        userPreset,
+                        out error))
+                {
+                    error =
+                        $"User preset '{presetId}' is invalid: {error}";
+                    return false;
+                }
+
+                _presets.Add(
+                    presetId,
+                    ClonePreset(
+                        userPreset));
+                _presetIds.Add(
+                    presetId);
             }
 
             // Preserve authoring order for previous/next quick-change UI.
@@ -449,6 +487,258 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 SetFault(error);
             }
+        }
+
+        public bool SaveCurrentAsUserPreset(
+            string presetId,
+            string preferredTransitionId,
+            out AppearancePreset preset,
+            out string error)
+        {
+            preset = null;
+            error = null;
+
+            if (_state !=
+                AppearanceRuntimeState.Ready)
+            {
+                error =
+                    "Appearance runtime must be ready before saving a user preset.";
+                return false;
+            }
+
+            var id =
+                presetId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    id))
+            {
+                error =
+                    "User appearance preset id is required.";
+                return false;
+            }
+
+            if (_authoredPresetIds.Contains(
+                    id))
+            {
+                error =
+                    $"User preset '{id}' cannot replace an authored appearance preset.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    _currentOutfitId) &&
+                _currentAccessories.Count == 0)
+            {
+                error =
+                    "No active appearance is available to save.";
+                return false;
+            }
+
+            var next =
+                new AppearancePreset
+                {
+                    Id = id,
+                    OutfitId =
+                        _currentOutfitId,
+                    PreferredTransitionId =
+                        NormalizePreferredTransition(
+                            preferredTransitionId),
+                    Accessories =
+                        CaptureCurrentAccessories()
+                };
+
+            if (!ValidateUserPreset(
+                    next,
+                    out error))
+            {
+                return false;
+            }
+
+            UpsertUserPreset(
+                next);
+
+            _currentPresetId =
+                id;
+
+            preset =
+                ClonePreset(
+                    next);
+
+            AppearanceChanged?.Invoke(
+                Current);
+            SetState(
+                _state,
+                _lastError);
+            return true;
+        }
+
+        public bool ReplaceUserPresets(
+            IReadOnlyList<AppearancePreset> nextPresets,
+            out string error)
+        {
+            error = null;
+
+            if (_state ==
+                    AppearanceRuntimeState.Transitioning ||
+                _state ==
+                    AppearanceRuntimeState.Committing)
+            {
+                error =
+                    "User presets cannot be replaced during an appearance transition.";
+                return false;
+            }
+
+            var validated =
+                new Dictionary<string, AppearancePreset>(
+                    StringComparer.Ordinal);
+            var order =
+                new List<string>();
+
+            if (nextPresets != null)
+            {
+                for (var i = 0;
+                     i < nextPresets.Count;
+                     i++)
+                {
+                    var candidate =
+                        nextPresets[i];
+
+                    if (!ValidateUserPreset(
+                            candidate,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    if (_authoredPresetIds.Contains(
+                            candidate.Id))
+                    {
+                        error =
+                            $"User preset '{candidate.Id}' cannot replace an authored appearance preset.";
+                        return false;
+                    }
+
+                    if (!validated.TryAdd(
+                            candidate.Id,
+                            ClonePreset(
+                                candidate)))
+                    {
+                        error =
+                            $"Duplicate user appearance preset id '{candidate.Id}'.";
+                        return false;
+                    }
+
+                    order.Add(
+                        candidate.Id);
+                }
+            }
+
+            foreach (var id in
+                     _userPresetIds)
+            {
+                _presets.Remove(
+                    id);
+                _presetIds.Remove(
+                    id);
+            }
+
+            _userPresets.Clear();
+            _userPresetIds.Clear();
+
+            foreach (var id in order)
+            {
+                var candidate =
+                    validated[id];
+
+                _userPresets.Add(
+                    id,
+                    candidate);
+                _userPresetIds.Add(
+                    id);
+                _presets.Add(
+                    id,
+                    ClonePreset(
+                        candidate));
+                _presetIds.Add(
+                    id);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    _currentPresetId) &&
+                !_presets.ContainsKey(
+                    _currentPresetId))
+            {
+                _currentPresetId = null;
+            }
+
+            SetState(
+                _state ==
+                    AppearanceRuntimeState.Unconfigured &&
+                _presets.Count > 0
+                    ? AppearanceRuntimeState.Ready
+                    : _state,
+                _lastError);
+            return true;
+        }
+
+        public bool RemoveUserPreset(
+            string presetId,
+            out string error)
+        {
+            error = null;
+            var id =
+                presetId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    id) ||
+                !_userPresets.Remove(
+                    id))
+            {
+                error =
+                    $"Unknown user appearance preset '{presetId ?? "<null>"}'.";
+                return false;
+            }
+
+            _userPresetIds.Remove(
+                id);
+            _presets.Remove(
+                id);
+            _presetIds.Remove(
+                id);
+
+            if (string.Equals(
+                    _currentPresetId,
+                    id,
+                    StringComparison.Ordinal))
+            {
+                _currentPresetId = null;
+                AppearanceChanged?.Invoke(
+                    Current);
+            }
+
+            SetState(
+                _state,
+                _lastError);
+            return true;
+        }
+
+        public AppearancePreset[] CaptureUserPresets()
+        {
+            var result =
+                new AppearancePreset[
+                    _userPresetIds.Count];
+
+            for (var i = 0;
+                 i < _userPresetIds.Count;
+                 i++)
+            {
+                result[i] =
+                    ClonePreset(
+                        _userPresets[
+                            _userPresetIds[i]]);
+            }
+
+            return result;
         }
 
         public bool SetPreset(
@@ -1172,6 +1462,131 @@ namespace VCR.Runtime.Appearance.Unity
                  accessories.Length == 0) &&
                 (presets == null ||
                  presets.Length == 0);
+        }
+
+        private bool ValidateUserPreset(
+            AppearancePreset preset,
+            out string error)
+        {
+            error = null;
+
+            if (preset == null ||
+                string.IsNullOrWhiteSpace(
+                    preset.Id))
+            {
+                error =
+                    "User appearance preset requires a non-empty id.";
+                return false;
+            }
+
+            if (!ValidateTarget(
+                    preset.OutfitId,
+                    preset.Accessories,
+                    out error))
+            {
+                return false;
+            }
+
+            return ValidatePreferredTransition(
+                preset,
+                out error);
+        }
+
+        private bool ValidatePreferredTransition(
+            AppearancePreset preset,
+            out string error)
+        {
+            error = null;
+
+            if (preset == null ||
+                string.IsNullOrWhiteSpace(
+                    preset.PreferredTransitionId) ||
+                string.Equals(
+                    preset.PreferredTransitionId,
+                    "Immediate",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (_transitions.ContainsKey(
+                    preset.PreferredTransitionId))
+            {
+                return true;
+            }
+
+            error =
+                $"Preset '{preset.Id}' references unknown transition '{preset.PreferredTransitionId}'.";
+            return false;
+        }
+
+        private void UpsertUserPreset(
+            AppearancePreset preset)
+        {
+            var clone =
+                ClonePreset(
+                    preset);
+
+            if (_userPresets.ContainsKey(
+                    clone.Id))
+            {
+                _userPresets[
+                    clone.Id] =
+                        clone;
+                _presets[
+                    clone.Id] =
+                        ClonePreset(
+                            clone);
+                return;
+            }
+
+            _userPresets.Add(
+                clone.Id,
+                clone);
+            _userPresetIds.Add(
+                clone.Id);
+            _presets.Add(
+                clone.Id,
+                ClonePreset(
+                    clone));
+            _presetIds.Add(
+                clone.Id);
+        }
+
+        private static string NormalizePreferredTransition(
+            string transitionId)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    transitionId) ||
+                string.Equals(
+                    transitionId,
+                    "Immediate",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Immediate";
+            }
+
+            return transitionId.Trim();
+        }
+
+        private static AppearancePreset ClonePreset(
+            AppearancePreset source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new AppearancePreset
+            {
+                Id = source.Id,
+                OutfitId = source.OutfitId,
+                PreferredTransitionId =
+                    source.PreferredTransitionId,
+                Accessories =
+                    CopySelections(
+                        source.Accessories)
+            };
         }
 
         private bool ValidateTarget(
