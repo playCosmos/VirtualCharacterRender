@@ -47,6 +47,31 @@ Active Character
 
 A preset is a named snapshot of outfit and accessory selections. Applying a preset must be atomic from the user's point of view.
 
+## Runtime binding path
+
+P11 supports two binding paths:
+
+1. explicit programmatic/serialized bindings for authored scenes and future P12 tooling
+2. convention discovery for dynamically loaded characters when no explicit bindings exist
+
+The convention path is:
+
+```text
+<CharacterRoot>
+  └─ VCRAppearance
+       ├─ Outfits
+       │    ├─ casual
+       │    ├─ formal
+       │    └─ ...
+       └─ Accessories
+            ├─ head
+            │    ├─ hat
+            │    └─ crown
+            └─ ...
+```
+
+Each direct child of `Outfits` becomes a named outfit and baseline preset. Each direct child under `Accessories/<slot>` becomes a selectable accessory for that slot. Explicit authored bindings remain authoritative when present.
+
 ## Outfit variants
 
 The first supported outfit path is a registered variant belonging to the active character.
