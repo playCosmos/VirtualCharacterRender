@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Appearance;
+using VCR.Runtime.Capabilities;
+using VCR.Runtime.EventRuntime;
+using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.UI;
 
 namespace VCR.Editor.P11
@@ -131,6 +135,22 @@ namespace VCR.Editor.P11
                         VCR.Runtime.Scene.SceneRuntimeState.Ready,
                         false),
                 "overlay setting actions must require an operational scene runtime and configured output adapter",
+                failures);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanApplyRuntimeSettings(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready) &&
+                !ApplicationUiActionPolicy
+                    .CanApplyRuntimeSettings(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.LoadingCharacter) &&
+                !ApplicationUiActionPolicy
+                    .CanApplyRuntimeSettings(
+                        false,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready),
+                "runtime Settings actions must require an available operational scene runtime",
                 failures);
 
             Expect(
@@ -457,6 +477,144 @@ namespace VCR.Editor.P11
                     motionUiObject);
             }
 
+            var capabilityRegistry =
+                new CapabilityRegistry();
+
+            try
+            {
+                Expect(
+                    capabilityRegistry.Register(
+                        "zeta",
+                        () =>
+                            new MemoryStream()) &&
+                    capabilityRegistry.Register(
+                        "alpha",
+                        () =>
+                            new MemoryStream()),
+                    "capability validation registry must accept unique factories",
+                    failures);
+
+                Expect(
+                    capabilityRegistry.Enable(
+                        "zeta",
+                        out var capabilityEnableError),
+                    "capability validation enable must succeed: " +
+                    capabilityEnableError,
+                    failures);
+
+                var capabilityStatuses =
+                    capabilityRegistry
+                        .CaptureStatuses();
+
+                Expect(
+                    capabilityStatuses.Length ==
+                        2 &&
+                    capabilityStatuses[0].Id ==
+                        "alpha" &&
+                    capabilityStatuses[0].State ==
+                        CapabilityState.Disabled &&
+                    capabilityStatuses[1].Id ==
+                        "zeta" &&
+                    capabilityStatuses[1].State ==
+                        CapabilityState.Enabled,
+                    "capability status snapshots must be sorted by id and preserve enabled/disabled state",
+                    failures);
+            }
+            finally
+            {
+                capabilityRegistry.Dispose();
+            }
+
+            var eventStoreDirectory =
+                Path.Combine(
+                    Path.GetTempPath(),
+                    "vcr-p11-event-ui-" +
+                    Guid.NewGuid()
+                        .ToString("N"));
+            var eventStorePath =
+                Path.Combine(
+                    eventStoreDirectory,
+                    "event-rules.json");
+
+            try
+            {
+                var eventStore =
+                    new EventRuntimeConfigurationStore(
+                        eventStorePath);
+                var eventRules =
+                    new[]
+                    {
+                        new EventRuntimeRule
+                        {
+                            Id =
+                                "rule-b",
+                            Enabled =
+                                false
+                        },
+                        new EventRuntimeRule
+                        {
+                            Id =
+                                "rule-a",
+                            Enabled =
+                                true
+                        }
+                    };
+
+                var saved =
+                    eventStore.TrySave(
+                        eventRules,
+                        73,
+                        out var eventSaveError);
+                var loaded =
+                    saved &&
+                    eventStore.TryLoad(
+                        out var loadedRules,
+                        out var loadedMaxCommands,
+                        out var eventLoadError);
+
+                Expect(
+                    saved &&
+                    loaded &&
+                    loadedRules.Length ==
+                        2 &&
+                    loadedRules[0].Id ==
+                        "rule-b" &&
+                    !loadedRules[0].Enabled &&
+                    loadedRules[1].Id ==
+                        "rule-a" &&
+                    loadedRules[1].Enabled &&
+                    loadedMaxCommands ==
+                        73,
+                    "P11 event rule persistence must preserve rule order/enabled state and max commands: " +
+                    eventSaveError +
+                    " / " +
+                    eventLoadError,
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P11 event rule persistence validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(
+                            eventStoreDirectory))
+                    {
+                        Directory.Delete(
+                            eventStoreDirectory,
+                            recursive:
+                                true);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
             P11AppearanceRuntimeValidation
                 .RunChecks(
                     failures);
@@ -488,7 +646,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, character file browse policy, overlay setting policy, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
+                    "(section order, availability, character file browse policy, overlay/settings policy, capability snapshots, event-rule persistence, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
                 return true;
             }
 
