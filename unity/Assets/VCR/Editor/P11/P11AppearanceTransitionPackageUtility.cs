@@ -164,6 +164,13 @@ namespace VCR.Editor.P11
                     return false;
                 }
 
+                if (transition.Markers == null)
+                {
+                    transition.Markers =
+                        Array.Empty<
+                            AppearanceTransitionMarker>();
+                }
+
                 if (transition.Steps == null)
                 {
                     transition.Steps =
