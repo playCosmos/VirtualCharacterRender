@@ -1920,6 +1920,293 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void RenameAppearanceUserPreset()
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var sourceId =
+                _appearanceUserPresetInput?.text?.Trim();
+            var targetId =
+                _appearanceUserPresetTargetInput?.text?.Trim();
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                _appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanRenameAppearanceUserPreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        sourceId,
+                        targetId,
+                        characterPath))
+            {
+                _lastActionMessage =
+                    "Enter a saved user preset ID and a new preset ID to rename.";
+                RefreshAll();
+                return;
+            }
+
+            var previous =
+                registry.CaptureUserPresets();
+            var previousCurrentPresetId =
+                _appearanceRuntime.Current.PresetId;
+
+            if (!registry.RenameUserPreset(
+                    sourceId,
+                    targetId,
+                    out var renamed,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "User preset rename failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (!PersistAppearanceUserPresets(
+                    registry,
+                    characterPath,
+                    out error))
+            {
+                RestoreAppearanceUserPresetMutation(
+                    registry,
+                    previous,
+                    previousCurrentPresetId);
+
+                _lastActionMessage =
+                    "User preset rename persistence failed and the in-memory change was rolled back: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceUserPresetInput != null)
+            {
+                _appearanceUserPresetInput.text =
+                    renamed.Id;
+            }
+
+            if (_appearancePresetInput != null &&
+                string.Equals(
+                    _appearancePresetInput.text?.Trim(),
+                    sourceId,
+                    StringComparison.Ordinal))
+            {
+                _appearancePresetInput.text =
+                    renamed.Id;
+            }
+
+            if (_appearanceUserPresetTargetInput != null)
+            {
+                _appearanceUserPresetTargetInput.text =
+                    string.Empty;
+            }
+
+            _lastActionMessage =
+                $"User appearance preset '{sourceId}' renamed to '{renamed.Id}'.";
+            RefreshAll();
+        }
+
+        private void DuplicateAppearanceUserPreset()
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var sourceId =
+                _appearanceUserPresetInput?.text?.Trim();
+            var targetId =
+                _appearanceUserPresetTargetInput?.text?.Trim();
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                _appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanDuplicateAppearanceUserPreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        sourceId,
+                        targetId,
+                        characterPath))
+            {
+                _lastActionMessage =
+                    "Enter a saved user preset ID and a new preset ID to duplicate.";
+                RefreshAll();
+                return;
+            }
+
+            var previous =
+                registry.CaptureUserPresets();
+            var previousCurrentPresetId =
+                _appearanceRuntime.Current.PresetId;
+
+            if (!registry.DuplicateUserPreset(
+                    sourceId,
+                    targetId,
+                    out var duplicate,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "User preset duplicate failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (!PersistAppearanceUserPresets(
+                    registry,
+                    characterPath,
+                    out error))
+            {
+                RestoreAppearanceUserPresetMutation(
+                    registry,
+                    previous,
+                    previousCurrentPresetId);
+
+                _lastActionMessage =
+                    "User preset duplicate persistence failed and the in-memory change was rolled back: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceUserPresetInput != null)
+            {
+                _appearanceUserPresetInput.text =
+                    duplicate.Id;
+            }
+
+            if (_appearancePresetInput != null)
+            {
+                _appearancePresetInput.text =
+                    duplicate.Id;
+            }
+
+            if (_appearanceUserPresetTargetInput != null)
+            {
+                _appearanceUserPresetTargetInput.text =
+                    string.Empty;
+            }
+
+            _lastActionMessage =
+                $"User appearance preset '{sourceId}' duplicated as '{duplicate.Id}'.";
+            RefreshAll();
+        }
+
+        private void MoveAppearanceUserPresetUp()
+        {
+            MoveAppearanceUserPreset(
+                -1);
+        }
+
+        private void MoveAppearanceUserPresetDown()
+        {
+            MoveAppearanceUserPreset(
+                1);
+        }
+
+        private void MoveAppearanceUserPreset(
+            int offset)
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var presetId =
+                _appearanceUserPresetInput?.text?.Trim();
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                _appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanMoveAppearanceUserPreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        presetId,
+                        characterPath))
+            {
+                _lastActionMessage =
+                    "Enter a saved user preset ID to reorder.";
+                RefreshAll();
+                return;
+            }
+
+            var previous =
+                registry.CaptureUserPresets();
+            var previousCurrentPresetId =
+                _appearanceRuntime.Current.PresetId;
+
+            if (!registry.MoveUserPreset(
+                    presetId,
+                    offset,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "User preset reorder failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (!PersistAppearanceUserPresets(
+                    registry,
+                    characterPath,
+                    out error))
+            {
+                RestoreAppearanceUserPresetMutation(
+                    registry,
+                    previous,
+                    previousCurrentPresetId);
+
+                _lastActionMessage =
+                    "User preset reorder persistence failed and the in-memory change was rolled back: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"User appearance preset '{presetId}' moved " +
+                (offset < 0
+                    ? "up."
+                    : "down.");
+            RefreshAll();
+        }
+
+        private void RestoreAppearanceUserPresetMutation(
+            IAppearanceUserPresetRegistry registry,
+            AppearancePreset[] previous,
+            string previousCurrentPresetId)
+        {
+            if (registry == null)
+            {
+                return;
+            }
+
+            var restored =
+                registry.ReplaceUserPresets(
+                    previous,
+                    out _);
+
+            if (restored &&
+                _appearanceRuntime != null &&
+                !string.IsNullOrWhiteSpace(
+                    previousCurrentPresetId) &&
+                !string.Equals(
+                    _appearanceRuntime.Current.PresetId,
+                    previousCurrentPresetId,
+                    StringComparison.Ordinal))
+            {
+                _appearanceRuntime.SetPreset(
+                    previousCurrentPresetId,
+                    "Immediate",
+                    out _);
+            }
+        }
+
         private bool PersistAppearanceUserPresets(
             IAppearanceUserPresetRegistry registry,
             string characterPath,
