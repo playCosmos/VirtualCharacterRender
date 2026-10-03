@@ -6145,8 +6145,17 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var snapshot =
-                diagnostics.CaptureNow();
+            if (!diagnostics.TryCaptureNow(
+                    out var snapshot,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Diagnostics capture skipped: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
             _diagnosticsMetricPage = 0;
             _lastActionMessage =
                 $"Diagnostics snapshot {snapshot.Sequence} captured.";
@@ -6165,7 +6174,16 @@ namespace VCR.Runtime.UI
 
             if (diagnostics.LatestSnapshot.Sequence <= 0)
             {
-                diagnostics.CaptureNow();
+                if (!diagnostics.TryCaptureNow(
+                        out _,
+                        out var captureError))
+                {
+                    _lastActionMessage =
+                        "Diagnostics snapshot save requires a captured report: " +
+                        (captureError ?? "unknown error");
+                    RefreshAll();
+                    return;
+                }
             }
 
             if (!diagnostics.TryWriteLatestSnapshotJson(
