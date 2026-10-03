@@ -24,6 +24,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
+        ITrackingRuntimeControl,
         IRuntimeMetricsSource
     {
         [Header("iOS sender")]
@@ -72,6 +73,25 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         private string _lastError;
         private ArKitReceiverLifecycleState _state =
             ArKitReceiverLifecycleState.Stopped;
+
+        public string ControlId => "arkit-ifacialmocap";
+        public string DisplayName => "ARKit / iFacialMocap";
+        public bool ControlEnabled => enabled;
+        public TrackingSourceHealthState ControlHealthState =>
+            _state switch
+            {
+                ArKitReceiverLifecycleState.Starting =>
+                    TrackingSourceHealthState.Starting,
+                ArKitReceiverLifecycleState.Running =>
+                    TrackingSourceHealthState.Healthy,
+                ArKitReceiverLifecycleState.SourceLost =>
+                    TrackingSourceHealthState.SourceLost,
+                ArKitReceiverLifecycleState.Faulted =>
+                    TrackingSourceHealthState.Faulted,
+                _ =>
+                    TrackingSourceHealthState.Stopped
+            };
+        public string ControlError => _lastError;
 
         public TrackingPresenceSnapshot Presence => _presence;
         public long PacketCount => Interlocked.Read(ref _packetCount);
@@ -151,6 +171,68 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     ArKitReceiverLifecycleState.Running;
                 _lastError = null;
             }
+        }
+
+        public bool TrySetControlEnabled(
+            bool enabledValue,
+            out string error)
+        {
+            error = null;
+            enabled = enabledValue;
+
+            if (enabledValue &&
+                !enabled)
+            {
+                error =
+                    _lastError ??
+                    "ARKit receiver could not be enabled.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryRecover(
+            out string error)
+        {
+            error = null;
+
+            if (!Application.isPlaying)
+            {
+                error =
+                    "Tracking recovery requires play mode.";
+                return false;
+            }
+
+            if (!enabled)
+            {
+                enabled = true;
+
+                if (!enabled)
+                {
+                    error =
+                        _lastError ??
+                        "ARKit receiver recovery failed.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            StopReceiver();
+            StartReceiver();
+
+            if (!enabled ||
+                _state ==
+                    ArKitReceiverLifecycleState.Faulted)
+            {
+                error =
+                    _lastError ??
+                    "ARKit receiver recovery failed.";
+                return false;
+            }
+
+            return true;
         }
 
         public bool TryGetSourceHealth(
