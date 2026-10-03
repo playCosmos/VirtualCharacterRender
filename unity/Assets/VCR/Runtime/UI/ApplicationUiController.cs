@@ -1553,17 +1553,26 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var requested =
-                !string.IsNullOrWhiteSpace(
-                    current.PresetId)
-                    ? _appearanceRuntime.SetPreset(
+            bool requested;
+            string error;
+
+            if (!string.IsNullOrWhiteSpace(
+                    current.PresetId))
+            {
+                requested =
+                    _appearanceRuntime.SetPreset(
                         current.PresetId,
                         transitionId,
-                        out var error)
-                    : _appearanceRuntime.SetOutfit(
+                        out error);
+            }
+            else
+            {
+                requested =
+                    _appearanceRuntime.SetOutfit(
                         current.OutfitId,
                         transitionId,
                         out error);
+            }
 
             _lastActionMessage =
                 requested
@@ -1981,7 +1990,9 @@ namespace VCR.Runtime.UI
                                 _appearanceRuntime != null,
                                 appearanceState,
                                 GetSelectedAppearanceTransitionId(),
-                                _appearanceRuntime?.Current.OutfitId);
+                                _appearanceRuntime != null
+                                    ? _appearanceRuntime.Current.OutfitId
+                                    : null);
                 }
             }
 
