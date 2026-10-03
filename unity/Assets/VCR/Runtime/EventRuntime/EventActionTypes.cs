@@ -50,6 +50,12 @@ namespace VCR.Runtime.EventRuntime
         public const string EffectStop =
             "effect.stop";
 
+        public const string AudioPlay =
+            "audio.play";
+
+        public const string AudioStop =
+            "audio.stop";
+
         public const string AppearanceSetPreset =
             "appearance.set_preset";
 
