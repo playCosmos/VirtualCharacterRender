@@ -53,6 +53,7 @@ namespace VCR.Runtime.UI
         private RectTransform _contextActions;
         private RectTransform _appearanceActions;
         private RectTransform _appearanceDirectActions;
+        private RectTransform _appearancePersistenceActions;
         private InputField _characterPathInput;
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
@@ -76,9 +77,15 @@ namespace VCR.Runtime.UI
         private InputField _appearanceAccessoryInput;
         private Button _appearanceSetAccessoryButton;
         private Button _appearanceClearAccessoryButton;
+        private InputField _appearanceUserPresetInput;
+        private Button _appearanceSaveUserPresetButton;
+        private Button _appearanceDeleteUserPresetButton;
 
         private ITrackingPresenceProvider _trackingPresence;
         private IAppearanceRuntime _appearanceRuntime;
+        private AppearanceUserPresetStore _appearancePresetStore;
+        private IAppearanceUserPresetRegistry _loadedAppearancePresetRegistry;
+        private string _loadedAppearanceProfilePath;
         private MotionExpressionMixer _mixer;
         private MaterialOverrideController _materialController;
 
@@ -164,6 +171,7 @@ namespace VCR.Runtime.UI
             _contextActions = null;
             _appearanceActions = null;
             _appearanceDirectActions = null;
+            _appearancePersistenceActions = null;
             _characterPathInput = null;
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
@@ -187,6 +195,9 @@ namespace VCR.Runtime.UI
             _appearanceAccessoryInput = null;
             _appearanceSetAccessoryButton = null;
             _appearanceClearAccessoryButton = null;
+            _appearanceUserPresetInput = null;
+            _appearanceSaveUserPresetButton = null;
+            _appearanceDeleteUserPresetButton = null;
 
             BuildUi();
             RefreshAll();
@@ -227,6 +238,7 @@ namespace VCR.Runtime.UI
 
             ResolveTrackingControls();
             ResolveAppearanceRuntime();
+            EnsureAppearanceUserPresetsLoaded();
 
             if (_trackingPresence == null)
             {
@@ -591,7 +603,7 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 244f);
+                    new Vector2(24f, 300f);
             _contentText.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -84f);
@@ -880,6 +892,58 @@ namespace VCR.Runtime.UI
             _appearanceClearAccessoryButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 80f;
+
+            _appearancePersistenceActions =
+                CreateRect(
+                    "Appearance Saved Presets",
+                    content);
+
+            _appearancePersistenceActions.anchorMin =
+                new Vector2(0f, 0f);
+            _appearancePersistenceActions.anchorMax =
+                new Vector2(1f, 0f);
+            _appearancePersistenceActions.pivot =
+                new Vector2(0.5f, 0f);
+            _appearancePersistenceActions.offsetMin =
+                new Vector2(24f, 240f);
+            _appearancePersistenceActions.offsetMax =
+                new Vector2(-24f, 290f);
+
+            var appearancePersistenceLayout =
+                _appearancePersistenceActions.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            appearancePersistenceLayout.spacing = 8f;
+            appearancePersistenceLayout.childForceExpandWidth = false;
+            appearancePersistenceLayout.childControlWidth = true;
+            appearancePersistenceLayout.childControlHeight = true;
+
+            _appearanceUserPresetInput =
+                CreateInputField(
+                    "Appearance User Preset Id",
+                    _appearancePersistenceActions,
+                    "User Preset ID");
+            _appearanceUserPresetInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 220f;
+
+            _appearanceSaveUserPresetButton =
+                CreateButton(
+                    "Save Current",
+                    _appearancePersistenceActions,
+                    SaveCurrentAppearanceUserPreset);
+            _appearanceSaveUserPresetButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 140f;
+
+            _appearanceDeleteUserPresetButton =
+                CreateButton(
+                    "Delete User Preset",
+                    _appearancePersistenceActions,
+                    DeleteAppearanceUserPreset);
+            _appearanceDeleteUserPresetButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 180f;
 
             var actions =
                 CreateRect(
@@ -1583,6 +1647,249 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void SaveCurrentAppearanceUserPreset()
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var presetId =
+                _appearanceUserPresetInput?.text?.Trim();
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                _appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanSaveAppearanceUserPreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        presetId,
+                        characterPath))
+            {
+                _lastActionMessage =
+                    "Enter a user preset ID while a character appearance is ready.";
+                RefreshAll();
+                return;
+            }
+
+            var previous =
+                registry.CaptureUserPresets();
+
+            if (!registry.SaveCurrentAsUserPreset(
+                    presetId,
+                    GetSelectedAppearanceTransitionId(),
+                    out var saved,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "User preset save failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (!PersistAppearanceUserPresets(
+                    registry,
+                    characterPath,
+                    out error))
+            {
+                registry.ReplaceUserPresets(
+                    previous,
+                    out _);
+
+                _lastActionMessage =
+                    "User preset persistence failed and the in-memory change was rolled back: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _appearancePresetInput.text =
+                saved.Id;
+            _lastActionMessage =
+                $"User appearance preset '{saved.Id}' saved for this character.";
+            RefreshAll();
+        }
+
+        private void DeleteAppearanceUserPreset()
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var presetId =
+                _appearanceUserPresetInput?.text?.Trim();
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                _appearanceRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanDeleteAppearanceUserPreset(
+                        true,
+                        _appearanceRuntime.Status.State,
+                        presetId,
+                        characterPath))
+            {
+                _lastActionMessage =
+                    "Enter a saved user preset ID to delete.";
+                RefreshAll();
+                return;
+            }
+
+            var previous =
+                registry.CaptureUserPresets();
+
+            if (!registry.RemoveUserPreset(
+                    presetId,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "User preset delete failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (!PersistAppearanceUserPresets(
+                    registry,
+                    characterPath,
+                    out error))
+            {
+                registry.ReplaceUserPresets(
+                    previous,
+                    out _);
+
+                _lastActionMessage =
+                    "User preset delete persistence failed and the in-memory change was rolled back: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (_appearancePresetInput != null &&
+                string.Equals(
+                    _appearancePresetInput.text?.Trim(),
+                    presetId,
+                    StringComparison.Ordinal))
+            {
+                _appearancePresetInput.text =
+                    string.Empty;
+            }
+
+            _lastActionMessage =
+                $"User appearance preset '{presetId}' deleted.";
+            RefreshAll();
+        }
+
+        private bool PersistAppearanceUserPresets(
+            IAppearanceUserPresetRegistry registry,
+            string characterPath,
+            out string error)
+        {
+            error = null;
+
+            if (registry == null)
+            {
+                error =
+                    "Appearance user preset registry is unavailable.";
+                return false;
+            }
+
+            try
+            {
+                _appearancePresetStore ??=
+                    AppearanceUserPresetStore
+                        .CreateDefault();
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Appearance profile store initialization failed: " +
+                    exception.Message;
+                return false;
+            }
+
+            return _appearancePresetStore.TrySave(
+                characterPath,
+                registry.CaptureUserPresets(),
+                out error);
+        }
+
+        private void EnsureAppearanceUserPresetsLoaded()
+        {
+            var registry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
+            var characterPath =
+                sceneRuntime?.CurrentCharacterPath;
+
+            if (registry == null ||
+                string.IsNullOrWhiteSpace(
+                    characterPath))
+            {
+                _loadedAppearancePresetRegistry = null;
+                _loadedAppearanceProfilePath = null;
+                return;
+            }
+
+            if (ReferenceEquals(
+                    registry,
+                    _loadedAppearancePresetRegistry) &&
+                string.Equals(
+                    characterPath,
+                    _loadedAppearanceProfilePath,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _loadedAppearancePresetRegistry =
+                registry;
+            _loadedAppearanceProfilePath =
+                characterPath;
+
+            try
+            {
+                _appearancePresetStore ??=
+                    AppearanceUserPresetStore
+                        .CreateDefault();
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Appearance profile store initialization failed: " +
+                    exception.Message;
+                return;
+            }
+
+            if (!_appearancePresetStore.TryLoad(
+                    characterPath,
+                    out var presets,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Saved appearance presets were not loaded: " +
+                    (error ?? "unknown error");
+                return;
+            }
+
+            if (!registry.ReplaceUserPresets(
+                    presets,
+                    out error))
+            {
+                _lastActionMessage =
+                    "Saved appearance presets are incompatible with this character: " +
+                    (error ?? "unknown error");
+                return;
+            }
+
+            if (presets.Length > 0)
+            {
+                _lastActionMessage =
+                    $"Loaded {presets.Length} saved appearance preset(s) for this character.";
+            }
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -1713,6 +2020,14 @@ namespace VCR.Runtime.UI
                     characterSelected)
             {
                 _appearanceDirectActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            if (_appearancePersistenceActions != null &&
+                _appearancePersistenceActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearancePersistenceActions.gameObject.SetActive(
                     characterSelected);
             }
 
@@ -1994,6 +2309,34 @@ namespace VCR.Runtime.UI
                                     ? _appearanceRuntime.Current.OutfitId
                                     : null);
                 }
+
+                var hasPresetRegistry =
+                    _appearanceRuntime is
+                        IAppearanceUserPresetRegistry;
+
+                if (_appearanceSaveUserPresetButton != null)
+                {
+                    _appearanceSaveUserPresetButton.interactable =
+                        hasPresetRegistry &&
+                        ApplicationUiActionPolicy
+                            .CanSaveAppearanceUserPreset(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceUserPresetInput?.text,
+                                sceneRuntime?.CurrentCharacterPath);
+                }
+
+                if (_appearanceDeleteUserPresetButton != null)
+                {
+                    _appearanceDeleteUserPresetButton.interactable =
+                        hasPresetRegistry &&
+                        ApplicationUiActionPolicy
+                            .CanDeleteAppearanceUserPreset(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceUserPresetInput?.text,
+                                sceneRuntime?.CurrentCharacterPath);
+                }
             }
 
             if (outputSelected &&
@@ -2135,10 +2478,17 @@ namespace VCR.Runtime.UI
             var appearance =
                 _appearanceRuntime.Status;
 
+            var userPresetCount =
+                _appearanceRuntime is
+                    IAppearanceUserPresetRegistry registry
+                    ? registry.UserPresetIds.Count
+                    : 0;
+
             return text +
                 $"\nAppearance state: {appearance.State}" +
                 $"\nAppearance preset: {appearance.CurrentPresetId ?? "<none>"}" +
                 $"\nOutfit: {appearance.CurrentOutfitId ?? "<none>"}" +
+                $"\nUser presets: {userPresetCount}" +
                 $"\nTransition: {appearance.ActiveTransitionId ?? "<none>"}" +
                 $"\nAppearance error: {appearance.LastError ?? "<none>"}";
         }
