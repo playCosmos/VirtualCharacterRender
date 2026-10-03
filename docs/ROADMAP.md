@@ -134,11 +134,11 @@ Multi-person identity tracking is not in scope.
 
 ## P5 — Motion and Expression Mixer
 
-Status: Active. See `P5_STATUS.md`.
+Status: Source implementation checkpoint-ready; Unity allocation/performance evidence remains deferred. See `P5_STATUS.md`.
 
-Base pose, tracking pose, additive motion, expressions, procedural motion, weighting, masks, deadzones, smoothing, and fallback behavior.
+Implemented source scope includes the final mix-provider contract, routed base motion, ordered Tracking/Additive/Procedural pose layers, Override/Additive pose composition, global/root/per-bone weights, expression Override/Additive/Maximum composition, expression deadzone and smoothing, pose-space mismatch guards, deterministic overlay-to-base-to-neutral fallback, and mixer diagnostics.
 
-The first implementation slice establishes the final mix-provider contract and expression-layer blending while passing routed face/body/full-body frames through unchanged.
+Active smoothing and multi-layer pose allocation/update cost must still be measured in Unity before changing their opt-in/default performance posture.
 
 ## P6 — Environment Runtime
 
