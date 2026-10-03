@@ -106,19 +106,17 @@ namespace VCR.Runtime.Appearance.Unity
             AppearanceTransitionFallbackPolicy.Immediate;
         public AppearanceTransitionStepBinding[] Steps =
             Array.Empty<AppearanceTransitionStepBinding>();
+        public AppearanceTransitionStepBinding[] CancellationSteps =
+            Array.Empty<AppearanceTransitionStepBinding>();
 
         public AppearanceTransitionPreset ToPreset()
         {
             var steps =
-                new AppearanceTransitionStep[
-                    Steps?.Length ?? 0];
-
-            for (var i = 0; i < steps.Length; i++)
-            {
-                steps[i] =
-                    Steps[i]?.ToStep() ??
-                    new AppearanceTransitionStep();
-            }
+                ConvertSteps(
+                    Steps);
+            var cancellationSteps =
+                ConvertSteps(
+                    CancellationSteps);
 
             return new AppearanceTransitionPreset
             {
@@ -126,8 +124,28 @@ namespace VCR.Runtime.Appearance.Unity
                 DurationSeconds = DurationSeconds,
                 QueuePolicy = QueuePolicy,
                 FallbackPolicy = FallbackPolicy,
-                Steps = steps
+                Steps = steps,
+                CancellationSteps =
+                    cancellationSteps
             };
+        }
+
+        private static AppearanceTransitionStep[]
+            ConvertSteps(
+                AppearanceTransitionStepBinding[] source)
+        {
+            var steps =
+                new AppearanceTransitionStep[
+                    source?.Length ?? 0];
+
+            for (var i = 0; i < steps.Length; i++)
+            {
+                steps[i] =
+                    source[i]?.ToStep() ??
+                    new AppearanceTransitionStep();
+            }
+
+            return steps;
         }
     }
 }
