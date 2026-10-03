@@ -172,6 +172,27 @@ namespace VCR.Runtime.Appearance
             out string error);
     }
 
+    public interface IAppearanceUserPresetRegistry
+    {
+        IReadOnlyList<string> UserPresetIds { get; }
+
+        bool SaveCurrentAsUserPreset(
+            string presetId,
+            string preferredTransitionId,
+            out AppearancePreset preset,
+            out string error);
+
+        bool ReplaceUserPresets(
+            IReadOnlyList<AppearancePreset> presets,
+            out string error);
+
+        bool RemoveUserPreset(
+            string presetId,
+            out string error);
+
+        AppearancePreset[] CaptureUserPresets();
+    }
+
     public interface IAppearanceTransitionStepExecutor
     {
         bool CanExecute(
