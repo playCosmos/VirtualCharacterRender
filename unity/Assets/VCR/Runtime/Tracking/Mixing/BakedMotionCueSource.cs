@@ -181,7 +181,8 @@ namespace VCR.Runtime.Tracking.Mixing
                         existing,
                         asset))
                 {
-                    return true;
+                    return RebuildCues(
+                        out error);
                 }
 
                 if (string.Equals(
