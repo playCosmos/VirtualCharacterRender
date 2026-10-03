@@ -538,6 +538,31 @@ namespace VCR.Editor.P6
                     "invalid lighting target must be rejected atomically without replacing the active valid target",
                     failures);
 
+                runtime.SetLightingTargets();
+
+                Expect(
+                    runtime.LightingTargetCount == 0 &&
+                    Mathf.Abs(
+                        light.color.r - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.g - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.b - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.intensity - 2f) <
+                        0.001f,
+                    "removing environment lighting targets must restore their source Light values",
+                    failures);
+
+                runtime.SetLightingTargets(
+                    lightingTarget);
+                runtime.SetLightingProfile(
+                    lightingProfile,
+                    out _);
+
                 runtime.SetSpaceTargets(
                     spaceTarget,
                     spaceTarget);
@@ -1124,6 +1149,15 @@ namespace VCR.Editor.P6
                         out var updateDispatchAverage) &&
                     updateDispatchAverage >= 0.0,
                     "environment diagnostics must attribute update-target dispatch cost",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_dispatch_count",
+                        out var transitionDispatchCount) &&
+                    transitionDispatchCount >= 3.0,
+                    "environment diagnostics must expose actual transition-target dispatch count",
                     failures);
 
                 Expect(
