@@ -56,6 +56,9 @@ namespace VCR.Runtime.Tracking.Mixing
         public IReadOnlyList<string> CueIds =>
             _cueIds;
 
+        public IReadOnlyList<BakedMotionCueAsset> CueAssets =>
+            cueAssets;
+
         private void Awake()
         {
             RebuildCues(
@@ -146,6 +149,88 @@ namespace VCR.Runtime.Tracking.Mixing
 
             RebuildCues(
                 out _);
+        }
+
+        public bool TryRegisterAsset(
+            BakedMotionCueAsset asset,
+            out string error)
+        {
+            error = null;
+
+            if (asset == null ||
+                !ValidateCue(
+                    asset.Cue,
+                    out error))
+            {
+                error ??=
+                    "Baked motion cue asset is required.";
+                return false;
+            }
+
+            foreach (var existing in
+                     cueAssets ??
+                     Array.Empty<
+                         BakedMotionCueAsset>())
+            {
+                if (existing == null)
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(
+                        existing,
+                        asset))
+                {
+                    return true;
+                }
+
+                if (string.Equals(
+                        existing.Cue?.CueId,
+                        asset.Cue.CueId,
+                        StringComparison.Ordinal))
+                {
+                    error =
+                        $"Baked motion cue id '{asset.Cue.CueId}' is already registered.";
+                    return false;
+                }
+            }
+
+            foreach (var configured in
+                     _configuredCues ??
+                     Array.Empty<
+                         BakedMotionCueDefinition>())
+            {
+                if (configured != null &&
+                    string.Equals(
+                        configured.CueId,
+                        asset.Cue.CueId,
+                        StringComparison.Ordinal))
+                {
+                    error =
+                        $"Baked motion cue id '{asset.Cue.CueId}' conflicts with a runtime-configured cue.";
+                    return false;
+                }
+            }
+
+            var current =
+                cueAssets ??
+                Array.Empty<
+                    BakedMotionCueAsset>();
+            var next =
+                new BakedMotionCueAsset[
+                    current.Length + 1];
+
+            Array.Copy(
+                current,
+                next,
+                current.Length);
+            next[next.Length - 1] =
+                asset;
+            cueAssets =
+                next;
+
+            return RebuildCues(
+                out error);
         }
 
         public bool RebuildCues(
