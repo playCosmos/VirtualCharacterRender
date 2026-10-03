@@ -77,6 +77,8 @@ namespace VCR.Runtime.UI
             {
                 var editorUtilityType =
                     Type.GetType(
+                        "UnityEditor.EditorUtility, UnityEditor.CoreModule") ??
+                    Type.GetType(
                         "UnityEditor.EditorUtility, UnityEditor");
 
                 if (editorUtilityType == null)
