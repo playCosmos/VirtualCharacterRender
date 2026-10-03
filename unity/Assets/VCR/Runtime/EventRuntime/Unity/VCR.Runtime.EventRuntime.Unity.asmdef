@@ -1,0 +1,20 @@
+{
+  "name": "VCR.Runtime.EventRuntime.Unity",
+  "rootNamespace": "VCR.Runtime.EventRuntime.Unity",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Events",
+    "VCR.Runtime.Events.Unity",
+    "VCR.Runtime.EventRuntime",
+    "VCR.Runtime.Environment"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
