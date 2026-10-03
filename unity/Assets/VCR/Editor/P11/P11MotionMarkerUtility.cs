@@ -114,6 +114,164 @@ namespace VCR.Editor.P11
             return true;
         }
 
+        public static bool TryApplyMarkers(
+            AnimationClip clip,
+            IReadOnlyList<BakedMotionCueMarker> markers,
+            bool replaceExistingNames,
+            out string error)
+        {
+            error = null;
+
+            if (clip == null)
+            {
+                error =
+                    "AnimationClip is required for marker application.";
+                return false;
+            }
+
+            var incoming =
+                markers ??
+                Array.Empty<BakedMotionCueMarker>();
+            var incomingNames =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var marker in incoming)
+            {
+                if (marker == null ||
+                    string.IsNullOrWhiteSpace(
+                        marker.Name))
+                {
+                    error =
+                        "Every imported motion marker requires a non-empty name.";
+                    return false;
+                }
+
+                if (float.IsNaN(
+                        marker.TimeSeconds) ||
+                    float.IsInfinity(
+                        marker.TimeSeconds) ||
+                    marker.TimeSeconds < 0f ||
+                    marker.TimeSeconds >
+                        clip.length + 0.0001f)
+                {
+                    error =
+                        $"Motion marker '{marker.Name}' is outside AnimationClip duration.";
+                    return false;
+                }
+
+                if (!incomingNames.Add(
+                        marker.Name))
+                {
+                    error =
+                        $"Imported motion marker set contains duplicate name '{marker.Name}'.";
+                    return false;
+                }
+            }
+
+            var events =
+                new List<AnimationEvent>(
+                    AnimationUtility.GetAnimationEvents(
+                        clip) ??
+                    Array.Empty<AnimationEvent>());
+            var existingNames =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var animationEvent in events)
+            {
+                if (TryGetMarkerName(
+                        animationEvent,
+                        out var markerName))
+                {
+                    existingNames.Add(
+                        markerName);
+                }
+            }
+
+            if (!replaceExistingNames)
+            {
+                foreach (var marker in incoming)
+                {
+                    if (existingNames.Contains(
+                            marker.Name))
+                    {
+                        error =
+                            $"AnimationClip already contains VCR marker '{marker.Name}'.";
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                events.RemoveAll(
+                    animationEvent =>
+                    {
+                        if (!TryGetMarkerName(
+                                animationEvent,
+                                out var markerName))
+                        {
+                            return false;
+                        }
+
+                        return incomingNames.Contains(
+                            markerName);
+                    });
+            }
+
+            foreach (var marker in incoming)
+            {
+                events.Add(
+                    new AnimationEvent
+                    {
+                        functionName =
+                            MarkerFunctionName,
+                        stringParameter =
+                            marker.Name,
+                        time =
+                            Mathf.Clamp(
+                                marker.TimeSeconds,
+                                0f,
+                                clip.length)
+                    });
+            }
+
+            events.Sort(
+                (left, right) =>
+                {
+                    var time =
+                        left.time.CompareTo(
+                            right.time);
+
+                    if (time != 0)
+                    {
+                        return time;
+                    }
+
+                    return string.Compare(
+                        left.functionName,
+                        right.functionName,
+                        StringComparison.Ordinal);
+                });
+
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    clip,
+                    events.ToArray());
+                EditorUtility.SetDirty(
+                    clip);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "AnimationClip marker application failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
         public static AppearanceTransitionMarker[]
             ToAppearanceMarkers(
                 IReadOnlyList<BakedMotionCueMarker> markers)
