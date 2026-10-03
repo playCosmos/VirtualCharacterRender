@@ -592,6 +592,106 @@ namespace VCR.Editor.P11
                     "appearance transition executor must reject recursive appearance.* actions",
                     failures);
 
+                var conventionRoot =
+                    new GameObject(
+                        "Convention Appearance Runtime");
+                conventionRoot.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var appearanceRoot =
+                    new GameObject(
+                        "VCRAppearance");
+                appearanceRoot.transform.SetParent(
+                    conventionRoot.transform,
+                    false);
+
+                var conventionOutfits =
+                    new GameObject(
+                        "Outfits");
+                conventionOutfits.transform.SetParent(
+                    appearanceRoot.transform,
+                    false);
+
+                var conventionCasual =
+                    new GameObject(
+                        "casual");
+                conventionCasual.transform.SetParent(
+                    conventionOutfits.transform,
+                    false);
+                conventionCasual.SetActive(
+                    true);
+
+                var conventionFormal =
+                    new GameObject(
+                        "formal");
+                conventionFormal.transform.SetParent(
+                    conventionOutfits.transform,
+                    false);
+                conventionFormal.SetActive(
+                    false);
+
+                var conventionAccessories =
+                    new GameObject(
+                        "Accessories");
+                conventionAccessories.transform.SetParent(
+                    appearanceRoot.transform,
+                    false);
+
+                var conventionHead =
+                    new GameObject(
+                        "head");
+                conventionHead.transform.SetParent(
+                    conventionAccessories.transform,
+                    false);
+
+                var conventionHat =
+                    new GameObject(
+                        "hat");
+                conventionHat.transform.SetParent(
+                    conventionHead.transform,
+                    false);
+                conventionHat.SetActive(
+                    false);
+
+                var conventionRuntime =
+                    conventionRoot.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+
+                Expect(
+                    conventionRuntime.RebuildConfiguration(
+                        out var conventionError) &&
+                    conventionRuntime.PresetIds.Count == 2 &&
+                    conventionRuntime.PresetIds[0] ==
+                        "casual" &&
+                    conventionRuntime.PresetIds[1] ==
+                        "formal",
+                    "dynamically loaded characters must auto-discover VCRAppearance/Outfits convention bindings: " +
+                    conventionError,
+                    failures);
+
+                Expect(
+                    conventionRuntime.SetPreset(
+                        "formal",
+                        "Immediate",
+                        out var conventionApplyError) &&
+                    !conventionCasual.activeSelf &&
+                    conventionFormal.activeSelf,
+                    "auto-discovered outfit roots must support immediate quick change: " +
+                    conventionApplyError,
+                    failures);
+
+                Expect(
+                    conventionRuntime.SetAccessory(
+                        "head",
+                        "hat",
+                        "Immediate",
+                        out var conventionAccessoryError) &&
+                    conventionHat.activeSelf,
+                    "auto-discovered accessory slots must support direct quick change: " +
+                    conventionAccessoryError,
+                    failures);
+
                 var invalidRoot =
                     new GameObject(
                         "Invalid Appearance Runtime");
@@ -641,6 +741,101 @@ namespace VCR.Editor.P11
                         "exactly one",
                         StringComparison.OrdinalIgnoreCase),
                     "transition definition without exactly one appearance commit must fail closed",
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "out-of-order",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.75f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .EffectPlay,
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.50f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var orderingError) &&
+                    orderingError != null &&
+                    orderingError.Contains(
+                        "ordered",
+                        StringComparison.OrdinalIgnoreCase),
+                    "appearance transition steps must reject decreasing timeline times",
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "duration-too-short",
+                            DurationSeconds =
+                                0.25f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.50f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var durationError) &&
+                    durationError != null &&
+                    durationError.Contains(
+                        "duration",
+                        StringComparison.OrdinalIgnoreCase),
+                    "appearance transition duration must not end before its final step",
                     failures);
             }
             catch (Exception exception)
