@@ -163,10 +163,6 @@ namespace VCR.Editor.P11
             if (string.Equals(
                     function,
                     MarkerFunctionName,
-                    StringComparison.Ordinal) ||
-                string.Equals(
-                    function,
-                    "VCR.Marker",
                     StringComparison.Ordinal))
             {
                 markerName =
@@ -178,23 +174,12 @@ namespace VCR.Editor.P11
                         markerName);
             }
 
-            const string colonPrefix =
-                "VCRMarker:";
             const string underscorePrefix =
                 "VCRMarker_";
 
             if (function.StartsWith(
-                    colonPrefix,
+                    underscorePrefix,
                     StringComparison.Ordinal))
-            {
-                markerName =
-                    function.Substring(
-                            colonPrefix.Length)
-                        .Trim();
-            }
-            else if (function.StartsWith(
-                         underscorePrefix,
-                         StringComparison.Ordinal))
             {
                 markerName =
                     function.Substring(
