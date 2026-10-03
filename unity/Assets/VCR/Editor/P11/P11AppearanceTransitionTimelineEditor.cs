@@ -1547,6 +1547,21 @@ namespace VCR.Editor.P11
                     AppearanceTransitionFallbackPolicy
                         .Immediate;
 
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
+            markers.arraySize = 2;
+            ConfigureMarker(
+                markers.GetArrayElementAtIndex(
+                    0),
+                "swap",
+                0.55f);
+            ConfigureMarker(
+                markers.GetArrayElementAtIndex(
+                    1),
+                "spin-end",
+                0.90f);
+
             var steps =
                 transition.FindPropertyRelative(
                     "Steps");
@@ -1578,26 +1593,28 @@ namespace VCR.Editor.P11
                 AppearanceTransitionStepKind
                     .Commit,
                 false);
-            steps.GetArrayElementAtIndex(
-                    2)
-                .FindPropertyRelative(
-                    "TimeSeconds")
-                .floatValue = 0.55f;
+            ConfigureMarkerStepTiming(
+                steps.GetArrayElementAtIndex(
+                    2),
+                "swap",
+                0f);
 
-            ConfigureActionStep(
+            ConfigureMarkerActionStep(
                 steps.GetArrayElementAtIndex(
                     3),
-                0.55f,
+                "swap",
+                0f,
                 EventActionTypes.EffectPlay,
                 "effects.main",
                 "sparkle-burst",
                 required:
                     false);
 
-            ConfigureActionStep(
+            ConfigureMarkerActionStep(
                 steps.GetArrayElementAtIndex(
                     4),
-                0.90f,
+                "spin-end",
+                0f,
                 EventActionTypes.MotionRelease,
                 "motion.quickchange",
                 "spin",
@@ -1678,6 +1695,64 @@ namespace VCR.Editor.P11
                 MessageType.Info;
         }
 
+        private static void ConfigureMarker(
+            SerializedProperty marker,
+            string name,
+            float timeSeconds)
+        {
+            marker.FindPropertyRelative(
+                    "Name")
+                .stringValue =
+                    name;
+            marker.FindPropertyRelative(
+                    "TimeSeconds")
+                .floatValue =
+                    timeSeconds;
+        }
+
+        private static void ConfigureMarkerStepTiming(
+            SerializedProperty step,
+            string markerName,
+            float offsetSeconds)
+        {
+            step.FindPropertyRelative(
+                    "TimingMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionTimingMode
+                        .Marker;
+            step.FindPropertyRelative(
+                    "MarkerName")
+                .stringValue =
+                    markerName;
+            step.FindPropertyRelative(
+                    "MarkerOffsetSeconds")
+                .floatValue =
+                    offsetSeconds;
+        }
+
+        private static void ConfigureMarkerActionStep(
+            SerializedProperty step,
+            string markerName,
+            float markerOffsetSeconds,
+            string actionType,
+            string targetId,
+            string text,
+            bool required)
+        {
+            ConfigureActionStep(
+                step,
+                0f,
+                actionType,
+                targetId,
+                text,
+                required);
+            ConfigureMarkerStepTiming(
+                step,
+                markerName,
+                markerOffsetSeconds);
+        }
+
         private static void ConfigureActionStep(
             SerializedProperty step,
             float timeSeconds,
@@ -1713,7 +1788,8 @@ namespace VCR.Editor.P11
                     required;
         }
 
-        private static void SortStepsByTime(
+        private static void SortStepsByResolvedTime(
+            SerializedProperty transition,
             SerializedProperty steps)
         {
             for (var target = 0;
@@ -1723,11 +1799,10 @@ namespace VCR.Editor.P11
                 var best =
                     target;
                 var bestTime =
-                    steps.GetArrayElementAtIndex(
-                            best)
-                        .FindPropertyRelative(
-                            "TimeSeconds")
-                        .floatValue;
+                    ResolveSerializedStepTime(
+                        transition,
+                        steps.GetArrayElementAtIndex(
+                            best));
 
                 for (var candidate =
                          target + 1;
@@ -1736,11 +1811,10 @@ namespace VCR.Editor.P11
                      candidate++)
                 {
                     var candidateTime =
-                        steps.GetArrayElementAtIndex(
-                                candidate)
-                            .FindPropertyRelative(
-                                "TimeSeconds")
-                            .floatValue;
+                        ResolveSerializedStepTime(
+                            transition,
+                            steps.GetArrayElementAtIndex(
+                                candidate));
 
                     if (candidateTime <
                         bestTime)
@@ -1759,6 +1833,62 @@ namespace VCR.Editor.P11
                         target);
                 }
             }
+        }
+
+        private static float ResolveSerializedStepTime(
+            SerializedProperty transition,
+            SerializedProperty step)
+        {
+            var mode =
+                (AppearanceTransitionTimingMode)
+                step.FindPropertyRelative(
+                        "TimingMode")
+                    .enumValueIndex;
+
+            if (mode !=
+                AppearanceTransitionTimingMode
+                    .Marker)
+            {
+                return step.FindPropertyRelative(
+                        "TimeSeconds")
+                    .floatValue;
+            }
+
+            var markerName =
+                step.FindPropertyRelative(
+                        "MarkerName")
+                    .stringValue;
+            var offset =
+                step.FindPropertyRelative(
+                        "MarkerOffsetSeconds")
+                    .floatValue;
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
+
+            for (var i = 0;
+                 i < markers.arraySize;
+                 i++)
+            {
+                var marker =
+                    markers.GetArrayElementAtIndex(
+                        i);
+
+                if (string.Equals(
+                        marker.FindPropertyRelative(
+                                "Name")
+                            .stringValue,
+                        markerName,
+                        StringComparison.Ordinal))
+                {
+                    return marker.FindPropertyRelative(
+                            "TimeSeconds")
+                        .floatValue +
+                        offset;
+                }
+            }
+
+            return float.PositiveInfinity;
         }
 
         private void ValidateAndApply()
