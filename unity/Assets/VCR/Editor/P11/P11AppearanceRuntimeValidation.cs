@@ -5,6 +5,7 @@ using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
+using VCR.Runtime.Tracking.Mixing;
 
 namespace VCR.Editor.P11
 {
@@ -444,6 +445,129 @@ namespace VCR.Editor.P11
                     !effectRoot.activeSelf,
                     "effect.stop must stop/deactivate a registered quick-change effect: " +
                     stopError,
+                    failures);
+
+                var motionMixer =
+                    root.AddComponent<
+                        MotionExpressionMixer>();
+                var motionSource =
+                    root.AddComponent<
+                        ProceduralMotionCueSource>();
+
+                motionSource.ConfigureCues(
+                    new ProceduralMotionCueDefinition
+                    {
+                        CueId =
+                            "spin",
+                        DurationSeconds =
+                            1f,
+                        RootEulerDegrees =
+                            new Vector3(
+                                0f,
+                                180f,
+                                0f),
+                        ProgressCurve =
+                            AnimationCurve.Linear(
+                                0f,
+                                0f,
+                                1f,
+                                1f)
+                    });
+
+                Expect(
+                    motionSource.TrySampleCue(
+                        "spin",
+                        0.5f,
+                        out var sampledPose,
+                        out var sampleError),
+                    "procedural quick-change motion cue must be sampleable: " +
+                    sampleError,
+                    failures);
+
+                var sampledRotation =
+                    sampledPose?.RootRotation ??
+                    VCR.Runtime.Tracking
+                        .TrackingQuaternion.Identity;
+
+                Expect(
+                    Math.Abs(
+                        Math.Abs(
+                            sampledRotation.Y) -
+                        0.7071f) <
+                    0.02f &&
+                    Math.Abs(
+                        Math.Abs(
+                            sampledRotation.W) -
+                        0.7071f) <
+                    0.02f,
+                    "halfway through a 180-degree root spin cue must sample approximately 90 degrees",
+                    failures);
+
+                var motionHandler =
+                    root.AddComponent<
+                        MotionCueEventActionHandler>();
+                motionHandler.SetMotionRuntime(
+                    motionSource);
+
+                transitionExecutor.SetActionHandlers(
+                    fakeAction,
+                    effectHandler,
+                    motionHandler);
+
+                var motionPlayStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .MotionPlay,
+                        TargetId =
+                            "motion.quickchange",
+                        Text =
+                            "spin"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        motionPlayStep) &&
+                    transitionExecutor.TryExecute(
+                        motionPlayStep,
+                        out var motionPlayError) &&
+                    motionSource.Status.Playing &&
+                    motionSource.TryGetLatestHumanoidPose(
+                        out _),
+                    "appearance transition must start a registered procedural motion cue through motion.play: " +
+                    motionPlayError,
+                    failures);
+
+                var motionReleaseStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .MotionRelease,
+                        TargetId =
+                            "motion.quickchange",
+                        Text =
+                            "spin"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        motionReleaseStep) &&
+                    transitionExecutor.TryExecute(
+                        motionReleaseStep,
+                        out var motionReleaseError) &&
+                    !motionSource.Status.Playing &&
+                    !motionSource.TryGetLatestHumanoidPose(
+                        out _),
+                    "appearance transition motion.release must remove the procedural pose contribution: " +
+                    motionReleaseError,
                     failures);
 
                 var recursiveStep =
