@@ -85,12 +85,16 @@ namespace VCR.Runtime.Environment.Unity
         private long _manualDispatchCount;
         private long _updateFailureCount;
         private long _updateSequence;
+        private long _updateDispatchCount;
+        private long _updateDispatchStopwatchTicks;
+        private double _lastUpdateDispatchMs;
         private long _transitionCount;
         private long _transitionTickCount;
         private long _transitionFailureCount;
         private long _transitionSequence;
         private long _transitionLastTickUs;
         private long _transitionDispatchStopwatchTicks;
+        private double _lastTransitionDispatchMs;
         private long _lightingFailureCount;
         private string _lastError;
 
@@ -883,6 +887,26 @@ namespace VCR.Runtime.Environment.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "environment.update_dispatch_ms_last",
+                _lastUpdateDispatchMs,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "environment.update_dispatch_ms_total",
+                StopwatchTicksToMilliseconds(
+                    _updateDispatchStopwatchTicks),
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "environment.update_dispatch_ms_avg",
+                _updateDispatchCount > 0
+                    ? StopwatchTicksToMilliseconds(
+                        _updateDispatchStopwatchTicks) /
+                        _updateDispatchCount
+                    : 0.0,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
                 "environment.recurring_updates_active",
                 RecurringUpdatesActive ? 1 : 0,
                 "bool"));
@@ -943,10 +967,25 @@ namespace VCR.Runtime.Environment.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
-                "environment.transition_dispatch_ms",
-                _transitionDispatchStopwatchTicks *
-                    1000.0 /
-                    System.Diagnostics.Stopwatch.Frequency,
+                "environment.transition_dispatch_ms_last",
+                _lastTransitionDispatchMs,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_dispatch_ms_total",
+                StopwatchTicksToMilliseconds(
+                    _transitionDispatchStopwatchTicks),
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_dispatch_ms_avg",
+                _transitionTickCount +
+                    _transitionCount > 0
+                    ? StopwatchTicksToMilliseconds(
+                        _transitionDispatchStopwatchTicks) /
+                        (_transitionTickCount +
+                         _transitionCount)
+                    : 0.0,
                 "ms"));
         }
 
@@ -1322,10 +1361,16 @@ namespace VCR.Runtime.Environment.Unity
                 }
             }
 
-            _transitionDispatchStopwatchTicks +=
+            var elapsedTicks =
                 System.Diagnostics.Stopwatch
                     .GetTimestamp() -
                 started;
+
+            _transitionDispatchStopwatchTicks +=
+                elapsedTicks;
+            _lastTransitionDispatchMs =
+                StopwatchTicksToMilliseconds(
+                    elapsedTicks);
         }
 
         private EnvironmentTransitionContext
@@ -1845,6 +1890,10 @@ namespace VCR.Runtime.Environment.Unity
                 return;
             }
 
+            var started =
+                System.Diagnostics.Stopwatch
+                    .GetTimestamp();
+
             var context =
                 new EnvironmentUpdateContext(
                     ++_updateSequence,
@@ -1880,6 +1929,30 @@ namespace VCR.Runtime.Environment.Unity
                         this);
                 }
             }
+
+            var elapsedTicks =
+                System.Diagnostics.Stopwatch
+                    .GetTimestamp() -
+                started;
+
+            _updateDispatchCount++;
+            _updateDispatchStopwatchTicks +=
+                elapsedTicks;
+            _lastUpdateDispatchMs =
+                StopwatchTicksToMilliseconds(
+                    elapsedTicks);
+        }
+
+        private static double
+            StopwatchTicksToMilliseconds(
+                long ticks)
+        {
+            return ticks <= 0
+                ? 0.0
+                : ticks *
+                    1000.0 /
+                    System.Diagnostics.Stopwatch
+                        .Frequency;
         }
     }
 }
