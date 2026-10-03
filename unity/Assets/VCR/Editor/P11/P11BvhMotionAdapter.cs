@@ -12,9 +12,6 @@ namespace VCR.Editor.P11
     internal sealed class P11BvhMotionAdapter :
         IP11ExternalMotionAdapter
     {
-        private const float PositionScale =
-            0.01f;
-
         private sealed class Joint
         {
             public string Name;
@@ -308,11 +305,17 @@ namespace VCR.Editor.P11
                 return false;
             }
 
+            var options =
+                context.Options ??
+                new P11ExternalMotionImportOptions();
+
             if (!TryBuildCue(
                     bvh,
                     Path.GetFileNameWithoutExtension(
                         context.SourceFilePath),
                     context.MarkerFile,
+                    options.BvhPositionScale,
+                    options.BvhMirrorX,
                     out var cue,
                     out var mappedBoneCount,
                     out var importedMarkerCount,
@@ -339,6 +342,8 @@ namespace VCR.Editor.P11
             {
                 AssetDatabase.CreateAsset(
                     asset,
+                    outputPath);
+                context.CreatedAssetPaths?.Add(
                     outputPath);
                 EditorUtility.SetDirty(
                     asset);
@@ -501,6 +506,12 @@ namespace VCR.Editor.P11
                 }
             }
 
+            if (!reader.End)
+            {
+                throw new FormatException(
+                    $"BVH contains unexpected trailing token '{reader.Peek()}'.");
+            }
+
             return new ParsedBvh
             {
                 Root =
@@ -582,8 +593,18 @@ namespace VCR.Editor.P11
                          i < count;
                          i++)
                     {
-                        joint.Channels[i] =
+                        var channel =
                             reader.Read();
+
+                        if (!IsSupportedChannel(
+                                channel))
+                        {
+                            throw new FormatException(
+                                $"BVH joint '{name}' uses unsupported channel '{channel}'.");
+                        }
+
+                        joint.Channels[i] =
+                            channel;
                     }
 
                     channelCount +=
@@ -634,6 +655,8 @@ namespace VCR.Editor.P11
             ParsedBvh bvh,
             string cueId,
             P11ExternalMotionMarkerFile markerFile,
+            float positionScale,
+            bool mirrorX,
             out BakedMotionCueDefinition cue,
             out int mappedBoneCount,
             out int importedMarkerCount,
@@ -643,6 +666,17 @@ namespace VCR.Editor.P11
             mappedBoneCount = 0;
             importedMarkerCount = 0;
             error = null;
+
+            if (float.IsNaN(
+                    positionScale) ||
+                float.IsInfinity(
+                    positionScale) ||
+                positionScale <= 0f)
+            {
+                error =
+                    "BVH position scale must be finite and positive.";
+                return false;
+            }
 
             var mapped =
                 new Dictionary<
@@ -749,7 +783,7 @@ namespace VCR.Editor.P11
                 ReadPosition(
                     bvh.Root,
                     bvh.Frames[0]) *
-                PositionScale;
+                positionScale;
             var basePositions =
                 new Dictionary<
                     HumanoidBoneId,
@@ -767,7 +801,7 @@ namespace VCR.Editor.P11
                         ReadPosition(
                             pair.Value,
                             bvh.Frames[0]) *
-                        PositionScale;
+                        positionScale;
                 baseRotations[
                     pair.Key] =
                         ReadRotation(
@@ -786,8 +820,9 @@ namespace VCR.Editor.P11
                                 bvh.Root,
                                 bvh.Frames[
                                     frame]) *
-                            PositionScale -
-                            baseRootPosition);
+                            positionScale -
+                            baseRootPosition,
+                            mirrorX);
                 rootRotations[
                     frame] =
                         Quaternion.identity;
@@ -804,7 +839,7 @@ namespace VCR.Editor.P11
                             joint,
                             bvh.Frames[
                                 frame]) *
-                        PositionScale;
+                        positionScale;
                     var currentRotation =
                         ReadRotation(
                             joint,
@@ -822,14 +857,16 @@ namespace VCR.Editor.P11
                                 : ConvertPosition(
                                     currentPosition -
                                     basePositions[
-                                        bone]);
+                                        bone],
+                                    mirrorX);
                     track.LocalRotationOffsets[
                         frame] =
                             ConvertRotation(
                                 Quaternion.Inverse(
                                     baseRotations[
                                         bone]) *
-                                currentRotation);
+                                currentRotation,
+                                mirrorX);
                 }
             }
 
@@ -946,19 +983,42 @@ namespace VCR.Editor.P11
         }
 
         private static Vector3 ConvertPosition(
-            Vector3 value) =>
-                new(
-                    -value.x,
-                    value.y,
-                    value.z);
+            Vector3 value,
+            bool mirrorX) =>
+                mirrorX
+                    ? new Vector3(
+                        -value.x,
+                        value.y,
+                        value.z)
+                    : value;
 
         private static Quaternion ConvertRotation(
-            Quaternion value) =>
-                new(
-                    value.x,
-                    -value.y,
-                    -value.z,
-                    value.w);
+            Quaternion value,
+            bool mirrorX) =>
+                mirrorX
+                    ? new Quaternion(
+                        value.x,
+                        -value.y,
+                        -value.z,
+                        value.w)
+                    : value;
+
+        private static bool IsSupportedChannel(
+            string value)
+        {
+            switch (value?.ToLowerInvariant())
+            {
+                case "xposition":
+                case "yposition":
+                case "zposition":
+                case "xrotation":
+                case "yrotation":
+                case "zrotation":
+                    return true;
+                default:
+                    return false;
+            }
+        }
 
         private static bool TryMapBone(
             string jointName,
