@@ -112,7 +112,7 @@ appearance.restore_default
 
 Transition presentation is intentionally handler-driven. A user or later built-in module can register logical actions such as `motion.play` or `effect.play` without the appearance runtime owning Animator, ParticleSystem, material, camera, or environment objects.
 
-The generic transition sequencer/bridge and built-in particle/effect action path are implemented. A registered confetti/flower-petal/sparkle effect can therefore be played directly by a transition. Built-in `motion.play`, `motion.release`, and `audio.play` remain pending, so the complete spin + confetti example still requires either a user-provided motion action handler or the next built-in motion slice.
+The generic transition sequencer/bridge, particle/effect action path, and procedural motion action path are implemented. The default `spin` motion cue plus a registered confetti/flower-petal/sparkle effect can now be referenced directly by a transition definition. `audio.play` and imported AnimationClip conversion remain pending.
 
 Timed coroutine execution, queue behavior, visual commit timing, cancellation cleanup, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
@@ -172,6 +172,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - transition action executor -> application action handler bridge
 - recursive appearance.* transition action rejection
 - built-in effect.play/effect.stop root activation/deactivation through transition actions
+- procedural motion cue sampling plus motion.play/motion.release state changes through the transition bridge
 - user-defined custom transition action dispatch
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
@@ -180,7 +181,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: add direct preset/outfit/accessory selection and user-preset save on top of the implemented previous/next/default controls
-- Appearance transitions: add built-in motion/audio action handlers, preview/test choreography, and transition progress/cancel UX
+- Appearance transitions: add audio action handler, imported AnimationClip cue conversion/registration, preview/test choreography, and transition progress/cancel UX
 - define explicit cancellation-cleanup steps before enabling Interrupt policy
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
