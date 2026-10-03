@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed through P4 tracking abstraction/routing. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
+The source implementation has progressed through P6 environment runtime. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
 
 ## Architecture documents
 
@@ -80,6 +80,7 @@ The source implementation has progressed through P4 tracking abstraction/routing
 - [P3 status](docs/P3_STATUS.md)
 - [P4 status](docs/P4_STATUS.md)
 - [P5 status](docs/P5_STATUS.md)
+- [P6 status](docs/P6_STATUS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
