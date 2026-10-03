@@ -46,11 +46,13 @@ namespace VCR.Editor.P11
 
     internal static class P11ExternalMotionAdapterRegistry
     {
-        private static readonly IP11ExternalMotionAdapter[]
+        private static readonly List<
+            IP11ExternalMotionAdapter>
             Adapters =
-            {
-                new P11BvhMotionAdapter()
-            };
+                new()
+                {
+                    new P11BvhMotionAdapter()
+                };
 
         public static bool TryResolve(
             string extension,
@@ -77,5 +79,32 @@ namespace VCR.Editor.P11
             IP11ExternalMotionAdapter>
             All =>
                 Adapters;
+
+        public static bool Register(
+            IP11ExternalMotionAdapter adapter)
+        {
+            if (adapter == null ||
+                string.IsNullOrWhiteSpace(
+                    adapter.AdapterId))
+            {
+                return false;
+            }
+
+            foreach (var existing in
+                     Adapters)
+            {
+                if (string.Equals(
+                        existing.AdapterId,
+                        adapter.AdapterId,
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            Adapters.Add(
+                adapter);
+            return true;
+        }
     }
 }
