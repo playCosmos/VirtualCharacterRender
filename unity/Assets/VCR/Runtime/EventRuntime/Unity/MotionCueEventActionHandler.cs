@@ -84,7 +84,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                 command,
                 out _,
                 out var count) &&
-                count == 1;
+                count > 0;
         }
 
         public bool TryExecute(
