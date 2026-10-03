@@ -548,6 +548,18 @@ namespace VCR.Editor.P11
                 return;
             }
 
+            if (!ValidateImportedMarkers(
+                    imported,
+                    sourceDurationSeconds,
+                    out var markerError))
+            {
+                _lastMessage =
+                    $"Marker import from '{sourceLabel}' failed: {markerError}";
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
             var markers =
                 transition.FindPropertyRelative(
                     "Markers");
@@ -759,6 +771,58 @@ namespace VCR.Editor.P11
                 snapped > 0
                     ? MessageType.Info
                     : MessageType.Warning;
+        }
+
+        private static bool ValidateImportedMarkers(
+            AppearanceTransitionMarker[] markers,
+            float sourceDurationSeconds,
+            out string error)
+        {
+            error = null;
+            var names =
+                new System.Collections.Generic
+                    .HashSet<string>(
+                        StringComparer.Ordinal);
+
+            foreach (var marker in
+                     markers ??
+                     Array.Empty<
+                         AppearanceTransitionMarker>())
+            {
+                if (marker == null ||
+                    string.IsNullOrWhiteSpace(
+                        marker.Name))
+                {
+                    error =
+                        "Imported marker requires a non-empty name.";
+                    return false;
+                }
+
+                if (double.IsNaN(
+                        marker.TimeSeconds) ||
+                    double.IsInfinity(
+                        marker.TimeSeconds) ||
+                    marker.TimeSeconds < 0.0 ||
+                    (sourceDurationSeconds >= 0f &&
+                     marker.TimeSeconds >
+                         sourceDurationSeconds +
+                         0.0001f))
+                {
+                    error =
+                        $"Marker '{marker.Name}' is outside the source duration.";
+                    return false;
+                }
+
+                if (!names.Add(
+                        marker.Name))
+                {
+                    error =
+                        $"Imported marker set contains duplicate name '{marker.Name}'.";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static int FindMarkerIndex(
