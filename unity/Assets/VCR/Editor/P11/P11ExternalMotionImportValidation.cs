@@ -13,6 +13,8 @@ namespace VCR.Editor.P11
             "Assets/VCR/Editor/P11/__ExternalMotionValidation.anim";
         private const string ImportFolder =
             "Assets/VCR/Editor/P11/__ExternalMotionValidationImported";
+        private const string RollbackFolder =
+            "Assets/VCR/Editor/P11/__ExternalMotionValidationRollback";
 
         public static void RunChecks(
             List<string> failures)
@@ -42,6 +44,8 @@ namespace VCR.Editor.P11
                     SourceAssetPath);
                 DeleteIfExists(
                     ImportFolder);
+                DeleteIfExists(
+                    RollbackFolder);
 
                 AssetDatabase.CreateAsset(
                     sourceClip,
@@ -221,6 +225,70 @@ namespace VCR.Editor.P11
                         StringComparison.OrdinalIgnoreCase),
                     "external motion marker sidecar must reject unsupported newer versions",
                     failures);
+
+                var invalidSidecarPath =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-external-motion-validation-invalid-" +
+                        Guid.NewGuid()
+                            .ToString("N") +
+                        ".vcrmarkers.json");
+
+                try
+                {
+                    File.WriteAllText(
+                        invalidSidecarPath,
+@"{
+  ""Version"": 1,
+  ""Clips"": [
+    {
+      ""ClipName"": ""*"",
+      ""Markers"": [
+        {
+          ""Name"": ""outside"",
+          ""TimeMode"": 0,
+          ""Time"": 2.0
+        }
+      ]
+    }
+  ]
+}");
+
+                    Expect(
+                        !P11ExternalMotionImportUtility
+                            .TryImport(
+                                absoluteSource,
+                                RollbackFolder,
+                                invalidSidecarPath,
+                                autoDetectSidecar:
+                                    false,
+                                out _,
+                                out var rollbackError) &&
+                        rollbackError != null &&
+                        rollbackError.Contains(
+                            "outside",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !AssetDatabase.IsValidFolder(
+                            RollbackFolder),
+                        "failed external motion import must roll back newly created assets and destination folder: " +
+                        rollbackError,
+                        failures);
+                }
+                finally
+                {
+                    if (File.Exists(
+                            invalidSidecarPath))
+                    {
+                        try
+                        {
+                            File.Delete(
+                                invalidSidecarPath);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
             }
             catch (Exception exception)
             {
@@ -232,6 +300,8 @@ namespace VCR.Editor.P11
             {
                 DeleteIfExists(
                     ImportFolder);
+                DeleteIfExists(
+                    RollbackFolder);
                 DeleteIfExists(
                     SourceAssetPath);
 
