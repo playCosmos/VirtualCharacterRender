@@ -17,6 +17,10 @@ checkpoint/p10-source-implementation
 
 P0-P10 runtime/device/platform evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
 
+P11 source scope is now checkpoint-ready. The application shell and current control surfaces are implemented through existing subsystem contracts, including Character, Tracking, Motion / Expression, Environment, Material / Shader, Events, Camera / Output, Settings, Diagnostics, Appearance / Quick Change, transition authoring/import, external motion import including BVH, desktop file selection, output toggles, capability/render controls, and diagnostics evidence capture. Remaining P11 work is dominated by Unity Editor/standalone/device/OBS evidence rather than another required source feature slice.
+
+This status does **not** mark Unity compilation, Editor execution, standalone behavior, tracker quality, overlay capture, or performance targets PASS in the current environment.
+
 ## First P11 source slice
 
 P11 introduces a dedicated `VCR.Runtime.UI` assembly rather than moving UI concerns into scene, tracking, materials, events, or diagnostics.
