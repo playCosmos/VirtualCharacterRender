@@ -37,7 +37,7 @@ namespace VCR.Editor.P11
                 "External Motion Import",
                 EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Imports Unity-native external motion files (.fbx, .dae, .anim). FBX/DAE embedded AnimationClips are copied to standalone .anim assets so markers can be applied without modifying the source model importer. BVH/glTF require a dedicated adapter.",
+                "Imports Unity-native motion files (.fbx, .dae, .anim) and registered adapter formats. Built-in BVH converts directly to an additive humanoid BakedMotionCueAsset; glTF motion still requires an adapter. FBX/DAE embedded clips are copied to standalone .anim assets before marker editing.",
                 MessageType.Info);
 
             DrawPathField(
@@ -110,30 +110,43 @@ namespace VCR.Editor.P11
 
         private void DrawLastResult()
         {
-            if (_lastResult == null ||
-                _lastResult.Clips == null ||
-                _lastResult.Clips.Length == 0)
+            if (_lastResult == null)
+            {
+                return;
+            }
+
+            var clips =
+                _lastResult.Clips ??
+                Array.Empty<AnimationClip>();
+            var cues =
+                _lastResult.CueAssets ??
+                Array.Empty<
+                    VCR.Runtime.Tracking.Mixing
+                        .BakedMotionCueAsset>();
+
+            if (clips.Length == 0 &&
+                cues.Length == 0)
             {
                 return;
             }
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(
-                "Imported Clips",
+                $"Imported Motion ({_lastResult.AdapterId ?? "unknown"})",
                 EditorStyles.boldLabel);
 
             _scroll =
                 EditorGUILayout.BeginScrollView(
                     _scroll,
                     GUILayout.MaxHeight(
-                        220f));
+                        260f));
 
             for (var i = 0;
-                 i < _lastResult.Clips.Length;
+                 i < clips.Length;
                  i++)
             {
                 var clip =
-                    _lastResult.Clips[i];
+                    clips[i];
                 var path =
                     i <
                     _lastResult.ClipAssetPaths.Length
@@ -170,6 +183,44 @@ namespace VCR.Editor.P11
                         P11AppearanceTransitionTimelineEditor
                             .OpenWithMarkerClip(
                                 clip);
+                    }
+                }
+            }
+
+            for (var i = 0;
+                 i < cues.Length;
+                 i++)
+            {
+                var cue =
+                    cues[i];
+                var path =
+                    i <
+                    _lastResult.CueAssetPaths.Length
+                        ? _lastResult
+                            .CueAssetPaths[i]
+                        : string.Empty;
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    EditorGUILayout.ObjectField(
+                        cue,
+                        typeof(
+                            VCR.Runtime.Tracking.Mixing
+                                .BakedMotionCueAsset),
+                        false);
+                    EditorGUILayout.LabelField(
+                        path,
+                        EditorStyles.miniLabel);
+
+                    if (GUILayout.Button(
+                            "Timeline",
+                            GUILayout.Width(
+                                68f)))
+                    {
+                        P11AppearanceTransitionTimelineEditor
+                            .OpenWithMarkerCue(
+                                cue);
                     }
                 }
             }
@@ -259,12 +310,17 @@ namespace VCR.Editor.P11
 
             _lastResult =
                 result;
+            var clipCount =
+                result.Clips?.Length ?? 0;
+            var cueCount =
+                result.CueAssets?.Length ?? 0;
+
             _status =
-                $"Imported {result.Clips.Length} clip(s), applied {result.ImportedMarkerCount} sidecar marker(s). Source asset: {result.SourceAssetPath}";
+                $"Imported {clipCount} clip(s), {cueCount} baked cue(s), applied {result.ImportedMarkerCount} sidecar marker(s) through '{result.AdapterId ?? "unknown"}'. Source asset: {result.SourceAssetPath}";
             _statusType =
                 MessageType.Info;
 
-            if (result.Clips.Length > 0)
+            if (clipCount > 0)
             {
                 Selection.activeObject =
                     result.Clips[0];
@@ -277,6 +333,16 @@ namespace VCR.Editor.P11
                         .OpenWithClip(
                             result.Clips[0]);
                 }
+            }
+            else if (cueCount > 0)
+            {
+                Selection.activeObject =
+                    result.CueAssets[0];
+                EditorGUIUtility.PingObject(
+                    result.CueAssets[0]);
+                P11AppearanceTransitionTimelineEditor
+                    .OpenWithMarkerCue(
+                        result.CueAssets[0]);
             }
         }
 
