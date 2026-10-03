@@ -165,15 +165,32 @@ namespace VCR.Runtime.Diagnostics
             }
         }
 
-        public RuntimeDiagnosticsSnapshot CaptureNow()
+        public bool TryCaptureNow(
+            out RuntimeDiagnosticsSnapshot snapshot,
+            out string error)
         {
             var now =
                 Time.realtimeSinceStartupAsDouble;
+            var elapsed =
+                now -
+                _lastReportTime;
+
+            snapshot =
+                _latestSnapshot;
+            error = null;
+
+            if (elapsed < 1.0)
+            {
+                error =
+                    "Diagnostics capture requires at least one second since the previous report so tracking-rate evidence is not distorted.";
+                return false;
+            }
 
             Report(
                 now);
-
-            return _latestSnapshot;
+            snapshot =
+                _latestSnapshot;
+            return true;
         }
 
         public void SetConsoleLogging(
