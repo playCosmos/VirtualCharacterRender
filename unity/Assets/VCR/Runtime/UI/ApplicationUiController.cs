@@ -37,6 +37,10 @@ namespace VCR.Runtime.UI
             _sectionButtons =
                 new();
 
+        private readonly List<ITrackingRuntimeControl>
+            _trackingControls =
+                new();
+
         private Canvas _canvas;
         private RectTransform _root;
         private Text _statusText;
@@ -52,6 +56,10 @@ namespace VCR.Runtime.UI
         private Button _unloadCharacterButton;
         private Button _apply720p60Button;
         private Button _apply1080p60Button;
+        private Button _trackingPreviousButton;
+        private Button _trackingToggleButton;
+        private Button _trackingRecoverButton;
+        private Button _trackingNextButton;
 
         private ITrackingPresenceProvider _trackingPresence;
         private MotionExpressionMixer _mixer;
@@ -59,6 +67,7 @@ namespace VCR.Runtime.UI
 
         private float _nextRefreshTime;
         private string _lastActionMessage;
+        private int _trackingControlIndex;
 
         public ApplicationUiModel Model => _model;
 
@@ -141,6 +150,10 @@ namespace VCR.Runtime.UI
             _unloadCharacterButton = null;
             _apply720p60Button = null;
             _apply1080p60Button = null;
+            _trackingPreviousButton = null;
+            _trackingToggleButton = null;
+            _trackingRecoverButton = null;
+            _trackingNextButton = null;
 
             BuildUi();
             RefreshAll();
@@ -178,6 +191,8 @@ namespace VCR.Runtime.UI
                 FindFirstObjectByType<
                     MaterialOverrideController>(
                     FindObjectsInactive.Exclude);
+
+            ResolveTrackingControls();
 
             if (_trackingPresence == null)
             {
@@ -219,8 +234,9 @@ namespace VCR.Runtime.UI
 
             _model.SetAvailability(
                 ApplicationUiSection.Tracking,
-                _trackingPresence != null,
-                "No tracking presence provider is active.");
+                _trackingPresence != null ||
+                _trackingControls.Count > 0,
+                "No tracking runtime is configured.");
 
             _model.SetAvailability(
                 ApplicationUiSection.MotionExpression,
@@ -610,6 +626,42 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 160f;
 
+            _trackingPreviousButton =
+                CreateButton(
+                    "Prev Source",
+                    _contextActions,
+                    SelectPreviousTrackingControl);
+            _trackingPreviousButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _trackingToggleButton =
+                CreateButton(
+                    "Toggle Tracking",
+                    _contextActions,
+                    ToggleSelectedTrackingControl);
+            _trackingToggleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 220f;
+
+            _trackingRecoverButton =
+                CreateButton(
+                    "Recover Source",
+                    _contextActions,
+                    RecoverSelectedTrackingControl);
+            _trackingRecoverButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _trackingNextButton =
+                CreateButton(
+                    "Next Source",
+                    _contextActions,
+                    SelectNextTrackingControl);
+            _trackingNextButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
             _apply720p60Button =
                 CreateButton(
                     "Apply 720p60",
@@ -878,6 +930,104 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void SelectPreviousTrackingControl()
+        {
+            if (_trackingControls.Count == 0)
+            {
+                return;
+            }
+
+            _trackingControlIndex =
+                (_trackingControlIndex -
+                 1 +
+                 _trackingControls.Count) %
+                _trackingControls.Count;
+
+            RefreshAll();
+        }
+
+        private void SelectNextTrackingControl()
+        {
+            if (_trackingControls.Count == 0)
+            {
+                return;
+            }
+
+            _trackingControlIndex =
+                (_trackingControlIndex + 1) %
+                _trackingControls.Count;
+
+            RefreshAll();
+        }
+
+        private void ToggleSelectedTrackingControl()
+        {
+            var control =
+                GetSelectedTrackingControl();
+
+            if (control == null)
+            {
+                _lastActionMessage =
+                    "No tracking source is selected.";
+                RefreshAll();
+                return;
+            }
+
+            var nextEnabled =
+                !control.ControlEnabled;
+
+            if (control.TrySetControlEnabled(
+                    nextEnabled,
+                    out var error))
+            {
+                _lastActionMessage =
+                    control.DisplayName +
+                    (nextEnabled
+                        ? " enabled."
+                        : " disabled.");
+            }
+            else
+            {
+                _lastActionMessage =
+                    control.DisplayName +
+                    " toggle failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
+        private void RecoverSelectedTrackingControl()
+        {
+            var control =
+                GetSelectedTrackingControl();
+
+            if (control == null)
+            {
+                _lastActionMessage =
+                    "No tracking source is selected.";
+                RefreshAll();
+                return;
+            }
+
+            if (control.TryRecover(
+                    out var error))
+            {
+                _lastActionMessage =
+                    control.DisplayName +
+                    " recovery requested.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    control.DisplayName +
+                    " recovery failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -991,6 +1141,9 @@ namespace VCR.Runtime.UI
             var outputSelected =
                 selected ==
                 ApplicationUiSection.CameraOutput;
+            var trackingSelected =
+                selected ==
+                ApplicationUiSection.Tracking;
 
             SetActive(
                 _characterPathInput,
@@ -1004,6 +1157,19 @@ namespace VCR.Runtime.UI
             SetActive(
                 _unloadCharacterButton,
                 characterSelected);
+            SetActive(
+                _trackingPreviousButton,
+                trackingSelected);
+            SetActive(
+                _trackingToggleButton,
+                trackingSelected);
+            SetActive(
+                _trackingRecoverButton,
+                trackingSelected);
+            SetActive(
+                _trackingNextButton,
+                trackingSelected);
+
             SetActive(
                 _apply720p60Button,
                 outputSelected);
@@ -1057,6 +1223,47 @@ namespace VCR.Runtime.UI
                                 true,
                                 status.State,
                                 status.HasCharacter);
+                }
+            }
+
+            if (trackingSelected)
+            {
+                var control =
+                    GetSelectedTrackingControl();
+                var hasControl =
+                    control != null;
+
+                if (_trackingPreviousButton != null)
+                {
+                    _trackingPreviousButton.interactable =
+                        _trackingControls.Count > 1;
+                }
+
+                if (_trackingNextButton != null)
+                {
+                    _trackingNextButton.interactable =
+                        _trackingControls.Count > 1;
+                }
+
+                if (_trackingToggleButton != null)
+                {
+                    _trackingToggleButton.interactable =
+                        hasControl;
+
+                    SetButtonLabel(
+                        _trackingToggleButton,
+                        hasControl
+                            ? (control.ControlEnabled
+                                ? "Disable "
+                                : "Enable ") +
+                              control.DisplayName
+                            : "No Tracking Source");
+                }
+
+                if (_trackingRecoverButton != null)
+                {
+                    _trackingRecoverButton.interactable =
+                        hasControl;
                 }
             }
 
@@ -1201,13 +1408,47 @@ namespace VCR.Runtime.UI
             var presence =
                 _trackingPresence.Presence;
 
-            return
+            var summary =
                 $"Subject: {presence.SubjectState}\n" +
                 $"Any source available: {presence.AnySourceAvailable}\n" +
                 $"Face source: {presence.FaceSourceAvailable}\n" +
                 $"Body/hands source: {presence.BodyHandsSourceAvailable}\n" +
                 $"Full-body source: {presence.FullBodySourceAvailable}\n" +
                 $"Events: {presence.Events}";
+
+            if (_trackingControls.Count == 0)
+            {
+                return summary +
+                    "\nSource controls: <none>";
+            }
+
+            var lines =
+                new List<string>(
+                    _trackingControls.Count);
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
+                var control =
+                    _trackingControls[i];
+                var selected =
+                    i == _trackingControlIndex
+                        ? ">"
+                        : " ";
+
+                lines.Add(
+                    $"{selected} {control.DisplayName}: " +
+                    $"enabled={control.ControlEnabled}, " +
+                    $"health={control.ControlHealthState}, " +
+                    $"error={control.ControlError ?? "<none>"}");
+            }
+
+            return summary +
+                "\nSource controls:\n" +
+                string.Join(
+                    "\n",
+                    lines);
         }
 
         private string MotionSummary()
@@ -1396,6 +1637,94 @@ namespace VCR.Runtime.UI
                 new Vector2(-8f, -2f));
 
             return button;
+        }
+
+        private void ResolveTrackingControls()
+        {
+            var rebuild =
+                _trackingControls.Count == 0;
+
+            if (!rebuild)
+            {
+                foreach (var control in
+                         _trackingControls)
+                {
+                    if (control is not
+                            MonoBehaviour behaviour ||
+                        behaviour == null)
+                    {
+                        rebuild = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!rebuild)
+            {
+                return;
+            }
+
+            _trackingControls.Clear();
+
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour is
+                    ITrackingRuntimeControl control)
+                {
+                    _trackingControls.Add(
+                        control);
+                }
+            }
+
+            _trackingControls.Sort(
+                (left, right) =>
+                    string.CompareOrdinal(
+                        left.ControlId,
+                        right.ControlId));
+
+            _trackingControlIndex =
+                Mathf.Clamp(
+                    _trackingControlIndex,
+                    0,
+                    Mathf.Max(
+                        0,
+                        _trackingControls.Count - 1));
+        }
+
+        private ITrackingRuntimeControl
+            GetSelectedTrackingControl()
+        {
+            if (_trackingControls.Count == 0)
+            {
+                return null;
+            }
+
+            _trackingControlIndex =
+                Mathf.Clamp(
+                    _trackingControlIndex,
+                    0,
+                    _trackingControls.Count - 1);
+
+            return
+                _trackingControls[
+                    _trackingControlIndex];
+        }
+
+        private static void SetButtonLabel(
+            Button button,
+            string label)
+        {
+            if (button != null &&
+                button.GetComponentInChildren<Text>()
+                    is Text text)
+            {
+                text.text = label;
+            }
         }
 
         private InputField CreateInputField(
