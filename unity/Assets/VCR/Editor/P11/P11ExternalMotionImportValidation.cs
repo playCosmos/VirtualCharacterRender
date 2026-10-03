@@ -15,12 +15,16 @@ namespace VCR.Editor.P11
             "Assets/VCR/Editor/P11/__ExternalMotionValidationImported";
         private const string RollbackFolder =
             "Assets/VCR/Editor/P11/__ExternalMotionValidationRollback";
+        private const string BvhImportFolder =
+            "Assets/VCR/Editor/P11/__ExternalMotionValidationBvh";
 
         public static void RunChecks(
             List<string> failures)
         {
             AnimationClip sourceClip = null;
             string sidecarPath = null;
+            string bvhPath = null;
+            string bvhSidecarPath = null;
 
             try
             {
@@ -46,6 +50,8 @@ namespace VCR.Editor.P11
                     ImportFolder);
                 DeleteIfExists(
                     RollbackFolder);
+                DeleteIfExists(
+                    BvhImportFolder);
 
                 AssetDatabase.CreateAsset(
                     sourceClip,
@@ -226,6 +232,156 @@ namespace VCR.Editor.P11
                     "external motion marker sidecar must reject unsupported newer versions",
                     failures);
 
+                bvhPath =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-external-motion-validation-" +
+                        Guid.NewGuid()
+                            .ToString("N") +
+                        ".bvh");
+                bvhSidecarPath =
+                    bvhPath +
+                    ".vcrmarkers.json";
+
+                File.WriteAllText(
+                    bvhPath,
+@"HIERARCHY
+ROOT Hips
+{
+  OFFSET 0 0 0
+  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation
+  JOINT Chest
+  {
+    OFFSET 0 10 0
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    JOINT Head
+    {
+      OFFSET 0 10 0
+      CHANNELS 3 Zrotation Xrotation Yrotation
+      End Site
+      {
+        OFFSET 0 5 0
+      }
+    }
+  }
+}
+MOTION
+Frames: 3
+Frame Time: 0.5
+0 0 0 0 0 0  0 0 0  0 0 0
+100 0 0 0 10 0  0 20 0  0 0 5
+200 0 0 0 20 0  0 40 0  0 0 10
+");
+
+                File.WriteAllText(
+                    bvhSidecarPath,
+@"{
+  ""Version"": 1,
+  ""Clips"": [
+    {
+      ""ClipName"": ""*"",
+      ""Markers"": [
+        {
+          ""Name"": ""swap"",
+          ""TimeMode"": 1,
+          ""Time"": 0.5
+        }
+      ]
+    }
+  ]
+}");
+
+                Expect(
+                    P11ExternalMotionImportUtility
+                        .TryImport(
+                            bvhPath,
+                            BvhImportFolder,
+                            bvhSidecarPath,
+                            autoDetectSidecar:
+                                false,
+                            out var bvhResult,
+                            out var bvhError),
+                    "BVH adapter import must succeed through the shared external motion pipeline: " +
+                    bvhError,
+                    failures);
+
+                if (bvhResult != null &&
+                    bvhResult.CueAssets.Length ==
+                        1 &&
+                    bvhResult.CueAssets[0] !=
+                        null)
+                {
+                    var cue =
+                        bvhResult.CueAssets[0]
+                            .Cue;
+                    var hipsFound =
+                        false;
+                    var chestFound =
+                        false;
+                    var headFound =
+                        false;
+
+                    foreach (var track in
+                             cue?.Bones ??
+                             Array.Empty<
+                                 BakedBoneMotionCueTrack>())
+                    {
+                        hipsFound |=
+                            track != null &&
+                            track.Bone ==
+                            VCR.Runtime.Tracking
+                                .HumanoidBoneId.Hips;
+                        chestFound |=
+                            track != null &&
+                            track.Bone ==
+                            VCR.Runtime.Tracking
+                                .HumanoidBoneId.Chest;
+                        headFound |=
+                            track != null &&
+                            track.Bone ==
+                            VCR.Runtime.Tracking
+                                .HumanoidBoneId.Head;
+                    }
+
+                    Expect(
+                        bvhResult.AdapterId ==
+                            "bvh" &&
+                        cue != null &&
+                        cue.FrameCount ==
+                            3 &&
+                        Math.Abs(
+                            cue.DurationSeconds -
+                            1.0) <
+                            0.001 &&
+                        cue.RootPositionOffsets
+                            .Length ==
+                            3 &&
+                        Math.Abs(
+                            cue.RootPositionOffsets[1]
+                                .x +
+                            1.0f) <
+                            0.001f &&
+                        hipsFound &&
+                        chestFound &&
+                        headFound &&
+                        cue.Markers.Length ==
+                            1 &&
+                        cue.Markers[0].Name ==
+                            "swap" &&
+                        Math.Abs(
+                            cue.Markers[0]
+                                .TimeSeconds -
+                            0.5f) <
+                            0.001f,
+                        "BVH adapter must create a three-frame additive humanoid cue, mirror root X, map common bones, and preserve sidecar markers",
+                        failures);
+                }
+                else
+                {
+                    failures.Add(
+                        "BVH adapter import must return exactly one baked cue asset");
+                }
+
                 var invalidSidecarPath =
                     Path.Combine(
                         Path.GetTempPath(),
@@ -303,6 +459,8 @@ namespace VCR.Editor.P11
                 DeleteIfExists(
                     RollbackFolder);
                 DeleteIfExists(
+                    BvhImportFolder);
+                DeleteIfExists(
                     SourceAssetPath);
 
                 if (!string.IsNullOrWhiteSpace(
@@ -317,6 +475,29 @@ namespace VCR.Editor.P11
                     }
                     catch
                     {
+                    }
+                }
+
+                foreach (var tempPath in
+                         new[]
+                         {
+                             bvhPath,
+                             bvhSidecarPath
+                         })
+                {
+                    if (!string.IsNullOrWhiteSpace(
+                            tempPath) &&
+                        File.Exists(
+                            tempPath))
+                    {
+                        try
+                        {
+                            File.Delete(
+                                tempPath);
+                        }
+                        catch
+                        {
+                        }
                     }
                 }
 
