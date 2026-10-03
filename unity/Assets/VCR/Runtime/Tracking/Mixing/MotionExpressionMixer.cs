@@ -23,8 +23,11 @@ namespace VCR.Runtime.Tracking.Mixing
         [Header("Inputs")]
         [SerializeField] private MonoBehaviour routedProviderBehaviour;
         [SerializeField] private bool autoFindRoutedProvider = true;
-        [Tooltip("Optional humanoid-pose layer. It may be tracking, additive, or procedural according to the layer settings.")]
+        [Tooltip("Optional primary humanoid-pose layer. Existing scenes keep this as the first overlay slot.")]
         [SerializeField] private MonoBehaviour poseLayerProviderBehaviour;
+        [Tooltip("Additional humanoid-pose layers applied in array order after the primary pose layer.")]
+        [SerializeField] private HumanoidPoseLayerSlot[] additionalPoseLayers =
+            Array.Empty<HumanoidPoseLayerSlot>();
         [Tooltip("Optional expression-only layer. It never contributes performer-presence evidence.")]
         [SerializeField] private MonoBehaviour expressionLayerProviderBehaviour;
 
@@ -51,6 +54,10 @@ namespace VCR.Runtime.Tracking.Mixing
         private long _poseSequence;
         private bool _poseDirty = true;
         private bool _poseSpaceMismatch;
+        private long[] _additionalPoseLayerSequences =
+            Array.Empty<long>();
+        private string[] _additionalPoseLayerSourceIds =
+            Array.Empty<string>();
 
         private NormalizedExpressionState _targetExpressions;
         private NormalizedExpressionState _currentExpressions;
@@ -134,6 +141,19 @@ namespace VCR.Runtime.Tracking.Mixing
                 settings ??
                 new HumanoidPoseLayerSettings();
             _poseDirty = true;
+        }
+
+        public void SetAdditionalPoseLayers(
+            params HumanoidPoseLayerSlot[] layers)
+        {
+            additionalPoseLayers =
+                layers == null
+                    ? Array.Empty<
+                        HumanoidPoseLayerSlot>()
+                    : (HumanoidPoseLayerSlot[])
+                        layers.Clone();
+
+            ResetPoseState();
         }
 
         public void SetExpressionLayerProvider(
@@ -247,6 +267,11 @@ namespace VCR.Runtime.Tracking.Mixing
                         ? 1.0
                         : 0.0,
                     "bool"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.additional_layers",
+                    additionalPoseLayers?.Length ?? 0,
+                    "count"));
 
             output.Add(
                 new RuntimeMetric(
@@ -378,7 +403,7 @@ namespace VCR.Runtime.Tracking.Mixing
         private void UpdatePoseOutput()
         {
             TrackingFrame baseFrame = null;
-            TrackingFrame layerFrame = null;
+            TrackingFrame primaryLayerFrame = null;
 
             _routedProvider
                 .TryGetLatestHumanoidPose(
@@ -391,7 +416,7 @@ namespace VCR.Runtime.Tracking.Mixing
             {
                 _poseLayerProvider
                     .TryGetLatestHumanoidPose(
-                        out layerFrame);
+                        out primaryLayerFrame);
             }
 
             var baseChanged =
@@ -399,14 +424,36 @@ namespace VCR.Runtime.Tracking.Mixing
                     baseFrame,
                     ref _lastBasePoseSequence,
                     ref _lastBasePoseSourceId);
-            var layerChanged =
+            var primaryChanged =
                 FrameChanged(
-                    layerFrame,
+                    primaryLayerFrame,
                     ref _lastLayerPoseSequence,
                     ref _lastLayerPoseSourceId);
 
+            EnsureAdditionalPoseRuntimeState();
+
+            var additionalChanged = false;
+
+            for (var i = 0;
+                 i < _additionalPoseLayerSequences.Length;
+                 i++)
+            {
+                TryGetAdditionalPoseLayerFrame(
+                    i,
+                    out var frame);
+
+                if (FrameChanged(
+                        frame,
+                        ref _additionalPoseLayerSequences[i],
+                        ref _additionalPoseLayerSourceIds[i]))
+                {
+                    additionalChanged = true;
+                }
+            }
+
             if (!baseChanged &&
-                !layerChanged &&
+                !primaryChanged &&
+                !additionalChanged &&
                 !_poseDirty)
             {
                 return;
@@ -415,32 +462,50 @@ namespace VCR.Runtime.Tracking.Mixing
             _poseDirty = false;
             _poseSpaceMismatch = false;
 
-            if (layerFrame?.HumanoidPose == null ||
-                poseLayerSettings == null ||
-                !poseLayerSettings.Enabled ||
-                poseLayerSettings.Weight <= 0f)
+            var mixedPose =
+                baseFrame?.HumanoidPose;
+            var hasMixedLayer = false;
+            var confidence =
+                baseFrame?.Confidence ?? 0f;
+
+            ApplyPoseLayer(
+                primaryLayerFrame,
+                poseLayerSettings,
+                ref mixedPose,
+                ref hasMixedLayer,
+                ref confidence);
+
+            if (additionalPoseLayers != null)
             {
-                _latestPoseFrame =
-                    baseFrame;
-                return;
+                for (var i = 0;
+                     i < additionalPoseLayers.Length;
+                     i++)
+                {
+                    if (!TryGetAdditionalPoseLayerFrame(
+                            i,
+                            out var frame))
+                    {
+                        continue;
+                    }
+
+                    ApplyPoseLayer(
+                        frame,
+                        additionalPoseLayers[i]?.Settings,
+                        ref mixedPose,
+                        ref hasMixedLayer,
+                        ref confidence);
+                }
             }
 
-            var mixed =
-                HumanoidPoseMixerMath.Blend(
-                    baseFrame?.HumanoidPose,
-                    layerFrame.HumanoidPose,
-                    poseLayerSettings,
-                    out _poseSpaceMismatch);
-
-            if (mixed == null)
+            if (mixedPose == null)
             {
                 _latestPoseFrame = null;
                 return;
             }
 
-            if (_poseSpaceMismatch ||
+            if (!hasMixedLayer &&
                 ReferenceEquals(
-                    mixed,
+                    mixedPose,
                     baseFrame?.HumanoidPose))
             {
                 _latestPoseFrame =
@@ -460,18 +525,118 @@ namespace VCR.Runtime.Tracking.Mixing
                     validRegions:
                         TrackingRegion.FullBody,
                     confidence:
-                        Math.Max(
-                            baseFrame?.Confidence ?? 0f,
-                            layerFrame.Confidence),
+                        confidence,
                     subjectDetected:
                         baseFrame?.SubjectDetected ??
                         false,
                     humanoidPose:
-                        mixed,
+                        mixedPose,
                     sourceId:
                         "motion-expression-mixer:pose",
                     runtimeTimestampUs:
                         nowUs);
+        }
+
+        private void ApplyPoseLayer(
+            TrackingFrame layerFrame,
+            HumanoidPoseLayerSettings settings,
+            ref HumanoidPoseState mixedPose,
+            ref bool hasMixedLayer,
+            ref float confidence)
+        {
+            if (layerFrame?.HumanoidPose == null ||
+                settings == null ||
+                !settings.Enabled ||
+                settings.Weight <= 0f)
+            {
+                return;
+            }
+
+            var next =
+                HumanoidPoseMixerMath.Blend(
+                    mixedPose,
+                    layerFrame.HumanoidPose,
+                    settings,
+                    out var mismatch);
+
+            if (mismatch)
+            {
+                _poseSpaceMismatch = true;
+                return;
+            }
+
+            if (next == null ||
+                ReferenceEquals(
+                    next,
+                    mixedPose))
+            {
+                return;
+            }
+
+            mixedPose = next;
+            hasMixedLayer = true;
+            confidence =
+                Math.Max(
+                    confidence,
+                    layerFrame.Confidence);
+        }
+
+        private void EnsureAdditionalPoseRuntimeState()
+        {
+            var count =
+                additionalPoseLayers?.Length ?? 0;
+
+            if (_additionalPoseLayerSequences.Length ==
+                    count &&
+                _additionalPoseLayerSourceIds.Length ==
+                    count)
+            {
+                return;
+            }
+
+            _additionalPoseLayerSequences =
+                new long[count];
+            _additionalPoseLayerSourceIds =
+                new string[count];
+
+            for (var i = 0;
+                 i < count;
+                 i++)
+            {
+                _additionalPoseLayerSequences[i] = -1;
+            }
+        }
+
+        private bool TryGetAdditionalPoseLayerFrame(
+            int index,
+            out TrackingFrame frame)
+        {
+            frame = null;
+
+            if (additionalPoseLayers == null ||
+                index < 0 ||
+                index >= additionalPoseLayers.Length)
+            {
+                return false;
+            }
+
+            var provider =
+                additionalPoseLayers[index]?.Provider;
+
+            if (provider == null ||
+                ReferenceEquals(
+                    provider,
+                    this) ||
+                ReferenceEquals(
+                    provider,
+                    _routedProvider))
+            {
+                return false;
+            }
+
+            return provider.TryGetLatestHumanoidPose(
+                out frame) &&
+                frame?.HumanoidPose != null;
         }
 
         private void UpdateExpressionTarget()
@@ -643,6 +808,10 @@ namespace VCR.Runtime.Tracking.Mixing
             _latestPoseFrame = null;
             _poseDirty = true;
             _poseSpaceMismatch = false;
+            _additionalPoseLayerSequences =
+                Array.Empty<long>();
+            _additionalPoseLayerSourceIds =
+                Array.Empty<string>();
         }
 
         private void ResetExpressionState()
