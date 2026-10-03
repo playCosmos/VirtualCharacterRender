@@ -348,6 +348,95 @@ namespace VCR.Editor.P11
                 "transition cancel UI must require an active transition with an executable cleanup contract",
                 failures);
 
+            var motionUiObject =
+                new GameObject(
+                    "P11 Motion UI Validation");
+
+            try
+            {
+                var validationMixer =
+                    motionUiObject.AddComponent<
+                        VCR.Runtime.Tracking.Mixing
+                            .MotionExpressionMixer>();
+                var validationManual =
+                    motionUiObject.AddComponent<
+                        VCR.Runtime.Tracking.Mixing
+                            .ManualExpressionLayerSource>();
+
+                validationMixer
+                    .SetExpressionLayerProvider(
+                        validationManual);
+                validationMixer
+                    .ConfigureExpressionLayer(
+                        VCR.Runtime.Tracking.Mixing
+                            .ExpressionBlendMode.Maximum,
+                        1f,
+                        0f,
+                        0f);
+                validationMixer
+                    .SetPoseLayerProvider(
+                        validationManual);
+
+                Expect(
+                    validationMixer
+                        .IsExpressionLayerProvider(
+                            validationManual) &&
+                    validationMixer
+                        .ExpressionLayerBlendMode ==
+                        VCR.Runtime.Tracking.Mixing
+                            .ExpressionBlendMode.Maximum &&
+                    validationMixer
+                        .TrySetPrimaryPoseLayerWeight(
+                            0.35f,
+                            out var poseWeightError) &&
+                    Math.Abs(
+                        validationMixer
+                            .PrimaryPoseLayerWeight -
+                        0.35f) <
+                        0.001f,
+                    "motion UI runtime contract must expose a configurable primary pose weight and Maximum manual-expression layer: " +
+                    poseWeightError,
+                    failures);
+
+                Expect(
+                    validationManual.SetExpression(
+                        VCR.Runtime.Tracking
+                            .StandardExpression.Happy,
+                        0.75f) &&
+                    Math.Abs(
+                        validationManual.GetExpression(
+                            VCR.Runtime.Tracking
+                                .StandardExpression.Happy) -
+                        0.75f) <
+                        0.001f &&
+                    validationManual.ClearExpression(
+                        VCR.Runtime.Tracking
+                            .StandardExpression.Happy) &&
+                    Math.Abs(
+                        validationManual.GetExpression(
+                            VCR.Runtime.Tracking
+                                .StandardExpression.Happy)) <
+                        0.001f,
+                    "manual expression UI source must support set/read/clear semantics",
+                    failures);
+
+                var picker =
+                    motionUiObject.AddComponent<
+                        DesktopCharacterFileSelectionAdapter>();
+
+                Expect(
+                    picker.IsSupported &&
+                    !string.IsNullOrWhiteSpace(
+                        picker.AdapterId),
+                    "P11 editor validation must expose a supported character file-selection adapter without opening the dialog",
+                    failures);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    motionUiObject);
+            }
+
             P11AppearanceRuntimeValidation
                 .RunChecks(
                     failures);
