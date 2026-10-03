@@ -54,6 +54,7 @@ namespace VCR.Runtime.UI
         private RectTransform _appearanceActions;
         private RectTransform _appearanceDirectActions;
         private RectTransform _appearancePersistenceActions;
+        private RectTransform _appearancePresetManagementActions;
         private InputField _characterPathInput;
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
@@ -79,8 +80,13 @@ namespace VCR.Runtime.UI
         private Button _appearanceSetAccessoryButton;
         private Button _appearanceClearAccessoryButton;
         private InputField _appearanceUserPresetInput;
+        private InputField _appearanceUserPresetTargetInput;
         private Button _appearanceSaveUserPresetButton;
         private Button _appearanceDeleteUserPresetButton;
+        private Button _appearanceRenameUserPresetButton;
+        private Button _appearanceDuplicateUserPresetButton;
+        private Button _appearanceMoveUserPresetUpButton;
+        private Button _appearanceMoveUserPresetDownButton;
 
         private ITrackingPresenceProvider _trackingPresence;
         private IAppearanceRuntime _appearanceRuntime;
@@ -173,6 +179,7 @@ namespace VCR.Runtime.UI
             _appearanceActions = null;
             _appearanceDirectActions = null;
             _appearancePersistenceActions = null;
+            _appearancePresetManagementActions = null;
             _characterPathInput = null;
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
@@ -198,8 +205,13 @@ namespace VCR.Runtime.UI
             _appearanceSetAccessoryButton = null;
             _appearanceClearAccessoryButton = null;
             _appearanceUserPresetInput = null;
+            _appearanceUserPresetTargetInput = null;
             _appearanceSaveUserPresetButton = null;
             _appearanceDeleteUserPresetButton = null;
+            _appearanceRenameUserPresetButton = null;
+            _appearanceDuplicateUserPresetButton = null;
+            _appearanceMoveUserPresetUpButton = null;
+            _appearanceMoveUserPresetDownButton = null;
 
             BuildUi();
             RefreshAll();
@@ -955,6 +967,76 @@ namespace VCR.Runtime.UI
             _appearanceDeleteUserPresetButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 180f;
+
+            _appearancePresetManagementActions =
+                CreateRect(
+                    "Appearance Preset Management",
+                    content);
+
+            _appearancePresetManagementActions.anchorMin =
+                new Vector2(0f, 0f);
+            _appearancePresetManagementActions.anchorMax =
+                new Vector2(1f, 0f);
+            _appearancePresetManagementActions.pivot =
+                new Vector2(0.5f, 0f);
+            _appearancePresetManagementActions.offsetMin =
+                new Vector2(24f, 296f);
+            _appearancePresetManagementActions.offsetMax =
+                new Vector2(-24f, 346f);
+
+            var appearancePresetManagementLayout =
+                _appearancePresetManagementActions.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            appearancePresetManagementLayout.spacing = 8f;
+            appearancePresetManagementLayout.childForceExpandWidth = false;
+            appearancePresetManagementLayout.childControlWidth = true;
+            appearancePresetManagementLayout.childControlHeight = true;
+
+            _appearanceUserPresetTargetInput =
+                CreateInputField(
+                    "Appearance User Preset Target Id",
+                    _appearancePresetManagementActions,
+                    "New Preset ID");
+            _appearanceUserPresetTargetInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 220f;
+
+            _appearanceRenameUserPresetButton =
+                CreateButton(
+                    "Rename",
+                    _appearancePresetManagementActions,
+                    RenameAppearanceUserPreset);
+            _appearanceRenameUserPresetButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
+
+            _appearanceDuplicateUserPresetButton =
+                CreateButton(
+                    "Duplicate",
+                    _appearancePresetManagementActions,
+                    DuplicateAppearanceUserPreset);
+            _appearanceDuplicateUserPresetButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _appearanceMoveUserPresetUpButton =
+                CreateButton(
+                    "Move Up",
+                    _appearancePresetManagementActions,
+                    MoveAppearanceUserPresetUp);
+            _appearanceMoveUserPresetUpButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 105f;
+
+            _appearanceMoveUserPresetDownButton =
+                CreateButton(
+                    "Move Down",
+                    _appearancePresetManagementActions,
+                    MoveAppearanceUserPresetDown);
+            _appearanceMoveUserPresetDownButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 115f;
 
             var actions =
                 CreateRect(
