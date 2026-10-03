@@ -56,6 +56,7 @@ namespace VCR.Runtime.UI
         private RectTransform _appearancePersistenceActions;
         private RectTransform _appearancePresetManagementActions;
         private InputField _characterPathInput;
+        private Button _characterBrowseButton;
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
@@ -89,6 +90,7 @@ namespace VCR.Runtime.UI
         private Button _appearanceMoveUserPresetDownButton;
 
         private ITrackingPresenceProvider _trackingPresence;
+        private ICharacterFileSelectionAdapter _characterFileSelectionAdapter;
         private IAppearanceRuntime _appearanceRuntime;
         private AppearanceUserPresetStore _appearancePresetStore;
         private IAppearanceUserPresetRegistry _loadedAppearancePresetRegistry;
@@ -181,6 +183,7 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions = null;
             _appearancePresetManagementActions = null;
             _characterPathInput = null;
+            _characterBrowseButton = null;
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
@@ -251,6 +254,7 @@ namespace VCR.Runtime.UI
                     FindObjectsInactive.Exclude);
 
             ResolveTrackingControls();
+            ResolveCharacterFileSelectionAdapter();
             ResolveAppearanceRuntime();
             EnsureAppearanceUserPresetsLoaded();
 
@@ -657,7 +661,16 @@ namespace VCR.Runtime.UI
                 _characterPathInput.gameObject
                     .AddComponent<
                         LayoutElement>();
-            pathLayout.preferredWidth = 440f;
+            pathLayout.preferredWidth = 360f;
+
+            _characterBrowseButton =
+                CreateButton(
+                    "Browse…",
+                    _contextActions,
+                    BrowseCharacterFile);
+            _characterBrowseButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 100f;
 
             _loadCharacterButton =
                 CreateButton(
@@ -1140,6 +1153,69 @@ namespace VCR.Runtime.UI
                     (error ?? "unknown error");
             }
 
+            RefreshAll();
+        }
+
+        private void BrowseCharacterFile()
+        {
+            ResolveCharacterFileSelectionAdapter();
+
+            if (sceneRuntime == null ||
+                _characterFileSelectionAdapter == null ||
+                !_characterFileSelectionAdapter.IsSupported)
+            {
+                _lastActionMessage =
+                    _characterFileSelectionAdapter?.UnavailableReason ??
+                    "Character file selection adapter is unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (!ApplicationUiActionPolicy
+                .CanBrowseCharacterFile(
+                    true,
+                    sceneRuntime.State,
+                    true))
+            {
+                _lastActionMessage =
+                    "Character browsing is unavailable while the scene runtime is busy.";
+                RefreshAll();
+                return;
+            }
+
+            var result =
+                _characterFileSelectionAdapter
+                    .SelectCharacterFile(
+                        _characterPathInput?.text);
+
+            if (result.Cancelled)
+            {
+                _lastActionMessage =
+                    "Character file selection cancelled.";
+                RefreshAll();
+                return;
+            }
+
+            if (!result.Selected ||
+                string.IsNullOrWhiteSpace(
+                    result.Path))
+            {
+                _lastActionMessage =
+                    "Character file selection failed: " +
+                    (result.Error ??
+                     "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            if (_characterPathInput != null)
+            {
+                _characterPathInput.text =
+                    result.Path;
+            }
+
+            _lastActionMessage =
+                $"Selected character file through '{_characterFileSelectionAdapter.AdapterId}'.";
             RefreshAll();
         }
 
@@ -2469,6 +2545,9 @@ namespace VCR.Runtime.UI
                 _characterPathInput,
                 characterSelected);
             SetActive(
+                _characterBrowseButton,
+                characterSelected);
+            SetActive(
                 _loadCharacterButton,
                 characterSelected);
             SetActive(
@@ -2512,6 +2591,19 @@ namespace VCR.Runtime.UI
                 {
                     _characterPathInput.text =
                         status.CurrentCharacterPath;
+                }
+
+                if (_characterBrowseButton != null)
+                {
+                    _characterBrowseButton.interactable =
+                        ApplicationUiActionPolicy
+                            .CanBrowseCharacterFile(
+                                true,
+                                status.State,
+                                _characterFileSelectionAdapter !=
+                                    null &&
+                                _characterFileSelectionAdapter
+                                    .IsSupported);
                 }
 
                 if (_loadCharacterButton != null)
@@ -3379,6 +3471,45 @@ namespace VCR.Runtime.UI
                 new Vector2(-8f, -2f));
 
             return button;
+        }
+
+        private void ResolveCharacterFileSelectionAdapter()
+        {
+            if (_characterFileSelectionAdapter != null &&
+                _characterFileSelectionAdapter.IsSupported)
+            {
+                return;
+            }
+
+            ICharacterFileSelectionAdapter fallback =
+                null;
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            foreach (var behaviour in
+                     behaviours)
+            {
+                if (behaviour is not
+                    ICharacterFileSelectionAdapter candidate)
+                {
+                    continue;
+                }
+
+                fallback ??=
+                    candidate;
+
+                if (candidate.IsSupported)
+                {
+                    _characterFileSelectionAdapter =
+                        candidate;
+                    return;
+                }
+            }
+
+            _characterFileSelectionAdapter =
+                fallback;
         }
 
         private void ResolveAppearanceRuntime()
