@@ -1,0 +1,1167 @@
+using System;
+using UnityEditor;
+using UnityEngine;
+using VCR.Runtime.Appearance;
+using VCR.Runtime.Appearance.Unity;
+
+namespace VCR.Editor.P12
+{
+    public sealed class P12AppearanceAuthoringWindow :
+        EditorWindow
+    {
+        private BasicCharacterAppearanceRuntime _runtime;
+        private SerializedObject _serializedRuntime;
+        private SerializedProperty _defaultPresetId;
+        private SerializedProperty _applyDefaultOnAwake;
+        private SerializedProperty _autoDiscoverHierarchy;
+        private SerializedProperty _appearanceRootName;
+        private SerializedProperty _outfitsRootName;
+        private SerializedProperty _accessoriesRootName;
+        private SerializedProperty _outfits;
+        private SerializedProperty _accessories;
+        private SerializedProperty _presets;
+
+        private Vector2 _scroll;
+        private bool _showOutfits = true;
+        private bool _showAccessories = true;
+        private bool _showPresets = true;
+        private bool _hasPendingChanges;
+        private string _lastValidJson;
+        private string _newPresetId =
+            "new-preset";
+        private string _message;
+        private MessageType _messageType =
+            MessageType.Info;
+
+        [MenuItem("VCR/P12/Open Appearance Authoring")]
+        public static void Open()
+        {
+            GetWindow<
+                    P12AppearanceAuthoringWindow>(
+                    "VCR Appearance Authoring")
+                .Show();
+        }
+
+        private void OnEnable()
+        {
+            ResolveFromSelection();
+            Rebind();
+        }
+
+        private void OnSelectionChange()
+        {
+            var selected =
+                Selection.activeGameObject != null
+                    ? Selection.activeGameObject
+                        .GetComponentInParent<
+                            BasicCharacterAppearanceRuntime>()
+                    : null;
+
+            if (selected != null &&
+                !ReferenceEquals(
+                    selected,
+                    _runtime))
+            {
+                _runtime =
+                    selected;
+                Rebind();
+                Repaint();
+            }
+        }
+
+        private void OnGUI()
+        {
+            EditorGUILayout.LabelField(
+                "Advanced Appearance Authoring",
+                EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "P12 authoring edits the scene-backed appearance bindings used by BasicCharacterAppearanceRuntime. Outfit/accessory roots are Unity scene references; exported transition JSON remains logical-ID-only.",
+                MessageType.Info);
+
+            var nextRuntime =
+                (BasicCharacterAppearanceRuntime)
+                    EditorGUILayout.ObjectField(
+                        "Appearance Runtime",
+                        _runtime,
+                        typeof(
+                            BasicCharacterAppearanceRuntime),
+                        true);
+
+            if (!ReferenceEquals(
+                    nextRuntime,
+                    _runtime))
+            {
+                _runtime =
+                    nextRuntime;
+                Rebind();
+            }
+
+            if (_runtime == null ||
+                _serializedRuntime == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Select a BasicCharacterAppearanceRuntime to author wardrobe and accessories.",
+                    MessageType.Info);
+                return;
+            }
+
+            _serializedRuntime.Update();
+
+            if (!string.IsNullOrWhiteSpace(
+                    _message))
+            {
+                EditorGUILayout.HelpBox(
+                    _message,
+                    _messageType);
+            }
+
+            if (_hasPendingChanges)
+            {
+                EditorGUILayout.HelpBox(
+                    "Serialized appearance bindings changed since the last successful validation. Use Validate & Apply before treating this configuration as runtime-ready.",
+                    MessageType.Warning);
+            }
+
+            DrawTopActions();
+
+            _scroll =
+                EditorGUILayout.BeginScrollView(
+                    _scroll);
+
+            DrawRuntimeSettings();
+            DrawOutfits();
+            DrawAccessories();
+            DrawPresets();
+
+            EditorGUILayout.EndScrollView();
+
+            if (_serializedRuntime
+                .ApplyModifiedProperties())
+            {
+                _hasPendingChanges =
+                    true;
+                EditorUtility.SetDirty(
+                    _runtime);
+            }
+        }
+
+        private void DrawTopActions()
+        {
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Discover Convention → Explicit Bindings"))
+                {
+                    DiscoverConventionBindings();
+                }
+
+                if (GUILayout.Button(
+                        "Validate & Apply"))
+                {
+                    ValidateAndApply();
+                }
+
+                if (GUILayout.Button(
+                        "Open Transition Timeline"))
+                {
+                    VCR.Editor.P11
+                        .P11AppearanceTransitionTimelineEditor
+                        .Open();
+                }
+            }
+        }
+
+        private void DrawRuntimeSettings()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(
+                "Runtime Binding Settings",
+                EditorStyles.boldLabel);
+
+            EditorGUILayout.PropertyField(
+                _autoDiscoverHierarchy,
+                new GUIContent(
+                    "Auto Discover When Empty"));
+            EditorGUILayout.PropertyField(
+                _appearanceRootName);
+            EditorGUILayout.PropertyField(
+                _outfitsRootName);
+            EditorGUILayout.PropertyField(
+                _accessoriesRootName);
+            EditorGUILayout.PropertyField(
+                _defaultPresetId,
+                new GUIContent(
+                    "Default Preset ID"));
+            EditorGUILayout.PropertyField(
+                _applyDefaultOnAwake);
+        }
+
+        private void DrawOutfits()
+        {
+            EditorGUILayout.Space();
+            _showOutfits =
+                EditorGUILayout.Foldout(
+                    _showOutfits,
+                    $"Outfits ({_outfits.arraySize})",
+                    true);
+
+            if (!_showOutfits)
+            {
+                return;
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Add Empty Outfit"))
+                {
+                    AddEmptyOutfit();
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           Selection.activeGameObject ==
+                           null))
+                {
+                    if (GUILayout.Button(
+                            "Add Selected Root"))
+                    {
+                        AddSelectedOutfitRoot();
+                    }
+                }
+            }
+
+            for (var i = 0;
+                 i < _outfits.arraySize;
+                 i++)
+            {
+                var outfit =
+                    _outfits
+                        .GetArrayElementAtIndex(
+                            i);
+
+                using (new EditorGUILayout
+                           .VerticalScope(
+                               EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout
+                               .HorizontalScope())
+                    {
+                        EditorGUILayout.PropertyField(
+                            outfit.FindPropertyRelative(
+                                "OutfitId"),
+                            new GUIContent(
+                                $"Outfit {i + 1} ID"));
+
+                        if (GUILayout.Button(
+                                "Delete",
+                                GUILayout.Width(
+                                    70f)))
+                        {
+                            _outfits
+                                .DeleteArrayElementAtIndex(
+                                    i);
+                            GUIUtility.ExitGUI();
+                        }
+                    }
+
+                    EditorGUILayout.PropertyField(
+                        outfit.FindPropertyRelative(
+                            "Roots"),
+                        includeChildren:
+                            true);
+                }
+            }
+        }
+
+        private void DrawAccessories()
+        {
+            EditorGUILayout.Space();
+            _showAccessories =
+                EditorGUILayout.Foldout(
+                    _showAccessories,
+                    $"Accessories ({_accessories.arraySize})",
+                    true);
+
+            if (!_showAccessories)
+            {
+                return;
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Add Empty Accessory"))
+                {
+                    AddEmptyAccessory();
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           Selection.activeGameObject ==
+                           null))
+                {
+                    if (GUILayout.Button(
+                            "Add Selected Accessory"))
+                    {
+                        AddSelectedAccessory();
+                    }
+                }
+            }
+
+            for (var i = 0;
+                 i < _accessories.arraySize;
+                 i++)
+            {
+                var accessory =
+                    _accessories
+                        .GetArrayElementAtIndex(
+                            i);
+
+                using (new EditorGUILayout
+                           .VerticalScope(
+                               EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout
+                               .HorizontalScope())
+                    {
+                        EditorGUILayout.PropertyField(
+                            accessory.FindPropertyRelative(
+                                "SlotId"),
+                            new GUIContent(
+                                $"Accessory {i + 1} Slot"));
+                        EditorGUILayout.PropertyField(
+                            accessory.FindPropertyRelative(
+                                "AccessoryId"),
+                            new GUIContent(
+                                "ID"));
+
+                        if (GUILayout.Button(
+                                "Delete",
+                                GUILayout.Width(
+                                    70f)))
+                        {
+                            _accessories
+                                .DeleteArrayElementAtIndex(
+                                    i);
+                            GUIUtility.ExitGUI();
+                        }
+                    }
+
+                    EditorGUILayout.PropertyField(
+                        accessory.FindPropertyRelative(
+                            "Root"));
+                }
+            }
+        }
+
+        private void DrawPresets()
+        {
+            EditorGUILayout.Space();
+            _showPresets =
+                EditorGUILayout.Foldout(
+                    _showPresets,
+                    $"Authored Presets ({_presets.arraySize})",
+                    true);
+
+            if (!_showPresets)
+            {
+                return;
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Add Empty Preset"))
+                {
+                    AddEmptyPreset();
+                }
+
+                _newPresetId =
+                    EditorGUILayout.TextField(
+                        _newPresetId,
+                        GUILayout.MinWidth(
+                            150f));
+
+                if (GUILayout.Button(
+                        "Capture Current Appearance"))
+                {
+                    CaptureCurrentAppearanceAsPreset();
+                }
+            }
+
+            for (var i = 0;
+                 i < _presets.arraySize;
+                 i++)
+            {
+                var preset =
+                    _presets
+                        .GetArrayElementAtIndex(
+                            i);
+                var presetId =
+                    preset.FindPropertyRelative(
+                            "PresetId")
+                        .stringValue;
+
+                using (new EditorGUILayout
+                           .VerticalScope(
+                               EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout
+                               .HorizontalScope())
+                    {
+                        EditorGUILayout.PropertyField(
+                            preset.FindPropertyRelative(
+                                "PresetId"),
+                            new GUIContent(
+                                $"Preset {i + 1} ID"));
+
+                        if (GUILayout.Button(
+                                "Set Default",
+                                GUILayout.Width(
+                                    92f)))
+                        {
+                            _defaultPresetId
+                                .stringValue =
+                                    presetId;
+                        }
+
+                        if (GUILayout.Button(
+                                "Delete",
+                                GUILayout.Width(
+                                    70f)))
+                        {
+                            _presets
+                                .DeleteArrayElementAtIndex(
+                                    i);
+                            GUIUtility.ExitGUI();
+                        }
+                    }
+
+                    EditorGUILayout.PropertyField(
+                        preset.FindPropertyRelative(
+                            "OutfitId"));
+                    EditorGUILayout.PropertyField(
+                        preset.FindPropertyRelative(
+                            "PreferredTransitionId"));
+                    EditorGUILayout.PropertyField(
+                        preset.FindPropertyRelative(
+                            "Accessories"),
+                        includeChildren:
+                            true);
+                }
+            }
+        }
+
+        private void DiscoverConventionBindings()
+        {
+            if (_runtime == null)
+            {
+                return;
+            }
+
+            if ((_outfits.arraySize > 0 ||
+                 _accessories.arraySize > 0) &&
+                !EditorUtility.DisplayDialog(
+                    "Replace Explicit Appearance Bindings?",
+                    "Convention discovery will replace the current explicit outfit and accessory binding arrays. Presets and transitions are preserved.",
+                    "Replace",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            if (!P12AppearanceAuthoringUtility
+                .TryDiscoverConvention(
+                    _runtime.transform,
+                    _appearanceRootName.stringValue,
+                    _outfitsRootName.stringValue,
+                    _accessoriesRootName.stringValue,
+                    out var outfits,
+                    out var accessories,
+                    out var error))
+            {
+                _message =
+                    "Appearance discovery failed: " +
+                    error;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                "Discover Appearance Bindings");
+            WriteOutfits(
+                outfits);
+            WriteAccessories(
+                accessories);
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            _hasPendingChanges =
+                true;
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _message =
+                $"Discovered {outfits.Length} outfit(s) and {accessories.Length} accessory binding(s). Validate & Apply to commit runtime configuration.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void AddEmptyOutfit()
+        {
+            Undo.RecordObject(
+                _runtime,
+                "Add Appearance Outfit");
+            var index =
+                _outfits.arraySize;
+            _outfits.arraySize =
+                index + 1;
+            var outfit =
+                _outfits
+                    .GetArrayElementAtIndex(
+                        index);
+            outfit.FindPropertyRelative(
+                    "OutfitId")
+                .stringValue =
+                    BuildUniqueOutfitId(
+                        "outfit");
+            outfit.FindPropertyRelative(
+                    "Roots")
+                .arraySize = 0;
+        }
+
+        private void AddSelectedOutfitRoot()
+        {
+            var selected =
+                Selection.activeGameObject;
+
+            if (selected == null)
+            {
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                "Add Selected Appearance Outfit");
+            var index =
+                _outfits.arraySize;
+            _outfits.arraySize =
+                index + 1;
+            var outfit =
+                _outfits
+                    .GetArrayElementAtIndex(
+                        index);
+            outfit.FindPropertyRelative(
+                    "OutfitId")
+                .stringValue =
+                    BuildUniqueOutfitId(
+                        selected.name);
+            var roots =
+                outfit.FindPropertyRelative(
+                    "Roots");
+            roots.arraySize = 1;
+            roots.GetArrayElementAtIndex(
+                    0)
+                .objectReferenceValue =
+                    selected;
+        }
+
+        private void AddEmptyAccessory()
+        {
+            Undo.RecordObject(
+                _runtime,
+                "Add Appearance Accessory");
+            var index =
+                _accessories.arraySize;
+            _accessories.arraySize =
+                index + 1;
+            var accessory =
+                _accessories
+                    .GetArrayElementAtIndex(
+                        index);
+            accessory.FindPropertyRelative(
+                    "SlotId")
+                .stringValue =
+                    "accessory";
+            accessory.FindPropertyRelative(
+                    "AccessoryId")
+                .stringValue =
+                    BuildUniqueAccessoryId(
+                        "accessory",
+                        "item");
+            accessory.FindPropertyRelative(
+                    "Root")
+                .objectReferenceValue =
+                    null;
+        }
+
+        private void AddSelectedAccessory()
+        {
+            var selected =
+                Selection.activeGameObject;
+
+            if (selected == null)
+            {
+                return;
+            }
+
+            var slotId =
+                InferAccessorySlotId(
+                    selected);
+            var accessoryId =
+                BuildUniqueAccessoryId(
+                    slotId,
+                    selected.name);
+
+            Undo.RecordObject(
+                _runtime,
+                "Add Selected Appearance Accessory");
+            var index =
+                _accessories.arraySize;
+            _accessories.arraySize =
+                index + 1;
+            var accessory =
+                _accessories
+                    .GetArrayElementAtIndex(
+                        index);
+            accessory.FindPropertyRelative(
+                    "SlotId")
+                .stringValue =
+                    slotId;
+            accessory.FindPropertyRelative(
+                    "AccessoryId")
+                .stringValue =
+                    accessoryId;
+            accessory.FindPropertyRelative(
+                    "Root")
+                .objectReferenceValue =
+                    selected;
+        }
+
+        private void AddEmptyPreset()
+        {
+            Undo.RecordObject(
+                _runtime,
+                "Add Appearance Preset");
+            var index =
+                _presets.arraySize;
+            _presets.arraySize =
+                index + 1;
+            var preset =
+                _presets
+                    .GetArrayElementAtIndex(
+                        index);
+            preset.FindPropertyRelative(
+                    "PresetId")
+                .stringValue =
+                    BuildUniquePresetId(
+                        "preset");
+            preset.FindPropertyRelative(
+                    "OutfitId")
+                .stringValue =
+                    FirstOutfitId();
+            preset.FindPropertyRelative(
+                    "PreferredTransitionId")
+                .stringValue =
+                    "Immediate";
+            preset.FindPropertyRelative(
+                    "Accessories")
+                .arraySize = 0;
+        }
+
+        private void CaptureCurrentAppearanceAsPreset()
+        {
+            var current =
+                _runtime.Current;
+
+            if (string.IsNullOrWhiteSpace(
+                    current.OutfitId) &&
+                (current.Accessories == null ||
+                 current.Accessories.Length == 0))
+            {
+                _message =
+                    "No active outfit/accessory state is available to capture.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var id =
+                BuildUniquePresetId(
+                    string.IsNullOrWhiteSpace(
+                        _newPresetId)
+                        ? "captured-preset"
+                        : _newPresetId);
+            var binding =
+                P12AppearanceAuthoringUtility
+                    .CreatePresetFromCurrent(
+                        id,
+                        current,
+                        "Immediate");
+
+            Undo.RecordObject(
+                _runtime,
+                "Capture Appearance Preset");
+            var index =
+                _presets.arraySize;
+            _presets.arraySize =
+                index + 1;
+            WritePreset(
+                _presets
+                    .GetArrayElementAtIndex(
+                        index),
+                binding);
+            _newPresetId =
+                id;
+
+            _message =
+                $"Captured current appearance as authored preset '{id}'. Validate & Apply to register it.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void ValidateAndApply()
+        {
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            if (_runtime.RebuildConfiguration(
+                    out var error))
+            {
+                _lastValidJson =
+                    EditorJsonUtility.ToJson(
+                        _runtime,
+                        prettyPrint:
+                            false);
+                _hasPendingChanges =
+                    false;
+                _message =
+                    $"Appearance configuration validated: {_runtime.PresetIds.Count} preset(s), {_runtime.TransitionIds.Count} transition(s).";
+                _messageType =
+                    MessageType.Info;
+                RebindSerializedOnly();
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    _lastValidJson))
+            {
+                try
+                {
+                    EditorJsonUtility
+                        .FromJsonOverwrite(
+                            _lastValidJson,
+                            _runtime);
+                    EditorUtility.SetDirty(
+                        _runtime);
+                    RebindSerializedOnly();
+                    _runtime.RebuildConfiguration(
+                        out _);
+                    _hasPendingChanges =
+                        false;
+                    _message =
+                        "Appearance validation failed and authored bindings were rolled back to the last valid snapshot: " +
+                        error;
+                    _messageType =
+                        MessageType.Error;
+                    return;
+                }
+                catch (Exception exception)
+                {
+                    _message =
+                        "Appearance validation failed, and snapshot rollback also failed: " +
+                        error +
+                        " / " +
+                        exception.Message;
+                    _messageType =
+                        MessageType.Error;
+                    return;
+                }
+            }
+
+            _message =
+                "Appearance validation failed: " +
+                error;
+            _messageType =
+                MessageType.Error;
+        }
+
+        private void WriteOutfits(
+            AppearanceOutfitBinding[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceOutfitBinding>();
+            _outfits.arraySize =
+                source.Length;
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var property =
+                    _outfits
+                        .GetArrayElementAtIndex(
+                            i);
+                var binding =
+                    source[i];
+                property.FindPropertyRelative(
+                        "OutfitId")
+                    .stringValue =
+                        binding?.OutfitId ??
+                        string.Empty;
+
+                var roots =
+                    property.FindPropertyRelative(
+                        "Roots");
+                var sourceRoots =
+                    binding?.Roots ??
+                    Array.Empty<GameObject>();
+                roots.arraySize =
+                    sourceRoots.Length;
+
+                for (var rootIndex = 0;
+                     rootIndex <
+                     sourceRoots.Length;
+                     rootIndex++)
+                {
+                    roots.GetArrayElementAtIndex(
+                            rootIndex)
+                        .objectReferenceValue =
+                            sourceRoots[
+                                rootIndex];
+                }
+            }
+        }
+
+        private void WriteAccessories(
+            AppearanceAccessoryBinding[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceAccessoryBinding>();
+            _accessories.arraySize =
+                source.Length;
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var property =
+                    _accessories
+                        .GetArrayElementAtIndex(
+                            i);
+                var binding =
+                    source[i];
+
+                property.FindPropertyRelative(
+                        "SlotId")
+                    .stringValue =
+                        binding?.SlotId ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "AccessoryId")
+                    .stringValue =
+                        binding?.AccessoryId ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "Root")
+                    .objectReferenceValue =
+                        binding?.Root;
+            }
+        }
+
+        private static void WritePreset(
+            SerializedProperty property,
+            AppearancePresetBinding binding)
+        {
+            property.FindPropertyRelative(
+                    "PresetId")
+                .stringValue =
+                    binding?.PresetId ??
+                    string.Empty;
+            property.FindPropertyRelative(
+                    "OutfitId")
+                .stringValue =
+                    binding?.OutfitId ??
+                    string.Empty;
+            property.FindPropertyRelative(
+                    "PreferredTransitionId")
+                .stringValue =
+                    binding?.PreferredTransitionId ??
+                    "Immediate";
+
+            var accessories =
+                property.FindPropertyRelative(
+                    "Accessories");
+            var source =
+                binding?.Accessories ??
+                Array.Empty<
+                    AppearanceAccessorySelectionBinding>();
+            accessories.arraySize =
+                source.Length;
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var item =
+                    accessories
+                        .GetArrayElementAtIndex(
+                            i);
+                item.FindPropertyRelative(
+                        "SlotId")
+                    .stringValue =
+                        source[i]?.SlotId ??
+                        string.Empty;
+                item.FindPropertyRelative(
+                        "AccessoryId")
+                    .stringValue =
+                        source[i]?.AccessoryId ??
+                        string.Empty;
+            }
+        }
+
+        private string BuildUniqueOutfitId(
+            string preferred) =>
+                P12AppearanceAuthoringUtility
+                    .BuildUniqueId(
+                        preferred,
+                        OutfitIdExists);
+
+        private string BuildUniqueAccessoryId(
+            string slotId,
+            string preferred) =>
+                P12AppearanceAuthoringUtility
+                    .BuildUniqueId(
+                        preferred,
+                        candidate =>
+                            AccessoryIdExists(
+                                slotId,
+                                candidate));
+
+        private string BuildUniquePresetId(
+            string preferred) =>
+                P12AppearanceAuthoringUtility
+                    .BuildUniqueId(
+                        preferred,
+                        PresetIdExists);
+
+        private bool OutfitIdExists(
+            string id)
+        {
+            for (var i = 0;
+                 i < _outfits.arraySize;
+                 i++)
+            {
+                if (string.Equals(
+                        _outfits
+                            .GetArrayElementAtIndex(
+                                i)
+                            .FindPropertyRelative(
+                                "OutfitId")
+                            .stringValue,
+                        id,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool AccessoryIdExists(
+            string slotId,
+            string accessoryId)
+        {
+            for (var i = 0;
+                 i < _accessories.arraySize;
+                 i++)
+            {
+                var property =
+                    _accessories
+                        .GetArrayElementAtIndex(
+                            i);
+
+                if (string.Equals(
+                        property.FindPropertyRelative(
+                                "SlotId")
+                            .stringValue,
+                        slotId,
+                        StringComparison.Ordinal) &&
+                    string.Equals(
+                        property.FindPropertyRelative(
+                                "AccessoryId")
+                            .stringValue,
+                        accessoryId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool PresetIdExists(
+            string id)
+        {
+            for (var i = 0;
+                 i < _presets.arraySize;
+                 i++)
+            {
+                if (string.Equals(
+                        _presets
+                            .GetArrayElementAtIndex(
+                                i)
+                            .FindPropertyRelative(
+                                "PresetId")
+                            .stringValue,
+                        id,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string FirstOutfitId()
+        {
+            return _outfits.arraySize > 0
+                ? _outfits
+                    .GetArrayElementAtIndex(
+                        0)
+                    .FindPropertyRelative(
+                        "OutfitId")
+                    .stringValue
+                : string.Empty;
+        }
+
+        private string InferAccessorySlotId(
+            GameObject selected)
+        {
+            var transform =
+                selected?.transform;
+            var parent =
+                transform?.parent;
+
+            if (parent != null &&
+                parent.parent != null &&
+                string.Equals(
+                    parent.parent.name,
+                    _accessoriesRootName
+                        .stringValue,
+                    StringComparison.Ordinal))
+            {
+                return parent.name;
+            }
+
+            return "accessory";
+        }
+
+        private void ResolveFromSelection()
+        {
+            if (_runtime != null)
+            {
+                return;
+            }
+
+            _runtime =
+                Selection.activeGameObject != null
+                    ? Selection.activeGameObject
+                        .GetComponentInParent<
+                            BasicCharacterAppearanceRuntime>()
+                    : null;
+        }
+
+        private void Rebind()
+        {
+            _message = null;
+            _hasPendingChanges =
+                false;
+
+            if (_runtime == null)
+            {
+                _serializedRuntime =
+                    null;
+                _lastValidJson =
+                    null;
+                return;
+            }
+
+            RebindSerializedOnly();
+
+            if (_runtime.RebuildConfiguration(
+                    out var error))
+            {
+                _lastValidJson =
+                    EditorJsonUtility.ToJson(
+                        _runtime,
+                        prettyPrint:
+                            false);
+            }
+            else
+            {
+                _lastValidJson =
+                    null;
+                _message =
+                    "Current appearance configuration is already invalid: " +
+                    error;
+                _messageType =
+                    MessageType.Warning;
+            }
+        }
+
+        private void RebindSerializedOnly()
+        {
+            _serializedRuntime =
+                new SerializedObject(
+                    _runtime);
+            _defaultPresetId =
+                _serializedRuntime
+                    .FindProperty(
+                        "defaultPresetId");
+            _applyDefaultOnAwake =
+                _serializedRuntime
+                    .FindProperty(
+                        "applyDefaultOnAwake");
+            _autoDiscoverHierarchy =
+                _serializedRuntime
+                    .FindProperty(
+                        "autoDiscoverHierarchy");
+            _appearanceRootName =
+                _serializedRuntime
+                    .FindProperty(
+                        "appearanceRootName");
+            _outfitsRootName =
+                _serializedRuntime
+                    .FindProperty(
+                        "outfitsRootName");
+            _accessoriesRootName =
+                _serializedRuntime
+                    .FindProperty(
+                        "accessoriesRootName");
+            _outfits =
+                _serializedRuntime
+                    .FindProperty(
+                        "outfits");
+            _accessories =
+                _serializedRuntime
+                    .FindProperty(
+                        "accessories");
+            _presets =
+                _serializedRuntime
+                    .FindProperty(
+                        "presets");
+        }
+    }
+}
