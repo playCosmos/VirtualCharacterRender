@@ -31,12 +31,14 @@ namespace VCR.Editor.P9
             ValidateEngine(failures);
             ValidateUnityDispatch(failures);
             ValidateMaterialAction(failures);
+            P9ExpressionEventValidation.RunChecks(
+                failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 

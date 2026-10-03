@@ -11,6 +11,7 @@
     "VCR.Editor.P6",
     "VCR.Editor.P7",
     "VCR.Editor.P8",
+    "VCR.Runtime.Core",
     "VCR.Runtime.Events",
     "VCR.Runtime.Events.Unity",
     "VCR.Runtime.EventRuntime",
