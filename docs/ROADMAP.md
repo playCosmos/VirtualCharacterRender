@@ -134,7 +134,11 @@ Multi-person identity tracking is not in scope.
 
 ## P5 — Motion and Expression Mixer
 
+Status: Active. See `P5_STATUS.md`.
+
 Base pose, tracking pose, additive motion, expressions, procedural motion, weighting, masks, deadzones, smoothing, and fallback behavior.
+
+The first implementation slice establishes the final mix-provider contract and expression-layer blending while passing routed face/body/full-body frames through unchanged.
 
 ## P6 — Environment Runtime
 
