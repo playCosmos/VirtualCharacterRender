@@ -8,7 +8,8 @@ namespace VCR.Runtime.EventRuntime.Unity
     [DisallowMultipleComponent]
     public sealed class MotionCueEventActionHandler :
         MonoBehaviour,
-        IEventActionHandler
+        IEventActionHandler,
+        IEventActionCompletionProbe
     {
         [SerializeField] private MonoBehaviour motionRuntimeBehaviour;
         [SerializeField] private MonoBehaviour[] additionalMotionRuntimeBehaviours =
@@ -149,6 +150,64 @@ namespace VCR.Runtime.EventRuntime.Unity
             return runtime.TryReleaseCue(
                 command.Text,
                 out error);
+        }
+
+        public bool CanTrackCompletion(
+            EventActionCommand command)
+        {
+            if (command.ActionType !=
+                    EventActionTypes.MotionPlay &&
+                command.ActionType !=
+                    EventActionTypes.MotionRelease)
+            {
+                return false;
+            }
+
+            ResolveRuntimes();
+
+            return TryResolveRuntime(
+                command,
+                out _,
+                out var count) &&
+                count == 1;
+        }
+
+        public bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+            ResolveRuntimes();
+
+            if (!CanTrackCompletion(
+                    command))
+            {
+                error =
+                    "Motion action completion cannot be tracked because its runtime is unavailable or ambiguous.";
+                return false;
+            }
+
+            TryResolveRuntime(
+                command,
+                out var runtime,
+                out _);
+
+            if (command.ActionType ==
+                EventActionTypes.MotionRelease)
+            {
+                complete = true;
+                return true;
+            }
+
+            complete =
+                !runtime.Status.Playing ||
+                !string.Equals(
+                    runtime.Status.CueId,
+                    command.Text,
+                    StringComparison.Ordinal);
+            return true;
         }
 
         private void ResolveRuntimes()
