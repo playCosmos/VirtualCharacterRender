@@ -96,7 +96,7 @@ motion.pose_weight
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. If more than one configured handler claims the same command, the host fails closed, increments the ambiguous-action metric, and executes none of them.
 
-Planned appearance-facing application actions include `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.restore_default`, and transition-aware preset switching. The future Appearance Transition Runtime may reuse registered application-action handlers for motion/effect/audio/material/camera cues, but it owns timing and the single atomic `appearance.commit` boundary. It must not implement choreography by recursively publishing arbitrary normalized events.
+P11 extends the established P9 action boundary with `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.clear_accessory`, and `appearance.restore_default`. The P11 Appearance Transition Runtime reuses registered application-action handlers directly for presentation cues while owning timing and the single atomic `appearance.commit` boundary. It rejects recursive `appearance.*` transition actions. P11 also adds shared `effect.play` / `effect.stop` and `motion.play` / `motion.release` action handlers; this is a later-phase extension and does not change the preserved P9 checkpoint claim.
 
 ## Source-free validation
 
