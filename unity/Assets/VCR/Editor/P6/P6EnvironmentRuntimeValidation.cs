@@ -27,7 +27,7 @@ namespace VCR.Editor.P6
             {
                 Debug.Log(
                     "VCR P6 environment runtime validation: PASS " +
-                    "(state roots, binding guards, event/manual dispatch, recurring-policy driver, drop-only scheduler)");
+                    "(state roots, atomic binding guards, event/manual/scheduled dispatch, failure isolation, recurring-policy driver, drop-only scheduler)");
                 return true;
             }
 
@@ -159,7 +159,7 @@ namespace VCR.Editor.P6
                         },
                         out var bindingError);
 
-                runtime.ConfigureUpdateTargets(
+                runtime.SetUpdateTargets(
                     target);
 
                 Expect(
@@ -230,9 +230,8 @@ namespace VCR.Editor.P6
                     "unknown states must fail without partially toggling roots or dispatching updates",
                     failures);
 
-                runtime.RequestUpdate();
-
                 Expect(
+                    runtime.RequestManualUpdate() &&
                     target.UpdateCount == 2 &&
                     target.LastContext.Reason ==
                         EnvironmentUpdateReason.Manual,
@@ -258,8 +257,38 @@ namespace VCR.Editor.P6
 
                 Expect(
                     driver != null &&
-                    driver.enabled,
+                    driver.enabled &&
+                    runtime.RecurringUpdatesActive,
                     "Hz10 policy must lazily create and enable the recurring update driver",
+                    failures);
+
+                var firstDue =
+                    MonotonicClock
+                        .NowMicroseconds();
+
+                Expect(
+                    runtime.TickScheduled(
+                        firstDue),
+                    "Hz10 runtime must dispatch the first due scheduled update",
+                    failures);
+
+                Expect(
+                    !runtime.TickScheduled(
+                        firstDue + 50_000),
+                    "Hz10 runtime must reject early scheduled ticks",
+                    failures);
+
+                Expect(
+                    runtime.TickScheduled(
+                        firstDue + 100_000),
+                    "Hz10 runtime must dispatch the next scheduled update after 100ms",
+                    failures);
+
+                Expect(
+                    runtime.ScheduledDispatchCount == 2 &&
+                    target.LastContext.Reason ==
+                        EnvironmentUpdateReason.Scheduled,
+                    "scheduled dispatch count must include only due ticks",
                     failures);
 
                 runtime.Configure(
@@ -270,7 +299,8 @@ namespace VCR.Editor.P6
 
                 Expect(
                     driver != null &&
-                    !driver.enabled,
+                    !driver.enabled &&
+                    !runtime.RecurringUpdatesActive,
                     "returning to EventDriven must disable the recurring update driver",
                     failures);
 
@@ -318,6 +348,38 @@ namespace VCR.Editor.P6
                     "state roots that contain the runtime itself must be rejected",
                     failures);
 
+                var throwingTarget =
+                    root.AddComponent<
+                        P6ThrowingEnvironmentUpdateTarget>();
+
+                runtime.SetUpdateTargets(
+                    target,
+                    throwingTarget);
+
+                var beforeFailureDispatch =
+                    target.UpdateCount;
+
+                Expect(
+                    runtime.RequestManualUpdate() &&
+                    target.UpdateCount ==
+                        beforeFailureDispatch + 1 &&
+                    runtime.UpdateFailureCount == 1,
+                    "one failing update target must not stop healthy targets or the environment runtime",
+                    failures);
+
+                Expect(
+                    runtime.UpdateTargetCount == 2,
+                    "runtime must retain distinct healthy and failing update targets",
+                    failures);
+
+                runtime.UnregisterUpdateTarget(
+                    throwingTarget);
+
+                Expect(
+                    runtime.UpdateTargetCount == 1,
+                    "dynamic update target unregister must remove only the requested target",
+                    failures);
+
                 var metrics =
                     new List<RuntimeMetric>();
                 runtime.CollectMetrics(
@@ -336,12 +398,45 @@ namespace VCR.Editor.P6
                 Expect(
                     TryGetMetric(
                         metrics,
-                        "environment.manual_updates",
-                        out var manualUpdates) &&
+                        "environment.state_dispatches",
+                        out var stateDispatches) &&
                     Math.Abs(
-                        manualUpdates - 1.0) <
+                        stateDispatches - 1.0) <
                     0.001,
-                    "environment diagnostics must expose manual update count",
+                    "environment diagnostics must expose state dispatch count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.manual_dispatches",
+                        out var manualDispatches) &&
+                    Math.Abs(
+                        manualDispatches - 2.0) <
+                    0.001,
+                    "environment diagnostics must expose manual dispatch count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.scheduled_dispatches",
+                        out var scheduledDispatches) &&
+                    Math.Abs(
+                        scheduledDispatches - 2.0) <
+                    0.001,
+                    "environment diagnostics must expose scheduled dispatch count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.update_failures",
+                        out var updateFailures) &&
+                    Math.Abs(
+                        updateFailures - 1.0) <
+                    0.001,
+                    "environment diagnostics must expose isolated update-target failures",
                     failures);
             }
             catch (Exception exception)
@@ -390,6 +485,18 @@ namespace VCR.Editor.P6
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P6ThrowingEnvironmentUpdateTarget :
+        MonoBehaviour,
+        IEnvironmentUpdateTarget
+    {
+        public void UpdateEnvironment(
+            EnvironmentUpdateContext context)
+        {
+            throw new InvalidOperationException(
+                "P6 validation target failure");
         }
     }
 
