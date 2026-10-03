@@ -104,8 +104,9 @@ Implemented source contracts:
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
 - `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
-- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
+- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
 - selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
+- transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
 
@@ -196,9 +197,9 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
 - transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
-- named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, and completion-probe bridging
+- named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, completion-probe bridging, StepId uniqueness, All/Any dependency validation, forward-reference rejection, and dependency timeout validation
 - procedural motion completion state before/after release through the transition bridge
-- transition package JSON version/marker/blocking/action/commit/cleanup round trip and newer-version rejection
+- transition package JSON v2 marker/blocking/dependency/action/commit/cleanup round trip, v1→v2 migration, and newer-version rejection
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
@@ -206,7 +207,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, linear Blocking completion dependencies, and versioned JSON import/export are implemented; remaining work is external motion-format marker import, richer dependency graph UX, package-library UX/migration, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/blocking behavior
+- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is external motion-format marker import, richer dependency graph visualization/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking is implemented; external motion-file import remains later tooling
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
@@ -225,7 +226,7 @@ Appearance quick change now has a source implementation foundation but is not ru
 
 ## Appearance quick-change implementation update
 
-Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named authored and user presets, atomic immediate switching, transition presets with exactly one appearance commit point, named marker + offset scheduling, cleanup-backed Blocking completion dependencies, QueueLatest/QueueAll/IgnoreWhileBusy plus cleanup-gated Interrupt, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, procedural and baked AnimationClip motion cues, effect/audio handlers, direct P11 preset/outfit/accessory controls, transition preview/progress/cancel UI, per-character user-preset persistence, and a Unity Editor transition timeline authoring surface. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
+Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named authored and user presets, atomic immediate switching, transition presets with exactly one appearance commit point, named marker + offset scheduling, cleanup-backed Blocking and StepId-based All/Any completion dependencies, QueueLatest/QueueAll/IgnoreWhileBusy plus cleanup-gated Interrupt, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, procedural and baked AnimationClip motion cues, effect/audio handlers, direct P11 preset/outfit/accessory controls, transition preview/progress/cancel UI, per-character user-preset persistence, and a Unity Editor transition timeline authoring surface. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
 
 Transition validation now rejects missing/multiple commit points, recursive `appearance.*` steps, decreasing step times, durations that end before the final step, and Interrupt definitions without explicit cleanup. The source-free validator covers atomic outfit/accessory changes, authored/user preset separation, user-preset persistence round trips, event-driven changes, custom transition actions, procedural and baked clip cues, effect/audio play/stop, convention discovery, transition timing guards, direct appearance control gating, preview gating, and cancel gating.
 
