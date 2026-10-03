@@ -47,6 +47,7 @@ Implemented rule features:
 - event amount/text/actor/type/source value mapping into state/actions
 - numeric scale/offset transforms for state/action values with non-finite configuration containment
 - rule-level cooldown using monotonic event timestamps
+- optional rule-level fixed-window rate limiting for bursty inputs; quota counts only successful rule executions and resets deterministically at the next window
 - ordered rule evaluation
 - optional stop-after-match
 - bounded action-command output per input event
@@ -104,6 +105,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - case-insensitive text filtering
 - missing-state numeric condition behavior
 - rule cooldown suppression
+- windowed rule rate-limit burst allowance, excess suppression, and next-window reset
 - numeric scale/offset action transform
 - bounded commands per event
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
@@ -120,7 +122,6 @@ These validation paths are implemented but have not been executed in this enviro
 
 The next source slices are:
 
-- add windowed rate-limit policy for bursty chat/donation inputs beyond the implemented per-rule cooldown
 - add text transform operators beyond direct value mapping
 - add motion-layer application handlers and expand material/shader actions beyond float parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions

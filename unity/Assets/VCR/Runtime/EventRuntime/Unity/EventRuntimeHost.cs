@@ -298,6 +298,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                     "count"));
             output.Add(
                 new RuntimeMetric(
+                    "events.runtime.rate_limit_suppressed",
+                    _engine.RateLimitSuppressedRules,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
                     "events.runtime.actions_executed",
                     _executedActions,
                     "count"));

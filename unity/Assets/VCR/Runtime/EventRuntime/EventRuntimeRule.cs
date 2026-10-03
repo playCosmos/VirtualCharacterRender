@@ -15,6 +15,8 @@ namespace VCR.Runtime.EventRuntime
         public EventActionTemplate[] Actions =
             Array.Empty<EventActionTemplate>();
         public double CooldownSeconds;
+        public double RateLimitWindowSeconds;
+        public int RateLimitMaxExecutions;
         public bool StopAfterMatch;
     }
 }

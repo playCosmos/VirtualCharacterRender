@@ -13,6 +13,9 @@ namespace VCR.Runtime.EventRuntime
         private readonly Dictionary<EventRuntimeRule, long>
             _lastRuleExecutionUs = new();
 
+        private readonly Dictionary<EventRuntimeRule, RateWindowState>
+            _rateWindows = new();
+
         public EventRuntimeStateStore State { get; } = new();
 
         public long ProcessedEvents { get; private set; }
@@ -20,6 +23,7 @@ namespace VCR.Runtime.EventRuntime
         public long EmittedCommands { get; private set; }
         public long DroppedCommands { get; private set; }
         public long CooldownSuppressedRules { get; private set; }
+        public long RateLimitSuppressedRules { get; private set; }
 
         public int MaxCommandsPerEvent
         {
@@ -36,6 +40,7 @@ namespace VCR.Runtime.EventRuntime
                     : (EventRuntimeRule[])rules.Clone();
 
             _lastRuleExecutionUs.Clear();
+            _rateWindows.Clear();
         }
 
         public int Process(
@@ -65,6 +70,14 @@ namespace VCR.Runtime.EventRuntime
                         value.TimestampUs))
                 {
                     CooldownSuppressedRules++;
+                    continue;
+                }
+
+                if (IsRateLimited(
+                        rule,
+                        value.TimestampUs))
+                {
+                    RateLimitSuppressedRules++;
                     continue;
                 }
 
@@ -119,15 +132,120 @@ namespace VCR.Runtime.EventRuntime
                 (long)cooldownUs;
         }
 
+        private bool IsRateLimited(
+            EventRuntimeRule rule,
+            long timestampUs)
+        {
+            if (!TryGetRateLimit(
+                    rule,
+                    out var windowUs,
+                    out var maxExecutions) ||
+                timestampUs <= 0 ||
+                !_rateWindows.TryGetValue(
+                    rule,
+                    out var state))
+            {
+                return false;
+            }
+
+            if (timestampUs < state.WindowStartUs ||
+                timestampUs - state.WindowStartUs >=
+                    windowUs)
+            {
+                return false;
+            }
+
+            return state.Executions >= maxExecutions;
+        }
+
         private void RecordExecution(
             EventRuntimeRule rule,
             long timestampUs)
         {
-            if (timestampUs > 0)
+            if (timestampUs <= 0)
             {
-                _lastRuleExecutionUs[rule] =
-                    timestampUs;
+                return;
             }
+
+            _lastRuleExecutionUs[rule] =
+                timestampUs;
+
+            if (!TryGetRateLimit(
+                    rule,
+                    out var windowUs,
+                    out _))
+            {
+                return;
+            }
+
+            if (!_rateWindows.TryGetValue(
+                    rule,
+                    out var state) ||
+                timestampUs < state.WindowStartUs ||
+                timestampUs - state.WindowStartUs >=
+                    windowUs)
+            {
+                _rateWindows[rule] =
+                    new RateWindowState(
+                        timestampUs,
+                        1);
+                return;
+            }
+
+            _rateWindows[rule] =
+                new RateWindowState(
+                    state.WindowStartUs,
+                    state.Executions + 1);
+        }
+
+        private static bool TryGetRateLimit(
+            EventRuntimeRule rule,
+            out long windowUs,
+            out int maxExecutions)
+        {
+            windowUs = 0;
+            maxExecutions = 0;
+
+            if (rule == null ||
+                rule.RateLimitWindowSeconds <= 0.0 ||
+                double.IsNaN(
+                    rule.RateLimitWindowSeconds) ||
+                double.IsInfinity(
+                    rule.RateLimitWindowSeconds) ||
+                rule.RateLimitMaxExecutions <= 0)
+            {
+                return false;
+            }
+
+            var calculated =
+                rule.RateLimitWindowSeconds *
+                1_000_000.0;
+
+            windowUs =
+                calculated >= long.MaxValue
+                    ? long.MaxValue
+                    : Math.Max(
+                        1L,
+                        (long)calculated);
+
+            maxExecutions =
+                rule.RateLimitMaxExecutions;
+
+            return true;
+        }
+
+        private readonly struct RateWindowState
+        {
+            public RateWindowState(
+                long windowStartUs,
+                int executions)
+            {
+                WindowStartUs = windowStartUs;
+                Executions = executions;
+            }
+
+            public long WindowStartUs { get; }
+            public int Executions { get; }
         }
 
         private bool ConditionsPass(EventRuntimeRule rule)

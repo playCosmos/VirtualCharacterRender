@@ -38,7 +38,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -375,6 +375,87 @@ namespace VCR.Editor.P9
                 engine.CooldownSuppressedRules ==
                     suppressedBefore + 1,
                 "rule cooldown must suppress burst repeats until the monotonic interval expires",
+                failures);
+
+            var rateLimitedRule =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "window-rate-limit",
+                    RateLimitWindowSeconds =
+                        1.0,
+                    RateLimitMaxExecutions =
+                        2,
+                    Filter =
+                        new EventRuleFilter
+                        {
+                            Type =
+                                NormalizedEventTypes
+                                    .LocalManual
+                        },
+                    Actions =
+                        new[]
+                        {
+                            EnvironmentAction(
+                                "environment.main",
+                                "rate-limited")
+                        }
+                };
+
+            engine.SetRules(
+                rateLimitedRule);
+
+            var rateSuppressedBefore =
+                engine.RateLimitSuppressedRules;
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    3_000_000,
+                    sequence: 20),
+                output);
+            var rateFirstCount =
+                output.Count;
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    3_100_000,
+                    sequence: 21),
+                output);
+            var rateSecondCount =
+                output.Count;
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    3_200_000,
+                    sequence: 22),
+                output);
+            var rateThirdCount =
+                output.Count;
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    4_000_000,
+                    sequence: 23),
+                output);
+            var rateNextWindowCount =
+                output.Count;
+
+            Expect(
+                rateFirstCount == 1 &&
+                rateSecondCount == 1 &&
+                rateThirdCount == 0 &&
+                rateNextWindowCount == 1 &&
+                engine.RateLimitSuppressedRules ==
+                    rateSuppressedBefore + 1,
+                "windowed rule rate limit must allow the configured burst, suppress excess matches, and reset at the next window",
                 failures);
 
             var cappedRule =
