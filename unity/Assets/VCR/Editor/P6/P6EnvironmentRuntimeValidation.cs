@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Core;
@@ -308,11 +309,11 @@ namespace VCR.Editor.P6
 
                 parallaxTarget.UpdateEnvironment(
                     new EnvironmentUpdateContext(
-                        sequence: 1,
-                        timestampUs: 0,
-                        deltaSeconds: 0.1f,
+                        1,
+                        0,
+                        0.1f,
                         EnvironmentUpdateReason.Scheduled,
-                        stateId: "day"));
+                        "day"));
 
                 Expect(
                     parallaxTransform.anchoredPosition ==
