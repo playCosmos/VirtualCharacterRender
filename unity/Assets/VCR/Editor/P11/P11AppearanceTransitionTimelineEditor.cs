@@ -2440,6 +2440,10 @@ namespace VCR.Editor.P11
                 "spin",
                 required:
                     true);
+            SetStepId(
+                steps.GetArrayElementAtIndex(
+                    0),
+                "spin-start");
 
             ConfigureActionStep(
                 steps.GetArrayElementAtIndex(
@@ -2450,6 +2454,10 @@ namespace VCR.Editor.P11
                 "confetti",
                 required:
                     false);
+            SetStepId(
+                steps.GetArrayElementAtIndex(
+                    1),
+                "confetti-start");
 
             ResetStep(
                 steps.GetArrayElementAtIndex(
@@ -2473,6 +2481,10 @@ namespace VCR.Editor.P11
                 "sparkle-burst",
                 required:
                     false);
+            SetStepId(
+                steps.GetArrayElementAtIndex(
+                    3),
+                "sparkle-start");
 
             ConfigureMarkerActionStep(
                 steps.GetArrayElementAtIndex(
@@ -2484,6 +2496,10 @@ namespace VCR.Editor.P11
                 "spin",
                 required:
                     true);
+            SetStepId(
+                steps.GetArrayElementAtIndex(
+                    4),
+                "spin-release");
 
             transition.FindPropertyRelative(
                     "CancellationSteps")
@@ -2557,6 +2573,17 @@ namespace VCR.Editor.P11
                 "Interrupt cleanup template added. Remove unused cleanup actions or replace their logical IDs before validation.";
             _lastMessageType =
                 MessageType.Info;
+        }
+
+        private static void SetStepId(
+            SerializedProperty step,
+            string stepId)
+        {
+            step.FindPropertyRelative(
+                    "StepId")
+                .stringValue =
+                    stepId ??
+                    string.Empty;
         }
 
         private static void ConfigureMarker(
