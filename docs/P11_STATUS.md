@@ -113,6 +113,8 @@ Implemented source contracts:
 - transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, a resolved-time dependency node/edge graph with missing/forward-reference warnings, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
 - selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
 - transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
+- `VCR/P11/Open Transition Package Library` indexes `Assets/VCR/TransitionPackages`, supports package/transition search, source/effective version and migration status, invalid-package diagnostics, external JSON add, asset ping/path copy, and pending-package handoff to the Timeline
+- package-library handoff reuses the Timeline collision prompt plus transactional `RebuildConfiguration` rollback rather than implementing a second import path
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
 - `VCR/P11/Open External Motion Importer` imports Unity-native `.fbx`, `.dae`, and `.anim` motion sources into project assets
@@ -217,6 +219,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, completion-probe bridging, StepId uniqueness, All/Any dependency validation, forward-reference rejection, and dependency timeout validation
 - procedural motion completion state before/after release through the transition bridge
 - transition package JSON v2 marker/blocking/dependency/action/commit/cleanup round trip, v1→v2 migration, and newer-version rejection
+- transition package library add/scan behavior, v1 migration metadata, valid/invalid file indexing, and package/transition search matching
 - external standalone `.anim` file copy/import with wildcard + exact sidecar marker resolution
 - normalized/seconds sidecar marker conversion into `VCRMarker` AnimationEvents
 - duplicate resolved marker rejection, newer-sidecar-version rejection, and failed-import asset/folder rollback
@@ -231,7 +234,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: native file-selection source path is implemented for Unity Editor, Windows standalone, and macOS standalone; remaining work is real-platform dialog/build verification
 - Character > Appearance / Quick Change: saved preset save/load/delete/rename/duplicate/reorder is implemented; later work is richer browsing/search/metadata UX if needed
-- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, resolved-time dependency graph preview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, interactive graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
+- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, resolved-time dependency graph preview, versioned JSON v2 import/export with v1 migration, and a searchable project package-library browser are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, interactive graph editing/grouping, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking plus external Unity-native `.fbx`, `.dae`, and `.anim` import are implemented. FBX/DAE embedded clips are extracted to standalone `.anim` assets before marker editing. A built-in `.bvh` adapter parses hierarchy/channels and emits an additive humanoid `BakedMotionCueAsset`; glTF-style motion remains adapter work.
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls are implemented; remaining work is real tracker-device verification and any justified source-specific UI that does not leak implementation details
