@@ -50,7 +50,6 @@ These validation paths are implemented but have not been executed here because a
 
 ## Next P5 work
 
-- separate expression application availability from full-body pose availability in the VRM target path
 - define base/tracking/additive/procedural pose-layer contracts
 - add per-region/per-bone masks and weights
 - avoid duplicate smoothing between mixer and target layers

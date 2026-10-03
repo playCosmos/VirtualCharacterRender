@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.Tracking.Mixing;
 
 namespace VCR.Runtime.Character
 {
@@ -62,7 +63,8 @@ namespace VCR.Runtime.Character
         private Vector3 _targetRootReferencePosition;
         private Quaternion _targetRootReferenceRotation;
         private bool _rootReferenceInitialized;
-        private bool _fullBodyUnavailable = true;
+        private bool _poseUnavailable = true;
+        private bool _expressionsUnavailable = true;
 
         private readonly float[] _smoothedExpressions =
             new float[(int)StandardExpression.Count];
@@ -107,31 +109,34 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            if (_presenceProvider != null)
-            {
-                var presence =
-                    _presenceProvider.Presence;
+            var hasPoseFrame =
+                _provider.TryGetLatestHumanoidPose(
+                    out var poseFrame) &&
+                poseFrame?.HumanoidPose != null;
 
-                var unavailable =
-                    presence.SubjectState !=
-                        SubjectPresenceState.Present ||
-                    !presence.FullBodySourceAvailable ||
-                    !presence.FullBodySubjectEvidence;
+            var hasExpressionFrame =
+                _provider.TryGetLatestExpressions(
+                    out var expressionFrame) &&
+                expressionFrame?.Expressions != null;
 
-                SetFullBodyUnavailable(unavailable);
+            var presence =
+                _presenceProvider != null
+                    ? _presenceProvider.Presence
+                    : (TrackingPresenceSnapshot?)null;
 
-                if (_fullBodyUnavailable)
-                {
-                    return;
-                }
-            }
-            else
-            {
-                SetFullBodyUnavailable(false);
-            }
+            var availability =
+                MotionApplicationAvailabilityResolver
+                    .Resolve(
+                        presence,
+                        hasPoseFrame,
+                        hasExpressionFrame);
 
-            if (_provider.TryGetLatestHumanoidPose(out var poseFrame) &&
-                poseFrame?.HumanoidPose != null &&
+            SetPoseUnavailable(
+                !availability.PoseAvailable);
+            SetExpressionsUnavailable(
+                !availability.ExpressionsAvailable);
+
+            if (availability.PoseAvailable &&
                 poseFrame.Sequence != _lastPoseSequence)
             {
                 if (!string.Equals(
@@ -140,17 +145,19 @@ namespace VCR.Runtime.Character
                     StringComparison.Ordinal))
                 {
                     ResetPoseCalibration();
-                    _lastPoseSourceId = poseFrame.SourceId;
+                    _lastPoseSourceId =
+                        poseFrame.SourceId;
                 }
 
-                _lastPoseSequence = poseFrame.Sequence;
-                _latestPose = poseFrame.HumanoidPose;
+                _lastPoseSequence =
+                    poseFrame.Sequence;
+                _latestPose =
+                    poseFrame.HumanoidPose;
             }
 
-            if (_provider.TryGetLatestExpressions(
-                    out var expressionFrame) &&
-                expressionFrame?.Expressions != null &&
-                expressionFrame.Sequence != _lastExpressionSequence)
+            if (availability.ExpressionsAvailable &&
+                expressionFrame.Sequence !=
+                    _lastExpressionSequence)
             {
                 if (!string.Equals(
                     _lastExpressionSourceId,
@@ -161,6 +168,7 @@ namespace VCR.Runtime.Character
                         _smoothedExpressions,
                         0,
                         _smoothedExpressions.Length);
+                    _smoothedCustomExpressions.Clear();
                     _lastExpressionSourceId =
                         expressionFrame.SourceId;
                 }
@@ -177,27 +185,38 @@ namespace VCR.Runtime.Character
             var deltaTime =
                 Time.unscaledDeltaTime;
 
-            if (_fullBodyUnavailable &&
-                returnToNeutralWhenUnavailable)
+            if (applyHumanoidPose)
             {
-                ApplyNeutral(deltaTime);
-                return;
+                if (_poseUnavailable &&
+                    returnToNeutralWhenUnavailable)
+                {
+                    ApplyPoseNeutral(
+                        deltaTime);
+                }
+                else if (_latestPose != null)
+                {
+                    ApplyPose(
+                        _latestPose,
+                        deltaTime);
+                }
             }
 
-            if (applyHumanoidPose &&
-                _latestPose != null)
+            if (applyExpressions)
             {
-                ApplyPose(
-                    _latestPose,
-                    deltaTime);
-            }
-
-            if (applyExpressions &&
-                _latestExpressions != null)
-            {
-                ApplyExpressionState(
-                    _latestExpressions,
-                    deltaTime);
+                if (_expressionsUnavailable &&
+                    returnToNeutralWhenUnavailable)
+                {
+                    FadeExpressionsToNeutral(
+                        SmoothAlpha(
+                            neutralReturnSmoothing,
+                            deltaTime));
+                }
+                else if (_latestExpressions != null)
+                {
+                    ApplyExpressionState(
+                        _latestExpressions,
+                        deltaTime);
+                }
             }
         }
 
@@ -214,7 +233,8 @@ namespace VCR.Runtime.Character
             _lastExpressionSourceId = null;
             _latestPose = null;
             _latestExpressions = null;
-            _fullBodyUnavailable = true;
+            _poseUnavailable = true;
+            _expressionsUnavailable = true;
             Array.Clear(
                 _smoothedExpressions,
                 0,
@@ -229,25 +249,45 @@ namespace VCR.Runtime.Character
             _rootReferenceInitialized = false;
         }
 
-        private void SetFullBodyUnavailable(
+        private void SetPoseUnavailable(
             bool unavailable)
         {
-            if (_fullBodyUnavailable == unavailable)
+            if (_poseUnavailable == unavailable)
             {
                 return;
             }
 
-            _fullBodyUnavailable = unavailable;
+            _poseUnavailable = unavailable;
 
             if (unavailable)
             {
                 _latestPose = null;
-                _latestExpressions = null;
                 return;
             }
 
             ResetPoseCalibration();
             _lastPoseSequence = -1;
+        }
+
+        private void SetExpressionsUnavailable(
+            bool unavailable)
+        {
+            if (_expressionsUnavailable ==
+                unavailable)
+            {
+                return;
+            }
+
+            _expressionsUnavailable =
+                unavailable;
+
+            if (unavailable)
+            {
+                _latestExpressions = null;
+                _lastExpressionSequence = -1;
+                return;
+            }
+
             _lastExpressionSequence = -1;
         }
 
@@ -440,7 +480,7 @@ namespace VCR.Runtime.Character
             }
         }
 
-        private void ApplyNeutral(float deltaTime)
+        private void ApplyPoseNeutral(float deltaTime)
         {
             var alpha =
                 SmoothAlpha(
@@ -493,10 +533,6 @@ namespace VCR.Runtime.Character
                 }
             }
 
-            if (applyExpressions)
-            {
-                FadeExpressionsToNeutral(alpha);
-            }
         }
 
         private void FadeExpressionsToNeutral(float alpha)

@@ -23,13 +23,14 @@ namespace VCR.Editor.P5
                 new List<string>();
 
             ValidateMath(failures);
+            ValidateAvailability(failures);
             ValidateComponent(failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(blend modes, deadzone, custom expressions, base passthrough, overlay blend, presence isolation)");
+                    "(blend modes, deadzone, custom expressions, base passthrough, overlay blend, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -147,6 +148,98 @@ namespace VCR.Editor.P5
                 alpha > 0f &&
                 alpha < 1f,
                 "positive smoothing must produce an interpolation alpha inside (0, 1)",
+                failures);
+        }
+
+        private static void ValidateAvailability(
+            List<string> failures)
+        {
+            var timestampUs =
+                MonotonicClock
+                    .NowMicroseconds();
+
+            var noFullBodyPresence =
+                new TrackingPresenceSnapshot(
+                    sequence:
+                        timestampUs,
+                    timestampUs:
+                        timestampUs,
+                    subjectState:
+                        SubjectPresenceState.Present,
+                    faceSourceAvailable:
+                        true,
+                    bodyHandsSourceAvailable:
+                        true,
+                    fullBodySourceAvailable:
+                        false,
+                    faceSubjectEvidence:
+                        true,
+                    bodyHandsSubjectEvidence:
+                        true,
+                    fullBodySubjectEvidence:
+                        false,
+                    anySourceAvailable:
+                        true,
+                    subjectEvidence:
+                        true,
+                    events:
+                        TrackingPresenceEvents.None);
+
+            var expressionOnly =
+                MotionApplicationAvailabilityResolver
+                    .Resolve(
+                        noFullBodyPresence,
+                        hasPoseFrame: true,
+                        hasExpressionFrame: true);
+
+            Expect(
+                !expressionOnly.PoseAvailable,
+                "full-body pose application must remain unavailable without full-body presence",
+                failures);
+
+            Expect(
+                expressionOnly.ExpressionsAvailable,
+                "expression application must remain available when an expression frame exists without full-body presence",
+                failures);
+
+            var lostSubject =
+                new TrackingPresenceSnapshot(
+                    sequence:
+                        timestampUs + 1,
+                    timestampUs:
+                        timestampUs + 1,
+                    subjectState:
+                        SubjectPresenceState.Lost,
+                    faceSourceAvailable:
+                        false,
+                    bodyHandsSourceAvailable:
+                        false,
+                    fullBodySourceAvailable:
+                        false,
+                    faceSubjectEvidence:
+                        false,
+                    bodyHandsSubjectEvidence:
+                        false,
+                    fullBodySubjectEvidence:
+                        false,
+                    anySourceAvailable:
+                        false,
+                    subjectEvidence:
+                        false,
+                    events:
+                        TrackingPresenceEvents.SubjectLost);
+
+            var audioFallback =
+                MotionApplicationAvailabilityResolver
+                    .Resolve(
+                        lostSubject,
+                        hasPoseFrame: false,
+                        hasExpressionFrame: true);
+
+            Expect(
+                !audioFallback.PoseAvailable &&
+                audioFallback.ExpressionsAvailable,
+                "expression-only fallback must not become coupled to visual subject/full-body presence",
                 failures);
         }
 
