@@ -38,7 +38,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -691,6 +691,66 @@ namespace VCR.Editor.P9
                     new EventRuntimeRule
                     {
                         Id =
+                            "manual-environment-transition",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .EnvironmentSetState,
+                                    TargetId =
+                                        "environment.main",
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "night",
+                                    Name =
+                                        "Fade",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        0.75
+                                }
+                            }
+                    });
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        10));
+
+                InvokeUpdate(hub);
+
+                Expect(
+                    environment.Status.StateId ==
+                        "night" &&
+                    environment.LastTransition.Mode ==
+                        EnvironmentTransitionMode.Fade,
+                    "environment.set_state must map transition mode through the environment runtime contract",
+                    failures);
+
+                ExpectClose(
+                    environment.LastTransition.DurationSeconds,
+                    0.75,
+                    "environment.set_state must pass transition duration without exposing concrete environment components",
+                    failures);
+
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
                             "manual-camera",
                         Filter =
                             new EventRuleFilter
@@ -1172,6 +1232,13 @@ namespace VCR.Editor.P9
         private string _stateId =
             "default";
 
+        public EnvironmentTransitionSpec LastTransition
+        {
+            get;
+            private set;
+        } =
+            EnvironmentTransitionSpec.Cut;
+
         public EnvironmentRuntimeStatus Status =>
             new(
                 _environmentId,
@@ -1228,6 +1295,8 @@ namespace VCR.Editor.P9
                 _stateId;
             _stateId =
                 stateId;
+            LastTransition =
+                transition;
 
             StateChanged?.Invoke(
                 new EnvironmentStateChange(

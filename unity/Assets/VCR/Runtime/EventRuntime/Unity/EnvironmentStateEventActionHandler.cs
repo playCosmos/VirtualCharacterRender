@@ -79,8 +79,51 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
+            var hasTransitionMetadata =
+                !string.IsNullOrWhiteSpace(
+                    command.Name) ||
+                command.HasValue;
+
+            if (!hasTransitionMetadata)
+            {
+                return _runtime.SetState(
+                    stateId,
+                    out error);
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    command.Name) ||
+                !Enum.TryParse<
+                    EnvironmentTransitionMode>(
+                        command.Name,
+                        ignoreCase: true,
+                        out var mode))
+            {
+                error =
+                    "environment.set_state transition Name must be Cut, Fade, Crossfade, or Dissolve.";
+                return false;
+            }
+
+            var duration =
+                command.HasValue
+                    ? command.Value
+                    : 0.0;
+
+            if (double.IsNaN(duration) ||
+                double.IsInfinity(duration) ||
+                duration < 0.0 ||
+                duration > float.MaxValue)
+            {
+                error =
+                    "environment.set_state transition duration must be a finite non-negative float-range value.";
+                return false;
+            }
+
             return _runtime.SetState(
                 stateId,
+                new EnvironmentTransitionSpec(
+                    mode,
+                    (float)duration),
                 out error);
         }
 

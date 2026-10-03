@@ -116,6 +116,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - bounded commands per event
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
+- environment transition mode/duration mapping through IEnvironmentRuntime without concrete component leakage
 - camera.set_fov execution through PrimaryCameraController
 - material.set_float mutation of an active runtime override without source-material mutation
 - material int/bool strict-value validation plus color/vector command component contracts
@@ -130,7 +131,6 @@ These validation paths are implemented but have not been executed in this enviro
 The next source slices are:
 
 - expand material/shader actions to texture/shader-id/preset operations only where resource-id validation can remain deterministic
-- add environment transition parameters without leaking concrete environment components into rule definitions
 - version persisted rule configuration before P11 exposes editing UI
 - add rule-level diagnostics and optional tracing that stays disabled by default
 - validate allocation/frame-time cost under event bursts
