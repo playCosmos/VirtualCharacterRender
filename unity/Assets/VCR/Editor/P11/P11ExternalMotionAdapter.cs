@@ -22,6 +22,8 @@ namespace VCR.Editor.P11
 
     internal sealed class P11ExternalMotionAdapterResult
     {
+        public string AdapterId;
+        public string SourceAssetPath;
         public BakedMotionCueAsset[] CueAssets =
             Array.Empty<BakedMotionCueAsset>();
         public string[] CueAssetPaths =
