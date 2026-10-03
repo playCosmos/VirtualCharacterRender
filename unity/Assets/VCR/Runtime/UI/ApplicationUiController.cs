@@ -774,6 +774,75 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 150f;
 
+            _motionPoseWeightLabel =
+                CreateText(
+                    "Pose Weight Label",
+                    _contextActions,
+                    15,
+                    TextAnchor.MiddleLeft);
+            _motionPoseWeightLabel.text =
+                "Pose Weight";
+            _motionPoseWeightLabel.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
+
+            _motionPoseWeightSlider =
+                CreateSlider(
+                    "Primary Pose Weight",
+                    _contextActions,
+                    0f,
+                    1f,
+                    1f,
+                    SetPrimaryPoseLayerWeight);
+            _motionPoseWeightSlider.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 180f;
+
+            _manualExpressionNameInput =
+                CreateInputField(
+                    "Manual Expression Name",
+                    _contextActions,
+                    "Expression");
+            _manualExpressionNameInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 135f;
+
+            _manualExpressionValueInput =
+                CreateInputField(
+                    "Manual Expression Value",
+                    _contextActions,
+                    "0..1");
+            _manualExpressionValueInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _manualExpressionApplyButton =
+                CreateButton(
+                    "Apply",
+                    _contextActions,
+                    ApplyManualExpression);
+            _manualExpressionApplyButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _manualExpressionClearButton =
+                CreateButton(
+                    "Clear",
+                    _contextActions,
+                    ClearManualExpression);
+            _manualExpressionClearButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _manualExpressionClearAllButton =
+                CreateButton(
+                    "Clear All",
+                    _contextActions,
+                    ClearAllManualExpressions);
+            _manualExpressionClearAllButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 95f;
+
             _appearanceActions =
                 CreateRect(
                     "Appearance Actions",
