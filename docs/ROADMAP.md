@@ -217,7 +217,7 @@ UI areas:
 
 Advanced controls may remain collapsed/disabled when their capabilities are unused.
 
-Character UI now has the first Appearance / Quick Change source implementation: registered outfit variants, accessory slots, named authored/user presets, previous/next/default controls, direct preset/outfit/accessory ID apply/clear controls, per-character user-preset save/load/delete, event-compatible switching, reusable transition definitions, transition preview, one atomic appearance-commit marker, a logical particle/effect action handler, and a procedural P5 Mixer motion-cue source with a default spin cue. Immediate change remains available. Timed choreography evidence and real VRM switching still require Unity runtime evidence. See `APPEARANCE_QUICKCHANGE.md`.
+Character UI now has the first Appearance / Quick Change source implementation: registered outfit variants, accessory slots, named authored/user presets, previous/next/default controls, direct preset/outfit/accessory ID apply/clear controls, per-character user-preset save/load/delete, event-compatible switching, reusable transition definitions, transition preview, one atomic appearance-commit marker, logical particle/effect and audio action handlers, and a procedural P5 Mixer motion-cue source with a default spin cue. Immediate change remains available. Timed choreography evidence and real VRM switching still require Unity runtime evidence. See `APPEARANCE_QUICKCHANGE.md`.
 
 ## P12 — Advanced One-Character Scene Tooling
 
