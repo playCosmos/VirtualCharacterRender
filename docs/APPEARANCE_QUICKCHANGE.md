@@ -210,7 +210,8 @@ Examples include:
 - jump/land
 - bow
 - pose-and-hold
-- custom imported animation clip (planned P12 conversion/registration path)
+- Unity-project `AnimationClip` baked to a normalized additive cue asset through the P11 cue baker
+- externally imported motion files remain a P12 import/tooling concern
 - user-authored procedural/additive pose sequence (runtime cue path implemented)
 
 Custom effect support uses registered effect presets and character/world anchors.
@@ -251,9 +252,9 @@ Planned policies:
 - `QueueLatest` — default; keep only the newest pending appearance request while the current transition finishes
 - `QueueAll` — optional for authored sequences
 - `IgnoreWhileBusy`
-- `Interrupt` — advanced; allowed only for transitions explicitly authored as interruptible
+- `Interrupt` — advanced; allowed only when explicit immediate cancellation cleanup actions are authored
 
-Interrupting before `appearance.commit` keeps the previous appearance. Interrupting after commit keeps the newly committed appearance and only stops remaining presentation steps.
+Cancellation cleanup uses ordinary non-`appearance.*` action steps such as `motion.release`, `effect.stop`, and `audio.stop`. Cleanup steps execute immediately in authored order. Interrupting before `appearance.commit` keeps the previous appearance. Interrupting after commit keeps the newly committed appearance and only stops remaining presentation steps.
 
 ## Transition fallback policy
 
@@ -375,7 +376,9 @@ The first source implementation now exists:
 - timed transition runner with a single commit step
 - deterministic authored step order
 - QueueLatest / QueueAll / IgnoreWhileBusy
-- Interrupt rejected until cancellation cleanup is explicitly implemented
+- Interrupt enabled only for transitions with explicit cancellation cleanup actions
+- transition status exposes elapsed time, duration, normalized progress, commit state, and cancel availability
+- Character UI exposes progress and a Cancel Transition action when cleanup is executable
 - generic transition-action bridge to existing application-level event handlers
 - P11 Character UI previous/next/transition/default controls plus direct preset/outfit/accessory ID apply/clear controls
 - P11 transition preview by replaying the selected non-Immediate transition against the current appearance without changing the requested look
@@ -406,21 +409,24 @@ Implemented built-in motion presentation now also includes:
 - `motion.play`
 - `motion.release`
 - `ProceduralMotionCueSource` as a P5 Mixer Additive/Procedural pose layer
+- `BakedMotionCueSource` for pre-baked `AnimationClip` pose data
+- `VCR/P11/Open AnimationClip Cue Baker` editor workflow using a reference humanoid hierarchy
+- baked cues store additive root/bone deltas and interpolate them at runtime without sampling `AnimationClip` or `Animator` per frame
+- `MotionCueEventActionHandler` routes across procedural and baked runtimes by explicit runtime id or unique cue id
 - root position/rotation curves and per-bone position/rotation curves
-- idle source disables its own Update callback
+- idle sources disable their own Update callback
 - default `spin` cue: 360-degree root yaw over 0.9 seconds
-- user-defined procedural cues through the same logical cue-id contract
+- user-defined procedural and baked cues through the same logical cue-id contract
 
 Not yet implemented as built-ins:
 
-- imported AnimationClip -> normalized motion cue conversion/registration
+- external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
 - transition timeline authoring UI
 - external appearance package import
 - compatible external skinned-garment workflow
-- transition cancellation cleanup contract
 
-A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive. P11 runtime scene generation now places the shared appearance-transition executor, the default effect/audio handlers, and the appearance event handler; the appearance runtime auto-discovers transition executors when a character is loaded.
+A custom `IEventActionHandler` can already provide additional logical transition actions, so user-defined action types have an extension path before the built-in authoring tools arrive. P11 runtime scene generation now places the shared appearance-transition executor, the default effect/audio handlers, procedural and baked motion cue sources, and the appearance event handler; the appearance runtime auto-discovers transition executors when a character is loaded.
 
 ## Deferred evidence
 
