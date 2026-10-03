@@ -372,6 +372,71 @@ namespace VCR.Runtime.Scene
                 out error);
         }
 
+        public bool TryApplyBroadcastCaptureTarget(
+            BroadcastCaptureTarget target,
+            out string error)
+        {
+            error = null;
+
+            try
+            {
+                EnsureOperational();
+            }
+            catch (Exception exception)
+            {
+                error = exception.Message;
+                return false;
+            }
+
+            if (renderBootstrap == null)
+            {
+                error =
+                    "Render bootstrap is unavailable.";
+                return false;
+            }
+
+            if (target.Width < 320 ||
+                target.Height < 240 ||
+                target.FramesPerSecond < 30 ||
+                target.FramesPerSecond > 240)
+            {
+                error =
+                    "Broadcast target must be at least 320x240 and use 30..240 FPS.";
+                return false;
+            }
+
+            var settings =
+                renderBootstrap.CaptureSettings();
+
+            settings.ResolutionPreset =
+                target.Tier switch
+                {
+                    BroadcastCaptureTargetTier.Minimum720p60
+                        when target.Width == 1280 &&
+                             target.Height == 720 =>
+                            RenderResolutionPreset.Minimum720p,
+
+                    BroadcastCaptureTargetTier.Recommended1080p60
+                        when target.Width == 1920 &&
+                             target.Height == 1080 =>
+                            RenderResolutionPreset.Recommended1080p,
+
+                    _ =>
+                        RenderResolutionPreset.Custom
+                };
+
+            settings.Width = target.Width;
+            settings.Height = target.Height;
+            settings.TargetFrameRate =
+                target.FramesPerSecond;
+            settings.RunInBackground = true;
+
+            renderBootstrap.Apply(
+                settings);
+
+            return true;
+        }
+
         public bool Suspend()
         {
             if (_state == SceneRuntimeState.Suspended)
