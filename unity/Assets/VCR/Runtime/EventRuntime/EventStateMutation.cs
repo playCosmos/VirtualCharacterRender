@@ -38,6 +38,9 @@ namespace VCR.Runtime.EventRuntime
         public double NumericOffset;
         public EventTextValueSource TextSource;
         public string ConstantText;
+        public EventTextTransformFlags TextTransforms;
+        public string TextPrefix;
+        public string TextSuffix;
 
         public void Apply(
             NormalizedEvent value,
@@ -106,15 +109,25 @@ namespace VCR.Runtime.EventRuntime
                 !double.IsInfinity(value);
         }
 
-        private string ResolveText(NormalizedEvent value) =>
-            TextSource switch
-            {
-                EventTextValueSource.EventText => value.Text,
-                EventTextValueSource.EventActorId => value.ActorId,
-                EventTextValueSource.EventActorName => value.ActorName,
-                EventTextValueSource.EventType => value.Type,
-                EventTextValueSource.EventSourceId => value.SourceId,
-                _ => ConstantText
-            };
+        private string ResolveText(
+            NormalizedEvent value)
+        {
+            var raw =
+                TextSource switch
+                {
+                    EventTextValueSource.EventText => value.Text,
+                    EventTextValueSource.EventActorId => value.ActorId,
+                    EventTextValueSource.EventActorName => value.ActorName,
+                    EventTextValueSource.EventType => value.Type,
+                    EventTextValueSource.EventSourceId => value.SourceId,
+                    _ => ConstantText
+                };
+
+            return EventTextTransform.Apply(
+                raw,
+                TextTransforms,
+                TextPrefix,
+                TextSuffix);
+        }
     }
 }

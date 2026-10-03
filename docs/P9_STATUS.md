@@ -46,6 +46,7 @@ Implemented rule features:
 - Set/Remove text/state mutations
 - event amount/text/actor/type/source value mapping into state/actions
 - numeric scale/offset transforms for state/action values with non-finite configuration containment
+- text trim, invariant lower/upper-case, prefix, and suffix transforms for state/action mappings
 - rule-level cooldown using monotonic event timestamps
 - optional rule-level fixed-window rate limiting for bursty inputs; quota counts only successful rule executions and resets deterministically at the next window
 - ordered rule evaluation
@@ -107,6 +108,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - rule cooldown suppression
 - windowed rule rate-limit burst allowance, excess suppression, and next-window reset
 - numeric scale/offset action transform
+- deterministic text transform mapping for state mutation and action commands
 - bounded commands per event
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
@@ -122,7 +124,6 @@ These validation paths are implemented but have not been executed in this enviro
 
 The next source slices are:
 
-- add text transform operators beyond direct value mapping
 - add motion-layer application handlers and expand material/shader actions beyond float parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - version persisted rule configuration before P11 exposes editing UI

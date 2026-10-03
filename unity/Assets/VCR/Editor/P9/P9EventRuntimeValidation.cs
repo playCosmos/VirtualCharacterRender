@@ -38,7 +38,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -300,6 +300,92 @@ namespace VCR.Editor.P9
             Expect(
                 output.Count == 0,
                 "numeric conditions must fail when their state key is missing instead of treating it as zero",
+                failures);
+
+            var transformedTextRule =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "text-transform",
+                    Filter =
+                        new EventRuleFilter
+                        {
+                            Type =
+                                NormalizedEventTypes
+                                    .BroadcastChatMessage
+                        },
+                    StateMutations =
+                        new[]
+                        {
+                            new EventStateMutation
+                            {
+                                Kind =
+                                    EventStateMutationKind
+                                        .SetText,
+                                Key =
+                                    "chat.normalized",
+                                TextSource =
+                                    EventTextValueSource
+                                        .EventText,
+                                TextTransforms =
+                                    EventTextTransformFlags
+                                        .Trim |
+                                    EventTextTransformFlags
+                                        .ToLowerInvariant,
+                                TextPrefix =
+                                    "msg:",
+                                TextSuffix =
+                                    ":end"
+                            }
+                        },
+                    Actions =
+                        new[]
+                        {
+                            new EventActionTemplate
+                            {
+                                ActionType =
+                                    "test.text_transform",
+                                TextSource =
+                                    EventTextValueSource
+                                        .EventActorName,
+                                TextTransforms =
+                                    EventTextTransformFlags
+                                        .Trim |
+                                    EventTextTransformFlags
+                                        .ToUpperInvariant,
+                                TextPrefix =
+                                    "[",
+                                TextSuffix =
+                                    "]"
+                            }
+                        }
+                };
+
+            engine.SetRules(
+                transformedTextRule);
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .BroadcastChatMessage,
+                    "soop.validation",
+                    900_000,
+                    text:
+                        "  Hello World  ",
+                    actorName:
+                        "  Streamer  ",
+                    sequence:
+                        9),
+                output);
+
+            Expect(
+                output.Count == 1 &&
+                output[0].Text ==
+                    "[STREAMER]" &&
+                engine.State.GetText(
+                    "chat.normalized") ==
+                    "msg:hello world:end",
+                "text transforms must support deterministic trim/case/prefix/suffix mapping for state and actions",
                 failures);
 
             var cooldownRule =

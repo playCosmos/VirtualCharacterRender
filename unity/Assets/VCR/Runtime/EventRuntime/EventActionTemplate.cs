@@ -16,6 +16,9 @@ namespace VCR.Runtime.EventRuntime
         public double NumericOffset;
         public EventTextValueSource TextSource;
         public string ConstantText;
+        public EventTextTransformFlags TextTransforms;
+        public string TextPrefix;
+        public string TextSuffix;
 
         public EventActionCommand Build(
             string ruleId,
@@ -43,7 +46,7 @@ namespace VCR.Runtime.EventRuntime
                     ? transformed
                     : 0.0;
 
-            var text =
+            var rawText =
                 TextSource switch
                 {
                     EventTextValueSource.EventText => value.Text,
@@ -53,6 +56,13 @@ namespace VCR.Runtime.EventRuntime
                     EventTextValueSource.EventSourceId => value.SourceId,
                     _ => ConstantText
                 };
+
+            var text =
+                EventTextTransform.Apply(
+                    rawText,
+                    TextTransforms,
+                    TextPrefix,
+                    TextSuffix);
 
             return new EventActionCommand(
                 ruleId,
