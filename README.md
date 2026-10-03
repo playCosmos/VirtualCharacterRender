@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed through P7 declarative material/shader packages and capability registration. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
+The source implementation has progressed through P8 protocol/event adapters: VMC/OSC interoperability foundations, normalized external event ingress, a bounded OSC event receiver, a ClientWebSocket bridge client, and a SOOP chat/donation bridge adapter. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
 
 ## Architecture documents
 
@@ -82,6 +82,7 @@ The source implementation has progressed through P7 declarative material/shader 
 - [P5 status](docs/P5_STATUS.md)
 - [P6 status](docs/P6_STATUS.md)
 - [P7 status](docs/P7_STATUS.md)
+- [P8 status](docs/P8_STATUS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -111,6 +112,6 @@ The source implementation has progressed through P7 declarative material/shader 
 
 ## Status
 
-P1-P6 source implementations are preserved as source checkpoints. P7 declarative shader-package loading now covers validated manifests/resources, transactional load/reload rollback, and metadata-only capability registration. Executable third-party plugins remain deferred under ADR-0015.
+P1-P7 source implementations are preserved as source checkpoints. P8 protocol/event-adapter source scope is checkpoint-ready: normalized external ingress, OSC UDP event injection, outbound WebSocket bridge transport, tracking-presence adaptation, and SOOP chat/donation bridge mapping are implemented. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
