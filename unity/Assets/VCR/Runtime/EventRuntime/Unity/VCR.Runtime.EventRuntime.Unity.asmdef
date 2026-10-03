@@ -3,6 +3,7 @@
   "rootNamespace": "VCR.Runtime.EventRuntime.Unity",
   "references": [
     "VCR.Runtime.Core",
+    "VCR.Runtime.Appearance",
     "VCR.Runtime.Events",
     "VCR.Runtime.Events.Unity",
     "VCR.Runtime.EventRuntime",
