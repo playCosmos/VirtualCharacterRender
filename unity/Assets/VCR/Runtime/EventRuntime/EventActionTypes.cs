@@ -23,6 +23,12 @@ namespace VCR.Runtime.EventRuntime
         public const string MaterialSetVector =
             "material.set_vector";
 
+        public const string MaterialSetTexture =
+            "material.set_texture";
+
+        public const string MaterialSetShader =
+            "material.set_shader";
+
         public const string ExpressionSet =
             "expression.set";
 

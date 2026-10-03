@@ -1185,6 +1185,13 @@ namespace VCR.Editor.P9
         {
             GameObject root = null;
             Material source = null;
+            Texture2D runtimeTexture = null;
+            var shaderRegistrySnapshot =
+                RuntimeShaderRegistry
+                    .CaptureRegistered();
+            var textureRegistrySnapshot =
+                RuntimeTextureRegistry
+                    .CaptureRegistered();
 
             try
             {
@@ -1200,6 +1207,7 @@ namespace VCR.Editor.P9
                 }
 
                 string floatProperty = null;
+                string textureProperty = null;
 
                 for (var i = 0;
                      i < shader.GetPropertyCount();
@@ -1208,14 +1216,22 @@ namespace VCR.Editor.P9
                     var type =
                         shader.GetPropertyType(i);
 
-                    if (type ==
+                    if (floatProperty == null &&
+                        (type ==
                             ShaderPropertyType.Float ||
-                        type ==
-                            ShaderPropertyType.Range)
+                         type ==
+                            ShaderPropertyType.Range))
                     {
                         floatProperty =
                             shader.GetPropertyName(i);
-                        break;
+                    }
+
+                    if (textureProperty == null &&
+                        type ==
+                            ShaderPropertyType.Texture)
+                    {
+                        textureProperty =
+                            shader.GetPropertyName(i);
                     }
                 }
 
@@ -1224,6 +1240,14 @@ namespace VCR.Editor.P9
                 {
                     failures.Add(
                         "URP Unlit exposed no float/range property for material action validation.");
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(
+                        textureProperty))
+                {
+                    failures.Add(
+                        "URP Unlit exposed no texture property for material action validation.");
                     return;
                 }
 
@@ -1408,6 +1432,75 @@ namespace VCR.Editor.P9
                         vectorCommand),
                     "material.set_vector must be claimed by the generalized material property handler",
                     failures);
+
+                const string shaderId =
+                    "p9.validation.shader";
+                const string textureId =
+                    "p9.validation.texture";
+
+                runtimeTexture =
+                    new Texture2D(
+                        1,
+                        1);
+
+                Expect(
+                    RuntimeShaderRegistry.Register(
+                        shaderId,
+                        shader) &&
+                    RuntimeTextureRegistry.Register(
+                        textureId,
+                        runtimeTexture),
+                    "material event validation must register deterministic shader/texture resource ids",
+                    failures);
+
+                var shaderCommand =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetShader,
+                        slots[0].Id,
+                        null,
+                        shaderId,
+                        0.0,
+                        false,
+                        24);
+
+                Expect(
+                    propertyHandler.TryExecute(
+                        shaderCommand,
+                        out var shaderActionError) &&
+                    string.IsNullOrEmpty(
+                        shaderActionError) &&
+                    renderer.sharedMaterial.shader ==
+                        shader,
+                    "material.set_shader must resolve a registered shader id through MaterialOverrideController",
+                    failures);
+
+                var textureCommand =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetTexture,
+                        slots[0].Id,
+                        textureProperty,
+                        textureId,
+                        0.0,
+                        false,
+                        25);
+
+                Expect(
+                    propertyHandler.TryExecute(
+                        textureCommand,
+                        out var textureActionError) &&
+                    string.IsNullOrEmpty(
+                        textureActionError) &&
+                    ReferenceEquals(
+                        renderer.sharedMaterial
+                            .GetTexture(
+                                textureProperty),
+                        runtimeTexture),
+                    "material.set_texture must resolve a registered texture id without exposing Texture objects to rules",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -1421,6 +1514,20 @@ namespace VCR.Editor.P9
                 {
                     UnityEngine.Object
                         .DestroyImmediate(root);
+                }
+
+                RuntimeShaderRegistry
+                    .RestoreRegistered(
+                        shaderRegistrySnapshot);
+                RuntimeTextureRegistry
+                    .RestoreRegistered(
+                        textureRegistrySnapshot);
+
+                if (runtimeTexture != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            runtimeTexture);
                 }
 
                 if (source != null)

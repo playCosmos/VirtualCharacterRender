@@ -48,6 +48,14 @@ namespace VCR.Runtime.EventRuntime.Unity
                  string.Equals(
                      command.ActionType,
                      EventActionTypes.MaterialSetVector,
+                     StringComparison.Ordinal) ||
+                 string.Equals(
+                     command.ActionType,
+                     EventActionTypes.MaterialSetTexture,
+                     StringComparison.Ordinal) ||
+                 string.Equals(
+                     command.ActionType,
+                     EventActionTypes.MaterialSetShader,
                      StringComparison.Ordinal));
         }
 
@@ -72,12 +80,51 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
+            if (string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetShader,
+                    StringComparison.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(
+                        command.Text))
+                {
+                    error =
+                        "material.set_shader requires a shader id in command text.";
+                    return false;
+                }
+
+                return controller.TryApplyShaderId(
+                    command.TargetId,
+                    command.Text,
+                    out error);
+            }
+
             if (string.IsNullOrWhiteSpace(
                     command.Name))
             {
                 error =
                     "Material property action requires a shader property name.";
                 return false;
+            }
+
+            if (string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetTexture,
+                    StringComparison.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(
+                        command.Text))
+                {
+                    error =
+                        "material.set_texture requires a texture id in command text.";
+                    return false;
+                }
+
+                return controller.TrySetTextureId(
+                    command.TargetId,
+                    command.Name,
+                    command.Text,
+                    out error);
             }
 
             if (!command.HasValue)

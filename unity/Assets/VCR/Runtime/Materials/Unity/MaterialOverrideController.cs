@@ -583,6 +583,28 @@ namespace VCR.Runtime.Materials.Unity
                 out error);
         }
 
+        public bool TrySetTextureId(
+            string slotId,
+            string propertyName,
+            string textureId,
+            out string error)
+        {
+            if (!TryResolveTexture(
+                    textureId,
+                    out var texture))
+            {
+                error =
+                    $"Texture id '{textureId}' could not be resolved.";
+                return false;
+            }
+
+            return TrySetTexture(
+                slotId,
+                propertyName,
+                texture,
+                out error);
+        }
+
         public bool ClearOverride(
             string slotId)
         {
