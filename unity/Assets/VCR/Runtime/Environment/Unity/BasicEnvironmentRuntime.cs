@@ -544,13 +544,13 @@ namespace VCR.Runtime.Environment.Unity
 
             _transitionStatus =
                 new EnvironmentTransitionStatus(
-                    active: true,
+                    true,
                     transition.Mode,
                     previous,
                     nextStateId,
                     nowUs,
                     transition.DurationSeconds,
-                    progress: 0f);
+                    0f);
 
             StateChanged?.Invoke(
                 new EnvironmentStateChange(
@@ -653,7 +653,7 @@ namespace VCR.Runtime.Environment.Unity
 
             _transitionStatus =
                 new EnvironmentTransitionStatus(
-                    active: progress < 1f,
+                    progress < 1f,
                     _transitionStatus.Mode,
                     _transitionStatus
                         .PreviousStateId,
@@ -1063,7 +1063,7 @@ namespace VCR.Runtime.Environment.Unity
 
             _transitionStatus =
                 new EnvironmentTransitionStatus(
-                    active: false,
+                    false,
                     _transitionStatus.Mode,
                     _transitionStatus
                         .PreviousStateId,
@@ -1072,7 +1072,7 @@ namespace VCR.Runtime.Environment.Unity
                         .StartedAtTimestampUs,
                     _transitionStatus
                         .DurationSeconds,
-                    progress: 1f);
+                    1f);
 
             ApplyTransitionTargets(
                 CreateTransitionContext(
