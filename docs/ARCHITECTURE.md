@@ -27,6 +27,9 @@ Built-in / External Inputs
              ┌─────────────┼─────────────┐
              ↓             ↓             ↓
          Character    Environment      Props/FX
+             │
+        Appearance
+       Outfit/Accessory
              └─────────────┼─────────────┘
                            ↓
                  Rendering Abstractions
@@ -60,6 +63,7 @@ Optional systems are capabilities, not separate editions.
 Runtime
  ├─ Core — always active
  ├─ Character
+ ├─ Appearance / Wardrobe
  ├─ Rendering
  ├─ Tracking adapters
  ├─ Motion/Expression
@@ -150,6 +154,8 @@ tools/      Build, validation, conversion, diagnostics
 - Built-in webcam/mobile capture and external VMC share normalized tracking state.
 - Platform event adapters emit normalized events.
 - Runtime overrides never destructively rewrite source model materials.
+- Appearance quick changes preserve the active character runtime and must not reset tracking, motion/expression, environment, event, or output state.
+- Outfit/accessory changes are transactional: invalid or incompatible requests leave the previous complete appearance active.
 - Custom shaders are overrides, not prerequisites for model load.
 - A bad custom shader always has a deterministic fallback.
 - Tracking sources can be replaced or mixed without changing renderer code.
