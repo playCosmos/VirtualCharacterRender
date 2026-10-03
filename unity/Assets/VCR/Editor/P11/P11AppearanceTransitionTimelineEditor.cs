@@ -5,6 +5,7 @@ using UnityEngine;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
+using VCR.Runtime.Tracking.Mixing;
 
 namespace VCR.Editor.P11
 {
@@ -30,6 +31,9 @@ namespace VCR.Editor.P11
         private SerializedProperty _transitions;
         private int _selectedTransitionIndex;
         private Vector2 _scroll;
+        private AnimationClip _markerClip;
+        private BakedMotionCueAsset _markerCueAsset;
+        private float _markerSnapThresholdSeconds = 0.08f;
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
@@ -330,6 +334,72 @@ namespace VCR.Editor.P11
                 "Named Markers",
                 EditorStyles.boldLabel);
 
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                _markerClip =
+                    (AnimationClip)
+                    EditorGUILayout.ObjectField(
+                        "AnimationClip Source",
+                        _markerClip,
+                        typeof(AnimationClip),
+                        false);
+                _markerCueAsset =
+                    (BakedMotionCueAsset)
+                    EditorGUILayout.ObjectField(
+                        "Baked Cue Source",
+                        _markerCueAsset,
+                        typeof(BakedMotionCueAsset),
+                        false);
+                _markerSnapThresholdSeconds =
+                    Mathf.Max(
+                        0f,
+                        EditorGUILayout.FloatField(
+                            "Snap Threshold (s)",
+                            _markerSnapThresholdSeconds));
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    using (new EditorGUI
+                               .DisabledScope(
+                                   _markerClip == null))
+                    {
+                        if (GUILayout.Button(
+                                "Import Clip Markers"))
+                        {
+                            ImportAnimationClipMarkers(
+                                transition);
+                        }
+                    }
+
+                    using (new EditorGUI
+                               .DisabledScope(
+                                   _markerCueAsset == null))
+                    {
+                        if (GUILayout.Button(
+                                "Import Baked Markers"))
+                        {
+                            ImportBakedCueMarkers(
+                                transition);
+                        }
+                    }
+
+                    using (new EditorGUI
+                               .DisabledScope(
+                                   markers.arraySize == 0))
+                    {
+                        if (GUILayout.Button(
+                                "Snap Absolute Steps"))
+                        {
+                            SnapAbsoluteStepsToMarkers(
+                                transition);
+                        }
+                    }
+                }
+            }
+
             if (markers.arraySize == 0)
             {
                 EditorGUILayout.HelpBox(
@@ -401,6 +471,366 @@ namespace VCR.Editor.P11
                 marker.FindPropertyRelative(
                         "TimeSeconds")
                     .floatValue = 0f;
+            }
+        }
+
+        private void ImportAnimationClipMarkers(
+            SerializedProperty transition)
+        {
+            if (!P11MotionMarkerUtility
+                .TryExtractFromAnimationClip(
+                    _markerClip,
+                    out var extracted,
+                    out var error))
+            {
+                _lastMessage =
+                    "AnimationClip marker import failed: " +
+                    error;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            ImportMarkers(
+                transition,
+                P11MotionMarkerUtility
+                    .ToAppearanceMarkers(
+                        extracted),
+                _markerClip != null
+                    ? _markerClip.length
+                    : 0f,
+                _markerClip != null
+                    ? _markerClip.name
+                    : "AnimationClip");
+        }
+
+        private void ImportBakedCueMarkers(
+            SerializedProperty transition)
+        {
+            var cue =
+                _markerCueAsset?.Cue;
+
+            if (cue == null)
+            {
+                _lastMessage =
+                    "Baked cue marker import failed: cue asset is empty.";
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            ImportMarkers(
+                transition,
+                P11MotionMarkerUtility
+                    .ToAppearanceMarkers(
+                        cue.Markers),
+                cue.DurationSeconds,
+                cue.CueId ??
+                    _markerCueAsset.name);
+        }
+
+        private void ImportMarkers(
+            SerializedProperty transition,
+            AppearanceTransitionMarker[] imported,
+            float sourceDurationSeconds,
+            string sourceLabel)
+        {
+            imported ??=
+                Array.Empty<
+                    AppearanceTransitionMarker>();
+
+            if (imported.Length == 0)
+            {
+                _lastMessage =
+                    $"No explicit VCR markers were found in '{sourceLabel}'.";
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
+            var collisions = 0;
+
+            foreach (var marker in imported)
+            {
+                if (marker != null &&
+                    FindMarkerIndex(
+                        markers,
+                        marker.Name) >= 0)
+                {
+                    collisions++;
+                }
+            }
+
+            if (collisions > 0 &&
+                !EditorUtility.DisplayDialog(
+                    "Replace Marker Times?",
+                    $"{collisions} marker name(s) already exist. Replace those marker times with values from '{sourceLabel}'?",
+                    "Replace",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                "Import Transition Markers");
+
+            foreach (var marker in imported)
+            {
+                if (marker == null ||
+                    string.IsNullOrWhiteSpace(
+                        marker.Name))
+                {
+                    continue;
+                }
+
+                var index =
+                    FindMarkerIndex(
+                        markers,
+                        marker.Name);
+
+                if (index < 0)
+                {
+                    index =
+                        markers.arraySize;
+                    markers.arraySize =
+                        index + 1;
+                }
+
+                var property =
+                    markers.GetArrayElementAtIndex(
+                        index);
+                property.FindPropertyRelative(
+                        "Name")
+                    .stringValue =
+                        marker.Name;
+                property.FindPropertyRelative(
+                        "TimeSeconds")
+                    .floatValue =
+                        (float)marker.TimeSeconds;
+            }
+
+            SortMarkersByTime(
+                markers);
+
+            var duration =
+                transition.FindPropertyRelative(
+                    "DurationSeconds");
+            var previousDuration =
+                duration.floatValue;
+            duration.floatValue =
+                Mathf.Max(
+                    previousDuration,
+                    Mathf.Max(
+                        0f,
+                        sourceDurationSeconds));
+
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                $"Imported {imported.Length} marker(s) from '{sourceLabel}'." +
+                (duration.floatValue >
+                 previousDuration
+                    ? $" Transition duration expanded to {duration.floatValue:0.###}s."
+                    : string.Empty);
+            _lastMessageType =
+                MessageType.Info;
+        }
+
+        private void SnapAbsoluteStepsToMarkers(
+            SerializedProperty transition)
+        {
+            var markers =
+                transition.FindPropertyRelative(
+                    "Markers");
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+
+            if (markers.arraySize == 0)
+            {
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                "Snap Transition Steps To Markers");
+
+            var snapped = 0;
+
+            for (var i = 0;
+                 i < steps.arraySize;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+                var timing =
+                    (AppearanceTransitionTimingMode)
+                    step.FindPropertyRelative(
+                            "TimingMode")
+                        .enumValueIndex;
+
+                if (timing !=
+                    AppearanceTransitionTimingMode
+                        .AbsoluteTime)
+                {
+                    continue;
+                }
+
+                var stepTime =
+                    step.FindPropertyRelative(
+                            "TimeSeconds")
+                        .floatValue;
+                var nearestIndex = -1;
+                var nearestDistance =
+                    float.PositiveInfinity;
+
+                for (var markerIndex = 0;
+                     markerIndex < markers.arraySize;
+                     markerIndex++)
+                {
+                    var marker =
+                        markers.GetArrayElementAtIndex(
+                            markerIndex);
+                    var markerTime =
+                        marker.FindPropertyRelative(
+                                "TimeSeconds")
+                            .floatValue;
+                    var distance =
+                        Mathf.Abs(
+                            markerTime -
+                            stepTime);
+
+                    if (distance <
+                        nearestDistance)
+                    {
+                        nearestDistance =
+                            distance;
+                        nearestIndex =
+                            markerIndex;
+                    }
+                }
+
+                if (nearestIndex < 0 ||
+                    nearestDistance >
+                        _markerSnapThresholdSeconds)
+                {
+                    continue;
+                }
+
+                var nearest =
+                    markers.GetArrayElementAtIndex(
+                        nearestIndex);
+                step.FindPropertyRelative(
+                        "TimingMode")
+                    .enumValueIndex =
+                        (int)
+                        AppearanceTransitionTimingMode
+                            .Marker;
+                step.FindPropertyRelative(
+                        "MarkerName")
+                    .stringValue =
+                        nearest.FindPropertyRelative(
+                                "Name")
+                            .stringValue;
+                step.FindPropertyRelative(
+                        "MarkerOffsetSeconds")
+                    .floatValue = 0f;
+                snapped++;
+            }
+
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                snapped > 0
+                    ? $"Snapped {snapped} absolute-time step(s) to markers within {_markerSnapThresholdSeconds:0.###}s."
+                    : $"No absolute-time steps were within {_markerSnapThresholdSeconds:0.###}s of a marker.";
+            _lastMessageType =
+                snapped > 0
+                    ? MessageType.Info
+                    : MessageType.Warning;
+        }
+
+        private static int FindMarkerIndex(
+            SerializedProperty markers,
+            string markerName)
+        {
+            for (var i = 0;
+                 i < markers.arraySize;
+                 i++)
+            {
+                if (string.Equals(
+                        markers
+                            .GetArrayElementAtIndex(
+                                i)
+                            .FindPropertyRelative(
+                                "Name")
+                            .stringValue,
+                        markerName,
+                        StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static void SortMarkersByTime(
+            SerializedProperty markers)
+        {
+            for (var target = 0;
+                 target < markers.arraySize - 1;
+                 target++)
+            {
+                var best =
+                    target;
+                var bestTime =
+                    markers.GetArrayElementAtIndex(
+                            target)
+                        .FindPropertyRelative(
+                            "TimeSeconds")
+                        .floatValue;
+
+                for (var candidate =
+                         target + 1;
+                     candidate <
+                     markers.arraySize;
+                     candidate++)
+                {
+                    var candidateTime =
+                        markers.GetArrayElementAtIndex(
+                                candidate)
+                            .FindPropertyRelative(
+                                "TimeSeconds")
+                            .floatValue;
+
+                    if (candidateTime <
+                        bestTime)
+                    {
+                        best =
+                            candidate;
+                        bestTime =
+                            candidateTime;
+                    }
+                }
+
+                if (best != target)
+                {
+                    markers.MoveArrayElement(
+                        best,
+                        target);
+                }
             }
         }
 
