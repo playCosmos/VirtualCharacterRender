@@ -95,6 +95,15 @@ namespace VCR.Editor.P11
             }
 
             if (bootstrap.GetComponent<
+                    BakedMotionCueSource>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    BakedMotionCueSource>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
                     MotionCueEventActionHandler>() ==
                 null)
             {
