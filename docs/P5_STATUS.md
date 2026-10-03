@@ -24,6 +24,7 @@ The first P5 slice introduces `ITrackingMixProvider` as the final one-performer 
 `MotionExpressionMixer` currently:
 - uses routed tracking as its base input
 - passes face, body/hands, humanoid pose, and performer presence through
+- accepts one optional humanoid-pose layer with role, blend mode, weight, root controls, and per-bone mask
 - accepts one optional expression-only overlay
 - blends standard and named/custom expressions
 - supports Override, Additive, and Maximum modes
@@ -50,8 +51,7 @@ These validation paths are implemented but have not been executed here because a
 
 ## Next P5 work
 
-- define base/tracking/additive/procedural pose-layer contracts
-- add per-region/per-bone masks and weights
+- extend the first pose-layer slot into an ordered multi-layer stack only where a concrete base/tracking/additive/procedural use case requires it
 - avoid duplicate smoothing between mixer and target layers
 - define deterministic fallback-to-base/neutral behavior
 - add pose weighting/mask source-free validation

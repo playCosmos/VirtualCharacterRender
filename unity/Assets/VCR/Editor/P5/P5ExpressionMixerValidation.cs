@@ -23,6 +23,7 @@ namespace VCR.Editor.P5
                 new List<string>();
 
             ValidateMath(failures);
+            ValidatePoseMath(failures);
             ValidateAvailability(failures);
             ValidateComponent(failures);
 
@@ -30,7 +31,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(blend modes, deadzone, custom expressions, base passthrough, overlay blend, pose/expression availability separation, presence isolation)");
+                    "(expression blend modes, pose weighting/masks, pose-space guard, base passthrough, overlay blend, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -151,6 +152,98 @@ namespace VCR.Editor.P5
                 failures);
         }
 
+        private static void ValidatePoseMath(
+            List<string> failures)
+        {
+            var mask =
+                new HumanoidBoneMask();
+            mask.SetIncluded(
+                HumanoidBoneId.LeftUpperArm);
+
+            var settings =
+                new HumanoidPoseLayerSettings();
+            settings.Configure(
+                layerEnabled: true,
+                layerRole:
+                    MotionLayerRole.Tracking,
+                mode:
+                    HumanoidPoseBlendMode.Override,
+                layerWeight: 0.5f,
+                mask: mask);
+
+            var basePose =
+                CreateTwoBonePose(
+                    HumanoidPoseSpace.NormalizedLocal,
+                    leftX: 0f,
+                    rightX: 0.25f);
+
+            var layerPose =
+                CreateTwoBonePose(
+                    HumanoidPoseSpace.NormalizedLocal,
+                    leftX: 2f,
+                    rightX: 4f);
+
+            var mixed =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    layerPose,
+                    settings,
+                    out var mismatch);
+
+            Expect(
+                !mismatch &&
+                mixed != null,
+                "same-space pose layers must blend",
+                failures);
+
+            Expect(
+                mixed.TryGet(
+                    HumanoidBoneId.LeftUpperArm,
+                    out var left),
+                "masked left-arm pose must remain present",
+                failures);
+
+            ExpectClose(
+                left.LocalPosition.X,
+                1f,
+                "0.5 override weight must interpolate included bone position",
+                failures);
+
+            Expect(
+                mixed.TryGet(
+                    HumanoidBoneId.RightUpperArm,
+                    out var right),
+                "base right-arm pose must remain present",
+                failures);
+
+            ExpectClose(
+                right.LocalPosition.X,
+                0.25f,
+                "mask-excluded bones must preserve base pose",
+                failures);
+
+            var differentSpace =
+                CreateTwoBonePose(
+                    HumanoidPoseSpace.OriginalLocal,
+                    leftX: 5f,
+                    rightX: 5f);
+
+            var preserved =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    differentSpace,
+                    settings,
+                    out mismatch);
+
+            Expect(
+                mismatch &&
+                ReferenceEquals(
+                    preserved,
+                    basePose),
+                "pose-space mismatch must preserve the base pose instead of mixing incompatible transforms",
+                failures);
+        }
+
         private static void ValidateAvailability(
             List<string> failures)
         {
@@ -200,6 +293,21 @@ namespace VCR.Editor.P5
             Expect(
                 expressionOnly.ExpressionsAvailable,
                 "expression application must remain available when an expression frame exists without full-body presence",
+                failures);
+
+            var finalMixPose =
+                MotionApplicationAvailabilityResolver
+                    .Resolve(
+                        noFullBodyPresence,
+                        hasPoseFrame: true,
+                        hasExpressionFrame: true,
+                        finalMixOwnsPoseAvailability:
+                            true);
+
+            Expect(
+                finalMixPose.PoseAvailable &&
+                finalMixPose.ExpressionsAvailable,
+                "final mix providers must own mixed-pose availability so procedural/base pose layers are not re-gated by raw full-body presence",
                 failures);
 
             var lostSubject =
@@ -279,6 +387,13 @@ namespace VCR.Editor.P5
                         sequence: 1,
                         nowUs,
                         aa: 0.2f);
+                route.PoseFrame =
+                    CreatePoseFrame(
+                        "route-pose",
+                        sequence: 1,
+                        nowUs,
+                        leftX: 0f,
+                        rightX: 0.25f);
                 route.Presence =
                     CreatePresence(
                         nowUs);
@@ -289,9 +404,36 @@ namespace VCR.Editor.P5
                         sequence: 1,
                         nowUs,
                         aa: 0.6f);
+                layer.PoseFrame =
+                    CreatePoseFrame(
+                        "overlay-pose",
+                        sequence: 1,
+                        nowUs,
+                        leftX: 2f,
+                        rightX: 4f);
+
+                var poseMask =
+                    new HumanoidBoneMask();
+                poseMask.SetIncluded(
+                    HumanoidBoneId.LeftUpperArm);
+
+                var poseSettings =
+                    new HumanoidPoseLayerSettings();
+                poseSettings.Configure(
+                    layerEnabled: true,
+                    layerRole:
+                        MotionLayerRole.Additive,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight: 0.5f,
+                    mask: poseMask);
 
                 mixer.SetRoutedProvider(
                     route);
+                mixer.SetPoseLayerProvider(
+                    layer);
+                mixer.ConfigurePoseLayer(
+                    poseSettings);
                 mixer.SetExpressionLayerProvider(
                     layer);
                 mixer.ConfigureExpressionLayer(
@@ -321,6 +463,35 @@ namespace VCR.Editor.P5
                         face,
                         route.FaceFrame),
                     "face frames must pass through unchanged in the first P5 mixer slice",
+                    failures);
+
+                Expect(
+                    mixer.TryGetLatestHumanoidPose(
+                        out var mixedPoseFrame) &&
+                    mixedPoseFrame?.HumanoidPose != null &&
+                    mixedPoseFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.LeftUpperArm,
+                        out var mixedLeft),
+                    "mixer must emit a weighted humanoid-pose frame when a pose layer is configured",
+                    failures);
+
+                ExpectClose(
+                    mixedLeft.LocalPosition.X,
+                    1f,
+                    "component pose layer must honor configured weight and mask",
+                    failures);
+
+                Expect(
+                    mixedPoseFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.RightUpperArm,
+                        out var mixedRight),
+                    "component pose mix must preserve base bones outside the mask",
+                    failures);
+
+                ExpectClose(
+                    mixedRight.LocalPosition.X,
+                    0.25f,
+                    "component pose mix must leave mask-excluded bones unchanged",
                     failures);
 
                 Expect(
@@ -364,6 +535,26 @@ namespace VCR.Editor.P5
                 Expect(
                     TryGetMetric(
                         metrics,
+                        "mixer.pose.weight",
+                        out var poseWeight) &&
+                    Math.Abs(
+                        poseWeight - 0.5) <
+                    0.001,
+                    "mixer diagnostics must expose pose layer weight",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "mixer.pose.space_mismatch",
+                        out var poseMismatch) &&
+                    poseMismatch < 0.5,
+                    "compatible pose layer must not report a pose-space mismatch",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
                         "mixer.expression.weight",
                         out var weight) &&
                     Math.Abs(weight - 0.5) <
@@ -403,6 +594,78 @@ namespace VCR.Editor.P5
             return new NormalizedExpressionState(
                 standard,
                 custom);
+        }
+
+        private static HumanoidPoseState
+            CreateTwoBonePose(
+                HumanoidPoseSpace poseSpace,
+                float leftX,
+                float rightX)
+        {
+            var bones =
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
+            var hasBone =
+                new bool[
+                    (int)HumanoidBoneId.Count];
+
+            var left =
+                (int)HumanoidBoneId.LeftUpperArm;
+            var right =
+                (int)HumanoidBoneId.RightUpperArm;
+
+            bones[left] =
+                new NormalizedBonePose(
+                    new TrackingVector3(
+                        leftX,
+                        0f,
+                        0f),
+                    TrackingQuaternion.Identity);
+            hasBone[left] = true;
+
+            bones[right] =
+                new NormalizedBonePose(
+                    new TrackingVector3(
+                        rightX,
+                        0f,
+                        0f),
+                    TrackingQuaternion.Identity);
+            hasBone[right] = true;
+
+            return new HumanoidPoseState(
+                poseSpace,
+                TrackingVector3.Zero,
+                TrackingQuaternion.Identity,
+                bones,
+                hasBone);
+        }
+
+        private static TrackingFrame CreatePoseFrame(
+            string sourceId,
+            long sequence,
+            long runtimeTimestampUs,
+            float leftX,
+            float rightX)
+        {
+            return new TrackingFrame(
+                sequence,
+                sourceTimestampUs:
+                    runtimeTimestampUs,
+                validRegions:
+                    TrackingRegion.FullBody,
+                confidence:
+                    1f,
+                subjectDetected:
+                    true,
+                humanoidPose:
+                    CreateTwoBonePose(
+                        HumanoidPoseSpace.NormalizedLocal,
+                        leftX,
+                        rightX),
+                sourceId:
+                    sourceId,
+                runtimeTimestampUs:
+                    runtimeTimestampUs);
         }
 
         private static TrackingFrame
@@ -593,6 +856,7 @@ namespace VCR.Editor.P5
         ITrackingRouteProvider
     {
         public TrackingFrame FaceFrame { get; set; }
+        public TrackingFrame PoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
         public TrackingPresenceSnapshot Presence { get; set; }
 
@@ -613,8 +877,8 @@ namespace VCR.Editor.P5
         public bool TryGetLatestHumanoidPose(
             out TrackingFrame frame)
         {
-            frame = null;
-            return false;
+            frame = PoseFrame;
+            return frame != null;
         }
 
         public bool TryGetLatestExpressions(
@@ -629,6 +893,7 @@ namespace VCR.Editor.P5
         MonoBehaviour,
         ITrackingFrameProvider
     {
+        public TrackingFrame PoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
 
         public bool TryGetLatestFace(
@@ -648,8 +913,8 @@ namespace VCR.Editor.P5
         public bool TryGetLatestHumanoidPose(
             out TrackingFrame frame)
         {
-            frame = null;
-            return false;
+            frame = PoseFrame;
+            return frame != null;
         }
 
         public bool TryGetLatestExpressions(

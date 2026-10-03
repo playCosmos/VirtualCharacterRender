@@ -129,7 +129,9 @@ namespace VCR.Runtime.Character
                     .Resolve(
                         presence,
                         hasPoseFrame,
-                        hasExpressionFrame);
+                        hasExpressionFrame,
+                        finalMixOwnsPoseAvailability:
+                            _provider is ITrackingMixProvider);
 
             SetPoseUnavailable(
                 !availability.PoseAvailable);

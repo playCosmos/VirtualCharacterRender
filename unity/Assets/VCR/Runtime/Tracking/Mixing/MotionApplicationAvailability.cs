@@ -27,9 +27,11 @@ namespace VCR.Runtime.Tracking.Mixing
         public static MotionApplicationAvailability Resolve(
             TrackingPresenceSnapshot? presence,
             bool hasPoseFrame,
-            bool hasExpressionFrame)
+            bool hasExpressionFrame,
+            bool finalMixOwnsPoseAvailability = false)
         {
             var posePresenceAvailable =
+                finalMixOwnsPoseAvailability ||
                 !presence.HasValue ||
                 (presence.Value.SubjectState ==
                     SubjectPresenceState.Present &&
