@@ -514,11 +514,18 @@ namespace VCR.Runtime.Environment.Unity
                     nextStateId,
                     nowUs);
 
+                ApplyImmediateTransitionTargets(
+                    previous,
+                    nextStateId,
+                    nowUs);
+
                 return true;
             }
 
             if (!ValidateTransitionTargets(
                     transition,
+                    previous,
+                    nextStateId,
                     out error))
             {
                 _lastError = error;
@@ -952,6 +959,8 @@ namespace VCR.Runtime.Environment.Unity
 
         private bool ValidateTransitionTargets(
             EnvironmentTransitionSpec transition,
+            string previousStateId,
+            string nextStateId,
             out string error)
         {
             error = null;
@@ -980,6 +989,8 @@ namespace VCR.Runtime.Environment.Unity
                 if (!target
                     .ValidateEnvironmentTransition(
                         transition,
+                        previousStateId,
+                        nextStateId,
                         out error))
                 {
                     return false;
@@ -987,6 +998,28 @@ namespace VCR.Runtime.Environment.Unity
             }
 
             return true;
+        }
+
+        private void ApplyImmediateTransitionTargets(
+            string previousStateId,
+            string nextStateId,
+            long timestampUs)
+        {
+            if (_transitionTargets == null ||
+                _transitionTargets.Length == 0)
+            {
+                return;
+            }
+
+            ApplyTransitionTargets(
+                new EnvironmentTransitionContext(
+                    ++_transitionSequence,
+                    timestampUs,
+                    previousStateId,
+                    nextStateId,
+                    EnvironmentTransitionMode.Cut,
+                    progress: 1f,
+                    deltaSeconds: 0f));
         }
 
         private void ApplyTransitionTargets(
