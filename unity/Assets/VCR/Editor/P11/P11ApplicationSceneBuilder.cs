@@ -6,6 +6,7 @@ using VCR.Editor.P0;
 using VCR.Runtime.Application;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
+using VCR.Runtime.Tracking.Mixing;
 using VCR.Runtime.UI;
 
 namespace VCR.Editor.P11
@@ -72,6 +73,24 @@ namespace VCR.Editor.P11
             {
                 Undo.AddComponent<
                     AppearanceEventActionHandler>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
+                    ProceduralMotionCueSource>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    ProceduralMotionCueSource>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
+                    MotionCueEventActionHandler>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    MotionCueEventActionHandler>(
                         bootstrap.gameObject);
             }
 
