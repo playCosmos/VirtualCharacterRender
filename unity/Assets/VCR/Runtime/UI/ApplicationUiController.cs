@@ -2760,9 +2760,36 @@ namespace VCR.Runtime.UI
                                     : null);
                 }
 
-                var hasPresetRegistry =
-                    _appearanceRuntime is
+                var presetRegistry =
+                    _appearanceRuntime as
                         IAppearanceUserPresetRegistry;
+                var hasPresetRegistry =
+                    presetRegistry != null;
+                var selectedUserPresetId =
+                    _appearanceUserPresetInput?.text?.Trim();
+                var selectedUserPresetIndex =
+                    -1;
+
+                if (presetRegistry != null &&
+                    !string.IsNullOrWhiteSpace(
+                        selectedUserPresetId))
+                {
+                    for (var i = 0;
+                         i <
+                         presetRegistry.UserPresetIds.Count;
+                         i++)
+                    {
+                        if (string.Equals(
+                                presetRegistry.UserPresetIds[i],
+                                selectedUserPresetId,
+                                StringComparison.Ordinal))
+                        {
+                            selectedUserPresetIndex =
+                                i;
+                            break;
+                        }
+                    }
+                }
 
                 if (_appearanceSaveUserPresetButton != null)
                 {
@@ -2786,6 +2813,61 @@ namespace VCR.Runtime.UI
                                 appearanceState,
                                 _appearanceUserPresetInput?.text,
                                 sceneRuntime?.CurrentCharacterPath);
+                }
+
+                if (_appearanceRenameUserPresetButton != null)
+                {
+                    _appearanceRenameUserPresetButton.interactable =
+                        hasPresetRegistry &&
+                        ApplicationUiActionPolicy
+                            .CanRenameAppearanceUserPreset(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceUserPresetInput?.text,
+                                _appearanceUserPresetTargetInput?.text,
+                                sceneRuntime?.CurrentCharacterPath);
+                }
+
+                if (_appearanceDuplicateUserPresetButton != null)
+                {
+                    _appearanceDuplicateUserPresetButton.interactable =
+                        hasPresetRegistry &&
+                        ApplicationUiActionPolicy
+                            .CanDuplicateAppearanceUserPreset(
+                                _appearanceRuntime != null,
+                                appearanceState,
+                                _appearanceUserPresetInput?.text,
+                                _appearanceUserPresetTargetInput?.text,
+                                sceneRuntime?.CurrentCharacterPath);
+                }
+
+                var canMoveUserPreset =
+                    hasPresetRegistry &&
+                    ApplicationUiActionPolicy
+                        .CanMoveAppearanceUserPreset(
+                            _appearanceRuntime != null,
+                            appearanceState,
+                            _appearanceUserPresetInput?.text,
+                            sceneRuntime?.CurrentCharacterPath);
+
+                if (_appearanceMoveUserPresetUpButton != null)
+                {
+                    _appearanceMoveUserPresetUpButton.interactable =
+                        canMoveUserPreset &&
+                        selectedUserPresetIndex >
+                            0;
+                }
+
+                if (_appearanceMoveUserPresetDownButton != null)
+                {
+                    _appearanceMoveUserPresetDownButton.interactable =
+                        canMoveUserPreset &&
+                        selectedUserPresetIndex >=
+                            0 &&
+                        presetRegistry != null &&
+                        selectedUserPresetIndex <
+                            presetRegistry.UserPresetIds.Count -
+                            1;
                 }
             }
 
