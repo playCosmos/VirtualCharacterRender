@@ -164,6 +164,34 @@ namespace VCR.Runtime.Capabilities
                 entry.Instance != null;
         }
 
+        public CapabilityStatusSnapshot[]
+            CaptureStatuses()
+        {
+            var result =
+                new CapabilityStatusSnapshot[
+                    _entries.Count];
+            var index = 0;
+
+            foreach (var pair in _entries)
+            {
+                result[index++] =
+                    new CapabilityStatusSnapshot(
+                        pair.Key,
+                        pair.Value.State,
+                        pair.Value.Error);
+            }
+
+            Array.Sort(
+                result,
+                (left, right) =>
+                    string.Compare(
+                        left.Id,
+                        right.Id,
+                        StringComparison.Ordinal));
+
+            return result;
+        }
+
         private static void DisposeInstance(
             Entry entry)
         {
