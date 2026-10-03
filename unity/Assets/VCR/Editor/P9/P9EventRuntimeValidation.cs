@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 using VCR.Runtime.Environment;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Events;
 using VCR.Runtime.Events.Unity;
+using VCR.Runtime.Materials;
+using VCR.Runtime.Materials.Unity;
 using VCR.Runtime.Scene;
 
 namespace VCR.Editor.P9
@@ -27,12 +30,13 @@ namespace VCR.Editor.P9
 
             ValidateEngine(failures);
             ValidateUnityDispatch(failures);
+            ValidateMaterialAction(failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera action dispatch, unhandled diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera/material action dispatch, unhandled diagnostics)");
                 return true;
             }
 
@@ -612,6 +616,184 @@ namespace VCR.Editor.P9
                 {
                     UnityEngine.Object
                         .DestroyImmediate(root);
+                }
+            }
+        }
+
+        private static void ValidateMaterialAction(
+            List<string> failures)
+        {
+            GameObject root = null;
+            Material source = null;
+
+            try
+            {
+                var shader =
+                    Shader.Find(
+                        "Universal Render Pipeline/Unlit");
+
+                if (shader == null)
+                {
+                    failures.Add(
+                        "P9 material action validation requires the URP Unlit shader.");
+                    return;
+                }
+
+                string floatProperty = null;
+
+                for (var i = 0;
+                     i < shader.GetPropertyCount();
+                     i++)
+                {
+                    var type =
+                        shader.GetPropertyType(i);
+
+                    if (type ==
+                            ShaderPropertyType.Float ||
+                        type ==
+                            ShaderPropertyType.Range)
+                    {
+                        floatProperty =
+                            shader.GetPropertyName(i);
+                        break;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(
+                        floatProperty))
+                {
+                    failures.Add(
+                        "URP Unlit exposed no float/range property for material action validation.");
+                    return;
+                }
+
+                root =
+                    new GameObject(
+                        "P9 Material Action Validation");
+
+                var child =
+                    GameObject.CreatePrimitive(
+                        PrimitiveType.Quad);
+                child.transform.SetParent(
+                    root.transform,
+                    false);
+
+                source =
+                    new Material(shader)
+                    {
+                        name =
+                            "P9 Source Material"
+                    };
+
+                source.SetFloat(
+                    floatProperty,
+                    0.11f);
+
+                var renderer =
+                    child.GetComponent<
+                        MeshRenderer>();
+                renderer.sharedMaterial =
+                    source;
+
+                var controller =
+                    root.AddComponent<
+                        MaterialOverrideController>();
+                controller.RefreshSlots();
+
+                var slots =
+                    controller.GetSlots();
+
+                Expect(
+                    slots.Length == 1,
+                    "P9 material action validation must discover exactly one material slot",
+                    failures);
+
+                if (slots.Length != 1)
+                {
+                    return;
+                }
+
+                var preset =
+                    new MaterialOverridePreset
+                    {
+                        PresetId =
+                            "p9.event-material"
+                    };
+
+                Expect(
+                    controller.TryApplyPreset(
+                        slots[0].Id,
+                        preset,
+                        out var report,
+                        out var applyError) &&
+                    report.Compatible &&
+                    string.IsNullOrEmpty(
+                        applyError),
+                    "P9 material action validation must create an active non-destructive runtime override",
+                    failures);
+
+                var handler =
+                    root.AddComponent<
+                        MaterialFloatEventActionHandler>();
+                handler.SetMaterialController(
+                    controller);
+
+                var command =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetFloat,
+                        slots[0].Id,
+                        floatProperty,
+                        null,
+                        0.37,
+                        true,
+                        20);
+
+                Expect(
+                    handler.CanHandle(
+                        command) &&
+                    handler.TryExecute(
+                        command,
+                        out var actionError) &&
+                    string.IsNullOrEmpty(
+                        actionError),
+                    "material.set_float must execute through MaterialOverrideController",
+                    failures);
+
+                ExpectClose(
+                    source.GetFloat(
+                        floatProperty),
+                    0.11,
+                    "material event action must not mutate the source material",
+                    failures);
+
+                ExpectClose(
+                    renderer.sharedMaterial
+                        .GetFloat(
+                            floatProperty),
+                    0.37,
+                    "material event action must update only the active runtime override",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "material action unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(root);
+                }
+
+                if (source != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(source);
                 }
             }
         }

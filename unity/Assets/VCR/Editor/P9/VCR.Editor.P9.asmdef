@@ -16,7 +16,9 @@
     "VCR.Runtime.EventRuntime",
     "VCR.Runtime.EventRuntime.Unity",
     "VCR.Runtime.Environment",
-    "VCR.Runtime.Scene"
+    "VCR.Runtime.Scene",
+    "VCR.Runtime.Materials",
+    "VCR.Runtime.Materials.Unity"
   ],
   "includePlatforms": [
     "Editor"

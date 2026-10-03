@@ -7,5 +7,8 @@ namespace VCR.Runtime.EventRuntime
 
         public const string CameraSetFieldOfView =
             "camera.set_fov";
+
+        public const string MaterialSetFloat =
+            "material.set_float";
     }
 }

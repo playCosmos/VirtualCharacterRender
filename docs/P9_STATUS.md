@@ -67,11 +67,14 @@ The first concrete actions are:
 ```text
 environment.set_state
 camera.set_fov
+material.set_float
 ```
 
 `EnvironmentStateEventActionHandler` resolves an `IEnvironmentRuntime` target by environment id and calls its state-change contract.
 
 `CameraFieldOfViewEventActionHandler` resolves the configured primary camera id, requires a finite numeric command value, and applies it through `PrimaryCameraController` rather than exposing a Camera object to the rule.
+
+`MaterialFloatEventActionHandler` maps `TargetId` to a discovered material slot, `Name` to a shader property, and the numeric command value to `MaterialOverrideController.TrySetFloat`. It only mutates an already-active runtime override; it does not edit the source material or create an override implicitly.
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics.
 
@@ -103,6 +106,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
 - camera.set_fov execution through PrimaryCameraController
+- material.set_float mutation of an active runtime override without source-material mutation
 - unknown-action containment and diagnostics
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
@@ -113,7 +117,7 @@ The next source slices are:
 
 - add windowed rate-limit policy for bursty chat/donation inputs beyond the implemented per-rule cooldown
 - add text transform operators beyond direct value mapping
-- add application handlers for expression/motion and material/shader parameters using existing subsystem contracts
+- add application handlers for expression/motion and expand material/shader actions beyond float parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - define deterministic handler selection when multiple handlers claim the same command
 - version persisted rule configuration before P11 exposes editing UI
