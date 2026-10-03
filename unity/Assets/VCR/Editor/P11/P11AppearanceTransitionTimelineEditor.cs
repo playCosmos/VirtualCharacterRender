@@ -38,6 +38,9 @@ namespace VCR.Editor.P11
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
+        private AppearanceTransitionPackage
+            _pendingPackage;
+        private string _pendingPackageSource;
 
         [MenuItem("VCR/P11/Open Appearance Transition Timeline")]
         public static void Open()
@@ -70,6 +73,22 @@ namespace VCR.Editor.P11
                     "VCR Transition Timeline");
             window._markerCueAsset =
                 cueAsset;
+            window.Show();
+            window.Repaint();
+        }
+
+        public static void OpenWithPackage(
+            AppearanceTransitionPackage package,
+            string sourceLabel)
+        {
+            var window =
+                GetWindow<
+                    P11AppearanceTransitionTimelineEditor>(
+                    "VCR Transition Timeline");
+            window._pendingPackage =
+                package;
+            window._pendingPackageSource =
+                sourceLabel;
             window.Show();
             window.Repaint();
         }
@@ -145,6 +164,7 @@ namespace VCR.Editor.P11
 
             _serializedRuntime.Update();
 
+            DrawPendingPackageImport();
             DrawTransitionSelector();
 
             if (_transitions.arraySize == 0)
@@ -220,6 +240,62 @@ namespace VCR.Editor.P11
                     _lastMessage,
                     _lastMessageType);
             }
+        }
+
+        private void DrawPendingPackageImport()
+        {
+            if (_pendingPackage == null)
+            {
+                return;
+            }
+
+            var transitionCount =
+                _pendingPackage.Transitions?.Length ??
+                0;
+            var source =
+                string.IsNullOrWhiteSpace(
+                    _pendingPackageSource)
+                    ? "<library>"
+                    : _pendingPackageSource;
+
+            EditorGUILayout.HelpBox(
+                $"Pending package '{_pendingPackage.PackageId}' from {source}\nVersion: {_pendingPackage.Version}    Transitions: {transitionCount}",
+                MessageType.Info);
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Import Pending Package"))
+                {
+                    var package =
+                        _pendingPackage;
+                    var sourceLabel =
+                        _pendingPackageSource;
+                    _pendingPackage =
+                        null;
+                    _pendingPackageSource =
+                        null;
+                    ImportPackage(
+                        package,
+                        sourceLabel);
+                }
+
+                if (GUILayout.Button(
+                        "Discard Pending Package"))
+                {
+                    _pendingPackage =
+                        null;
+                    _pendingPackageSource =
+                        null;
+                    _lastMessage =
+                        "Pending transition package discarded.";
+                    _lastMessageType =
+                        MessageType.Info;
+                }
+            }
+
+            EditorGUILayout.Space();
         }
 
         private void DrawTransitionSelector()
@@ -3675,6 +3751,39 @@ namespace VCR.Editor.P11
                 return;
             }
 
+            ImportPackage(
+                package,
+                path);
+        }
+
+        private void ImportPackage(
+            AppearanceTransitionPackage package,
+            string sourceLabel)
+        {
+            if (package == null)
+            {
+                _lastMessage =
+                    "Transition import failed: package is missing.";
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (_runtime == null ||
+                _serializedRuntime == null ||
+                _transitions == null)
+            {
+                _pendingPackage =
+                    package;
+                _pendingPackageSource =
+                    sourceLabel;
+                _lastMessage =
+                    "Select a BasicCharacterAppearanceRuntime, then import the pending package.";
+                _lastMessageType =
+                    MessageType.Info;
+                return;
+            }
+
             _serializedRuntime.Update();
             var before =
                 CaptureAllTransitions();
@@ -3756,7 +3865,11 @@ namespace VCR.Editor.P11
             }
 
             _lastMessage =
-                $"Imported {package.Transitions.Length} transition(s) from package '{package.PackageId}'.";
+                $"Imported {package.Transitions.Length} transition(s) from package '{package.PackageId}'" +
+                (string.IsNullOrWhiteSpace(
+                    sourceLabel)
+                    ? "."
+                    : $" ({sourceLabel}).");
             _lastMessageType =
                 MessageType.Info;
             Repaint();
