@@ -124,6 +124,7 @@ These validation paths are implemented but have not been executed in this enviro
 ## Next P11 work
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
+- Character > Appearance / Quick Change: implement the planned appearance runtime and UI for named outfit variants, accessory slots, named presets, previous/next/direct preset switching, restore-default, and user preset save; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
 - Motion / Expression: pose-layer weight and manual-expression controls
 - Environment: state and transition controls
@@ -135,3 +136,5 @@ These validation paths are implemented but have not been executed in this enviro
 - define save/apply UX and validation messaging before enabling destructive-looking actions
 
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
+
+Appearance quick change is now explicitly in plan but is not yet implemented or validated. The baseline is same-character outfit/accessory switching; arbitrary external skinned garments are deferred until character/skeleton compatibility can be validated.
