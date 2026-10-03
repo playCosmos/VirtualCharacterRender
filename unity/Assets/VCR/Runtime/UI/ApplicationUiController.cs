@@ -3579,6 +3579,12 @@ namespace VCR.Runtime.UI
             var materialSelected =
                 selected ==
                 ApplicationUiSection.MaterialShader;
+            var eventsSelected =
+                selected ==
+                ApplicationUiSection.Events;
+            var settingsSelected =
+                selected ==
+                ApplicationUiSection.Settings;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -3722,6 +3728,62 @@ namespace VCR.Runtime.UI
                 _materialRefreshSlotsButton,
                 materialSelected);
 
+            SetActive(
+                _eventPreviousRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventNextRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventRuleInput,
+                eventsSelected);
+            SetActive(
+                _eventToggleRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventTraceButton,
+                eventsSelected);
+            SetActive(
+                _eventMaxCommandsInput,
+                eventsSelected);
+            SetActive(
+                _eventApplyMaxCommandsButton,
+                eventsSelected);
+            SetActive(
+                _eventSaveRulesButton,
+                eventsSelected);
+            SetActive(
+                _eventReloadRulesButton,
+                eventsSelected);
+
+            SetActive(
+                _settingsPreviousCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsNextCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsToggleCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsRenderScaleInput,
+                settingsSelected);
+            SetActive(
+                _settingsApplyRenderScaleButton,
+                settingsSelected);
+            SetActive(
+                _settingsFpsInput,
+                settingsSelected);
+            SetActive(
+                _settingsApplyFpsButton,
+                settingsSelected);
+            SetActive(
+                _settingsVsyncButton,
+                settingsSelected);
+            SetActive(
+                _settingsRunInBackgroundButton,
+                settingsSelected);
+
             if (motionSelected)
             {
                 RefreshMotionControlState();
@@ -3735,6 +3797,16 @@ namespace VCR.Runtime.UI
             if (materialSelected)
             {
                 RefreshMaterialControlState();
+            }
+
+            if (eventsSelected)
+            {
+                RefreshEventControlState();
+            }
+
+            if (settingsSelected)
+            {
+                RefreshSettingsControlState();
             }
 
             if (characterSelected &&
