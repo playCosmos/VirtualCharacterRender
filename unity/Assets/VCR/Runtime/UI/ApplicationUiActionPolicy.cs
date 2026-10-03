@@ -5,6 +5,18 @@ namespace VCR.Runtime.UI
 {
     public static class ApplicationUiActionPolicy
     {
+        public static bool CanBrowseCharacterFile(
+            bool runtimeAvailable,
+            SceneRuntimeState state,
+            bool adapterSupported)
+        {
+            return
+                runtimeAvailable &&
+                adapterSupported &&
+                IsOperationalActionState(
+                    state);
+        }
+
         public static bool CanLoadCharacter(
             bool runtimeAvailable,
             SceneRuntimeState state,
