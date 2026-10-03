@@ -96,6 +96,8 @@ motion.pose_weight
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. If more than one configured handler claims the same command, the host fails closed, increments the ambiguous-action metric, and executes none of them.
 
+Planned appearance-facing application actions include `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.restore_default`, and transition-aware preset switching. The future Appearance Transition Runtime may reuse registered application-action handlers for motion/effect/audio/material/camera cues, but it owns timing and the single atomic `appearance.commit` boundary. It must not implement choreography by recursively publishing arbitrary normalized events.
+
 ## Source-free validation
 
 Interactive:
