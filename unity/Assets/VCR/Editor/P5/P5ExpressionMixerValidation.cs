@@ -485,6 +485,12 @@ namespace VCR.Editor.P5
                 var layer =
                     root.AddComponent<
                         P5FakeExpressionProvider>();
+                var poseOverrideLayer =
+                    root.AddComponent<
+                        P5FakeExpressionProvider>();
+                var poseAdditiveLayer =
+                    root.AddComponent<
+                        P5FakeExpressionProvider>();
                 var mixer =
                     root.AddComponent<
                         MotionExpressionMixer>();
@@ -529,6 +535,22 @@ namespace VCR.Editor.P5
                         leftX: 2f,
                         rightX: 4f);
 
+                poseOverrideLayer.PoseFrame =
+                    CreatePoseFrame(
+                        "ordered-override-pose",
+                        sequence: 1,
+                        nowUs,
+                        leftX: 0f,
+                        rightX: 1f);
+
+                poseAdditiveLayer.PoseFrame =
+                    CreatePoseFrame(
+                        "ordered-additive-pose",
+                        sequence: 1,
+                        nowUs,
+                        leftX: 0f,
+                        rightX: 0.5f);
+
                 var poseMask =
                     new HumanoidPoseLayerMask();
                 poseMask.SetDefaultBoneWeight(0f);
@@ -550,12 +572,59 @@ namespace VCR.Editor.P5
                     layerWeight: 0.5f,
                     layerMask: poseMask);
 
+                var rightMask =
+                    new HumanoidPoseLayerMask();
+                rightMask.SetDefaultBoneWeight(0f);
+                rightMask.SetRootWeights(
+                    positionWeight: 0f,
+                    rotationWeight: 0f);
+                rightMask.SetBoneWeight(
+                    HumanoidBoneId.RightUpperArm,
+                    1f);
+
+                var overrideSettings =
+                    new HumanoidPoseLayerSettings();
+                overrideSettings.Configure(
+                    layerEnabled: true,
+                    layerRole:
+                        MotionLayerRole.Tracking,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight: 1f,
+                    layerMask: rightMask);
+
+                var additiveSettings =
+                    new HumanoidPoseLayerSettings();
+                additiveSettings.Configure(
+                    layerEnabled: true,
+                    layerRole:
+                        MotionLayerRole.Procedural,
+                    mode:
+                        HumanoidPoseBlendMode.Additive,
+                    layerWeight: 1f,
+                    layerMask: rightMask);
+
+                var overrideSlot =
+                    new HumanoidPoseLayerSlot();
+                overrideSlot.Configure(
+                    poseOverrideLayer,
+                    overrideSettings);
+
+                var additiveSlot =
+                    new HumanoidPoseLayerSlot();
+                additiveSlot.Configure(
+                    poseAdditiveLayer,
+                    additiveSettings);
+
                 mixer.SetRoutedProvider(
                     route);
                 mixer.SetPoseLayerProvider(
                     layer);
                 mixer.ConfigurePoseLayer(
                     poseSettings);
+                mixer.SetAdditionalPoseLayers(
+                    overrideSlot,
+                    additiveSlot);
                 mixer.SetExpressionLayerProvider(
                     layer);
                 mixer.ConfigureExpressionLayer(
