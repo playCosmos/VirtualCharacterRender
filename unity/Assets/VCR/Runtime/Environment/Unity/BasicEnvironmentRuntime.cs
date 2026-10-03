@@ -39,11 +39,19 @@ namespace VCR.Runtime.Environment.Unity
         [SerializeField] private MonoBehaviour[] updateTargetBehaviours =
             Array.Empty<MonoBehaviour>();
 
+        [Header("Space targets")]
+        [Tooltip("Explicit components implementing IEnvironmentSpaceTarget.")]
+        [SerializeField] private MonoBehaviour[] spaceTargetBehaviours =
+            Array.Empty<MonoBehaviour>();
+
         private readonly EnvironmentUpdateScheduler _scheduler =
             new();
 
         private IEnvironmentUpdateTarget[] _updateTargets =
             Array.Empty<IEnvironmentUpdateTarget>();
+
+        private IEnvironmentSpaceTarget[] _spaceTargets =
+            Array.Empty<IEnvironmentSpaceTarget>();
 
         private EnvironmentUpdateDriver _updateDriver;
 
@@ -86,6 +94,9 @@ namespace VCR.Runtime.Environment.Unity
         public int UpdateTargetCount =>
             _updateTargets?.Length ?? 0;
 
+        public int SpaceTargetCount =>
+            _spaceTargets?.Length ?? 0;
+
         public bool RecurringUpdatesActive =>
             _updateDriver != null &&
             _updateDriver.enabled &&
@@ -94,7 +105,9 @@ namespace VCR.Runtime.Environment.Unity
         private void Awake()
         {
             RebuildUpdateTargets();
+            RebuildSpaceTargets();
             ApplyCurrentStateBinding();
+            ApplyCurrentSpaceMode();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
@@ -102,7 +115,9 @@ namespace VCR.Runtime.Environment.Unity
         private void OnEnable()
         {
             RebuildUpdateTargets();
+            RebuildSpaceTargets();
             ApplyCurrentStateBinding();
+            ApplyCurrentSpaceMode();
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
         }
@@ -135,13 +150,91 @@ namespace VCR.Runtime.Environment.Unity
             }
 
             updatePolicy = policy;
-            spaceMode = mode;
             _lastError = null;
 
             RebuildUpdateTargets();
+            RebuildSpaceTargets();
             ApplyCurrentStateBinding();
+
+            if (!SetSpaceMode(
+                    mode,
+                    out var spaceError))
+            {
+                _lastError = spaceError;
+            }
+
             ConfigureScheduler(
                 MonotonicClock.NowMicroseconds());
+        }
+
+        public bool ConfigureSpaceTargets(
+            MonoBehaviour[] targets,
+            out string error)
+        {
+            error = null;
+
+            var nextBehaviours =
+                targets == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        targets.Clone();
+
+            var nextTargets =
+                BuildSpaceTargets(
+                    nextBehaviours);
+
+            if (!ValidateSpaceTargets(
+                    nextTargets,
+                    spaceMode,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            spaceTargetBehaviours =
+                nextBehaviours;
+            _spaceTargets =
+                nextTargets;
+
+            ApplySpaceTargets(
+                _spaceTargets,
+                spaceMode);
+
+            _lastError = null;
+            return true;
+        }
+
+        public void SetSpaceTargets(
+            params MonoBehaviour[] targets)
+        {
+            ConfigureSpaceTargets(
+                targets,
+                out _);
+        }
+
+        public bool SetSpaceMode(
+            EnvironmentSpaceMode mode,
+            out string error)
+        {
+            error = null;
+
+            if (!ValidateSpaceTargets(
+                    _spaceTargets,
+                    mode,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            ApplySpaceTargets(
+                _spaceTargets,
+                mode);
+
+            spaceMode = mode;
+            _lastError = null;
+            return true;
         }
 
         public bool ConfigureStateBindings(
@@ -431,6 +524,16 @@ namespace VCR.Runtime.Environment.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "environment.space_targets",
+                SpaceTargetCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.space_mode",
+                (int)spaceMode,
+                "enum"));
+
+            output.Add(new RuntimeMetric(
                 "environment.state_dispatches",
                 _stateDispatchCount,
                 "count"));
@@ -487,6 +590,134 @@ namespace VCR.Runtime.Environment.Unity
             _updateDriver.Bind(this);
             _updateDriver.enabled =
                 isActiveAndEnabled;
+        }
+
+        private void ApplyCurrentSpaceMode()
+        {
+            if (!SetSpaceMode(
+                    spaceMode,
+                    out var error))
+            {
+                _lastError = error;
+            }
+        }
+
+        private void RebuildSpaceTargets()
+        {
+            _spaceTargets =
+                BuildSpaceTargets(
+                    spaceTargetBehaviours);
+        }
+
+        private static IEnvironmentSpaceTarget[]
+            BuildSpaceTargets(
+                MonoBehaviour[] behaviours)
+        {
+            if (behaviours == null ||
+                behaviours.Length == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentSpaceTarget>();
+            }
+
+            var targets =
+                new IEnvironmentSpaceTarget[
+                    behaviours.Length];
+            var count = 0;
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour == null ||
+                    behaviour is not
+                        IEnvironmentSpaceTarget target)
+                {
+                    continue;
+                }
+
+                var duplicate = false;
+
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    if (ReferenceEquals(
+                            targets[i],
+                            target))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (duplicate)
+                {
+                    continue;
+                }
+
+                targets[count++] =
+                    target;
+            }
+
+            if (count == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentSpaceTarget>();
+            }
+
+            if (count != targets.Length)
+            {
+                Array.Resize(
+                    ref targets,
+                    count);
+            }
+
+            return targets;
+        }
+
+        private static bool ValidateSpaceTargets(
+            IEnvironmentSpaceTarget[] targets,
+            EnvironmentSpaceMode mode,
+            out string error)
+        {
+            error = null;
+
+            if (targets == null)
+            {
+                return true;
+            }
+
+            foreach (var target in targets)
+            {
+                if (target == null)
+                {
+                    continue;
+                }
+
+                if (!target.ValidateEnvironmentSpace(
+                        mode,
+                        out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void ApplySpaceTargets(
+            IEnvironmentSpaceTarget[] targets,
+            EnvironmentSpaceMode mode)
+        {
+            if (targets == null)
+            {
+                return;
+            }
+
+            foreach (var target in targets)
+            {
+                target?.ApplyEnvironmentSpace(
+                    mode);
+            }
         }
 
         private void ApplyCurrentStateBinding()
