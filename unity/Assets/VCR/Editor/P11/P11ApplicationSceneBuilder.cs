@@ -50,6 +50,15 @@ namespace VCR.Editor.P11
             }
 
             if (bootstrap.GetComponent<
+                    DesktopCharacterFileSelectionAdapter>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    DesktopCharacterFileSelectionAdapter>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
                     AppearanceTransitionActionExecutor>() ==
                 null)
             {
