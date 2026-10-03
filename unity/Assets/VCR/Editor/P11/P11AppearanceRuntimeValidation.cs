@@ -374,14 +374,24 @@ namespace VCR.Editor.P11
                         "cleared user preset must leave the active registry",
                         failures);
 
-                    Expect(
+                    var restoredUserPresets =
                         userRegistry.ReplaceUserPresets(
                             loadedUserPresets,
-                            out var restoreUserError) &&
+                            out var restoreUserError);
+                    var appliedUserPreset =
+                        restoredUserPresets &&
                         runtime.SetPreset(
                             "user-casual",
                             "Immediate",
-                            out var applyUserError),
+                            out var applyUserError);
+                    applyUserError ??=
+                        restoredUserPresets
+                            ? null
+                            : "restore failed before apply";
+
+                    Expect(
+                        restoredUserPresets &&
+                        appliedUserPreset,
                         "loaded user preset must register and apply through the normal quick-change path: " +
                         restoreUserError +
                         " / " +
