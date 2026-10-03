@@ -2482,6 +2482,175 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void SetPrimaryPoseLayerWeight(
+            float value)
+        {
+            if (_mixer == null)
+            {
+                _lastActionMessage =
+                    "Motion/expression mixer is unavailable.";
+                return;
+            }
+
+            if (!_mixer.TrySetPrimaryPoseLayerWeight(
+                    Mathf.Clamp01(
+                        value),
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Pose layer weight update failed: " +
+                    (error ?? "unknown error");
+                RefreshMotionControlState();
+                return;
+            }
+
+            if (_motionPoseWeightLabel != null)
+            {
+                _motionPoseWeightLabel.text =
+                    "Pose Weight " +
+                    _mixer.PrimaryPoseLayerWeight
+                        .ToString("0.00");
+            }
+        }
+
+        private void ApplyManualExpression()
+        {
+            if (!TryResolveManualExpressionInput(
+                    requireValue:
+                        true,
+                    out var expression,
+                    out var value,
+                    out var error))
+            {
+                _lastActionMessage =
+                    error;
+                RefreshAll();
+                return;
+            }
+
+            if (_manualExpressionSource == null ||
+                !_manualExpressionSource
+                    .SetExpression(
+                        expression,
+                        value))
+            {
+                _lastActionMessage =
+                    "Manual expression source rejected the requested value.";
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Manual expression '{StandardExpressionNames.GetVrm1Name(expression)}' set to {value:0.00}.";
+            RefreshAll();
+        }
+
+        private void ClearManualExpression()
+        {
+            if (!TryResolveManualExpressionInput(
+                    requireValue:
+                        false,
+                    out var expression,
+                    out _,
+                    out var error))
+            {
+                _lastActionMessage =
+                    error;
+                RefreshAll();
+                return;
+            }
+
+            if (_manualExpressionSource == null ||
+                !_manualExpressionSource
+                    .ClearExpression(
+                        expression))
+            {
+                _lastActionMessage =
+                    "Manual expression source rejected the clear request.";
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Manual expression '{StandardExpressionNames.GetVrm1Name(expression)}' cleared.";
+            RefreshAll();
+        }
+
+        private void ClearAllManualExpressions()
+        {
+            if (_manualExpressionSource == null)
+            {
+                _lastActionMessage =
+                    "Manual expression source is unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            _manualExpressionSource
+                .ClearAll();
+            _lastActionMessage =
+                "All manual expressions cleared.";
+            RefreshAll();
+        }
+
+        private bool TryResolveManualExpressionInput(
+            bool requireValue,
+            out StandardExpression expression,
+            out float value,
+            out string error)
+        {
+            expression = default;
+            value = 0f;
+            error = null;
+
+            if (_manualExpressionSource == null)
+            {
+                error =
+                    "Manual expression source is unavailable.";
+                return false;
+            }
+
+            var name =
+                _manualExpressionNameInput?.text?.Trim();
+
+            if (!StandardExpressionNames
+                .TryParse(
+                    name,
+                    out expression))
+            {
+                error =
+                    $"Unknown standard expression '{name ?? "<empty>"}'.";
+                return false;
+            }
+
+            if (!requireValue)
+            {
+                return true;
+            }
+
+            var raw =
+                _manualExpressionValueInput?.text?.Trim();
+
+            if (!float.TryParse(
+                    raw,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out value) ||
+                float.IsNaN(
+                    value) ||
+                float.IsInfinity(
+                    value) ||
+                value < 0f ||
+                value > 1f)
+            {
+                error =
+                    "Manual expression value must be a number in the 0..1 range.";
+                return false;
+            }
+
+            return true;
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -3790,13 +3959,131 @@ namespace VCR.Runtime.UI
                 _ =>
                 {
                     if (_model.SelectedSection ==
-                        ApplicationUiSection.Character)
+                            ApplicationUiSection.Character ||
+                        _model.SelectedSection ==
+                            ApplicationUiSection.MotionExpression)
                     {
                         RefreshContextActions();
                     }
                 });
 
             return input;
+        }
+
+        private Slider CreateSlider(
+            string name,
+            Transform parent,
+            float minimum,
+            float maximum,
+            float initialValue,
+            Action<float> onValueChanged)
+        {
+            var rect =
+                CreateRect(
+                    name,
+                    parent);
+
+            var background =
+                rect.gameObject
+                    .AddComponent<Image>();
+            background.color =
+                new Color(
+                    0.10f,
+                    0.11f,
+                    0.13f,
+                    1f);
+
+            var fill =
+                CreateRect(
+                    "Fill",
+                    rect);
+            fill.anchorMin =
+                new Vector2(
+                    0f,
+                    0.3f);
+            fill.anchorMax =
+                new Vector2(
+                    1f,
+                    0.7f);
+            fill.offsetMin =
+                new Vector2(
+                    6f,
+                    0f);
+            fill.offsetMax =
+                new Vector2(
+                    -6f,
+                    0f);
+
+            var fillImage =
+                fill.gameObject
+                    .AddComponent<Image>();
+            fillImage.color =
+                new Color(
+                    0.45f,
+                    0.62f,
+                    0.86f,
+                    1f);
+
+            var handle =
+                CreateRect(
+                    "Handle",
+                    rect);
+            handle.anchorMin =
+                new Vector2(
+                    0f,
+                    0.5f);
+            handle.anchorMax =
+                new Vector2(
+                    0f,
+                    0.5f);
+            handle.sizeDelta =
+                new Vector2(
+                    16f,
+                    28f);
+
+            var handleImage =
+                handle.gameObject
+                    .AddComponent<Image>();
+            handleImage.color =
+                new Color(
+                    0.92f,
+                    0.94f,
+                    0.97f,
+                    1f);
+
+            var slider =
+                rect.gameObject
+                    .AddComponent<Slider>();
+            slider.minValue =
+                minimum;
+            slider.maxValue =
+                maximum;
+            slider.wholeNumbers =
+                false;
+            slider.direction =
+                Slider.Direction.LeftToRight;
+            slider.fillRect =
+                fill;
+            slider.handleRect =
+                handle;
+            slider.targetGraphic =
+                handleImage;
+            slider.SetValueWithoutNotify(
+                Mathf.Clamp(
+                    initialValue,
+                    minimum,
+                    maximum));
+
+            if (onValueChanged != null)
+            {
+                slider.onValueChanged
+                    .AddListener(
+                        value =>
+                            onValueChanged(
+                                value));
+            }
+
+            return slider;
         }
 
         private Text CreateText(
