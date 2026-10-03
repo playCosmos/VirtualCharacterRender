@@ -753,6 +753,330 @@ namespace VCR.Runtime.Appearance.Unity
             return true;
         }
 
+        public bool RenameUserPreset(
+            string presetId,
+            string newPresetId,
+            out AppearancePreset preset,
+            out string error)
+        {
+            preset = null;
+            error = null;
+
+            var sourceId =
+                presetId?.Trim();
+            var targetId =
+                newPresetId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    sourceId) ||
+                !_userPresets.ContainsKey(
+                    sourceId))
+            {
+                error =
+                    $"Unknown user appearance preset '{presetId ?? "<null>"}'.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    targetId))
+            {
+                error =
+                    "New user appearance preset id is required.";
+                return false;
+            }
+
+            if (string.Equals(
+                    sourceId,
+                    targetId,
+                    StringComparison.Ordinal))
+            {
+                preset =
+                    ClonePreset(
+                        _userPresets[
+                            sourceId]);
+                return true;
+            }
+
+            if (_authoredPresetIds.Contains(
+                    targetId))
+            {
+                error =
+                    $"User preset '{targetId}' cannot replace an authored appearance preset.";
+                return false;
+            }
+
+            if (_userPresets.ContainsKey(
+                    targetId))
+            {
+                error =
+                    $"User appearance preset '{targetId}' already exists.";
+                return false;
+            }
+
+            var next =
+                CaptureUserPresets();
+            var renamedIndex =
+                Array.FindIndex(
+                    next,
+                    candidate =>
+                        candidate != null &&
+                        string.Equals(
+                            candidate.Id,
+                            sourceId,
+                            StringComparison.Ordinal));
+
+            if (renamedIndex < 0)
+            {
+                error =
+                    $"User appearance preset '{sourceId}' could not be captured for rename.";
+                return false;
+            }
+
+            next[
+                renamedIndex].Id =
+                    targetId;
+            var wasCurrent =
+                string.Equals(
+                    _currentPresetId,
+                    sourceId,
+                    StringComparison.Ordinal);
+
+            if (!ReplaceUserPresets(
+                    next,
+                    out error))
+            {
+                return false;
+            }
+
+            if (wasCurrent)
+            {
+                _currentPresetId =
+                    targetId;
+                AppearanceChanged?.Invoke(
+                    Current);
+            }
+
+            preset =
+                ClonePreset(
+                    _userPresets[
+                        targetId]);
+            SetState(
+                _state,
+                _lastError);
+            return true;
+        }
+
+        public bool DuplicateUserPreset(
+            string presetId,
+            string newPresetId,
+            out AppearancePreset preset,
+            out string error)
+        {
+            preset = null;
+            error = null;
+
+            var sourceId =
+                presetId?.Trim();
+            var targetId =
+                newPresetId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    sourceId) ||
+                !_userPresets.TryGetValue(
+                    sourceId,
+                    out var source))
+            {
+                error =
+                    $"Unknown user appearance preset '{presetId ?? "<null>"}'.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    targetId))
+            {
+                error =
+                    "Duplicate user appearance preset id is required.";
+                return false;
+            }
+
+            if (_authoredPresetIds.Contains(
+                    targetId))
+            {
+                error =
+                    $"User preset '{targetId}' cannot replace an authored appearance preset.";
+                return false;
+            }
+
+            if (_userPresets.ContainsKey(
+                    targetId))
+            {
+                error =
+                    $"User appearance preset '{targetId}' already exists.";
+                return false;
+            }
+
+            var previous =
+                CaptureUserPresets();
+            var sourceIndex =
+                Array.FindIndex(
+                    previous,
+                    candidate =>
+                        candidate != null &&
+                        string.Equals(
+                            candidate.Id,
+                            sourceId,
+                            StringComparison.Ordinal));
+
+            if (sourceIndex < 0)
+            {
+                error =
+                    $"User appearance preset '{sourceId}' could not be captured for duplication.";
+                return false;
+            }
+
+            var next =
+                new AppearancePreset[
+                    previous.Length + 1];
+
+            for (var i = 0;
+                 i <= sourceIndex;
+                 i++)
+            {
+                next[i] =
+                    previous[i];
+            }
+
+            var duplicate =
+                ClonePreset(
+                    source);
+            duplicate.Id =
+                targetId;
+            next[
+                sourceIndex + 1] =
+                    duplicate;
+
+            for (var i = sourceIndex + 1;
+                 i < previous.Length;
+                 i++)
+            {
+                next[
+                    i + 1] =
+                        previous[i];
+            }
+
+            if (!ReplaceUserPresets(
+                    next,
+                    out error))
+            {
+                return false;
+            }
+
+            preset =
+                ClonePreset(
+                    _userPresets[
+                        targetId]);
+            SetState(
+                _state,
+                _lastError);
+            return true;
+        }
+
+        public bool MoveUserPreset(
+            string presetId,
+            int offset,
+            out string error)
+        {
+            error = null;
+            var id =
+                presetId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    id))
+            {
+                error =
+                    "User appearance preset id is required for reorder.";
+                return false;
+            }
+
+            var next =
+                CaptureUserPresets();
+            var sourceIndex =
+                Array.FindIndex(
+                    next,
+                    candidate =>
+                        candidate != null &&
+                        string.Equals(
+                            candidate.Id,
+                            id,
+                            StringComparison.Ordinal));
+
+            if (sourceIndex < 0)
+            {
+                error =
+                    $"Unknown user appearance preset '{presetId ?? "<null>"}'.";
+                return false;
+            }
+
+            if (offset == 0)
+            {
+                return true;
+            }
+
+            var targetIndex =
+                Math.Max(
+                    0,
+                    Math.Min(
+                        next.Length - 1,
+                        sourceIndex +
+                        offset));
+
+            if (targetIndex ==
+                sourceIndex)
+            {
+                error =
+                    offset < 0
+                        ? $"User preset '{id}' is already first."
+                        : $"User preset '{id}' is already last.";
+                return false;
+            }
+
+            var moved =
+                next[
+                    sourceIndex];
+
+            if (targetIndex >
+                sourceIndex)
+            {
+                for (var i = sourceIndex;
+                     i < targetIndex;
+                     i++)
+                {
+                    next[i] =
+                        next[
+                            i + 1];
+                }
+            }
+            else
+            {
+                for (var i = sourceIndex;
+                     i > targetIndex;
+                     i--)
+                {
+                    next[i] =
+                        next[
+                            i - 1];
+                }
+            }
+
+            next[
+                targetIndex] =
+                    moved;
+
+            return ReplaceUserPresets(
+                next,
+                out error);
+        }
+
         public AppearancePreset[] CaptureUserPresets()
         {
             var result =
