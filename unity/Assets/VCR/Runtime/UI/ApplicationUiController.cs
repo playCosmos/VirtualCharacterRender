@@ -8,6 +8,7 @@ using UnityEngine.UI;
 using VCR.Runtime.Application;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Capabilities;
+using VCR.Runtime.Core;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Environment;
 using VCR.Runtime.EventRuntime;
@@ -110,6 +111,8 @@ namespace VCR.Runtime.UI
         private Button _settingsApplyFpsButton;
         private Button _settingsVsyncButton;
         private Button _settingsRunInBackgroundButton;
+        private Button _diagnosticsPreviousPageButton;
+        private Button _diagnosticsNextPageButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -160,6 +163,7 @@ namespace VCR.Runtime.UI
         private int _materialSlotIndex;
         private int _eventRuleIndex;
         private int _settingsCapabilityIndex;
+        private int _diagnosticsMetricPage;
 
         public ApplicationUiModel Model => _model;
 
@@ -289,6 +293,8 @@ namespace VCR.Runtime.UI
             _settingsApplyFpsButton = null;
             _settingsVsyncButton = null;
             _settingsRunInBackgroundButton = null;
+            _diagnosticsPreviousPageButton = null;
+            _diagnosticsNextPageButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -1244,6 +1250,24 @@ namespace VCR.Runtime.UI
             _settingsRunInBackgroundButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 145f;
+
+            _diagnosticsPreviousPageButton =
+                CreateButton(
+                    "Prev Metrics",
+                    _contextActions,
+                    SelectPreviousDiagnosticsMetricPage);
+            _diagnosticsPreviousPageButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _diagnosticsNextPageButton =
+                CreateButton(
+                    "Next Metrics",
+                    _contextActions,
+                    SelectNextDiagnosticsMetricPage);
+            _diagnosticsNextPageButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
 
             _appearanceActions =
                 CreateRect(
@@ -4438,6 +4462,9 @@ namespace VCR.Runtime.UI
             var settingsSelected =
                 selected ==
                 ApplicationUiSection.Settings;
+            var diagnosticsSelected =
+                selected ==
+                ApplicationUiSection.Diagnostics;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -4637,6 +4664,13 @@ namespace VCR.Runtime.UI
                 _settingsRunInBackgroundButton,
                 settingsSelected);
 
+            SetActive(
+                _diagnosticsPreviousPageButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsNextPageButton,
+                diagnosticsSelected);
+
             if (motionSelected)
             {
                 RefreshMotionControlState();
@@ -4660,6 +4694,11 @@ namespace VCR.Runtime.UI
             if (settingsSelected)
             {
                 RefreshSettingsControlState();
+            }
+
+            if (diagnosticsSelected)
+            {
+                RefreshDiagnosticsControlState();
             }
 
             if (characterSelected &&
@@ -5918,14 +5957,201 @@ namespace VCR.Runtime.UI
                 return "Waiting for the first diagnostics report.";
             }
 
-            return
-                $"Frame average: {snapshot.FrameAverageMs:F2} ms\n" +
-                $"Frame P95: {snapshot.FrameP95Ms:F2} ms\n" +
-                $"Frame P99: {snapshot.FrameP99Ms:F2} ms\n" +
-                $"Face updates: {snapshot.FaceHz:F1} Hz\n" +
-                $"Body/hands updates: {snapshot.BodyHandsHz:F1} Hz\n" +
-                $"Full-body updates: {snapshot.FullBodyHz:F1} Hz\n" +
-                $"Expression updates: {snapshot.ExpressionHz:F1} Hz";
+            var metrics =
+                snapshot.Metrics != null
+                    ? (RuntimeMetric[])
+                        snapshot.Metrics.Clone()
+                    : Array.Empty<RuntimeMetric>();
+
+            Array.Sort(
+                metrics,
+                (left, right) =>
+                    string.Compare(
+                        left.Name,
+                        right.Name,
+                        StringComparison.Ordinal));
+
+            const int pageSize = 12;
+            var pageCount =
+                Math.Max(
+                    1,
+                    (metrics.Length +
+                     pageSize -
+                     1) /
+                    pageSize);
+            _diagnosticsMetricPage =
+                Mathf.Clamp(
+                    _diagnosticsMetricPage,
+                    0,
+                    pageCount - 1);
+            var start =
+                _diagnosticsMetricPage *
+                pageSize;
+            var end =
+                Math.Min(
+                    metrics.Length,
+                    start +
+                    pageSize);
+
+            var builder =
+                new System.Text.StringBuilder(
+                    768);
+            builder.AppendLine(
+                $"Snapshot: {snapshot.Sequence} @ {snapshot.RealtimeSeconds:0.00}s");
+            builder.AppendLine(
+                $"Frame: avg {snapshot.FrameAverageMs:F2} ms | P95 {snapshot.FrameP95Ms:F2} ms | P99 {snapshot.FrameP99Ms:F2} ms");
+            builder.AppendLine(
+                $"Tracking Hz: face {snapshot.FaceHz:F1} | body/hands {snapshot.BodyHandsHz:F1} | full-body {snapshot.FullBodyHz:F1} | expressions {snapshot.ExpressionHz:F1}");
+            builder.AppendLine(
+                $"Tracking age ms: face {FormatDiagnosticValue(snapshot.FaceAgeMs)} | body/hands {FormatDiagnosticValue(snapshot.BodyHandsAgeMs)} | full-body {FormatDiagnosticValue(snapshot.FullBodyAgeMs)} | expressions {FormatDiagnosticValue(snapshot.ExpressionAgeMs)}");
+
+            if (snapshot.Presence.HasValue)
+            {
+                builder.AppendLine(
+                    $"Presence: {snapshot.Presence.Value.SubjectState} | source available: {snapshot.Presence.Value.AnySourceAvailable}");
+            }
+            else
+            {
+                builder.AppendLine(
+                    "Presence: n/a");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(
+                $"Subsystem metrics: {metrics.Length} | page {_diagnosticsMetricPage + 1}/{pageCount}");
+
+            if (metrics.Length == 0)
+            {
+                builder.Append(
+                    "<no subsystem metrics>");
+            }
+            else
+            {
+                for (var i = start;
+                     i < end;
+                     i++)
+                {
+                    var metric =
+                        metrics[i];
+                    builder.Append(
+                        metric.Name);
+                    builder.Append(
+                        " = ");
+                    builder.Append(
+                        metric.Value.ToString(
+                            "0.###",
+                            CultureInfo.InvariantCulture));
+
+                    if (!string.IsNullOrWhiteSpace(
+                            metric.Unit))
+                    {
+                        builder.Append(
+                            ' ');
+                        builder.Append(
+                            metric.Unit);
+                    }
+
+                    if (i + 1 < end)
+                    {
+                        builder.AppendLine();
+                    }
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static string FormatDiagnosticValue(
+            double value)
+        {
+            return double.IsNaN(
+                    value) ||
+                double.IsInfinity(
+                    value)
+                    ? "n/a"
+                    : value.ToString(
+                        "0.0",
+                        CultureInfo.InvariantCulture);
+        }
+
+        private void SelectPreviousDiagnosticsMetricPage()
+        {
+            SelectDiagnosticsMetricPage(
+                -1);
+        }
+
+        private void SelectNextDiagnosticsMetricPage()
+        {
+            SelectDiagnosticsMetricPage(
+                1);
+        }
+
+        private void SelectDiagnosticsMetricPage(
+            int offset)
+        {
+            var metrics =
+                diagnostics?.LatestSnapshot.Metrics ??
+                Array.Empty<RuntimeMetric>();
+            const int pageSize = 12;
+            var pageCount =
+                Math.Max(
+                    1,
+                    (metrics.Length +
+                     pageSize -
+                     1) /
+                    pageSize);
+
+            _diagnosticsMetricPage =
+                (_diagnosticsMetricPage +
+                 offset +
+                 pageCount) %
+                pageCount;
+            RefreshAll();
+        }
+
+        private void RefreshDiagnosticsControlState()
+        {
+            var metrics =
+                diagnostics?.LatestSnapshot.Metrics ??
+                Array.Empty<RuntimeMetric>();
+            const int pageSize = 12;
+            var pageCount =
+                Math.Max(
+                    1,
+                    (metrics.Length +
+                     pageSize -
+                     1) /
+                    pageSize);
+            _diagnosticsMetricPage =
+                Mathf.Clamp(
+                    _diagnosticsMetricPage,
+                    0,
+                    pageCount - 1);
+            var canPage =
+                diagnostics != null &&
+                diagnostics.LatestSnapshot.Sequence >
+                    0 &&
+                pageCount > 1;
+
+            if (_diagnosticsPreviousPageButton != null)
+            {
+                _diagnosticsPreviousPageButton.interactable =
+                    canPage;
+                SetButtonLabel(
+                    _diagnosticsPreviousPageButton,
+                    "Prev Metrics");
+            }
+
+            if (_diagnosticsNextPageButton != null)
+            {
+                _diagnosticsNextPageButton.interactable =
+                    canPage;
+                SetButtonLabel(
+                    _diagnosticsNextPageButton,
+                    pageCount > 1
+                        ? $"Next Metrics ({_diagnosticsMetricPage + 1}/{pageCount})"
+                        : "Next Metrics");
+            }
         }
 
         private Button CreateButton(
