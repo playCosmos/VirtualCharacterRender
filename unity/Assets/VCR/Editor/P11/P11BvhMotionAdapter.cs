@@ -374,10 +374,9 @@ namespace VCR.Editor.P11
             }
             catch (Exception exception)
             {
-                AssetDatabase.DeleteAsset(
-                    outputPath);
-
-                if (asset != null)
+                if (asset != null &&
+                    !AssetDatabase.Contains(
+                        asset))
                 {
                     UnityEngine.Object
                         .DestroyImmediate(
