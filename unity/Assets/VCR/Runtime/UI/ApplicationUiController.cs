@@ -69,6 +69,7 @@ namespace VCR.Runtime.UI
         private Button _appearanceTransitionButton;
         private Button _appearanceRestoreButton;
         private Button _appearancePreviewButton;
+        private Button _appearanceCancelButton;
         private InputField _appearancePresetInput;
         private Button _appearanceApplyPresetButton;
         private InputField _appearanceOutfitInput;
@@ -187,6 +188,7 @@ namespace VCR.Runtime.UI
             _appearanceTransitionButton = null;
             _appearanceRestoreButton = null;
             _appearancePreviewButton = null;
+            _appearanceCancelButton = null;
             _appearancePresetInput = null;
             _appearanceApplyPresetButton = null;
             _appearanceOutfitInput = null;
@@ -795,6 +797,15 @@ namespace VCR.Runtime.UI
             _appearancePreviewButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 170f;
+
+            _appearanceCancelButton =
+                CreateButton(
+                    "Cancel Transition",
+                    _appearanceActions,
+                    CancelAppearanceTransition);
+            _appearanceCancelButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 160f;
 
             _appearanceDirectActions =
                 CreateRect(
@@ -1647,6 +1658,32 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void CancelAppearanceTransition()
+        {
+            if (_appearanceRuntime == null)
+            {
+                _lastActionMessage =
+                    "Appearance runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (_appearanceRuntime.CancelTransition(
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Appearance transition cancelled. Presentation cleanup was executed.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "Appearance transition cancel failed: " +
+                    (error ?? "unknown error");
+            }
+
+            RefreshAll();
+        }
+
         private void SaveCurrentAppearanceUserPreset()
         {
             var registry =
@@ -2207,13 +2244,37 @@ namespace VCR.Runtime.UI
                         appearanceAvailable &&
                         !_appearanceRuntime.Status.Busy;
 
+                    var runtimeStatus =
+                        _appearanceRuntime != null
+                            ? _appearanceRuntime.Status
+                            : default;
                     var transitionLabel =
-                        GetSelectedAppearanceTransitionId();
+                        runtimeStatus.Busy &&
+                        !string.IsNullOrWhiteSpace(
+                            runtimeStatus.ActiveTransitionId)
+                            ? runtimeStatus.ActiveTransitionId +
+                              " " +
+                              Math.Round(
+                                  runtimeStatus
+                                      .TransitionProgress01 *
+                                  100.0) +
+                              "%"
+                            : GetSelectedAppearanceTransitionId();
 
                     SetButtonLabel(
                         _appearanceTransitionButton,
                         "Transition: " +
                         transitionLabel);
+                }
+
+                if (_appearanceCancelButton != null)
+                {
+                    _appearanceCancelButton.interactable =
+                        _appearanceRuntime != null &&
+                        ApplicationUiActionPolicy
+                            .CanCancelAppearanceTransition(
+                                true,
+                                _appearanceRuntime.Status);
                 }
 
                 if (_appearanceRestoreButton != null)
@@ -2504,12 +2565,29 @@ namespace VCR.Runtime.UI
                     ? registry.UserPresetIds.Count
                     : 0;
 
+            var transitionProgress =
+                appearance.Busy
+                    ? Math.Round(
+                        appearance.TransitionProgress01 *
+                        100.0) +
+                      "% (" +
+                      appearance.TransitionElapsedSeconds
+                          .ToString("0.00") +
+                      "s / " +
+                      appearance.TransitionDurationSeconds
+                          .ToString("0.00") +
+                      "s)"
+                    : "<idle>";
+
             return text +
                 $"\nAppearance state: {appearance.State}" +
                 $"\nAppearance preset: {appearance.CurrentPresetId ?? "<none>"}" +
                 $"\nOutfit: {appearance.CurrentOutfitId ?? "<none>"}" +
                 $"\nUser presets: {userPresetCount}" +
                 $"\nTransition: {appearance.ActiveTransitionId ?? "<none>"}" +
+                $"\nTransition progress: {transitionProgress}" +
+                $"\nTransition committed: {appearance.TransitionCommitted}" +
+                $"\nTransition cancelable: {appearance.CanCancelTransition}" +
                 $"\nAppearance error: {appearance.LastError ?? "<none>"}";
         }
 
