@@ -295,11 +295,12 @@ appearance.set_outfit
 appearance.set_accessory
 appearance.clear_accessory
 appearance.restore_default
+appearance.cancel_transition
 appearance.transition
 appearance.set_preset_with_transition
 ```
 
-This allows hotkeys, OSC/WebSocket events, donations, chat rules, or local automation to trigger the same quick-change runtime used by the UI.
+This allows hotkeys, OSC/WebSocket events, donations, chat rules, or local automation to trigger the same quick-change runtime used by the UI, including cleanup-gated transition cancellation.
 
 The transition runtime may internally reuse the same application-level action-handler concepts as P9, but it owns sequencing/timing and the `appearance.commit` boundary. It must not recursively emit arbitrary normalized events to drive its own steps.
 
@@ -410,7 +411,7 @@ Implemented built-in motion presentation now also includes:
 - `motion.release`
 - `ProceduralMotionCueSource` as a P5 Mixer Additive/Procedural pose layer
 - `BakedMotionCueSource` for pre-baked `AnimationClip` pose data
-- `VCR/P11/Open AnimationClip Cue Baker` editor workflow using a reference humanoid hierarchy
+- `VCR/P11/Open AnimationClip Cue Baker` editor workflow using a reference humanoid hierarchy, with optional direct registration to a selected `BakedMotionCueSource`
 - baked cues store additive root/bone deltas and interpolate them at runtime without sampling `AnimationClip` or `Animator` per frame
 - `MotionCueEventActionHandler` routes across procedural and baked runtimes by explicit runtime id or unique cue id
 - root position/rotation curves and per-bone position/rotation curves
