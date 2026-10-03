@@ -124,7 +124,9 @@ These validation paths are implemented but have not been executed in this enviro
 ## Next P11 work
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
-- Character > Appearance / Quick Change: implement the planned appearance runtime and UI for named outfit variants, accessory slots, named presets, previous/next/direct preset switching, restore-default, and user preset save; see `APPEARANCE_QUICKCHANGE.md`
+- Character > Appearance / Quick Change: implement the planned appearance runtime and UI for named outfit variants, accessory slots, named presets, previous/next/direct preset switching, restore-default, and user preset save
+- Appearance transitions: select Immediate or a reusable transition preset; preview/test motion/effect choreography and expose transition state without embedding Unity-object references in UI data
+- Custom transition authoring/import remains P12, but P11 must be able to select and execute user-authored transition presets through the same runtime contract; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
 - Motion / Expression: pose-layer weight and manual-expression controls
 - Environment: state and transition controls
@@ -137,4 +139,4 @@ These validation paths are implemented but have not been executed in this enviro
 
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
 
-Appearance quick change is now explicitly in plan but is not yet implemented or validated. The baseline is same-character outfit/accessory switching; arbitrary external skinned garments are deferred until character/skeleton compatibility can be validated.
+Appearance quick change is now explicitly in plan but is not yet implemented or validated. The baseline is same-character outfit/accessory switching. It also includes optional choreographed transitions such as spin + confetti + atomic outfit swap, with user-authored motion/effect sequences supported through registered logical assets/actions. Arbitrary external skinned garments are deferred until character/skeleton compatibility can be validated.
