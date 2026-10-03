@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -85,6 +86,15 @@ namespace VCR.Runtime.UI
         private Button _materialSetFloatButton;
         private Button _materialClearOverrideButton;
         private Button _materialRefreshSlotsButton;
+        private Button _eventPreviousRuleButton;
+        private Button _eventNextRuleButton;
+        private InputField _eventRuleInput;
+        private Button _eventToggleRuleButton;
+        private Button _eventTraceButton;
+        private InputField _eventMaxCommandsInput;
+        private Button _eventApplyMaxCommandsButton;
+        private Button _eventSaveRulesButton;
+        private Button _eventReloadRulesButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -116,6 +126,10 @@ namespace VCR.Runtime.UI
         private ICharacterFileSelectionAdapter _characterFileSelectionAdapter;
         private IAppearanceRuntime _appearanceRuntime;
         private AppearanceUserPresetStore _appearancePresetStore;
+        private EventRuntimeConfigurationStore _eventRuleStore;
+        private string _eventRuleStorePath;
+        private EventRuntimeHost _loadedEventRuleHost;
+        private bool _eventRuleStoreChecked;
         private IAppearanceUserPresetRegistry _loadedAppearancePresetRegistry;
         private string _loadedAppearanceProfilePath;
         private MotionExpressionMixer _mixer;
@@ -129,6 +143,7 @@ namespace VCR.Runtime.UI
         private EnvironmentTransitionMode _environmentTransitionMode =
             EnvironmentTransitionMode.Cut;
         private int _materialSlotIndex;
+        private int _eventRuleIndex;
 
         public ApplicationUiModel Model => _model;
 
@@ -237,6 +252,15 @@ namespace VCR.Runtime.UI
             _materialSetFloatButton = null;
             _materialClearOverrideButton = null;
             _materialRefreshSlotsButton = null;
+            _eventPreviousRuleButton = null;
+            _eventNextRuleButton = null;
+            _eventRuleInput = null;
+            _eventToggleRuleButton = null;
+            _eventTraceButton = null;
+            _eventMaxCommandsInput = null;
+            _eventApplyMaxCommandsButton = null;
+            _eventSaveRulesButton = null;
+            _eventReloadRulesButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -310,6 +334,7 @@ namespace VCR.Runtime.UI
             ResolveCharacterFileSelectionAdapter();
             ResolveAppearanceRuntime();
             EnsureAppearanceUserPresetsLoaded();
+            EnsureEventRulesLoaded();
 
             if (_trackingPresence == null)
             {
@@ -1002,6 +1027,87 @@ namespace VCR.Runtime.UI
             _materialRefreshSlotsButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 115f;
+
+            _eventPreviousRuleButton =
+                CreateButton(
+                    "Prev Rule",
+                    _contextActions,
+                    SelectPreviousEventRule);
+            _eventPreviousRuleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 90f;
+
+            _eventNextRuleButton =
+                CreateButton(
+                    "Next Rule",
+                    _contextActions,
+                    SelectNextEventRule);
+            _eventNextRuleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 90f;
+
+            _eventRuleInput =
+                CreateInputField(
+                    "Event Rule Id",
+                    _contextActions,
+                    "Rule ID");
+            _eventRuleInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 170f;
+
+            _eventToggleRuleButton =
+                CreateButton(
+                    "Toggle Rule",
+                    _contextActions,
+                    ToggleSelectedEventRule);
+            _eventToggleRuleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 115f;
+
+            _eventTraceButton =
+                CreateButton(
+                    "Trace: Off",
+                    _contextActions,
+                    ToggleEventRuleTracing);
+            _eventTraceButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 105f;
+
+            _eventMaxCommandsInput =
+                CreateInputField(
+                    "Event Max Commands",
+                    _contextActions,
+                    "1..256");
+            _eventMaxCommandsInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _eventApplyMaxCommandsButton =
+                CreateButton(
+                    "Set Max",
+                    _contextActions,
+                    ApplyEventMaxCommands);
+            _eventApplyMaxCommandsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 85f;
+
+            _eventSaveRulesButton =
+                CreateButton(
+                    "Save Rules",
+                    _contextActions,
+                    SaveEventRules);
+            _eventSaveRulesButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 100f;
+
+            _eventReloadRulesButton =
+                CreateButton(
+                    "Reload Rules",
+                    _contextActions,
+                    ReloadEventRules);
+            _eventReloadRulesButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
 
             _appearanceActions =
                 CreateRect(
