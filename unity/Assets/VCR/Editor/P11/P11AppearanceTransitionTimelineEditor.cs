@@ -34,6 +34,7 @@ namespace VCR.Editor.P11
         private AnimationClip _markerClip;
         private BakedMotionCueAsset _markerCueAsset;
         private float _markerSnapThresholdSeconds = 0.08f;
+        private bool _showDependencyOverview = true;
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
@@ -162,6 +163,8 @@ namespace VCR.Editor.P11
             DrawMarkers(
                 transition);
             DrawTimeline(
+                transition);
+            DrawDependencyOverview(
                 transition);
             DrawSteps(
                 transition,
@@ -1127,6 +1130,179 @@ namespace VCR.Editor.P11
                     alignment =
                         TextAnchor.MiddleRight
                 });
+        }
+
+        private void DrawDependencyOverview(
+            SerializedProperty transition)
+        {
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+
+            _showDependencyOverview =
+                EditorGUILayout.Foldout(
+                    _showDependencyOverview,
+                    "Dependency Overview",
+                    toggleOnLabelClick:
+                        true);
+
+            if (!_showDependencyOverview)
+            {
+                return;
+            }
+
+            var knownActionIds =
+                new System.Collections.Generic
+                    .HashSet<string>(
+                        StringComparer.Ordinal);
+            var allGroups = 0;
+            var anyGroups = 0;
+            var edges = 0;
+            var invalidEdges = 0;
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                for (var i = 0;
+                     i < steps.arraySize;
+                     i++)
+                {
+                    var step =
+                        steps.GetArrayElementAtIndex(
+                            i);
+                    var kind =
+                        (AppearanceTransitionStepKind)
+                        step.FindPropertyRelative(
+                                "Kind")
+                            .enumValueIndex;
+                    var stepId =
+                        step.FindPropertyRelative(
+                                "StepId")
+                            .stringValue;
+                    var nodeLabel =
+                        kind ==
+                            AppearanceTransitionStepKind
+                                .Commit
+                            ? "appearance.commit"
+                            : !string.IsNullOrWhiteSpace(
+                                  stepId)
+                                ? stepId
+                                : $"action#{i + 1}";
+
+                    var mode =
+                        (AppearanceTransitionDependencyMode)
+                        step.FindPropertyRelative(
+                                "DependencyMode")
+                            .enumValueIndex;
+                    var dependencies =
+                        step.FindPropertyRelative(
+                            "DependsOnStepIds");
+
+                    if (mode !=
+                        AppearanceTransitionDependencyMode
+                            .None)
+                    {
+                        if (mode ==
+                            AppearanceTransitionDependencyMode
+                                .All)
+                        {
+                            allGroups++;
+                        }
+                        else if (mode ==
+                                 AppearanceTransitionDependencyMode
+                                     .Any)
+                        {
+                            anyGroups++;
+                        }
+
+                        EditorGUILayout.LabelField(
+                            $"{i + 1}. {nodeLabel} waits {mode}",
+                            EditorStyles.boldLabel);
+
+                        if (dependencies.arraySize == 0)
+                        {
+                            invalidEdges++;
+                            EditorGUILayout.HelpBox(
+                                "Dependency mode is enabled but no source Step ID is selected.",
+                                MessageType.Warning);
+                        }
+
+                        for (var dependencyIndex = 0;
+                             dependencyIndex <
+                             dependencies.arraySize;
+                             dependencyIndex++)
+                        {
+                            var dependencyId =
+                                dependencies
+                                    .GetArrayElementAtIndex(
+                                        dependencyIndex)
+                                    .stringValue;
+                            var valid =
+                                !string.IsNullOrWhiteSpace(
+                                    dependencyId) &&
+                                knownActionIds.Contains(
+                                    dependencyId);
+
+                            edges++;
+
+                            if (!valid)
+                            {
+                                invalidEdges++;
+                            }
+
+                            EditorGUILayout.LabelField(
+                                valid
+                                    ? $"    ← {dependencyId}"
+                                    : $"    ← {dependencyId ?? "<empty>"}  [missing/forward]",
+                                valid
+                                    ? EditorStyles.miniLabel
+                                    : EditorStyles
+                                        .miniBoldLabel);
+                        }
+
+                        EditorGUILayout.LabelField(
+                            $"    timeout {step.FindPropertyRelative("DependencyTimeoutSeconds").floatValue:0.###}s",
+                            EditorStyles.miniLabel);
+                    }
+
+                    if (kind ==
+                            AppearanceTransitionStepKind
+                                .Action &&
+                        !string.IsNullOrWhiteSpace(
+                            stepId))
+                    {
+                        if (!knownActionIds.Add(
+                                stepId))
+                        {
+                            invalidEdges++;
+                            EditorGUILayout.HelpBox(
+                                $"Duplicate action Step ID '{stepId}'.",
+                                MessageType.Warning);
+                        }
+                    }
+                }
+
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField(
+                    $"Edges: {edges}    All groups: {allGroups}    Any groups: {anyGroups}    Invalid: {invalidEdges}",
+                    invalidEdges == 0
+                        ? EditorStyles.miniLabel
+                        : EditorStyles.miniBoldLabel);
+
+                if (edges == 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        "No cross-step completion dependencies are authored. Blocking on an individual action can still be used independently.",
+                        MessageType.None);
+                }
+                else if (invalidEdges == 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Dependency references are structurally ordered. Validate & Apply still checks executor/completion-probe availability.",
+                        MessageType.Info);
+                }
+            }
         }
 
         private void DrawSteps(
