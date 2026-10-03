@@ -273,13 +273,16 @@ namespace VCR.Editor.P11
                             package,
                             out var packageJson,
                             out var packageSaveError);
+                AppearanceTransitionPackage
+                    packageRoundTrip = null;
+                string packageLoadError = null;
                 var loadedPackage =
                     serializedPackage &&
                     P11AppearanceTransitionPackageUtility
                         .TryDeserialize(
                             packageJson,
-                            out var packageRoundTrip,
-                            out var packageLoadError);
+                            out packageRoundTrip,
+                            out packageLoadError);
 
                 Expect(
                     serializedPackage &&
