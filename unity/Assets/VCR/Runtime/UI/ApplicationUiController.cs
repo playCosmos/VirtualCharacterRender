@@ -7,6 +7,7 @@ using UnityEngine.UI;
 using VCR.Runtime.Application;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Diagnostics;
+using VCR.Runtime.Environment;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Materials.Unity;
 using VCR.Runtime.Output;
@@ -70,6 +71,10 @@ namespace VCR.Runtime.UI
         private Button _manualExpressionApplyButton;
         private Button _manualExpressionClearButton;
         private Button _manualExpressionClearAllButton;
+        private InputField _environmentStateInput;
+        private Button _environmentTransitionModeButton;
+        private InputField _environmentTransitionDurationInput;
+        private Button _environmentApplyStateButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -111,6 +116,8 @@ namespace VCR.Runtime.UI
         private string _lastActionMessage;
         private int _trackingControlIndex;
         private int _appearanceTransitionIndex;
+        private EnvironmentTransitionMode _environmentTransitionMode =
+            EnvironmentTransitionMode.Cut;
 
         public ApplicationUiModel Model => _model;
 
@@ -205,6 +212,10 @@ namespace VCR.Runtime.UI
             _manualExpressionApplyButton = null;
             _manualExpressionClearButton = null;
             _manualExpressionClearAllButton = null;
+            _environmentStateInput = null;
+            _environmentTransitionModeButton = null;
+            _environmentTransitionDurationInput = null;
+            _environmentApplyStateButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -842,6 +853,44 @@ namespace VCR.Runtime.UI
             _manualExpressionClearAllButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 95f;
+
+            _environmentStateInput =
+                CreateInputField(
+                    "Environment State",
+                    _contextActions,
+                    "State ID");
+            _environmentStateInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 220f;
+
+            _environmentTransitionModeButton =
+                CreateButton(
+                    "Transition: Cut",
+                    _contextActions,
+                    SelectNextEnvironmentTransitionMode);
+            _environmentTransitionModeButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 190f;
+
+            _environmentTransitionDurationInput =
+                CreateInputField(
+                    "Environment Transition Duration",
+                    _contextActions,
+                    "Duration s");
+            _environmentTransitionDurationInput.text =
+                "0";
+            _environmentTransitionDurationInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
+
+            _environmentApplyStateButton =
+                CreateButton(
+                    "Apply State",
+                    _contextActions,
+                    ApplyEnvironmentState);
+            _environmentApplyStateButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
 
             _appearanceActions =
                 CreateRect(
