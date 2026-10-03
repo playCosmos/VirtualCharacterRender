@@ -401,6 +401,7 @@ The first source implementation now exists:
 - per-step Absolute Time or Marker + Offset timing
 - per-action Blocking + completion timeout controls
 - stable Action `Step ID` editing plus `All` / `Any` dependency selection against earlier Action steps
+- foldable Dependency Overview summarizing graph edges, All/Any groups, and missing/forward references before runtime validation
 - `Generate Step IDs` migration convenience for older authored transitions
 - per-dependent-step timeout controls with fail-closed forward-reference and duplicate-id validation
 - step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
