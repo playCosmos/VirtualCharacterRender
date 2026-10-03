@@ -402,8 +402,11 @@ namespace VCR.Runtime.Appearance.Unity
                     nextDefaultPresetId;
             }
 
-            RebuildConfiguration(
-                out _);
+            if (!RebuildConfiguration(
+                    out var error))
+            {
+                SetFault(error);
+            }
         }
 
         public bool SetPreset(
@@ -1035,6 +1038,14 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 error =
                     "Every appearance transition requires a non-empty id.";
+                return false;
+            }
+
+            if (transition.QueuePolicy ==
+                AppearanceTransitionQueuePolicy.Interrupt)
+            {
+                error =
+                    $"Transition '{transition.Id}' requests Interrupt, which is deferred until explicit cancellation cleanup steps are implemented.";
                 return false;
             }
 
