@@ -1516,6 +1516,403 @@ namespace VCR.Editor.P11
                     "Interrupt transitions with explicit immediate cleanup actions must validate: " +
                     cleanupError,
                     failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "dependency-all-valid",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        StepId =
+                                            "motion-a",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.1f,
+                                        StepId =
+                                            "motion-b",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.2f,
+                                        DependencyMode =
+                                            AppearanceTransitionDependencyMode
+                                                .All,
+                                        DependsOnStepIds =
+                                            new[]
+                                            {
+                                                "motion-a",
+                                                "motion-b"
+                                            },
+                                        DependencyTimeoutSeconds =
+                                            2f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                },
+                            CancellationSteps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .MotionRelease,
+                                        Required =
+                                            false
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    invalid.RebuildConfiguration(
+                        out var validDependencyError),
+                    "All dependency graph with two earlier action step ids must validate: " +
+                    validDependencyError,
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "dependency-any-valid",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        StepId =
+                                            "audio-a",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .AudioPlay,
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.2f,
+                                        DependencyMode =
+                                            AppearanceTransitionDependencyMode
+                                                .Any,
+                                        DependsOnStepIds =
+                                            new[]
+                                            {
+                                                "audio-a"
+                                            },
+                                        DependencyTimeoutSeconds =
+                                            1f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                },
+                            CancellationSteps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .AudioStop,
+                                        Required =
+                                            false
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    invalid.RebuildConfiguration(
+                        out var validAnyError),
+                    "Any dependency graph must validate when it references an earlier action step: " +
+                    validAnyError,
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "dependency-forward-reference",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.1f,
+                                        DependencyMode =
+                                            AppearanceTransitionDependencyMode
+                                                .All,
+                                        DependsOnStepIds =
+                                            new[]
+                                            {
+                                                "later-action"
+                                            },
+                                        DependencyTimeoutSeconds =
+                                            1f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.2f,
+                                        StepId =
+                                            "later-action",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    }
+                                },
+                            CancellationSteps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        ActionType =
+                                            EventActionTypes
+                                                .EffectStop,
+                                        Required =
+                                            false
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var forwardDependencyError) &&
+                    forwardDependencyError != null &&
+                    forwardDependencyError.Contains(
+                        "earlier",
+                        StringComparison.OrdinalIgnoreCase),
+                    "dependency graph must reject forward references",
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "dependency-duplicate-step-id",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        StepId =
+                                            "duplicate",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.1f,
+                                        StepId =
+                                            "duplicate",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.2f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var duplicateStepIdError) &&
+                    duplicateStepIdError != null &&
+                    duplicateStepIdError.Contains(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase),
+                    "transition definition must reject duplicate action StepId values",
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "dependency-timeout-invalid",
+                            DurationSeconds =
+                                1f,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        StepId =
+                                            "source",
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "custom.transition",
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.2f,
+                                        DependencyMode =
+                                            AppearanceTransitionDependencyMode
+                                                .All,
+                                        DependsOnStepIds =
+                                            new[]
+                                            {
+                                                "source"
+                                            },
+                                        DependencyTimeoutSeconds =
+                                            0f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                },
+                            CancellationSteps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        ActionType =
+                                            EventActionTypes
+                                                .EffectStop,
+                                        Required =
+                                            false
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var dependencyTimeoutError) &&
+                    dependencyTimeoutError != null &&
+                    dependencyTimeoutError.Contains(
+                        "dependency timeout",
+                        StringComparison.OrdinalIgnoreCase),
+                    "dependency waits must require a finite positive timeout",
+                    failures);
             }
             catch (Exception exception)
             {
