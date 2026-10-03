@@ -10,7 +10,8 @@
     "VCR.Editor.P5",
     "VCR.Runtime.Core",
     "VCR.Runtime.Environment",
-    "VCR.Runtime.Environment.Unity"
+    "VCR.Runtime.Environment.Unity",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [
     "Editor"
