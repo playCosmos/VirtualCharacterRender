@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Appearance;
 using VCR.Runtime.UI;
 
 namespace VCR.Editor.P11
@@ -166,6 +167,68 @@ namespace VCR.Editor.P11
                 "broadcast target actions must follow operational scene state",
                 failures);
 
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanApplyAppearancePreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "formal-crown") &&
+                !ApplicationUiActionPolicy
+                    .CanApplyAppearancePreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "   ") &&
+                !ApplicationUiActionPolicy
+                    .CanApplyAppearancePreset(
+                        true,
+                        AppearanceRuntimeState.Transitioning,
+                        "formal-crown"),
+                "direct appearance preset controls must require a ready runtime and non-empty id",
+                failures);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanSetAppearanceAccessory(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "head",
+                        "crown") &&
+                !ApplicationUiActionPolicy
+                    .CanSetAppearanceAccessory(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "head",
+                        "   ") &&
+                ApplicationUiActionPolicy
+                    .CanClearAppearanceAccessory(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "head"),
+                "direct accessory controls must validate slot and accessory ids independently",
+                failures);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanPreviewAppearanceTransition(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "spin-confetti",
+                        "formal") &&
+                !ApplicationUiActionPolicy
+                    .CanPreviewAppearanceTransition(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "Immediate",
+                        "formal") &&
+                !ApplicationUiActionPolicy
+                    .CanPreviewAppearanceTransition(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "spin-confetti",
+                        null),
+                "transition preview must require a non-immediate transition and an active outfit",
+                failures);
+
             P11AppearanceRuntimeValidation
                 .RunChecks(
                     failures);
@@ -189,7 +252,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, fallback selection, stable labels, action availability policy, transactional appearance quick change)");
+                    "(section order, availability, fallback selection, stable labels, direct appearance action policy, transition preview gating, transactional appearance quick change)");
                 return true;
             }
 
