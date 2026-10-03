@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -29,6 +30,7 @@ namespace VCR.Editor.P9
                 new List<string>();
 
             ValidateEngine(failures);
+            ValidateRulePersistence(failures);
             ValidateUnityDispatch(failures);
             ValidateMaterialAction(failures);
             P9ExpressionEventValidation.RunChecks(
@@ -38,7 +40,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, versioned rule persistence, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -585,6 +587,166 @@ namespace VCR.Editor.P9
                     droppedBefore + 1,
                 "event action output must be bounded per input event",
                 failures);
+        }
+
+        private static void ValidateRulePersistence(
+            List<string> failures)
+        {
+            var path =
+                Path.Combine(
+                    Application.temporaryCachePath,
+                    "vcr-p9-rules-" +
+                    Guid.NewGuid().ToString("N") +
+                    ".json");
+
+            try
+            {
+                var store =
+                    new EventRuntimeConfigurationStore(
+                        path);
+
+                var rule =
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "persisted-rule",
+                        RateLimitWindowSeconds =
+                            2.0,
+                        RateLimitMaxExecutions =
+                            5,
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .BroadcastChatMessage,
+                                TextContains =
+                                    "hello"
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .MaterialSetVector,
+                                    TargetId =
+                                        "slot.0",
+                                    Name =
+                                        "_Vector",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        1.0,
+                                    ConstantNumberY =
+                                        2.0,
+                                    ConstantNumberZ =
+                                        3.0,
+                                    ConstantNumberW =
+                                        4.0,
+                                    TextTransforms =
+                                        EventTextTransformFlags
+                                            .Trim |
+                                        EventTextTransformFlags
+                                            .ToUpperInvariant
+                                }
+                            }
+                    };
+
+                Expect(
+                    store.TrySave(
+                        new[]
+                        {
+                            rule
+                        },
+                        maxCommandsPerEvent: 17,
+                        out var saveError) &&
+                    string.IsNullOrEmpty(
+                        saveError),
+                    "P9 rule configuration must save through a versioned atomic store",
+                    failures);
+
+                Expect(
+                    store.TryLoad(
+                        out var loadedRules,
+                        out var loadedMaxCommands,
+                        out var loadError) &&
+                    string.IsNullOrEmpty(
+                        loadError),
+                    "P9 rule configuration must reload the current format version",
+                    failures);
+
+                Expect(
+                    loadedMaxCommands == 17 &&
+                    loadedRules.Length == 1 &&
+                    loadedRules[0].Id ==
+                        "persisted-rule" &&
+                    loadedRules[0]
+                        .RateLimitMaxExecutions ==
+                        5 &&
+                    loadedRules[0].Actions.Length ==
+                        1 &&
+                    Math.Abs(
+                        loadedRules[0]
+                            .Actions[0]
+                            .ConstantNumberW -
+                        4.0) <
+                        0.000001 &&
+                    loadedRules[0]
+                        .Actions[0]
+                        .TextTransforms ==
+                        (EventTextTransformFlags.Trim |
+                         EventTextTransformFlags
+                             .ToUpperInvariant),
+                    "P9 versioned rule persistence must preserve rate-limit, multi-value action, and text-transform fields",
+                    failures);
+
+                File.WriteAllText(
+                    path,
+                    "{\"Version\":999,\"MaxCommandsPerEvent\":32,\"Rules\":[]}");
+
+                Expect(
+                    !store.TryLoad(
+                        out _,
+                        out _,
+                        out var futureError) &&
+                    !string.IsNullOrWhiteSpace(
+                        futureError),
+                    "P9 rule configuration must reject a newer unsupported persisted version",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "rule persistence unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                TryDelete(
+                    path);
+                TryDelete(
+                    path + ".tmp");
+                TryDelete(
+                    path + ".bak");
+            }
+        }
+
+        private static void TryDelete(
+            string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Validation cleanup must not hide the actual assertion.
+            }
         }
 
         private static void ValidateUnityDispatch(

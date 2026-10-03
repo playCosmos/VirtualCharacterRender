@@ -53,6 +53,7 @@ Implemented rule features:
 - optional stop-after-match
 - bounded action-command output per input event
 - dropped-command diagnostics
+- versioned persisted rule documents with atomic save, explicit max-command settings, current-version reload, and fail-closed rejection of newer unsupported versions
 
 Missing numeric/text state keys do not silently compare as zero/empty values.
 
@@ -114,6 +115,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - numeric scale/offset action transform
 - deterministic text transform mapping for state mutation and action commands
 - bounded commands per event
+- versioned rule save/reload plus newer-version rejection
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
 - environment transition mode/duration mapping through IEnvironmentRuntime without concrete component leakage
@@ -131,7 +133,6 @@ These validation paths are implemented but have not been executed in this enviro
 The next source slices are:
 
 - expand material/shader actions to texture/shader-id/preset operations only where resource-id validation can remain deterministic
-- version persisted rule configuration before P11 exposes editing UI
 - add rule-level diagnostics and optional tracing that stays disabled by default
 - validate allocation/frame-time cost under event bursts
 
