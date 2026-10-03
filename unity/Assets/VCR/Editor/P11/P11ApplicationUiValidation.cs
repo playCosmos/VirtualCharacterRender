@@ -560,17 +560,27 @@ namespace VCR.Editor.P11
                         }
                     };
 
+                string eventSaveError =
+                    null;
+                EventRuntimeRule[] loadedRules =
+                    Array.Empty<
+                        EventRuntimeRule>();
+                var loadedMaxCommands =
+                    0;
+                string eventLoadError =
+                    null;
+
                 var saved =
                     eventStore.TrySave(
                         eventRules,
                         73,
-                        out var eventSaveError);
+                        out eventSaveError);
                 var loaded =
                     saved &&
                     eventStore.TryLoad(
-                        out var loadedRules,
-                        out var loadedMaxCommands,
-                        out var eventLoadError);
+                        out loadedRules,
+                        out loadedMaxCommands,
+                        out eventLoadError);
 
                 Expect(
                     saved &&
