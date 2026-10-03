@@ -1,8 +1,11 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Editor.P0;
 using VCR.Runtime.Application;
+using VCR.Runtime.EventRuntime;
+using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.UI;
 
 namespace VCR.Editor.P11
@@ -43,6 +46,62 @@ namespace VCR.Editor.P11
                 Undo.AddComponent<
                     ApplicationUiController>(
                         bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
+                    AppearanceTransitionActionExecutor>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    AppearanceTransitionActionExecutor>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
+                    EffectEventActionHandler>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    EffectEventActionHandler>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
+                    AppearanceEventActionHandler>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    AppearanceEventActionHandler>(
+                        bootstrap.gameObject);
+            }
+
+            var eventRuntime =
+                Object.FindFirstObjectByType<
+                    EventRuntimeHost>();
+
+            if (eventRuntime != null)
+            {
+                var handlers =
+                    new List<MonoBehaviour>();
+
+                var behaviours =
+                    Object.FindObjectsByType<
+                        MonoBehaviour>(
+                            FindObjectsInactive.Exclude,
+                            FindObjectsSortMode.None);
+
+                foreach (var behaviour in behaviours)
+                {
+                    if (behaviour is
+                        IEventActionHandler)
+                    {
+                        handlers.Add(
+                            behaviour);
+                    }
+                }
+
+                eventRuntime.SetActionHandlers(
+                    handlers.ToArray());
             }
 
             if (!EditorSceneManager
