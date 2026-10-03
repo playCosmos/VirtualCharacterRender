@@ -378,16 +378,19 @@ namespace VCR.Editor.P11
                         userRegistry.ReplaceUserPresets(
                             loadedUserPresets,
                             out var restoreUserError);
+                    string applyUserError = null;
                     var appliedUserPreset =
                         restoredUserPresets &&
                         runtime.SetPreset(
                             "user-casual",
                             "Immediate",
-                            out var applyUserError);
-                    applyUserError ??=
-                        restoredUserPresets
-                            ? null
-                            : "restore failed before apply";
+                            out applyUserError);
+
+                    if (!restoredUserPresets)
+                    {
+                        applyUserError =
+                            "restore failed before apply";
+                    }
 
                     Expect(
                         restoredUserPresets &&
