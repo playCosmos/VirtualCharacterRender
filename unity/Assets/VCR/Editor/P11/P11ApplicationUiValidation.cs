@@ -304,6 +304,10 @@ namespace VCR.Editor.P11
                 .RunChecks(
                     failures);
 
+            P11ExternalMotionImportValidation
+                .RunChecks(
+                    failures);
+
             var unavailable =
                 model.CaptureSections();
 
@@ -323,7 +327,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, cancellation policy, serialized timeline authoring contract)");
+                    "(section order, availability, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
                 return true;
             }
 
