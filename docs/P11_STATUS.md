@@ -105,6 +105,8 @@ Implemented source contracts:
 - persistence failure rolls the in-memory user-preset mutation back
 - `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
 - transition editor supports add/duplicate/delete, ordered action/commit steps, custom action payloads, cleanup actions, marker visualization, sort/reorder, runtime validation, and Play Mode preview
+- selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
+- import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
 
 Implemented event action types:
@@ -194,6 +196,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
 - transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
+- transition package JSON version/action/commit/cleanup round trip and newer-version rejection
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
@@ -201,7 +204,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: first timeline authoring UI is implemented; remaining work is named markers/blocking dependencies, reusable transition import/export, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt behavior
+- Appearance transitions: first timeline authoring UI and versioned JSON import/export are implemented; remaining work is named markers/blocking dependencies, richer package-library UX/migration, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt behavior
 - Motion import: Unity-project AnimationClip baking is implemented; external motion-file import remains later tooling
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
