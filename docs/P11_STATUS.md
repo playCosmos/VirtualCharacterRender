@@ -208,6 +208,10 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - external standalone `.anim` file copy/import with wildcard + exact sidecar marker resolution
 - normalized/seconds sidecar marker conversion into `VCRMarker` AnimationEvents
 - duplicate resolved marker rejection, newer-sidecar-version rejection, and failed-import asset/folder rollback
+- built-in BVH adapter dispatch through the shared external-motion registry
+- BVH hierarchy/channel/frame parsing into an additive humanoid baked cue
+- BVH configurable position scale/handedness conversion, first-frame-relative root motion/rotation, common humanoid bone mapping, and sidecar-marker preservation
+- adapter source archival as Unity-tracked `.bvh.bytes` plus baked-cue asset creation
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
