@@ -226,11 +226,12 @@ namespace VCR.Editor.P5
                 "same-space pose layers must blend",
                 failures);
 
+            NormalizedBonePose left = default;
             var hasLeft =
                 mixed != null &&
                 mixed.TryGet(
                     HumanoidBoneId.LeftUpperArm,
-                    out var left);
+                    out left);
 
             Expect(
                 hasLeft,
@@ -246,11 +247,12 @@ namespace VCR.Editor.P5
                     failures);
             }
 
+            NormalizedBonePose right = default;
             var hasRight =
                 mixed != null &&
                 mixed.TryGet(
                     HumanoidBoneId.RightUpperArm,
-                    out var right);
+                    out right);
 
             Expect(
                 hasRight,
@@ -282,11 +284,12 @@ namespace VCR.Editor.P5
                     settings,
                     out mismatch);
 
+            NormalizedBonePose additiveLeft = default;
             var hasAdditiveLeft =
                 additive != null &&
                 additive.TryGet(
                     HumanoidBoneId.LeftUpperArm,
-                    out var additiveLeft);
+                    out additiveLeft);
 
             Expect(
                 hasAdditiveLeft,
@@ -661,11 +664,12 @@ namespace VCR.Editor.P5
                         out var mixedPoseFrame) &&
                     mixedPoseFrame?.HumanoidPose != null;
 
+                NormalizedBonePose mixedLeft = default;
                 var hasMixedLeft =
                     hasMixedPose &&
                     mixedPoseFrame.HumanoidPose.TryGet(
                         HumanoidBoneId.LeftUpperArm,
-                        out var mixedLeft);
+                        out mixedLeft);
 
                 Expect(
                     hasMixedLeft,
@@ -681,11 +685,12 @@ namespace VCR.Editor.P5
                         failures);
                 }
 
+                NormalizedBonePose mixedRight = default;
                 var hasMixedRight =
                     hasMixedPose &&
                     mixedPoseFrame.HumanoidPose.TryGet(
                         HumanoidBoneId.RightUpperArm,
-                        out var mixedRight);
+                        out mixedRight);
 
                 Expect(
                     hasMixedRight,
@@ -700,6 +705,73 @@ namespace VCR.Editor.P5
                         "ordered pose layers must apply override before additive in array order",
                         failures);
                 }
+
+                var orderedMetrics =
+                    new List<RuntimeMetric>();
+                mixer.CollectMetrics(
+                    orderedMetrics);
+
+                Expect(
+                    TryGetMetric(
+                        orderedMetrics,
+                        "mixer.pose.additional_layers",
+                        out var additionalLayerCount) &&
+                    Math.Abs(
+                        additionalLayerCount - 2.0) <
+                    0.001,
+                    "mixer diagnostics must expose the configured ordered pose-layer count",
+                    failures);
+
+                poseOverrideLayer.PoseFrame =
+                    CreatePoseFrame(
+                        "ordered-override-mismatch",
+                        sequence: 2,
+                        nowUs + 1,
+                        leftX: 0f,
+                        rightX: 8f,
+                        poseSpace:
+                            HumanoidPoseSpace.OriginalLocal);
+
+                InvokeUpdate(mixer);
+
+                var hasMismatchPose =
+                    mixer.TryGetLatestHumanoidPose(
+                        out var mismatchPoseFrame) &&
+                    mismatchPoseFrame?.HumanoidPose != null;
+
+                NormalizedBonePose mismatchRight = default;
+                var hasMismatchRight =
+                    hasMismatchPose &&
+                    mismatchPoseFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.RightUpperArm,
+                        out mismatchRight);
+
+                Expect(
+                    hasMismatchRight,
+                    "a pose-space mismatch in one ordered layer must preserve the previously mixed pose and continue later compatible layers",
+                    failures);
+
+                if (hasMismatchRight)
+                {
+                    ExpectClose(
+                        mismatchRight.LocalPosition.X,
+                        0.75f,
+                        "mismatched ordered layer must be skipped while the following additive layer still applies",
+                        failures);
+                }
+
+                orderedMetrics.Clear();
+                mixer.CollectMetrics(
+                    orderedMetrics);
+
+                Expect(
+                    TryGetMetric(
+                        orderedMetrics,
+                        "mixer.pose.space_mismatch",
+                        out var orderedMismatch) &&
+                    orderedMismatch > 0.5,
+                    "ordered-layer pose-space mismatch must be surfaced in mixer diagnostics",
+                    failures);
 
                 mixer.SetAdditionalPoseLayers();
                 mixer.SetPoseLayerProvider(
@@ -905,7 +977,9 @@ namespace VCR.Editor.P5
             long sequence,
             long runtimeTimestampUs,
             float leftX,
-            float rightX)
+            float rightX,
+            HumanoidPoseSpace poseSpace =
+                HumanoidPoseSpace.NormalizedLocal)
         {
             return new TrackingFrame(
                 sequence,
@@ -919,7 +993,7 @@ namespace VCR.Editor.P5
                     true,
                 humanoidPose:
                     CreateTwoBonePose(
-                        HumanoidPoseSpace.NormalizedLocal,
+                        poseSpace,
                         leftX,
                         rightX),
                 sourceId:
