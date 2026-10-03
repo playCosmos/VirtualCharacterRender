@@ -65,6 +65,9 @@ namespace VCR.Runtime.UI
         private Button _unloadCharacterButton;
         private Button _apply720p60Button;
         private Button _apply1080p60Button;
+        private Button _outputTransparentButton;
+        private Button _outputTopmostButton;
+        private Button _outputClickThroughButton;
         private Text _motionPoseWeightLabel;
         private Slider _motionPoseWeightSlider;
         private InputField _manualExpressionNameInput;
@@ -231,6 +234,9 @@ namespace VCR.Runtime.UI
             _unloadCharacterButton = null;
             _apply720p60Button = null;
             _apply1080p60Button = null;
+            _outputTransparentButton = null;
+            _outputTopmostButton = null;
+            _outputClickThroughButton = null;
             _motionPoseWeightLabel = null;
             _motionPoseWeightSlider = null;
             _manualExpressionNameInput = null;
@@ -830,6 +836,33 @@ namespace VCR.Runtime.UI
             _apply1080p60Button.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 150f;
+
+            _outputTransparentButton =
+                CreateButton(
+                    "Transparent",
+                    _contextActions,
+                    ToggleOverlayTransparent);
+            _outputTransparentButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _outputTopmostButton =
+                CreateButton(
+                    "Topmost",
+                    _contextActions,
+                    ToggleOverlayTopmost);
+            _outputTopmostButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 135f;
+
+            _outputClickThroughButton =
+                CreateButton(
+                    "Click-through",
+                    _contextActions,
+                    ToggleOverlayClickThrough);
+            _outputClickThroughButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 165f;
 
             _motionPoseWeightLabel =
                 CreateText(
@@ -3214,6 +3247,111 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void ToggleOverlayTransparent()
+        {
+            ToggleOverlaySetting(
+                transparent:
+                    true,
+                topmost:
+                    false,
+                clickThrough:
+                    false);
+        }
+
+        private void ToggleOverlayTopmost()
+        {
+            ToggleOverlaySetting(
+                transparent:
+                    false,
+                topmost:
+                    true,
+                clickThrough:
+                    false);
+        }
+
+        private void ToggleOverlayClickThrough()
+        {
+            ToggleOverlaySetting(
+                transparent:
+                    false,
+                topmost:
+                    false,
+                clickThrough:
+                    true);
+        }
+
+        private void ToggleOverlaySetting(
+            bool transparent,
+            bool topmost,
+            bool clickThrough)
+        {
+            if (sceneRuntime == null)
+            {
+                _lastActionMessage =
+                    "Overlay output control is unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var output =
+                sceneRuntime.OverlayOutput;
+
+            if (output == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyOverlaySetting(
+                        true,
+                        sceneRuntime.State,
+                        true))
+            {
+                _lastActionMessage =
+                    output == null
+                        ? "No overlay output adapter is configured."
+                        : "Overlay output settings cannot be changed while the scene runtime is busy.";
+                RefreshAll();
+                return;
+            }
+
+            var current =
+                output.Settings;
+            var next =
+                new OverlayOutputSettings(
+                    transparent
+                        ? !current.Transparent
+                        : current.Transparent,
+                    topmost
+                        ? !current.Topmost
+                        : current.Topmost,
+                    clickThrough
+                        ? !current.ClickThrough
+                        : current.ClickThrough);
+
+            try
+            {
+                sceneRuntime.ApplyOverlayOutput(
+                    next);
+
+                if (clickThrough &&
+                    next.ClickThrough)
+                {
+                    _lastActionMessage =
+                        "Click-through enabled. Mouse input will pass through the overlay window; use another control path or restart with click-through disabled if you need to regain mouse interaction.";
+                }
+                else
+                {
+                    _lastActionMessage =
+                        $"Overlay settings applied: transparent={next.Transparent}, topmost={next.Topmost}, click-through={next.ClickThrough}.";
+                }
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Overlay setting apply failed: " +
+                    exception.Message;
+            }
+
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -3406,6 +3544,15 @@ namespace VCR.Runtime.UI
             SetActive(
                 _apply1080p60Button,
                 outputSelected);
+            SetActive(
+                _outputTransparentButton,
+                outputSelected);
+            SetActive(
+                _outputTopmostButton,
+                outputSelected);
+            SetActive(
+                _outputClickThroughButton,
+                outputSelected);
 
             SetActive(
                 _motionPoseWeightLabel,
@@ -3547,6 +3694,63 @@ namespace VCR.Runtime.UI
                                 true,
                                 status.State,
                                 status.HasCharacter);
+                }
+            }
+
+            if (outputSelected &&
+                sceneRuntime != null)
+            {
+                var status =
+                    sceneRuntime.Status;
+                var output =
+                    sceneRuntime.OverlayOutput;
+                var canApplyOverlay =
+                    ApplicationUiActionPolicy
+                        .CanApplyOverlaySetting(
+                            true,
+                            status.State,
+                            output != null);
+
+                if (_outputTransparentButton != null)
+                {
+                    _outputTransparentButton.interactable =
+                        canApplyOverlay;
+                    SetButtonLabel(
+                        _outputTransparentButton,
+                        output != null
+                            ? "Transparent: " +
+                              (output.Settings.Transparent
+                                  ? "On"
+                                  : "Off")
+                            : "Transparent: n/a");
+                }
+
+                if (_outputTopmostButton != null)
+                {
+                    _outputTopmostButton.interactable =
+                        canApplyOverlay;
+                    SetButtonLabel(
+                        _outputTopmostButton,
+                        output != null
+                            ? "Topmost: " +
+                              (output.Settings.Topmost
+                                  ? "On"
+                                  : "Off")
+                            : "Topmost: n/a");
+                }
+
+                if (_outputClickThroughButton != null)
+                {
+                    _outputClickThroughButton.interactable =
+                        canApplyOverlay;
+                    SetButtonLabel(
+                        _outputClickThroughButton,
+                        output != null
+                            ? "Click-through: " +
+                              (output.Settings.ClickThrough
+                                  ? "On"
+                                  : "Off")
+                            : "Click-through: n/a");
                 }
             }
 
