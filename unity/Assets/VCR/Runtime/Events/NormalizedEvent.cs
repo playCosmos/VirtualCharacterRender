@@ -11,7 +11,8 @@ namespace VCR.Runtime.Events
             double amount = 0.0,
             string currency = null,
             bool hasAmount = false,
-            long sequence = 0)
+            long sequence = 0,
+            string actorName = null)
         {
             Type = type;
             SourceId = sourceId;
@@ -22,12 +23,14 @@ namespace VCR.Runtime.Events
             Currency = currency;
             HasAmount = hasAmount;
             Sequence = sequence;
+            ActorName = actorName;
         }
 
         public string Type { get; }
         public string SourceId { get; }
         public long TimestampUs { get; }
         public string ActorId { get; }
+        public string ActorName { get; }
         public string Text { get; }
         public double Amount { get; }
         public string Currency { get; }
@@ -45,7 +48,8 @@ namespace VCR.Runtime.Events
                 Amount,
                 Currency,
                 HasAmount,
-                sequence);
+                sequence,
+                ActorName);
         }
     }
 }
