@@ -135,6 +135,16 @@ namespace VCR.Runtime.UI
                     characterPath);
         }
 
+        public static bool CanCancelAppearanceTransition(
+            bool runtimeAvailable,
+            AppearanceRuntimeStatus status)
+        {
+            return
+                runtimeAvailable &&
+                status.Busy &&
+                status.CanCancelTransition;
+        }
+
         public static bool CanPreviewAppearanceTransition(
             bool runtimeAvailable,
             AppearanceRuntimeState state,
