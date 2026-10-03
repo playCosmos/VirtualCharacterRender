@@ -18,6 +18,12 @@ namespace VCR.Runtime.Appearance
         Commit = 1
     }
 
+    public enum AppearanceTransitionTimingMode
+    {
+        AbsoluteTime = 0,
+        Marker = 1
+    }
+
     public enum AppearanceTransitionQueuePolicy
     {
         QueueLatest = 0,
@@ -58,9 +64,20 @@ namespace VCR.Runtime.Appearance
     }
 
     [Serializable]
+    public sealed class AppearanceTransitionMarker
+    {
+        public string Name;
+        public double TimeSeconds;
+    }
+
+    [Serializable]
     public sealed class AppearanceTransitionStep
     {
         public double TimeSeconds;
+        public AppearanceTransitionTimingMode TimingMode =
+            AppearanceTransitionTimingMode.AbsoluteTime;
+        public string MarkerName;
+        public double MarkerOffsetSeconds;
         public AppearanceTransitionStepKind Kind =
             AppearanceTransitionStepKind.Action;
         public string ActionType;
@@ -70,6 +87,8 @@ namespace VCR.Runtime.Appearance
         public double Value;
         public bool HasValue;
         public bool Required = true;
+        public bool Blocking = false;
+        public double CompletionTimeoutSeconds = 5.0;
     }
 
     [Serializable]
@@ -81,6 +100,8 @@ namespace VCR.Runtime.Appearance
             AppearanceTransitionQueuePolicy.QueueLatest;
         public AppearanceTransitionFallbackPolicy FallbackPolicy =
             AppearanceTransitionFallbackPolicy.Immediate;
+        public AppearanceTransitionMarker[] Markers =
+            Array.Empty<AppearanceTransitionMarker>();
         public AppearanceTransitionStep[] Steps =
             Array.Empty<AppearanceTransitionStep>();
         public AppearanceTransitionStep[] CancellationSteps =
@@ -244,6 +265,17 @@ namespace VCR.Runtime.Appearance
 
         bool TryExecute(
             AppearanceTransitionStep step,
+            out string error);
+    }
+
+    public interface IAppearanceTransitionStepCompletionProbe
+    {
+        bool CanTrackCompletion(
+            AppearanceTransitionStep step);
+
+        bool TryIsComplete(
+            AppearanceTransitionStep step,
+            out bool complete,
             out string error);
     }
 }
