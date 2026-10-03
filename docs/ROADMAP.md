@@ -201,7 +201,7 @@ Windows/macOS standalone transparency, OBS alpha capture, resize/high-DPI behavi
 
 Status: Active. See `P11_STATUS.md`.
 
-The first source slice establishes a programmatic uGUI shell, stable navigation/availability model, runtime status summaries, configuration save, overlay recovery, desktop character file browsing, and a dedicated P11 runtime-scene builder.
+The first source slice establishes a programmatic uGUI shell, stable navigation/availability model, runtime status summaries, configuration save, overlay recovery, desktop character file browsing, tracking controls, motion/expression controls, environment transitions, material/shader overrides, persisted event-rule controls, camera/output controls, capability/render settings, and a dedicated P11 runtime-scene builder.
 
 UI areas:
 
