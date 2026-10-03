@@ -778,10 +778,15 @@ namespace VCR.Editor.P6
 
         public bool ValidateEnvironmentTransition(
             EnvironmentTransitionSpec transition,
+            string previousStateId,
+            string nextStateId,
             out string error)
         {
             error = null;
-            return !transition.IsImmediate;
+            return
+                !transition.IsImmediate &&
+                !string.IsNullOrEmpty(previousStateId) &&
+                !string.IsNullOrEmpty(nextStateId);
         }
 
         public void ApplyEnvironmentTransition(
