@@ -66,7 +66,7 @@ Detailed editing controls are intentionally added incrementally instead of dupli
 The next control slice is now also implemented:
 
 - Character: manual VRM path boundary plus Load / Reload / Unload actions over `SingleCharacterSceneRuntime`
-- Character path input is not a platform-native file picker; desktop file browsing remains a platform/UI adapter concern
+- Character keeps direct path input and now also exposes a Browse action through `ICharacterFileSelectionAdapter`; Unity Editor, Windows standalone, and macOS standalone adapters are implemented. The selected path is validated as an existing `.vrm` before it is copied into the path field.
 - scene-mutating buttons are disabled while a character load is already in progress and while the scene is suspended/shutting down/stopped
 - Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract
 - Save Configuration and Recover Output remain global actions
@@ -218,7 +218,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 ## Next P11 work
 
-- Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
+- Character: native file-selection source path is implemented for Unity Editor, Windows standalone, and macOS standalone; remaining work is real-platform dialog/build verification
 - Character > Appearance / Quick Change: saved preset save/load/delete/rename/duplicate/reorder is implemented; later work is richer browsing/search/metadata UX if needed
 - Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, resolved-time dependency graph preview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, interactive graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking plus external Unity-native `.fbx`, `.dae`, and `.anim` import are implemented. FBX/DAE embedded clips are extracted to standalone `.anim` assets before marker editing. A built-in `.bvh` adapter parses hierarchy/channels and emits an additive humanoid `BakedMotionCueAsset`; glTF-style motion remains adapter work.
