@@ -1037,21 +1037,6 @@ namespace VCR.Runtime.Appearance.Unity
                     yield return null;
                 }
 
-                if (hasPreviousStep &&
-                    step.TimeSeconds <
-                    previousTime)
-                {
-                    error =
-                        $"Transition '{transition.Id}' steps must be authored in non-decreasing time order.";
-                    return false;
-                }
-
-                previousTime =
-                    step.TimeSeconds;
-                lastStepTime =
-                    step.TimeSeconds;
-                hasPreviousStep = true;
-
                 if (step.Kind ==
                     AppearanceTransitionStepKind.Commit)
                 {
@@ -1699,6 +1684,22 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
+                if (hasPreviousStep &&
+                    step.TimeSeconds <
+                        previousTime)
+                {
+                    error =
+                        $"Transition '{transition.Id}' steps must be ordered by non-decreasing time.";
+                    return false;
+                }
+
+                previousTime =
+                    step.TimeSeconds;
+                lastStepTime =
+                    step.TimeSeconds;
+                hasPreviousStep =
+                    true;
+
                 if (step.Kind ==
                     AppearanceTransitionStepKind.Commit)
                 {
@@ -1725,21 +1726,6 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
-                if (hasPreviousStep &&
-                    step.TimeSeconds <
-                        previousTime)
-                {
-                    error =
-                        $"Transition '{transition.Id}' steps must be ordered by non-decreasing time.";
-                    return false;
-                }
-
-                previousTime =
-                    step.TimeSeconds;
-                lastStepTime =
-                    step.TimeSeconds;
-                hasPreviousStep =
-                    true;
             }
 
             if (commitCount != 1)
