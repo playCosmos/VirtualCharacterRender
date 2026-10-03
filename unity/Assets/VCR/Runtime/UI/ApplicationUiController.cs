@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -62,6 +63,13 @@ namespace VCR.Runtime.UI
         private Button _unloadCharacterButton;
         private Button _apply720p60Button;
         private Button _apply1080p60Button;
+        private Text _motionPoseWeightLabel;
+        private Slider _motionPoseWeightSlider;
+        private InputField _manualExpressionNameInput;
+        private InputField _manualExpressionValueInput;
+        private Button _manualExpressionApplyButton;
+        private Button _manualExpressionClearButton;
+        private Button _manualExpressionClearAllButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -96,6 +104,7 @@ namespace VCR.Runtime.UI
         private IAppearanceUserPresetRegistry _loadedAppearancePresetRegistry;
         private string _loadedAppearanceProfilePath;
         private MotionExpressionMixer _mixer;
+        private ManualExpressionLayerSource _manualExpressionSource;
         private MaterialOverrideController _materialController;
 
         private float _nextRefreshTime;
@@ -189,6 +198,13 @@ namespace VCR.Runtime.UI
             _unloadCharacterButton = null;
             _apply720p60Button = null;
             _apply1080p60Button = null;
+            _motionPoseWeightLabel = null;
+            _motionPoseWeightSlider = null;
+            _manualExpressionNameInput = null;
+            _manualExpressionValueInput = null;
+            _manualExpressionApplyButton = null;
+            _manualExpressionClearButton = null;
+            _manualExpressionClearAllButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -246,6 +262,11 @@ namespace VCR.Runtime.UI
             _mixer ??=
                 FindFirstObjectByType<
                     MotionExpressionMixer>(
+                    FindObjectsInactive.Exclude);
+
+            _manualExpressionSource ??=
+                FindFirstObjectByType<
+                    ManualExpressionLayerSource>(
                     FindObjectsInactive.Exclude);
 
             _materialController ??=
