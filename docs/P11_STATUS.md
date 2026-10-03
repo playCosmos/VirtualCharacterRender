@@ -98,13 +98,13 @@ Implemented source contracts:
 - recursive `appearance.*` transition actions are rejected
 - event actions for preset/outfit/accessory/default changes
 - loaded VRM characters receive an appearance runtime component without forcing any appearance configuration
-- Character UI exposes Previous Look / Next Look / transition selection / Restore Default, direct preset/outfit/accessory ID controls, transition preview, and per-character user preset save/delete
+- Character UI exposes Previous Look / Next Look / transition selection / Restore Default, direct preset/outfit/accessory ID controls, transition preview, and per-character user preset save/delete/rename/duplicate/reorder
 - user presets are restored automatically from a versioned per-character appearance profile
 - authored preset ids cannot be overwritten by user presets
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
 - `VCR/P11/Open Appearance Transition Timeline` authors the serialized runtime transition array directly
-- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, a dependency overview panel with missing/forward-reference warnings, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
+- transition editor supports add/duplicate/delete, ordered action/commit steps, named marker create/edit/delete, AnimationClip/BakedMotionCue marker import, configurable nearest-marker snapping, Absolute Time or Marker + Offset scheduling, custom action payloads, Blocking + completion timeout, stable Action Step IDs, All/Any dependencies on earlier actions, a resolved-time dependency node/edge graph with missing/forward-reference warnings, cleanup actions, resolved-time sorting, runtime validation, and Play Mode preview
 - selected/all transition definitions can be exported as versioned JSON packages and imported transactionally
 - transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
@@ -196,9 +196,10 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - direct appearance UI action gating for preset/outfit/accessory set/clear
 - transition preview gating rejects Immediate, busy/faulted states, and missing active outfits
 - audio.play/audio.stop transition dispatch, logical audio binding, loop and optional volume override
-- user preset registry save/replace/collision behavior
-- per-character appearance profile JSON save/load round trip
-- saved preset UI gating requires a ready runtime, user preset id, and active character path
+- user preset registry save/replace/collision behavior plus rename/duplicate/reorder semantics
+- active user-preset identity preservation across rename and ordered duplicate insertion
+- per-character appearance profile JSON save/load round trip including managed preset order
+- saved preset UI gating requires a ready runtime, source/target ids as applicable, and active character path
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
 - transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
@@ -218,8 +219,8 @@ These validation paths are implemented but have not been executed in this enviro
 ## Next P11 work
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
-- Character > Appearance / Quick Change: richer saved-preset management such as rename/reorder/duplicate; durable save/load/delete is implemented
-- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, dependency overview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, richer graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
+- Character > Appearance / Quick Change: saved preset save/load/delete/rename/duplicate/reorder is implemented; later work is richer browsing/search/metadata UX if needed
+- Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, resolved-time dependency graph preview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, interactive graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking plus external Unity-native `.fbx`, `.dae`, and `.anim` import are implemented. FBX/DAE embedded clips are extracted to standalone `.anim` assets before marker editing. A built-in `.bvh` adapter parses hierarchy/channels and emits an additive humanoid `BakedMotionCueAsset`; glTF-style motion remains adapter work.
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
