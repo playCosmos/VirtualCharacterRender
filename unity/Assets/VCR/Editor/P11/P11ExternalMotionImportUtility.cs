@@ -106,19 +106,6 @@ namespace VCR.Editor.P11
                 NormalizeAssetFolder(
                     destinationAssetFolder);
 
-            var createdFolders =
-                new List<string>();
-
-            if (!TryEnsureAssetFolder(
-                    destinationAssetFolder,
-                    createdFolders,
-                    out error))
-            {
-                RollbackFolders(
-                    createdFolders);
-                return false;
-            }
-
             if (autoDetectSidecar &&
                 string.IsNullOrWhiteSpace(
                     markerSidecarPath))
@@ -149,6 +136,19 @@ namespace VCR.Editor.P11
                 {
                     return false;
                 }
+            }
+
+            var createdFolders =
+                new List<string>();
+
+            if (!TryEnsureAssetFolder(
+                    destinationAssetFolder,
+                    createdFolders,
+                    out error))
+            {
+                RollbackFolders(
+                    createdFolders);
+                return false;
             }
 
             var createdAssets =
