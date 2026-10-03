@@ -945,6 +945,25 @@ namespace VCR.Editor.P11
                     motionPlayError,
                     failures);
 
+                var motionCompletionBeforeRelease =
+                    false;
+                string motionCompletionError =
+                    null;
+
+                Expect(
+                    transitionExecutor
+                        .CanTrackCompletion(
+                            motionPlayStep) &&
+                    transitionExecutor
+                        .TryIsComplete(
+                            motionPlayStep,
+                            out motionCompletionBeforeRelease,
+                            out motionCompletionError) &&
+                    !motionCompletionBeforeRelease,
+                    "active procedural motion.play must expose incomplete completion state for blocking transitions: " +
+                    motionCompletionError,
+                    failures);
+
                 var motionReleaseStep =
                     new AppearanceTransitionStep
                     {
@@ -971,6 +990,22 @@ namespace VCR.Editor.P11
                         out _),
                     "appearance transition motion.release must remove the procedural pose contribution: " +
                     motionReleaseError,
+                    failures);
+
+                var motionCompletionAfterRelease =
+                    false;
+                string motionCompletionAfterReleaseError =
+                    null;
+
+                Expect(
+                    transitionExecutor
+                        .TryIsComplete(
+                            motionPlayStep,
+                            out motionCompletionAfterRelease,
+                            out motionCompletionAfterReleaseError) &&
+                    motionCompletionAfterRelease,
+                    "released motion cue must report the prior motion.play blocking action complete: " +
+                    motionCompletionAfterReleaseError,
                     failures);
 
                 var bakedPlayStep =
