@@ -161,6 +161,16 @@ namespace VCR.Editor.P11
                             .OpenWithClip(
                                 clip);
                     }
+
+                    if (GUILayout.Button(
+                            "Timeline",
+                            GUILayout.Width(
+                                68f)))
+                    {
+                        P11AppearanceTransitionTimelineEditor
+                            .OpenWithMarkerClip(
+                                clip);
+                    }
                 }
             }
 
