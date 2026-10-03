@@ -238,11 +238,14 @@ A transition step may be scheduled by:
 - delay after the previous step
 - absolute time from transition start remains the compatibility/default mode
 - a named marker plus a signed time offset
-- completion of a previous Blocking action before the runner advances to the next authored step
+- completion of the current Blocking action before the runner advances
+- `All` / `Any` completion dependencies on multiple earlier Action steps identified by stable `StepId` values
 
 Named markers are transition-owned time anchors such as `swap` or `spin-end`. A step may use `TimingMode=Marker`, reference the marker by name, and add an optional offset. The resolved step times must still be non-decreasing and remain within the transition duration.
 
 Action steps may be marked `Blocking`. Blocking requires a finite positive completion timeout and an explicit cancellation-cleanup contract. The transition executor polls a completion probe every frame; on completion it advances, while timeout/probe failure follows the normal Required/Fallback policy after cleanup. Built-in motion, particle-effect, and audio handlers expose completion probes, and custom handlers may implement the same completion interface.
+
+For non-linear completion gates, Action steps may expose a stable `StepId`. Any later Action or `appearance.commit` step may select `DependencyMode=All` or `DependencyMode=Any` and list one or more earlier Action step ids. `All` waits for every referenced action to complete; `Any` advances as soon as the first referenced action completes. Dependency waits have their own positive timeout and require cancellation cleanup. Forward references, duplicate action ids, duplicate dependency ids, missing completion probes, and unsupported dependency modes fail closed before transition execution.
 
 The appearance commit can therefore be synchronized to a stable `swap` marker while a later `spin-end` marker releases the motion, or a later step can wait on actual action completion instead of a guessed fixed delay. The runtime remains deterministic and ordered; a full cinematic timeline is still not required.
 
@@ -363,7 +366,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - import validated external accessory packages
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
-- richer transition timeline authoring: motion-asset event/marker extraction, marker snapping, dependency graphs beyond linear blocking, package libraries, and non-scene workflows
+- richer transition timeline authoring: dependency visualization beyond the implemented StepId-based All/Any graph, package libraries, and non-scene workflows
 - external custom motion import/registration beyond the implemented Unity AnimationClip baker
 - custom particle/effect preset import/registration
 - automatic import of markers/events from compatible motion assets
@@ -397,8 +400,11 @@ The first source implementation now exists:
 - configurable `Snap Threshold` converts nearby Absolute Time steps to exact Marker timing
 - per-step Absolute Time or Marker + Offset timing
 - per-action Blocking + completion timeout controls
+- stable Action `Step ID` editing plus `All` / `Any` dependency selection against earlier Action steps
+- `Generate Step IDs` migration convenience for older authored transitions
+- per-dependent-step timeout controls with fail-closed forward-reference and duplicate-id validation
 - step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
-- versioned JSON export for the selected transition or all transitions
+- versioned JSON export for the selected transition or all transitions; schema v2 preserves marker/blocking/dependency metadata and v1 packages migrate automatically
 - transactional JSON import with duplicate-ID replacement confirmation and full rollback when runtime validation fails
 - built-in `Spin + Confetti` and Interrupt cleanup starter templates
 - timeline edits write directly to `BasicCharacterAppearanceRuntime.transitions`, so editor and runtime definitions cannot silently diverge
@@ -441,8 +447,8 @@ Not yet implemented as built-ins:
 - external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
 - automatic marker/event extraction from external motion-file formats before they become Unity AnimationClips; Unity AnimationClip VCR marker extraction and baked-cue marker preservation are implemented
-- richer dependency authoring beyond the implemented linear Blocking rule
-- richer transition package management beyond the implemented versioned JSON import/export, such as package libraries/metadata/migration UI
+- richer dependency visualization/grouping beyond the implemented StepId-based `All` / `Any` completion graph
+- richer transition package management beyond the implemented v2 JSON import/export and v1 migration, such as package libraries/metadata/migration UI
 - external appearance package import
 - compatible external skinned-garment workflow
 
