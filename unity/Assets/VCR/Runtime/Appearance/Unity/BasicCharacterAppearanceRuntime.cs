@@ -1942,6 +1942,7 @@ namespace VCR.Runtime.Appearance.Unity
                 return true;
             }
 
+            string firstRequiredError = null;
             string firstOptionalError = null;
 
             foreach (var step in
@@ -1958,18 +1959,21 @@ namespace VCR.Runtime.Appearance.Unity
 
                 if (step.Required)
                 {
-                    error =
+                    firstRequiredError ??=
                         stepError;
-                    return false;
                 }
-
-                firstOptionalError ??=
-                    stepError;
+                else
+                {
+                    firstOptionalError ??=
+                        stepError;
+                }
             }
 
             error =
+                firstRequiredError ??
                 firstOptionalError;
-            return true;
+            return
+                firstRequiredError == null;
         }
 
         private void ClearActiveTransition()
