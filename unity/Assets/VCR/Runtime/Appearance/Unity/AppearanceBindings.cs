@@ -88,6 +88,12 @@ namespace VCR.Runtime.Appearance.Unity
             AppearanceTransitionTimingMode.AbsoluteTime;
         public string MarkerName;
         public float MarkerOffsetSeconds;
+        public string StepId;
+        public AppearanceTransitionDependencyMode DependencyMode =
+            AppearanceTransitionDependencyMode.None;
+        public string[] DependsOnStepIds =
+            Array.Empty<string>();
+        [Min(0.01f)] public float DependencyTimeoutSeconds = 5f;
         public AppearanceTransitionStepKind Kind =
             AppearanceTransitionStepKind.Action;
         public string ActionType;
@@ -107,6 +113,14 @@ namespace VCR.Runtime.Appearance.Unity
                 TimingMode = TimingMode,
                 MarkerName = MarkerName,
                 MarkerOffsetSeconds = MarkerOffsetSeconds,
+                StepId = StepId,
+                DependencyMode = DependencyMode,
+                DependsOnStepIds =
+                    DependsOnStepIds != null
+                        ? (string[])DependsOnStepIds.Clone()
+                        : Array.Empty<string>(),
+                DependencyTimeoutSeconds =
+                    DependencyTimeoutSeconds,
                 Kind = Kind,
                 ActionType = ActionType,
                 TargetId = TargetId,
