@@ -63,6 +63,15 @@ The first bound summaries are:
 
 Detailed editing controls are intentionally added incrementally instead of duplicating subsystem logic inside the UI.
 
+The next control slice is now also implemented:
+
+- Character: manual VRM path boundary plus Load / Reload / Unload actions over `SingleCharacterSceneRuntime`
+- Character path input is not a platform-native file picker; desktop file browsing remains a platform/UI adapter concern
+- scene-mutating buttons are disabled while a character load is already in progress and while the scene is suspended/shutting down/stopped
+- Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract
+- Save Configuration and Recover Output remain global actions
+- action availability rules are centralized in `ApplicationUiActionPolicy` rather than duplicated across button callbacks
+
 ## Runtime scene
 
 Interactive scene generation:
@@ -104,18 +113,23 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - navigation to available sections
 - stable user-facing section titles
 - unavailable-reason preservation
+- blank character-path rejection
+- character load availability in operational scene states
+- reload/unload gating on an active character
+- scene-mutating action suppression while loading/suspended
+- broadcast-target action availability by scene state
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
 ## Next P11 work
 
-- Character: model load/reload/unload controls and file-selection boundary
+- Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
 - Motion / Expression: pose-layer weight and manual-expression controls
 - Environment: state and transition controls
 - Material / Shader: slot/preset/shader/parameter controls over existing P2/P7 contracts
 - Events: persisted P9 rule document list/edit/enable controls
-- Camera / Output: camera state, transparent/topmost/click-through and broadcast-target controls
+- Camera / Output: camera state plus transparent/topmost/click-through controls; 720p60/1080p60 broadcast-target apply actions are implemented
 - Settings: capability enable/disable and graphics/runtime settings
 - Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence
 - define save/apply UX and validation messaging before enabling destructive-looking actions
