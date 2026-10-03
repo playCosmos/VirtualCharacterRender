@@ -66,7 +66,7 @@ P8 adds the VCR OSC address:
 - packet/malformed/accepted/rejected/dropped/dispatched/rejected-sender diagnostics
 - no receive work while the component is disabled
 
-## WebSocket event injection boundary
+## WebSocket event injection and bridge transport
 
 P8 defines version 1 of the transport-neutral WebSocket event message:
 
@@ -95,7 +95,23 @@ P8 defines version 1 of the transport-neutral WebSocket event message:
 - exposes accepted/rejected diagnostics
 - performs no socket polling itself
 
-A concrete WebSocket listener/client transport has **not** yet been selected or claimed complete. The message/handler contract is intentionally transport-neutral so the transport can be chosen from measured Windows/macOS behavior without changing normalized-event semantics.
+`WebSocketEventClientTransport` provides the concrete optional transport using the .NET `ClientWebSocket` API:
+
+- default endpoint `ws://127.0.0.1:39541/vcr/events`
+- plaintext `ws://` allowed only for loopback
+- remote endpoints require `wss://`
+- URI user-info credentials are rejected
+- asynchronous receive with fragmented-text assembly
+- binary/oversize/invalid UTF-8 rejection
+- bounded text-message queue
+- main-thread-only delivery to `IWebSocketTextMessageHandler`
+- bounded dispatch per frame
+- configurable automatic reconnect delay
+- generation-guarded restart so an old async loop cannot overwrite a new connection state
+- transport connection/receive/drop/dispatch/rejection diagnostics
+- no third-party WebSocket package dependency
+
+This is an outbound bridge-client transport, not a public listener/server. A future application-control server, if required, remains a separate protocol surface rather than being implied by this event-ingress client.
 
 ## SOOP chat and donation bridge
 
@@ -152,6 +168,9 @@ The P8 suite runs P0-P7 checks first and then covers:
 - external tracking-event spoof rejection
 - WebSocket version/op/source/timestamp normalization
 - WebSocket invalid/tracking-event rejection
+- WebSocket endpoint security rules
+- WebSocket bounded queue -> main-thread handler delivery
+- WebSocket transport diagnostics
 - OSC chat/donation mapping
 - OSC wrong-address/tracking-event rejection
 - OSC receiver queue -> main-thread dispatch path
@@ -162,23 +181,28 @@ The P8 suite runs P0-P7 checks first and then covers:
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
-## Remaining P8 source work
+## Source implementation scope
 
-Before calling P8 source-checkpoint-ready:
+The P8 source scope now covers:
 
-- select and implement a concrete WebSocket transport for Windows/macOS
-- define its listen/connect security posture and lifecycle
-- connect that transport only through `IWebSocketTextMessageHandler`
-- add source-free lifecycle/backpressure tests for the selected transport
+- inherited VMC receive/send interoperability contracts
+- generic OSC normalized-event injection with a concrete UDP receiver
+- WebSocket v1 normalized-event injection with a concrete outbound client bridge
+- tracking-derived subject/source event adaptation
+- SOOP chat/donation bridge mapping with duplicate suppression
+- bounded network-to-main-thread queues and diagnostics
+
+The source architecture is complete enough for a checkpoint. Direct real-service/network evidence remains deferred.
 
 ## Deferred P8 evidence
 
 - execute the P0-P8 Unity source-free batch suite
 - external VMC application interoperability
 - actual UDP OSC sender interoperability and overload measurements
-- actual WebSocket client/server interoperability on Windows and macOS
+- actual WebSocket bridge-client interoperability on Windows and macOS
+- decide separately whether a public/local WebSocket listener API is required for P11/P12 application control
 - real SOOP bridge/direct-connector chat and donation evidence
 - reconnect/replay behavior against real SOOP sessions
 - network load and frame-time attribution on target hardware
 
-P8 is active; the normalized ingress and OSC/SOOP adapter slices are implemented, while concrete WebSocket transport remains open.
+P8 source implementation is checkpoint-ready, but source-free/network/real-service evidence is not marked PASS.
