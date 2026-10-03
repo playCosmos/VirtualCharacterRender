@@ -268,6 +268,23 @@ namespace VCR.Runtime.Appearance
             string presetId,
             out string error);
 
+        bool RenameUserPreset(
+            string presetId,
+            string newPresetId,
+            out AppearancePreset preset,
+            out string error);
+
+        bool DuplicateUserPreset(
+            string presetId,
+            string newPresetId,
+            out AppearancePreset preset,
+            out string error);
+
+        bool MoveUserPreset(
+            string presetId,
+            int offset,
+            out string error);
+
         AppearancePreset[] CaptureUserPresets();
     }
 
