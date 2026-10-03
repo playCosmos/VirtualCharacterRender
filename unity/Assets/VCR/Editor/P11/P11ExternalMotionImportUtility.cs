@@ -80,6 +80,23 @@ namespace VCR.Editor.P11
             string markerSidecarPath,
             bool autoDetectSidecar,
             out P11ExternalMotionImportResult result,
+            out string error) =>
+                TryImport(
+                    sourceFilePath,
+                    destinationAssetFolder,
+                    markerSidecarPath,
+                    autoDetectSidecar,
+                    null,
+                    out result,
+                    out error);
+
+        public static bool TryImport(
+            string sourceFilePath,
+            string destinationAssetFolder,
+            string markerSidecarPath,
+            bool autoDetectSidecar,
+            P11ExternalMotionImportOptions options,
+            out P11ExternalMotionImportResult result,
             out string error)
         {
             result = null;
@@ -203,7 +220,12 @@ namespace VCR.Editor.P11
                                 DestinationAssetFolder =
                                     destinationAssetFolder,
                                 MarkerFile =
-                                    markerFile
+                                    markerFile,
+                                Options =
+                                    options ??
+                                    new P11ExternalMotionImportOptions(),
+                                CreatedAssetPaths =
+                                    createdAssets
                             },
                             out var adapterResult,
                             out error))
@@ -212,18 +234,6 @@ namespace VCR.Editor.P11
                             createdAssets,
                             createdFolders);
                         return false;
-                    }
-
-                    foreach (var createdPath in
-                             adapterResult.CueAssetPaths ??
-                             Array.Empty<string>())
-                    {
-                        if (!string.IsNullOrWhiteSpace(
-                                createdPath))
-                        {
-                            createdAssets.Add(
-                                createdPath);
-                        }
                     }
 
                     AssetDatabase.SaveAssets();
