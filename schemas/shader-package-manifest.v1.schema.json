@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtualcharacterrender.local/schemas/shader-package-manifest.v1.schema.json",
+  "title": "VirtualCharacterRender Shader Package Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "FormatVersion",
+    "PackageId",
+    "PackageVersion",
+    "ShaderIds"
+  ],
+  "properties": {
+    "FormatVersion": {
+      "const": 1
+    },
+    "PackageId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "PackageVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._+\\-]+$"
+    },
+    "UnityVersion": {
+      "type": ["string", "null"]
+    },
+    "UrpVersion": {
+      "type": ["string", "null"]
+    },
+    "WindowsBundle": {
+      "type": ["string", "null"]
+    },
+    "MacOSBundle": {
+      "type": ["string", "null"]
+    },
+    "MaterialPreset": {
+      "type": ["string", "null"]
+    },
+    "ShaderIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "TextureFiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "PreviewFiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "required": ["WindowsBundle"]
+    },
+    {
+      "required": ["MacOSBundle"]
+    }
+  ]
+}
