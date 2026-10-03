@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using VCR.Runtime.Core;
+using VCR.Runtime.Capabilities;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace VCR.Runtime.Materials.Unity
@@ -49,6 +50,14 @@ namespace VCR.Runtime.Materials.Unity
         private readonly Dictionary<string, Texture>
             _restoreTextures =
                 new(StringComparer.Ordinal);
+
+        private readonly object _capabilityOwner =
+            new();
+
+        private static readonly string[] PackageCapabilities =
+        {
+            CapabilityIds.RenderCustomShader
+        };
 
         private RuntimeShaderBundleLoader _bundleLoader;
 
@@ -97,6 +106,14 @@ namespace VCR.Runtime.Materials.Unity
             var textureSnapshot =
                 RuntimeTextureRegistry
                     .CaptureRegistered();
+
+            var capabilitySnapshot =
+                DeclarativeCapabilityCatalog
+                    .Shared
+                    .CaptureOwner(
+                        _capabilityOwner);
+            var capabilityRegistrationChanged =
+                false;
 
             var previousOwnedTextures =
                 new List<Texture>(
@@ -337,6 +354,34 @@ namespace VCR.Runtime.Materials.Unity
                     }
                 }
 
+                if (!DeclarativeCapabilityCatalog
+                    .Shared
+                    .TryReplace(
+                        _capabilityOwner,
+                        manifest.PackageId,
+                        manifest.PackageVersion,
+                        PackageCapabilities,
+                        out var capabilityError))
+                {
+                    RestoreTransaction(
+                        shaderSnapshot,
+                        textureSnapshot,
+                        stagedTextures);
+
+                    return Fail(
+                        normalizedRoot,
+                        manifestPath,
+                        manifest,
+                        bundlePath,
+                        presetPath,
+                        started,
+                        "Shader package capability registration failed: " +
+                        capabilityError);
+                }
+
+                capabilityRegistrationChanged =
+                    true;
+
                 CommitOwnership(
                     nextOwnedShaders,
                     nextRestoreShaders,
@@ -381,9 +426,30 @@ namespace VCR.Runtime.Materials.Unity
                     textureSnapshot,
                     stagedTextures);
 
+                string capabilityRollbackError =
+                    null;
+
+                if (capabilityRegistrationChanged)
+                {
+                    DeclarativeCapabilityCatalog
+                        .Shared
+                        .RestoreOwner(
+                            _capabilityOwner,
+                            capabilitySnapshot,
+                            out capabilityRollbackError);
+                }
+
                 error =
                     "Shader package load failed: " +
                     exception.Message;
+
+                if (!string.IsNullOrWhiteSpace(
+                        capabilityRollbackError))
+                {
+                    error +=
+                        " Capability rollback failed: " +
+                        capabilityRollbackError;
+                }
 
                 return Fail(
                     normalizedRoot,
@@ -415,6 +481,10 @@ namespace VCR.Runtime.Materials.Unity
         public void UnloadActivePackage()
         {
             RestoreOwnedRegistrations();
+            DeclarativeCapabilityCatalog
+                .Shared
+                .UnregisterOwner(
+                    _capabilityOwner);
 
             _activePackageRoot = null;
             _activePackageId = null;
@@ -1360,6 +1430,10 @@ namespace VCR.Runtime.Materials.Unity
         private void OnDestroy()
         {
             RestoreOwnedRegistrations();
+            DeclarativeCapabilityCatalog
+                .Shared
+                .UnregisterOwner(
+                    _capabilityOwner);
         }
     }
 }
