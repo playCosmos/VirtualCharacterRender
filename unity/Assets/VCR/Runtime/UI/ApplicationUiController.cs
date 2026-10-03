@@ -113,6 +113,10 @@ namespace VCR.Runtime.UI
         private Button _settingsRunInBackgroundButton;
         private Button _diagnosticsPreviousPageButton;
         private Button _diagnosticsNextPageButton;
+        private Button _diagnosticsCaptureButton;
+        private Button _diagnosticsSaveSnapshotButton;
+        private Button _diagnosticsCsvButton;
+        private Button _diagnosticsConsoleButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -295,6 +299,10 @@ namespace VCR.Runtime.UI
             _settingsRunInBackgroundButton = null;
             _diagnosticsPreviousPageButton = null;
             _diagnosticsNextPageButton = null;
+            _diagnosticsCaptureButton = null;
+            _diagnosticsSaveSnapshotButton = null;
+            _diagnosticsCsvButton = null;
+            _diagnosticsConsoleButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -1268,6 +1276,42 @@ namespace VCR.Runtime.UI
             _diagnosticsNextPageButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 120f;
+
+            _diagnosticsCaptureButton =
+                CreateButton(
+                    "Capture Now",
+                    _contextActions,
+                    CaptureDiagnosticsNow);
+            _diagnosticsCaptureButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 120f;
+
+            _diagnosticsSaveSnapshotButton =
+                CreateButton(
+                    "Save Snapshot",
+                    _contextActions,
+                    SaveDiagnosticsSnapshot);
+            _diagnosticsSaveSnapshotButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 135f;
+
+            _diagnosticsCsvButton =
+                CreateButton(
+                    "CSV Evidence",
+                    _contextActions,
+                    ToggleDiagnosticsCsvEvidence);
+            _diagnosticsCsvButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 135f;
+
+            _diagnosticsConsoleButton =
+                CreateButton(
+                    "Console Log",
+                    _contextActions,
+                    ToggleDiagnosticsConsoleLogging);
+            _diagnosticsConsoleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 130f;
 
             _appearanceActions =
                 CreateRect(
@@ -4670,6 +4714,18 @@ namespace VCR.Runtime.UI
             SetActive(
                 _diagnosticsNextPageButton,
                 diagnosticsSelected);
+            SetActive(
+                _diagnosticsCaptureButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsSaveSnapshotButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsCsvButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsConsoleButton,
+                diagnosticsSelected);
 
             if (motionSelected)
             {
@@ -6018,6 +6074,11 @@ namespace VCR.Runtime.UI
 
             builder.AppendLine();
             builder.AppendLine(
+                $"Reporting: every {diagnostics.ReportIntervalSeconds:0.###}s | console {diagnostics.ConsoleLoggingEnabled} | CSV {diagnostics.CsvEvidenceEnabled}");
+            builder.AppendLine(
+                $"Evidence directory: {diagnostics.EvidenceDirectory}");
+            builder.AppendLine();
+            builder.AppendLine(
                 $"Subsystem metrics: {metrics.Length} | page {_diagnosticsMetricPage + 1}/{pageCount}");
 
             if (metrics.Length == 0)
@@ -6072,6 +6133,97 @@ namespace VCR.Runtime.UI
                     : value.ToString(
                         "0.0",
                         CultureInfo.InvariantCulture);
+        }
+
+        private void CaptureDiagnosticsNow()
+        {
+            if (diagnostics == null)
+            {
+                _lastActionMessage =
+                    "Runtime diagnostics unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var snapshot =
+                diagnostics.CaptureNow();
+            _diagnosticsMetricPage = 0;
+            _lastActionMessage =
+                $"Diagnostics snapshot {snapshot.Sequence} captured.";
+            RefreshAll();
+        }
+
+        private void SaveDiagnosticsSnapshot()
+        {
+            if (diagnostics == null)
+            {
+                _lastActionMessage =
+                    "Runtime diagnostics unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (diagnostics.LatestSnapshot.Sequence <= 0)
+            {
+                diagnostics.CaptureNow();
+            }
+
+            if (!diagnostics.TryWriteLatestSnapshotJson(
+                    out var path,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Diagnostics snapshot save failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Diagnostics snapshot saved: {path}";
+            RefreshAll();
+        }
+
+        private void ToggleDiagnosticsCsvEvidence()
+        {
+            if (diagnostics == null)
+            {
+                _lastActionMessage =
+                    "Runtime diagnostics unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            diagnostics.SetCsvEvidence(
+                !diagnostics.CsvEvidenceEnabled);
+
+            _lastActionMessage =
+                "Diagnostics CSV evidence " +
+                (diagnostics.CsvEvidenceEnabled
+                    ? "enabled."
+                    : "disabled.");
+            RefreshAll();
+        }
+
+        private void ToggleDiagnosticsConsoleLogging()
+        {
+            if (diagnostics == null)
+            {
+                _lastActionMessage =
+                    "Runtime diagnostics unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            diagnostics.SetConsoleLogging(
+                !diagnostics.ConsoleLoggingEnabled);
+
+            _lastActionMessage =
+                "Diagnostics console logging " +
+                (diagnostics.ConsoleLoggingEnabled
+                    ? "enabled."
+                    : "disabled.");
+            RefreshAll();
         }
 
         private void SelectPreviousDiagnosticsMetricPage()
@@ -6151,6 +6303,49 @@ namespace VCR.Runtime.UI
                     pageCount > 1
                         ? $"Next Metrics ({_diagnosticsMetricPage + 1}/{pageCount})"
                         : "Next Metrics");
+            }
+
+            var available =
+                diagnostics != null;
+
+            if (_diagnosticsCaptureButton != null)
+            {
+                _diagnosticsCaptureButton.interactable =
+                    available;
+            }
+
+            if (_diagnosticsSaveSnapshotButton != null)
+            {
+                _diagnosticsSaveSnapshotButton.interactable =
+                    available;
+            }
+
+            if (_diagnosticsCsvButton != null)
+            {
+                _diagnosticsCsvButton.interactable =
+                    available;
+                SetButtonLabel(
+                    _diagnosticsCsvButton,
+                    available
+                        ? "CSV Evidence: " +
+                          (diagnostics.CsvEvidenceEnabled
+                              ? "On"
+                              : "Off")
+                        : "CSV Evidence: n/a");
+            }
+
+            if (_diagnosticsConsoleButton != null)
+            {
+                _diagnosticsConsoleButton.interactable =
+                    available;
+                SetButtonLabel(
+                    _diagnosticsConsoleButton,
+                    available
+                        ? "Console Log: " +
+                          (diagnostics.ConsoleLoggingEnabled
+                              ? "On"
+                              : "Off")
+                        : "Console Log: n/a");
             }
         }
 
