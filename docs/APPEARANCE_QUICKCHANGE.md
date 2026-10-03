@@ -508,7 +508,7 @@ Conversion policy:
 
 - common BVH joint aliases are mapped to `HumanoidBoneId` values for hips, legs, feet/toes, spine/chest/upper-chest, neck/head, shoulders, arms, forearms, and hands
 - namespace/prefix forms such as `mixamorig:Hips` are normalized before alias lookup
-- more than one BVH joint resolving to the same humanoid bone fails closed instead of silently choosing one
+- common lower-priority aliases such as `root` may be superseded by a more specific `hips` mapping; two different joints resolving to the same humanoid bone at equal priority fail closed as ambiguous
 - a hips/root mapping is mandatory
 - the first BVH frame is the additive reference pose
 - static BVH skeleton `OFFSET` values are parsed for hierarchy validity but are not copied into the active VRM bind pose
