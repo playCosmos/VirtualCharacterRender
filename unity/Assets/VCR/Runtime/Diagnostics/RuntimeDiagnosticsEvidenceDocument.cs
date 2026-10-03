@@ -8,6 +8,7 @@ namespace VCR.Runtime.Diagnostics
     public sealed class RuntimeDiagnosticsMetricEvidence
     {
         public string Name;
+        public bool ValueAvailable;
         public double Value;
         public string Unit;
     }
@@ -33,9 +34,13 @@ namespace VCR.Runtime.Diagnostics
         public double BodyHandsHz;
         public double FullBodyHz;
         public double ExpressionHz;
+        public bool FaceAgeAvailable;
         public double FaceAgeMs;
+        public bool BodyHandsAgeAvailable;
         public double BodyHandsAgeMs;
+        public bool FullBodyAgeAvailable;
         public double FullBodyAgeMs;
+        public bool ExpressionAgeAvailable;
         public double ExpressionAgeMs;
         public bool HasPresence;
         public string PresenceState;
@@ -64,8 +69,14 @@ namespace VCR.Runtime.Diagnostics
                     {
                         Name =
                             sourceMetrics[i].Name,
+                        ValueAvailable =
+                            IsFinite(
+                                sourceMetrics[i]
+                                    .Value),
                         Value =
-                            sourceMetrics[i].Value,
+                            FiniteOrZero(
+                                sourceMetrics[i]
+                                    .Value),
                         Unit =
                             sourceMetrics[i].Unit
                     };
@@ -109,14 +120,30 @@ namespace VCR.Runtime.Diagnostics
                     snapshot.FullBodyHz,
                 ExpressionHz =
                     snapshot.ExpressionHz,
+                FaceAgeAvailable =
+                    IsFinite(
+                        snapshot.FaceAgeMs),
                 FaceAgeMs =
-                    snapshot.FaceAgeMs,
+                    FiniteOrZero(
+                        snapshot.FaceAgeMs),
+                BodyHandsAgeAvailable =
+                    IsFinite(
+                        snapshot.BodyHandsAgeMs),
                 BodyHandsAgeMs =
-                    snapshot.BodyHandsAgeMs,
+                    FiniteOrZero(
+                        snapshot.BodyHandsAgeMs),
+                FullBodyAgeAvailable =
+                    IsFinite(
+                        snapshot.FullBodyAgeMs),
                 FullBodyAgeMs =
-                    snapshot.FullBodyAgeMs,
+                    FiniteOrZero(
+                        snapshot.FullBodyAgeMs),
+                ExpressionAgeAvailable =
+                    IsFinite(
+                        snapshot.ExpressionAgeMs),
                 ExpressionAgeMs =
-                    snapshot.ExpressionAgeMs,
+                    FiniteOrZero(
+                        snapshot.ExpressionAgeMs),
                 HasPresence =
                     presence.HasValue,
                 PresenceState =
@@ -137,5 +164,19 @@ namespace VCR.Runtime.Diagnostics
                     metrics
             };
         }
+
+        private static bool IsFinite(
+            double value) =>
+                !double.IsNaN(
+                    value) &&
+                !double.IsInfinity(
+                    value);
+
+        private static double FiniteOrZero(
+            double value) =>
+                IsFinite(
+                    value)
+                    ? value
+                    : 0.0;
     }
 }
