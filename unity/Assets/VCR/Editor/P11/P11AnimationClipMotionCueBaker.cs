@@ -12,6 +12,7 @@ namespace VCR.Editor.P11
     {
         private AnimationClip _clip;
         private GameObject _referenceRoot;
+        private BakedMotionCueSource _targetSource;
         private string _cueId = "quick-change";
         private float _sampleRate = 30f;
         private bool _loop;
@@ -48,6 +49,13 @@ namespace VCR.Editor.P11
                         "Reference Character Root",
                         _referenceRoot,
                         typeof(GameObject),
+                        true);
+            _targetSource =
+                (BakedMotionCueSource)
+                    EditorGUILayout.ObjectField(
+                        "Register To Source",
+                        _targetSource,
+                        typeof(BakedMotionCueSource),
                         true);
             _cueId =
                 EditorGUILayout.TextField(
@@ -159,6 +167,29 @@ namespace VCR.Editor.P11
                 existing = asset;
             }
 
+            if (_targetSource != null)
+            {
+                Undo.RecordObject(
+                    _targetSource,
+                    "Register Baked Motion Cue");
+
+                if (!_targetSource.TryRegisterAsset(
+                        existing,
+                        out var registerError))
+                {
+                    EditorUtility.DisplayDialog(
+                        "VCR Motion Cue Baker",
+                        "The cue asset was saved, but registration failed: " +
+                        registerError,
+                        "OK");
+                }
+                else
+                {
+                    EditorUtility.SetDirty(
+                        _targetSource);
+                }
+            }
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
@@ -168,7 +199,12 @@ namespace VCR.Editor.P11
                 existing);
 
             Debug.Log(
-                $"VCR P11 baked AnimationClip '{_clip.name}' as motion cue '{cue.CueId}' ({cue.FrameCount} frames at {_sampleRate:0.##} Hz).",
+                $"VCR P11 baked AnimationClip '{_clip.name}' as motion cue '{cue.CueId}' ({cue.FrameCount} frames at {_sampleRate:0.##} Hz)." +
+                (_targetSource != null
+                    ? " Registered to '" +
+                      _targetSource.name +
+                      "'."
+                    : string.Empty),
                 existing);
         }
 
@@ -225,6 +261,14 @@ namespace VCR.Editor.P11
             {
                 error =
                     "AnimationClip must have a positive duration.";
+                return false;
+            }
+
+            if (EditorUtility.IsPersistent(
+                    referenceRoot))
+            {
+                error =
+                    "Reference character root must be a scene instance so Unity AnimationMode can sample and restore it safely.";
                 return false;
             }
 
