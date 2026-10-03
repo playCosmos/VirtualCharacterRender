@@ -44,6 +44,14 @@ namespace VCR.Runtime.Environment.Unity
         [SerializeField] private MonoBehaviour[] spaceTargetBehaviours =
             Array.Empty<MonoBehaviour>();
 
+        [Header("Transitions")]
+        [SerializeField] private EnvironmentTransitionMode defaultTransitionMode =
+            EnvironmentTransitionMode.Cut;
+        [SerializeField, Min(0f)] private float defaultTransitionDuration = 0.35f;
+        [Tooltip("Optional components implementing IEnvironmentTransitionTarget. Non-Cut transitions require at least one target.")]
+        [SerializeField] private MonoBehaviour[] transitionTargetBehaviours =
+            Array.Empty<MonoBehaviour>();
+
         private readonly EnvironmentUpdateScheduler _scheduler =
             new();
 
@@ -53,7 +61,12 @@ namespace VCR.Runtime.Environment.Unity
         private IEnvironmentSpaceTarget[] _spaceTargets =
             Array.Empty<IEnvironmentSpaceTarget>();
 
+        private IEnvironmentTransitionTarget[] _transitionTargets =
+            Array.Empty<IEnvironmentTransitionTarget>();
+
         private EnvironmentUpdateDriver _updateDriver;
+        private EnvironmentTransitionDriver _transitionDriver;
+        private EnvironmentTransitionStatus _transitionStatus;
 
         private long _stateChangeCount;
         private long _stateDispatchCount;
@@ -61,6 +74,12 @@ namespace VCR.Runtime.Environment.Unity
         private long _manualDispatchCount;
         private long _updateFailureCount;
         private long _updateSequence;
+        private long _transitionCount;
+        private long _transitionTickCount;
+        private long _transitionFailureCount;
+        private long _transitionSequence;
+        private long _transitionLastTickUs;
+        private long _transitionDispatchStopwatchTicks;
         private string _lastError;
 
         public event Action<EnvironmentStateChange> StateChanged;
@@ -75,6 +94,9 @@ namespace VCR.Runtime.Environment.Unity
 
         public EnvironmentSpaceMode SpaceMode =>
             spaceMode;
+
+        public EnvironmentTransitionStatus TransitionStatus =>
+            _transitionStatus;
 
         public long StateChangeCount =>
             _stateChangeCount;
@@ -97,6 +119,9 @@ namespace VCR.Runtime.Environment.Unity
         public int SpaceTargetCount =>
             _spaceTargets?.Length ?? 0;
 
+        public int TransitionTargetCount =>
+            _transitionTargets?.Length ?? 0;
+
         public bool RecurringUpdatesActive =>
             _updateDriver != null &&
             _updateDriver.enabled &&
@@ -106,6 +131,7 @@ namespace VCR.Runtime.Environment.Unity
         {
             RebuildUpdateTargets();
             RebuildSpaceTargets();
+            RebuildTransitionTargets();
             ApplyCurrentStateBinding();
             ApplyCurrentSpaceMode();
             ConfigureScheduler(
@@ -116,6 +142,7 @@ namespace VCR.Runtime.Environment.Unity
         {
             RebuildUpdateTargets();
             RebuildSpaceTargets();
+            RebuildTransitionTargets();
             ApplyCurrentStateBinding();
             ApplyCurrentSpaceMode();
             ConfigureScheduler(
@@ -127,6 +154,19 @@ namespace VCR.Runtime.Environment.Unity
             if (_updateDriver != null)
             {
                 _updateDriver.enabled = false;
+            }
+
+            if (_transitionStatus.Active)
+            {
+                TryApplyStateBinding(
+                    stateId,
+                    out _);
+                _transitionStatus = default;
+            }
+
+            if (_transitionDriver != null)
+            {
+                _transitionDriver.enabled = false;
             }
         }
 
@@ -154,6 +194,7 @@ namespace VCR.Runtime.Environment.Unity
 
             RebuildUpdateTargets();
             RebuildSpaceTargets();
+            RebuildTransitionTargets();
             ApplyCurrentStateBinding();
 
             if (!SetSpaceMode(
@@ -405,6 +446,19 @@ namespace VCR.Runtime.Environment.Unity
             string nextStateId,
             out string error)
         {
+            return SetState(
+                nextStateId,
+                new EnvironmentTransitionSpec(
+                    defaultTransitionMode,
+                    defaultTransitionDuration),
+                out error);
+        }
+
+        public bool SetState(
+            string nextStateId,
+            EnvironmentTransitionSpec transition,
+            out string error)
+        {
             error = null;
 
             if (string.IsNullOrWhiteSpace(
@@ -425,7 +479,7 @@ namespace VCR.Runtime.Environment.Unity
                 return true;
             }
 
-            if (!TryApplyStateBinding(
+            if (!ValidateStateBindingTarget(
                     nextStateId,
                     out error))
             {
@@ -433,23 +487,194 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            var previous = stateId;
-            stateId = nextStateId;
+            var nowUs =
+                MonotonicClock.NowMicroseconds();
+
+            if (_transitionStatus.Active)
+            {
+                CompleteTransition(
+                    nowUs);
+            }
+
+            var previous =
+                stateId;
+
+            if (transition.IsImmediate)
+            {
+                if (!TryApplyStateBinding(
+                        nextStateId,
+                        out error))
+                {
+                    _lastError = error;
+                    return false;
+                }
+
+                CommitStateChange(
+                    previous,
+                    nextStateId,
+                    nowUs);
+
+                return true;
+            }
+
+            if (!ValidateTransitionTargets(
+                    transition,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            if (!TryPrepareTransitionBindings(
+                    previous,
+                    nextStateId,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            stateId =
+                nextStateId;
             _lastError = null;
             _stateChangeCount++;
+            _transitionCount++;
+            _transitionLastTickUs =
+                nowUs;
+
+            _transitionStatus =
+                new EnvironmentTransitionStatus(
+                    active: true,
+                    transition.Mode,
+                    previous,
+                    nextStateId,
+                    nowUs,
+                    transition.DurationSeconds,
+                    progress: 0f);
 
             StateChanged?.Invoke(
                 new EnvironmentStateChange(
                     previous,
                     stateId));
 
-            if (isActiveAndEnabled)
+            DispatchStateChanged(
+                nowUs);
+            ApplyTransitionTargets(
+                CreateTransitionContext(
+                    nowUs,
+                    progress: 0f,
+                    deltaSeconds: 0f));
+
+            EnsureTransitionDriver();
+            return true;
+        }
+
+        public bool ConfigureTransitionTargets(
+            MonoBehaviour[] targets,
+            out string error)
+        {
+            error = null;
+
+            var nextBehaviours =
+                targets == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        targets.Clone();
+
+            var nextTargets =
+                BuildTransitionTargets(
+                    nextBehaviours);
+
+            transitionTargetBehaviours =
+                nextBehaviours;
+            _transitionTargets =
+                nextTargets;
+            _lastError = null;
+            return true;
+        }
+
+        public void SetTransitionTargets(
+            params MonoBehaviour[] targets)
+        {
+            ConfigureTransitionTargets(
+                targets,
+                out _);
+        }
+
+        public void ConfigureDefaultTransition(
+            EnvironmentTransitionMode mode,
+            float durationSeconds)
+        {
+            defaultTransitionMode = mode;
+            defaultTransitionDuration =
+                Math.Max(
+                    0f,
+                    durationSeconds);
+        }
+
+        public bool TickTransition(
+            long nowUs)
+        {
+            if (!isActiveAndEnabled ||
+                !_transitionStatus.Active)
             {
-                DispatchUpdate(
-                    EnvironmentUpdateReason.StateChanged,
-                    MonotonicClock.NowMicroseconds(),
-                    deltaSeconds: 0f);
-                _stateDispatchCount++;
+                return false;
+            }
+
+            var durationUs =
+                Math.Max(
+                    1L,
+                    (long)(
+                        _transitionStatus
+                            .DurationSeconds *
+                        1_000_000.0));
+
+            var progress =
+                (float)Math.Max(
+                    0.0,
+                    Math.Min(
+                        1.0,
+                        (nowUs -
+                         _transitionStatus
+                             .StartedAtTimestampUs) /
+                        (double)durationUs));
+
+            var deltaSeconds =
+                _transitionLastTickUs <= 0
+                    ? 0f
+                    : (float)Math.Max(
+                        0.0,
+                        (nowUs -
+                         _transitionLastTickUs) /
+                        1_000_000.0);
+
+            _transitionLastTickUs =
+                nowUs;
+
+            _transitionStatus =
+                new EnvironmentTransitionStatus(
+                    active: progress < 1f,
+                    _transitionStatus.Mode,
+                    _transitionStatus
+                        .PreviousStateId,
+                    _transitionStatus.StateId,
+                    _transitionStatus
+                        .StartedAtTimestampUs,
+                    _transitionStatus
+                        .DurationSeconds,
+                    progress);
+
+            ApplyTransitionTargets(
+                CreateTransitionContext(
+                    nowUs,
+                    progress,
+                    deltaSeconds));
+
+            _transitionTickCount++;
+
+            if (progress >= 1f)
+            {
+                CompleteTransitionRoots();
             }
 
             return true;
@@ -557,6 +782,48 @@ namespace VCR.Runtime.Environment.Unity
                 "environment.recurring_updates_active",
                 RecurringUpdatesActive ? 1 : 0,
                 "bool"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_targets",
+                TransitionTargetCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_default_mode",
+                (int)defaultTransitionMode,
+                "enum"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_active",
+                _transitionStatus.Active ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_progress",
+                _transitionStatus.Progress,
+                "ratio"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_count",
+                _transitionCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_ticks",
+                _transitionTickCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_failures",
+                _transitionFailureCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_dispatch_ms",
+                _transitionDispatchStopwatchTicks *
+                    1000.0 /
+                    System.Diagnostics.Stopwatch.Frequency,
+                "ms"));
         }
 
         private void ConfigureScheduler(
@@ -590,6 +857,363 @@ namespace VCR.Runtime.Environment.Unity
             _updateDriver.Bind(this);
             _updateDriver.enabled =
                 isActiveAndEnabled;
+        }
+
+        private void EnsureTransitionDriver()
+        {
+            _transitionDriver ??=
+                GetComponent<
+                    EnvironmentTransitionDriver>();
+
+            if (_transitionDriver == null)
+            {
+                _transitionDriver =
+                    gameObject.AddComponent<
+                        EnvironmentTransitionDriver>();
+            }
+
+            _transitionDriver.Bind(this);
+            _transitionDriver.enabled =
+                isActiveAndEnabled &&
+                _transitionStatus.Active;
+        }
+
+        private void RebuildTransitionTargets()
+        {
+            _transitionTargets =
+                BuildTransitionTargets(
+                    transitionTargetBehaviours);
+        }
+
+        private static IEnvironmentTransitionTarget[]
+            BuildTransitionTargets(
+                MonoBehaviour[] behaviours)
+        {
+            if (behaviours == null ||
+                behaviours.Length == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentTransitionTarget>();
+            }
+
+            var targets =
+                new IEnvironmentTransitionTarget[
+                    behaviours.Length];
+            var count = 0;
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour == null ||
+                    behaviour is not
+                        IEnvironmentTransitionTarget target)
+                {
+                    continue;
+                }
+
+                var duplicate = false;
+
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    if (ReferenceEquals(
+                            targets[i],
+                            target))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (duplicate)
+                {
+                    continue;
+                }
+
+                targets[count++] =
+                    target;
+            }
+
+            if (count == 0)
+            {
+                return Array.Empty<
+                    IEnvironmentTransitionTarget>();
+            }
+
+            if (count != targets.Length)
+            {
+                Array.Resize(
+                    ref targets,
+                    count);
+            }
+
+            return targets;
+        }
+
+        private bool ValidateTransitionTargets(
+            EnvironmentTransitionSpec transition,
+            out string error)
+        {
+            error = null;
+
+            if (transition.IsImmediate)
+            {
+                return true;
+            }
+
+            if (_transitionTargets == null ||
+                _transitionTargets.Length == 0)
+            {
+                error =
+                    $"Environment transition '{transition.Mode}' requires at least one transition target.";
+                return false;
+            }
+
+            foreach (var target in
+                     _transitionTargets)
+            {
+                if (target == null)
+                {
+                    continue;
+                }
+
+                if (!target
+                    .ValidateEnvironmentTransition(
+                        transition,
+                        out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void ApplyTransitionTargets(
+            EnvironmentTransitionContext context)
+        {
+            if (_transitionTargets == null ||
+                _transitionTargets.Length == 0)
+            {
+                return;
+            }
+
+            var started =
+                System.Diagnostics.Stopwatch
+                    .GetTimestamp();
+
+            foreach (var target in
+                     _transitionTargets)
+            {
+                if (target == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    target.ApplyEnvironmentTransition(
+                        context);
+                }
+                catch (Exception exception)
+                {
+                    _transitionFailureCount++;
+                    _lastError =
+                        "Environment transition target failed: " +
+                        exception.Message;
+
+                    Debug.LogWarning(
+                        _lastError,
+                        this);
+                }
+            }
+
+            _transitionDispatchStopwatchTicks +=
+                System.Diagnostics.Stopwatch
+                    .GetTimestamp() -
+                started;
+        }
+
+        private EnvironmentTransitionContext
+            CreateTransitionContext(
+                long timestampUs,
+                float progress,
+                float deltaSeconds)
+        {
+            return new EnvironmentTransitionContext(
+                ++_transitionSequence,
+                timestampUs,
+                _transitionStatus
+                    .PreviousStateId,
+                _transitionStatus.StateId,
+                _transitionStatus.Mode,
+                progress,
+                Math.Max(
+                    0f,
+                    deltaSeconds));
+        }
+
+        private void CompleteTransition(
+            long nowUs)
+        {
+            if (!_transitionStatus.Active)
+            {
+                return;
+            }
+
+            _transitionStatus =
+                new EnvironmentTransitionStatus(
+                    active: false,
+                    _transitionStatus.Mode,
+                    _transitionStatus
+                        .PreviousStateId,
+                    _transitionStatus.StateId,
+                    _transitionStatus
+                        .StartedAtTimestampUs,
+                    _transitionStatus
+                        .DurationSeconds,
+                    progress: 1f);
+
+            ApplyTransitionTargets(
+                CreateTransitionContext(
+                    nowUs,
+                    progress: 1f,
+                    deltaSeconds: 0f));
+
+            CompleteTransitionRoots();
+        }
+
+        private void CompleteTransitionRoots()
+        {
+            if (!TryApplyStateBinding(
+                    stateId,
+                    out var error))
+            {
+                _lastError = error;
+            }
+
+            if (_transitionDriver != null)
+            {
+                _transitionDriver.enabled = false;
+            }
+        }
+
+        private bool TryPrepareTransitionBindings(
+            string previousStateId,
+            string nextStateId,
+            out string error)
+        {
+            error = null;
+
+            if (stateBindings == null ||
+                stateBindings.Length == 0)
+            {
+                return true;
+            }
+
+            if (!ValidateStateBindings(
+                    stateBindings,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!ContainsState(
+                    stateBindings,
+                    nextStateId))
+            {
+                error =
+                    $"Environment state '{nextStateId}' has no binding.";
+                return false;
+            }
+
+            foreach (var binding in
+                     stateBindings)
+            {
+                var active =
+                    string.Equals(
+                        binding.StateId,
+                        previousStateId,
+                        StringComparison.Ordinal) ||
+                    string.Equals(
+                        binding.StateId,
+                        nextStateId,
+                        StringComparison.Ordinal);
+
+                if (binding.Root.activeSelf !=
+                    active)
+                {
+                    binding.Root.SetActive(
+                        active);
+                }
+            }
+
+            return true;
+        }
+
+        private bool ValidateStateBindingTarget(
+            string nextStateId,
+            out string error)
+        {
+            error = null;
+
+            if (stateBindings == null ||
+                stateBindings.Length == 0)
+            {
+                return true;
+            }
+
+            if (!ValidateStateBindings(
+                    stateBindings,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!ContainsState(
+                    stateBindings,
+                    nextStateId))
+            {
+                error =
+                    $"Environment state '{nextStateId}' has no binding.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void CommitStateChange(
+            string previousStateId,
+            string nextStateId,
+            long nowUs)
+        {
+            stateId =
+                nextStateId;
+            _lastError = null;
+            _stateChangeCount++;
+
+            StateChanged?.Invoke(
+                new EnvironmentStateChange(
+                    previousStateId,
+                    stateId));
+
+            DispatchStateChanged(
+                nowUs);
+        }
+
+        private void DispatchStateChanged(
+            long nowUs)
+        {
+            if (!isActiveAndEnabled)
+            {
+                return;
+            }
+
+            DispatchUpdate(
+                EnvironmentUpdateReason.StateChanged,
+                nowUs,
+                deltaSeconds: 0f);
+            _stateDispatchCount++;
         }
 
         private void ApplyCurrentSpaceMode()
