@@ -392,6 +392,9 @@ The first source implementation now exists:
 - `VCR/P11/Open Appearance Transition Timeline` editor with add/duplicate/delete transition operations
 - direct editing of duration, queue/fallback policy, ordered action/commit steps, custom action type/target/name/text/value fields, and cancellation cleanup
 - named marker create/edit/delete plus timeline marker visualization
+- import explicit VCR markers directly from an `AnimationClip` or a `BakedMotionCueAsset`
+- imported marker names merge by id with explicit replacement confirmation; transition duration expands only when the latest imported marker requires it
+- configurable `Snap Threshold` converts nearby Absolute Time steps to exact Marker timing
 - per-step Absolute Time or Marker + Offset timing
 - per-action Blocking + completion timeout controls
 - step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
@@ -425,6 +428,7 @@ Implemented built-in motion presentation now also includes:
 - `ProceduralMotionCueSource` as a P5 Mixer Additive/Procedural pose layer
 - `BakedMotionCueSource` for pre-baked `AnimationClip` pose data
 - `VCR/P11/Open AnimationClip Cue Baker` editor workflow using a reference humanoid hierarchy, with optional direct registration to a selected `BakedMotionCueSource`
+- AnimationClip authoring markers are extracted from explicit `VCRMarker` events (`stringParameter` = marker name) or `VCRMarker_<name>` events and preserved inside the baked cue asset
 - baked cues store additive root/bone deltas and interpolate them at runtime without sampling `AnimationClip` or `Animator` per frame
 - `MotionCueEventActionHandler` routes across procedural and baked runtimes by explicit runtime id or unique cue id
 - root position/rotation curves and per-bone position/rotation curves
@@ -436,7 +440,7 @@ Not yet implemented as built-ins:
 
 - external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
-- automatic marker/event extraction from imported motion assets
+- automatic marker/event extraction from external motion-file formats before they become Unity AnimationClips; Unity AnimationClip VCR marker extraction and baked-cue marker preservation are implemented
 - richer dependency authoring beyond the implemented linear Blocking rule
 - richer transition package management beyond the implemented versioned JSON import/export, such as package libraries/metadata/migration UI
 - external appearance package import
