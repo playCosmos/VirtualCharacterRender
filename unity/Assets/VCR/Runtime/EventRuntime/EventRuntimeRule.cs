@@ -14,6 +14,7 @@ namespace VCR.Runtime.EventRuntime
             Array.Empty<EventStateMutation>();
         public EventActionTemplate[] Actions =
             Array.Empty<EventActionTemplate>();
+        public double CooldownSeconds;
         public bool StopAfterMatch;
     }
 }

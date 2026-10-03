@@ -34,6 +34,8 @@ namespace VCR.Runtime.EventRuntime
         public string Key;
         public EventNumericValueSource NumericSource;
         public double ConstantNumber;
+        public double NumericScale = 1.0;
+        public double NumericOffset;
         public EventTextValueSource TextSource;
         public string ConstantText;
 
@@ -67,11 +69,42 @@ namespace VCR.Runtime.EventRuntime
             }
         }
 
-        private double ResolveNumber(NormalizedEvent value) =>
-            NumericSource == EventNumericValueSource.EventAmount &&
-            value.HasAmount
-                ? value.Amount
-                : ConstantNumber;
+        private double ResolveNumber(
+            NormalizedEvent value)
+        {
+            var raw =
+                NumericSource ==
+                    EventNumericValueSource.EventAmount &&
+                value.HasAmount
+                    ? value.Amount
+                    : ConstantNumber;
+
+            var scale =
+                IsFinite(NumericScale)
+                    ? NumericScale
+                    : 1.0;
+
+            var offset =
+                IsFinite(NumericOffset)
+                    ? NumericOffset
+                    : 0.0;
+
+            var result =
+                raw * scale + offset;
+
+            return
+                IsFinite(result)
+                    ? result
+                    : 0.0;
+        }
+
+        private static bool IsFinite(
+            double value)
+        {
+            return
+                !double.IsNaN(value) &&
+                !double.IsInfinity(value);
+        }
 
         private string ResolveText(NormalizedEvent value) =>
             TextSource switch

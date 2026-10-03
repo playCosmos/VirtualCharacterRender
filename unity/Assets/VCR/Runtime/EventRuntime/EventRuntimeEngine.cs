@@ -10,12 +10,16 @@ namespace VCR.Runtime.EventRuntime
             Array.Empty<EventRuntimeRule>();
         private int _maxCommandsPerEvent = 32;
 
+        private readonly Dictionary<EventRuntimeRule, long>
+            _lastRuleExecutionUs = new();
+
         public EventRuntimeStateStore State { get; } = new();
 
         public long ProcessedEvents { get; private set; }
         public long MatchedRules { get; private set; }
         public long EmittedCommands { get; private set; }
         public long DroppedCommands { get; private set; }
+        public long CooldownSuppressedRules { get; private set; }
 
         public int MaxCommandsPerEvent
         {
@@ -30,6 +34,8 @@ namespace VCR.Runtime.EventRuntime
                 rules == null
                     ? Array.Empty<EventRuntimeRule>()
                     : (EventRuntimeRule[])rules.Clone();
+
+            _lastRuleExecutionUs.Clear();
         }
 
         public int Process(
@@ -54,7 +60,18 @@ namespace VCR.Runtime.EventRuntime
                     continue;
                 }
 
+                if (IsCoolingDown(
+                        rule,
+                        value.TimestampUs))
+                {
+                    CooldownSuppressedRules++;
+                    continue;
+                }
+
                 MatchedRules++;
+                RecordExecution(
+                    rule,
+                    value.TimestampUs);
                 ApplyMutations(rule, value);
                 EmitActions(rule, value, output);
 
@@ -71,6 +88,46 @@ namespace VCR.Runtime.EventRuntime
         public void ResetState()
         {
             State.Clear();
+        }
+
+        private bool IsCoolingDown(
+            EventRuntimeRule rule,
+            long timestampUs)
+        {
+            if (rule.CooldownSeconds <= 0.0 ||
+                double.IsNaN(rule.CooldownSeconds) ||
+                double.IsInfinity(rule.CooldownSeconds) ||
+                timestampUs <= 0 ||
+                !_lastRuleExecutionUs.TryGetValue(
+                    rule,
+                    out var previousUs))
+            {
+                return false;
+            }
+
+            var cooldownUs =
+                rule.CooldownSeconds *
+                1_000_000.0;
+
+            if (cooldownUs >= long.MaxValue)
+            {
+                return true;
+            }
+
+            return
+                timestampUs - previousUs <
+                (long)cooldownUs;
+        }
+
+        private void RecordExecution(
+            EventRuntimeRule rule,
+            long timestampUs)
+        {
+            if (timestampUs > 0)
+            {
+                _lastRuleExecutionUs[rule] =
+                    timestampUs;
+            }
         }
 
         private bool ConditionsPass(EventRuntimeRule rule)

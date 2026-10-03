@@ -275,6 +275,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                     "count"));
             output.Add(
                 new RuntimeMetric(
+                    "events.runtime.cooldown_suppressed",
+                    _engine.CooldownSuppressedRules,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
                     "events.runtime.actions_executed",
                     _executedActions,
                     "count"));

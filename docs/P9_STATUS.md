@@ -45,6 +45,8 @@ Implemented rule features:
 - Set/Add numeric state mutations
 - Set/Remove text/state mutations
 - event amount/text/actor/type/source value mapping into state/actions
+- numeric scale/offset transforms for state/action values with non-finite configuration containment
+- rule-level cooldown using monotonic event timestamps
 - ordered rule evaluation
 - optional stop-after-match
 - bounded action-command output per input event
@@ -90,6 +92,8 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - state-conditioned follow-up rules
 - case-insensitive text filtering
 - missing-state numeric condition behavior
+- rule cooldown suppression
+- numeric scale/offset action transform
 - bounded commands per event
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
@@ -101,8 +105,8 @@ These validation paths are implemented but have not been executed in this enviro
 
 The next source slices are:
 
-- add rule cooldown/debounce/rate-limit policy for bursty chat/donation inputs
-- add explicit numeric/text transform operators rather than only direct value mapping
+- add windowed rate-limit policy for bursty chat/donation inputs beyond the implemented per-rule cooldown
+- add text transform operators beyond direct value mapping
 - add application handlers for expression/motion, material/shader parameters, and camera using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - define deterministic handler selection when multiple handlers claim the same command

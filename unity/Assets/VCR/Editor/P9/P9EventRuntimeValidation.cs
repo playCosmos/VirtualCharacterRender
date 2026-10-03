@@ -31,7 +31,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, action cap, environment action dispatch, unhandled diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment action dispatch, unhandled diagnostics)");
                 return true;
             }
 
@@ -87,7 +87,21 @@ namespace VCR.Editor.P9
                         {
                             EnvironmentAction(
                                 "environment.main",
-                                "celebrate")
+                                "celebrate"),
+                            new EventActionTemplate
+                            {
+                                ActionType =
+                                    "test.transformed_amount",
+                                HasValue =
+                                    true,
+                                NumericSource =
+                                    EventNumericValueSource
+                                        .EventAmount,
+                                NumericScale =
+                                    2.0,
+                                NumericOffset =
+                                    1.0
+                            }
                         }
                 };
 
@@ -217,7 +231,7 @@ namespace VCR.Editor.P9
                 output);
 
             Expect(
-                output.Count == 1 &&
+                output.Count == 2 &&
                 output[0].ActionType ==
                     EventActionTypes
                         .EnvironmentSetState &&
@@ -226,6 +240,12 @@ namespace VCR.Editor.P9
                 output[0].Text ==
                     "celebrate",
                 "qualifying donation must produce the configured application-level environment command",
+                failures);
+
+            ExpectClose(
+                output[1].Value,
+                25.0,
+                "numeric action transform must apply event amount scale and offset",
                 failures);
 
             ExpectClose(
@@ -273,6 +293,81 @@ namespace VCR.Editor.P9
             Expect(
                 output.Count == 0,
                 "numeric conditions must fail when their state key is missing instead of treating it as zero",
+                failures);
+
+            var cooldownRule =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "cooldown",
+                    CooldownSeconds =
+                        1.0,
+                    Filter =
+                        new EventRuleFilter
+                        {
+                            Type =
+                                NormalizedEventTypes
+                                    .LocalManual
+                        },
+                    Actions =
+                        new[]
+                        {
+                            EnvironmentAction(
+                                "environment.main",
+                                "cooldown")
+                        }
+                };
+
+            engine.SetRules(
+                cooldownRule);
+            engine.MaxCommandsPerEvent = 32;
+
+            var cooldownFirst =
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    1_000_000,
+                    sequence: 10);
+            var cooldownSecond =
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    1_500_000,
+                    sequence: 11);
+            var cooldownThird =
+                new NormalizedEvent(
+                    NormalizedEventTypes.LocalManual,
+                    "local.validation",
+                    2_100_000,
+                    sequence: 12);
+
+            engine.Process(
+                cooldownFirst,
+                output);
+            var firstCount =
+                output.Count;
+
+            var suppressedBefore =
+                engine.CooldownSuppressedRules;
+            engine.Process(
+                cooldownSecond,
+                output);
+            var secondCount =
+                output.Count;
+
+            engine.Process(
+                cooldownThird,
+                output);
+            var thirdCount =
+                output.Count;
+
+            Expect(
+                firstCount == 1 &&
+                secondCount == 0 &&
+                thirdCount == 1 &&
+                engine.CooldownSuppressedRules ==
+                    suppressedBefore + 1,
+                "rule cooldown must suppress burst repeats until the monotonic interval expires",
                 failures);
 
             var cappedRule =
