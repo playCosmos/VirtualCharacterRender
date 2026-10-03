@@ -18,6 +18,7 @@ namespace VCR.Runtime.Tracking.Mixing
     public sealed class MotionExpressionMixer :
         MonoBehaviour,
         ITrackingMixProvider,
+        ITrackingSmoothingStatusProvider,
         IRuntimeMetricsSource
     {
         [Header("Inputs")]
