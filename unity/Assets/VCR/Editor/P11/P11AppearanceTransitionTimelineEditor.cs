@@ -157,6 +157,13 @@ namespace VCR.Editor.P11
             EditorGUILayout.EndScrollView();
 
             DrawFooterActions();
+
+            if (_serializedRuntime
+                .ApplyModifiedProperties())
+            {
+                EditorUtility.SetDirty(
+                    _runtime);
+            }
         }
 
         private void DrawHeader()
@@ -568,6 +575,9 @@ namespace VCR.Editor.P11
                         if (GUILayout.Button(
                                 "Sort by Time"))
                         {
+                            Undo.RecordObject(
+                                _runtime,
+                                "Sort Transition Steps");
                             SortStepsByTime(
                                 steps);
                         }
@@ -609,6 +619,9 @@ namespace VCR.Editor.P11
                             "↑",
                             GUILayout.Width(28f)))
                     {
+                        Undo.RecordObject(
+                            _runtime,
+                            "Move Transition Step");
                         array.MoveArrayElement(
                             index,
                             index - 1);
@@ -624,6 +637,9 @@ namespace VCR.Editor.P11
                             "↓",
                             GUILayout.Width(28f)))
                     {
+                        Undo.RecordObject(
+                            _runtime,
+                            "Move Transition Step");
                         array.MoveArrayElement(
                             index,
                             index + 1);
@@ -634,8 +650,17 @@ namespace VCR.Editor.P11
                         "×",
                         GUILayout.Width(28f)))
                 {
+                    Undo.RecordObject(
+                        _runtime,
+                        cleanup
+                            ? "Delete Transition Cleanup Action"
+                            : "Delete Transition Step");
                     array.DeleteArrayElementAtIndex(
                         index);
+                    _serializedRuntime
+                        .ApplyModifiedProperties();
+                    EditorUtility.SetDirty(
+                        _runtime);
                     GUIUtility.ExitGUI();
                 }
             }
