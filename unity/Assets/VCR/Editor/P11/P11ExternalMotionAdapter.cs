@@ -4,12 +4,20 @@ using VCR.Runtime.Tracking.Mixing;
 
 namespace VCR.Editor.P11
 {
+    internal sealed class P11ExternalMotionImportOptions
+    {
+        public float BvhPositionScale = 0.01f;
+        public bool BvhFlipZ = true;
+    }
+
     internal sealed class P11ExternalMotionAdapterContext
     {
         public string SourceFilePath;
         public string SourceAssetPath;
         public string DestinationAssetFolder;
         public P11ExternalMotionMarkerFile MarkerFile;
+        public P11ExternalMotionImportOptions Options;
+        public ICollection<string> CreatedAssetPaths;
     }
 
     internal sealed class P11ExternalMotionAdapterResult
