@@ -251,6 +251,120 @@ namespace VCR.Editor.P6
                     "CanvasGroup transition target must explicitly reject shader-driven Dissolve",
                     failures);
 
+                var parallaxObject =
+                    new GameObject(
+                        "Parallax Layer",
+                        typeof(RectTransform));
+                parallaxObject.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var parallaxReference =
+                    new GameObject(
+                        "Parallax Reference");
+                parallaxReference.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var parallaxTransform =
+                    parallaxObject.GetComponent<
+                        RectTransform>();
+                parallaxTransform.anchoredPosition =
+                    new Vector2(
+                        5f,
+                        6f);
+
+                parallaxReference.transform.localPosition =
+                    new Vector3(
+                        1f,
+                        2f,
+                        0f);
+
+                var parallaxTarget =
+                    parallaxObject.AddComponent<
+                        Environment2DLayerTarget>();
+
+                parallaxTarget.ConfigureParallax(
+                    null,
+                    parallaxTransform,
+                    parallaxReference.transform,
+                    new Vector2(
+                        10f,
+                        20f));
+
+                Expect(
+                    parallaxTarget.ValidateConfiguration(
+                        out var parallaxError) &&
+                    string.IsNullOrEmpty(
+                        parallaxError),
+                    "Parallax 2D layer must validate with an explicit RectTransform and reference Transform",
+                    failures);
+
+                parallaxReference.transform.localPosition =
+                    new Vector3(
+                        3f,
+                        1f,
+                        0f);
+
+                parallaxTarget.UpdateEnvironment(
+                    new EnvironmentUpdateContext(
+                        sequence: 1,
+                        timestampUs: 0,
+                        deltaSeconds: 0.1f,
+                        EnvironmentUpdateReason.Scheduled,
+                        stateId: "day"));
+
+                Expect(
+                    parallaxTransform.anchoredPosition ==
+                        new Vector2(
+                            25f,
+                            -14f) &&
+                    parallaxTarget.ParallaxUpdateCount == 1,
+                    "Parallax layer must move only when an environment update is dispatched and apply configured XY scale",
+                    failures);
+
+                Expect(
+                    typeof(Environment2DLayerTarget)
+                        .GetMethod(
+                            "Update",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic |
+                            BindingFlags.Public) ==
+                    null,
+                    "2D environment layer target must not own a recurring Update loop",
+                    failures);
+
+                var invalidStaticLayer =
+                    root.AddComponent<
+                        Environment2DLayerTarget>();
+                invalidStaticLayer.ConfigureStaticImage(
+                    null);
+
+                Expect(
+                    !invalidStaticLayer
+                        .ValidateConfiguration(
+                            out var invalidStaticError) &&
+                    !string.IsNullOrEmpty(
+                        invalidStaticError),
+                    "StaticImage layer must reject missing RawImage configuration",
+                    failures);
+
+                var parallaxMetrics =
+                    new List<RuntimeMetric>();
+                parallaxTarget.CollectMetrics(
+                    parallaxMetrics);
+
+                Expect(
+                    TryGetMetric(
+                        parallaxMetrics,
+                        "environment.2d.parallax_updates",
+                        out var parallaxUpdates) &&
+                    Math.Abs(
+                        parallaxUpdates - 1.0) <
+                    0.001,
+                    "2D layer diagnostics must expose parallax update count",
+                    failures);
+
                 var spaceTarget =
                     spaceContent.AddComponent<
                         EnvironmentSpaceAnchor>();
