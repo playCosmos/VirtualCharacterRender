@@ -115,6 +115,25 @@ namespace VCR.Editor.P11
                 failures);
 
             Expect(
+                ApplicationUiActionPolicy
+                    .CanApplyOverlaySetting(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        true) &&
+                !ApplicationUiActionPolicy
+                    .CanApplyOverlaySetting(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.LoadingCharacter,
+                        true) &&
+                !ApplicationUiActionPolicy
+                    .CanApplyOverlaySetting(
+                        true,
+                        VCR.Runtime.Scene.SceneRuntimeState.Ready,
+                        false),
+                "overlay setting actions must require an operational scene runtime and configured output adapter",
+                failures);
+
+            Expect(
                 !ApplicationUiActionPolicy
                     .CanLoadCharacter(
                         true,
@@ -469,7 +488,7 @@ namespace VCR.Editor.P11
             {
                 Debug.Log(
                     "VCR P11 application UI validation: PASS " +
-                    "(section order, availability, character file browse policy, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
+                    "(section order, availability, character file browse policy, overlay setting policy, fallback selection, direct appearance action policy, persisted quick change, baked motion cues, external motion import, cancellation policy, serialized timeline authoring contract)");
                 return true;
             }
 
