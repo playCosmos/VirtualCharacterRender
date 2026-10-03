@@ -708,8 +708,8 @@ namespace VCR.Editor.P8
                     webSocketTransport);
 
                 Expect(
-                    sink.Events.Count == 5 &&
-                    sink.Events[4].Type ==
+                    sink.Events.Count == 4 &&
+                    sink.Events[3].Type ==
                         NormalizedEventTypes
                             .LocalManual &&
                     webSocketTransport.QueuedCount == 0,
@@ -745,8 +745,8 @@ namespace VCR.Editor.P8
                     osc);
 
                 Expect(
-                    sink.Events.Count == 4 &&
-                    sink.Events[3].Type ==
+                    sink.Events.Count == 5 &&
+                    sink.Events[4].Type ==
                         NormalizedEventTypes
                             .LocalManual &&
                     sink.Events[4].SourceId ==
