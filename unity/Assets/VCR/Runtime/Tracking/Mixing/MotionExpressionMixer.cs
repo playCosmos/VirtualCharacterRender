@@ -64,6 +64,7 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private bool _targetDirty = true;
         private bool _outputDirty;
+        private bool _expressionSmoothingActive;
         private float _nextProviderSearchTime;
 
         public TrackingPresenceSnapshot Presence =>
@@ -267,6 +268,13 @@ namespace VCR.Runtime.Tracking.Mixing
                     "mixer.expression.smoothing",
                     expressionSmoothing,
                     "rate"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.smoothing_active",
+                    _expressionSmoothingActive
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
             output.Add(
                 new RuntimeMetric(
                     "mixer.expression.layer_configured",
@@ -532,17 +540,17 @@ namespace VCR.Runtime.Tracking.Mixing
                 _currentExpressions = null;
                 _latestExpressionFrame = null;
                 _outputDirty = false;
+                _expressionSmoothingActive = false;
                 return;
             }
 
             if (!_outputDirty &&
-                expressionSmoothing <= 0f)
+                !_expressionSmoothingActive)
             {
                 return;
             }
 
-            if (expressionSmoothing > 0f &&
-                _currentExpressions != null)
+            if (expressionSmoothing > 0f)
             {
                 var alpha =
                     ExpressionMixerMath
@@ -557,11 +565,24 @@ namespace VCR.Runtime.Tracking.Mixing
                         alpha,
                         0f,
                         ExpressionBlendMode.Override);
+
+                _expressionSmoothingActive =
+                    !ExpressionMixerMath
+                        .ApproximatelyEqual(
+                            _currentExpressions,
+                            _targetExpressions);
+
+                if (!_expressionSmoothingActive)
+                {
+                    _currentExpressions =
+                        _targetExpressions;
+                }
             }
             else
             {
                 _currentExpressions =
                     _targetExpressions;
+                _expressionSmoothingActive = false;
             }
 
             var nowUs =
@@ -635,6 +656,7 @@ namespace VCR.Runtime.Tracking.Mixing
             _latestExpressionFrame = null;
             _targetDirty = true;
             _outputDirty = false;
+            _expressionSmoothingActive = false;
         }
     }
 }
