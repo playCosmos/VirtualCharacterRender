@@ -442,6 +442,62 @@ Implemented built-in motion presentation now also includes:
 - default `spin` cue: 360-degree root yaw over 0.9 seconds
 - user-defined procedural and baked cues through the same logical cue-id contract
 
+### External Unity-native motion import
+
+`VCR/P11/Open External Motion Importer` imports motion sources that Unity can read natively:
+
+- `.fbx`
+- `.dae`
+- `.anim`
+
+FBX/DAE source assets remain imported as source files, while each usable embedded `AnimationClip` is copied to a standalone `.anim` asset. Marker editing is performed on the standalone clip so model-importer state is not mutated. A standalone `.anim` input remains standalone after copy into the configured project destination.
+
+After import, each clip can be opened directly in either:
+
+- the AnimationClip Cue Baker
+- the Appearance Transition Timeline as a marker source
+
+The optional marker sidecar is discovered next to the source as either `<basename>.vcrmarkers.json` or `<source-file>.vcrmarkers.json`. It may also be selected manually. Sidecar version 1 has this shape:
+
+```json
+{
+  "Version": 1,
+  "Clips": [
+    {
+      "ClipName": "*",
+      "Markers": [
+        {
+          "Name": "swap",
+          "TimeMode": 1,
+          "Time": 0.5
+        }
+      ]
+    },
+    {
+      "ClipName": "Take 001",
+      "Markers": [
+        {
+          "Name": "motion-end",
+          "TimeMode": 0,
+          "Time": 0.9
+        }
+      ]
+    }
+  ]
+}
+```
+
+`ClipName="*"` applies markers to every imported clip. An exact `ClipName` adds clip-specific markers. Resolved marker names must remain unique for each clip.
+
+`TimeMode` values are:
+
+- `0` — seconds from clip start
+- `1` — normalized 0..1 clip time
+
+Resolved markers are written as explicit `VCRMarker` AnimationEvents. Existing unrelated AnimationEvents are preserved. A sidecar marker with the same VCR marker name replaces that marker on the imported standalone clip. Invalid times, duplicate resolved marker names, duplicate clip selectors, unsupported sidecar versions, or source files with no usable AnimationClip fail the import and roll back newly created assets.
+
+Formats that Unity does not import natively, such as BVH or a glTF motion workflow without an installed importer, intentionally fail with an adapter-required error instead of being guessed or partially converted.
+
 Not yet implemented as built-ins:
 
 - external motion adapters for non-Unity-native formats such as BVH/glTF; `.fbx`, `.dae`, and `.anim` import is implemented
