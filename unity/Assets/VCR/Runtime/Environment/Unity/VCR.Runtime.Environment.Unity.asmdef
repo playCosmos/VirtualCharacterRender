@@ -3,7 +3,8 @@
   "rootNamespace": "VCR.Runtime.Environment.Unity",
   "references": [
     "VCR.Runtime.Core",
-    "VCR.Runtime.Environment"
+    "VCR.Runtime.Environment",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
