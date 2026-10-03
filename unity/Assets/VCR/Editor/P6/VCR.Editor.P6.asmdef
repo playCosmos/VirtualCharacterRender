@@ -1,0 +1,26 @@
+{
+  "name": "VCR.Editor.P6",
+  "rootNamespace": "VCR.Editor.P6",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Editor.P1",
+    "VCR.Editor.P2",
+    "VCR.Editor.P3",
+    "VCR.Editor.P4",
+    "VCR.Editor.P5",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Environment",
+    "VCR.Runtime.Environment.Unity"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
