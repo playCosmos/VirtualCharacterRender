@@ -228,7 +228,7 @@ Examples include:
 
 User-authored transition steps must use application-level action contracts. Transition files must not persist raw `GameObject`, `Transform`, `ParticleSystem`, `AnimationClip`, or other Unity instance references.
 
-P12 authoring tooling should provide a timeline/sequence editor or equivalent ordered-step editor for these presets.
+The first Unity Editor timeline/sequence authoring slice is now available in P11. P12 remains responsible for richer packaged authoring/import workflows, marker-based synchronization, and non-Unity end-user tooling.
 
 ## Transition timing and synchronization
 
@@ -241,7 +241,7 @@ A transition step may be scheduled by:
 
 The appearance commit can therefore be synchronized to the exact frame/marker intended by a custom motion.
 
-The initial implementation should prefer deterministic ordered/timed execution. A full cinematic timeline editor is optional later tooling, not a runtime requirement.
+The runtime remains deterministic ordered/timed execution. The P11 editor visualizes timed markers and edits their order directly; named markers, blocking-step dependencies, and a full cinematic timeline remain later tooling.
 
 ## Concurrent quick-change requests
 
@@ -352,7 +352,7 @@ Add the Character > Appearance / Quick Change controls and application-facing ap
 
 ### P12 — Advanced One-Character Scene Tooling
 
-Add appearance authoring/import tooling:
+The first transition timeline editor has been pulled forward into P11. P12 extends it with broader appearance authoring/import tooling:
 
 - register outfit roots
 - create/edit accessory slots and anchors
@@ -360,8 +360,8 @@ Add appearance authoring/import tooling:
 - import validated external accessory packages
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
-- transition preset/timeline authoring
-- custom motion import/registration for quick-change use
+- richer transition timeline authoring: named markers, blocking dependencies, reusable/importable transition packages, and non-scene workflows
+- external custom motion import/registration beyond the implemented Unity AnimationClip baker
 - custom particle/effect preset import/registration
 - named motion-marker placement for appearance.commit synchronization
 - transition interruption/fallback policy editing
@@ -386,6 +386,11 @@ The first source implementation now exists:
 - per-character user preset save/load/delete through a versioned appearance profile store
 - automatic user-preset restore when the same character profile is loaded
 - authored preset ids protected from user-preset overwrite
+- `VCR/P11/Open Appearance Transition Timeline` editor with add/duplicate/delete transition operations
+- direct editing of duration, queue/fallback policy, ordered action/commit steps, custom action type/target/name/text/value fields, and cancellation cleanup
+- timeline marker visualization, step reorder/delete, sort-by-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
+- built-in `Spin + Confetti` and Interrupt cleanup starter templates
+- timeline edits write directly to `BasicCharacterAppearanceRuntime.transitions`, so editor and runtime definitions cannot silently diverge
 - appearance Event Runtime action handler
 
 Implemented built-in presentation actions now also include:
@@ -423,7 +428,8 @@ Not yet implemented as built-ins:
 
 - external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
-- transition timeline authoring UI
+- named motion markers / blocking-step dependency authoring
+- reusable transition package import/export outside scene serialization
 - external appearance package import
 - compatible external skinned-garment workflow
 
