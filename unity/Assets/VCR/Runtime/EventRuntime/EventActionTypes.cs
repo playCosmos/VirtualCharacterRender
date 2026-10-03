@@ -70,5 +70,8 @@ namespace VCR.Runtime.EventRuntime
 
         public const string AppearanceRestoreDefault =
             "appearance.restore_default";
+
+        public const string AppearanceCancelTransition =
+            "appearance.cancel_transition";
     }
 }
