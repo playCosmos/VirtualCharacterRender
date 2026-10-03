@@ -191,7 +191,7 @@ Targets will expand to character motion, environment transitions, broader shader
 
 ## P10 — Broadcast Output
 
-Status: Active. See `P10_STATUS.md`.
+Status: Source implementation checkpoint-ready; standalone/OBS evidence remains deferred. See `P10_STATUS.md`.
 
 Productionize the existing transparent-overlay path and OBS workflow on both platforms. The first source slice adds explicit configured/pending/active/unsupported/fault output states, bounded native-apply timeout behavior, and an application-side capture-readiness contract while retaining `IOverlayOutputAdapter` as the platform boundary.
 

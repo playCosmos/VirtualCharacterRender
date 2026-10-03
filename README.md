@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed into P10 Broadcast Output. P9 event rules are preserved as a source checkpoint, and P10 is productionizing the existing transparent-overlay path with explicit native output state and capture-readiness contracts. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
+The source implementation has progressed through P10 Broadcast Output. P9 event rules are preserved as a source checkpoint, and P10 now has checkpoint-ready transparent-overlay state, recovery, and capture-target readiness contracts. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
 
 ## Architecture documents
 
@@ -114,6 +114,6 @@ The source implementation has progressed into P10 Broadcast Output. P9 event rul
 
 ## Status
 
-P1-P9 source implementations are preserved as source checkpoints. P10 Broadcast Output is active, reusing the project-owned overlay abstraction and UniWinC adapter while adding explicit configured/pending/active/fault state and application-side capture readiness. Executable third-party plugins remain deferred under ADR-0015.
+P1-P9 source implementations are preserved as source checkpoints. P10 Broadcast Output is source-checkpoint-ready, reusing the project-owned overlay abstraction and UniWinC adapter with explicit configured/pending/active/fault state, recovery, and 720p60/1080p60 capture-target readiness. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.

@@ -17,7 +17,7 @@ checkpoint/p9-source-implementation
 
 P0-P9 runtime/device/network/service evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
 
-## First P10 source slice
+## Source implementation checkpoint
 
 P10 reuses the existing output architecture instead of introducing a second broadcast pipeline:
 
@@ -95,6 +95,8 @@ The P10 batch entry runs P0-P9 source-free suites first and then checks:
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
+The source implementation is complete enough for a checkpoint. See `P10_BROADCAST_VALIDATION_PLAN.md` for the standalone/OBS evidence protocol.
+
 ## Deferred P10 evidence
 
 - execute the P0-P10 Unity source-free batch suite
@@ -108,3 +110,5 @@ These validation paths are implemented but have not been executed in this enviro
 - recovery after native output/capture failures
 
 P10 must not convert these platform/OBS evidence gates into PASS without real standalone-player validation.
+
+The P10 source architecture is checkpoint-ready; platform/OBS/performance evidence remains deferred.
