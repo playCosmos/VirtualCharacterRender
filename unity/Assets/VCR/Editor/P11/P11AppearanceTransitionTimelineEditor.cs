@@ -61,6 +61,19 @@ namespace VCR.Editor.P11
             window.Repaint();
         }
 
+        public static void OpenWithMarkerCue(
+            BakedMotionCueAsset cueAsset)
+        {
+            var window =
+                GetWindow<
+                    P11AppearanceTransitionTimelineEditor>(
+                    "VCR Transition Timeline");
+            window._markerCueAsset =
+                cueAsset;
+            window.Show();
+            window.Repaint();
+        }
+
         private void OnEnable()
         {
             if (_runtime == null)
