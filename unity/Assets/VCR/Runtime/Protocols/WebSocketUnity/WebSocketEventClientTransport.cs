@@ -71,6 +71,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private CancellationTokenSource _cancellation;
         private Task _runTask;
         private ClientWebSocket _client;
+        private long _generation;
 
         private int _state =
             (int)WebSocketClientTransportState.Stopped;
@@ -205,7 +206,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             error = null;
 
             if (_runTask != null &&
-                !_runTask.IsCompleted)
+                !_runTask.IsCompleted &&
+                _cancellation != null &&
+                !_cancellation.IsCancellationRequested)
             {
                 return true;
             }
@@ -222,19 +225,27 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
             StopTransport();
 
+            var generation =
+                Interlocked.Increment(
+                    ref _generation);
+
             _cancellation =
                 new CancellationTokenSource();
 
             _runTask =
                 RunTransportAsync(
                     uri,
-                    _cancellation.Token);
+                    _cancellation.Token,
+                    generation);
 
             return true;
         }
 
         public void StopTransport()
         {
+            Interlocked.Increment(
+                ref _generation);
+
             var cancellation =
                 _cancellation;
             _cancellation = null;
@@ -262,6 +273,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     // Shutdown path.
                 }
             }
+
+            _runTask = null;
 
             SetState(
                 WebSocketClientTransportState.Stopped);
@@ -453,14 +466,16 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
         private async Task RunTransportAsync(
             Uri uri,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            long generation)
         {
             var firstAttempt = true;
 
             while (!cancellationToken
                        .IsCancellationRequested)
             {
-                SetState(
+                SetStateIfCurrent(
+                    generation,
                     firstAttempt
                         ? WebSocketClientTransportState.Connecting
                         : WebSocketClientTransportState.Reconnecting);
@@ -488,7 +503,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     Interlocked.Increment(
                         ref _connectSuccesses);
 
-                    SetState(
+                    SetStateIfCurrent(
+                        generation,
                         WebSocketClientTransportState.Connected);
 
                     await ReceiveLoopAsync(
@@ -529,7 +545,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
                 if (!autoReconnect)
                 {
-                    SetState(
+                    SetStateIfCurrent(
+                        generation,
                         WebSocketClientTransportState.Faulted);
                     return;
                 }
@@ -551,7 +568,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 }
             }
 
-            SetState(
+            SetStateIfCurrent(
+                generation,
                 WebSocketClientTransportState.Stopped);
         }
 
@@ -736,6 +754,21 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     return;
                 }
             }
+        }
+
+        private void SetStateIfCurrent(
+            long generation,
+            WebSocketClientTransportState state)
+        {
+            if (Interlocked.Read(
+                    ref _generation) !=
+                generation)
+            {
+                return;
+            }
+
+            SetState(
+                state);
         }
 
         private void SetState(
