@@ -221,6 +221,8 @@ Character UI now has the first Appearance / Quick Change source implementation: 
 
 ## P12 — Advanced One-Character Scene Tooling
 
+The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` promotes the conventional wardrobe hierarchy into explicit outfit/accessory bindings, edits authored presets/default state over `BasicCharacterAppearanceRuntime`, captures the current appearance as an authored preset, and validates/rolls back invalid serialized binding edits. See `P12_STATUS.md`.
+
 - visual event/node editor
 - richer environment/prop/effect automation
 - multiple scene cameras if justified
