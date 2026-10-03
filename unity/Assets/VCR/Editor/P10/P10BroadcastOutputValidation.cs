@@ -24,12 +24,14 @@ namespace VCR.Editor.P10
                 failures);
             ValidateRecovery(
                 failures);
+            ValidateBroadcastTargets(
+                failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P10 broadcast output validation: PASS " +
-                    "(status compatibility, pending/fault/unsupported containment, transparency/client-size readiness, settings-preserving recovery)");
+                    "(status compatibility, pending/fault/unsupported containment, transparency/client-size readiness, settings-preserving recovery, 720p60/1080p60 target configuration)");
                 return true;
             }
 
@@ -188,6 +190,121 @@ namespace VCR.Editor.P10
                 transparent,
                 OverlayCaptureReadinessFailure
                     .InvalidClientSize,
+                failures);
+        }
+
+        private static void ValidateBroadcastTargets(
+            List<string> failures)
+        {
+            var overlay =
+                new OverlayCaptureReadiness(
+                    true,
+                    OverlayCaptureReadinessFailure.None,
+                    null);
+
+            var minimum =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Minimum720p60,
+                        overlay,
+                        requestedWidth: 1280,
+                        requestedHeight: 720,
+                        targetFramesPerSecond: 60,
+                        runInBackground: true);
+
+            Expect(
+                minimum.Ready,
+                "1280x720 at 60 FPS with background execution must satisfy the minimum broadcast target configuration",
+                failures);
+
+            var recommended =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Recommended1080p60,
+                        overlay,
+                        requestedWidth: 1920,
+                        requestedHeight: 1080,
+                        targetFramesPerSecond: 60,
+                        runInBackground: true);
+
+            Expect(
+                recommended.Ready,
+                "1920x1080 at 60 FPS with background execution must satisfy the recommended broadcast target configuration",
+                failures);
+
+            var wrongResolution =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Recommended1080p60,
+                        overlay,
+                        requestedWidth: 1280,
+                        requestedHeight: 720,
+                        targetFramesPerSecond: 60,
+                        runInBackground: true);
+
+            Expect(
+                !wrongResolution.Ready &&
+                wrongResolution.Failure ==
+                    BroadcastCaptureReadinessFailure
+                        .ResolutionMismatch,
+                "broadcast target evaluation must distinguish resolution mismatch from output readiness",
+                failures);
+
+            var lowFps =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Minimum720p60,
+                        overlay,
+                        requestedWidth: 1280,
+                        requestedHeight: 720,
+                        targetFramesPerSecond: 30,
+                        runInBackground: true);
+
+            Expect(
+                !lowFps.Ready &&
+                lowFps.Failure ==
+                    BroadcastCaptureReadinessFailure
+                        .FrameRateBelowTarget,
+                "broadcast target evaluation must reject frame-rate configuration below the declared target",
+                failures);
+
+            var noBackground =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Minimum720p60,
+                        overlay,
+                        requestedWidth: 1280,
+                        requestedHeight: 720,
+                        targetFramesPerSecond: 60,
+                        runInBackground: false);
+
+            Expect(
+                !noBackground.Ready &&
+                noBackground.Failure ==
+                    BroadcastCaptureReadinessFailure
+                        .RunInBackgroundDisabled,
+                "broadcast target evaluation must require background execution for overlay use",
+                failures);
+
+            var overlayFailure =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget.Minimum720p60,
+                        new OverlayCaptureReadiness(
+                            false,
+                            OverlayCaptureReadinessFailure.Faulted,
+                            "fault"),
+                        requestedWidth: 1280,
+                        requestedHeight: 720,
+                        targetFramesPerSecond: 60,
+                        runInBackground: true);
+
+            Expect(
+                !overlayFailure.Ready &&
+                overlayFailure.Failure ==
+                    BroadcastCaptureReadinessFailure
+                        .OverlayNotReady,
+                "broadcast target evaluation must preserve overlay readiness as a separate prerequisite",
                 failures);
         }
 

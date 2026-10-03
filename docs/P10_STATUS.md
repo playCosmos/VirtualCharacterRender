@@ -60,6 +60,8 @@ This readiness result means only that the application-side overlay prerequisites
 
 `SingleCharacterSceneRuntime.OverlayCaptureReadiness` exposes the same readiness contract without leaking UniWinC/native objects into the scene/runtime API.
 
+`BroadcastCaptureTarget` defines the product's minimum 1280x720@60 and recommended 1920x1080@60 configuration targets. `BroadcastCaptureReadinessEvaluator` keeps configuration readiness separate from measured performance: it checks overlay readiness, exact requested render size, configured target FPS, and Run In Background, but it does not claim that the frame-time target was actually sustained. `SingleCharacterSceneRuntime.EvaluateBroadcastCaptureTarget` exposes this combined check for later UI/diagnostics.
+
 `OverlayOutputRecovery.TryRestart` and `SingleCharacterSceneRuntime.TryRecoverOverlayOutput` provide an explicit settings-preserving recovery path. Recovery performs `Shutdown -> Apply(previous settings)`, contains adapter exceptions, and treats pending/configured restart states as a successful retry attempt while still requiring a later readiness check before capture.
 
 ## Source-free validation
@@ -88,6 +90,8 @@ The P10 batch entry runs P0-P9 source-free suites first and then checks:
 - invalid-client-size rejection
 - settings-preserving overlay restart
 - unsupported restart and adapter-exception containment
+- minimum 720p60 and recommended 1080p60 capture-target configuration
+- resolution/FPS/background-execution mismatch reporting
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 

@@ -73,6 +73,31 @@ namespace VCR.Runtime.Scene
             }
         }
 
+        public BroadcastCaptureReadiness EvaluateBroadcastCaptureTarget(
+            BroadcastCaptureTarget target)
+        {
+            ResolveDependencies();
+
+            if (renderBootstrap == null)
+            {
+                return new BroadcastCaptureReadiness(
+                    false,
+                    BroadcastCaptureReadinessFailure.InvalidTarget,
+                    "Render bootstrap is unavailable.");
+            }
+
+            var render =
+                renderBootstrap.CaptureSettings();
+
+            return BroadcastCaptureReadinessEvaluator.Evaluate(
+                target,
+                OverlayCaptureReadiness,
+                render.Width,
+                render.Height,
+                render.TargetFrameRate,
+                render.RunInBackground);
+        }
+
         public IEnvironmentRuntime EnvironmentRuntime => _environmentRuntime;
         public CapabilityRegistry Capabilities => _capabilities;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
