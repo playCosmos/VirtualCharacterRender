@@ -195,6 +195,133 @@ namespace VCR.Editor.P11
                     "timeline-authored Interrupt with cleanup must rebuild: " +
                     interruptError,
                     failures);
+
+                var package =
+                    P11AppearanceTransitionPackageUtility
+                        .CreatePackage(
+                            "timeline-validation",
+                            new[]
+                            {
+                                new AppearanceTransitionPreset
+                                {
+                                    Id =
+                                        "portable-transition",
+                                    DurationSeconds =
+                                        1.2,
+                                    QueuePolicy =
+                                        AppearanceTransitionQueuePolicy
+                                            .Interrupt,
+                                    FallbackPolicy =
+                                        AppearanceTransitionFallbackPolicy
+                                            .Immediate,
+                                    Steps =
+                                        new[]
+                                        {
+                                            new AppearanceTransitionStep
+                                            {
+                                                TimeSeconds =
+                                                    0.0,
+                                                Kind =
+                                                    AppearanceTransitionStepKind
+                                                        .Action,
+                                                ActionType =
+                                                    EventActionTypes
+                                                        .MotionPlay,
+                                                TargetId =
+                                                    "motion.quickchange",
+                                                Text =
+                                                    "spin",
+                                                Required =
+                                                    false
+                                            },
+                                            new AppearanceTransitionStep
+                                            {
+                                                TimeSeconds =
+                                                    0.55,
+                                                Kind =
+                                                    AppearanceTransitionStepKind
+                                                        .Commit
+                                            }
+                                        },
+                                    CancellationSteps =
+                                        new[]
+                                        {
+                                            new AppearanceTransitionStep
+                                            {
+                                                TimeSeconds =
+                                                    0.0,
+                                                Kind =
+                                                    AppearanceTransitionStepKind
+                                                        .Action,
+                                                ActionType =
+                                                    EventActionTypes
+                                                        .MotionRelease,
+                                                TargetId =
+                                                    "motion.quickchange",
+                                                Text =
+                                                    "spin",
+                                                Required =
+                                                    false
+                                            }
+                                        }
+                                }
+                            });
+
+                var serializedPackage =
+                    P11AppearanceTransitionPackageUtility
+                        .TrySerialize(
+                            package,
+                            out var packageJson,
+                            out var packageSaveError);
+                var loadedPackage =
+                    serializedPackage &&
+                    P11AppearanceTransitionPackageUtility
+                        .TryDeserialize(
+                            packageJson,
+                            out var packageRoundTrip,
+                            out var packageLoadError);
+
+                Expect(
+                    serializedPackage &&
+                    loadedPackage &&
+                    packageRoundTrip != null &&
+                    packageRoundTrip.Version ==
+                        AppearanceTransitionPackage
+                            .CurrentVersion &&
+                    packageRoundTrip.Transitions.Length ==
+                        1 &&
+                    packageRoundTrip.Transitions[0]
+                        .Id ==
+                        "portable-transition" &&
+                    packageRoundTrip.Transitions[0]
+                        .CancellationSteps.Length ==
+                        1 &&
+                    packageRoundTrip.Transitions[0]
+                        .CancellationSteps[0]
+                        .ActionType ==
+                        EventActionTypes.MotionRelease,
+                    "transition package JSON must preserve action, commit, cleanup, queue, and version data: " +
+                    packageSaveError +
+                    " / " +
+                    packageLoadError,
+                    failures);
+
+                package.Version =
+                    AppearanceTransitionPackage
+                        .CurrentVersion +
+                    1;
+
+                Expect(
+                    !P11AppearanceTransitionPackageUtility
+                        .Validate(
+                            package,
+                            out var versionError) &&
+                    versionError != null &&
+                    versionError.Contains(
+                        "newer",
+                        StringComparison.OrdinalIgnoreCase),
+                    "transition package validator must reject unsupported newer versions",
+                    failures);
             }
             catch (Exception exception)
             {
