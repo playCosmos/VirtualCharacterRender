@@ -69,6 +69,12 @@ The next control slice is now also implemented:
 - Character keeps direct path input and now also exposes a Browse action through `ICharacterFileSelectionAdapter`; Unity Editor, Windows standalone, and macOS standalone adapters are implemented. The selected path is validated as an existing `.vrm` before it is copied into the path field.
 - scene-mutating buttons are disabled while a character load is already in progress and while the scene is suspended/shutting down/stopped
 - Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract; Transparent / Topmost / Click-through buttons preserve the other overlay flags and apply through `SingleCharacterSceneRuntime.ApplyOverlayOutput`
+- Tracking: previous/next source selection, enable/disable, and recovery actions use `ITrackingRuntimeControl`
+- Motion / Expression: primary pose-layer weight plus manual expression set/clear/clear-all controls use the mixer/manual-expression contracts
+- Environment: state ID, Cut/Fade/Dissolve mode, duration, and apply controls use `IEnvironmentRuntime`
+- Material / Shader: slot browse/refresh, shader apply, float override, and clear actions use `MaterialOverrideController`
+- Events: rule browse, enable/disable, trace toggle, max-commands setting, and atomic persistent save/reload use `EventRuntimeHost` plus `EventRuntimeConfigurationStore`
+- Settings: sorted capability browse/enable/disable and Render Scale / FPS / VSync / Run in Background controls use `CapabilityRegistry` and `SingleCharacterSceneRuntime` render-setting boundaries
 - Save Configuration and Recover Output remain global actions
 - action availability rules are centralized in `ApplicationUiActionPolicy` rather than duplicated across button callbacks
 
@@ -180,6 +186,9 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - reload/unload gating on an active character
 - scene-mutating action suppression while loading/suspended
 - broadcast-target action availability by scene state
+- overlay-setting and runtime-Settings action availability by scene state
+- sorted capability status snapshots including enabled/disabled state
+- event rule configuration JSON save/load round trip with rule enabled state/order and max commands
 - transactional registered outfit/accessory switching
 - authored appearance preset order
 - default appearance restore
@@ -223,15 +232,15 @@ These validation paths are implemented but have not been executed in this enviro
 - Appearance transitions: timeline authoring, Unity AnimationClip/BakedCue marker extraction/import/snapping, named markers, Blocking plus StepId-based All/Any completion dependencies, resolved-time dependency graph preview, and versioned JSON v2 import/export with v1 migration are implemented; remaining work is additional non-native motion adapters/marker conversion beyond BVH, interactive graph editing/grouping, package-library UX, richer preview choreography, and real-runtime verification of progress/cancel/Interrupt/dependency behavior
 - Motion import: Unity-project AnimationClip baking plus external Unity-native `.fbx`, `.dae`, and `.anim` import are implemented. FBX/DAE embedded clips are extracted to standalone `.anim` assets before marker editing. A built-in `.bvh` adapter parses hierarchy/channels and emits an additive humanoid `BakedMotionCueAsset`; glTF-style motion remains adapter work.
 - Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
-- Tracking: source enable/status/recovery controls without exposing tracker implementation details
-- Motion / Expression: pose-layer weight and manual-expression controls
-- Environment: state and transition controls
-- Material / Shader: slot/preset/shader/parameter controls over existing P2/P7 contracts
-- Events: persisted P9 rule document list/edit/enable controls
+- Tracking: source enable/status/recovery controls are implemented; remaining work is real tracker-device verification and any justified source-specific UI that does not leak implementation details
+- Motion / Expression: pose-layer weight and manual-expression controls are implemented; remaining work is real avatar/mixer verification and richer preset browsing only if needed
+- Environment: state and Cut/Fade/Dissolve transition controls are implemented; remaining work is real scene-transition evidence and richer state browsing if justified
+- Material / Shader: slot browse/refresh, shader apply, float override, and clear controls are implemented; remaining work is richer property discovery/preset UX without duplicating P2/P7 internals
+- Events: persisted rule browse/enable, trace, max-command, save, and reload controls are implemented; full rule filter/condition/action editing remains later tooling rather than hidden mutation in P11
 - Camera / Output: output state plus transparent/topmost/click-through controls and 720p60/1080p60 broadcast-target apply actions are implemented; remaining work is real standalone/OBS verification and any justified camera-edit controls beyond the existing summary
-- Settings: capability enable/disable and graphics/runtime settings
-- Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence
-- define save/apply UX and validation messaging before enabling destructive-looking actions
+- Settings: capability enable/disable and Render Scale / FPS / VSync / Run in Background controls are implemented; remaining work is real capability lifecycle/render verification and any additional settings justified by runtime contracts
+- Diagnostics: richer metric tables and optional charts without increasing core diagnostics cadence remain the main unfinished P11 UI slice
+- destructive-looking actions remain gated by centralized validation/policy and explicit status messages
 
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
 
