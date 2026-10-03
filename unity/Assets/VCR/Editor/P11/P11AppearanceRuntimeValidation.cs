@@ -469,6 +469,39 @@ namespace VCR.Editor.P11
                     eventError,
                     failures);
 
+                var cancelCommand =
+                    new EventActionCommand(
+                        ruleId:
+                            "appearance-validation",
+                        actionType:
+                            EventActionTypes
+                                .AppearanceCancelTransition,
+                        targetId:
+                            runtime.Status.RuntimeId,
+                        name:
+                            null,
+                        text:
+                            null,
+                        value:
+                            0.0,
+                        hasValue:
+                            false,
+                        eventSequence:
+                            2);
+
+                Expect(
+                    appearanceHandler.CanHandle(
+                        cancelCommand) &&
+                    !appearanceHandler.TryExecute(
+                        cancelCommand,
+                        out var inactiveCancelError) &&
+                    inactiveCancelError != null &&
+                    inactiveCancelError.Contains(
+                        "No appearance transition",
+                        StringComparison.OrdinalIgnoreCase),
+                    "appearance.cancel_transition must route through the appearance runtime and fail clearly when no transition is active",
+                    failures);
+
                 Expect(
                     runtime.Status.CurrentPresetId ==
                         "formal-crown" &&
