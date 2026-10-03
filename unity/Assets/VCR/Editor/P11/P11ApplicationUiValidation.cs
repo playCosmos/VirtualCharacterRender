@@ -257,6 +257,45 @@ namespace VCR.Editor.P11
                 "saved appearance preset actions must require a ready runtime, preset id, and active character path",
                 failures);
 
+            var cancelableTransitionStatus =
+                new AppearanceRuntimeStatus(
+                    "appearance.main",
+                    AppearanceRuntimeState
+                        .Transitioning,
+                    "formal-crown",
+                    "formal",
+                    "spin-confetti",
+                    false,
+                    0.4,
+                    1.0,
+                    0.4,
+                    true,
+                    null);
+
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanCancelAppearanceTransition(
+                        true,
+                        cancelableTransitionStatus) &&
+                !ApplicationUiActionPolicy
+                    .CanCancelAppearanceTransition(
+                        false,
+                        cancelableTransitionStatus) &&
+                !ApplicationUiActionPolicy
+                    .CanCancelAppearanceTransition(
+                        true,
+                        new AppearanceRuntimeStatus(
+                            "appearance.main",
+                            AppearanceRuntimeState
+                                .Ready,
+                            "formal-crown",
+                            "formal",
+                            null,
+                            false,
+                            null)),
+                "transition cancel UI must require an active transition with an executable cleanup contract",
+                failures);
+
             P11AppearanceRuntimeValidation
                 .RunChecks(
                     failures);
