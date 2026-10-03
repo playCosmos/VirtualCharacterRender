@@ -32,6 +32,10 @@ namespace VCR.Runtime.Materials.Unity
             64L * 1024L * 1024L;
         private const long PreviewSizeLimit =
             64L * 1024L * 1024L;
+        private const int PackageFileCountLimit =
+            4096;
+        private const long PackageTotalSizeLimit =
+            1024L * 1024L * 1024L;
 
         private readonly Dictionary<string, Shader>
             _ownedShaders =
@@ -516,6 +520,13 @@ namespace VCR.Runtime.Materials.Unity
                 return false;
             }
 
+            if (!TryValidatePackageInventory(
+                    normalizedRoot,
+                    out error))
+            {
+                return false;
+            }
+
             manifestPath =
                 Path.Combine(
                     normalizedRoot,
@@ -552,6 +563,107 @@ namespace VCR.Runtime.Materials.Unity
                     out error))
             {
                 return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryValidatePackageInventory(
+            string packageRoot,
+            out string error)
+        {
+            error = null;
+
+            string[] files;
+
+            try
+            {
+                files =
+                    Directory.GetFiles(
+                        packageRoot,
+                        "*",
+                        SearchOption.AllDirectories);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Shader package inventory could not be enumerated: " +
+                    exception.Message;
+                return false;
+            }
+
+            if (files.Length >
+                PackageFileCountLimit)
+            {
+                error =
+                    $"Shader package contains {files.Length} files; limit is {PackageFileCountLimit}.";
+                return false;
+            }
+
+            long totalBytes = 0;
+
+            foreach (var file in files)
+            {
+                string relative;
+
+                try
+                {
+                    relative =
+                        Path.GetRelativePath(
+                            packageRoot,
+                            file)
+                        .Replace(
+                            Path.DirectorySeparatorChar,
+                            '/')
+                        .Replace(
+                            Path.AltDirectorySeparatorChar,
+                            '/');
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Shader package inventory path resolution failed: " +
+                        exception.Message;
+                    return false;
+                }
+
+                if (!ShaderPackageManifestValidator
+                    .IsSafeRelativeResourcePath(
+                        relative))
+                {
+                    error =
+                        $"Shader package contains forbidden or unsafe file '{relative}'.";
+                    return false;
+                }
+
+                try
+                {
+                    if (HasReparsePoint(
+                            packageRoot,
+                            file))
+                    {
+                        error =
+                            $"Shader package file '{relative}' uses a symbolic/reparse-point segment.";
+                        return false;
+                    }
+
+                    totalBytes +=
+                        new FileInfo(file).Length;
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        $"Shader package file '{relative}' could not be inspected: {exception.Message}";
+                    return false;
+                }
+
+                if (totalBytes >
+                    PackageTotalSizeLimit)
+                {
+                    error =
+                        $"Shader package exceeds the {PackageTotalSizeLimit} byte total size limit.";
+                    return false;
+                }
             }
 
             return true;
