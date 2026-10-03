@@ -4,6 +4,13 @@ using UnityEngine;
 namespace VCR.Runtime.Tracking.Mixing
 {
     [Serializable]
+    public sealed class BakedMotionCueMarker
+    {
+        public string Name;
+        [Min(0f)] public float TimeSeconds;
+    }
+
+    [Serializable]
     public sealed class BakedBoneMotionCueTrack
     {
         public HumanoidBoneId Bone;
@@ -20,6 +27,8 @@ namespace VCR.Runtime.Tracking.Mixing
         [Min(0.01f)] public float DurationSeconds = 1f;
         public bool Loop = false;
         public bool HoldLastPose = false;
+        public BakedMotionCueMarker[] Markers =
+            Array.Empty<BakedMotionCueMarker>();
         public HumanoidPoseSpace PoseSpace =
             HumanoidPoseSpace.NormalizedLocal;
         [Min(2)] public int FrameCount = 2;
