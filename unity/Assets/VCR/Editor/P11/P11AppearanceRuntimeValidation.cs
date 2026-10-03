@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
+using VCR.Runtime.Application;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
@@ -267,6 +269,135 @@ namespace VCR.Editor.P11
                     !crown.activeSelf,
                     "default restore must return the complete outfit/accessory state",
                     failures);
+
+                var userRegistry =
+                    (IAppearanceUserPresetRegistry)
+                    runtime;
+
+                Expect(
+                    userRegistry.SaveCurrentAsUserPreset(
+                        "user-casual",
+                        "Immediate",
+                        out var savedUserPreset,
+                        out var userPresetError),
+                    "current appearance must be savable as a user preset: " +
+                    userPresetError,
+                    failures);
+
+                Expect(
+                    savedUserPreset != null &&
+                    savedUserPreset.Id ==
+                        "user-casual" &&
+                    savedUserPreset.OutfitId ==
+                        "casual" &&
+                    userRegistry.UserPresetIds.Count ==
+                        1 &&
+                    runtime.PresetIds.Count ==
+                        3,
+                    "saved user preset must join quick-change order without replacing authored presets",
+                    failures);
+
+                Expect(
+                    !userRegistry.SaveCurrentAsUserPreset(
+                        "casual-hat",
+                        "Immediate",
+                        out _,
+                        out var collisionError) &&
+                    !string.IsNullOrWhiteSpace(
+                        collisionError),
+                    "user presets must not replace authored appearance preset ids",
+                    failures);
+
+                var profileDirectory =
+                    Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p11-appearance-" +
+                        Guid.NewGuid()
+                            .ToString("N"));
+
+                try
+                {
+                    var store =
+                        new AppearanceUserPresetStore(
+                            profileDirectory);
+                    var characterPath =
+                        Path.Combine(
+                            profileDirectory,
+                            "avatar.vrm");
+
+                    Expect(
+                        store.TrySave(
+                            characterPath,
+                            userRegistry
+                                .CaptureUserPresets(),
+                            out var profileSaveError),
+                        "user appearance preset profile must save atomically: " +
+                        profileSaveError,
+                        failures);
+
+                    Expect(
+                        store.TryLoad(
+                            characterPath,
+                            out var loadedUserPresets,
+                            out var profileLoadError),
+                        "user appearance preset profile must load: " +
+                        profileLoadError,
+                        failures);
+
+                    Expect(
+                        loadedUserPresets.Length ==
+                            1 &&
+                        loadedUserPresets[0] !=
+                            null &&
+                        loadedUserPresets[0].Id ==
+                            "user-casual" &&
+                        loadedUserPresets[0]
+                            .Accessories.Length ==
+                            1,
+                        "saved appearance profile must preserve preset and accessory selections",
+                        failures);
+
+                    Expect(
+                        userRegistry.ReplaceUserPresets(
+                            Array.Empty<
+                                AppearancePreset>(),
+                            out var clearUserError),
+                        "user preset registry must support profile replacement: " +
+                        clearUserError,
+                        failures);
+
+                    Expect(
+                        !runtime.SetPreset(
+                            "user-casual",
+                            "Immediate",
+                            out _),
+                        "cleared user preset must leave the active registry",
+                        failures);
+
+                    Expect(
+                        userRegistry.ReplaceUserPresets(
+                            loadedUserPresets,
+                            out var restoreUserError) &&
+                        runtime.SetPreset(
+                            "user-casual",
+                            "Immediate",
+                            out var applyUserError),
+                        "loaded user preset must register and apply through the normal quick-change path: " +
+                        restoreUserError +
+                        " / " +
+                        applyUserError,
+                        failures);
+                }
+                finally
+                {
+                    if (Directory.Exists(
+                            profileDirectory))
+                    {
+                        Directory.Delete(
+                            profileDirectory,
+                            true);
+                    }
+                }
 
                 var previous =
                     runtime.Current;
