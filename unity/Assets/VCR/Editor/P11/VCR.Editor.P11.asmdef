@@ -14,6 +14,8 @@
     "VCR.Editor.P9",
     "VCR.Editor.P10",
     "VCR.Runtime.Application",
+    "VCR.Runtime.Appearance",
+    "VCR.Runtime.Appearance.Unity",
     "VCR.Runtime.Scene",
     "VCR.Runtime.UI"
   ],
