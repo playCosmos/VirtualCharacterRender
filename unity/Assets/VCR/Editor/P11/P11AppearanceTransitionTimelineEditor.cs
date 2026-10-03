@@ -47,6 +47,19 @@ namespace VCR.Editor.P11
                 .Show();
         }
 
+        public static void OpenWithMarkerClip(
+            AnimationClip clip)
+        {
+            var window =
+                GetWindow<
+                    P11AppearanceTransitionTimelineEditor>(
+                    "VCR Transition Timeline");
+            window._markerClip =
+                clip;
+            window.Show();
+            window.Repaint();
+        }
+
         private void OnEnable()
         {
             if (_runtime == null)
