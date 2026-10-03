@@ -12,6 +12,9 @@ namespace VCR.Runtime.EventRuntime
         public bool HasValue;
         public EventNumericValueSource NumericSource;
         public double ConstantNumber;
+        public double ConstantNumberY;
+        public double ConstantNumberZ;
+        public double ConstantNumberW;
         public double NumericScale = 1.0;
         public double NumericOffset;
         public EventTextValueSource TextSource;
@@ -71,8 +74,22 @@ namespace VCR.Runtime.EventRuntime
                 Name,
                 text,
                 number,
+                FiniteOrZero(
+                    ConstantNumberY),
+                FiniteOrZero(
+                    ConstantNumberZ),
+                FiniteOrZero(
+                    ConstantNumberW),
                 HasValue,
                 value.Sequence);
+        }
+
+        private static double FiniteOrZero(
+            double value)
+        {
+            return IsFinite(value)
+                ? value
+                : 0.0;
         }
 
         private static bool IsFinite(

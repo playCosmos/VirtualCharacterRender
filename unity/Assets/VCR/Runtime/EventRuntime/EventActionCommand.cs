@@ -11,6 +11,33 @@ namespace VCR.Runtime.EventRuntime
             double value,
             bool hasValue,
             long eventSequence)
+            : this(
+                ruleId,
+                actionType,
+                targetId,
+                name,
+                text,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                hasValue,
+                eventSequence)
+        {
+        }
+
+        public EventActionCommand(
+            string ruleId,
+            string actionType,
+            string targetId,
+            string name,
+            string text,
+            double value,
+            double valueY,
+            double valueZ,
+            double valueW,
+            bool hasValue,
+            long eventSequence)
         {
             RuleId = ruleId;
             ActionType = actionType;
@@ -18,6 +45,9 @@ namespace VCR.Runtime.EventRuntime
             Name = name;
             Text = text;
             Value = value;
+            ValueY = valueY;
+            ValueZ = valueZ;
+            ValueW = valueW;
             HasValue = hasValue;
             EventSequence = eventSequence;
         }
@@ -28,6 +58,9 @@ namespace VCR.Runtime.EventRuntime
         public string Name { get; }
         public string Text { get; }
         public double Value { get; }
+        public double ValueY { get; }
+        public double ValueZ { get; }
+        public double ValueW { get; }
         public bool HasValue { get; }
         public long EventSequence { get; }
     }

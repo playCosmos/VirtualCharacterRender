@@ -11,6 +11,18 @@ namespace VCR.Runtime.EventRuntime
         public const string MaterialSetFloat =
             "material.set_float";
 
+        public const string MaterialSetInt =
+            "material.set_int";
+
+        public const string MaterialSetBool =
+            "material.set_bool";
+
+        public const string MaterialSetColor =
+            "material.set_color";
+
+        public const string MaterialSetVector =
+            "material.set_vector";
+
         public const string ExpressionSet =
             "expression.set";
 

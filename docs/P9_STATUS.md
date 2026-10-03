@@ -70,6 +70,10 @@ The first concrete actions are:
 environment.set_state
 camera.set_fov
 material.set_float
+material.set_int
+material.set_bool
+material.set_color
+material.set_vector
 expression.set
 ```
 
@@ -114,6 +118,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - environment.set_state execution through an application-level handler
 - camera.set_fov execution through PrimaryCameraController
 - material.set_float mutation of an active runtime override without source-material mutation
+- material int/bool strict-value validation plus color/vector command component contracts
 - expression.set alias/range validation, no redundant frame publication, and Maximum blend preservation of routed lip-sync
 - unknown-action containment and diagnostics
 - multiple-handler ambiguity fails closed without target mutation
@@ -124,7 +129,7 @@ These validation paths are implemented but have not been executed in this enviro
 
 The next source slices are:
 
-- add motion-layer application handlers and expand material/shader actions beyond float parameters using existing subsystem contracts
+- expand material/shader actions to texture/shader-id/preset operations only where resource-id validation can remain deterministic
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - version persisted rule configuration before P11 exposes editing UI
 - add rule-level diagnostics and optional tracing that stays disabled by default

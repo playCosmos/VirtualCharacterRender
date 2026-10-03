@@ -38,7 +38,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment/camera/material/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, action cap, environment/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -958,6 +958,12 @@ namespace VCR.Editor.P9
                 handler.SetMaterialController(
                     controller);
 
+                var propertyHandler =
+                    root.AddComponent<
+                        MaterialPropertyEventActionHandler>();
+                propertyHandler.SetMaterialController(
+                    controller);
+
                 var command =
                     new EventActionCommand(
                         "material-rule",
@@ -994,6 +1000,73 @@ namespace VCR.Editor.P9
                             floatProperty),
                     0.37,
                     "material event action must update only the active runtime override",
+                    failures);
+
+                var invalidInt =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetInt,
+                        slots[0].Id,
+                        floatProperty,
+                        null,
+                        1.5,
+                        true,
+                        21);
+
+                Expect(
+                    propertyHandler.CanHandle(
+                        invalidInt) &&
+                    !propertyHandler.TryExecute(
+                        invalidInt,
+                        out var invalidIntError) &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidIntError),
+                    "material.set_int must reject fractional values before touching the material",
+                    failures);
+
+                var invalidBool =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetBool,
+                        slots[0].Id,
+                        floatProperty,
+                        null,
+                        2.0,
+                        true,
+                        22);
+
+                Expect(
+                    propertyHandler.CanHandle(
+                        invalidBool) &&
+                    !propertyHandler.TryExecute(
+                        invalidBool,
+                        out var invalidBoolError) &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidBoolError),
+                    "material.set_bool must accept only explicit 0/1 values",
+                    failures);
+
+                var vectorCommand =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialSetVector,
+                        slots[0].Id,
+                        floatProperty,
+                        null,
+                        1.0,
+                        2.0,
+                        3.0,
+                        4.0,
+                        true,
+                        23);
+
+                Expect(
+                    propertyHandler.CanHandle(
+                        vectorCommand),
+                    "material.set_vector must be claimed by the generalized material property handler",
                     failures);
             }
             catch (Exception exception)
