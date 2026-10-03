@@ -470,6 +470,46 @@ namespace VCR.Runtime.Tracking.Mixing
                 return false;
             }
 
+            var markerNames =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var marker in
+                     cue.Markers ??
+                     Array.Empty<
+                         BakedMotionCueMarker>())
+            {
+                if (marker == null ||
+                    string.IsNullOrWhiteSpace(
+                        marker.Name))
+                {
+                    error =
+                        $"Baked motion cue '{cue.CueId}' contains a marker without a name.";
+                    return false;
+                }
+
+                if (float.IsNaN(
+                        marker.TimeSeconds) ||
+                    float.IsInfinity(
+                        marker.TimeSeconds) ||
+                    marker.TimeSeconds < 0f ||
+                    marker.TimeSeconds >
+                        cue.DurationSeconds)
+                {
+                    error =
+                        $"Baked motion cue '{cue.CueId}' marker '{marker.Name}' is outside cue duration.";
+                    return false;
+                }
+
+                if (!markerNames.Add(
+                        marker.Name))
+                {
+                    error =
+                        $"Baked motion cue '{cue.CueId}' contains duplicate marker '{marker.Name}'.";
+                    return false;
+                }
+            }
+
             if (cue.RootPositionOffsets == null ||
                 cue.RootPositionOffsets.Length !=
                     cue.FrameCount ||
