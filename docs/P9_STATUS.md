@@ -17,7 +17,7 @@ d610380ae9fce2a6ecf7eee5b951ba2fb0ce453e
 
 P0-P8 runtime/device/network/service evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
 
-## First P9 source slice
+## Source implementation checkpoint
 
 P9 introduces a Unity-independent event rule engine in `VCR.Runtime.EventRuntime`.
 
@@ -140,12 +140,15 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
-## Next P9 work
+## Deferred P9 evidence
 
-The next source slices are:
+- execute the P0-P9 Unity source-free batch suite
+- measure allocation/frame-time cost under bursty chat/donation inputs
+- validate action dispatch against real environment/material/motion scenes
+- validate persisted rule documents through the future P11 editing UI
 
-- validate allocation/frame-time cost under event bursts
+Recursive/chained event emission remains intentionally out of the P9 source scope to avoid accidental feedback loops.
 
-Recursive/chained event emission is intentionally not part of the first slice to avoid accidental feedback loops.
+The P9 source architecture is complete enough for a checkpoint. Deferred source-free/runtime evidence is not marked PASS.
 
 One active performer remains the product scope.
