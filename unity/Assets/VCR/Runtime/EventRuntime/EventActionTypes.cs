@@ -4,8 +4,5 @@ namespace VCR.Runtime.EventRuntime
     {
         public const string EnvironmentSetState =
             "environment.set_state";
-
-        public const string LocalEmitEvent =
-            "event.emit";
     }
 }

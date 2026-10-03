@@ -34,14 +34,32 @@ namespace VCR.Runtime.EventRuntime
                 EventStateConditionKind.Missing =>
                     !state.Contains(Key),
                 EventStateConditionKind.NumberGreaterOrEqual =>
-                    state.GetNumber(Key) >= NumberValue,
+                    state.TryGetNumber(
+                        Key,
+                        out var greaterValue) &&
+                    greaterValue >= NumberValue,
+
                 EventStateConditionKind.NumberLessOrEqual =>
-                    state.GetNumber(Key) <= NumberValue,
+                    state.TryGetNumber(
+                        Key,
+                        out var lessValue) &&
+                    lessValue <= NumberValue,
+
                 EventStateConditionKind.NumberEqual =>
-                    Math.Abs(state.GetNumber(Key) - NumberValue) <= 0.000001,
+                    state.TryGetNumber(
+                        Key,
+                        out var equalValue) &&
+                    Math.Abs(
+                        equalValue -
+                        NumberValue) <=
+                    0.000001,
+
                 EventStateConditionKind.TextEqual =>
+                    state.TryGetText(
+                        Key,
+                        out var textValue) &&
                     string.Equals(
-                        state.GetText(Key),
+                        textValue,
                         TextValue,
                         StringComparison.Ordinal),
                 _ => false
