@@ -297,20 +297,20 @@ namespace VCR.Editor.P11
 
             const string template =
 @"{
-  \"Version\": 1,
-  \"Clips\": [
+  ""Version"": 1,
+  ""Clips"": [
     {
-      \"ClipName\": \"*\",
-      \"Markers\": [
+      ""ClipName"": ""*"",
+      ""Markers"": [
         {
-          \"Name\": \"swap\",
-          \"TimeMode\": 1,
-          \"Time\": 0.5
+          ""Name"": ""swap"",
+          ""TimeMode"": 1,
+          ""Time"": 0.5
         },
         {
-          \"Name\": \"motion-end\",
-          \"TimeMode\": 1,
-          \"Time\": 0.9
+          ""Name"": ""motion-end"",
+          ""TimeMode"": 1,
+          ""Time"": 0.9
         }
       ]
     }
