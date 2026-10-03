@@ -2474,6 +2474,13 @@ namespace VCR.Runtime.Appearance.Unity
                 if (complete)
                 {
                     completedCount++;
+
+                    if (waitingStep.DependencyMode ==
+                        AppearanceTransitionDependencyMode.Any)
+                    {
+                        satisfied = true;
+                        return true;
+                    }
                 }
                 else if (waitingStep.DependencyMode ==
                          AppearanceTransitionDependencyMode.All)
@@ -2485,10 +2492,9 @@ namespace VCR.Runtime.Appearance.Unity
 
             satisfied =
                 waitingStep.DependencyMode ==
-                    AppearanceTransitionDependencyMode.All
-                    ? completedCount ==
-                      dependencyIds.Length
-                    : completedCount > 0;
+                    AppearanceTransitionDependencyMode.All &&
+                completedCount ==
+                    dependencyIds.Length;
             return true;
         }
 
