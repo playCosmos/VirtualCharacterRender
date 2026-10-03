@@ -158,15 +158,22 @@ Executable third-party plugin loading remains gated by deferred ADR-0015 and is 
 
 ## P8 — Protocols and Event Adapters
 
-VMC, OSC, and WebSocket plus normalized event injection.
+Status: Source implementation checkpoint-ready; real network/service interoperability evidence remains deferred. See `P8_STATUS.md`.
 
-Introduce:
+Implemented source scope includes:
 
-- tracking-derived subject presence source
-- one broadcast chat integration
-- one donation/support integration
+- existing VMC receive/send interoperability contracts
+- generic OSC `/vcr/event` mapping and loopback-default UDP receiver
+- versioned WebSocket `event.inject` schema and outbound `ClientWebSocket` bridge transport
+- bounded background-network to main-thread dispatch queues
+- external ingress validation and tracking-event spoof rejection
+- tracking-derived subject/source event adaptation
+- SOOP chat and donation bridge mapping with event-id duplicate suppression
+- adapter/transport diagnostics
 
-Additional platforms use adapters rather than changing event-runtime contracts.
+A public application-control WebSocket listener/server is not implied by the P8 bridge client and remains a separate future versioned surface if P11/P12 requires it.
+
+Additional broadcast platforms use adapters rather than changing event-runtime contracts.
 
 ## P9 — Event Runtime
 
