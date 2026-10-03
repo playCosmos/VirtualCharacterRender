@@ -9,6 +9,7 @@ namespace VCR.Runtime.EventRuntime.Unity
     public sealed class AudioEventActionHandler :
         MonoBehaviour,
         IEventActionHandler,
+        IEventActionCompletionProbe,
         IRuntimeMetricsSource
     {
         [Serializable]
@@ -176,6 +177,49 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return Fail(
                     error);
             }
+        }
+
+        public bool CanTrackCompletion(
+            EventActionCommand command)
+        {
+            return
+                CanHandle(
+                    command) &&
+                !string.IsNullOrWhiteSpace(
+                    command.Text) &&
+                _audio.ContainsKey(
+                    command.Text);
+        }
+
+        public bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+
+            if (!CanTrackCompletion(
+                    command))
+            {
+                error =
+                    "Audio action completion cannot be tracked for this binding.";
+                return false;
+            }
+
+            if (command.ActionType ==
+                EventActionTypes.AudioStop)
+            {
+                complete = true;
+                return true;
+            }
+
+            complete =
+                !_audio[
+                    command.Text]
+                    .Source
+                    .isPlaying;
+            return true;
         }
 
         private static void Play(
