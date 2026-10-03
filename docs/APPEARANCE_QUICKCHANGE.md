@@ -390,9 +390,11 @@ The first source implementation now exists:
 - generic transition-action bridge to existing application-level event handlers
 - P11 Character UI previous/next/transition/default controls plus direct preset/outfit/accessory ID apply/clear controls
 - P11 transition preview by replaying the selected non-Immediate transition against the current appearance without changing the requested look
-- per-character user preset save/load/delete through a versioned appearance profile store
+- per-character user preset save/load/delete/rename/duplicate/reorder through a versioned appearance profile store
+- rename preserves the selected preset identity when it is active; duplicate inserts immediately after its source; reorder persists list order
+- all saved-preset mutations roll back the in-memory registry when profile persistence fails
 - automatic user-preset restore when the same character profile is loaded
-- authored preset ids protected from user-preset overwrite
+- authored preset ids protected from user-preset overwrite and rename/duplicate collisions
 - `VCR/P11/Open Appearance Transition Timeline` editor with add/duplicate/delete transition operations
 - direct editing of duration, queue/fallback policy, ordered action/commit steps, custom action type/target/name/text/value fields, and cancellation cleanup
 - named marker create/edit/delete plus timeline marker visualization
@@ -402,7 +404,7 @@ The first source implementation now exists:
 - per-step Absolute Time or Marker + Offset timing
 - per-action Blocking + completion timeout controls
 - stable Action `Step ID` editing plus `All` / `Any` dependency selection against earlier Action steps
-- foldable Dependency Overview summarizing graph edges, All/Any groups, and missing/forward references before runtime validation
+- foldable Dependency Overview with resolved-time node/edge graph plus All/Any group counts and missing/forward-reference warnings before runtime validation
 - `Generate Step IDs` migration convenience for older authored transitions
 - per-dependent-step timeout controls with fail-closed forward-reference and duplicate-id validation
 - step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
@@ -508,12 +510,13 @@ Conversion policy:
 
 - common BVH joint aliases are mapped to `HumanoidBoneId` values for hips, legs, feet/toes, spine/chest/upper-chest, neck/head, shoulders, arms, forearms, and hands
 - namespace/prefix forms such as `mixamorig:Hips` are normalized before alias lookup
-- common lower-priority aliases such as `root` may be superseded by a more specific `hips` mapping; two different joints resolving to the same humanoid bone at equal priority fail closed as ambiguous
+- common lower-priority aliases such as `root` may be superseded by a more specific `hips`/`pelvis` mapping; duplicate aliases resolve deterministically by mapping priority instead of depending on source traversal order
 - a hips/root mapping is mandatory
 - the first BVH frame is the additive reference pose
 - static BVH skeleton `OFFSET` values are parsed for hierarchy validity but are not copied into the active VRM bind pose
-- root translation is stored as first-frame-relative root motion
-- per-bone translation channels are stored as first-frame-relative local offsets; hips translation is not duplicated into the hips bone track because root translation already owns it
+- root translation and root rotation are stored as first-frame-relative root motion
+- when the BVH ROOT itself maps to Hips, it is excluded from the per-bone track so root rotation/translation are not applied twice
+- per-bone translation channels are stored as first-frame-relative local offsets
 - per-bone rotations are stored as first-frame-relative local quaternion deltas
 - BVH rotation channel order is respected when composing each joint rotation
 - generated data uses `HumanoidPoseSpace.NormalizedLocal` and is saved directly as a `BakedMotionCueAsset`
@@ -528,14 +531,13 @@ These values are explicit authoring options rather than universal BVH assumption
 
 Sidecar markers are resolved against the BVH cue id and written directly into the generated baked cue, so BVH does not need an intermediate AnimationClip just to participate in quick-change marker/timeline authoring.
 
-The current adapter intentionally does not provide automatic IK foot locking, source-skeleton bind-pose replacement, arbitrary unmapped-joint retargeting, or heuristic resolution of ambiguous duplicate humanoid joints. Those remain explicit future retarget-quality work rather than hidden corrections.
+The current adapter intentionally does not provide automatic IK foot locking, source-skeleton bind-pose replacement, or arbitrary unmapped-joint retargeting. Alias collisions are resolved by deterministic priority, but semantic retarget quality still requires real source/VRM evidence rather than hidden corrections.
 
 Not yet implemented as built-ins:
 
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
-- richer user-preset management UI such as rename/reorder/duplicate
 - automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
-- richer dependency visualization/grouping beyond the implemented StepId-based `All` / `Any` completion graph
+- richer interactive graph editing/grouping beyond the implemented resolved-time dependency graph preview and StepId-based `All` / `Any` completion graph
 - richer transition package management beyond the implemented v2 JSON import/export and v1 migration, such as package libraries/metadata/migration UI
 - external appearance package import
 - compatible external skinned-garment workflow
