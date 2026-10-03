@@ -3877,6 +3877,11 @@ namespace VCR.Runtime.UI
                 CaptureCapabilityStatuses();
 
             if (registry == null ||
+                sceneRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyRuntimeSettings(
+                        true,
+                        sceneRuntime.State) ||
                 statuses.Length == 0)
             {
                 _lastActionMessage =
@@ -4039,7 +4044,7 @@ namespace VCR.Runtime.UI
         {
             if (sceneRuntime == null ||
                 !ApplicationUiActionPolicy
-                    .CanApplyBroadcastTarget(
+                    .CanApplyRuntimeSettings(
                         true,
                         sceneRuntime.State))
             {
@@ -4089,7 +4094,7 @@ namespace VCR.Runtime.UI
             var canMutate =
                 sceneRuntime != null &&
                 ApplicationUiActionPolicy
-                    .CanApplyBroadcastTarget(
+                    .CanApplyRuntimeSettings(
                         true,
                         sceneRuntime.State);
 
