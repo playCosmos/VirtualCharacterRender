@@ -2677,6 +2677,22 @@ namespace VCR.Runtime.UI
                             current.PresetId;
                     }
 
+                    var currentUserPresetRegistry =
+                        _appearanceRuntime as
+                            IAppearanceUserPresetRegistry;
+
+                    if (_appearanceUserPresetInput != null &&
+                        !_appearanceUserPresetInput.isFocused &&
+                        string.IsNullOrWhiteSpace(
+                            _appearanceUserPresetInput.text) &&
+                        IsUserPresetId(
+                            currentUserPresetRegistry,
+                            current.PresetId))
+                    {
+                        _appearanceUserPresetInput.text =
+                            current.PresetId;
+                    }
+
                     if (_appearanceOutfitInput != null &&
                         !_appearanceOutfitInput.isFocused &&
                         string.IsNullOrWhiteSpace(
@@ -3018,11 +3034,15 @@ namespace VCR.Runtime.UI
             var appearance =
                 _appearanceRuntime.Status;
 
+            var userPresetRegistry =
+                _appearanceRuntime as
+                    IAppearanceUserPresetRegistry;
             var userPresetCount =
-                _appearanceRuntime is
-                    IAppearanceUserPresetRegistry registry
-                    ? registry.UserPresetIds.Count
-                    : 0;
+                userPresetRegistry?.UserPresetIds.Count ??
+                0;
+            var userPresetOrder =
+                FormatUserPresetOrder(
+                    userPresetRegistry);
 
             var transitionProgress =
                 appearance.Busy
@@ -3043,11 +3063,81 @@ namespace VCR.Runtime.UI
                 $"\nAppearance preset: {appearance.CurrentPresetId ?? "<none>"}" +
                 $"\nOutfit: {appearance.CurrentOutfitId ?? "<none>"}" +
                 $"\nUser presets: {userPresetCount}" +
+                $"\nUser preset order: {userPresetOrder}" +
                 $"\nTransition: {appearance.ActiveTransitionId ?? "<none>"}" +
                 $"\nTransition progress: {transitionProgress}" +
                 $"\nTransition committed: {appearance.TransitionCommitted}" +
                 $"\nTransition cancelable: {appearance.CanCancelTransition}" +
                 $"\nAppearance error: {appearance.LastError ?? "<none>"}";
+        }
+
+        private static bool IsUserPresetId(
+            IAppearanceUserPresetRegistry registry,
+            string presetId)
+        {
+            if (registry == null ||
+                string.IsNullOrWhiteSpace(
+                    presetId))
+            {
+                return false;
+            }
+
+            for (var i = 0;
+                 i <
+                 registry.UserPresetIds.Count;
+                 i++)
+            {
+                if (string.Equals(
+                        registry.UserPresetIds[i],
+                        presetId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string FormatUserPresetOrder(
+            IAppearanceUserPresetRegistry registry)
+        {
+            if (registry == null ||
+                registry.UserPresetIds.Count == 0)
+            {
+                return "<none>";
+            }
+
+            const int visibleLimit = 8;
+            var visibleCount =
+                Math.Min(
+                    visibleLimit,
+                    registry.UserPresetIds.Count);
+            var values =
+                new string[
+                    visibleCount];
+
+            for (var i = 0;
+                 i < visibleCount;
+                 i++)
+            {
+                values[i] =
+                    registry.UserPresetIds[i];
+            }
+
+            var result =
+                string.Join(
+                    " > ",
+                    values);
+
+            if (registry.UserPresetIds.Count >
+                visibleLimit)
+            {
+                result +=
+                    $" > +{registry.UserPresetIds.Count - visibleLimit}";
+            }
+
+            return result;
         }
 
         private string TrackingSummary()
