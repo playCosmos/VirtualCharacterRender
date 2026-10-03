@@ -18,8 +18,8 @@ namespace VCR.Runtime.Materials
         public string MaterialPreset;
         public string[] ShaderIds =
             Array.Empty<string>();
-        public string[] TextureFiles =
-            Array.Empty<string>();
+        public ShaderPackageTextureResource[] Textures =
+            Array.Empty<ShaderPackageTextureResource>();
         public string[] PreviewFiles =
             Array.Empty<string>();
     }
