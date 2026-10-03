@@ -15,7 +15,8 @@
     "VCR.Runtime.Tracking.Mixing",
     "UnityEngine.UI",
     "VCR.Runtime.EventRuntime",
-    "VCR.Runtime.Rendering"
+    "VCR.Runtime.Rendering",
+    "VCR.Runtime.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
