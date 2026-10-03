@@ -2014,6 +2014,37 @@ namespace VCR.Runtime.Appearance.Unity
                 }
             }
 
+            if (transition.QueuePolicy !=
+                AppearanceTransitionQueuePolicy.Interrupt)
+            {
+                return true;
+            }
+
+            foreach (var step in
+                     transition.CancellationSteps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null ||
+                    !step.Required)
+                {
+                    continue;
+                }
+
+                var count =
+                    CountExecutors(
+                        step);
+
+                if (count != 1)
+                {
+                    error =
+                        count == 0
+                            ? $"No transition executor handles cancellation action '{step.ActionType}'."
+                            : $"Multiple transition executors handle cancellation action '{step.ActionType}'.";
+                    return false;
+                }
+            }
+
             return true;
         }
 
