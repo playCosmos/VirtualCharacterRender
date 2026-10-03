@@ -188,6 +188,66 @@ namespace VCR.Runtime.Tracking.Mixing
             return true;
         }
 
+        public bool TryAddAdditionalPoseLayer(
+            MonoBehaviour provider,
+            HumanoidPoseLayerSettings settings,
+            out string error)
+        {
+            error = null;
+
+            if (provider == null ||
+                provider is not ITrackingFrameProvider ||
+                ReferenceEquals(
+                    provider,
+                    this))
+            {
+                error =
+                    "Additional pose layer provider must implement ITrackingFrameProvider and cannot be the mixer itself.";
+                return false;
+            }
+
+            foreach (var existing in
+                     additionalPoseLayers ??
+                     Array.Empty<HumanoidPoseLayerSlot>())
+            {
+                if (existing != null &&
+                    ReferenceEquals(
+                        existing.ProviderBehaviour,
+                        provider))
+                {
+                    return true;
+                }
+            }
+
+            var current =
+                additionalPoseLayers ??
+                Array.Empty<HumanoidPoseLayerSlot>();
+
+            var next =
+                new HumanoidPoseLayerSlot[
+                    current.Length + 1];
+
+            Array.Copy(
+                current,
+                next,
+                current.Length);
+
+            var slot =
+                new HumanoidPoseLayerSlot();
+
+            slot.Configure(
+                provider,
+                settings ??
+                new HumanoidPoseLayerSettings());
+
+            next[next.Length - 1] =
+                slot;
+
+            SetAdditionalPoseLayers(
+                next);
+            return true;
+        }
+
         public void SetAdditionalPoseLayers(
             params HumanoidPoseLayerSlot[] layers)
         {
