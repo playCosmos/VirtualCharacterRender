@@ -2907,6 +2907,9 @@ namespace VCR.Runtime.UI
             var motionSelected =
                 selected ==
                 ApplicationUiSection.MotionExpression;
+            var environmentSelected =
+                selected ==
+                ApplicationUiSection.Environment;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -2997,9 +3000,27 @@ namespace VCR.Runtime.UI
                 _manualExpressionClearAllButton,
                 motionSelected);
 
+            SetActive(
+                _environmentStateInput,
+                environmentSelected);
+            SetActive(
+                _environmentTransitionModeButton,
+                environmentSelected);
+            SetActive(
+                _environmentTransitionDurationInput,
+                environmentSelected);
+            SetActive(
+                _environmentApplyStateButton,
+                environmentSelected);
+
             if (motionSelected)
             {
                 RefreshMotionControlState();
+            }
+
+            if (environmentSelected)
+            {
+                RefreshEnvironmentControlState();
             }
 
             if (characterSelected &&
@@ -3436,6 +3457,66 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void RefreshEnvironmentControlState()
+        {
+            var runtime =
+                sceneRuntime?.EnvironmentRuntime;
+            var status =
+                runtime?.Status;
+
+            if (_environmentStateInput != null &&
+                !_environmentStateInput.isFocused &&
+                string.IsNullOrWhiteSpace(
+                    _environmentStateInput.text) &&
+                status.HasValue &&
+                !string.IsNullOrWhiteSpace(
+                    status.Value.StateId))
+            {
+                _environmentStateInput.text =
+                    status.Value.StateId;
+            }
+
+            if (_environmentTransitionModeButton != null)
+            {
+                SetButtonLabel(
+                    _environmentTransitionModeButton,
+                    "Transition: " +
+                    _environmentTransitionMode);
+                _environmentTransitionModeButton.interactable =
+                    runtime != null &&
+                    status.HasValue &&
+                    status.Value.Active;
+            }
+
+            var durationValid =
+                float.TryParse(
+                    _environmentTransitionDurationInput
+                        ?.text
+                        ?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var duration) &&
+                !float.IsNaN(
+                    duration) &&
+                !float.IsInfinity(
+                    duration) &&
+                duration >= 0f;
+            var stateValid =
+                !string.IsNullOrWhiteSpace(
+                    _environmentStateInput
+                        ?.text);
+
+            if (_environmentApplyStateButton != null)
+            {
+                _environmentApplyStateButton.interactable =
+                    runtime != null &&
+                    status.HasValue &&
+                    status.Value.Active &&
+                    stateValid &&
+                    durationValid;
+            }
+        }
+
         private void RefreshMotionControlState()
         {
             var poseConfigured =
@@ -3842,12 +3923,32 @@ namespace VCR.Runtime.UI
 
             var status =
                 runtime.Status;
+            var transition =
+                runtime.TransitionStatus;
+            var transitionText =
+                transition.Active
+                    ? transition.Mode +
+                      " " +
+                      Math.Round(
+                          transition.Progress *
+                          100f) +
+                      "% (" +
+                      transition.PreviousStateId +
+                      " → " +
+                      transition.StateId +
+                      ", " +
+                      transition.DurationSeconds
+                          .ToString("0.###") +
+                      "s)"
+                    : "<idle>";
 
             return
                 $"Environment: {status.EnvironmentId ?? "<none>"}\n" +
                 $"State: {status.StateId ?? "<none>"}\n" +
                 $"Space: {runtime.SpaceMode}\n" +
                 $"Active: {status.Active}\n" +
+                $"Transition: {transitionText}\n" +
+                $"Selected transition mode: {_environmentTransitionMode}\n" +
                 $"Error: {status.Error ?? "<none>"}";
         }
 
