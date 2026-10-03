@@ -28,11 +28,13 @@ namespace VCR.Runtime.Output.Unity
         [SerializeField] private bool transparent = true;
         [SerializeField] private bool topmost = true;
         [SerializeField] private bool clickThrough = false;
+        [SerializeField, Min(0.5f)] private float nativeApplyTimeoutSeconds = 5f;
 
         private UniWindowController _controller;
         private string _lastError;
         private bool _pendingNativeApply;
         private bool _nativeApplied;
+        private float _nativeApplyStartedAt;
 
         private CameraClearFlags _originalClearFlags;
         private Color _originalBackground;
@@ -51,12 +53,25 @@ namespace VCR.Runtime.Output.Unity
                         ? _controller.clientSize
                         : Vector2.zero;
 
+                var supported =
+                    IsPlatformSupported();
+
+                var state =
+                    !supported &&
+                    !Application.isEditor
+                        ? OverlayOutputState.Unsupported
+                        : !string.IsNullOrEmpty(_lastError)
+                            ? OverlayOutputState.Faulted
+                            : _nativeApplied
+                                ? OverlayOutputState.Active
+                                : _pendingNativeApply
+                                    ? OverlayOutputState.PendingNativeApply
+                                    : transparent
+                                        ? OverlayOutputState.Configured
+                                        : OverlayOutputState.Inactive;
+
                 return new OverlayOutputStatus(
-                    IsPlatformSupported(),
-                    !Application.isEditor &&
-                    IsPlatformSupported() &&
-                    _nativeApplied &&
-                    string.IsNullOrEmpty(_lastError),
+                    state,
                     "uniwinc-0.9.8",
                     _lastError,
                     Mathf.RoundToInt(size.x),
@@ -104,6 +119,19 @@ namespace VCR.Runtime.Output.Unity
                 _controller == null ||
                 !string.IsNullOrEmpty(_lastError))
             {
+                return;
+            }
+
+            if (Time.realtimeSinceStartup -
+                    _nativeApplyStartedAt >=
+                Mathf.Max(
+                    0.5f,
+                    nativeApplyTimeoutSeconds))
+            {
+                _pendingNativeApply = false;
+                _nativeApplied = false;
+                _lastError =
+                    "Timed out while applying native overlay window settings.";
                 return;
             }
 
@@ -163,6 +191,8 @@ namespace VCR.Runtime.Output.Unity
 
             if (_pendingNativeApply)
             {
+                _nativeApplyStartedAt =
+                    Time.realtimeSinceStartup;
                 ApplyNativeSettings();
             }
         }
@@ -218,6 +248,31 @@ namespace VCR.Runtime.Output.Unity
             output.Add(new RuntimeMetric(
                 "output.overlay.transparent",
                 transparent ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.state",
+                (int)status.State,
+                "enum"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.active",
+                status.Active ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.pending",
+                status.Pending ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.topmost",
+                topmost ? 1 : 0,
+                "bool"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.click_through",
+                clickThrough ? 1 : 0,
                 "bool"));
         }
 
@@ -303,6 +358,7 @@ namespace VCR.Runtime.Output.Unity
         {
             _pendingNativeApply = false;
             _nativeApplied = false;
+            _nativeApplyStartedAt = 0f;
 
             if (_controller != null &&
                 !Application.isEditor)
