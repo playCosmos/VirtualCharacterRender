@@ -1704,8 +1704,11 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            _appearancePresetInput.text =
-                saved.Id;
+            if (_appearancePresetInput != null)
+            {
+                _appearancePresetInput.text =
+                    saved.Id;
+            }
             _lastActionMessage =
                 $"User appearance preset '{saved.Id}' saved for this character.";
             RefreshAll();
@@ -1738,6 +1741,8 @@ namespace VCR.Runtime.UI
 
             var previous =
                 registry.CaptureUserPresets();
+            var previousCurrentPresetId =
+                _appearanceRuntime.Current.PresetId;
 
             if (!registry.RemoveUserPreset(
                     presetId,
@@ -1755,9 +1760,24 @@ namespace VCR.Runtime.UI
                     characterPath,
                     out error))
             {
-                registry.ReplaceUserPresets(
-                    previous,
-                    out _);
+                var restored =
+                    registry.ReplaceUserPresets(
+                        previous,
+                        out _);
+
+                if (restored &&
+                    !string.IsNullOrWhiteSpace(
+                        previousCurrentPresetId) &&
+                    !string.Equals(
+                        _appearanceRuntime.Current.PresetId,
+                        previousCurrentPresetId,
+                        StringComparison.Ordinal))
+                {
+                    _appearanceRuntime.SetPreset(
+                        previousCurrentPresetId,
+                        "Immediate",
+                        out _);
+                }
 
                 _lastActionMessage =
                     "User preset delete persistence failed and the in-memory change was rolled back: " +
