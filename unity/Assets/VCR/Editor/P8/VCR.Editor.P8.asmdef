@@ -1,0 +1,23 @@
+{
+  "name": "VCR.Editor.P8",
+  "rootNamespace": "VCR.Editor.P8",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Events",
+    "VCR.Runtime.Protocols.WebSocket",
+    "VCR.Runtime.Protocols.WebSocketUnity",
+    "VCR.Runtime.Broadcast.Soop",
+    "VCR.Runtime.Broadcast.SoopUnity"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
