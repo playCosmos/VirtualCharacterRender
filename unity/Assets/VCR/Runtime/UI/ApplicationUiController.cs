@@ -10,6 +10,7 @@ using VCR.Runtime.Appearance;
 using VCR.Runtime.Capabilities;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Environment;
+using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Materials.Unity;
 using VCR.Runtime.Output;
@@ -3542,9 +3543,12 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var enable =
+                !selected.Enabled;
+
             if (!eventRuntime.TrySetRuleEnabled(
                     ruleId,
-                    !selected.Enabled,
+                    enable,
                     out var error))
             {
                 _lastActionMessage =
@@ -3556,9 +3560,9 @@ namespace VCR.Runtime.UI
 
             _lastActionMessage =
                 $"Event rule '{ruleId}' " +
-                (selected.Enabled
-                    ? "disabled."
-                    : "enabled.");
+                (enable
+                    ? "enabled."
+                    : "disabled.");
             RefreshAll();
         }
 
