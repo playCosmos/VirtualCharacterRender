@@ -18,6 +18,7 @@ namespace VCR.Editor.P11
         {
             GameObject root = null;
             AudioClip audioClip = null;
+            AnimationClip motionClip = null;
 
             try
             {
@@ -744,11 +745,82 @@ namespace VCR.Editor.P11
                     "halfway through a 180-degree root spin cue must sample approximately 90 degrees",
                     failures);
 
+                var clipRig =
+                    new GameObject(
+                        "Clip Reference Rig");
+                clipRig.transform.SetParent(
+                    root.transform,
+                    false);
+                var clipHips =
+                    new GameObject(
+                        "Hips");
+                clipHips.transform.SetParent(
+                    clipRig.transform,
+                    false);
+
+                motionClip =
+                    new AnimationClip
+                    {
+                        name =
+                            "Quick Change Clip",
+                        legacy =
+                            true
+                    };
+                motionClip.SetCurve(
+                    "Hips",
+                    typeof(Transform),
+                    "localPosition.x",
+                    AnimationCurve.Linear(
+                        0f,
+                        0f,
+                        1f,
+                        1f));
+
+                Expect(
+                    P11AnimationClipMotionCueBaker
+                        .TryBake(
+                            motionClip,
+                            clipRig,
+                            "clip-step",
+                            4f,
+                            false,
+                            false,
+                            out var bakedCue,
+                            out var bakeError),
+                    "AnimationClip quick-change cue must bake against a reference humanoid hierarchy: " +
+                    bakeError,
+                    failures);
+
+                var bakedSource =
+                    root.AddComponent<
+                        BakedMotionCueSource>();
+                bakedSource.ConfigureCues(
+                    bakedCue);
+
+                Expect(
+                    bakedSource.TrySampleCue(
+                        "clip-step",
+                        0.5f,
+                        out var bakedSample,
+                        out var bakedSampleError) &&
+                    bakedSample.TryGet(
+                        VCR.Runtime.Tracking
+                            .HumanoidBoneId.Hips,
+                        out var bakedHips) &&
+                    Math.Abs(
+                        bakedHips.LocalPosition.X -
+                        0.5f) <
+                        0.08f,
+                    "baked AnimationClip cue must interpolate additive humanoid pose data without sampling Animator at playback time: " +
+                    bakedSampleError,
+                    failures);
+
                 var motionHandler =
                     root.AddComponent<
                         MotionCueEventActionHandler>();
-                motionHandler.SetMotionRuntime(
-                    motionSource);
+                motionHandler.SetMotionRuntimes(
+                    motionSource,
+                    bakedSource);
 
                 transitionExecutor.SetActionHandlers(
                     fakeAction,
@@ -810,6 +882,56 @@ namespace VCR.Editor.P11
                         out _),
                     "appearance transition motion.release must remove the procedural pose contribution: " +
                     motionReleaseError,
+                    failures);
+
+                var bakedPlayStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .MotionPlay,
+                        Text =
+                            "clip-step"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        bakedPlayStep) &&
+                    transitionExecutor.TryExecute(
+                        bakedPlayStep,
+                        out var bakedPlayError) &&
+                    bakedSource.Status.Playing &&
+                    bakedSource.TryGetLatestHumanoidPose(
+                        out _),
+                    "motion.play without TargetId must route an AnimationClip-derived cue to its single owning runtime: " +
+                    bakedPlayError,
+                    failures);
+
+                var bakedReleaseStep =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Action,
+                        ActionType =
+                            EventActionTypes
+                                .MotionRelease,
+                        Text =
+                            "clip-step"
+                    };
+
+                Expect(
+                    transitionExecutor.CanExecute(
+                        bakedReleaseStep) &&
+                    transitionExecutor.TryExecute(
+                        bakedReleaseStep,
+                        out var bakedReleaseError) &&
+                    !bakedSource.Status.Playing,
+                    "motion.release without TargetId must route to the runtime that owns the baked cue: " +
+                    bakedReleaseError,
                     failures);
 
                 var recursiveStep =
@@ -1099,6 +1221,13 @@ namespace VCR.Editor.P11
                     UnityEngine.Object
                         .DestroyImmediate(
                             audioClip);
+                }
+
+                if (motionClip != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            motionClip);
                 }
             }
         }
