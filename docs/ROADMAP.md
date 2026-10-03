@@ -142,7 +142,11 @@ The first implementation slice establishes the final mix-provider contract and e
 
 ## P6 — Environment Runtime
 
-Static image/video, parallax, reactive 2D/2.5D layers, 3D environment hooks, state changes, transitions, environment lighting, update classes, and performance attribution.
+Status: Source implementation checkpoint-ready; Unity media/performance evidence remains deferred. See `P6_STATUS.md`.
+
+Implemented source scope includes state-root switching, Static/EventDriven/Hz10/Hz30/EveryFrame update classes, World/Camera/Screen/Character anchors, Cut/Fade/Crossfade transition runtime with optional Dissolve target contract, lightweight image/video/parallax targets, weighted environment-light influence, failure containment, and update/transition cost attribution.
+
+Real media decode, transition visual quality, shader-specific Dissolve, VRM lighting quality, and target-hardware performance still require evidence.
 
 ## P7 — Material/Shader Package and Plugin Layer
 
