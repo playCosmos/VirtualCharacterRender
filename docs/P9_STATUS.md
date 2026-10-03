@@ -68,11 +68,14 @@ The first concrete actions are:
 environment.set_state
 camera.set_fov
 material.set_float
+expression.set
 ```
 
 `EnvironmentStateEventActionHandler` resolves an `IEnvironmentRuntime` target by environment id and calls its state-change contract.
 
 `CameraFieldOfViewEventActionHandler` resolves the configured primary camera id, requires a finite numeric command value, and applies it through `PrimaryCameraController` rather than exposing a Camera object to the rule.
+
+`ExpressionEventActionHandler` maps `TargetId` to a logical manual-expression layer and `Name` through `StandardExpressionNames`. Values must remain in 0..1. `ManualExpressionLayerSource` publishes only on actual value changes, has no Update loop, and never contributes performer-presence evidence. When wired as the mixer's expression overlay with Maximum blending, routed lip-sync/eye channels remain intact.
 
 `MaterialFloatEventActionHandler` maps `TargetId` to a discovered material slot, `Name` to a shader property, and the numeric command value to `MaterialOverrideController.TrySetFloat`. It only mutates an already-active runtime override; it does not edit the source material or create an override implicitly.
 
@@ -107,6 +110,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - environment.set_state execution through an application-level handler
 - camera.set_fov execution through PrimaryCameraController
 - material.set_float mutation of an active runtime override without source-material mutation
+- expression.set alias/range validation, no redundant frame publication, and Maximum blend preservation of routed lip-sync
 - unknown-action containment and diagnostics
 - multiple-handler ambiguity fails closed without target mutation
 
@@ -118,7 +122,7 @@ The next source slices are:
 
 - add windowed rate-limit policy for bursty chat/donation inputs beyond the implemented per-rule cooldown
 - add text transform operators beyond direct value mapping
-- add application handlers for expression/motion and expand material/shader actions beyond float parameters using existing subsystem contracts
+- add motion-layer application handlers and expand material/shader actions beyond float parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - version persisted rule configuration before P11 exposes editing UI
 - add rule-level diagnostics and optional tracing that stays disabled by default

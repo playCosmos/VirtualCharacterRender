@@ -185,9 +185,9 @@ Implement event execution before the visual graph editor.
 Event → Filter/Condition → Transform/State → Action
 ```
 
-The current source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, numeric scale/offset transforms, per-rule cooldown, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, `environment.set_state`, and `camera.set_fov`.
+The current source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, numeric scale/offset transforms, per-rule cooldown, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, `environment.set_state`, `camera.set_fov`, `material.set_float`, and `expression.set`.
 
-Targets will expand to character, expressions, motion, environment transitions, shader/material parameters, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
+Targets will expand to character motion, environment transitions, broader shader/material parameters, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
 
 ## P10 — Broadcast Output
 

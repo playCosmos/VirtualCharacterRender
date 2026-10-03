@@ -120,6 +120,8 @@ Action
  └ Overlay
 ```
 
-Rules emit only application-level `EventActionCommand` values. The current concrete handlers are `environment.set_state` and `camera.set_fov`. Rule definitions never receive a Unity `GameObject`, `Material`, Camera, native window handle, or streaming-service SDK object.
+Rules emit only application-level `EventActionCommand` values. The current concrete handlers are `environment.set_state`, `camera.set_fov`, `material.set_float`, and `expression.set`. Rule definitions never receive a Unity `GameObject`, `Material`, Camera, native window handle, or streaming-service SDK object.
+
+`expression.set` writes only to a `ManualExpressionLayerSource`; the source has no recurring Update loop and does not implement performer presence. It is intended to enter `MotionExpressionMixer` as an expression-only overlay, with Maximum blending available to preserve routed lip-sync/eye channels.
 
 The engine also provides typed runtime state, state conditions/mutations, numeric scale/offset transforms, per-rule cooldown, ordered rule evaluation, stop-after-match, and a bounded command count per input event. Unknown or failed action commands are contained and surfaced through diagnostics rather than falling through to direct scene mutation.
