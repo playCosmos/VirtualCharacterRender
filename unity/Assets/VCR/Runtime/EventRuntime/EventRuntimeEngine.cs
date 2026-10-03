@@ -16,7 +16,15 @@ namespace VCR.Runtime.EventRuntime
         private readonly Dictionary<EventRuntimeRule, RateWindowState>
             _rateWindows = new();
 
+        private readonly Dictionary<EventRuntimeRule, RuleDiagnosticsCounter>
+            _ruleDiagnostics = new();
+
         public EventRuntimeStateStore State { get; } = new();
+
+        public bool TraceEnabled { get; set; }
+
+        public event Action<EventRuntimeTraceEntry>
+            TraceEmitted;
 
         public long ProcessedEvents { get; private set; }
         public long MatchedRules { get; private set; }
@@ -41,6 +49,16 @@ namespace VCR.Runtime.EventRuntime
 
             _lastRuleExecutionUs.Clear();
             _rateWindows.Clear();
+            _ruleDiagnostics.Clear();
+
+            foreach (var rule in _rules)
+            {
+                if (rule != null)
+                {
+                    _ruleDiagnostics[rule] =
+                        new RuleDiagnosticsCounter();
+                }
+            }
         }
 
         public int Process(
@@ -58,10 +76,36 @@ namespace VCR.Runtime.EventRuntime
             foreach (var rule in _rules)
             {
                 if (rule == null ||
-                    !rule.Enabled ||
-                    !(rule.Filter?.Matches(value) ?? true) ||
-                    !ConditionsPass(rule))
+                    !rule.Enabled)
                 {
+                    continue;
+                }
+
+                var diagnostics =
+                    GetRuleCounter(rule);
+                diagnostics.EvaluatedEvents++;
+
+                if (!(rule.Filter?.Matches(value) ?? true))
+                {
+                    diagnostics.FilterRejectedEvents++;
+                    Trace(
+                        rule,
+                        value,
+                        EventRuntimeTraceOutcome.FilterRejected,
+                        0,
+                        0);
+                    continue;
+                }
+
+                if (!ConditionsPass(rule))
+                {
+                    diagnostics.ConditionRejectedEvents++;
+                    Trace(
+                        rule,
+                        value,
+                        EventRuntimeTraceOutcome.ConditionRejected,
+                        0,
+                        0);
                     continue;
                 }
 
@@ -70,6 +114,13 @@ namespace VCR.Runtime.EventRuntime
                         value.TimestampUs))
                 {
                     CooldownSuppressedRules++;
+                    diagnostics.CooldownSuppressedEvents++;
+                    Trace(
+                        rule,
+                        value,
+                        EventRuntimeTraceOutcome.CooldownSuppressed,
+                        0,
+                        0);
                     continue;
                 }
 
@@ -78,15 +129,54 @@ namespace VCR.Runtime.EventRuntime
                         value.TimestampUs))
                 {
                     RateLimitSuppressedRules++;
+                    diagnostics.RateLimitSuppressedEvents++;
+                    Trace(
+                        rule,
+                        value,
+                        EventRuntimeTraceOutcome.RateLimitSuppressed,
+                        0,
+                        0);
                     continue;
                 }
 
                 MatchedRules++;
+                diagnostics.MatchedEvents++;
+                diagnostics.LastMatchedTimestampUs =
+                    value.TimestampUs;
+
                 RecordExecution(
                     rule,
                     value.TimestampUs);
                 ApplyMutations(rule, value);
-                EmitActions(rule, value, output);
+
+                var commandCountBefore =
+                    output.Count;
+                var droppedBefore =
+                    DroppedCommands;
+
+                EmitActions(
+                    rule,
+                    value,
+                    output);
+
+                var emitted =
+                    output.Count -
+                    commandCountBefore;
+                var dropped =
+                    DroppedCommands -
+                    droppedBefore;
+
+                diagnostics.EmittedCommands +=
+                    emitted;
+                diagnostics.DroppedCommands +=
+                    dropped;
+
+                Trace(
+                    rule,
+                    value,
+                    EventRuntimeTraceOutcome.Matched,
+                    emitted,
+                    dropped);
 
                 if (rule.StopAfterMatch)
                 {
@@ -101,6 +191,92 @@ namespace VCR.Runtime.EventRuntime
         public void ResetState()
         {
             State.Clear();
+        }
+
+        public EventRuntimeRuleDiagnostics[]
+            GetRuleDiagnostics()
+        {
+            var count = 0;
+
+            foreach (var rule in _rules)
+            {
+                if (rule != null)
+                {
+                    count++;
+                }
+            }
+
+            var result =
+                new EventRuntimeRuleDiagnostics[
+                    count];
+
+            var index = 0;
+
+            foreach (var rule in _rules)
+            {
+                if (rule == null)
+                {
+                    continue;
+                }
+
+                var counter =
+                    GetRuleCounter(rule);
+
+                result[index++] =
+                    new EventRuntimeRuleDiagnostics(
+                        rule.Id,
+                        counter.EvaluatedEvents,
+                        counter.FilterRejectedEvents,
+                        counter.ConditionRejectedEvents,
+                        counter.CooldownSuppressedEvents,
+                        counter.RateLimitSuppressedEvents,
+                        counter.MatchedEvents,
+                        counter.EmittedCommands,
+                        counter.DroppedCommands,
+                        counter.LastMatchedTimestampUs);
+            }
+
+            return result;
+        }
+
+        private RuleDiagnosticsCounter
+            GetRuleCounter(
+                EventRuntimeRule rule)
+        {
+            if (!_ruleDiagnostics.TryGetValue(
+                    rule,
+                    out var counter))
+            {
+                counter =
+                    new RuleDiagnosticsCounter();
+                _ruleDiagnostics[rule] =
+                    counter;
+            }
+
+            return counter;
+        }
+
+        private void Trace(
+            EventRuntimeRule rule,
+            NormalizedEvent value,
+            EventRuntimeTraceOutcome outcome,
+            int emittedCommands,
+            long droppedCommands)
+        {
+            if (!TraceEnabled ||
+                TraceEmitted == null)
+            {
+                return;
+            }
+
+            TraceEmitted.Invoke(
+                new EventRuntimeTraceEntry(
+                    rule?.Id,
+                    value.Sequence,
+                    value.TimestampUs,
+                    outcome,
+                    emittedCommands,
+                    droppedCommands));
         }
 
         private bool IsCoolingDown(
@@ -232,6 +408,19 @@ namespace VCR.Runtime.EventRuntime
                 rule.RateLimitMaxExecutions;
 
             return true;
+        }
+
+        private sealed class RuleDiagnosticsCounter
+        {
+            public long EvaluatedEvents;
+            public long FilterRejectedEvents;
+            public long ConditionRejectedEvents;
+            public long CooldownSuppressedEvents;
+            public long RateLimitSuppressedEvents;
+            public long MatchedEvents;
+            public long EmittedCommands;
+            public long DroppedCommands;
+            public long LastMatchedTimestampUs;
         }
 
         private readonly struct RateWindowState

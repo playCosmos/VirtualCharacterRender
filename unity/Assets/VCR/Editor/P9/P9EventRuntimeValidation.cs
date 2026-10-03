@@ -40,7 +40,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, versioned rule persistence, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, versioned rule persistence, rule diagnostics/opt-in tracing, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -545,6 +545,124 @@ namespace VCR.Editor.P9
                     rateSuppressedBefore + 1,
                 "windowed rule rate limit must allow the configured burst, suppress excess matches, and reset at the next window",
                 failures);
+
+            var diagnosticsRule =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "rule-diagnostics",
+                    RateLimitWindowSeconds =
+                        1.0,
+                    RateLimitMaxExecutions =
+                        1,
+                    Filter =
+                        new EventRuleFilter
+                        {
+                            Type =
+                                NormalizedEventTypes
+                                    .LocalManual
+                        },
+                    Actions =
+                        new[]
+                        {
+                            EnvironmentAction(
+                                "environment.main",
+                                "diagnostics")
+                        }
+                };
+
+            engine.SetRules(
+                diagnosticsRule);
+
+            var traceCount = 0;
+            var lastTrace =
+                default(EventRuntimeTraceEntry);
+
+            engine.TraceEmitted +=
+                entry =>
+                {
+                    traceCount++;
+                    lastTrace = entry;
+                };
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .BroadcastChatMessage,
+                    "local.validation",
+                    5_000_000,
+                    sequence:
+                        30),
+                output);
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .LocalManual,
+                    "local.validation",
+                    5_100_000,
+                    sequence:
+                        31),
+                output);
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .LocalManual,
+                    "local.validation",
+                    5_200_000,
+                    sequence:
+                        32),
+                output);
+
+            var ruleDiagnostics =
+                engine.GetRuleDiagnostics();
+
+            Expect(
+                traceCount == 0,
+                "rule tracing must remain disabled by default",
+                failures);
+
+            Expect(
+                ruleDiagnostics.Length == 1 &&
+                ruleDiagnostics[0].RuleId ==
+                    "rule-diagnostics" &&
+                ruleDiagnostics[0]
+                    .EvaluatedEvents == 3 &&
+                ruleDiagnostics[0]
+                    .FilterRejectedEvents == 1 &&
+                ruleDiagnostics[0]
+                    .MatchedEvents == 1 &&
+                ruleDiagnostics[0]
+                    .RateLimitSuppressedEvents == 1 &&
+                ruleDiagnostics[0]
+                    .EmittedCommands == 1,
+                "rule diagnostics must report per-rule evaluation, rejection, match, suppression, and command counts",
+                failures);
+
+            engine.TraceEnabled = true;
+
+            engine.Process(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .LocalManual,
+                    "local.validation",
+                    6_200_000,
+                    sequence:
+                        33),
+                output);
+
+            Expect(
+                traceCount == 1 &&
+                lastTrace.RuleId ==
+                    "rule-diagnostics" &&
+                lastTrace.Outcome ==
+                    EventRuntimeTraceOutcome.Matched &&
+                lastTrace.EmittedCommands == 1,
+                "opt-in tracing must emit a structured rule outcome only after tracing is enabled",
+                failures);
+
+            engine.TraceEnabled = false;
 
             var cappedRule =
                 new EventRuntimeRule

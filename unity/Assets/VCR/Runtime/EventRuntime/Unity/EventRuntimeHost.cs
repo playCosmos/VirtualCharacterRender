@@ -26,6 +26,9 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField] private MonoBehaviour[] actionHandlerBehaviours =
             Array.Empty<MonoBehaviour>();
 
+        [Header("Diagnostics")]
+        [SerializeField] private bool enableRuleTracing = false;
+
         private readonly EventRuntimeEngine _engine =
             new();
 
@@ -48,6 +51,17 @@ namespace VCR.Runtime.EventRuntime.Unity
         public long UnhandledActions => _unhandledActions;
         public long AmbiguousActions => _ambiguousActions;
         public string LastError => _lastError;
+
+        public EventRuntimeRuleDiagnostics[]
+            GetRuleDiagnostics() =>
+                _engine.GetRuleDiagnostics();
+
+        public void SetRuleTracingEnabled(
+            bool enabled)
+        {
+            enableRuleTracing = enabled;
+            _engine.TraceEnabled = enabled;
+        }
 
         private void Awake()
         {
@@ -107,6 +121,8 @@ namespace VCR.Runtime.EventRuntime.Unity
         {
             _engine.MaxCommandsPerEvent =
                 maxCommandsPerEvent;
+            _engine.TraceEnabled =
+                enableRuleTracing;
             _engine.SetRules(rules);
         }
 
@@ -301,6 +317,13 @@ namespace VCR.Runtime.EventRuntime.Unity
                     "events.runtime.rate_limit_suppressed",
                     _engine.RateLimitSuppressedRules,
                     "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "events.runtime.rule_tracing_enabled",
+                    _engine.TraceEnabled
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
             output.Add(
                 new RuntimeMetric(
                     "events.runtime.actions_executed",

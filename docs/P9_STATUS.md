@@ -54,6 +54,8 @@ Implemented rule features:
 - bounded action-command output per input event
 - dropped-command diagnostics
 - versioned persisted rule documents with atomic save, explicit max-command settings, current-version reload, and fail-closed rejection of newer unsupported versions
+- per-rule diagnostics snapshots for evaluations, rejects, cooldown/rate-limit suppression, matches, emitted/dropped commands, and last-match timestamp
+- structured opt-in rule tracing that is disabled by default and emits no trace events unless explicitly enabled
 
 Missing numeric/text state keys do not silently compare as zero/empty values.
 
@@ -76,6 +78,7 @@ material.set_bool
 material.set_color
 material.set_vector
 expression.set
+motion.pose_weight
 ```
 
 `EnvironmentStateEventActionHandler` resolves an `IEnvironmentRuntime` target by environment id and calls its state-change contract.
@@ -84,7 +87,9 @@ expression.set
 
 `ExpressionEventActionHandler` maps `TargetId` to a logical manual-expression layer and `Name` through `StandardExpressionNames`. Values must remain in 0..1. `ManualExpressionLayerSource` publishes only on actual value changes, has no Update loop, and never contributes performer-presence evidence. When wired as the mixer's expression overlay with Maximum blending, routed lip-sync/eye channels remain intact.
 
-`MaterialFloatEventActionHandler` maps `TargetId` to a discovered material slot, `Name` to a shader property, and the numeric command value to `MaterialOverrideController.TrySetFloat`. It only mutates an already-active runtime override; it does not edit the source material or create an override implicitly.
+`MaterialFloatEventActionHandler` preserves the existing float path. `MaterialPropertyEventActionHandler` adds strict int/bool/color/vector command validation and delegates to the existing non-destructive runtime override setters. Neither handler edits source materials or creates overrides implicitly.
+
+`MotionPoseWeightEventActionHandler` applies a validated 0..1 value to the mixer's primary pose-layer weight through the P5 mixer contract.
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. If more than one configured handler claims the same command, the host fails closed, increments the ambiguous-action metric, and executes none of them.
 
@@ -116,6 +121,8 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - deterministic text transform mapping for state mutation and action commands
 - bounded commands per event
 - versioned rule save/reload plus newer-version rejection
+- per-rule diagnostics snapshot counts and tracing-disabled-by-default behavior
+- structured matched-rule trace emission after explicit opt-in
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
 - environment transition mode/duration mapping through IEnvironmentRuntime without concrete component leakage
@@ -133,7 +140,6 @@ These validation paths are implemented but have not been executed in this enviro
 The next source slices are:
 
 - expand material/shader actions to texture/shader-id/preset operations only where resource-id validation can remain deterministic
-- add rule-level diagnostics and optional tracing that stays disabled by default
 - validate allocation/frame-time cost under event bursts
 
 Recursive/chained event emission is intentionally not part of the first slice to avoid accidental feedback loops.
