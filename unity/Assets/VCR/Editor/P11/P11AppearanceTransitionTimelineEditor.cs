@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Appearance;
@@ -770,6 +771,37 @@ namespace VCR.Editor.P11
                 }
             }
 
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(
+                           _transitions == null ||
+                           _transitions.arraySize == 0))
+                {
+                    if (GUILayout.Button(
+                            "Export Selected JSON"))
+                    {
+                        ExportTransitions(
+                            selectedOnly:
+                                true);
+                    }
+
+                    if (GUILayout.Button(
+                            "Export All JSON"))
+                    {
+                        ExportTransitions(
+                            selectedOnly:
+                                false);
+                    }
+                }
+
+                if (GUILayout.Button(
+                        "Import JSON"))
+                {
+                    ImportTransitions();
+                }
+            }
+
             if (!EditorApplication.isPlaying)
             {
                 EditorGUILayout.HelpBox(
@@ -1479,6 +1511,532 @@ namespace VCR.Editor.P11
                 requested
                     ? MessageType.Info
                     : MessageType.Error;
+        }
+
+        private void ExportTransitions(
+            bool selectedOnly)
+        {
+            _serializedRuntime
+                .ApplyModifiedProperties();
+
+            var transitions =
+                selectedOnly
+                    ? new[]
+                    {
+                        CaptureTransition(
+                            _transitions
+                                .GetArrayElementAtIndex(
+                                    Mathf.Clamp(
+                                        _selectedTransitionIndex,
+                                        0,
+                                        _transitions.arraySize - 1)))
+                    }
+                    : CaptureAllTransitions();
+
+            var packageId =
+                selectedOnly &&
+                transitions.Length == 1
+                    ? transitions[0].Id
+                    : "appearance-transitions";
+
+            var package =
+                P11AppearanceTransitionPackageUtility
+                    .CreatePackage(
+                        packageId,
+                        transitions);
+
+            if (!P11AppearanceTransitionPackageUtility
+                .TrySerialize(
+                    package,
+                    out var json,
+                    out var error))
+            {
+                _lastMessage =
+                    "Transition export failed: " +
+                    error;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            var path =
+                EditorUtility.SaveFilePanel(
+                    "Export Appearance Transitions",
+                    Application.dataPath,
+                    SanitizeFileName(
+                        package.PackageId) +
+                    ".json",
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                return;
+            }
+
+            try
+            {
+                File.WriteAllText(
+                    path,
+                    json);
+                _lastMessage =
+                    $"Exported {transitions.Length} transition(s) to {path}.";
+                _lastMessageType =
+                    MessageType.Info;
+            }
+            catch (Exception exception)
+            {
+                _lastMessage =
+                    "Transition export failed: " +
+                    exception.Message;
+                _lastMessageType =
+                    MessageType.Error;
+            }
+        }
+
+        private void ImportTransitions()
+        {
+            var path =
+                EditorUtility.OpenFilePanel(
+                    "Import Appearance Transitions",
+                    Application.dataPath,
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                return;
+            }
+
+            string json;
+
+            try
+            {
+                json =
+                    File.ReadAllText(
+                        path);
+            }
+            catch (Exception exception)
+            {
+                _lastMessage =
+                    "Transition import failed: " +
+                    exception.Message;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!P11AppearanceTransitionPackageUtility
+                .TryDeserialize(
+                    json,
+                    out var package,
+                    out var error))
+            {
+                _lastMessage =
+                    "Transition import failed: " +
+                    error;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            _serializedRuntime.Update();
+            var before =
+                CaptureAllTransitions();
+            var collisions =
+                CountImportCollisions(
+                    package.Transitions);
+
+            if (collisions > 0 &&
+                !EditorUtility.DisplayDialog(
+                    "Replace Transition IDs?",
+                    $"{collisions} imported transition id(s) already exist. Replace the existing definitions with the imported versions?",
+                    "Replace",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                "Import Appearance Transitions");
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                var index =
+                    FindTransitionIndex(
+                        transition.Id);
+
+                if (index < 0)
+                {
+                    index =
+                        _transitions.arraySize;
+                    _transitions.arraySize =
+                        index + 1;
+                }
+
+                WriteTransition(
+                    _transitions
+                        .GetArrayElementAtIndex(
+                            index),
+                    transition);
+            }
+
+            _serializedRuntime
+                .ApplyModifiedProperties();
+
+            if (!_runtime
+                .RebuildConfiguration(
+                    out error))
+            {
+                _serializedRuntime.Update();
+                WriteAllTransitions(
+                    before);
+                _serializedRuntime
+                    .ApplyModifiedProperties();
+                _runtime.RebuildConfiguration(
+                    out _);
+
+                _lastMessage =
+                    "Transition import was rolled back because runtime validation failed: " +
+                    error;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
+            EditorUtility.SetDirty(
+                _runtime);
+
+            if (package.Transitions.Length > 0)
+            {
+                _serializedRuntime.Update();
+                _selectedTransitionIndex =
+                    Math.Max(
+                        0,
+                        FindTransitionIndex(
+                            package.Transitions[0]
+                                .Id));
+            }
+
+            _lastMessage =
+                $"Imported {package.Transitions.Length} transition(s) from package '{package.PackageId}'.";
+            _lastMessageType =
+                MessageType.Info;
+            Repaint();
+        }
+
+        private AppearanceTransitionPreset[]
+            CaptureAllTransitions()
+        {
+            var result =
+                new AppearanceTransitionPreset[
+                    _transitions.arraySize];
+
+            for (var i = 0;
+                 i < result.Length;
+                 i++)
+            {
+                result[i] =
+                    CaptureTransition(
+                        _transitions
+                            .GetArrayElementAtIndex(
+                                i));
+            }
+
+            return result;
+        }
+
+        private static AppearanceTransitionPreset
+            CaptureTransition(
+                SerializedProperty transition)
+        {
+            return new AppearanceTransitionPreset
+            {
+                Id =
+                    transition.FindPropertyRelative(
+                            "TransitionId")
+                        .stringValue,
+                DurationSeconds =
+                    transition.FindPropertyRelative(
+                            "DurationSeconds")
+                        .floatValue,
+                QueuePolicy =
+                    (AppearanceTransitionQueuePolicy)
+                    transition.FindPropertyRelative(
+                            "QueuePolicy")
+                        .enumValueIndex,
+                FallbackPolicy =
+                    (AppearanceTransitionFallbackPolicy)
+                    transition.FindPropertyRelative(
+                            "FallbackPolicy")
+                        .enumValueIndex,
+                Steps =
+                    CaptureSteps(
+                        transition.FindPropertyRelative(
+                            "Steps")),
+                CancellationSteps =
+                    CaptureSteps(
+                        transition.FindPropertyRelative(
+                            "CancellationSteps"))
+            };
+        }
+
+        private static AppearanceTransitionStep[]
+            CaptureSteps(
+                SerializedProperty steps)
+        {
+            var result =
+                new AppearanceTransitionStep[
+                    steps.arraySize];
+
+            for (var i = 0;
+                 i < result.Length;
+                 i++)
+            {
+                var step =
+                    steps.GetArrayElementAtIndex(
+                        i);
+
+                result[i] =
+                    new AppearanceTransitionStep
+                    {
+                        TimeSeconds =
+                            step.FindPropertyRelative(
+                                    "TimeSeconds")
+                                .floatValue,
+                        Kind =
+                            (AppearanceTransitionStepKind)
+                            step.FindPropertyRelative(
+                                    "Kind")
+                                .enumValueIndex,
+                        ActionType =
+                            step.FindPropertyRelative(
+                                    "ActionType")
+                                .stringValue,
+                        TargetId =
+                            step.FindPropertyRelative(
+                                    "TargetId")
+                                .stringValue,
+                        Name =
+                            step.FindPropertyRelative(
+                                    "Name")
+                                .stringValue,
+                        Text =
+                            step.FindPropertyRelative(
+                                    "Text")
+                                .stringValue,
+                        Value =
+                            step.FindPropertyRelative(
+                                    "Value")
+                                .doubleValue,
+                        HasValue =
+                            step.FindPropertyRelative(
+                                    "HasValue")
+                                .boolValue,
+                        Required =
+                            step.FindPropertyRelative(
+                                    "Required")
+                                .boolValue
+                    };
+            }
+
+            return result;
+        }
+
+        private static void WriteTransition(
+            SerializedProperty destination,
+            AppearanceTransitionPreset source)
+        {
+            destination.FindPropertyRelative(
+                    "TransitionId")
+                .stringValue =
+                    source?.Id ??
+                    string.Empty;
+            destination.FindPropertyRelative(
+                    "DurationSeconds")
+                .floatValue =
+                    (float)(
+                        source?.DurationSeconds ??
+                        0.0);
+            destination.FindPropertyRelative(
+                    "QueuePolicy")
+                .enumValueIndex =
+                    (int)(
+                        source?.QueuePolicy ??
+                        AppearanceTransitionQueuePolicy
+                            .QueueLatest);
+            destination.FindPropertyRelative(
+                    "FallbackPolicy")
+                .enumValueIndex =
+                    (int)(
+                        source?.FallbackPolicy ??
+                        AppearanceTransitionFallbackPolicy
+                            .Immediate);
+
+            WriteSteps(
+                destination.FindPropertyRelative(
+                    "Steps"),
+                source?.Steps);
+            WriteSteps(
+                destination.FindPropertyRelative(
+                    "CancellationSteps"),
+                source?.CancellationSteps);
+        }
+
+        private static void WriteSteps(
+            SerializedProperty destination,
+            AppearanceTransitionStep[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceTransitionStep>();
+
+            destination.arraySize =
+                source.Length;
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var step =
+                    source[i] ??
+                    new AppearanceTransitionStep();
+                var property =
+                    destination
+                        .GetArrayElementAtIndex(
+                            i);
+
+                property.FindPropertyRelative(
+                        "TimeSeconds")
+                    .floatValue =
+                        (float)step.TimeSeconds;
+                property.FindPropertyRelative(
+                        "Kind")
+                    .enumValueIndex =
+                        (int)step.Kind;
+                property.FindPropertyRelative(
+                        "ActionType")
+                    .stringValue =
+                        step.ActionType ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "TargetId")
+                    .stringValue =
+                        step.TargetId ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "Name")
+                    .stringValue =
+                        step.Name ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "Text")
+                    .stringValue =
+                        step.Text ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "Value")
+                    .doubleValue =
+                        step.Value;
+                property.FindPropertyRelative(
+                        "HasValue")
+                    .boolValue =
+                        step.HasValue;
+                property.FindPropertyRelative(
+                        "Required")
+                    .boolValue =
+                        step.Required;
+            }
+        }
+
+        private void WriteAllTransitions(
+            AppearanceTransitionPreset[] transitions)
+        {
+            transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            _transitions.arraySize =
+                transitions.Length;
+
+            for (var i = 0;
+                 i < transitions.Length;
+                 i++)
+            {
+                WriteTransition(
+                    _transitions
+                        .GetArrayElementAtIndex(
+                            i),
+                    transitions[i]);
+            }
+        }
+
+        private int CountImportCollisions(
+            AppearanceTransitionPreset[] transitions)
+        {
+            var count = 0;
+
+            foreach (var transition in
+                     transitions ??
+                     Array.Empty<
+                         AppearanceTransitionPreset>())
+            {
+                if (transition != null &&
+                    FindTransitionIndex(
+                        transition.Id) >= 0)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int FindTransitionIndex(
+            string id)
+        {
+            for (var i = 0;
+                 i < _transitions.arraySize;
+                 i++)
+            {
+                if (string.Equals(
+                        _transitions
+                            .GetArrayElementAtIndex(
+                                i)
+                            .FindPropertyRelative(
+                                "TransitionId")
+                            .stringValue,
+                        id,
+                        StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string SanitizeFileName(
+            string value)
+        {
+            value =
+                string.IsNullOrWhiteSpace(
+                    value)
+                    ? "appearance-transitions"
+                    : value.Trim();
+
+            foreach (var invalid in
+                     Path.GetInvalidFileNameChars())
+            {
+                value =
+                    value.Replace(
+                        invalid,
+                        '_');
+            }
+
+            return value;
         }
 
         private void ApplySerializedChanges()
