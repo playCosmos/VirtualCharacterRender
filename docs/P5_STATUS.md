@@ -17,9 +17,9 @@ checkpoint/p4-source-implementation
 
 P0-P4 real-device/runtime evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
 
-## First P5 source slice
+## Source implementation checkpoint
 
-The first P5 slice introduces `ITrackingMixProvider` as the final one-performer provider contract presented to character targets and diagnostics.
+The P5 source implementation now covers the planned one-performer motion/expression mixer contracts. `ITrackingMixProvider` is the final provider contract presented to character targets and diagnostics.
 
 `MotionExpressionMixer` currently:
 - uses routed tracking as its base input
