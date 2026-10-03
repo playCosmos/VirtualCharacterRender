@@ -359,6 +359,93 @@ namespace VCR.Editor.P6
                     "unknown states must fail without partially toggling roots or dispatching updates",
                     failures);
 
+                var unsupportedTransition =
+                    runtime.SetState(
+                        "day",
+                        new EnvironmentTransitionSpec(
+                            EnvironmentTransitionMode.Crossfade,
+                            0.5f),
+                        out var unsupportedTransitionError);
+
+                Expect(
+                    !unsupportedTransition &&
+                    !string.IsNullOrEmpty(
+                        unsupportedTransitionError) &&
+                    !day.activeSelf &&
+                    night.activeSelf,
+                    "non-Cut transition must be rejected when no transition target is configured",
+                    failures);
+
+                var transitionTarget =
+                    root.AddComponent<
+                        P6FakeEnvironmentTransitionTarget>();
+
+                runtime.SetTransitionTargets(
+                    transitionTarget,
+                    transitionTarget);
+
+                var transitionStarted =
+                    runtime.SetState(
+                        "day",
+                        new EnvironmentTransitionSpec(
+                            EnvironmentTransitionMode.Crossfade,
+                            0.5f),
+                        out var transitionError);
+
+                Expect(
+                    transitionStarted &&
+                    string.IsNullOrEmpty(
+                        transitionError) &&
+                    runtime.TransitionStatus.Active &&
+                    runtime.TransitionTargetCount == 1 &&
+                    day.activeSelf &&
+                    night.activeSelf &&
+                    transitionTarget.ApplyCount == 1 &&
+                    Math.Abs(
+                        transitionTarget
+                            .LastContext.Progress) <
+                    0.001f,
+                    "Crossfade must keep both roots active, de-duplicate targets, and dispatch progress 0",
+                    failures);
+
+                var transitionStartUs =
+                    runtime.TransitionStatus
+                        .StartedAtTimestampUs;
+
+                Expect(
+                    runtime.TickTransition(
+                        transitionStartUs +
+                        250_000) &&
+                    runtime.TransitionStatus.Active &&
+                    Math.Abs(
+                        runtime.TransitionStatus.Progress -
+                        0.5f) <
+                    0.01f &&
+                    day.activeSelf &&
+                    night.activeSelf &&
+                    Math.Abs(
+                        transitionTarget
+                            .LastContext.Progress -
+                        0.5f) <
+                    0.01f,
+                    "Crossfade midpoint must preserve both roots and dispatch progress 0.5",
+                    failures);
+
+                Expect(
+                    runtime.TickTransition(
+                        transitionStartUs +
+                        500_000) &&
+                    !runtime.TransitionStatus.Active &&
+                    day.activeSelf &&
+                    !night.activeSelf &&
+                    Math.Abs(
+                        transitionTarget
+                            .LastContext.Progress -
+                        1f) <
+                    0.001f,
+                    "Crossfade completion must keep only the new root active and dispatch progress 1",
+                    failures);
+
                 Expect(
                     runtime.RequestManualUpdate() &&
                     target.UpdateCount == 2 &&
@@ -519,7 +606,7 @@ namespace VCR.Editor.P6
                         metrics,
                         "environment.state_changes",
                         out var changes) &&
-                    Math.Abs(changes - 1.0) <
+                    Math.Abs(changes - 2.0) <
                     0.001,
                     "environment diagnostics must expose state change count",
                     failures);
@@ -550,10 +637,52 @@ namespace VCR.Editor.P6
                 Expect(
                     TryGetMetric(
                         metrics,
+                        "environment.transition_targets",
+                        out var transitionTargets) &&
+                    Math.Abs(
+                        transitionTargets - 1.0) <
+                    0.001,
+                    "environment diagnostics must expose de-duplicated transition target count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_count",
+                        out var transitionCount) &&
+                    Math.Abs(
+                        transitionCount - 1.0) <
+                    0.001,
+                    "environment diagnostics must expose non-Cut transition count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_ticks",
+                        out var transitionTicks) &&
+                    Math.Abs(
+                        transitionTicks - 2.0) <
+                    0.001,
+                    "environment diagnostics must expose transition progress tick count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_failures",
+                        out var transitionFailures) &&
+                    transitionFailures < 0.5,
+                    "valid transition target must not produce transition failures",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
                         "environment.state_dispatches",
                         out var stateDispatches) &&
                     Math.Abs(
-                        stateDispatches - 1.0) <
+                        stateDispatches - 2.0) <
                     0.001,
                     "environment diagnostics must expose state dispatch count",
                     failures);
@@ -637,6 +766,29 @@ namespace VCR.Editor.P6
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P6FakeEnvironmentTransitionTarget :
+        MonoBehaviour,
+        IEnvironmentTransitionTarget
+    {
+        public int ApplyCount { get; private set; }
+        public EnvironmentTransitionContext LastContext { get; private set; }
+
+        public bool ValidateEnvironmentTransition(
+            EnvironmentTransitionSpec transition,
+            out string error)
+        {
+            error = null;
+            return !transition.IsImmediate;
+        }
+
+        public void ApplyEnvironmentTransition(
+            EnvironmentTransitionContext context)
+        {
+            ApplyCount++;
+            LastContext = context;
         }
     }
 
