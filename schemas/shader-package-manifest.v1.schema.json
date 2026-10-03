@@ -49,12 +49,27 @@
         "minLength": 1
       }
     },
-    "TextureFiles": {
+    "Textures": {
       "type": "array",
-      "uniqueItems": true,
       "items": {
-        "type": "string",
-        "minLength": 1
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "TextureId",
+          "Path"
+        ],
+        "properties": {
+          "TextureId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "Path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     },
     "PreviewFiles": {
