@@ -2767,6 +2767,9 @@ namespace VCR.Runtime.UI
             var trackingSelected =
                 selected ==
                 ApplicationUiSection.Tracking;
+            var motionSelected =
+                selected ==
+                ApplicationUiSection.MotionExpression;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -2834,6 +2837,33 @@ namespace VCR.Runtime.UI
             SetActive(
                 _apply1080p60Button,
                 outputSelected);
+
+            SetActive(
+                _motionPoseWeightLabel,
+                motionSelected);
+            SetActive(
+                _motionPoseWeightSlider,
+                motionSelected);
+            SetActive(
+                _manualExpressionNameInput,
+                motionSelected);
+            SetActive(
+                _manualExpressionValueInput,
+                motionSelected);
+            SetActive(
+                _manualExpressionApplyButton,
+                motionSelected);
+            SetActive(
+                _manualExpressionClearButton,
+                motionSelected);
+            SetActive(
+                _manualExpressionClearAllButton,
+                motionSelected);
+
+            if (motionSelected)
+            {
+                RefreshMotionControlState();
+            }
 
             if (characterSelected &&
                 sceneRuntime != null)
@@ -3269,6 +3299,84 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void RefreshMotionControlState()
+        {
+            var poseConfigured =
+                _mixer != null &&
+                _mixer.PrimaryPoseLayerConfigured;
+            var poseWeight =
+                _mixer?.PrimaryPoseLayerWeight ??
+                0f;
+
+            if (_motionPoseWeightLabel != null)
+            {
+                _motionPoseWeightLabel.text =
+                    poseConfigured
+                        ? "Pose Weight " +
+                          poseWeight.ToString(
+                              "0.00")
+                        : "Pose Weight n/a";
+            }
+
+            if (_motionPoseWeightSlider != null)
+            {
+                _motionPoseWeightSlider
+                    .SetValueWithoutNotify(
+                        Mathf.Clamp01(
+                            poseWeight));
+                _motionPoseWeightSlider.interactable =
+                    poseConfigured;
+            }
+
+            var manualLayerReady =
+                _mixer != null &&
+                _manualExpressionSource != null &&
+                _mixer.IsExpressionLayerProvider(
+                    _manualExpressionSource);
+            var expressionValid =
+                StandardExpressionNames
+                    .TryParse(
+                        _manualExpressionNameInput
+                            ?.text
+                            ?.Trim(),
+                        out _);
+            var valueValid =
+                float.TryParse(
+                    _manualExpressionValueInput
+                        ?.text
+                        ?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var parsedValue) &&
+                !float.IsNaN(
+                    parsedValue) &&
+                !float.IsInfinity(
+                    parsedValue) &&
+                parsedValue >= 0f &&
+                parsedValue <= 1f;
+
+            if (_manualExpressionApplyButton != null)
+            {
+                _manualExpressionApplyButton.interactable =
+                    manualLayerReady &&
+                    expressionValid &&
+                    valueValid;
+            }
+
+            if (_manualExpressionClearButton != null)
+            {
+                _manualExpressionClearButton.interactable =
+                    manualLayerReady &&
+                    expressionValid;
+            }
+
+            if (_manualExpressionClearAllButton != null)
+            {
+                _manualExpressionClearAllButton.interactable =
+                    manualLayerReady;
+            }
+        }
+
         private void RefreshStatus()
         {
             if (_statusText == null)
@@ -3546,10 +3654,43 @@ namespace VCR.Runtime.UI
 
         private string MotionSummary()
         {
-            return _mixer == null
-                ? "Motion/expression mixer unavailable."
-                : "MotionExpressionMixer is active. " +
-                  "Detailed layer controls are added in later P11 slices.";
+            if (_mixer == null)
+            {
+                return "Motion/expression mixer unavailable.";
+            }
+
+            var manualConnected =
+                _manualExpressionSource != null &&
+                _mixer.IsExpressionLayerProvider(
+                    _manualExpressionSource);
+            var selectedExpression =
+                _manualExpressionNameInput
+                    ?.text
+                    ?.Trim();
+            var selectedValue =
+                "<none>";
+
+            if (_manualExpressionSource != null &&
+                StandardExpressionNames.TryParse(
+                    selectedExpression,
+                    out var expression))
+            {
+                selectedValue =
+                    _manualExpressionSource
+                        .GetExpression(
+                            expression)
+                        .ToString(
+                            "0.00");
+            }
+
+            return
+                $"Primary pose layer configured: {_mixer.PrimaryPoseLayerConfigured}\n" +
+                $"Primary pose weight: {_mixer.PrimaryPoseLayerWeight:0.00}\n" +
+                $"Manual expression source: {(_manualExpressionSource != null ? "available" : "missing")}\n" +
+                $"Manual layer connected: {manualConnected}\n" +
+                $"Expression blend: {_mixer.ExpressionLayerBlendMode} @ {_mixer.ExpressionLayerWeight:0.00}\n" +
+                $"Selected manual expression: {(string.IsNullOrWhiteSpace(selectedExpression) ? "<none>" : selectedExpression)} = {selectedValue}\n" +
+                "Standard expressions: neutral, happy, angry, sad, relaxed, surprised, aa, ih, ou, ee, oh, blink, blinkLeft, blinkRight, lookUp, lookDown, lookLeft, lookRight";
         }
 
         private string EnvironmentSummary()
