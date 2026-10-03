@@ -7,7 +7,7 @@ namespace VCR.Editor.P11
     internal sealed class P11ExternalMotionImportOptions
     {
         public float BvhPositionScale = 0.01f;
-        public bool BvhFlipZ = true;
+        public bool BvhMirrorX = true;
     }
 
     internal sealed class P11ExternalMotionAdapterContext
