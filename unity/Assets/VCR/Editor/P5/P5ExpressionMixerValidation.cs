@@ -31,7 +31,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression blend modes, pose weighting/masks, pose-space guard, base passthrough, overlay blend, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, pose weighting/masks, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -149,6 +149,31 @@ namespace VCR.Editor.P5
                 alpha > 0f &&
                 alpha < 1f,
                 "positive smoothing must produce an interpolation alpha inside (0, 1)",
+                failures);
+
+            var nearTarget =
+                CreateExpressionState(
+                    aa: 0.2005f,
+                    new NamedExpressionValue(
+                        "customA",
+                        0.2004f));
+
+            Expect(
+                ExpressionMixerMath
+                    .ApproximatelyEqual(
+                        baseState,
+                        nearTarget,
+                        epsilon: 0.001f),
+                "expression convergence check must accept values inside epsilon",
+                failures);
+
+            Expect(
+                !ExpressionMixerMath
+                    .ApproximatelyEqual(
+                        baseState,
+                        layerState,
+                        epsilon: 0.001f),
+                "expression convergence check must reject materially different values",
                 failures);
         }
 
@@ -569,6 +594,28 @@ namespace VCR.Editor.P5
                         failures);
                 }
 
+                mixer.SetPoseLayerProvider(
+                    null);
+                InvokeUpdate(mixer);
+
+                Expect(
+                    mixer.TryGetLatestHumanoidPose(
+                        out var basePoseOnly) &&
+                    ReferenceEquals(
+                        basePoseOnly,
+                        route.PoseFrame),
+                    "missing pose overlay must fall back to the routed base pose",
+                    failures);
+
+                route.PoseFrame = null;
+                InvokeUpdate(mixer);
+
+                Expect(
+                    !mixer.TryGetLatestHumanoidPose(
+                        out _),
+                    "missing base and pose overlay must emit no pose frame so the target can return to neutral",
+                    failures);
+
                 Expect(
                     mixer.TryGetLatestExpressions(
                         out var mixed) &&
@@ -601,6 +648,15 @@ namespace VCR.Editor.P5
                     -1f,
                     0.2f,
                     "missing overlay must preserve routed base expressions exactly",
+                    failures);
+
+                route.ExpressionFrame = null;
+                InvokeUpdate(mixer);
+
+                Expect(
+                    !mixer.TryGetLatestExpressions(
+                        out _),
+                    "missing base and expression overlay must emit no expression frame so the target can return to neutral",
                     failures);
 
                 Expect(
