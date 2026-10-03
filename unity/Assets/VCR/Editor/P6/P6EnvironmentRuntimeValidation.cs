@@ -28,7 +28,7 @@ namespace VCR.Editor.P6
             {
                 Debug.Log(
                     "VCR P6 environment runtime validation: PASS " +
-                    "(state roots, World/Camera/Screen/Character anchors, atomic binding guards, event/manual/scheduled dispatch, failure isolation, recurring-policy driver, drop-only scheduler)");
+                    "(state roots, space anchors, Cut/Fade/Crossfade transitions, 2D image/video/parallax targets, lighting influence, dispatch-cost diagnostics, atomic guards, event/manual/scheduled dispatch, failure isolation, drop-only scheduler)");
                 return true;
             }
 
@@ -220,6 +220,46 @@ namespace VCR.Editor.P6
 
                 canvasTransition.ApplyEnvironmentTransition(
                     new EnvironmentTransitionContext(
+                        3,
+                        0,
+                        "day",
+                        "night",
+                        EnvironmentTransitionMode.Fade,
+                        0.25f,
+                        0f));
+
+                Expect(
+                    Math.Abs(
+                        dayCanvas.alpha - 0.5f) <
+                        0.001f &&
+                    Math.Abs(
+                        nightCanvas.alpha) <
+                        0.001f,
+                    "CanvasGroup Fade first half must fade out the previous state before revealing the next state",
+                    failures);
+
+                canvasTransition.ApplyEnvironmentTransition(
+                    new EnvironmentTransitionContext(
+                        4,
+                        0,
+                        "day",
+                        "night",
+                        EnvironmentTransitionMode.Fade,
+                        0.75f,
+                        0f));
+
+                Expect(
+                    Math.Abs(
+                        dayCanvas.alpha) <
+                        0.001f &&
+                    Math.Abs(
+                        nightCanvas.alpha - 0.5f) <
+                        0.001f,
+                    "CanvasGroup Fade second half must fade in the next state after the previous state is hidden",
+                    failures);
+
+                canvasTransition.ApplyEnvironmentTransition(
+                    new EnvironmentTransitionContext(
                         2,
                         0,
                         "night",
@@ -348,6 +388,34 @@ namespace VCR.Editor.P6
                     !string.IsNullOrEmpty(
                         invalidStaticError),
                     "StaticImage layer must reject missing RawImage configuration",
+                    failures);
+
+                var videoObject =
+                    new GameObject(
+                        "Video Layer");
+                videoObject.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var videoPlayer =
+                    videoObject.AddComponent<
+                        UnityEngine.Video.VideoPlayer>();
+                var videoLayer =
+                    videoObject.AddComponent<
+                        Environment2DLayerTarget>();
+                videoLayer.ConfigureVideo(
+                    videoPlayer,
+                    target: null,
+                    autoPlay: false);
+
+                Expect(
+                    videoLayer.ValidateConfiguration(
+                        out var videoError) &&
+                    string.IsNullOrEmpty(
+                        videoError) &&
+                    videoLayer.Mode ==
+                        Environment2DLayerMode.Video,
+                    "Video 2D layer must validate a preconfigured VideoPlayer without requiring its own Update loop",
                     failures);
 
                 var parallaxMetrics =
@@ -1042,6 +1110,34 @@ namespace VCR.Editor.P6
                         updateFailures - 1.0) <
                     0.001,
                     "environment diagnostics must expose isolated update-target failures",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.update_dispatch_ms_total",
+                        out var updateDispatchTotal) &&
+                    updateDispatchTotal >= 0.0 &&
+                    TryGetMetric(
+                        metrics,
+                        "environment.update_dispatch_ms_avg",
+                        out var updateDispatchAverage) &&
+                    updateDispatchAverage >= 0.0,
+                    "environment diagnostics must attribute update-target dispatch cost",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_dispatch_ms_total",
+                        out var transitionDispatchTotal) &&
+                    transitionDispatchTotal >= 0.0 &&
+                    TryGetMetric(
+                        metrics,
+                        "environment.transition_dispatch_ms_avg",
+                        out var transitionDispatchAverage) &&
+                    transitionDispatchAverage >= 0.0,
+                    "environment diagnostics must attribute transition-target dispatch cost",
                     failures);
             }
             catch (Exception exception)
