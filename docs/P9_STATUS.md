@@ -62,13 +62,18 @@ Rules emit only `EventActionCommand` values. They do not contain `GameObject`, `
 
 Action execution is delegated through `IEventActionHandler`.
 
-The first concrete action is:
+The first concrete actions are:
 
 ```text
 environment.set_state
+camera.set_fov
 ```
 
-`EnvironmentStateEventActionHandler` resolves an `IEnvironmentRuntime` target by environment id and calls its state-change contract. Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics.
+`EnvironmentStateEventActionHandler` resolves an `IEnvironmentRuntime` target by environment id and calls its state-change contract.
+
+`CameraFieldOfViewEventActionHandler` resolves the configured primary camera id, requires a finite numeric command value, and applies it through `PrimaryCameraController` rather than exposing a Camera object to the rule.
+
+Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics.
 
 ## Source-free validation
 
@@ -97,6 +102,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - bounded commands per event
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
 - environment.set_state execution through an application-level handler
+- camera.set_fov execution through PrimaryCameraController
 - unknown-action containment and diagnostics
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
@@ -107,7 +113,7 @@ The next source slices are:
 
 - add windowed rate-limit policy for bursty chat/donation inputs beyond the implemented per-rule cooldown
 - add text transform operators beyond direct value mapping
-- add application handlers for expression/motion, material/shader parameters, and camera using existing subsystem contracts
+- add application handlers for expression/motion and material/shader parameters using existing subsystem contracts
 - add environment transition parameters without leaking concrete environment components into rule definitions
 - define deterministic handler selection when multiple handlers claim the same command
 - version persisted rule configuration before P11 exposes editing UI

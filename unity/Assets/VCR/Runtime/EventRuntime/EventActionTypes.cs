@@ -4,5 +4,8 @@ namespace VCR.Runtime.EventRuntime
     {
         public const string EnvironmentSetState =
             "environment.set_state";
+
+        public const string CameraSetFieldOfView =
+            "camera.set_fov";
     }
 }

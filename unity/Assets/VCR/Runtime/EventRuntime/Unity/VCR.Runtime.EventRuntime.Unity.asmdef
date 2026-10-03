@@ -6,7 +6,8 @@
     "VCR.Runtime.Events",
     "VCR.Runtime.Events.Unity",
     "VCR.Runtime.EventRuntime",
-    "VCR.Runtime.Environment"
+    "VCR.Runtime.Environment",
+    "VCR.Runtime.Scene"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

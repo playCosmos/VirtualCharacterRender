@@ -8,6 +8,7 @@ using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Events;
 using VCR.Runtime.Events.Unity;
+using VCR.Runtime.Scene;
 
 namespace VCR.Editor.P9
 {
@@ -31,7 +32,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment action dispatch, unhandled diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, action cap, environment/camera action dispatch, unhandled diagnostics)");
                 return true;
             }
 
@@ -443,13 +444,38 @@ namespace VCR.Editor.P9
                 handler.SetEnvironmentRuntime(
                     environment);
 
+                var cameraObject =
+                    new GameObject(
+                        "P9 Camera");
+                cameraObject.transform
+                    .SetParent(
+                        root.transform,
+                        false);
+
+                var camera =
+                    cameraObject
+                        .AddComponent<Camera>();
+                var cameraController =
+                    cameraObject
+                        .AddComponent<
+                            PrimaryCameraController>();
+                var cameraHandler =
+                    cameraObject
+                        .AddComponent<
+                            CameraFieldOfViewEventActionHandler>();
+
+                cameraHandler.SetCameraController(
+                    cameraController,
+                    "camera.primary");
+
                 var host =
                     root.AddComponent<
                         EventRuntimeHost>();
 
                 host.SetEventHub(hub);
                 host.SetActionHandlers(
-                    handler);
+                    handler,
+                    cameraHandler);
                 host.SetRules(
                     new EventRuntimeRule
                     {
@@ -486,6 +512,51 @@ namespace VCR.Editor.P9
                     host.ExecutedActions == 1 &&
                     host.FailedActions == 0,
                     "main-thread hub dispatch must execute environment.set_state through the application-level handler",
+                    failures);
+
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "manual-camera",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .CameraSetFieldOfView,
+                                    TargetId =
+                                        "camera.primary",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        70.0
+                                }
+                            }
+                    });
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        10));
+
+                InvokeUpdate(hub);
+
+                ExpectClose(
+                    camera.fieldOfView,
+                    70.0,
+                    "camera.set_fov must apply a numeric application command through PrimaryCameraController",
                     failures);
 
                 host.SetRules(
