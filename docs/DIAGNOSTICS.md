@@ -87,6 +87,15 @@ The CSV includes:
 
 CSV writing is disabled by default and occurs only at report cadence.
 
+P11 Diagnostics UI also exposes explicit evidence controls without adding per-frame file I/O:
+
+- `Capture Now` forces a diagnostics report only when at least one second has elapsed since the prior report, preventing extremely short-window tracking-Hz distortion
+- `Save Snapshot` writes the latest snapshot as `vcr-runtime-snapshot-<UTC>.json` under `Application.persistentDataPath`
+- `CSV Evidence` toggles the existing periodic CSV evidence path
+- `Console Log` toggles the existing periodic console report path
+
+The JSON snapshot includes system identity, frame statistics, tracking rates/ages, presence state, and subsystem metrics. Non-finite ages or metric values are normalized to finite numbers plus explicit availability flags so the JSON remains portable and parseable.
+
 ## Performance rule
 
 Do not add expensive diagnostics work to every render frame.
@@ -97,4 +106,4 @@ Current per-frame diagnostics work is limited to:
 - non-destructive provider sequence checks
 - monotonic age arithmetic
 
-Sorting, scene metric discovery, string formatting, logging, and CSV file I/O occur only at the report cadence.
+Sorting, scene metric discovery, string formatting, logging, and CSV file I/O occur only at the report cadence. JSON snapshot serialization/file I/O occurs only on explicit user request.
