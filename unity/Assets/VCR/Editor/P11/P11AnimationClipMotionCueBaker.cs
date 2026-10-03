@@ -33,7 +33,7 @@ namespace VCR.Editor.P11
                 "AnimationClip → Baked Motion Cue",
                 EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Bake once against a reference humanoid. Playback uses normalized additive pose data and does not sample AnimationClip/Animator every frame. Animation events named VCRMarker (marker name in stringParameter), VCRMarker:<name>, or VCRMarker_<name> are preserved as reusable timeline markers.",
+                "Bake once against a reference humanoid. Playback uses normalized additive pose data and does not sample AnimationClip/Animator every frame. Animation events named VCRMarker (marker name in stringParameter) or VCRMarker_<name> are preserved as reusable timeline markers.",
                 MessageType.Info);
 
             _clip =
