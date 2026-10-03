@@ -88,8 +88,8 @@ namespace VCR.Runtime.Materials
 
             manifest.ShaderIds ??=
                 Array.Empty<string>();
-            manifest.TextureFiles ??=
-                Array.Empty<string>();
+            manifest.Textures ??=
+                Array.Empty<ShaderPackageTextureResource>();
             manifest.PreviewFiles ??=
                 Array.Empty<string>();
 
@@ -156,11 +156,32 @@ namespace VCR.Runtime.Materials
                 return false;
             }
 
-            foreach (var path in
-                     manifest.TextureFiles)
+            var textureIds =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var texture in
+                     manifest.Textures)
             {
+                if (texture == null ||
+                    !IsSafeIdentifier(
+                        texture.TextureId))
+                {
+                    error =
+                        "Every package texture requires a safe texture id.";
+                    return false;
+                }
+
+                if (!textureIds.Add(
+                        texture.TextureId))
+                {
+                    error =
+                        $"Duplicate package texture id '{texture.TextureId}'.";
+                    return false;
+                }
+
                 if (!ValidateResourcePath(
-                        path,
+                        texture.Path,
                         "Texture",
                         required: true,
                         ImageExtensions,
