@@ -256,6 +256,24 @@ namespace VCR.Editor.P11
                 transition.FindPropertyRelative(
                     "FallbackPolicy"));
 
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Spin + Confetti Template"))
+                {
+                    ApplySpinConfettiTemplate(
+                        transition);
+                }
+
+                if (GUILayout.Button(
+                        "Add Interrupt Cleanup"))
+                {
+                    ApplyInterruptCleanupTemplate(
+                        transition);
+                }
+            }
+
             var queue =
                 (AppearanceTransitionQueuePolicy)
                 transition
@@ -737,11 +755,14 @@ namespace VCR.Editor.P11
 
         private void AddTransition()
         {
+            Undo.RecordObject(
+                _runtime,
+                "Add Appearance Transition");
             _serializedRuntime.Update();
             var index =
                 _transitions.arraySize;
-            _transitions.InsertArrayElementAtIndex(
-                index);
+            _transitions.arraySize =
+                index + 1;
 
             var transition =
                 _transitions
@@ -755,8 +776,7 @@ namespace VCR.Editor.P11
 
             _selectedTransitionIndex =
                 index;
-            ApplySerializedChanges(
-                "Add Appearance Transition");
+            ApplySerializedChanges();
         }
 
         private void DuplicateTransition()
@@ -766,6 +786,9 @@ namespace VCR.Editor.P11
                 return;
             }
 
+            Undo.RecordObject(
+                _runtime,
+                "Duplicate Appearance Transition");
             _serializedRuntime.Update();
 
             var sourceIndex =
@@ -776,8 +799,8 @@ namespace VCR.Editor.P11
             var insertIndex =
                 _transitions.arraySize;
 
-            _transitions.InsertArrayElementAtIndex(
-                insertIndex);
+            _transitions.arraySize =
+                insertIndex + 1;
 
             CopyTransition(
                 _transitions
@@ -809,8 +832,7 @@ namespace VCR.Editor.P11
 
             _selectedTransitionIndex =
                 insertIndex;
-            ApplySerializedChanges(
-                "Duplicate Appearance Transition");
+            ApplySerializedChanges();
         }
 
         private void DeleteTransition()
@@ -820,6 +842,9 @@ namespace VCR.Editor.P11
                 return;
             }
 
+            Undo.RecordObject(
+                _runtime,
+                "Delete Appearance Transition");
             _serializedRuntime.Update();
             _transitions.DeleteArrayElementAtIndex(
                 Mathf.Clamp(
@@ -835,8 +860,7 @@ namespace VCR.Editor.P11
                         0,
                         _transitions.arraySize - 1));
 
-            ApplySerializedChanges(
-                "Delete Appearance Transition");
+            ApplySerializedChanges();
         }
 
         private void AddStep(
@@ -844,10 +868,15 @@ namespace VCR.Editor.P11
             AppearanceTransitionStepKind kind,
             bool cleanup)
         {
+            Undo.RecordObject(
+                _runtime,
+                cleanup
+                    ? "Add Transition Cleanup Action"
+                    : "Add Transition Step");
             var index =
                 steps.arraySize;
-            steps.InsertArrayElementAtIndex(
-                index);
+            steps.arraySize =
+                index + 1;
 
             var step =
                 steps.GetArrayElementAtIndex(
@@ -1094,6 +1123,195 @@ namespace VCR.Editor.P11
             return false;
         }
 
+        private void ApplySpinConfettiTemplate(
+            SerializedProperty transition)
+        {
+            Undo.RecordObject(
+                _runtime,
+                "Apply Spin Confetti Transition Template");
+
+            transition.FindPropertyRelative(
+                    "DurationSeconds")
+                .floatValue = 1.2f;
+            transition.FindPropertyRelative(
+                    "QueuePolicy")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionQueuePolicy
+                        .QueueLatest;
+            transition.FindPropertyRelative(
+                    "FallbackPolicy")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionFallbackPolicy
+                        .Immediate;
+
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+            steps.arraySize = 5;
+
+            ConfigureActionStep(
+                steps.GetArrayElementAtIndex(
+                    0),
+                0f,
+                EventActionTypes.MotionPlay,
+                "motion.quickchange",
+                "spin",
+                required:
+                    true);
+
+            ConfigureActionStep(
+                steps.GetArrayElementAtIndex(
+                    1),
+                0.10f,
+                EventActionTypes.EffectPlay,
+                "effects.main",
+                "confetti",
+                required:
+                    false);
+
+            ResetStep(
+                steps.GetArrayElementAtIndex(
+                    2),
+                AppearanceTransitionStepKind
+                    .Commit,
+                false);
+            steps.GetArrayElementAtIndex(
+                    2)
+                .FindPropertyRelative(
+                    "TimeSeconds")
+                .floatValue = 0.55f;
+
+            ConfigureActionStep(
+                steps.GetArrayElementAtIndex(
+                    3),
+                0.55f,
+                EventActionTypes.EffectPlay,
+                "effects.main",
+                "sparkle-burst",
+                required:
+                    false);
+
+            ConfigureActionStep(
+                steps.GetArrayElementAtIndex(
+                    4),
+                0.90f,
+                EventActionTypes.MotionRelease,
+                "motion.quickchange",
+                "spin",
+                required:
+                    true);
+
+            transition.FindPropertyRelative(
+                    "CancellationSteps")
+                .arraySize = 0;
+
+            ApplySerializedChanges();
+            _lastMessage =
+                "Applied spin + confetti template. Effect IDs are optional placeholders and can be replaced with registered effect IDs.";
+            _lastMessageType =
+                MessageType.Info;
+        }
+
+        private void ApplyInterruptCleanupTemplate(
+            SerializedProperty transition)
+        {
+            Undo.RecordObject(
+                _runtime,
+                "Add Interrupt Cleanup Template");
+
+            transition.FindPropertyRelative(
+                    "QueuePolicy")
+                .enumValueIndex =
+                    (int)
+                    AppearanceTransitionQueuePolicy
+                        .Interrupt;
+
+            var cleanup =
+                transition.FindPropertyRelative(
+                    "CancellationSteps");
+            cleanup.arraySize = 4;
+
+            ConfigureActionStep(
+                cleanup.GetArrayElementAtIndex(
+                    0),
+                0f,
+                EventActionTypes.MotionRelease,
+                "motion.quickchange",
+                "spin",
+                required:
+                    false);
+            ConfigureActionStep(
+                cleanup.GetArrayElementAtIndex(
+                    1),
+                0f,
+                EventActionTypes.EffectStop,
+                "effects.main",
+                "confetti",
+                required:
+                    false);
+            ConfigureActionStep(
+                cleanup.GetArrayElementAtIndex(
+                    2),
+                0f,
+                EventActionTypes.EffectStop,
+                "effects.main",
+                "sparkle-burst",
+                required:
+                    false);
+            ConfigureActionStep(
+                cleanup.GetArrayElementAtIndex(
+                    3),
+                0f,
+                EventActionTypes.AudioStop,
+                "audio.main",
+                "wardrobe-chime",
+                required:
+                    false);
+
+            ApplySerializedChanges();
+            _lastMessage =
+                "Interrupt cleanup template added. Remove unused cleanup actions or replace their logical IDs before validation.";
+            _lastMessageType =
+                MessageType.Info;
+        }
+
+        private static void ConfigureActionStep(
+            SerializedProperty step,
+            float timeSeconds,
+            string actionType,
+            string targetId,
+            string text,
+            bool required)
+        {
+            ResetStep(
+                step,
+                AppearanceTransitionStepKind
+                    .Action,
+                false);
+            step.FindPropertyRelative(
+                    "TimeSeconds")
+                .floatValue =
+                    timeSeconds;
+            step.FindPropertyRelative(
+                    "ActionType")
+                .stringValue =
+                    actionType;
+            step.FindPropertyRelative(
+                    "TargetId")
+                .stringValue =
+                    targetId ?? string.Empty;
+            step.FindPropertyRelative(
+                    "Text")
+                .stringValue =
+                    text ?? string.Empty;
+            step.FindPropertyRelative(
+                    "Required")
+                .boolValue =
+                    required;
+        }
+
         private static void SortStepsByTime(
             SerializedProperty steps)
         {
@@ -1238,12 +1456,8 @@ namespace VCR.Editor.P11
                     : MessageType.Error;
         }
 
-        private void ApplySerializedChanges(
-            string undoName)
+        private void ApplySerializedChanges()
         {
-            Undo.RecordObject(
-                _runtime,
-                undoName);
             _serializedRuntime
                 .ApplyModifiedProperties();
             EditorUtility.SetDirty(
