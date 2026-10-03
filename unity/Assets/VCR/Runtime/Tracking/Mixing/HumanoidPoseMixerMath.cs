@@ -151,7 +151,7 @@ namespace VCR.Runtime.Tracking.Mixing
                                 Nlerp(
                                     TrackingQuaternion.Identity,
                                     layerBone.LocalRotation,
-                                    weight)));
+                                    boneWeight)));
                 }
                 else
                 {
