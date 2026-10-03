@@ -461,7 +461,24 @@ namespace VCR.Runtime.Environment.Unity
                 return true;
             }
 
-            var found = false;
+            if (!ValidateStateBindings(
+                    stateBindings,
+                    out error))
+            {
+                return false;
+            }
+
+            var found =
+                ContainsState(
+                    stateBindings,
+                    nextStateId);
+
+            if (!found)
+            {
+                error =
+                    $"Environment state '{nextStateId}' has no binding.";
+                return false;
+            }
 
             for (var i = 0;
                  i < stateBindings.Length;
@@ -470,50 +487,20 @@ namespace VCR.Runtime.Environment.Unity
                 var binding =
                     stateBindings[i];
 
-                if (binding == null)
-                {
-                    continue;
-                }
-
                 var isTarget =
                     string.Equals(
                         binding.StateId,
                         nextStateId,
                         StringComparison.Ordinal);
 
-                if (isTarget)
-                {
-                    found = true;
-                }
-
                 var root =
                     binding.Root;
-
-                if (root == null)
-                {
-                    continue;
-                }
-
-                if (transform.IsChildOf(
-                        root.transform))
-                {
-                    error =
-                        $"Environment state root '{root.name}' contains the environment runtime and cannot be toggled safely.";
-                    return false;
-                }
 
                 if (root.activeSelf != isTarget)
                 {
                     root.SetActive(
                         isTarget);
                 }
-            }
-
-            if (!found)
-            {
-                error =
-                    $"Environment state '{nextStateId}' has no binding.";
-                return false;
             }
 
             return true;
