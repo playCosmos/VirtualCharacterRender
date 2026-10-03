@@ -3349,6 +3349,850 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void EnsureEventRulesLoaded()
+        {
+            if (eventRuntime == null)
+            {
+                _eventRuleStore = null;
+                _eventRuleStorePath = null;
+                _loadedEventRuleHost = null;
+                _eventRuleStoreChecked = false;
+                return;
+            }
+
+            if (_eventRuleStoreChecked &&
+                ReferenceEquals(
+                    _loadedEventRuleHost,
+                    eventRuntime))
+            {
+                return;
+            }
+
+            _eventRuleStoreChecked = true;
+            _loadedEventRuleHost =
+                eventRuntime;
+            _eventRuleStorePath =
+                Path.Combine(
+                    Application.persistentDataPath,
+                    "VCR",
+                    "event-rules.json");
+
+            try
+            {
+                _eventRuleStore =
+                    new EventRuntimeConfigurationStore(
+                        _eventRuleStorePath);
+            }
+            catch (Exception exception)
+            {
+                _eventRuleStore = null;
+                _lastActionMessage =
+                    "Event rule store initialization failed: " +
+                    exception.Message;
+                return;
+            }
+
+            if (!File.Exists(
+                    _eventRuleStorePath))
+            {
+                _eventRuleIndex = 0;
+                return;
+            }
+
+            if (!_eventRuleStore.TryLoad(
+                    out var rules,
+                    out var maxCommands,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Event rule load failed: " +
+                    (error ?? "unknown error");
+                return;
+            }
+
+            eventRuntime.SetRules(
+                rules);
+
+            if (!eventRuntime.TrySetMaxCommandsPerEvent(
+                    maxCommands,
+                    out error))
+            {
+                _lastActionMessage =
+                    "Event max-command restore failed: " +
+                    (error ?? "unknown error");
+            }
+
+            _eventRuleIndex = 0;
+        }
+
+        private void SelectPreviousEventRule()
+        {
+            SelectEventRule(
+                -1);
+        }
+
+        private void SelectNextEventRule()
+        {
+            SelectEventRule(
+                1);
+        }
+
+        private void SelectEventRule(
+            int offset)
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var rules =
+                eventRuntime.CaptureRules();
+
+            if (rules.Length == 0)
+            {
+                _eventRuleIndex = 0;
+                _lastActionMessage =
+                    "No event rules are configured.";
+                RefreshAll();
+                return;
+            }
+
+            _eventRuleIndex =
+                (_eventRuleIndex +
+                 offset +
+                 rules.Length) %
+                rules.Length;
+
+            if (_eventRuleInput != null)
+            {
+                _eventRuleInput.text =
+                    rules[
+                        _eventRuleIndex]?.Id ??
+                    string.Empty;
+            }
+
+            RefreshAll();
+        }
+
+        private void ToggleSelectedEventRule()
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var rules =
+                eventRuntime.CaptureRules();
+
+            if (rules.Length == 0)
+            {
+                _lastActionMessage =
+                    "No event rules are configured.";
+                RefreshAll();
+                return;
+            }
+
+            var ruleId =
+                _eventRuleInput?.text?.Trim();
+
+            EventRuntimeRule selected =
+                null;
+
+            foreach (var rule in rules)
+            {
+                if (rule != null &&
+                    string.Equals(
+                        rule.Id,
+                        ruleId,
+                        StringComparison.Ordinal))
+                {
+                    selected =
+                        rule;
+                    break;
+                }
+            }
+
+            if (selected == null)
+            {
+                _eventRuleIndex =
+                    Mathf.Clamp(
+                        _eventRuleIndex,
+                        0,
+                        rules.Length - 1);
+                selected =
+                    rules[
+                        _eventRuleIndex];
+                ruleId =
+                    selected?.Id;
+            }
+
+            if (selected == null ||
+                string.IsNullOrWhiteSpace(
+                    ruleId))
+            {
+                _lastActionMessage =
+                    "Select a valid event rule first.";
+                RefreshAll();
+                return;
+            }
+
+            if (!eventRuntime.TrySetRuleEnabled(
+                    ruleId,
+                    !selected.Enabled,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Event rule toggle failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Event rule '{ruleId}' " +
+                (selected.Enabled
+                    ? "disabled."
+                    : "enabled.");
+            RefreshAll();
+        }
+
+        private void ToggleEventRuleTracing()
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var enabled =
+                !eventRuntime.Engine.TraceEnabled;
+            eventRuntime.SetRuleTracingEnabled(
+                enabled);
+
+            _lastActionMessage =
+                "Event rule tracing " +
+                (enabled
+                    ? "enabled."
+                    : "disabled.");
+            RefreshAll();
+        }
+
+        private void ApplyEventMaxCommands()
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (!int.TryParse(
+                    _eventMaxCommandsInput?.text?.Trim(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var value) ||
+                value < 1 ||
+                value > 256)
+            {
+                _lastActionMessage =
+                    "Event max commands must be an integer in the 1..256 range.";
+                RefreshAll();
+                return;
+            }
+
+            if (!eventRuntime.TrySetMaxCommandsPerEvent(
+                    value,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Event max-command update failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Event max commands set to {value}.";
+            RefreshAll();
+        }
+
+        private void SaveEventRules()
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            EnsureEventRulesLoaded();
+
+            if (_eventRuleStore == null)
+            {
+                _lastActionMessage =
+                    "Event rule store unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            if (!_eventRuleStore.TrySave(
+                    eventRuntime.CaptureRules(),
+                    eventRuntime.MaxCommandsPerEvent,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Event rule save failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                "Event rules saved to " +
+                _eventRuleStore.Path;
+            RefreshAll();
+        }
+
+        private void ReloadEventRules()
+        {
+            if (eventRuntime == null)
+            {
+                _lastActionMessage =
+                    "Event runtime unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            EnsureEventRulesLoaded();
+
+            if (_eventRuleStore == null ||
+                string.IsNullOrWhiteSpace(
+                    _eventRuleStorePath) ||
+                !File.Exists(
+                    _eventRuleStorePath))
+            {
+                _lastActionMessage =
+                    "No saved event rule document is available to reload.";
+                RefreshAll();
+                return;
+            }
+
+            if (!_eventRuleStore.TryLoad(
+                    out var rules,
+                    out var maxCommands,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Event rule reload failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            eventRuntime.SetRules(
+                rules);
+
+            if (!eventRuntime.TrySetMaxCommandsPerEvent(
+                    maxCommands,
+                    out error))
+            {
+                _lastActionMessage =
+                    "Event max-command reload failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _eventRuleIndex = 0;
+            _lastActionMessage =
+                $"Reloaded {rules.Length} event rule(s).";
+            RefreshAll();
+        }
+
+        private void RefreshEventControlState()
+        {
+            var rules =
+                eventRuntime?.CaptureRules() ??
+                Array.Empty<EventRuntimeRule>();
+            var hasRules =
+                rules.Length > 0;
+
+            _eventRuleIndex =
+                hasRules
+                    ? Mathf.Clamp(
+                        _eventRuleIndex,
+                        0,
+                        rules.Length - 1)
+                    : 0;
+
+            var selected =
+                hasRules
+                    ? rules[
+                        _eventRuleIndex]
+                    : null;
+
+            if (_eventRuleInput != null &&
+                !_eventRuleInput.isFocused)
+            {
+                _eventRuleInput.text =
+                    selected?.Id ??
+                    string.Empty;
+            }
+
+            if (_eventPreviousRuleButton != null)
+            {
+                _eventPreviousRuleButton.interactable =
+                    rules.Length > 1;
+            }
+
+            if (_eventNextRuleButton != null)
+            {
+                _eventNextRuleButton.interactable =
+                    rules.Length > 1;
+            }
+
+            if (_eventToggleRuleButton != null)
+            {
+                _eventToggleRuleButton.interactable =
+                    selected != null;
+                SetButtonLabel(
+                    _eventToggleRuleButton,
+                    selected == null
+                        ? "No Rule"
+                        : selected.Enabled
+                            ? "Disable Rule"
+                            : "Enable Rule");
+            }
+
+            if (_eventTraceButton != null)
+            {
+                _eventTraceButton.interactable =
+                    eventRuntime != null;
+                SetButtonLabel(
+                    _eventTraceButton,
+                    "Trace: " +
+                    (eventRuntime?.Engine.TraceEnabled ==
+                        true
+                        ? "On"
+                        : "Off"));
+            }
+
+            if (_eventMaxCommandsInput != null &&
+                !_eventMaxCommandsInput.isFocused &&
+                eventRuntime != null)
+            {
+                _eventMaxCommandsInput.text =
+                    eventRuntime.MaxCommandsPerEvent
+                        .ToString(
+                            CultureInfo.InvariantCulture);
+            }
+
+            if (_eventApplyMaxCommandsButton != null)
+            {
+                _eventApplyMaxCommandsButton.interactable =
+                    eventRuntime != null;
+            }
+
+            if (_eventSaveRulesButton != null)
+            {
+                _eventSaveRulesButton.interactable =
+                    eventRuntime != null;
+            }
+
+            if (_eventReloadRulesButton != null)
+            {
+                _eventReloadRulesButton.interactable =
+                    eventRuntime != null &&
+                    !string.IsNullOrWhiteSpace(
+                        _eventRuleStorePath) &&
+                    File.Exists(
+                        _eventRuleStorePath);
+            }
+        }
+
+        private CapabilityStatusSnapshot[]
+            CaptureCapabilityStatuses()
+        {
+            return sceneRuntime?.Capabilities
+                ?.CaptureStatuses() ??
+                Array.Empty<
+                    CapabilityStatusSnapshot>();
+        }
+
+        private void SelectPreviousCapability()
+        {
+            SelectCapability(
+                -1);
+        }
+
+        private void SelectNextCapability()
+        {
+            SelectCapability(
+                1);
+        }
+
+        private void SelectCapability(
+            int offset)
+        {
+            var statuses =
+                CaptureCapabilityStatuses();
+
+            if (statuses.Length == 0)
+            {
+                _settingsCapabilityIndex = 0;
+                _lastActionMessage =
+                    "No runtime capabilities are registered.";
+                RefreshAll();
+                return;
+            }
+
+            _settingsCapabilityIndex =
+                (_settingsCapabilityIndex +
+                 offset +
+                 statuses.Length) %
+                statuses.Length;
+
+            RefreshAll();
+        }
+
+        private void ToggleSelectedCapability()
+        {
+            var registry =
+                sceneRuntime?.Capabilities;
+            var statuses =
+                CaptureCapabilityStatuses();
+
+            if (registry == null ||
+                statuses.Length == 0)
+            {
+                _lastActionMessage =
+                    "No runtime capabilities are registered.";
+                RefreshAll();
+                return;
+            }
+
+            _settingsCapabilityIndex =
+                Mathf.Clamp(
+                    _settingsCapabilityIndex,
+                    0,
+                    statuses.Length - 1);
+
+            var selected =
+                statuses[
+                    _settingsCapabilityIndex];
+
+            if (selected.State ==
+                CapabilityState.Enabled)
+            {
+                if (!registry.Disable(
+                        selected.Id))
+                {
+                    _lastActionMessage =
+                        $"Capability '{selected.Id}' could not be disabled.";
+                    RefreshAll();
+                    return;
+                }
+
+                _lastActionMessage =
+                    $"Capability '{selected.Id}' disabled.";
+                RefreshAll();
+                return;
+            }
+
+            if (!registry.Enable(
+                    selected.Id,
+                    out var error))
+            {
+                _lastActionMessage =
+                    $"Capability '{selected.Id}' enable failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Capability '{selected.Id}' enabled.";
+            RefreshAll();
+        }
+
+        private void ApplySettingsRenderScale()
+        {
+            if (sceneRuntime == null ||
+                !float.TryParse(
+                    _settingsRenderScaleInput?.text?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var value) ||
+                float.IsNaN(
+                    value) ||
+                float.IsInfinity(
+                    value) ||
+                value < 0.5f ||
+                value > 2.0f)
+            {
+                _lastActionMessage =
+                    "Render scale must be a finite number in the 0.5..2.0 range.";
+                RefreshAll();
+                return;
+            }
+
+            var settings =
+                sceneRuntime.CaptureRenderSettings();
+            settings.RenderScale =
+                value;
+
+            ApplySettingsRender(
+                settings,
+                $"Render scale set to {value:0.###}.");
+        }
+
+        private void ApplySettingsFps()
+        {
+            if (sceneRuntime == null ||
+                !int.TryParse(
+                    _settingsFpsInput?.text?.Trim(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var value) ||
+                value < 30 ||
+                value > 240)
+            {
+                _lastActionMessage =
+                    "Target FPS must be an integer in the 30..240 range.";
+                RefreshAll();
+                return;
+            }
+
+            var settings =
+                sceneRuntime.CaptureRenderSettings();
+            settings.TargetFrameRate =
+                value;
+
+            ApplySettingsRender(
+                settings,
+                $"Target FPS set to {value}.");
+        }
+
+        private void ToggleSettingsVsync()
+        {
+            if (sceneRuntime == null)
+            {
+                _lastActionMessage =
+                    "Render settings unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var settings =
+                sceneRuntime.CaptureRenderSettings();
+            settings.UseVSync =
+                !settings.UseVSync;
+
+            ApplySettingsRender(
+                settings,
+                "VSync " +
+                (settings.UseVSync
+                    ? "enabled."
+                    : "disabled."));
+        }
+
+        private void ToggleSettingsRunInBackground()
+        {
+            if (sceneRuntime == null)
+            {
+                _lastActionMessage =
+                    "Render settings unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var settings =
+                sceneRuntime.CaptureRenderSettings();
+            settings.RunInBackground =
+                !settings.RunInBackground;
+
+            ApplySettingsRender(
+                settings,
+                "Run in background " +
+                (settings.RunInBackground
+                    ? "enabled."
+                    : "disabled."));
+        }
+
+        private void ApplySettingsRender(
+            RenderRuntimeSettings settings,
+            string successMessage)
+        {
+            if (sceneRuntime == null ||
+                !ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        sceneRuntime.State))
+            {
+                _lastActionMessage =
+                    "Render settings cannot be changed while the scene runtime is busy.";
+                RefreshAll();
+                return;
+            }
+
+            try
+            {
+                sceneRuntime.ApplyRenderSettings(
+                    settings);
+                _lastActionMessage =
+                    successMessage;
+            }
+            catch (Exception exception)
+            {
+                _lastActionMessage =
+                    "Render settings apply failed: " +
+                    exception.Message;
+            }
+
+            RefreshAll();
+        }
+
+        private void RefreshSettingsControlState()
+        {
+            var statuses =
+                CaptureCapabilityStatuses();
+            var hasCapabilities =
+                statuses.Length > 0;
+
+            _settingsCapabilityIndex =
+                hasCapabilities
+                    ? Mathf.Clamp(
+                        _settingsCapabilityIndex,
+                        0,
+                        statuses.Length - 1)
+                    : 0;
+
+            var selected =
+                hasCapabilities
+                    ? statuses[
+                        _settingsCapabilityIndex]
+                    : default;
+            var canMutate =
+                sceneRuntime != null &&
+                ApplicationUiActionPolicy
+                    .CanApplyBroadcastTarget(
+                        true,
+                        sceneRuntime.State);
+
+            if (_settingsPreviousCapabilityButton != null)
+            {
+                _settingsPreviousCapabilityButton.interactable =
+                    statuses.Length > 1 &&
+                    canMutate;
+            }
+
+            if (_settingsNextCapabilityButton != null)
+            {
+                _settingsNextCapabilityButton.interactable =
+                    statuses.Length > 1 &&
+                    canMutate;
+            }
+
+            if (_settingsToggleCapabilityButton != null)
+            {
+                _settingsToggleCapabilityButton.interactable =
+                    hasCapabilities &&
+                    canMutate;
+                SetButtonLabel(
+                    _settingsToggleCapabilityButton,
+                    hasCapabilities
+                        ? (selected.State ==
+                            CapabilityState.Enabled
+                            ? "Disable "
+                            : selected.State ==
+                                CapabilityState.Faulted
+                                ? "Retry "
+                                : "Enable ") +
+                          selected.Id
+                        : "No Capabilities");
+            }
+
+            RenderRuntimeSettings renderSettings =
+                default;
+
+            if (sceneRuntime != null)
+            {
+                renderSettings =
+                    sceneRuntime.CaptureRenderSettings();
+            }
+
+            if (_settingsRenderScaleInput != null &&
+                !_settingsRenderScaleInput.isFocused &&
+                sceneRuntime != null)
+            {
+                _settingsRenderScaleInput.text =
+                    renderSettings.RenderScale
+                        .ToString(
+                            "0.###",
+                            CultureInfo.InvariantCulture);
+            }
+
+            if (_settingsFpsInput != null &&
+                !_settingsFpsInput.isFocused &&
+                sceneRuntime != null)
+            {
+                _settingsFpsInput.text =
+                    renderSettings.TargetFrameRate
+                        .ToString(
+                            CultureInfo.InvariantCulture);
+            }
+
+            if (_settingsApplyRenderScaleButton != null)
+            {
+                _settingsApplyRenderScaleButton.interactable =
+                    canMutate;
+            }
+
+            if (_settingsApplyFpsButton != null)
+            {
+                _settingsApplyFpsButton.interactable =
+                    canMutate;
+            }
+
+            if (_settingsVsyncButton != null)
+            {
+                _settingsVsyncButton.interactable =
+                    canMutate;
+                SetButtonLabel(
+                    _settingsVsyncButton,
+                    sceneRuntime != null
+                        ? "VSync: " +
+                          (renderSettings.UseVSync
+                              ? "On"
+                              : "Off")
+                        : "VSync: n/a");
+            }
+
+            if (_settingsRunInBackgroundButton != null)
+            {
+                _settingsRunInBackgroundButton.interactable =
+                    canMutate;
+                SetButtonLabel(
+                    _settingsRunInBackgroundButton,
+                    sceneRuntime != null
+                        ? "Background: " +
+                          (renderSettings.RunInBackground
+                              ? "On"
+                              : "Off")
+                        : "Background: n/a");
+            }
+        }
+
         private void ToggleOverlayTransparent()
         {
             ToggleOverlaySetting(
