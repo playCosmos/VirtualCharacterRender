@@ -44,11 +44,16 @@ namespace VCR.Editor.P11
 
     internal sealed class P11ExternalMotionImportResult
     {
+        public string AdapterId;
         public string SourceAssetPath;
         public string MarkerSidecarPath;
         public AnimationClip[] Clips =
             Array.Empty<AnimationClip>();
         public string[] ClipAssetPaths =
+            Array.Empty<string>();
+        public BakedMotionCueAsset[] CueAssets =
+            Array.Empty<BakedMotionCueAsset>();
+        public string[] CueAssetPaths =
             Array.Empty<string>();
         public int ImportedMarkerCount;
     }
@@ -94,11 +99,20 @@ namespace VCR.Editor.P11
                 Path.GetExtension(
                     sourceFilePath);
 
-            if (!SupportedExtensions.Contains(
-                    extension))
+            var nativeImport =
+                SupportedExtensions.Contains(
+                    extension);
+            IP11ExternalMotionAdapter adapter =
+                null;
+
+            if (!nativeImport &&
+                !P11ExternalMotionAdapterRegistry
+                    .TryResolve(
+                        extension,
+                        out adapter))
             {
                 error =
-                    $"Unsupported external motion format '{extension}'. P11 currently supports Unity-native .fbx, .dae, and .anim input. BVH/glTF require a dedicated adapter.";
+                    $"Unsupported external motion format '{extension}'. P11 supports Unity-native .fbx/.dae/.anim plus registered adapters. Built-in adapters: .bvh.";
                 return false;
             }
 
@@ -176,6 +190,67 @@ namespace VCR.Editor.P11
                     sourceAssetPath,
                     ImportAssetOptions.ForceSynchronousImport |
                     ImportAssetOptions.ForceUpdate);
+
+                if (adapter != null)
+                {
+                    if (!adapter.TryImport(
+                            new P11ExternalMotionAdapterContext
+                            {
+                                SourceFilePath =
+                                    sourceFilePath,
+                                SourceAssetPath =
+                                    sourceAssetPath,
+                                DestinationAssetFolder =
+                                    destinationAssetFolder,
+                                MarkerFile =
+                                    markerFile
+                            },
+                            out var adapterResult,
+                            out error))
+                    {
+                        RollbackImport(
+                            createdAssets,
+                            createdFolders);
+                        return false;
+                    }
+
+                    foreach (var createdPath in
+                             adapterResult.CueAssetPaths ??
+                             Array.Empty<string>())
+                    {
+                        if (!string.IsNullOrWhiteSpace(
+                                createdPath))
+                        {
+                            createdAssets.Add(
+                                createdPath);
+                        }
+                    }
+
+                    AssetDatabase.SaveAssets();
+                    AssetDatabase.Refresh();
+
+                    result =
+                        new P11ExternalMotionImportResult
+                        {
+                            AdapterId =
+                                adapterResult.AdapterId,
+                            SourceAssetPath =
+                                sourceAssetPath,
+                            MarkerSidecarPath =
+                                markerSidecarPath,
+                            CueAssets =
+                                adapterResult.CueAssets ??
+                                Array.Empty<
+                                    BakedMotionCueAsset>(),
+                            CueAssetPaths =
+                                adapterResult.CueAssetPaths ??
+                                Array.Empty<string>(),
+                            ImportedMarkerCount =
+                                adapterResult.ImportedMarkerCount
+                        };
+
+                    return true;
+                }
 
                 var importedClips =
                     FindImportedClips(
@@ -289,6 +364,8 @@ namespace VCR.Editor.P11
                 result =
                     new P11ExternalMotionImportResult
                     {
+                        AdapterId =
+                            "unity-native",
                         SourceAssetPath =
                             sourceAssetPath,
                         MarkerSidecarPath =
