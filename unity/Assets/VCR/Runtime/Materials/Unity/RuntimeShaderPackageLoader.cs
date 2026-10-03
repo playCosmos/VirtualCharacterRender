@@ -358,14 +358,14 @@ namespace VCR.Runtime.Materials.Unity
 
                 Status =
                     BuildStatus(
-                        success: true,
+                        true,
                         normalizedRoot,
                         manifestPath,
                         manifest,
                         bundlePath,
                         presetPath,
                         _lastLoadMilliseconds,
-                        error: null);
+                        null);
 
                 error = null;
                 return true;
@@ -1126,7 +1126,7 @@ namespace VCR.Runtime.Materials.Unity
 
             Status =
                 BuildStatus(
-                    success: false,
+                    false,
                     packageRoot,
                     manifestPath,
                     manifest,
