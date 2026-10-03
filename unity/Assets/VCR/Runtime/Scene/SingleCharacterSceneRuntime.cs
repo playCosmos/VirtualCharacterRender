@@ -249,6 +249,30 @@ namespace VCR.Runtime.Scene
             renderBootstrap.Apply();
         }
 
+        public RenderRuntimeSettings CaptureRenderSettings()
+        {
+            ResolveDependencies();
+
+            return renderBootstrap != null
+                ? renderBootstrap.CaptureSettings()
+                : RenderRuntimeSettings.Default1080p;
+        }
+
+        public void ApplyRenderSettings(
+            RenderRuntimeSettings settings)
+        {
+            EnsureOperational();
+
+            if (renderBootstrap == null)
+            {
+                throw new InvalidOperationException(
+                    "Render bootstrap is unavailable.");
+            }
+
+            renderBootstrap.Apply(
+                settings);
+        }
+
         public void ApplySceneViewSettings()
         {
             EnsureOperational();
