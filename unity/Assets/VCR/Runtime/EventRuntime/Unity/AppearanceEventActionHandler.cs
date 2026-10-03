@@ -50,7 +50,9 @@ namespace VCR.Runtime.EventRuntime.Unity
                 command.ActionType ==
                     EventActionTypes.AppearanceClearAccessory ||
                 command.ActionType ==
-                    EventActionTypes.AppearanceRestoreDefault;
+                    EventActionTypes.AppearanceRestoreDefault ||
+                command.ActionType ==
+                    EventActionTypes.AppearanceCancelTransition;
 
             if (!supported)
             {
@@ -144,6 +146,10 @@ namespace VCR.Runtime.EventRuntime.Unity
                 case EventActionTypes.AppearanceRestoreDefault:
                     return _runtime.RestoreDefault(
                         command.Text,
+                        out error);
+
+                case EventActionTypes.AppearanceCancelTransition:
+                    return _runtime.CancelTransition(
                         out error);
 
                 default:
