@@ -367,7 +367,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - import validated external accessory packages
 - optional compatible skinned-outfit package workflow
 - preview and validate an appearance preset before making it active
-- richer transition timeline authoring: dependency visualization beyond the implemented StepId-based All/Any graph, package libraries, and non-scene workflows
+- richer transition timeline authoring: interactive dependency editing/grouping beyond the implemented StepId-based All/Any graph and non-scene workflows; the project package-library browser is implemented
 - additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
 - custom particle/effect preset import/registration
 - richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
@@ -410,6 +410,8 @@ The first source implementation now exists:
 - step reorder/delete, sort-by-resolved-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
 - versioned JSON export for the selected transition or all transitions; schema v2 preserves marker/blocking/dependency metadata and v1 packages migrate automatically
 - transactional JSON import with duplicate-ID replacement confirmation and full rollback when runtime validation fails
+- `VCR/P11/Open Transition Package Library` indexes project JSON packages under `Assets/VCR/TransitionPackages`, shows source/effective version, migration state, transition IDs, file metadata, searchable valid/invalid entries, and hands valid packages to the Timeline as pending imports
+- external JSON can be validated before being copied into the project package library; unsupported/invalid files are rejected while invalid JSON already present in the library stays visible for diagnostics
 - built-in `Spin + Confetti` and Interrupt cleanup starter templates
 - timeline edits write directly to `BasicCharacterAppearanceRuntime.transitions`, so editor and runtime definitions cannot silently diverge
 - appearance Event Runtime action handler
@@ -538,7 +540,7 @@ Not yet implemented as built-ins:
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
 - automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
 - richer interactive graph editing/grouping beyond the implemented resolved-time dependency graph preview and StepId-based `All` / `Any` completion graph
-- richer transition package management beyond the implemented v2 JSON import/export and v1 migration, such as package libraries/metadata/migration UI
+- richer transition package management beyond the implemented project library browser, v2 JSON import/export, v1 migration visibility, package search, and Timeline handoff; future work may add tags/descriptions/version history if evidence justifies schema expansion
 - external appearance package import
 - compatible external skinned-garment workflow
 
