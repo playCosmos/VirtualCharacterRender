@@ -79,6 +79,7 @@ material.set_color
 material.set_vector
 material.set_texture
 material.set_shader
+material.apply_preset
 expression.set
 motion.pose_weight
 ```
@@ -89,7 +90,7 @@ motion.pose_weight
 
 `ExpressionEventActionHandler` maps `TargetId` to a logical manual-expression layer and `Name` through `StandardExpressionNames`. Values must remain in 0..1. `ManualExpressionLayerSource` publishes only on actual value changes, has no Update loop, and never contributes performer-presence evidence. When wired as the mixer's expression overlay with Maximum blending, routed lip-sync/eye channels remain intact.
 
-`MaterialFloatEventActionHandler` preserves the existing float path. `MaterialPropertyEventActionHandler` adds strict int/bool/color/vector command validation plus texture/shader resource-id actions, delegating to the existing non-destructive runtime override controller and runtime registries. Rules never receive Material, Texture, or Shader objects, and handlers do not mutate source materials.
+`MaterialFloatEventActionHandler` preserves the existing float path. `MaterialPropertyEventActionHandler` adds strict int/bool/color/vector command validation plus texture/shader resource-id actions. `MaterialPresetEventActionHandler` resolves logical preset ids through `IMaterialPresetResolver`; the P7 shader-package loader implements that resolver over its active versioned preset document. Rules never receive Material, Texture, Shader, preset objects, or preset file paths, and handlers do not mutate source materials.
 
 `MotionPoseWeightEventActionHandler` applies a validated 0..1 value to the mixer's primary pose-layer weight through the P5 mixer contract.
 
@@ -132,6 +133,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - material.set_float mutation of an active runtime override without source-material mutation
 - material int/bool strict-value validation plus color/vector command component contracts
 - registered texture/shader id resolution without leaking Unity resource objects into rule definitions
+- logical material preset-id resolution through the active package preset resolver without rule-owned file paths
 - expression.set alias/range validation, no redundant frame publication, and Maximum blend preservation of routed lip-sync
 - unknown-action containment and diagnostics
 - multiple-handler ambiguity fails closed without target mutation
@@ -142,7 +144,6 @@ These validation paths are implemented but have not been executed in this enviro
 
 The next source slices are:
 
-- add material preset application only after a shared runtime preset-id registry is defined; rule definitions must not own preset file paths
 - validate allocation/frame-time cost under event bursts
 
 Recursive/chained event emission is intentionally not part of the first slice to avoid accidental feedback loops.

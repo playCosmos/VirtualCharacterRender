@@ -18,7 +18,8 @@ namespace VCR.Runtime.Materials.Unity
     [DisallowMultipleComponent]
     public sealed class RuntimeShaderPackageLoader :
         MonoBehaviour,
-        IRuntimeMetricsSource
+        IRuntimeMetricsSource,
+        IMaterialPresetResolver
     {
         private const string ManifestFileName =
             "manifest.json";
@@ -81,6 +82,36 @@ namespace VCR.Runtime.Materials.Unity
         public MaterialPresetDocument LoadedPresetDocument =>
             _loadedPresetDocument;
         public ShaderPackageLoadStatus Status { get; private set; }
+
+        public bool TryResolvePreset(
+            string presetId,
+            out MaterialOverridePreset preset)
+        {
+            preset = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    presetId) ||
+                _loadedPresetDocument?.Presets == null)
+            {
+                return false;
+            }
+
+            foreach (var candidate in
+                     _loadedPresetDocument.Presets)
+            {
+                if (candidate != null &&
+                    string.Equals(
+                        candidate.PresetId,
+                        presetId,
+                        StringComparison.Ordinal))
+                {
+                    preset = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         public bool TryLoadPackage(
             string packageRoot,

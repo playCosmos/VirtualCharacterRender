@@ -1328,6 +1328,24 @@ namespace VCR.Editor.P9
                 propertyHandler.SetMaterialController(
                     controller);
 
+                var presetResolver =
+                    root.AddComponent<
+                        P9FakeMaterialPresetResolver>();
+                presetResolver.Preset =
+                    new MaterialOverridePreset
+                    {
+                        PresetId =
+                            "p9.validation.preset"
+                    };
+
+                var presetHandler =
+                    root.AddComponent<
+                        MaterialPresetEventActionHandler>();
+                presetHandler.SetMaterialController(
+                    controller);
+                presetHandler.SetPresetResolver(
+                    presetResolver);
+
                 var command =
                     new EventActionCommand(
                         "material-rule",
@@ -1501,6 +1519,34 @@ namespace VCR.Editor.P9
                         runtimeTexture),
                     "material.set_texture must resolve a registered texture id without exposing Texture objects to rules",
                     failures);
+
+                var presetCommand =
+                    new EventActionCommand(
+                        "material-rule",
+                        EventActionTypes
+                            .MaterialApplyPreset,
+                        slots[0].Id,
+                        null,
+                        "p9.validation.preset",
+                        0.0,
+                        false,
+                        26);
+
+                Expect(
+                    presetHandler.CanHandle(
+                        presetCommand) &&
+                    presetHandler.TryExecute(
+                        presetCommand,
+                        out var presetActionError) &&
+                    string.IsNullOrEmpty(
+                        presetActionError) &&
+                    controller.TryGetStatus(
+                        slots[0].Id,
+                        out var presetStatus) &&
+                    presetStatus.PresetId ==
+                        "p9.validation.preset",
+                    "material.apply_preset must resolve a logical preset id without putting preset file paths or objects in rules",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -1606,6 +1652,33 @@ namespace VCR.Editor.P9
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P9FakeMaterialPresetResolver :
+        MonoBehaviour,
+        IMaterialPresetResolver
+    {
+        public MaterialOverridePreset Preset
+        {
+            get;
+            set;
+        }
+
+        public bool TryResolvePreset(
+            string presetId,
+            out MaterialOverridePreset preset)
+        {
+            preset =
+                Preset != null &&
+                string.Equals(
+                    Preset.PresetId,
+                    presetId,
+                    StringComparison.Ordinal)
+                    ? Preset
+                    : null;
+
+            return preset != null;
         }
     }
 

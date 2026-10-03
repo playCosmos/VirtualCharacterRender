@@ -29,6 +29,9 @@ namespace VCR.Runtime.EventRuntime
         public const string MaterialSetShader =
             "material.set_shader";
 
+        public const string MaterialApplyPreset =
+            "material.apply_preset";
+
         public const string ExpressionSet =
             "expression.set";
 
