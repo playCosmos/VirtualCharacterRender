@@ -112,9 +112,10 @@ appearance.set_outfit
 appearance.set_accessory
 appearance.clear_accessory
 appearance.restore_default
+appearance.cancel_transition
 ```
 
-`appearance.set_preset` and `appearance.set_outfit` accept an optional transition id through the command Name field. Accessory set/clear currently use the immediate path.
+`appearance.set_preset` and `appearance.set_outfit` accept an optional transition id through the command Name field. Accessory set/clear currently use the immediate path. `appearance.cancel_transition` executes the same cleanup-gated cancellation path exposed by the Character UI.
 
 Transition presentation is intentionally handler-driven. A user or later built-in module can register logical actions such as `motion.play` or `effect.play` without the appearance runtime owning Animator, ParticleSystem, material, camera, or environment objects.
 
@@ -174,7 +175,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - invalid appearance request leaves prior state intact
 - missing required transition executor with Immediate fallback
 - transition definition requires exactly one appearance commit
-- Event Runtime -> appearance preset bridge
+- Event Runtime -> appearance preset/cancel bridge
 - transition action executor -> application action handler bridge
 - recursive appearance.* transition action rejection
 - built-in effect.play/effect.stop root activation/deactivation through transition actions
