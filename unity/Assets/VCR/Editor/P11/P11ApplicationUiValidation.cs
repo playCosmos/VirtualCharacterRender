@@ -229,6 +229,34 @@ namespace VCR.Editor.P11
                 "transition preview must require a non-immediate transition and an active outfit",
                 failures);
 
+            Expect(
+                ApplicationUiActionPolicy
+                    .CanSaveAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        "C:/avatar.vrm") &&
+                !ApplicationUiActionPolicy
+                    .CanSaveAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "   ",
+                        "C:/avatar.vrm") &&
+                !ApplicationUiActionPolicy
+                    .CanSaveAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Ready,
+                        "stream-look",
+                        null) &&
+                !ApplicationUiActionPolicy
+                    .CanDeleteAppearanceUserPreset(
+                        true,
+                        AppearanceRuntimeState.Transitioning,
+                        "stream-look",
+                        "C:/avatar.vrm"),
+                "saved appearance preset actions must require a ready runtime, preset id, and active character path",
+                failures);
+
             P11AppearanceRuntimeValidation
                 .RunChecks(
                     failures);
