@@ -121,6 +121,56 @@ namespace VCR.Editor.P11
                         bootstrap.gameObject);
             }
 
+            var manualExpression =
+                bootstrap.GetComponent<
+                    ManualExpressionLayerSource>();
+
+            if (manualExpression == null)
+            {
+                manualExpression =
+                    Undo.AddComponent<
+                        ManualExpressionLayerSource>(
+                        bootstrap.gameObject);
+            }
+
+            var expressionHandler =
+                bootstrap.GetComponent<
+                    ExpressionEventActionHandler>();
+
+            if (expressionHandler == null)
+            {
+                expressionHandler =
+                    Undo.AddComponent<
+                        ExpressionEventActionHandler>(
+                        bootstrap.gameObject);
+            }
+
+            expressionHandler
+                .SetExpressionSource(
+                    manualExpression);
+
+            var motionMixer =
+                Object.FindFirstObjectByType<
+                    MotionExpressionMixer>();
+
+            if (motionMixer != null &&
+                !motionMixer
+                    .IsExpressionLayerProvider(
+                        manualExpression))
+            {
+                motionMixer
+                    .SetExpressionLayerProvider(
+                        manualExpression);
+                motionMixer
+                    .ConfigureExpressionLayer(
+                        ExpressionBlendMode.Maximum,
+                        1f,
+                        0f,
+                        0f);
+                EditorUtility.SetDirty(
+                    motionMixer);
+            }
+
             var eventRuntime =
                 Object.FindFirstObjectByType<
                     EventRuntimeHost>();
