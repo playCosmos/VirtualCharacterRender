@@ -199,13 +199,13 @@ namespace VCR.Editor.P6
 
                 canvasTransition.ApplyEnvironmentTransition(
                     new EnvironmentTransitionContext(
-                        sequence: 1,
-                        timestampUs: 0,
-                        previousStateId: "day",
-                        stateId: "night",
+                        1,
+                        0,
+                        "day",
+                        "night",
                         EnvironmentTransitionMode.Crossfade,
-                        progress: 0.25f,
-                        deltaSeconds: 0f));
+                        0.25f,
+                        0f));
 
                 Expect(
                     Math.Abs(
@@ -219,13 +219,13 @@ namespace VCR.Editor.P6
 
                 canvasTransition.ApplyEnvironmentTransition(
                     new EnvironmentTransitionContext(
-                        sequence: 2,
-                        timestampUs: 0,
-                        previousStateId: "night",
-                        stateId: "day",
+                        2,
+                        0,
+                        "night",
+                        "day",
                         EnvironmentTransitionMode.Cut,
-                        progress: 1f,
-                        deltaSeconds: 0f));
+                        1f,
+                        0f));
 
                 Expect(
                     Math.Abs(
