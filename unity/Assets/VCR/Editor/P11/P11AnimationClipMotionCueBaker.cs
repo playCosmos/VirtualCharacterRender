@@ -27,6 +27,25 @@ namespace VCR.Editor.P11
                 .Show();
         }
 
+        public static void OpenWithClip(
+            AnimationClip clip)
+        {
+            var window =
+                GetWindow<
+                    P11AnimationClipMotionCueBaker>(
+                    "VCR Motion Cue Baker");
+            window._clip =
+                clip;
+            window._cueId =
+                clip != null &&
+                !string.IsNullOrWhiteSpace(
+                    clip.name)
+                    ? clip.name
+                    : "quick-change";
+            window.Show();
+            window.Repaint();
+        }
+
         private void OnGUI()
         {
             EditorGUILayout.LabelField(
