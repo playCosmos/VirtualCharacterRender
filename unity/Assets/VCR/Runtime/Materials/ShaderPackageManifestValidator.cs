@@ -93,6 +93,27 @@ namespace VCR.Runtime.Materials
             manifest.PreviewFiles ??=
                 Array.Empty<string>();
 
+            if (manifest.ShaderIds.Length == 0)
+            {
+                error =
+                    "Shader package must declare at least one shader id.";
+                return false;
+            }
+
+            if ((!string.IsNullOrWhiteSpace(
+                     manifest.UnityVersion) &&
+                 !IsSafeVersion(
+                     manifest.UnityVersion)) ||
+                (!string.IsNullOrWhiteSpace(
+                     manifest.UrpVersion) &&
+                 !IsSafeVersion(
+                     manifest.UrpVersion)))
+            {
+                error =
+                    "Shader package Unity/URP compatibility versions contain unsupported characters.";
+                return false;
+            }
+
             if (string.IsNullOrWhiteSpace(
                     manifest.WindowsBundle) &&
                 string.IsNullOrWhiteSpace(
