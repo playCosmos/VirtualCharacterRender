@@ -197,3 +197,11 @@ These validation paths are implemented but have not been executed in this enviro
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
 
 Appearance quick change now has a source implementation foundation but is not runtime-validated. The baseline is same-character outfit/accessory switching with optional choreographed transitions and an atomic commit marker. User-authored motion/effect sequences are supported through registered logical action handlers. Arbitrary external skinned garments remain deferred until character/skeleton compatibility can be validated.
+
+## Appearance quick-change implementation update
+
+Appearance quick change now has a source implementation slice. The runtime includes same-character outfit/accessory bindings, named presets, atomic immediate switching, transition presets with exactly one appearance commit point, QueueLatest/QueueAll/IgnoreWhileBusy policies, Immediate/Fail/SkipOptionalSteps fallback policy, event actions, motion/effect action bridging, procedural quick-change motion cues, effect play/stop handlers, and P11 Character UI controls. Dynamically loaded characters can auto-discover a conventional `VCRAppearance/Outfits` and `VCRAppearance/Accessories/<slot>` hierarchy when no explicit bindings are supplied.
+
+Transition validation now rejects missing/multiple commit points, recursive `appearance.*` steps, decreasing step times, and durations that end before the final step. The source-free validator covers atomic outfit/accessory changes, event-driven changes, custom transition actions, procedural spin cues, effect play/stop, convention discovery, and transition timing guards.
+
+This is not a runtime/device validation PASS. Unity Editor execution, real VRM hierarchy switching, custom effect visuals, motion/particle synchronization, cancellation cleanup, memory/frame-time behavior, and external user-authored asset import remain evidence/tooling work. Arbitrary external skinned garments are still deferred until character/skeleton compatibility can be validated.
