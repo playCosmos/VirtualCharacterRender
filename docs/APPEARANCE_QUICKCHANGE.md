@@ -389,6 +389,8 @@ The first source implementation now exists:
 - `VCR/P11/Open Appearance Transition Timeline` editor with add/duplicate/delete transition operations
 - direct editing of duration, queue/fallback policy, ordered action/commit steps, custom action type/target/name/text/value fields, and cancellation cleanup
 - timeline marker visualization, step reorder/delete, sort-by-time, `Validate & Apply`, and Play Mode `Preview Current Appearance`
+- versioned JSON export for the selected transition or all transitions
+- transactional JSON import with duplicate-ID replacement confirmation and full rollback when runtime validation fails
 - built-in `Spin + Confetti` and Interrupt cleanup starter templates
 - timeline edits write directly to `BasicCharacterAppearanceRuntime.transitions`, so editor and runtime definitions cannot silently diverge
 - appearance Event Runtime action handler
@@ -429,7 +431,7 @@ Not yet implemented as built-ins:
 - external motion-file import into Unity/AnimationClip assets
 - richer user-preset management UI such as rename/reorder/duplicate
 - named motion markers / blocking-step dependency authoring
-- reusable transition package import/export outside scene serialization
+- richer transition package management beyond the implemented versioned JSON import/export, such as package libraries/metadata/migration UI
 - external appearance package import
 - compatible external skinned-garment workflow
 
