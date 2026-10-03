@@ -1519,6 +1519,18 @@ namespace VCR.Editor.P11
             _serializedRuntime
                 .ApplyModifiedProperties();
 
+            if (!_runtime
+                .RebuildConfiguration(
+                    out var validationError))
+            {
+                _lastMessage =
+                    "Transition export blocked by runtime validation: " +
+                    validationError;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
+
             var transitions =
                 selectedOnly
                     ? new[]
