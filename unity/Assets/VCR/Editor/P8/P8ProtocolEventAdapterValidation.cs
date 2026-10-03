@@ -6,6 +6,9 @@ using VCR.Runtime.Broadcast.Soop;
 using VCR.Runtime.Broadcast.SoopUnity;
 using VCR.Runtime.Core;
 using VCR.Runtime.Events;
+using VCR.Runtime.Protocols.Osc;
+using VCR.Runtime.Protocols.OscEvents;
+using VCR.Runtime.Protocols.OscEventsUnity;
 using VCR.Runtime.Protocols.WebSocket;
 using VCR.Runtime.Protocols.WebSocketUnity;
 
@@ -27,6 +30,8 @@ namespace VCR.Editor.P8
             ValidateIngress(
                 failures);
             ValidateWebSocketProtocol(
+                failures);
+            ValidateOscMapping(
                 failures);
             ValidateSoopMapping(
                 failures);
@@ -202,6 +207,139 @@ namespace VCR.Editor.P8
                 failures);
         }
 
+        private static void ValidateOscMapping(
+            List<string> failures)
+        {
+            var chat =
+                new OscMessage(
+                    OscNormalizedEventMapper
+                        .EventAddress,
+                    new[]
+                    {
+                        OscArgument.FromString(
+                            NormalizedEventTypes
+                                .BroadcastChatMessage),
+                        OscArgument.FromString(
+                            "osc-user"),
+                        OscArgument.FromString(
+                            "hello osc")
+                    });
+
+            Expect(
+                OscNormalizedEventMapper
+                    .TryCreateEvent(
+                        chat,
+                        "osc.validation",
+                        1500,
+                        out var chatEvent,
+                        out var chatError) &&
+                string.IsNullOrEmpty(
+                    chatError) &&
+                chatEvent.Type ==
+                    NormalizedEventTypes
+                        .BroadcastChatMessage &&
+                chatEvent.SourceId ==
+                    "osc.validation" &&
+                chatEvent.TimestampUs ==
+                    1500 &&
+                chatEvent.ActorId ==
+                    "osc-user" &&
+                chatEvent.Text ==
+                    "hello osc",
+                "OSC /vcr/event chat payload must map to normalized event using local source/timestamp",
+                failures);
+
+            var donation =
+                new OscMessage(
+                    OscNormalizedEventMapper
+                        .EventAddress,
+                    new[]
+                    {
+                        OscArgument.FromString(
+                            NormalizedEventTypes
+                                .BroadcastDonation),
+                        OscArgument.FromString(
+                            "osc-supporter"),
+                        OscArgument.FromString(
+                            "cheer"),
+                        OscArgument.FromInt(
+                            25),
+                        OscArgument.FromString(
+                            "TEST_UNIT"),
+                        OscArgument.FromString(
+                            "OSC Supporter")
+                    });
+
+            Expect(
+                OscNormalizedEventMapper
+                    .TryCreateEvent(
+                        donation,
+                        "osc.validation",
+                        1501,
+                        out var donationEvent,
+                        out var donationError) &&
+                string.IsNullOrEmpty(
+                    donationError) &&
+                donationEvent.HasAmount &&
+                Math.Abs(
+                    donationEvent.Amount -
+                    25.0) <
+                    0.001 &&
+                donationEvent.Currency ==
+                    "TEST_UNIT" &&
+                donationEvent.ActorName ==
+                    "OSC Supporter",
+                "OSC /vcr/event donation payload must support numeric amount, unit, and actor name",
+                failures);
+
+            var forged =
+                new OscMessage(
+                    OscNormalizedEventMapper
+                        .EventAddress,
+                    new[]
+                    {
+                        OscArgument.FromString(
+                            NormalizedEventTypes
+                                .TrackingSourceLost)
+                    });
+
+            Expect(
+                !OscNormalizedEventMapper
+                    .TryCreateEvent(
+                        forged,
+                        "osc.validation",
+                        1502,
+                        out _,
+                        out var forgedError) &&
+                !string.IsNullOrEmpty(
+                    forgedError),
+                "OSC normalized-event ingress must reject forged tracking-derived events",
+                failures);
+
+            var wrongAddress =
+                new OscMessage(
+                    "/other/event",
+                    new[]
+                    {
+                        OscArgument.FromString(
+                            NormalizedEventTypes
+                                .LocalManual)
+                    });
+
+            Expect(
+                !OscNormalizedEventMapper
+                    .TryCreateEvent(
+                        wrongAddress,
+                        "osc.validation",
+                        1503,
+                        out _,
+                        out var addressError) &&
+                !string.IsNullOrEmpty(
+                    addressError),
+                "OSC event mapper must reject unrelated OSC addresses",
+                failures);
+        }
+
         private static void ValidateSoopMapping(
             List<string> failures)
         {
@@ -326,10 +464,15 @@ namespace VCR.Editor.P8
                 var soop =
                     host.AddComponent<
                         SoopBridgeEventAdapter>();
+                var osc =
+                    host.AddComponent<
+                        OscNormalizedEventUdpReceiver>();
 
                 webSocket.SetSink(
                     sink);
                 soop.SetSink(
+                    sink);
+                osc.SetSink(
                     sink);
 
                 var webSocketJson =
@@ -494,12 +637,72 @@ namespace VCR.Editor.P8
                     "SOOP Unity adapter must reject invalid donation bridge message without publishing",
                     failures);
 
+                var oscMessage =
+                    new OscMessage(
+                        OscNormalizedEventMapper
+                            .EventAddress,
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                NormalizedEventTypes
+                                    .LocalManual),
+                            OscArgument.FromString(
+                                "osc-operator"),
+                            OscArgument.FromString(
+                                "osc trigger")
+                        });
+
+                Expect(
+                    osc.TryQueueMessage(
+                        oscMessage,
+                        out var oscError) &&
+                    string.IsNullOrEmpty(
+                        oscError) &&
+                    osc.QueuedCount == 1,
+                    "OSC UDP receiver test path must queue a valid mapped event before main-thread dispatch",
+                    failures);
+
+                InvokeUpdate(
+                    osc);
+
+                Expect(
+                    sink.Events.Count == 4 &&
+                    sink.Events[3].Type ==
+                        NormalizedEventTypes
+                            .LocalManual &&
+                    sink.Events[3].SourceId ==
+                        "osc.udp" &&
+                    osc.QueuedCount == 0 &&
+                    osc.DispatchedEventCount == 1,
+                    "OSC UDP receiver must publish queued events only through its main-thread Update path",
+                    failures);
+
+                Expect(
+                    !osc.TryQueueMessage(
+                        new OscMessage(
+                            OscNormalizedEventMapper
+                                .EventAddress,
+                            new[]
+                            {
+                                OscArgument.FromString(
+                                    NormalizedEventTypes
+                                        .TrackingSubjectLost)
+                            }),
+                        out var oscForgedError) &&
+                    !string.IsNullOrEmpty(
+                        oscForgedError) &&
+                    osc.RejectedEventCount == 1,
+                    "OSC UDP receiver must reject forged tracking events before they enter the queue",
+                    failures);
+
                 var metrics =
                     new List<RuntimeMetric>();
 
                 webSocket.CollectMetrics(
                     metrics);
                 soop.CollectMetrics(
+                    metrics);
+                osc.CollectMetrics(
                     metrics);
 
                 Expect(
@@ -544,6 +747,31 @@ namespace VCR.Editor.P8
                     0.001,
                     "SOOP adapter diagnostics must expose accepted/duplicate/rejected counts",
                     failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "protocol.osc.events.accepted",
+                        out var oscAccepted) &&
+                    Math.Abs(
+                        oscAccepted - 1.0) <
+                    0.001 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.osc.events.rejected",
+                        out var oscRejected) &&
+                    Math.Abs(
+                        oscRejected - 1.0) <
+                    0.001 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.osc.events.dispatched",
+                        out var oscDispatched) &&
+                    Math.Abs(
+                        oscDispatched - 1.0) <
+                    0.001,
+                    "OSC event receiver diagnostics must expose accepted/rejected/dispatched counts",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -560,6 +788,33 @@ namespace VCR.Editor.P8
                             host);
                 }
             }
+        }
+
+        private static void InvokeUpdate(
+            OscNormalizedEventUdpReceiver receiver)
+        {
+            var method =
+                typeof(
+                    OscNormalizedEventUdpReceiver)
+                    .GetMethod(
+                        "Update",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(
+                        OscNormalizedEventUdpReceiver)
+                        .FullName,
+                    "Update");
+            }
+
+            method.Invoke(
+                receiver,
+                null);
         }
 
         private static bool TryGetMetric(
