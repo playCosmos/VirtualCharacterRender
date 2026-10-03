@@ -109,6 +109,6 @@ The source implementation has progressed through P4 tracking abstraction/routing
 
 ## Status
 
-P1-P4 source implementations are preserved as source checkpoints. P5 motion/expression mixing is active, beginning with a final mix-provider contract and weighted/deadzoned expression-layer blending on top of routed tracking.
+P1-P4 source implementations are preserved as source checkpoints. P5 motion/expression mixing has reached a source-checkpoint-ready state with ordered pose layers, weighted root/per-bone masks, expression blending/deadzone/smoothing, deterministic fallback, and mixer diagnostics. Unity allocation/performance evidence remains deferred.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
