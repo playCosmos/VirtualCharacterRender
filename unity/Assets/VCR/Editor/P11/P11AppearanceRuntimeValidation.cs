@@ -1201,6 +1201,123 @@ namespace VCR.Editor.P11
                         StringComparison.OrdinalIgnoreCase),
                     "appearance transition duration must not end before its final step",
                     failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "interrupt-without-cleanup",
+                            DurationSeconds =
+                                0.5f,
+                            QueuePolicy =
+                                AppearanceTransitionQueuePolicy
+                                    .Interrupt,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.25f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    !invalid.RebuildConfiguration(
+                        out var interruptError) &&
+                    interruptError != null &&
+                    interruptError.Contains(
+                        "cleanup",
+                        StringComparison.OrdinalIgnoreCase),
+                    "Interrupt transitions must fail closed without explicit cancellation cleanup actions",
+                    failures);
+
+                invalid.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "interrupt-with-cleanup",
+                            DurationSeconds =
+                                0.5f,
+                            QueuePolicy =
+                                AppearanceTransitionQueuePolicy
+                                    .Interrupt,
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .EffectPlay,
+                                        Required =
+                                            false
+                                    },
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0.25f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Commit
+                                    }
+                                },
+                            CancellationSteps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        TimeSeconds =
+                                            0f,
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            EventActionTypes
+                                                .EffectStop,
+                                        Text =
+                                            "confetti",
+                                        Required =
+                                            false
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    invalid.RebuildConfiguration(
+                        out var cleanupError),
+                    "Interrupt transitions with explicit immediate cleanup actions must validate: " +
+                    cleanupError,
+                    failures);
             }
             catch (Exception exception)
             {
