@@ -402,6 +402,125 @@ namespace VCR.Editor.P11
                         " / " +
                         applyUserError,
                         failures);
+
+                    Expect(
+                        userRegistry.DuplicateUserPreset(
+                            "user-casual",
+                            "user-copy",
+                            out var duplicatedUserPreset,
+                            out var duplicateUserError) &&
+                        duplicatedUserPreset != null &&
+                        userRegistry.UserPresetIds.Count ==
+                            2 &&
+                        userRegistry.UserPresetIds[0] ==
+                            "user-casual" &&
+                        userRegistry.UserPresetIds[1] ==
+                            "user-copy",
+                        "user preset duplication must insert the clone immediately after its source: " +
+                        duplicateUserError,
+                        failures);
+
+                    Expect(
+                        userRegistry.RenameUserPreset(
+                            "user-copy",
+                            "user-renamed",
+                            out var renamedUserPreset,
+                            out var renameUserError) &&
+                        renamedUserPreset != null &&
+                        renamedUserPreset.Id ==
+                            "user-renamed" &&
+                        userRegistry.UserPresetIds[1] ==
+                            "user-renamed",
+                        "user preset rename must preserve list position while replacing the id: " +
+                        renameUserError,
+                        failures);
+
+                    Expect(
+                        !userRegistry.RenameUserPreset(
+                            "user-renamed",
+                            "casual-hat",
+                            out _,
+                            out var authoredRenameCollisionError) &&
+                        !string.IsNullOrWhiteSpace(
+                            authoredRenameCollisionError),
+                        "user preset rename must not collide with authored preset ids",
+                        failures);
+
+                    Expect(
+                        userRegistry.MoveUserPreset(
+                            "user-renamed",
+                            -1,
+                            out var moveUserUpError) &&
+                        userRegistry.UserPresetIds[0] ==
+                            "user-renamed" &&
+                        userRegistry.UserPresetIds[1] ==
+                            "user-casual",
+                        "user preset reorder must move the selected preset upward while preserving ids: " +
+                        moveUserUpError,
+                        failures);
+
+                    string applyRenamedError =
+                        null;
+                    var appliedRenamed =
+                        runtime.SetPreset(
+                            "user-renamed",
+                            "Immediate",
+                            out applyRenamedError);
+
+                    Expect(
+                        appliedRenamed &&
+                        runtime.Current.PresetId ==
+                            "user-renamed",
+                        "renamed user preset must remain applicable through the normal preset path: " +
+                        applyRenamedError,
+                        failures);
+
+                    Expect(
+                        userRegistry.RenameUserPreset(
+                            "user-renamed",
+                            "user-final",
+                            out _,
+                            out var currentRenameError) &&
+                        runtime.Current.PresetId ==
+                            "user-final",
+                        "renaming the currently selected user preset must update its current preset identity without changing appearance state: " +
+                        currentRenameError,
+                        failures);
+
+                    Expect(
+                        userRegistry.MoveUserPreset(
+                            "user-final",
+                            1,
+                            out var moveUserDownError) &&
+                        userRegistry.UserPresetIds[0] ==
+                            "user-casual" &&
+                        userRegistry.UserPresetIds[1] ==
+                            "user-final",
+                        "user preset reorder must move the selected preset downward: " +
+                        moveUserDownError,
+                        failures);
+
+                    Expect(
+                        store.TrySave(
+                            characterPath,
+                            userRegistry
+                                .CaptureUserPresets(),
+                            out var managedProfileSaveError) &&
+                        store.TryLoad(
+                            characterPath,
+                            out var managedUserPresets,
+                            out var managedProfileLoadError) &&
+                        managedUserPresets.Length ==
+                            2 &&
+                        managedUserPresets[0].Id ==
+                            "user-casual" &&
+                        managedUserPresets[1].Id ==
+                            "user-final",
+                        "appearance profile persistence must preserve managed user preset ids and order: " +
+                        managedProfileSaveError +
+                        " / " +
+                        managedProfileLoadError,
+                        failures);
                 }
                 finally
                 {
