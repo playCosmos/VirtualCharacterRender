@@ -1,3 +1,4 @@
+using VCR.Runtime.Appearance;
 using VCR.Runtime.Scene;
 
 namespace VCR.Runtime.UI
@@ -47,6 +48,93 @@ namespace VCR.Runtime.UI
             return
                 runtimeAvailable &&
                 IsOperationalActionState(state);
+        }
+
+        public static bool CanApplyAppearancePreset(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string presetId)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    presetId);
+        }
+
+        public static bool CanApplyAppearanceOutfit(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string outfitId)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    outfitId);
+        }
+
+        public static bool CanSetAppearanceAccessory(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string slotId,
+            string accessoryId)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    slotId) &&
+                !string.IsNullOrWhiteSpace(
+                    accessoryId);
+        }
+
+        public static bool CanClearAppearanceAccessory(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string slotId)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    slotId);
+        }
+
+        public static bool CanPreviewAppearanceTransition(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state,
+            string transitionId,
+            string currentOutfitId)
+        {
+            return
+                CanMutateAppearance(
+                    runtimeAvailable,
+                    state) &&
+                !string.IsNullOrWhiteSpace(
+                    transitionId) &&
+                !string.Equals(
+                    transitionId,
+                    "Immediate",
+                    System.StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(
+                    currentOutfitId);
+        }
+
+        public static bool CanMutateAppearance(
+            bool runtimeAvailable,
+            AppearanceRuntimeState state)
+        {
+            return
+                runtimeAvailable &&
+                state != AppearanceRuntimeState.Unconfigured &&
+                state != AppearanceRuntimeState.Transitioning &&
+                state != AppearanceRuntimeState.Committing &&
+                state != AppearanceRuntimeState.Faulted;
         }
 
         public static bool IsOperationalActionState(
