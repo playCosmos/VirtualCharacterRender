@@ -15,6 +15,8 @@ namespace VCR.Editor.P11
                 .DefaultDestinationFolder;
         private bool _autoDetectSidecar = true;
         private bool _openCueBaker = true;
+        private float _bvhPositionScale = 0.01f;
+        private bool _bvhMirrorX = true;
         private Vector2 _scroll;
         private string _status;
         private MessageType _statusType =
@@ -75,6 +77,35 @@ namespace VCR.Editor.P11
                 EditorGUILayout.Toggle(
                     "Open Cue Baker After Import",
                     _openCueBaker);
+
+            if (string.Equals(
+                    Path.GetExtension(
+                        _sourcePath),
+                    ".bvh",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                using (new EditorGUILayout
+                           .VerticalScope(
+                               EditorStyles.helpBox))
+                {
+                    EditorGUILayout.LabelField(
+                        "BVH Adapter",
+                        EditorStyles.boldLabel);
+                    _bvhPositionScale =
+                        Mathf.Max(
+                            0.000001f,
+                            EditorGUILayout.FloatField(
+                                "Position Scale",
+                                _bvhPositionScale));
+                    _bvhMirrorX =
+                        EditorGUILayout.Toggle(
+                            "Mirror X",
+                            _bvhMirrorX);
+                    EditorGUILayout.HelpBox(
+                        "Default scale 0.01 treats one BVH position unit as one centimeter. Mirror X converts the common right-handed BVH basis into the Unity-facing basis used by this adapter. Disable or adjust these only when the source convention differs.",
+                        MessageType.None);
+                }
+            }
 
             using (new EditorGUILayout
                        .HorizontalScope())
@@ -295,6 +326,13 @@ namespace VCR.Editor.P11
                         ? null
                         : _sidecarPath,
                     _autoDetectSidecar,
+                    new P11ExternalMotionImportOptions
+                    {
+                        BvhPositionScale =
+                            _bvhPositionScale,
+                        BvhMirrorX =
+                            _bvhMirrorX
+                    },
                     out var result,
                     out var error))
             {
