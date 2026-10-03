@@ -75,6 +75,16 @@ namespace VCR.Runtime.UI
         private Button _environmentTransitionModeButton;
         private InputField _environmentTransitionDurationInput;
         private Button _environmentApplyStateButton;
+        private Button _materialPreviousSlotButton;
+        private Button _materialNextSlotButton;
+        private InputField _materialSlotInput;
+        private InputField _materialShaderInput;
+        private Button _materialApplyShaderButton;
+        private InputField _materialPropertyInput;
+        private InputField _materialValueInput;
+        private Button _materialSetFloatButton;
+        private Button _materialClearOverrideButton;
+        private Button _materialRefreshSlotsButton;
         private Button _trackingPreviousButton;
         private Button _trackingToggleButton;
         private Button _trackingRecoverButton;
@@ -118,6 +128,7 @@ namespace VCR.Runtime.UI
         private int _appearanceTransitionIndex;
         private EnvironmentTransitionMode _environmentTransitionMode =
             EnvironmentTransitionMode.Cut;
+        private int _materialSlotIndex;
 
         public ApplicationUiModel Model => _model;
 
@@ -216,6 +227,16 @@ namespace VCR.Runtime.UI
             _environmentTransitionModeButton = null;
             _environmentTransitionDurationInput = null;
             _environmentApplyStateButton = null;
+            _materialPreviousSlotButton = null;
+            _materialNextSlotButton = null;
+            _materialSlotInput = null;
+            _materialShaderInput = null;
+            _materialApplyShaderButton = null;
+            _materialPropertyInput = null;
+            _materialValueInput = null;
+            _materialSetFloatButton = null;
+            _materialClearOverrideButton = null;
+            _materialRefreshSlotsButton = null;
             _trackingPreviousButton = null;
             _trackingToggleButton = null;
             _trackingRecoverButton = null;
@@ -891,6 +912,96 @@ namespace VCR.Runtime.UI
             _environmentApplyStateButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 120f;
+
+            _materialPreviousSlotButton =
+                CreateButton(
+                    "Prev Slot",
+                    _contextActions,
+                    SelectPreviousMaterialSlot);
+            _materialPreviousSlotButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 90f;
+
+            _materialNextSlotButton =
+                CreateButton(
+                    "Next Slot",
+                    _contextActions,
+                    SelectNextMaterialSlot);
+            _materialNextSlotButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 90f;
+
+            _materialSlotInput =
+                CreateInputField(
+                    "Material Slot Id",
+                    _contextActions,
+                    "Slot ID");
+            _materialSlotInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 190f;
+
+            _materialShaderInput =
+                CreateInputField(
+                    "Material Shader Id",
+                    _contextActions,
+                    "Shader ID");
+            _materialShaderInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 150f;
+
+            _materialApplyShaderButton =
+                CreateButton(
+                    "Apply Shader",
+                    _contextActions,
+                    ApplyMaterialShader);
+            _materialApplyShaderButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 115f;
+
+            _materialPropertyInput =
+                CreateInputField(
+                    "Material Float Property",
+                    _contextActions,
+                    "Float property");
+            _materialPropertyInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 130f;
+
+            _materialValueInput =
+                CreateInputField(
+                    "Material Float Value",
+                    _contextActions,
+                    "Value");
+            _materialValueInput.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 80f;
+
+            _materialSetFloatButton =
+                CreateButton(
+                    "Set Float",
+                    _contextActions,
+                    SetMaterialFloat);
+            _materialSetFloatButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 95f;
+
+            _materialClearOverrideButton =
+                CreateButton(
+                    "Clear",
+                    _contextActions,
+                    ClearMaterialOverride);
+            _materialClearOverrideButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 75f;
+
+            _materialRefreshSlotsButton =
+                CreateButton(
+                    "Refresh Slots",
+                    _contextActions,
+                    RefreshMaterialSlots);
+            _materialRefreshSlotsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 115f;
 
             _appearanceActions =
                 CreateRect(
