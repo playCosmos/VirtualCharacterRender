@@ -336,6 +336,17 @@ namespace VCR.Runtime.Scene
             _overlayOutput.Apply(settings);
         }
 
+        public bool TryRecoverOverlayOutput(
+            out string error)
+        {
+            EnsureOperational();
+            ResolveOverlayOutput();
+
+            return OverlayOutputRecovery.TryRestart(
+                _overlayOutput,
+                out error);
+        }
+
         public bool Suspend()
         {
             if (_state == SceneRuntimeState.Suspended)

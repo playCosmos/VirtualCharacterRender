@@ -35,6 +35,9 @@ namespace VCR.Runtime.Output.Unity
         private bool _pendingNativeApply;
         private bool _nativeApplied;
         private float _nativeApplyStartedAt;
+        private long _applyAttempts;
+        private long _applyFailures;
+        private long _nativeApplySuccesses;
 
         private CameraClearFlags _originalClearFlags;
         private Color _originalBackground;
@@ -130,6 +133,7 @@ namespace VCR.Runtime.Output.Unity
             {
                 _pendingNativeApply = false;
                 _nativeApplied = false;
+                _applyFailures++;
                 _lastError =
                     "Timed out while applying native overlay window settings.";
                 return;
@@ -148,6 +152,8 @@ namespace VCR.Runtime.Output.Unity
 
         public void Apply(OverlayOutputSettings settings)
         {
+            _applyAttempts++;
+
             transparent = settings.Transparent;
             topmost = settings.Topmost;
             clickThrough = settings.ClickThrough;
@@ -167,6 +173,14 @@ namespace VCR.Runtime.Output.Unity
             {
                 _lastError =
                     "UniWindowController component is missing.";
+                _applyFailures++;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(
+                    _lastError))
+            {
+                _applyFailures++;
                 return;
             }
 
@@ -219,6 +233,7 @@ namespace VCR.Runtime.Output.Unity
 
             _nativeApplied = true;
             _pendingNativeApply = false;
+            _nativeApplySuccesses++;
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)
@@ -274,6 +289,21 @@ namespace VCR.Runtime.Output.Unity
                 "output.overlay.click_through",
                 clickThrough ? 1 : 0,
                 "bool"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.apply_attempts",
+                _applyAttempts,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.apply_failures",
+                _applyFailures,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "output.overlay.native_apply_successes",
+                _nativeApplySuccesses,
+                "count"));
         }
 
         private OverlayOutputSettings CurrentSettings()

@@ -43,6 +43,7 @@ Faulted
 - reports native-apply pending state
 - fails closed after a bounded native-apply timeout instead of waiting forever
 - reports state/active/pending/topmost/click-through diagnostics
+- reports apply-attempt, apply-failure, and native-apply-success counters
 - preserves the existing transparent/topmost/click-through settings contract
 - restores camera/native state through the existing shutdown path
 
@@ -58,6 +59,8 @@ Faulted
 This readiness result means only that the application-side overlay prerequisites are satisfied. It does not prove OBS capture, platform compositor behavior, or alpha correctness in a built player.
 
 `SingleCharacterSceneRuntime.OverlayCaptureReadiness` exposes the same readiness contract without leaking UniWinC/native objects into the scene/runtime API.
+
+`OverlayOutputRecovery.TryRestart` and `SingleCharacterSceneRuntime.TryRecoverOverlayOutput` provide an explicit settings-preserving recovery path. Recovery performs `Shutdown -> Apply(previous settings)`, contains adapter exceptions, and treats pending/configured restart states as a successful retry attempt while still requiring a later readiness check before capture.
 
 ## Source-free validation
 
@@ -83,6 +86,8 @@ The P10 batch entry runs P0-P9 source-free suites first and then checks:
 - faulted/unsupported/inactive rejection
 - opaque-output rejection
 - invalid-client-size rejection
+- settings-preserving overlay restart
+- unsupported restart and adapter-exception containment
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
