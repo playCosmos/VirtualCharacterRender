@@ -2899,6 +2899,215 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void SelectPreviousMaterialSlot()
+        {
+            SelectMaterialSlot(
+                -1);
+        }
+
+        private void SelectNextMaterialSlot()
+        {
+            SelectMaterialSlot(
+                1);
+        }
+
+        private void SelectMaterialSlot(
+            int offset)
+        {
+            if (_materialController == null)
+            {
+                _lastActionMessage =
+                    "Material controller unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var slots =
+                _materialController.GetSlots();
+
+            if (slots.Length == 0)
+            {
+                _lastActionMessage =
+                    "No material slots are available.";
+                RefreshAll();
+                return;
+            }
+
+            _materialSlotIndex =
+                (_materialSlotIndex +
+                 offset +
+                 slots.Length) %
+                slots.Length;
+
+            if (_materialSlotInput != null)
+            {
+                _materialSlotInput.text =
+                    slots[
+                        _materialSlotIndex].Id;
+            }
+
+            RefreshAll();
+        }
+
+        private void ApplyMaterialShader()
+        {
+            if (_materialController == null)
+            {
+                _lastActionMessage =
+                    "Material controller unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var slotId =
+                _materialSlotInput?.text?.Trim();
+            var shaderId =
+                _materialShaderInput?.text?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    slotId) ||
+                string.IsNullOrWhiteSpace(
+                    shaderId))
+            {
+                _lastActionMessage =
+                    "Material slot ID and shader ID are required.";
+                RefreshAll();
+                return;
+            }
+
+            if (!_materialController
+                .TryApplyShaderId(
+                    slotId,
+                    shaderId,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Material shader apply failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Shader '{shaderId}' applied to material slot '{slotId}'.";
+            RefreshAll();
+        }
+
+        private void SetMaterialFloat()
+        {
+            if (_materialController == null)
+            {
+                _lastActionMessage =
+                    "Material controller unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var slotId =
+                _materialSlotInput?.text?.Trim();
+            var property =
+                _materialPropertyInput?.text?.Trim();
+            var rawValue =
+                _materialValueInput?.text?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    slotId) ||
+                string.IsNullOrWhiteSpace(
+                    property) ||
+                !float.TryParse(
+                    rawValue,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var value) ||
+                float.IsNaN(
+                    value) ||
+                float.IsInfinity(
+                    value))
+            {
+                _lastActionMessage =
+                    "Material float update requires a slot ID, property name, and finite numeric value.";
+                RefreshAll();
+                return;
+            }
+
+            if (!_materialController
+                .TrySetFloat(
+                    slotId,
+                    property,
+                    value,
+                    out var error))
+            {
+                _lastActionMessage =
+                    "Material float update failed: " +
+                    (error ?? "unknown error");
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Material '{slotId}' property '{property}' set to {value:0.###}.";
+            RefreshAll();
+        }
+
+        private void ClearMaterialOverride()
+        {
+            if (_materialController == null)
+            {
+                _lastActionMessage =
+                    "Material controller unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            var slotId =
+                _materialSlotInput?.text?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    slotId) ||
+                !_materialController
+                    .ClearOverride(
+                        slotId))
+            {
+                _lastActionMessage =
+                    $"Material override clear failed for '{slotId ?? "<empty>"}'.";
+                RefreshAll();
+                return;
+            }
+
+            _lastActionMessage =
+                $"Material override cleared for '{slotId}'.";
+            RefreshAll();
+        }
+
+        private void RefreshMaterialSlots()
+        {
+            if (_materialController == null)
+            {
+                _lastActionMessage =
+                    "Material controller unavailable.";
+                RefreshAll();
+                return;
+            }
+
+            _materialController.RefreshSlots();
+            _materialSlotIndex = 0;
+
+            var slots =
+                _materialController.GetSlots();
+
+            if (_materialSlotInput != null)
+            {
+                _materialSlotInput.text =
+                    slots.Length > 0
+                        ? slots[0].Id
+                        : string.Empty;
+            }
+
+            _lastActionMessage =
+                $"Material slots refreshed: {slots.Length}.";
+            RefreshAll();
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -4453,7 +4662,9 @@ namespace VCR.Runtime.UI
                         _model.SelectedSection ==
                             ApplicationUiSection.MotionExpression ||
                         _model.SelectedSection ==
-                            ApplicationUiSection.Environment)
+                            ApplicationUiSection.Environment ||
+                        _model.SelectedSection ==
+                            ApplicationUiSection.MaterialShader)
                     {
                         RefreshContextActions();
                     }
