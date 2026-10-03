@@ -19,7 +19,7 @@ namespace VCR.Runtime.UI
         {
             get
             {
-#if (UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+#if UNITY_EDITOR || UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX
                 return true;
 #else
                 return false;
@@ -31,9 +31,11 @@ namespace VCR.Runtime.UI
         {
             get
             {
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+#if UNITY_EDITOR
+                return "editor.openfile";
+#elif UNITY_STANDALONE_WIN
                 return "desktop.windows.openfile";
-#elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
+#elif UNITY_STANDALONE_OSX
                 return "desktop.macos.choose-file";
 #else
                 return "desktop.unsupported";
@@ -44,16 +46,19 @@ namespace VCR.Runtime.UI
         public string UnavailableReason =>
             IsSupported
                 ? null
-                : "Desktop file selection is available in Windows/macOS standalone builds. Unity Editor uses the P11 editor adapter.";
+                : "Character file selection is available in Unity Editor and Windows/macOS standalone builds.";
 
         public CharacterFileSelectionResult
             SelectCharacterFile(
                 string currentPath)
         {
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+#if UNITY_EDITOR
+            return SelectEditor(
+                currentPath);
+#elif UNITY_STANDALONE_WIN
             return SelectWindows(
                 currentPath);
-#elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
+#elif UNITY_STANDALONE_OSX
             return SelectMacOs(
                 currentPath);
 #else
@@ -62,6 +67,70 @@ namespace VCR.Runtime.UI
                     UnavailableReason);
 #endif
         }
+
+#if UNITY_EDITOR
+        private static CharacterFileSelectionResult
+            SelectEditor(
+                string currentPath)
+        {
+            try
+            {
+                var editorUtilityType =
+                    Type.GetType(
+                        "UnityEditor.EditorUtility, UnityEditor");
+
+                if (editorUtilityType == null)
+                {
+                    return CharacterFileSelectionResult
+                        .Failure(
+                            "Unity Editor file picker type is unavailable.");
+                }
+
+                var openFilePanel =
+                    editorUtilityType.GetMethod(
+                        "OpenFilePanel",
+                        new[]
+                        {
+                            typeof(string),
+                            typeof(string),
+                            typeof(string)
+                        });
+
+                if (openFilePanel == null)
+                {
+                    return CharacterFileSelectionResult
+                        .Failure(
+                            "Unity Editor file picker method is unavailable.");
+                }
+
+                var selected =
+                    openFilePanel.Invoke(
+                        null,
+                        new object[]
+                        {
+                            "Select VRM Character",
+                            ResolveInitialDirectory(
+                                currentPath) ??
+                            Application.dataPath,
+                            "vrm"
+                        }) as string;
+
+                return string.IsNullOrWhiteSpace(
+                           selected)
+                    ? CharacterFileSelectionResult
+                        .CancelledResult()
+                    : ValidateSelectedPath(
+                        selected);
+            }
+            catch (Exception exception)
+            {
+                return CharacterFileSelectionResult
+                    .Failure(
+                        "Unity Editor file dialog failed: " +
+                        exception.Message);
+            }
+        }
+#endif
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
         [StructLayout(
