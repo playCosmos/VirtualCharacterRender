@@ -5798,7 +5798,24 @@ namespace VCR.Runtime.UI
                 return "Event runtime unavailable.";
             }
 
+            var rules =
+                eventRuntime.CaptureRules();
+            var selectedRule =
+                rules.Length > 0
+                    ? rules[
+                        Mathf.Clamp(
+                            _eventRuleIndex,
+                            0,
+                            rules.Length - 1)]
+                    : null;
+
             return
+                $"Rules: {rules.Length}\n" +
+                $"Selected rule: {selectedRule?.Id ?? "<none>"}\n" +
+                $"Selected enabled: {(selectedRule != null ? selectedRule.Enabled.ToString() : "n/a")}\n" +
+                $"Trace enabled: {eventRuntime.Engine.TraceEnabled}\n" +
+                $"Max commands/event: {eventRuntime.MaxCommandsPerEvent}\n" +
+                $"Persisted rules: {_eventRuleStorePath ?? "<not resolved>"}\n" +
                 $"Processed events: {eventRuntime.Engine.ProcessedEvents}\n" +
                 $"Matched rules: {eventRuntime.Engine.MatchedRules}\n" +
                 $"Executed actions: {eventRuntime.ExecutedActions}\n" +
@@ -5855,12 +5872,35 @@ namespace VCR.Runtime.UI
 
             var capabilities =
                 sceneRuntime?.Capabilities;
+            var statuses =
+                capabilities?.CaptureStatuses() ??
+                Array.Empty<
+                    CapabilityStatusSnapshot>();
+            var selectedCapability =
+                statuses.Length > 0
+                    ? statuses[
+                        Mathf.Clamp(
+                            _settingsCapabilityIndex,
+                            0,
+                            statuses.Length - 1)]
+                    : default;
+            var render =
+                sceneRuntime != null
+                    ? sceneRuntime.CaptureRenderSettings()
+                    : RenderRuntimeSettings.Default1080p;
 
             return
                 $"Runtime started: {applicationBootstrap.IsStarted}\n" +
                 $"Configuration: {applicationBootstrap.ConfigurationPath ?? "<default/not resolved>"}\n" +
                 $"Capabilities registered: {capabilities?.RegisteredCount ?? 0}\n" +
-                $"Capabilities enabled: {capabilities?.EnabledCount ?? 0}";
+                $"Capabilities enabled: {capabilities?.EnabledCount ?? 0}\n" +
+                $"Selected capability: {(statuses.Length > 0 ? selectedCapability.Id : "<none>")}\n" +
+                $"Capability state: {(statuses.Length > 0 ? selectedCapability.State.ToString() : "n/a")}\n" +
+                $"Capability error: {(statuses.Length > 0 ? selectedCapability.Error ?? "<none>" : "n/a")}\n" +
+                $"Render scale: {render.RenderScale:0.###}\n" +
+                $"Target FPS: {render.TargetFrameRate}\n" +
+                $"VSync: {render.UseVSync}\n" +
+                $"Run in background: {render.RunInBackground}";
         }
 
         private string DiagnosticsSummary()
