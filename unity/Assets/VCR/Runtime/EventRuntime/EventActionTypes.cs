@@ -38,6 +38,12 @@ namespace VCR.Runtime.EventRuntime
         public const string MotionPoseWeight =
             "motion.pose_weight";
 
+        public const string MotionPlay =
+            "motion.play";
+
+        public const string MotionRelease =
+            "motion.release";
+
         public const string EffectPlay =
             "effect.play";
 
