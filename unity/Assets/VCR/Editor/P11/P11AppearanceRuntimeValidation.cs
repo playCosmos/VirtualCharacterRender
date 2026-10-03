@@ -591,6 +591,10 @@ namespace VCR.Editor.P11
                     checksBeforeComplete:
                         2);
 
+                var firstComplete =
+                    false;
+                string firstCompletionError =
+                    null;
                 var firstCompletionTracked =
                     transitionExecutor
                         .CanTrackCompletion(
@@ -598,15 +602,19 @@ namespace VCR.Editor.P11
                     transitionExecutor
                         .TryIsComplete(
                             blockingCustomStep,
-                            out var firstComplete,
-                            out var firstCompletionError);
+                            out firstComplete,
+                            out firstCompletionError);
 
+                var secondComplete =
+                    false;
+                string secondCompletionError =
+                    null;
                 var secondCompletionTracked =
                     transitionExecutor
                         .TryIsComplete(
                             blockingCustomStep,
-                            out var secondComplete,
-                            out var secondCompletionError);
+                            out secondComplete,
+                            out secondCompletionError);
 
                 Expect(
                     firstCompletionTracked &&
