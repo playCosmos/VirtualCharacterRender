@@ -188,9 +188,13 @@ namespace VCR.Editor.P11
             try
             {
                 var sourceAssetPath =
-                    BuildImportedSourceAssetPath(
-                        sourceFilePath,
-                        destinationAssetFolder);
+                    adapter == null
+                        ? BuildImportedSourceAssetPath(
+                            sourceFilePath,
+                            destinationAssetFolder)
+                        : BuildAdapterSourceAssetPath(
+                            sourceFilePath,
+                            destinationAssetFolder);
                 var sourceAbsolutePath =
                     AssetPathToAbsolutePath(
                         sourceAssetPath);
@@ -704,6 +708,23 @@ namespace VCR.Editor.P11
                         clip.name,
                     StringComparer.Ordinal)
                 .ToArray();
+        }
+
+        private static string BuildAdapterSourceAssetPath(
+            string sourceFilePath,
+            string destinationAssetFolder)
+        {
+            var sourceName =
+                SanitizeFileName(
+                    Path.GetFileName(
+                        sourceFilePath));
+
+            return AssetDatabase
+                .GenerateUniqueAssetPath(
+                    destinationAssetFolder +
+                    "/" +
+                    sourceName +
+                    ".bytes");
         }
 
         private static string BuildImportedSourceAssetPath(
