@@ -27,7 +27,7 @@ namespace VCR.Editor.P6
             {
                 Debug.Log(
                     "VCR P6 environment runtime validation: PASS " +
-                    "(state roots, atomic binding guards, event/manual/scheduled dispatch, failure isolation, recurring-policy driver, drop-only scheduler)");
+                    "(state roots, World/Camera/Screen/Character anchors, atomic binding guards, event/manual/scheduled dispatch, failure isolation, recurring-policy driver, drop-only scheduler)");
                 return true;
             }
 
@@ -132,11 +132,140 @@ namespace VCR.Editor.P6
                     root.AddComponent<
                         P6FakeEnvironmentUpdateTarget>();
 
+                var worldAnchor =
+                    new GameObject("World Anchor");
+                var cameraAnchor =
+                    new GameObject("Camera Anchor");
+                var screenAnchor =
+                    new GameObject("Screen Anchor");
+                var characterAnchor =
+                    new GameObject("Character Anchor");
+                var spaceContent =
+                    new GameObject("Space Content");
+
+                worldAnchor.transform.SetParent(
+                    root.transform,
+                    false);
+                cameraAnchor.transform.SetParent(
+                    root.transform,
+                    false);
+                screenAnchor.transform.SetParent(
+                    root.transform,
+                    false);
+                characterAnchor.transform.SetParent(
+                    root.transform,
+                    false);
+                spaceContent.transform.SetParent(
+                    worldAnchor.transform,
+                    false);
+
+                var spaceTarget =
+                    spaceContent.AddComponent<
+                        EnvironmentSpaceAnchor>();
+
+                spaceTarget.Configure(
+                    spaceContent.transform,
+                    worldAnchor.transform,
+                    cameraAnchor.transform,
+                    screenAnchor.transform,
+                    characterAnchor.transform,
+                    resetLocalTransform: true);
+
                 runtime.Configure(
                     "environment.p6.test",
                     "day",
                     EnvironmentUpdatePolicy.EventDriven,
                     EnvironmentSpaceMode.World);
+
+                runtime.SetSpaceTargets(
+                    spaceTarget,
+                    spaceTarget);
+
+                Expect(
+                    runtime.SpaceTargetCount == 1 &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        worldAnchor.transform),
+                    "space targets must be de-duplicated and apply the current World anchor",
+                    failures);
+
+                spaceContent.transform.localPosition =
+                    new Vector3(
+                        3f,
+                        4f,
+                        5f);
+
+                var cameraApplied =
+                    runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Camera,
+                        out var spaceError);
+
+                Expect(
+                    cameraApplied &&
+                    string.IsNullOrEmpty(
+                        spaceError) &&
+                    runtime.SpaceMode ==
+                        EnvironmentSpaceMode.Camera &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        cameraAnchor.transform) &&
+                    spaceContent.transform.localPosition ==
+                        Vector3.zero,
+                    "Camera space must reparent to the camera anchor and reset local transform",
+                    failures);
+
+                spaceTarget.Configure(
+                    spaceContent.transform,
+                    worldAnchor.transform,
+                    cameraAnchor.transform,
+                    spaceContent.transform,
+                    characterAnchor.transform,
+                    resetLocalTransform: true);
+
+                var invalidScreen =
+                    runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Screen,
+                        out var invalidScreenError);
+
+                Expect(
+                    !invalidScreen &&
+                    !string.IsNullOrEmpty(
+                        invalidScreenError) &&
+                    runtime.SpaceMode ==
+                        EnvironmentSpaceMode.Camera &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        cameraAnchor.transform),
+                    "invalid Screen anchor must fail validation without partially moving content or changing the active space mode",
+                    failures);
+
+                spaceTarget.Configure(
+                    spaceContent.transform,
+                    worldAnchor.transform,
+                    cameraAnchor.transform,
+                    screenAnchor.transform,
+                    characterAnchor.transform,
+                    resetLocalTransform: true);
+
+                Expect(
+                    runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Screen,
+                        out _) &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        screenAnchor.transform),
+                    "Screen space must use the explicit screen/Canvas anchor",
+                    failures);
+
+                Expect(
+                    runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Character,
+                        out _) &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        characterAnchor.transform),
+                    "Character space must follow the explicit character anchor",
+                    failures);
 
                 var dayBinding =
                     new EnvironmentStateBinding();
@@ -393,6 +522,29 @@ namespace VCR.Editor.P6
                     Math.Abs(changes - 1.0) <
                     0.001,
                     "environment diagnostics must expose state change count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.space_targets",
+                        out var spaceTargetCount) &&
+                    Math.Abs(
+                        spaceTargetCount - 1.0) <
+                    0.001,
+                    "environment diagnostics must expose de-duplicated space target count",
+                    failures);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.space_mode",
+                        out var spaceModeMetric) &&
+                    Math.Abs(
+                        spaceModeMetric -
+                        (int)EnvironmentSpaceMode.Character) <
+                    0.001,
+                    "environment diagnostics must expose the active space mode",
                     failures);
 
                 Expect(
