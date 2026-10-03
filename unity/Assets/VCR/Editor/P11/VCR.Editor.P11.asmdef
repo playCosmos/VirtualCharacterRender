@@ -14,6 +14,7 @@
     "VCR.Editor.P9",
     "VCR.Editor.P10",
     "VCR.Runtime.Application",
+    "VCR.Runtime.Scene",
     "VCR.Runtime.UI"
   ],
   "includePlatforms": [
