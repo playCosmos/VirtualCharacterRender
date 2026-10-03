@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Tracking.Mixing;
 
 namespace VCR.Editor.P11
 {
