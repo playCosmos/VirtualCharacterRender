@@ -72,6 +72,50 @@ The next control slice is now also implemented:
 - Save Configuration and Recover Output remain global actions
 - action availability rules are centralized in `ApplicationUiActionPolicy` rather than duplicated across button callbacks
 
+## Appearance / Quick Change implementation slice
+
+The planned wardrobe feature now has its first runtime implementation rather than documentation only.
+
+Implemented source contracts:
+
+- engine-independent `VCR.Runtime.Appearance` contracts and status/state snapshots
+- Unity `BasicCharacterAppearanceRuntime` for one active character
+- registered outfit-root switching
+- single-selection registered accessory slots
+- named appearance presets
+- authored previous/next preset order
+- default-appearance restore
+- atomic same-frame root activation with rollback on apply exception
+- Immediate changes
+- timed transition definitions with exactly one explicit appearance commit step
+- deterministic authored step order; transition step times must be non-decreasing
+- QueueLatest, QueueAll, and IgnoreWhileBusy request policies
+- Interrupt definitions currently fail closed until explicit transition-cancellation cleanup is implemented
+- Immediate fallback when a required presentation executor is unavailable
+- application-action transition executor that can reuse exactly one existing `IEventActionHandler`
+- recursive `appearance.*` transition actions are rejected
+- event actions for preset/outfit/accessory/default changes
+- loaded VRM characters receive an appearance runtime component without forcing any appearance configuration
+- Character UI exposes Previous Look / Next Look / transition selection / Restore Default in a separate action row
+
+Implemented event action types:
+
+```text
+appearance.set_preset
+appearance.set_outfit
+appearance.set_accessory
+appearance.clear_accessory
+appearance.restore_default
+```
+
+`appearance.set_preset` and `appearance.set_outfit` accept an optional transition id through the command Name field. Accessory set/clear currently use the immediate path.
+
+Transition presentation is intentionally handler-driven. A user or later built-in module can register logical actions such as `motion.play` or `effect.play` without the appearance runtime owning Animator, ParticleSystem, material, camera, or environment objects.
+
+The generic transition sequencer/bridge is implemented, but built-in `motion.play`, `motion.release`, `effect.play`, `effect.stop`, and `audio.play` handlers are not yet provided. Therefore the documented spin + confetti example is architecturally supported but is not yet an out-of-box built-in effect.
+
+Timed coroutine execution, queue behavior, visual commit timing, cancellation cleanup, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
+
 ## Runtime scene
 
 Interactive scene generation:
@@ -118,15 +162,25 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - reload/unload gating on an active character
 - scene-mutating action suppression while loading/suspended
 - broadcast-target action availability by scene state
+- transactional registered outfit/accessory switching
+- authored appearance preset order
+- default appearance restore
+- invalid appearance request leaves prior state intact
+- missing required transition executor with Immediate fallback
+- transition definition requires exactly one appearance commit
+- Event Runtime -> appearance preset bridge
+- transition action executor -> application action handler bridge
+- recursive appearance.* transition action rejection
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
 ## Next P11 work
 
 - Character: platform-native file-selection adapter on top of the implemented path-input/load/reload/unload boundary
-- Character > Appearance / Quick Change: implement the planned appearance runtime and UI for named outfit variants, accessory slots, named presets, previous/next/direct preset switching, restore-default, and user preset save
-- Appearance transitions: select Immediate or a reusable transition preset; preview/test motion/effect choreography and expose transition state without embedding Unity-object references in UI data
-- Custom transition authoring/import remains P12, but P11 must be able to select and execute user-authored transition presets through the same runtime contract; see `APPEARANCE_QUICKCHANGE.md`
+- Character > Appearance / Quick Change: add direct preset/outfit/accessory selection and user-preset save on top of the implemented previous/next/default controls
+- Appearance transitions: add built-in motion/effect/audio action handlers, preview/test choreography, and transition progress/cancel UX
+- define explicit cancellation-cleanup steps before enabling Interrupt policy
+- Custom transition authoring/import remains P12; the P11 runtime can already execute authored transition definitions through logical action executors; see `APPEARANCE_QUICKCHANGE.md`
 - Tracking: source enable/status/recovery controls without exposing tracker implementation details
 - Motion / Expression: pose-layer weight and manual-expression controls
 - Environment: state and transition controls
@@ -139,4 +193,4 @@ These validation paths are implemented but have not been executed in this enviro
 
 One active performer remains the product scope. P11 is a view/control layer over established subsystem contracts, not a new runtime orchestration layer.
 
-Appearance quick change is now explicitly in plan but is not yet implemented or validated. The baseline is same-character outfit/accessory switching. It also includes optional choreographed transitions such as spin + confetti + atomic outfit swap, with user-authored motion/effect sequences supported through registered logical assets/actions. Arbitrary external skinned garments are deferred until character/skeleton compatibility can be validated.
+Appearance quick change now has a source implementation foundation but is not runtime-validated. The baseline is same-character outfit/accessory switching with optional choreographed transitions and an atomic commit marker. User-authored motion/effect sequences are supported through registered logical action handlers. Arbitrary external skinned garments remain deferred until character/skeleton compatibility can be validated.
