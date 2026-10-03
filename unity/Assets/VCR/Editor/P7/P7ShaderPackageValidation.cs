@@ -4,6 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Core;
+using VCR.Runtime.Capabilities;
 using VCR.Runtime.Materials;
 using VCR.Runtime.Materials.Unity;
 
@@ -31,6 +32,8 @@ namespace VCR.Editor.P7
 
             ValidateManifest(
                 failures);
+            ValidateDeclarativeCapabilityCatalog(
+                failures);
             ValidateTransactionalLoader(
                 failures);
 
@@ -38,7 +41,7 @@ namespace VCR.Editor.P7
             {
                 Debug.Log(
                     "VCR P7 shader package validation: PASS " +
-                    "(manifest security, platform routing, declarative resources, transactional registry rollback)");
+                    "(manifest security, declarative capability registration, platform routing, declarative resources, transactional registry rollback)");
                 return true;
             }
 
@@ -227,6 +230,121 @@ namespace VCR.Editor.P7
                 failures);
         }
 
+        private static void ValidateDeclarativeCapabilityCatalog(
+            List<string> failures)
+        {
+            var catalog =
+                new DeclarativeCapabilityCatalog();
+            var ownerA =
+                new object();
+            var ownerB =
+                new object();
+
+            var registered =
+                catalog.TryReplace(
+                    ownerA,
+                    "vcr.p7.catalog-a",
+                    "1.0.0",
+                    new[]
+                    {
+                        CapabilityIds
+                            .RenderCustomShader
+                    },
+                    out var registerError);
+
+            Expect(
+                registered &&
+                string.IsNullOrEmpty(
+                    registerError) &&
+                catalog.RegisteredProviderCount == 1 &&
+                catalog.GetProviderCount(
+                    CapabilityIds
+                        .RenderCustomShader) == 1,
+                "declarative capability catalog must register metadata without creating an executable service",
+                failures);
+
+            Expect(
+                !catalog.TryReplace(
+                    ownerB,
+                    "vcr.p7.catalog-a",
+                    "2.0.0",
+                    new[]
+                    {
+                        CapabilityIds
+                            .RenderCustomShader
+                    },
+                    out var conflictError) &&
+                !string.IsNullOrEmpty(
+                    conflictError),
+                "declarative capability provider id ownership must reject a second owner",
+                failures);
+
+            var snapshot =
+                catalog.CaptureOwner(
+                    ownerA);
+
+            Expect(
+                snapshot != null &&
+                snapshot.ProviderId ==
+                    "vcr.p7.catalog-a" &&
+                snapshot.ProviderVersion ==
+                    "1.0.0" &&
+                ContainsCapability(
+                    snapshot,
+                    CapabilityIds
+                        .RenderCustomShader),
+                "declarative capability metadata snapshot must preserve provider identity, version, and capability ids",
+                failures);
+
+            Expect(
+                catalog.TryReplace(
+                    ownerA,
+                    "vcr.p7.catalog-b",
+                    "2.0.0",
+                    new[]
+                    {
+                        CapabilityIds
+                            .RenderCustomShader
+                    },
+                    out var replaceError) &&
+                string.IsNullOrEmpty(
+                    replaceError) &&
+                !catalog.TryGetProvider(
+                    "vcr.p7.catalog-a",
+                    out _) &&
+                catalog.TryGetProvider(
+                    "vcr.p7.catalog-b",
+                    out _),
+                "one owner must replace its declarative provider registration atomically",
+                failures);
+
+            Expect(
+                catalog.RestoreOwner(
+                    ownerA,
+                    snapshot,
+                    out var restoreError) &&
+                string.IsNullOrEmpty(
+                    restoreError) &&
+                catalog.TryGetProvider(
+                    "vcr.p7.catalog-a",
+                    out _) &&
+                !catalog.TryGetProvider(
+                    "vcr.p7.catalog-b",
+                    out _),
+                "declarative capability snapshot restore must support package rollback",
+                failures);
+
+            Expect(
+                catalog.UnregisterOwner(
+                    ownerA) &&
+                catalog.RegisteredProviderCount == 0 &&
+                !catalog.IsProvided(
+                    CapabilityIds
+                        .RenderCustomShader),
+                "unregistering a declarative package owner must remove only metadata registration",
+                failures);
+        }
+
         private static void ValidateTransactionalLoader(
             List<string> failures)
         {
@@ -261,6 +379,12 @@ namespace VCR.Editor.P7
 
             GameObject host = null;
             Texture2D sentinelTexture = null;
+
+            var capabilityCatalog =
+                DeclarativeCapabilityCatalog.Shared;
+            var baselineCapabilityProviders =
+                capabilityCatalog.GetProviderCount(
+                    CapabilityIds.RenderCustomShader);
 
             var shaderSnapshot =
                 RuntimeShaderRegistry
@@ -414,6 +538,21 @@ namespace VCR.Editor.P7
                     failures);
 
                 Expect(
+                    capabilityCatalog.GetProviderCount(
+                        CapabilityIds.RenderCustomShader) ==
+                        baselineCapabilityProviders + 1 &&
+                    capabilityCatalog.TryGetProvider(
+                        "vcr.p7.validation",
+                        out var capabilityRegistration) &&
+                    capabilityRegistration.ProviderVersion ==
+                        "1.0.0" &&
+                    ContainsCapability(
+                        capabilityRegistration,
+                        CapabilityIds.RenderCustomShader),
+                    "successful shader package load must register its declarative custom-shader capability",
+                    failures);
+
+                Expect(
                     RuntimeShaderRegistry
                         .TryGetRegistered(
                             ShaderId,
@@ -469,6 +608,18 @@ namespace VCR.Editor.P7
                     failures);
 
                 Expect(
+                    capabilityCatalog.GetProviderCount(
+                        CapabilityIds.RenderCustomShader) ==
+                        baselineCapabilityProviders + 1 &&
+                    capabilityCatalog.TryGetProvider(
+                        "vcr.p7.validation",
+                        out var rolledBackCapability) &&
+                    rolledBackCapability.ProviderVersion ==
+                        "1.0.0",
+                    "failed hot reload must preserve the previous declarative capability registration",
+                    failures);
+
+                Expect(
                     RuntimeShaderRegistry
                         .TryGetRegistered(
                             ShaderId,
@@ -517,6 +668,16 @@ namespace VCR.Editor.P7
                     failures);
 
                 loader.UnloadActivePackage();
+
+                Expect(
+                    capabilityCatalog.GetProviderCount(
+                        CapabilityIds.RenderCustomShader) ==
+                        baselineCapabilityProviders &&
+                    !capabilityCatalog.TryGetProvider(
+                        "vcr.p7.validation",
+                        out _),
+                    "unloading a shader package must unregister its declarative capability metadata",
+                    failures);
 
                 Expect(
                     RuntimeShaderRegistry
@@ -760,6 +921,32 @@ namespace VCR.Editor.P7
             platformFolder = null;
             return false;
 #endif
+        }
+
+        private static bool ContainsCapability(
+            DeclarativeCapabilityRegistration registration,
+            string capabilityId)
+        {
+            if (registration == null ||
+                string.IsNullOrWhiteSpace(
+                    capabilityId))
+            {
+                return false;
+            }
+
+            foreach (var candidate in
+                     registration.CapabilityIds)
+            {
+                if (string.Equals(
+                        candidate,
+                        capabilityId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool TryGetMetric(
