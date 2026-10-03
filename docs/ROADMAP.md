@@ -191,7 +191,11 @@ Targets will expand to character motion, environment transitions, broader shader
 
 ## P10 — Broadcast Output
 
-Productionize transparent overlay and OBS workflow on both platforms. Platform-specific high-performance output transports may be optional adapters.
+Status: Active. See `P10_STATUS.md`.
+
+Productionize the existing transparent-overlay path and OBS workflow on both platforms. The first source slice adds explicit configured/pending/active/unsupported/fault output states, bounded native-apply timeout behavior, and an application-side capture-readiness contract while retaining `IOverlayOutputAdapter` as the platform boundary.
+
+Windows/macOS standalone transparency, OBS alpha capture, resize/high-DPI behavior, and 720p60/1080p60 capture stability remain evidence gates. Platform-specific high-performance output transports may be optional adapters.
 
 ## P11 — Application UI
 

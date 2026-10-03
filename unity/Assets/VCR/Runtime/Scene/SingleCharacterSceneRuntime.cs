@@ -52,6 +52,27 @@ namespace VCR.Runtime.Scene
         public PrimaryCameraController CameraController => cameraController;
         public PrimaryLightController LightController => lightController;
         public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
+
+        public OverlayCaptureReadiness OverlayCaptureReadiness
+        {
+            get
+            {
+                ResolveOverlayOutput();
+
+                if (_overlayOutput == null)
+                {
+                    return new OverlayCaptureReadiness(
+                        false,
+                        OverlayCaptureReadinessFailure.NotActive,
+                        "No overlay output adapter is configured.");
+                }
+
+                return OverlayCaptureReadinessEvaluator.Evaluate(
+                    _overlayOutput.Status,
+                    _overlayOutput.Settings);
+            }
+        }
+
         public IEnvironmentRuntime EnvironmentRuntime => _environmentRuntime;
         public CapabilityRegistry Capabilities => _capabilities;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;

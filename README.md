@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed into P9 Event Runtime. P8 protocol/event adapters feed the normalized event hub, and P9 now evaluates bounded rules into application-level actions without exposing Unity scene objects to rule definitions. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
+The source implementation has progressed into P10 Broadcast Output. P9 event rules are preserved as a source checkpoint, and P10 is productionizing the existing transparent-overlay path with explicit native output state and capture-readiness contracts. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, and measured performance are still required before those evidence gates can be called complete.
 
 ## Architecture documents
 
@@ -84,6 +84,7 @@ The source implementation has progressed into P9 Event Runtime. P8 protocol/even
 - [P7 status](docs/P7_STATUS.md)
 - [P8 status](docs/P8_STATUS.md)
 - [P9 status](docs/P9_STATUS.md)
+- [P10 status](docs/P10_STATUS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -113,6 +114,6 @@ The source implementation has progressed into P9 Event Runtime. P8 protocol/even
 
 ## Status
 
-P1-P8 source implementations are preserved as source checkpoints. P9 Event Runtime is active with a pure rule engine, runtime state/conditions, numeric transforms, rule cooldown, bounded action-command generation, a main-thread Unity host, and application actions for environment state changes, primary-camera field of view, active runtime material floats, and event-driven expression layers. Executable third-party plugins remain deferred under ADR-0015.
+P1-P9 source implementations are preserved as source checkpoints. P10 Broadcast Output is active, reusing the project-owned overlay abstraction and UniWinC adapter while adding explicit configured/pending/active/fault state and application-side capture readiness. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
