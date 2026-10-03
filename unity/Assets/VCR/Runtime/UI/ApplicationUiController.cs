@@ -2457,6 +2457,14 @@ namespace VCR.Runtime.UI
                     characterSelected);
             }
 
+            if (_appearancePresetManagementActions != null &&
+                _appearancePresetManagementActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearancePresetManagementActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
             SetActive(
                 _characterPathInput,
                 characterSelected);
