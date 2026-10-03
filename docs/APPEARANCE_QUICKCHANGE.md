@@ -123,11 +123,11 @@ Example:
 
 ```text
 transition: spin-confetti
-0.00s  motion.play       character-spin
-0.10s  effect.play       confetti-ring
+0.00s  motion.play       spin
+0.10s  effect.play       confetti
 0.55s  appearance.commit
 0.55s  effect.play       sparkle-burst
-0.90s  motion.release    character-spin
+0.90s  motion.release    spin
 1.20s  complete
 ```
 
@@ -185,8 +185,8 @@ Examples include:
 - jump/land
 - bow
 - pose-and-hold
-- custom imported animation clip
-- user-authored procedural/additive pose sequence
+- custom imported animation clip (planned P12 conversion/registration path)
+- user-authored procedural/additive pose sequence (runtime cue path implemented)
 
 Custom effect support uses registered effect presets and character/world anchors.
 
@@ -359,9 +359,19 @@ Implemented built-in presentation actions now also include:
 - optional restart-on-play and deactivate-on-stop behavior
 - reuse from both normal Event Runtime rules and appearance transition steps
 
+Implemented built-in motion presentation now also includes:
+
+- `motion.play`
+- `motion.release`
+- `ProceduralMotionCueSource` as a P5 Mixer Additive/Procedural pose layer
+- root position/rotation curves and per-bone position/rotation curves
+- idle source disables its own Update callback
+- default `spin` cue: 360-degree root yaw over 0.9 seconds
+- user-defined procedural cues through the same logical cue-id contract
+
 Not yet implemented as built-ins:
 
-- `motion.play` / `motion.release` clip/procedural-motion action handler
+- imported AnimationClip -> normalized motion cue conversion/registration
 - `audio.play` action handler
 - transition timeline authoring UI
 - external appearance package import
