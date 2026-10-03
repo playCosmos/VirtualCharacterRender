@@ -62,6 +62,18 @@ namespace VCR.Runtime.UI
                 IsOperationalActionState(state);
         }
 
+        public static bool CanApplyOverlaySetting(
+            bool runtimeAvailable,
+            SceneRuntimeState state,
+            bool outputAvailable)
+        {
+            return
+                runtimeAvailable &&
+                outputAvailable &&
+                IsOperationalActionState(
+                    state);
+        }
+
         public static bool CanApplyAppearancePreset(
             bool runtimeAvailable,
             AppearanceRuntimeState state,
