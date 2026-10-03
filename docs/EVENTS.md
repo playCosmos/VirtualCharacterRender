@@ -4,7 +4,7 @@
 
 Events enter the application through normalized adapters. Tracking, broadcast chat, donations/support, manual controls, protocols, and future platform integrations do not call renderer objects directly.
 
-P8 extends the source/event boundary with validated external WebSocket/OSC ingress and a SOOP chat/donation bridge. Action execution and the visual node editor remain P9/P12 concerns.
+P8 extends the source/event boundary with validated external WebSocket/OSC ingress and a SOOP chat/donation bridge. P9 now implements rule execution and application-level action dispatch; the visual node editor remains a later P12 concern.
 
 ## Canonical P0 event types
 
@@ -43,7 +43,15 @@ NormalizedEventHub bounded ingress queue
         ↓
 NormalizedEventBus main-thread dispatch
         ↓
-future Event Runtime actions
+EventRuntimeHost
+        ↓
+Filter / Condition
+        ↓
+Transform / State
+        ↓
+EventActionCommand
+        ↓
+IEventActionHandler
 ```
 
 External adapters feed the same `INormalizedEventSink` boundary:
@@ -92,7 +100,7 @@ This prevents chat/donation bursts from monopolizing render time.
 
 ## Action layer
 
-The later event runtime consumes normalized events and targets application-level concepts:
+The P9 event runtime consumes normalized events and targets application-level concepts:
 
 ```text
 Event
@@ -112,4 +120,6 @@ Action
  └ Overlay
 ```
 
-No event node receives a Unity `GameObject`, `Material`, native window handle, or streaming-service SDK object as its core contract.
+Rules emit only application-level `EventActionCommand` values. The current concrete handlers are `environment.set_state` and `camera.set_fov`. Rule definitions never receive a Unity `GameObject`, `Material`, Camera, native window handle, or streaming-service SDK object.
+
+The engine also provides typed runtime state, state conditions/mutations, numeric scale/offset transforms, per-rule cooldown, ordered rule evaluation, stop-after-match, and a bounded command count per input event. Unknown or failed action commands are contained and surfaced through diagnostics rather than falling through to direct scene mutation.

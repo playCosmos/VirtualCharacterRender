@@ -113,6 +113,6 @@ The source implementation has progressed into P9 Event Runtime. P8 protocol/even
 
 ## Status
 
-P1-P8 source implementations are preserved as source checkpoints. P9 Event Runtime is active with a pure rule engine, runtime state/conditions, bounded action-command generation, a main-thread Unity host, and the first application action adapter for environment state changes. Executable third-party plugins remain deferred under ADR-0015.
+P1-P8 source implementations are preserved as source checkpoints. P9 Event Runtime is active with a pure rule engine, runtime state/conditions, numeric transforms, rule cooldown, bounded action-command generation, a main-thread Unity host, and application actions for environment state changes and primary-camera field of view. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.

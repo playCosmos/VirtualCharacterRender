@@ -134,7 +134,7 @@ Multi-person identity tracking is not in scope.
 
 ## P5 — Motion and Expression Mixer
 
-Status: Active. See `P5_STATUS.md`.
+Status: Source implementation checkpoint-ready; Unity allocation/performance evidence remains deferred. See `P5_STATUS.md`.
 
 Base pose, tracking pose, additive motion, expressions, procedural motion, weighting, masks, deadzones, smoothing, and fallback behavior.
 
@@ -185,9 +185,9 @@ Implement event execution before the visual graph editor.
 Event → Filter/Condition → Transform/State → Action
 ```
 
-The first source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, and `environment.set_state` as the first application-level action.
+The current source slice implements exact/source/actor/text/amount filters, typed runtime state and conditions, state mutation, numeric scale/offset transforms, per-rule cooldown, bounded action-command emission, a main-thread runtime host, failure containment, diagnostics, `environment.set_state`, and `camera.set_fov`.
 
-Targets will expand to character, expressions, motion, environment transitions, shader/material parameters, camera, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
+Targets will expand to character, expressions, motion, environment transitions, shader/material parameters, props, effects, audio, and overlay elements without exposing Unity object references inside rule definitions.
 
 ## P10 — Broadcast Output
 
