@@ -236,7 +236,7 @@ The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` p
 
 ## P13 — 2D Extension
 
-Status: Active source implementation; backend SDK/runtime evidence remains deferred. See `P13_STATUS.md` and ADR-0030.
+Status: Common source implementation checkpoint-ready; backend SDK/runtime evidence remains deferred. See `P13_STATUS.md`, `PRESENTATION2D_ADAPTERS.md`, and ADR-0030.
 
 The first source slice establishes `VCR.Runtime.Presentation2D` with a backend-neutral `ICharacter2DBackend`, source-neutral model/status/input contracts, and `Character2DRuntime`. The host reuses the existing `ITrackingFrameProvider`, polls only backend-supported requested domains, skips unchanged immutable snapshots, contains load/apply failures, resets input caches across model reload, and reports diagnostics without requiring Live2D/Inochi2D SDK assemblies. A shared `Character2DParameterMappingProfile` + evaluator maps normalized face/expression/head semantics to backend parameter ids, with a dedicated P13 Editor authoring/validation window. Optional `ICharacter2DParameterSink` routing lets the common host validate/evaluate those mappings while keeping the final SDK parameter write inside backend-specific adapters.
 
