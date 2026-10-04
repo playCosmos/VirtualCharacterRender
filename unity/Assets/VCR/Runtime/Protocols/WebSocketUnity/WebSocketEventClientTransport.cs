@@ -157,11 +157,6 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             {
                 _handler = null;
 
-                if (messageHandlerBehaviour == null)
-                {
-                    messageHandlerBehaviour = null;
-                }
-
                 ResolveHandler();
             }
 
