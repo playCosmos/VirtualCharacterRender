@@ -4283,10 +4283,58 @@ namespace VCR.Editor.P11
             return float.PositiveInfinity;
         }
 
+        private bool TryValidateAuthoringMetadata(
+            out string error)
+        {
+            error = null;
+
+            if (_transitions == null)
+            {
+                return true;
+            }
+
+            for (var i = 0;
+                 i < _transitions.arraySize;
+                 i++)
+            {
+                var transition =
+                    CaptureTransition(
+                        _transitions
+                            .GetArrayElementAtIndex(
+                                i));
+
+                if (P12TransitionDependencyAuthoringUtility
+                    .TryValidateGroupMetadata(
+                        transition,
+                        out var transitionError))
+                {
+                    continue;
+                }
+
+                error =
+                    $"Transition '{transition?.Id ?? "<unknown>"}': {transitionError}";
+                return false;
+            }
+
+            return true;
+        }
+
         private void ValidateAndApply()
         {
             _serializedRuntime
                 .ApplyModifiedProperties();
+
+            if (!TryValidateAuthoringMetadata(
+                    out var metadataError))
+            {
+                _lastMessage =
+                    "Transition authoring validation failed: " +
+                    metadataError;
+                _lastMessageType =
+                    MessageType.Error;
+                Repaint();
+                return;
+            }
 
             EditorUtility.SetDirty(
                 _runtime);
@@ -4316,6 +4364,17 @@ namespace VCR.Editor.P11
         {
             _serializedRuntime
                 .ApplyModifiedProperties();
+
+            if (!TryValidateAuthoringMetadata(
+                    out var metadataError))
+            {
+                _lastMessage =
+                    "Preview blocked by transition authoring metadata: " +
+                    metadataError;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
 
             if (!_runtime
                 .RebuildConfiguration(
@@ -4384,6 +4443,17 @@ namespace VCR.Editor.P11
         {
             _serializedRuntime
                 .ApplyModifiedProperties();
+
+            if (!TryValidateAuthoringMetadata(
+                    out var metadataError))
+            {
+                _lastMessage =
+                    "Transition export blocked by authoring metadata: " +
+                    metadataError;
+                _lastMessageType =
+                    MessageType.Error;
+                return;
+            }
 
             if (!_runtime
                 .RebuildConfiguration(
