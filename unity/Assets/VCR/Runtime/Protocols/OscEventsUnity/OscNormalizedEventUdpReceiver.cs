@@ -50,6 +50,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         [SerializeField]
         private bool autoFindEventSink = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         private readonly ConcurrentQueue<NormalizedEvent>
             _queue = new();
 
@@ -58,6 +61,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         private volatile bool _running;
         private IPAddress _allowedSender;
         private INormalizedEventSink _sink;
+        private float _nextSinkResolveRealtime;
 
         private int _queuedCount;
         private long _packetCount;
@@ -103,11 +107,15 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
 
         private void Awake()
         {
-            ResolveSink();
+            ResolveSink(
+                force: true);
         }
 
         private void OnEnable()
         {
+            ResolveSink(
+                force: true);
+
             if (Application.isPlaying)
             {
                 StartReceiver();
@@ -465,12 +473,14 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             return true;
         }
 
-        private void ResolveSink()
+        private void ResolveSink(
+            bool force = false)
         {
             if (eventSinkBehaviour is
                 INormalizedEventSink configured)
             {
                 _sink = configured;
+                _nextSinkResolveRealtime = 0f;
                 return;
             }
 
@@ -478,6 +488,22 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             {
                 return;
             }
+
+            var now =
+                Time.realtimeSinceStartup;
+
+            if (!force &&
+                now <
+                _nextSinkResolveRealtime)
+            {
+                return;
+            }
+
+            _nextSinkResolveRealtime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
 
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
