@@ -39,6 +39,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateUnityAdapters(
                 failures);
+            ValidateDestroyedUnityAdapterRecovery(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -890,6 +892,153 @@ namespace VCR.Editor.P8
                     UnityEngine.Object
                         .DestroyImmediate(
                             host);
+                }
+            }
+        }
+
+        private static void ValidateDestroyedUnityAdapterRecovery(
+            List<string> failures)
+        {
+            GameObject webSocketRoot = null;
+            GameObject oscRoot = null;
+
+            try
+            {
+                webSocketRoot =
+                    new GameObject(
+                        "P8 WebSocket Handler Recovery");
+
+                var webSocketSink =
+                    webSocketRoot.AddComponent<
+                        P8FakeEventSink>();
+                var oldHandler =
+                    webSocketRoot.AddComponent<
+                        WebSocketEventInjectionAdapter>();
+                var transport =
+                    webSocketRoot.AddComponent<
+                        WebSocketEventClientTransport>();
+
+                oldHandler.SetSink(
+                    webSocketSink);
+                transport.SetHandler(
+                    oldHandler);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldHandler);
+
+                var replacementHandler =
+                    webSocketRoot.AddComponent<
+                        WebSocketEventInjectionAdapter>();
+                replacementHandler.SetSink(
+                    webSocketSink);
+
+                var message =
+                    JsonUtility.ToJson(
+                        new WebSocketEventMessage
+                        {
+                            version =
+                                WebSocketEventProtocol
+                                    .CurrentVersion,
+                            op =
+                                WebSocketEventProtocol
+                                    .InjectOperation,
+                            type =
+                                NormalizedEventTypes
+                                    .LocalManual,
+                            text =
+                                "recovered-websocket"
+                        });
+
+                Expect(
+                    transport.TryQueueText(
+                        message,
+                        out var queueError),
+                    "WebSocket recovery validation must queue a message: " +
+                    queueError,
+                    failures);
+
+                InvokeUpdate(
+                    transport);
+
+                Expect(
+                    webSocketSink.Events.Count == 1 &&
+                    webSocketSink.Events[0].Text ==
+                        "recovered-websocket",
+                    "WebSocket transport must discard a destroyed cached handler and auto-discover its replacement",
+                    failures);
+
+                oscRoot =
+                    new GameObject(
+                        "P8 OSC Sink Recovery");
+
+                var oldSink =
+                    oscRoot.AddComponent<
+                        P8FakeEventSink>();
+                var receiver =
+                    oscRoot.AddComponent<
+                        OscNormalizedEventUdpReceiver>();
+
+                receiver.SetSink(
+                    oldSink);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldSink);
+
+                var replacementSink =
+                    oscRoot.AddComponent<
+                        P8FakeEventSink>();
+
+                var oscMessage =
+                    new OscMessage(
+                        OscNormalizedEventMapper
+                            .EventAddress,
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                NormalizedEventTypes
+                                    .LocalManual),
+                            OscArgument.FromString(
+                                "osc-recovery"),
+                            OscArgument.FromString(
+                                "recovered-osc")
+                        });
+
+                Expect(
+                    receiver.TryQueueMessage(
+                        oscMessage,
+                        out var oscQueueError),
+                    "OSC recovery validation must queue a message: " +
+                    oscQueueError,
+                    failures);
+
+                InvokeUpdate(
+                    receiver);
+
+                Expect(
+                    replacementSink.Events.Count == 1 &&
+                    replacementSink.Events[0].Text ==
+                        "recovered-osc",
+                    "OSC receiver must discard a destroyed cached sink and auto-discover its replacement",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed protocol adapter recovery unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (webSocketRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        webSocketRoot);
+                }
+
+                if (oscRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        oscRoot);
                 }
             }
         }
