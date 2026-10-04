@@ -82,6 +82,16 @@ The rollback uses editor-only serialized JSON over the scene component; runtime 
 
 Accessory application remains transactional as well. The runtime snapshots active states and accessory Transform parent/local state before switching. Transform-anchored accessories are reparented and offset only for the requested appearance; inactive anchored accessories can restore their original hierarchy transform. Any anchor/apply failure restores both active-state and Transform-state snapshots. Humanoid-bone anchors resolve through a humanoid `Animator.GetBoneTransform` and fail closed if the animator/bone is unavailable.
 
+## External rigid accessory packages
+
+P12 now includes a declarative accessory package v1 and importer. The format is intentionally limited to one rigid FBX model plus logical slot/id and optional humanoid-bone anchor metadata. External prefabs, scripts, executable payloads, and skinned meshes are rejected.
+
+`VCR/P12/Open Appearance Authoring` exposes `Import Accessory Package`. A successful import copies the manifest/FBX into the project, validates the Unity import result, creates an inactive scene instance, and appends an explicit accessory binding. Humanoid-bone packages fail closed unless the selected runtime exposes the requested bone through a humanoid Animator.
+
+Package asset/scene registration failures roll back assets created by that import attempt. The resulting scene binding is still treated as pending authoring state until `Validate & Apply` succeeds.
+
+See `ACCESSORY_PACKAGES.md` for the v1 manifest, safety rules, and importer contract.
+
 ## Source validation
 
 Menu:
@@ -103,6 +113,9 @@ The validation source covers:
 - repeated reactivation after restoration
 - descendant-anchor cycle rejection
 - serialized anchor property contract
+- valid rigid accessory package manifest + humanoid anchor metadata
+- traversal/non-FBX/unsafe-id/future-version/invalid-bone/zero-scale rejection
+- package-local FBX path resolution before Unity import
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -117,13 +130,14 @@ Required later evidence includes:
 - accessory Transform/humanoid-bone anchor stability during face/body/hand/full-body tracking
 - failed authoring validation rollback inside the real Unity Editor
 - scene save/reload preservation of explicit bindings
-- imported accessory/skinned-outfit compatibility checks
+- real imported rigid-FBX accessory rendering/anchor evidence
+- skinned-outfit/accessory compatibility checks
 - performance/memory behavior with realistic wardrobe counts
 
 ## Next P12 source work
 
-- validated external accessory package format and importer
 - real humanoid Animator/bone anchor verification on loaded VRM characters
+- real rigid-FBX package import/render verification
 - optional compatible skinned-outfit compatibility checks
 - richer appearance preset preview before activation
 - interactive transition dependency graph editing/grouping
