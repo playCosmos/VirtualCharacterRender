@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.EventRuntime;
@@ -199,6 +200,12 @@ namespace VCR.Editor.P12
                     AddRule();
                 }
 
+                if (GUILayout.Button(
+                        "Add Template"))
+                {
+                    ShowTemplateMenu();
+                }
+
                 using (new EditorGUI.DisabledScope(
                            _rules.arraySize == 0))
                 {
@@ -213,6 +220,24 @@ namespace VCR.Editor.P12
                     {
                         DeleteRule();
                     }
+
+                    if (GUILayout.Button(
+                            "Export Rule"))
+                    {
+                        ExportSelectedRule();
+                    }
+                }
+
+                if (GUILayout.Button(
+                        "Export All"))
+                {
+                    ExportAllRules();
+                }
+
+                if (GUILayout.Button(
+                        "Import Library"))
+                {
+                    ImportRuleLibrary();
                 }
 
                 if (GUILayout.Button(
@@ -701,6 +726,373 @@ namespace VCR.Editor.P12
                 GraphStage.Filter;
             _selectedItemIndex =
                 -1;
+        }
+
+        private void ShowTemplateMenu()
+        {
+            var menu =
+                new GenericMenu();
+
+            AddTemplateMenuItem(
+                menu,
+                "Manual / Restore Default Appearance",
+                P12BuiltInEventRuleTemplate
+                    .ManualRestoreDefault);
+            AddTemplateMenuItem(
+                menu,
+                "Tracking / Subject Lost → Restore Default",
+                P12BuiltInEventRuleTemplate
+                    .SubjectLostRestoreDefault);
+            AddTemplateMenuItem(
+                menu,
+                "Broadcast / Chat → Appearance Preset",
+                P12BuiltInEventRuleTemplate
+                    .ChatAppearancePreset);
+            AddTemplateMenuItem(
+                menu,
+                "Broadcast / Donation → Effect",
+                P12BuiltInEventRuleTemplate
+                    .DonationEffect);
+
+            menu.ShowAsContext();
+        }
+
+        private void AddTemplateMenuItem(
+            GenericMenu menu,
+            string label,
+            P12BuiltInEventRuleTemplate template)
+        {
+            menu.AddItem(
+                new GUIContent(
+                    label),
+                false,
+                () =>
+                    AddTemplate(
+                        template));
+        }
+
+        private void AddTemplate(
+            P12BuiltInEventRuleTemplate template)
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var existing))
+            {
+                return;
+            }
+
+            var authored =
+                P12EventRuleLibraryUtility
+                    .CreateTemplate(
+                        template);
+            var merged =
+                P12EventRuleLibraryUtility
+                    .MergeRules(
+                        existing,
+                        new[]
+                        {
+                            authored
+                        });
+
+            if (!P12EventRuleAuthoringUtility
+                .TryValidateRules(
+                    merged,
+                    out var error))
+            {
+                _message =
+                    "Built-in event template could not be added: " +
+                    error;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                "Add Event Rule Template");
+            _host.SetRules(
+                merged);
+            EditorUtility.SetDirty(
+                _host);
+            _ruleIndex =
+                Math.Max(
+                    0,
+                    merged.Length - 1);
+            Rebind();
+
+            _message =
+                $"Added event rule template '{merged[_ruleIndex].Id}'. Edit placeholder ids/text as needed, then Validate & Apply.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void ExportSelectedRule()
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var rules) ||
+                rules.Length == 0)
+            {
+                return;
+            }
+
+            var index =
+                Mathf.Clamp(
+                    _ruleIndex,
+                    0,
+                    rules.Length - 1);
+            var rule =
+                rules[index];
+
+            ExportRulePackage(
+                rule?.Id ??
+                "event-rule",
+                new[]
+                {
+                    rule
+                });
+        }
+
+        private void ExportAllRules()
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var rules))
+            {
+                return;
+            }
+
+            ExportRulePackage(
+                _host != null &&
+                !string.IsNullOrWhiteSpace(
+                    _host.name)
+                    ? _host.name +
+                      "-event-rules"
+                    : "event-rules",
+                rules);
+        }
+
+        private void ExportRulePackage(
+            string packageId,
+            EventRuntimeRule[] rules)
+        {
+            if (!P12EventRuleLibraryUtility
+                .TryCreatePackage(
+                    packageId,
+                    rules,
+                    out var package,
+                    out var error) ||
+                !P12EventRuleLibraryUtility
+                .TrySerialize(
+                    package,
+                    out var json,
+                    out error))
+            {
+                _message =
+                    "Event rule library export failed: " +
+                    (error ?? "unknown error");
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            var safeName =
+                SanitizeFileName(
+                    package.PackageId);
+            var path =
+                EditorUtility.SaveFilePanel(
+                    "Export Event Rule Library",
+                    Application.dataPath,
+                    safeName +
+                    ".vcrevents",
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                return;
+            }
+
+            try
+            {
+                File.WriteAllText(
+                    path,
+                    json);
+                _message =
+                    $"Exported {package.Rules.Length} event rule(s): {path}";
+                _messageType =
+                    MessageType.Info;
+            }
+            catch (Exception exception)
+            {
+                _message =
+                    "Event rule library file write failed: " +
+                    exception.Message;
+                _messageType =
+                    MessageType.Error;
+            }
+        }
+
+        private void ImportRuleLibrary()
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var existing))
+            {
+                return;
+            }
+
+            var path =
+                EditorUtility.OpenFilePanel(
+                    "Import Event Rule Library",
+                    Application.dataPath,
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                return;
+            }
+
+            string json;
+
+            try
+            {
+                json =
+                    File.ReadAllText(
+                        path);
+            }
+            catch (Exception exception)
+            {
+                _message =
+                    "Event rule library file read failed: " +
+                    exception.Message;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!P12EventRuleLibraryUtility
+                .TryParse(
+                    json,
+                    out var package,
+                    out var error))
+            {
+                _message =
+                    "Event rule library import rejected: " +
+                    error;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            var merged =
+                P12EventRuleLibraryUtility
+                    .MergeRules(
+                        existing,
+                        package.Rules);
+
+            if (!P12EventRuleAuthoringUtility
+                .TryValidateRules(
+                    merged,
+                    out error))
+            {
+                _message =
+                    "Merged event rule library is invalid: " +
+                    error;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                "Import Event Rule Library");
+            _host.SetRules(
+                merged);
+            EditorUtility.SetDirty(
+                _host);
+            _ruleIndex =
+                existing.Length <
+                merged.Length
+                    ? existing.Length
+                    : Math.Max(
+                        0,
+                        merged.Length - 1);
+            Rebind();
+
+            _message =
+                $"Imported event rule library '{package.PackageId}': {package.Rules.Length} rule(s), {merged.Length} total. ID collisions were suffixed deterministically.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private bool TryPrepareLibraryOperation(
+            out EventRuntimeRule[] rules)
+        {
+            rules =
+                Array.Empty<
+                    EventRuntimeRule>();
+
+            if (_host == null ||
+                _serializedHost == null)
+            {
+                _message =
+                    "Event Runtime host is unavailable.";
+                _messageType =
+                    MessageType.Error;
+                return false;
+            }
+
+            _serializedHost
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _host);
+
+            rules =
+                _host.CaptureRules();
+
+            if (!P12EventRuleAuthoringUtility
+                .TryValidateRules(
+                    rules,
+                    out var error))
+            {
+                _message =
+                    "Validate current event graph before template/library operations: " +
+                    error;
+                _messageType =
+                    MessageType.Error;
+                return false;
+            }
+
+            _host.SetRules(
+                rules);
+            _lastValidJson =
+                EditorJsonUtility.ToJson(
+                    _host,
+                    prettyPrint:
+                        false);
+            _hasPendingChanges =
+                false;
+            RebindSerializedOnly();
+            return true;
+        }
+
+        private static string SanitizeFileName(
+            string value)
+        {
+            value =
+                string.IsNullOrWhiteSpace(
+                    value)
+                    ? "event-rules"
+                    : value.Trim();
+
+            foreach (var invalid in
+                     Path.GetInvalidFileNameChars())
+            {
+                value =
+                    value.Replace(
+                        invalid,
+                        '_');
+            }
+
+            return value;
         }
 
         private void AddRule()
