@@ -119,6 +119,20 @@ Diagnostics must attribute at least:
 
 The desktop MediaPipe baseline currently uses separate LIVE_STREAM Face and Holistic submissions. The optional low-light preprocessor already caches its processed texture once per Unity frame, but CPU async readback and MediaPipe `Image` creation remain task-specific. Do not share one `Image` between both native tasks until the pinned plugin's ownership/lifetime contract is proven under concurrent LIVE_STREAM use. Use `tracking.mediapipe.face.readbacks`, `tracking.mediapipe.face.readback_wait`, `tracking.mediapipe.holistic.readbacks`, and `tracking.mediapipe.holistic.readback_wait` to measure this cost before changing the capture topology.
 
+## Managed-allocation gate
+
+The 60 FPS baseline is also a managed-GC target, not only a CPU/GPU frame-time target.
+
+For steady-state tracking and UI operation:
+
+- expression custom-channel merge scratch storage must be reused; do not reintroduce per-frame `Dictionary`, `HashSet`, or `List` construction in the mixer hot path,
+- immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
+- UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
+- missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan,
+- Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
+
+A temporary allocation that is necessary for an immutable published frame is evaluated separately from avoidable scratch allocation. Do not trade correctness or frame immutability for unsafe pooling without ownership/lifetime evidence.
+
 ## Disabled capability rule
 
 A disabled optional capability should create no meaningful recurring frame cost.
