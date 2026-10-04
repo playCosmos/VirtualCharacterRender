@@ -267,11 +267,17 @@ namespace VCR.Editor.P12
 
         private static bool IsFinite(
             Vector3 value) =>
-                float.IsFinite(
+                !float.IsNaN(
                     value.x) &&
-                float.IsFinite(
+                !float.IsInfinity(
+                    value.x) &&
+                !float.IsNaN(
                     value.y) &&
-                float.IsFinite(
+                !float.IsInfinity(
+                    value.y) &&
+                !float.IsNaN(
+                    value.z) &&
+                !float.IsInfinity(
                     value.z);
     }
 }
