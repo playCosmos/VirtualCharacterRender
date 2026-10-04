@@ -43,6 +43,11 @@ namespace VCR.Editor.P11
                 AppearanceTransitionDependencyMode.All;
         private string _dependencyGraphGroupName =
             "transition-group";
+        private int _dependencyGroupHierarchyIndex;
+        private string _dependencyGroupHierarchyDestination =
+            "transition-group-renamed";
+        private bool _dependencyGroupHierarchyIncludeDescendants =
+            true;
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
@@ -1912,6 +1917,218 @@ namespace VCR.Editor.P11
             EditorGUILayout.HelpBox(
                 "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency. Apply Group assigns the same authoring-only Graph Group to the selected target and every dependency source currently connected to it; Clear Group removes that metadata. Group metadata never changes runtime dependency semantics.",
                 MessageType.None);
+
+            DrawDependencyGroupHierarchyControls(
+                transition);
+        }
+
+        private void DrawDependencyGroupHierarchyControls(
+            SerializedProperty transition)
+        {
+            var captured =
+                CaptureTransition(
+                    transition);
+            var paths =
+                P12TransitionDependencyAuthoringUtility
+                    .CaptureGroupPaths(
+                        captured);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(
+                "Graph Group Hierarchy",
+                EditorStyles.boldLabel);
+
+            if (paths.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No graph groups are authored yet. Use Graph Group or Apply Group first. Nested paths use '/' such as wardrobe/change/spin.",
+                    MessageType.None);
+                return;
+            }
+
+            _dependencyGroupHierarchyIndex =
+                Mathf.Clamp(
+                    _dependencyGroupHierarchyIndex,
+                    0,
+                    paths.Length - 1);
+
+            _dependencyGroupHierarchyIndex =
+                EditorGUILayout.Popup(
+                    "Source Group",
+                    _dependencyGroupHierarchyIndex,
+                    paths);
+
+            var selected =
+                paths[
+                    _dependencyGroupHierarchyIndex];
+
+            _dependencyGroupHierarchyDestination =
+                EditorGUILayout.TextField(
+                    "Destination Path",
+                    _dependencyGroupHierarchyDestination);
+            _dependencyGroupHierarchyIncludeDescendants =
+                EditorGUILayout.Toggle(
+                    "Include Child Groups",
+                    _dependencyGroupHierarchyIncludeDescendants);
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Rename / Move Hierarchy"))
+                {
+                    ApplyDependencyGroupHierarchy(
+                        transition,
+                        selected,
+                        clear:
+                            false);
+                }
+
+                if (GUILayout.Button(
+                        "Clear Hierarchy"))
+                {
+                    ApplyDependencyGroupHierarchy(
+                        transition,
+                        selected,
+                        clear:
+                            true);
+                }
+            }
+
+            EditorGUILayout.Space();
+
+            foreach (var path in paths)
+            {
+                var depth =
+                    path.Split('/')
+                        .Length -
+                    1;
+                var assigned =
+                    CountExactGroupAssignments(
+                        captured,
+                        path);
+
+                EditorGUILayout.LabelField(
+                    new string(
+                        ' ',
+                        depth * 4) +
+                    path +
+                    $"  ({assigned} step{(assigned == 1 ? string.Empty : "s")})",
+                    EditorStyles.miniLabel);
+            }
+
+            EditorGUILayout.HelpBox(
+                "Group hierarchy is authoring metadata only. Rename/Move rewrites the selected path and, when enabled, every descendant path while preserving dependency edges, timing, actions, and runtime behavior.",
+                MessageType.None);
+        }
+
+        private void ApplyDependencyGroupHierarchy(
+            SerializedProperty transition,
+            string sourcePath,
+            bool clear)
+        {
+            var captured =
+                CaptureTransition(
+                    transition);
+            bool changed;
+            int affected;
+            string error;
+
+            if (clear)
+            {
+                changed =
+                    P12TransitionDependencyAuthoringUtility
+                        .TryClearGroupHierarchy(
+                            captured,
+                            sourcePath,
+                            _dependencyGroupHierarchyIncludeDescendants,
+                            out affected,
+                            out error);
+            }
+            else
+            {
+                changed =
+                    P12TransitionDependencyAuthoringUtility
+                        .TryRewriteGroupHierarchy(
+                            captured,
+                            sourcePath,
+                            _dependencyGroupHierarchyDestination,
+                            _dependencyGroupHierarchyIncludeDescendants,
+                            out affected,
+                            out error);
+            }
+
+            if (!changed)
+            {
+                _lastMessage =
+                    "Graph group hierarchy edit failed: " +
+                    (error ?? "unknown error");
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                clear
+                    ? "Clear Transition Graph Group Hierarchy"
+                    : "Rewrite Transition Graph Group Hierarchy");
+
+            var serializedSteps =
+                transition.FindPropertyRelative(
+                    "Steps");
+
+            for (var i = 0;
+                 i < serializedSteps.arraySize &&
+                 i < captured.Steps.Length;
+                 i++)
+            {
+                serializedSteps
+                    .GetArrayElementAtIndex(
+                        i)
+                    .FindPropertyRelative(
+                        "AuthoringGroup")
+                    .stringValue =
+                        captured.Steps[i]
+                            ?.AuthoringGroup ??
+                        string.Empty;
+            }
+
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                clear
+                    ? $"Cleared graph group hierarchy '{sourcePath}' from {affected} step(s)."
+                    : $"Rewrote graph group hierarchy '{sourcePath}' to '{_dependencyGroupHierarchyDestination}' across {affected} step(s).";
+            _lastMessageType =
+                MessageType.Info;
+        }
+
+        private static int CountExactGroupAssignments(
+            AppearanceTransitionPreset transition,
+            string groupPath)
+        {
+            var count = 0;
+
+            foreach (var step in
+                     transition?.Steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step != null &&
+                    string.Equals(
+                        step.AuthoringGroup,
+                        groupPath,
+                        StringComparison.Ordinal))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private void SelectDependencyGraphNode(
