@@ -315,8 +315,11 @@ namespace VCR.Editor.P13
                     runtime.TrackingProvider == null &&
                     !runtime.ProcessLatest(
                         out var destroyedProviderError) &&
-                    destroyedProviderError == null,
-                    "2D host must treat a destroyed Unity tracking provider as unavailable instead of retaining its interface reference",
+                    destroyedProviderError == null &&
+                    !runtime.enabled &&
+                    backend.Status.State ==
+                        Character2DBackendState.ModelLoaded,
+                    "2D host must treat a destroyed Unity tracking provider as unavailable, idle-disable itself, and preserve the loaded backend model",
                     failures);
 
                 UnityEngine.Object.DestroyImmediate(
