@@ -33,6 +33,8 @@ namespace VCR.Editor.P12
                 failures);
             RunEventNodeAuthoringChecks(
                 failures);
+            RunPropActionChecks(
+                failures);
             RunEventRuleLibraryBrowserChecks(
                 failures);
 
@@ -40,7 +42,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node rule validation/library browsing and serialized contracts)");
+                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node grouping/library revision workflows, prop automation, and serialized contracts)");
                 return true;
             }
 
@@ -2539,6 +2541,182 @@ namespace VCR.Editor.P12
                     UnityEngine.Object
                         .DestroyImmediate(
                             hostRoot);
+                }
+            }
+        }
+
+        private static void RunPropActionChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P12 Prop Action Validation");
+                var propA =
+                    new GameObject(
+                        "Prop A");
+                var propB =
+                    new GameObject(
+                        "Prop B");
+                propA.transform.SetParent(
+                    root.transform,
+                    false);
+                propB.transform.SetParent(
+                    root.transform,
+                    false);
+                propA.SetActive(
+                    false);
+                propB.SetActive(
+                    false);
+
+                var handler =
+                    root.AddComponent<
+                        PropEventActionHandler>();
+                handler.ConfigureBindings(
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "desk-lamp",
+                        Roots =
+                            new[]
+                            {
+                                propA,
+                                propB
+                            }
+                    });
+
+                Expect(
+                    handler.RebuildBindings(
+                        out var bindingError),
+                    "P12 prop handler must accept one logical prop id mapped to unique scene roots: " +
+                    bindingError,
+                    failures);
+
+                var setCommand =
+                    new EventActionCommand(
+                        "prop-validation",
+                        EventActionTypes
+                            .PropSetActive,
+                        "props.main",
+                        null,
+                        "desk-lamp",
+                        1.0,
+                        true,
+                        1);
+
+                Expect(
+                    handler.TryExecute(
+                        setCommand,
+                        out var setError) &&
+                    propA.activeSelf &&
+                    propB.activeSelf,
+                    "P12 prop.set_active must activate every root in one logical prop binding: " +
+                    setError,
+                    failures);
+
+                Expect(
+                    handler.CanTrackCompletion(
+                        setCommand) &&
+                    handler.TryIsComplete(
+                        setCommand,
+                        out var setComplete,
+                        out var completionError) &&
+                    setComplete,
+                    "P12 prop actions must expose immediate completion for transition dependency use: " +
+                    completionError,
+                    failures);
+
+                var toggleCommand =
+                    new EventActionCommand(
+                        "prop-validation",
+                        EventActionTypes
+                            .PropToggle,
+                        "props.main",
+                        null,
+                        "desk-lamp",
+                        0.0,
+                        false,
+                        2);
+
+                Expect(
+                    handler.TryExecute(
+                        toggleCommand,
+                        out var toggleError) &&
+                    !propA.activeSelf &&
+                    !propB.activeSelf,
+                    "P12 prop.toggle must invert a uniformly active/inactive logical prop binding: " +
+                    toggleError,
+                    failures);
+
+                propA.SetActive(
+                    true);
+                propB.SetActive(
+                    false);
+
+                Expect(
+                    !handler.TryExecute(
+                        toggleCommand,
+                        out var mixedError) &&
+                    mixedError != null &&
+                    mixedError.IndexOf(
+                        "mixed",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 prop.toggle must reject mixed root states instead of choosing an arbitrary toggle direction",
+                    failures);
+
+                handler.ConfigureBindings(
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "prop-one",
+                        Roots =
+                            new[]
+                            {
+                                propA
+                            }
+                    },
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "prop-two",
+                        Roots =
+                            new[]
+                            {
+                                propA
+                            }
+                    });
+
+                Expect(
+                    !handler.RebuildBindings(
+                        out var sharedRootError) &&
+                    sharedRootError != null &&
+                    sharedRootError.IndexOf(
+                        "shared",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 prop bindings must reject the same GameObject root being owned by multiple logical prop ids",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 prop automation validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
                 }
             }
         }
