@@ -167,6 +167,20 @@ These remain synchronous ordered command templates. For actual delays and cancel
 
 Appearance Transition timelines remain the richer appearance-specific tool when choreography needs named markers, Blocking actions, or All/Any completion dependencies tied to wardrobe switching.
 
+## Project-local Effect Presets
+
+`VCR/P12/Open Scene Automation Authoring` also supports Effect Preset v1.
+
+A preset is an editor authoring asset over the existing `EffectEventActionHandler` contract. It does not add a second effect runtime.
+
+The window can create a reusable prefab + preset asset from the selected scene ParticleSystem root, then install that preset as a normal logical effect binding.
+
+Effect Preset v1 deliberately permits only Transform, ParticleSystem, and ParticleSystemRenderer components. Arbitrary MonoBehaviours, AudioSource, Animator, physics, skinned renderers, missing scripts, and other components are rejected before asset creation/installation.
+
+Creation writes under `Assets/VCR/EffectPresets` by default. Installation is transactional: a scene instance is created, all ParticleSystems are discovered, one `EffectBinding` is appended, and `RebuildBindings` must succeed or both the handler mutation and created instance are rolled back.
+
+See `EFFECT_PRESETS.md` for the exact contract and limits.
+
 ## Scope and evidence
 
 This source implementation does not prove:
