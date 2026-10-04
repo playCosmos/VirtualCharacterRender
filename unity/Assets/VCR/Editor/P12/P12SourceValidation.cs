@@ -1356,6 +1356,154 @@ namespace VCR.Editor.P12
                 clearGroupError,
                 failures);
 
+            transition.Steps[0]
+                .AuthoringGroup =
+                    "wardrobe/change/spin";
+            transition.Steps[1]
+                .AuthoringGroup =
+                    "wardrobe/change/effects";
+            transition.Steps[2]
+                .AuthoringGroup =
+                    "wardrobe/change";
+
+            var hierarchyPaths =
+                P12TransitionDependencyAuthoringUtility
+                    .CaptureGroupPaths(
+                        transition);
+
+            Expect(
+                Array.IndexOf(
+                    hierarchyPaths,
+                    "wardrobe") >= 0 &&
+                Array.IndexOf(
+                    hierarchyPaths,
+                    "wardrobe/change") >= 0 &&
+                Array.IndexOf(
+                    hierarchyPaths,
+                    "wardrobe/change/spin") >= 0 &&
+                Array.IndexOf(
+                    hierarchyPaths,
+                    "wardrobe/change/effects") >= 0 &&
+                P12TransitionDependencyAuthoringUtility
+                    .TryValidateGroupMetadata(
+                        transition,
+                        out var validHierarchyError),
+                "P12 graph group hierarchy capture must include implicit parent paths and valid nested metadata: " +
+                validHierarchyError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryRewriteGroupHierarchy(
+                        transition,
+                        " wardrobe / change ",
+                        "show/wardrobe",
+                        includeDescendants:
+                            true,
+                        out var rewrittenGroupCount,
+                        out var rewriteGroupError) &&
+                rewrittenGroupCount ==
+                    3 &&
+                transition.Steps[0]
+                    .AuthoringGroup ==
+                    "show/wardrobe/spin" &&
+                transition.Steps[1]
+                    .AuthoringGroup ==
+                    "show/wardrobe/effects" &&
+                transition.Steps[2]
+                    .AuthoringGroup ==
+                    "show/wardrobe" &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    2,
+                "P12 graph group hierarchy rewrite must move the selected parent and descendants without mutating dependency edges: " +
+                rewriteGroupError,
+                failures);
+
+            Expect(
+                !P12TransitionDependencyAuthoringUtility
+                    .TryRewriteGroupHierarchy(
+                        transition,
+                        "show/wardrobe",
+                        "show/wardrobe/nested",
+                        includeDescendants:
+                            true,
+                        out _,
+                        out var selfNestedGroupError) &&
+                !string.IsNullOrWhiteSpace(
+                    selfNestedGroupError),
+                "P12 graph group hierarchy must reject moving a parent inside its own descendant path",
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryClearGroupHierarchy(
+                        transition,
+                        "show/wardrobe",
+                        includeDescendants:
+                            false,
+                        out var exactClearCount,
+                        out var exactClearError) &&
+                exactClearCount ==
+                    1 &&
+                transition.Steps[2]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[0]
+                    .AuthoringGroup ==
+                    "show/wardrobe/spin" &&
+                transition.Steps[1]
+                    .AuthoringGroup ==
+                    "show/wardrobe/effects",
+                "P12 graph group hierarchy exact clear must leave child groups intact: " +
+                exactClearError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryClearGroupHierarchy(
+                        transition,
+                        "show/wardrobe",
+                        includeDescendants:
+                            true,
+                        out var descendantClearCount,
+                        out var descendantClearError) &&
+                descendantClearCount ==
+                    2 &&
+                transition.Steps[0]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[1]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    2,
+                "P12 graph group hierarchy descendant clear must remove only authoring metadata and preserve dependency edges: " +
+                descendantClearError,
+                failures);
+
+            transition.Steps[0]
+                .AuthoringGroup =
+                    "bad//path";
+
+            Expect(
+                !P12TransitionDependencyAuthoringUtility
+                    .TryValidateGroupMetadata(
+                        transition,
+                        out var invalidGroupPathError) &&
+                invalidGroupPathError != null &&
+                invalidGroupPathError.IndexOf(
+                    "empty",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 graph group metadata validation must reject empty hierarchy segments",
+                failures);
+
+            transition.Steps[0]
+                .AuthoringGroup =
+                    string.Empty;
+
             Expect(
                 P12TransitionDependencyAuthoringUtility
                     .TryRemoveDependency(
