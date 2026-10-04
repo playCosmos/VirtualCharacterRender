@@ -424,7 +424,7 @@ namespace VCR.Runtime.UI
                 ResolveCharacterFileSelectionAdapter();
                 ResolveAppearanceRuntime();
 
-                if (_trackingPresence == null)
+                if (!IsServiceAlive(_trackingPresence))
                 {
                     var behaviours =
                         FindObjectsByType<MonoBehaviour>(
@@ -473,7 +473,7 @@ namespace VCR.Runtime.UI
 
             _model.SetAvailability(
                 ApplicationUiSection.Tracking,
-                _trackingPresence != null ||
+                IsServiceAlive(_trackingPresence) ||
                 _trackingControls.Count > 0,
                 "No tracking runtime is configured.");
 
@@ -1812,7 +1812,7 @@ namespace VCR.Runtime.UI
             ResolveCharacterFileSelectionAdapter();
 
             if (sceneRuntime == null ||
-                _characterFileSelectionAdapter == null ||
+                !IsServiceAlive(_characterFileSelectionAdapter) ||
                 !_characterFileSelectionAdapter.IsSupported)
             {
                 _lastActionMessage =
@@ -2128,7 +2128,7 @@ namespace VCR.Runtime.UI
         private void ApplyRelativeAppearancePreset(
             int direction)
         {
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 _appearanceRuntime.PresetIds.Count == 0)
             {
                 _lastActionMessage =
@@ -2193,7 +2193,7 @@ namespace VCR.Runtime.UI
 
         private void SelectNextAppearanceTransition()
         {
-            if (_appearanceRuntime == null)
+            if (!IsServiceAlive(_appearanceRuntime))
             {
                 return;
             }
@@ -2211,7 +2211,7 @@ namespace VCR.Runtime.UI
 
         private string GetSelectedAppearanceTransitionId()
         {
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 _appearanceTransitionIndex <= 0 ||
                 _appearanceRuntime.TransitionIds.Count == 0)
             {
@@ -2231,7 +2231,7 @@ namespace VCR.Runtime.UI
 
         private void RestoreDefaultAppearance()
         {
-            if (_appearanceRuntime == null)
+            if (!IsServiceAlive(_appearanceRuntime))
             {
                 _lastActionMessage =
                     "Appearance runtime unavailable.";
@@ -2261,7 +2261,7 @@ namespace VCR.Runtime.UI
             var presetId =
                 _appearancePresetInput?.text?.Trim();
 
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanApplyAppearancePreset(
                         true,
@@ -2297,7 +2297,7 @@ namespace VCR.Runtime.UI
             var outfitId =
                 _appearanceOutfitInput?.text?.Trim();
 
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanApplyAppearanceOutfit(
                         true,
@@ -2335,7 +2335,7 @@ namespace VCR.Runtime.UI
             var accessoryId =
                 _appearanceAccessoryInput?.text?.Trim();
 
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanSetAppearanceAccessory(
                         true,
@@ -2373,7 +2373,7 @@ namespace VCR.Runtime.UI
             var slotId =
                 _appearanceAccessorySlotInput?.text?.Trim();
 
-            if (_appearanceRuntime == null ||
+            if (!IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanClearAppearanceAccessory(
                         true,
@@ -2406,7 +2406,7 @@ namespace VCR.Runtime.UI
 
         private void PreviewSelectedAppearanceTransition()
         {
-            if (_appearanceRuntime == null)
+            if (!IsServiceAlive(_appearanceRuntime))
             {
                 _lastActionMessage =
                     "Appearance runtime unavailable.";
@@ -2469,7 +2469,7 @@ namespace VCR.Runtime.UI
 
         private void CancelAppearanceTransition()
         {
-            if (_appearanceRuntime == null)
+            if (!IsServiceAlive(_appearanceRuntime))
             {
                 _lastActionMessage =
                     "Appearance runtime unavailable.";
@@ -2504,7 +2504,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime?.CurrentCharacterPath;
 
             if (registry == null ||
-                _appearanceRuntime == null ||
+                !IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanSaveAppearanceUserPreset(
                         true,
@@ -2571,7 +2571,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime?.CurrentCharacterPath;
 
             if (registry == null ||
-                _appearanceRuntime == null ||
+                !IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanDeleteAppearanceUserPreset(
                         true,
@@ -2660,7 +2660,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime?.CurrentCharacterPath;
 
             if (registry == null ||
-                _appearanceRuntime == null ||
+                !IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanRenameAppearanceUserPreset(
                         true,
@@ -2750,7 +2750,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime?.CurrentCharacterPath;
 
             if (registry == null ||
-                _appearanceRuntime == null ||
+                !IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanDuplicateAppearanceUserPreset(
                         true,
@@ -2847,7 +2847,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime?.CurrentCharacterPath;
 
             if (registry == null ||
-                _appearanceRuntime == null ||
+                !IsServiceAlive(_appearanceRuntime) ||
                 !ApplicationUiActionPolicy
                     .CanMoveAppearanceUserPreset(
                         true,
@@ -2919,7 +2919,7 @@ namespace VCR.Runtime.UI
                     out _);
 
             if (restored &&
-                _appearanceRuntime != null &&
+                IsServiceAlive(_appearanceRuntime) &&
                 !string.IsNullOrWhiteSpace(
                     previousCurrentPresetId) &&
                 !string.Equals(
@@ -5025,13 +5025,13 @@ namespace VCR.Runtime.UI
             if (characterSelected)
             {
                 var appearanceState =
-                    _appearanceRuntime != null
+                    IsServiceAlive(_appearanceRuntime)
                         ? _appearanceRuntime.Status.State
                         : AppearanceRuntimeState.Unconfigured;
                 var appearanceAvailable =
                     ApplicationUiActionPolicy
                         .CanMutateAppearance(
-                            _appearanceRuntime != null,
+                            IsServiceAlive(_appearanceRuntime),
                             appearanceState);
 
                 if (_appearancePreviousButton != null)
@@ -5057,7 +5057,7 @@ namespace VCR.Runtime.UI
                         !_appearanceRuntime.Status.Busy;
 
                     var runtimeStatus =
-                        _appearanceRuntime != null
+                        IsServiceAlive(_appearanceRuntime)
                             ? _appearanceRuntime.Status
                             : default;
                     var transitionLabel =
@@ -5082,7 +5082,7 @@ namespace VCR.Runtime.UI
                 if (_appearanceCancelButton != null)
                 {
                     _appearanceCancelButton.interactable =
-                        _appearanceRuntime != null &&
+                        IsServiceAlive(_appearanceRuntime) &&
                         ApplicationUiActionPolicy
                             .CanCancelAppearanceTransition(
                                 true,
@@ -5096,7 +5096,7 @@ namespace VCR.Runtime.UI
                         !_appearanceRuntime.Status.Busy;
                 }
 
-                if (_appearanceRuntime != null)
+                if (IsServiceAlive(_appearanceRuntime))
                 {
                     var current =
                         _appearanceRuntime.Current;
@@ -5170,7 +5170,7 @@ namespace VCR.Runtime.UI
                     _appearanceApplyPresetButton.interactable =
                         ApplicationUiActionPolicy
                             .CanApplyAppearancePreset(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearancePresetInput?.text);
                 }
@@ -5180,7 +5180,7 @@ namespace VCR.Runtime.UI
                     _appearanceApplyOutfitButton.interactable =
                         ApplicationUiActionPolicy
                             .CanApplyAppearanceOutfit(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceOutfitInput?.text);
                 }
@@ -5190,7 +5190,7 @@ namespace VCR.Runtime.UI
                     _appearanceSetAccessoryButton.interactable =
                         ApplicationUiActionPolicy
                             .CanSetAppearanceAccessory(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceAccessorySlotInput?.text,
                                 _appearanceAccessoryInput?.text);
@@ -5201,7 +5201,7 @@ namespace VCR.Runtime.UI
                     _appearanceClearAccessoryButton.interactable =
                         ApplicationUiActionPolicy
                             .CanClearAppearanceAccessory(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceAccessorySlotInput?.text);
                 }
@@ -5211,10 +5211,10 @@ namespace VCR.Runtime.UI
                     _appearancePreviewButton.interactable =
                         ApplicationUiActionPolicy
                             .CanPreviewAppearanceTransition(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 GetSelectedAppearanceTransitionId(),
-                                _appearanceRuntime != null
+                                IsServiceAlive(_appearanceRuntime)
                                     ? _appearanceRuntime.Current.OutfitId
                                     : null);
                 }
@@ -5256,7 +5256,7 @@ namespace VCR.Runtime.UI
                         hasPresetRegistry &&
                         ApplicationUiActionPolicy
                             .CanSaveAppearanceUserPreset(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceUserPresetInput?.text,
                                 sceneRuntime?.CurrentCharacterPath);
@@ -5268,7 +5268,7 @@ namespace VCR.Runtime.UI
                         hasPresetRegistry &&
                         ApplicationUiActionPolicy
                             .CanDeleteAppearanceUserPreset(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceUserPresetInput?.text,
                                 sceneRuntime?.CurrentCharacterPath);
@@ -5280,7 +5280,7 @@ namespace VCR.Runtime.UI
                         hasPresetRegistry &&
                         ApplicationUiActionPolicy
                             .CanRenameAppearanceUserPreset(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceUserPresetInput?.text,
                                 _appearanceUserPresetTargetInput?.text,
@@ -5293,7 +5293,7 @@ namespace VCR.Runtime.UI
                         hasPresetRegistry &&
                         ApplicationUiActionPolicy
                             .CanDuplicateAppearanceUserPreset(
-                                _appearanceRuntime != null,
+                                IsServiceAlive(_appearanceRuntime),
                                 appearanceState,
                                 _appearanceUserPresetInput?.text,
                                 _appearanceUserPresetTargetInput?.text,
@@ -5304,7 +5304,7 @@ namespace VCR.Runtime.UI
                     hasPresetRegistry &&
                     ApplicationUiActionPolicy
                         .CanMoveAppearanceUserPreset(
-                            _appearanceRuntime != null,
+                            IsServiceAlive(_appearanceRuntime),
                             appearanceState,
                             _appearanceUserPresetInput?.text,
                             sceneRuntime?.CurrentCharacterPath);
@@ -5697,7 +5697,7 @@ namespace VCR.Runtime.UI
                 $"Model path: {status.CurrentCharacterPath ?? "<none>"}\n" +
                 $"Last runtime error: {status.LastError ?? "<none>"}";
 
-            if (_appearanceRuntime == null)
+            if (!IsServiceAlive(_appearanceRuntime))
             {
                 return text +
                     "\nAppearance: runtime unavailable";
@@ -5814,7 +5814,7 @@ namespace VCR.Runtime.UI
 
         private string TrackingSummary()
         {
-            if (_trackingPresence == null)
+            if (!IsServiceAlive(_trackingPresence))
             {
                 return "Tracking provider unavailable.";
             }
@@ -6523,7 +6523,7 @@ namespace VCR.Runtime.UI
 
         private void ResolveCharacterFileSelectionAdapter()
         {
-            if (_characterFileSelectionAdapter != null &&
+            if (IsServiceAlive(_characterFileSelectionAdapter) &&
                 _characterFileSelectionAdapter.IsSupported)
             {
                 return;
@@ -6562,9 +6562,8 @@ namespace VCR.Runtime.UI
 
         private void ResolveAppearanceRuntime()
         {
-            if (_appearanceRuntime is
-                    MonoBehaviour current &&
-                current != null)
+            if (IsServiceAlive(
+                    _appearanceRuntime))
             {
                 return;
             }
@@ -6662,6 +6661,19 @@ namespace VCR.Runtime.UI
             return
                 _trackingControls[
                     _trackingControlIndex];
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private static void SetButtonLabel(
