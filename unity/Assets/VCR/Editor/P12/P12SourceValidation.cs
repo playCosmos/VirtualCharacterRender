@@ -1408,21 +1408,27 @@ namespace VCR.Editor.P12
                         {
                             transition
                         });
+            string metadataJson = null;
+            string metadataSerializeError = null;
+            string metadataParseError = null;
+            AppearanceTransitionPackage
+                metadataRoundTrip = null;
+
             var metadataSerialized =
                 VCR.Editor.P11
                     .P11AppearanceTransitionPackageUtility
                     .TrySerialize(
                         metadataPackage,
-                        out var metadataJson,
-                        out var metadataSerializeError);
+                        out metadataJson,
+                        out metadataSerializeError);
             var metadataParsed =
                 metadataSerialized &&
                 VCR.Editor.P11
                     .P11AppearanceTransitionPackageUtility
                     .TryDeserialize(
                         metadataJson,
-                        out var metadataRoundTrip,
-                        out var metadataParseError);
+                        out metadataRoundTrip,
+                        out metadataParseError);
 
             Expect(
                 metadataParsed &&
