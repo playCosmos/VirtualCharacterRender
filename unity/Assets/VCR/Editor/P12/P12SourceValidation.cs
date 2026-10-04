@@ -38,6 +38,8 @@ namespace VCR.Editor.P12
                 failures);
             RunSceneAutomationAuthoringChecks(
                 failures);
+            RunSceneSequenceChecks(
+                failures);
             RunEventRuleLibraryBrowserChecks(
                 failures);
 
@@ -3283,6 +3285,428 @@ namespace VCR.Editor.P12
             {
                 failures.Add(
                     "P12 scene automation authoring validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
+        }
+
+        private static void RunSceneSequenceChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P12 Scene Sequence Validation");
+                var handler =
+                    root.AddComponent<
+                        SceneSequenceEventActionHandler>();
+
+                var valid =
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "scene-change",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .EnvironmentSetState,
+                                    Name =
+                                        "Fade",
+                                    Text =
+                                        "night",
+                                    Value =
+                                        0.5,
+                                    HasValue =
+                                        true
+                                },
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0.2f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropSetActive,
+                                    TargetId =
+                                        "props.main",
+                                    Text =
+                                        "desk-lamp",
+                                    Value =
+                                        1.0,
+                                    HasValue =
+                                        true
+                                },
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0.35f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectPlay,
+                                    TargetId =
+                                        "effects.main",
+                                    Text =
+                                        "sparkle",
+                                    Required =
+                                        false
+                                }
+                            },
+                        CancellationSteps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectStop,
+                                    TargetId =
+                                        "effects.main",
+                                    Text =
+                                        "sparkle",
+                                    Required =
+                                        false
+                                },
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropSetActive,
+                                    TargetId =
+                                        "props.main",
+                                    Text =
+                                        "desk-lamp",
+                                    Value =
+                                        0.0,
+                                    HasValue =
+                                        true,
+                                    Required =
+                                        false
+                                }
+                            }
+                    };
+
+                handler.ConfigureSequences(
+                    valid);
+
+                Expect(
+                    handler.RebuildBindings(
+                        out var validError),
+                    "P12 timed scene sequence must accept ordered logical actions and immediate cancellation cleanup: " +
+                    validError,
+                    failures);
+
+                var playCommand =
+                    new EventActionCommand(
+                        "sequence-validation",
+                        EventActionTypes
+                            .SceneSequencePlay,
+                        "scene.sequences",
+                        null,
+                        "scene-change",
+                        0.0,
+                        false,
+                        1);
+                var cancelCommand =
+                    new EventActionCommand(
+                        "sequence-validation",
+                        EventActionTypes
+                            .SceneSequenceCancel,
+                        "scene.sequences",
+                        null,
+                        null,
+                        0.0,
+                        false,
+                        2);
+
+                Expect(
+                    handler.CanHandle(
+                        playCommand) &&
+                    handler.CanHandle(
+                        cancelCommand) &&
+                    handler.CanTrackCompletion(
+                        playCommand) &&
+                    handler.CanTrackCompletion(
+                        cancelCommand),
+                    "P12 timed scene sequence handler must expose play/cancel routing and completion-probe contracts",
+                    failures);
+
+                handler.ConfigureSequences(
+                    valid,
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "scene-change",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropToggle,
+                                    Text =
+                                        "desk-lamp"
+                                }
+                            }
+                    });
+
+                Expect(
+                    !handler.RebuildBindings(
+                        out var duplicateError) &&
+                    duplicateError != null &&
+                    duplicateError.IndexOf(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 timed scene sequence must reject duplicate sequence ids",
+                    failures);
+
+                handler.ConfigureSequences(
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "backward-time",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        1f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropToggle,
+                                    Text =
+                                        "desk-lamp"
+                                },
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0.5f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectPlay,
+                                    Text =
+                                        "sparkle"
+                                }
+                            }
+                    });
+
+                Expect(
+                    !handler.RebuildBindings(
+                        out var timeError) &&
+                    timeError != null &&
+                    timeError.IndexOf(
+                        "non-decreasing",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 timed scene sequence must reject decreasing step times",
+                    failures);
+
+                handler.ConfigureSequences(
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "recursive",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .SceneSequencePlay,
+                                    Text =
+                                        "recursive"
+                                }
+                            }
+                    });
+
+                Expect(
+                    !handler.RebuildBindings(
+                        out var recursiveError) &&
+                    recursiveError != null &&
+                    recursiveError.IndexOf(
+                        "recursively",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 timed scene sequence must reject recursive scene.sequence actions",
+                    failures);
+
+                handler.ConfigureSequences(
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "cleanup-time",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropToggle,
+                                    Text =
+                                        "desk-lamp"
+                                }
+                            },
+                        CancellationSteps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0.1f,
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectStop,
+                                    Text =
+                                        "sparkle"
+                                }
+                            }
+                    });
+
+                Expect(
+                    !handler.RebuildBindings(
+                        out var cleanupTimeError) &&
+                    cleanupTimeError != null &&
+                    cleanupTimeError.IndexOf(
+                        "time 0",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 timed scene sequence cancellation cleanup must be immediate",
+                    failures);
+
+                handler.ConfigureSequences(
+                    valid);
+                var serialized =
+                    new SerializedObject(
+                        handler);
+                var sequences =
+                    serialized.FindProperty(
+                        "sequences");
+                var first =
+                    sequences != null &&
+                    sequences.arraySize >
+                        0
+                        ? sequences
+                            .GetArrayElementAtIndex(
+                                0)
+                        : null;
+                var firstStep =
+                    first != null &&
+                    first.FindPropertyRelative(
+                            "Steps")
+                        .arraySize >
+                        0
+                        ? first
+                            .FindPropertyRelative(
+                                "Steps")
+                            .GetArrayElementAtIndex(
+                                0)
+                        : null;
+
+                Expect(
+                    first != null &&
+                    first.FindPropertyRelative(
+                        "SequenceId") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "Steps") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "CancellationSteps") !=
+                        null &&
+                    firstStep != null &&
+                    firstStep.FindPropertyRelative(
+                        "TimeSeconds") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "ActionType") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "TargetId") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "Name") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "Text") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "Value") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "HasValue") !=
+                        null &&
+                    firstStep.FindPropertyRelative(
+                        "Required") !=
+                        null,
+                    "P12 Scene Automation timed-sequence SerializedProperty contract must match SceneSequenceEventActionHandler",
+                    failures);
+
+                var timedTemplate =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            P12BuiltInEventRuleTemplate
+                                .ManualTimedSceneSequence);
+
+                Expect(
+                    timedTemplate.Actions.Length ==
+                        1 &&
+                    timedTemplate.Actions[0]
+                        .ActionType ==
+                        EventActionTypes
+                            .SceneSequencePlay &&
+                    timedTemplate.Actions[0]
+                        .TargetId ==
+                        "scene.sequences" &&
+                    timedTemplate.Actions[0]
+                        .ConstantText ==
+                        "sequence-id",
+                    "P12 timed scene sequence starter template must route one logical sequence id through scene.sequence_play",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 timed scene sequence validation unexpected exception: " +
                     exception);
             }
             finally
