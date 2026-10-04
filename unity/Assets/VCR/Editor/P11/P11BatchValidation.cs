@@ -17,36 +17,54 @@ namespace VCR.Editor.P11
 {
     public static class P11BatchValidation
     {
+        public static bool RunChecks()
+        {
+            var p0Passed =
+                P0SourceFreeValidationSuite.RunAllChecks();
+            var p1Passed =
+                P1RendererCoreValidation.RunChecks();
+            var p2Passed =
+                P2MaterialRuntimeValidation.RunChecks();
+            var p3Passed =
+                P3BuiltInTrackingValidation.RunChecks();
+            var p4Passed =
+                P4TrackingRoutingValidation.RunChecks();
+            var p5Passed =
+                P5ExpressionMixerValidation.RunChecks();
+            var p6Passed =
+                P6EnvironmentRuntimeValidation.RunChecks();
+            var p7Passed =
+                P7ShaderPackageValidation.RunChecks();
+            var p8Passed =
+                P8ProtocolEventAdapterValidation.RunChecks();
+            var p9Passed =
+                P9EventRuntimeValidation.RunChecks();
+            var p10Passed =
+                P10BroadcastOutputValidation.RunChecks();
+            var p11Passed =
+                P11ApplicationUiValidation.RunChecks();
+
+            return
+                p0Passed &&
+                p1Passed &&
+                p2Passed &&
+                p3Passed &&
+                p4Passed &&
+                p5Passed &&
+                p6Passed &&
+                p7Passed &&
+                p8Passed &&
+                p9Passed &&
+                p10Passed &&
+                p11Passed;
+        }
+
         public static void RunSourceFreeAndExit()
         {
             try
             {
-                var p0Passed = P0SourceFreeValidationSuite.RunAllChecks();
-                var p1Passed = P1RendererCoreValidation.RunChecks();
-                var p2Passed = P2MaterialRuntimeValidation.RunChecks();
-                var p3Passed = P3BuiltInTrackingValidation.RunChecks();
-                var p4Passed = P4TrackingRoutingValidation.RunChecks();
-                var p5Passed = P5ExpressionMixerValidation.RunChecks();
-                var p6Passed = P6EnvironmentRuntimeValidation.RunChecks();
-                var p7Passed = P7ShaderPackageValidation.RunChecks();
-                var p8Passed = P8ProtocolEventAdapterValidation.RunChecks();
-                var p9Passed = P9EventRuntimeValidation.RunChecks();
-                var p10Passed = P10BroadcastOutputValidation.RunChecks();
-                var p11Passed = P11ApplicationUiValidation.RunChecks();
-
                 EditorApplication.Exit(
-                    p0Passed &&
-                    p1Passed &&
-                    p2Passed &&
-                    p3Passed &&
-                    p4Passed &&
-                    p5Passed &&
-                    p6Passed &&
-                    p7Passed &&
-                    p8Passed &&
-                    p9Passed &&
-                    p10Passed &&
-                    p11Passed
+                    RunChecks()
                         ? 0
                         : 1);
             }
