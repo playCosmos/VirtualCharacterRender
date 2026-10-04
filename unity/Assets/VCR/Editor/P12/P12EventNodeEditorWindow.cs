@@ -357,14 +357,19 @@ namespace VCR.Editor.P12
                 var rule =
                     _rules.GetArrayElementAtIndex(
                         i);
-                var group =
+                var rawGroup =
                     rule.FindPropertyRelative(
                             "GraphGroup")
-                        .stringValue
-                        ?.Trim();
+                        .stringValue;
+                string group;
 
                 if (string.IsNullOrWhiteSpace(
-                        group))
+                        rawGroup) ||
+                    !P12GraphGroupPathUtility
+                        .TryNormalize(
+                            rawGroup,
+                            out group,
+                            out _))
                 {
                     ungrouped++;
                     continue;
@@ -988,13 +993,14 @@ namespace VCR.Editor.P12
                 var candidateGroup =
                     rule.FindPropertyRelative(
                             "GraphGroup")
-                        .stringValue
-                        ?.Trim();
+                        .stringValue;
 
-                if (string.Equals(
+                if (P12GraphGroupPathUtility
+                    .Matches(
                         candidateGroup,
                         group,
-                        StringComparison.Ordinal))
+                        includeDescendants:
+                            false))
                 {
                     rule.FindPropertyRelative(
                             "Enabled")
