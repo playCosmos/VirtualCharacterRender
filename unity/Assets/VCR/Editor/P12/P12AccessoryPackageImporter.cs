@@ -308,6 +308,25 @@ namespace VCR.Editor.P12
             }
         }
 
+        public static void DeleteImportedPackage(
+            P12AccessoryPackageImportResult result)
+        {
+            if (result == null ||
+                string.IsNullOrWhiteSpace(
+                    result.DestinationFolder))
+            {
+                return;
+            }
+
+            if (AssetDatabase.IsValidFolder(
+                    result.DestinationFolder))
+            {
+                AssetDatabase.DeleteAsset(
+                    result.DestinationFolder);
+                AssetDatabase.Refresh();
+            }
+        }
+
         internal static bool TryResolveModelPath(
             string manifestFilePath,
             string relativeModelPath,
