@@ -30,6 +30,33 @@ namespace VCR.Editor.P12
             Array.Empty<EventRuntimeRule>();
     }
 
+    internal sealed class P12EventRuleLibraryDiff
+    {
+        public string PackageId;
+        public int FromRevision;
+        public int ToRevision;
+        public bool DescriptionChanged;
+        public bool TagsChanged;
+        public string[] AddedRuleIds =
+            Array.Empty<string>();
+        public string[] RemovedRuleIds =
+            Array.Empty<string>();
+        public string[] ChangedRuleIds =
+            Array.Empty<string>();
+        public string[] UnchangedRuleIds =
+            Array.Empty<string>();
+
+        public bool HasRuleChanges =>
+            AddedRuleIds.Length > 0 ||
+            RemovedRuleIds.Length > 0 ||
+            ChangedRuleIds.Length > 0;
+
+        public bool HasChanges =>
+            DescriptionChanged ||
+            TagsChanged ||
+            HasRuleChanges;
+    }
+
     internal static class P12EventRuleLibraryUtility
     {
         public static bool TryCreatePackage(
@@ -278,6 +305,189 @@ namespace VCR.Editor.P12
                 .TryValidateRules(
                     package.Rules,
                     out error);
+        }
+
+        public static bool TryDiffPackages(
+            P12EventRuleLibraryPackage from,
+            P12EventRuleLibraryPackage to,
+            out P12EventRuleLibraryDiff diff,
+            out string error)
+        {
+            diff = null;
+            error = null;
+
+            if (!TryValidatePackage(
+                    from,
+                    out error) ||
+                !TryValidatePackage(
+                    to,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!string.Equals(
+                    from.PackageId,
+                    to.PackageId,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    $"Event rule library diff requires matching PackageId values ('{from.PackageId}' vs '{to.PackageId}').";
+                return false;
+            }
+
+            var fromRules =
+                IndexRules(
+                    from.Rules);
+            var toRules =
+                IndexRules(
+                    to.Rules);
+            var added =
+                new List<string>();
+            var removed =
+                new List<string>();
+            var changed =
+                new List<string>();
+            var unchanged =
+                new List<string>();
+
+            foreach (var pair in fromRules)
+            {
+                if (!toRules.TryGetValue(
+                        pair.Key,
+                        out var nextRule))
+                {
+                    removed.Add(
+                        pair.Key);
+                    continue;
+                }
+
+                var beforeJson =
+                    JsonUtility.ToJson(
+                        pair.Value);
+                var afterJson =
+                    JsonUtility.ToJson(
+                        nextRule);
+
+                if (string.Equals(
+                        beforeJson,
+                        afterJson,
+                        StringComparison.Ordinal))
+                {
+                    unchanged.Add(
+                        pair.Key);
+                }
+                else
+                {
+                    changed.Add(
+                        pair.Key);
+                }
+            }
+
+            foreach (var pair in toRules)
+            {
+                if (!fromRules.ContainsKey(
+                        pair.Key))
+                {
+                    added.Add(
+                        pair.Key);
+                }
+            }
+
+            added.Sort(
+                StringComparer.Ordinal);
+            removed.Sort(
+                StringComparer.Ordinal);
+            changed.Sort(
+                StringComparer.Ordinal);
+            unchanged.Sort(
+                StringComparer.Ordinal);
+
+            diff =
+                new P12EventRuleLibraryDiff
+                {
+                    PackageId =
+                        to.PackageId,
+                    FromRevision =
+                        from.Revision,
+                    ToRevision =
+                        to.Revision,
+                    DescriptionChanged =
+                        !string.Equals(
+                            from.Description,
+                            to.Description,
+                            StringComparison.Ordinal),
+                    TagsChanged =
+                        !SequenceEqualOrdinalIgnoreCase(
+                            from.Tags,
+                            to.Tags),
+                    AddedRuleIds =
+                        added.ToArray(),
+                    RemovedRuleIds =
+                        removed.ToArray(),
+                    ChangedRuleIds =
+                        changed.ToArray(),
+                    UnchangedRuleIds =
+                        unchanged.ToArray()
+                };
+
+            return true;
+        }
+
+        private static Dictionary<string, EventRuntimeRule>
+            IndexRules(
+                EventRuntimeRule[] rules)
+        {
+            var result =
+                new Dictionary<string, EventRuntimeRule>(
+                    StringComparer.Ordinal);
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule != null &&
+                    !string.IsNullOrWhiteSpace(
+                        rule.Id))
+                {
+                    result[
+                        rule.Id] =
+                            rule;
+                }
+            }
+
+            return result;
+        }
+
+        private static bool SequenceEqualOrdinalIgnoreCase(
+            string[] left,
+            string[] right)
+        {
+            left ??=
+                Array.Empty<string>();
+            right ??=
+                Array.Empty<string>();
+
+            if (left.Length !=
+                right.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0;
+                 i < left.Length;
+                 i++)
+            {
+                if (!string.Equals(
+                        left[i],
+                        right[i],
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static EventRuntimeRule[] MergeRules(
