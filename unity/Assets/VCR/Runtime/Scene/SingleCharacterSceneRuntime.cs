@@ -51,7 +51,10 @@ namespace VCR.Runtime.Scene
         public Vrm10Instance CurrentCharacter => characterLoader?.Current;
         public PrimaryCameraController CameraController => cameraController;
         public PrimaryLightController LightController => lightController;
-        public IOverlayOutputAdapter OverlayOutput => _overlayOutput;
+        public IOverlayOutputAdapter OverlayOutput =>
+            IsServiceAlive(_overlayOutput)
+                ? _overlayOutput
+                : null;
 
         public OverlayCaptureReadiness OverlayCaptureReadiness
         {
@@ -59,7 +62,7 @@ namespace VCR.Runtime.Scene
             {
                 ResolveOverlayOutput();
 
-                if (_overlayOutput == null)
+                if (!IsServiceAlive(_overlayOutput))
                 {
                     return new OverlayCaptureReadiness(
                         false,
@@ -98,7 +101,10 @@ namespace VCR.Runtime.Scene
                 render.RunInBackground);
         }
 
-        public IEnvironmentRuntime EnvironmentRuntime => _environmentRuntime;
+        public IEnvironmentRuntime EnvironmentRuntime =>
+            IsServiceAlive(_environmentRuntime)
+                ? _environmentRuntime
+                : null;
         public CapabilityRegistry Capabilities => _capabilities;
         public string CurrentCharacterPath => characterLoader?.CurrentPath;
 
@@ -309,8 +315,9 @@ namespace VCR.Runtime.Scene
             SceneRuntimeConfiguration configuration)
         {
             EnsureOperational();
+            ResolveDependencies();
 
-            if (_environmentRuntime != null &&
+            if (IsServiceAlive(_environmentRuntime) &&
                 !string.IsNullOrWhiteSpace(
                     configuration.EnvironmentStateId) &&
                 !_environmentRuntime.SetState(
@@ -342,7 +349,7 @@ namespace VCR.Runtime.Scene
             _overlayConfiguration =
                 configuration.Overlay;
 
-            if (_overlayOutput != null)
+            if (IsServiceAlive(_overlayOutput))
             {
                 _overlayOutput.Apply(
                     _overlayConfiguration.ToSettings());
@@ -354,8 +361,9 @@ namespace VCR.Runtime.Scene
             out string error)
         {
             EnsureOperational();
+            ResolveEnvironmentRuntime();
 
-            if (_environmentRuntime == null)
+            if (!IsServiceAlive(_environmentRuntime))
             {
                 error =
                     "No environment runtime is configured.";
@@ -371,8 +379,9 @@ namespace VCR.Runtime.Scene
             OverlayOutputSettings settings)
         {
             EnsureOperational();
+            ResolveOverlayOutput();
 
-            if (_overlayOutput == null)
+            if (!IsServiceAlive(_overlayOutput))
             {
                 throw new InvalidOperationException(
                     "No overlay output adapter is configured.");
@@ -493,7 +502,13 @@ namespace VCR.Runtime.Scene
                 };
 
             CancelActiveOperation();
-            _overlayOutput?.Shutdown();
+            ResolveOverlayOutput();
+
+            if (IsServiceAlive(_overlayOutput))
+            {
+                _overlayOutput.Shutdown();
+            }
+
             SetState(SceneRuntimeState.Suspended);
             return true;
         }
@@ -512,7 +527,7 @@ namespace VCR.Runtime.Scene
             cameraController?.Apply();
             lightController?.Apply();
 
-            if (_overlayOutput != null)
+            if (IsServiceAlive(_overlayOutput))
             {
                 _overlayOutput.Apply(
                     _overlayConfiguration.ToSettings());
@@ -565,7 +580,7 @@ namespace VCR.Runtime.Scene
                     failures);
             }
 
-            if (_overlayOutput != null)
+            if (IsServiceAlive(_overlayOutput))
             {
                 RunShutdownStep(
                     "overlay output shutdown",
@@ -642,12 +657,12 @@ namespace VCR.Runtime.Scene
 
             output.Add(new RuntimeMetric(
                 "scene.output.configured",
-                _overlayOutput != null ? 1 : 0,
+                IsServiceAlive(_overlayOutput) ? 1 : 0,
                 "bool"));
 
             output.Add(new RuntimeMetric(
                 "scene.environment.configured",
-                _environmentRuntime != null ? 1 : 0,
+                IsServiceAlive(_environmentRuntime) ? 1 : 0,
                 "bool"));
 
             output.Add(new RuntimeMetric(
@@ -747,8 +762,9 @@ namespace VCR.Runtime.Scene
 
         private void ResolveEnvironmentRuntime()
         {
-            if (environmentRuntimeBehaviour is
-                IEnvironmentRuntime configured)
+            if (environmentRuntimeBehaviour != null &&
+                environmentRuntimeBehaviour is
+                    IEnvironmentRuntime configured)
             {
                 _environmentRuntime = configured;
                 return;
@@ -768,13 +784,15 @@ namespace VCR.Runtime.Scene
                 }
             }
 
+            environmentRuntimeBehaviour = null;
             _environmentRuntime = null;
         }
 
         private void ResolveOverlayOutput()
         {
-            if (overlayOutputBehaviour is
-                IOverlayOutputAdapter configured)
+            if (overlayOutputBehaviour != null &&
+                overlayOutputBehaviour is
+                    IOverlayOutputAdapter configured)
             {
                 _overlayOutput = configured;
                 _overlayConfiguration =
@@ -800,7 +818,21 @@ namespace VCR.Runtime.Scene
                 }
             }
 
+            overlayOutputBehaviour = null;
             _overlayOutput = null;
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void EnsureOperational()
