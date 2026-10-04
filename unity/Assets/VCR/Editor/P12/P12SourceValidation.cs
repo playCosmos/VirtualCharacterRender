@@ -3073,8 +3073,146 @@ namespace VCR.Editor.P12
                             0)
                         .FindPropertyRelative(
                             "root") !=
+                        null &&
+                    environmentSerialized.FindProperty(
+                        "environmentId") !=
+                        null &&
+                    environmentSerialized.FindProperty(
+                        "stateId") !=
+                        null &&
+                    environmentSerialized.FindProperty(
+                        "defaultTransitionMode") !=
+                        null &&
+                    environmentSerialized.FindProperty(
+                        "defaultTransitionDuration") !=
                         null,
-                    "P12 Scene Automation Environment reference contract must expose existing P6 state id/root bindings read-only",
+                    "P12 Scene Automation Environment SerializedProperty contract must expose editable state bindings and transition defaults",
+                    failures);
+
+                Expect(
+                    environment.RebuildStateBindings(
+                        out var environmentRebuildError) &&
+                    propHandler.RebuildBindings(
+                        out var propRebuildError) &&
+                    effectHandler.RebuildBindings(
+                        out var effectRebuildError),
+                    "P12 Scene Automation valid environment/prop/effect registries must rebuild through their runtime validation boundaries: " +
+                    environmentRebuildError +
+                    " / " +
+                    propRebuildError +
+                    " / " +
+                    effectRebuildError,
+                    failures);
+
+                var propSnapshot =
+                    EditorJsonUtility.ToJson(
+                        propHandler);
+                props.InsertArrayElementAtIndex(
+                    0);
+                propSerialized
+                    .ApplyModifiedProperties();
+
+                Expect(
+                    !propHandler.RebuildBindings(
+                        out var duplicatePropError) &&
+                    duplicatePropError != null &&
+                    duplicatePropError.IndexOf(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 Scene Automation authoring must reject duplicate logical prop ids",
+                    failures);
+
+                EditorJsonUtility.FromJsonOverwrite(
+                    propSnapshot,
+                    propHandler);
+                propSerialized =
+                    new SerializedObject(
+                        propHandler);
+
+                Expect(
+                    propHandler.RebuildBindings(
+                        out var restoredPropError),
+                    "restoring the last valid prop snapshot must rebuild after failed authoring validation: " +
+                    restoredPropError,
+                    failures);
+
+                var effectSnapshot =
+                    EditorJsonUtility.ToJson(
+                        effectHandler);
+                effectSerialized.Update();
+                effects =
+                    effectSerialized.FindProperty(
+                        "effects");
+                effects.InsertArrayElementAtIndex(
+                    0);
+                effectSerialized
+                    .ApplyModifiedProperties();
+
+                Expect(
+                    !effectHandler.RebuildBindings(
+                        out var duplicateEffectError) &&
+                    duplicateEffectError != null &&
+                    duplicateEffectError.IndexOf(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 Scene Automation authoring must reject duplicate logical effect ids",
+                    failures);
+
+                EditorJsonUtility.FromJsonOverwrite(
+                    effectSnapshot,
+                    effectHandler);
+                effectSerialized =
+                    new SerializedObject(
+                        effectHandler);
+
+                Expect(
+                    effectHandler.RebuildBindings(
+                        out var restoredEffectError),
+                    "restoring the last valid effect snapshot must rebuild after failed authoring validation: " +
+                    restoredEffectError,
+                    failures);
+
+                var environmentSnapshot =
+                    EditorJsonUtility.ToJson(
+                        environment);
+                environmentSerialized.Update();
+                states =
+                    environmentSerialized.FindProperty(
+                        "stateBindings");
+                states.GetArrayElementAtIndex(
+                        1)
+                    .FindPropertyRelative(
+                        "stateId")
+                    .stringValue =
+                        "day";
+                environmentSerialized
+                    .ApplyModifiedProperties();
+
+                Expect(
+                    !environment.RebuildStateBindings(
+                        out var duplicateStateError) &&
+                    duplicateStateError != null &&
+                    duplicateStateError.IndexOf(
+                        "duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 Scene Automation authoring must reject duplicate environment state ids",
+                    failures);
+
+                EditorJsonUtility.FromJsonOverwrite(
+                    environmentSnapshot,
+                    environment);
+                environmentSerialized =
+                    new SerializedObject(
+                        environment);
+
+                Expect(
+                    environment.RebuildStateBindings(
+                        out var restoredEnvironmentError),
+                    "restoring the last valid environment snapshot must rebuild after failed authoring validation: " +
+                    restoredEnvironmentError,
                     failures);
 
                 var propTemplate =
