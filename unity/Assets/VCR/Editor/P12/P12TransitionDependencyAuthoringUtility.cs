@@ -256,9 +256,21 @@ namespace VCR.Editor.P12
                     match);
             }
 
-            var normalized =
-                groupName?.Trim() ??
-                string.Empty;
+            string normalized;
+
+            if (string.IsNullOrWhiteSpace(
+                    groupName))
+            {
+                normalized =
+                    string.Empty;
+            }
+            else if (!TryNormalizeGroupPath(
+                         groupName,
+                         out normalized,
+                         out error))
+            {
+                return false;
+            }
 
             target.AuthoringGroup =
                 normalized;
@@ -273,6 +285,295 @@ namespace VCR.Editor.P12
                         normalized;
                     affectedSteps++;
                 }
+            }
+
+            return true;
+        }
+
+        public static bool TryNormalizeGroupPath(
+            string groupPath,
+            out string normalized,
+            out string error)
+        {
+            normalized = null;
+            error = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    groupPath))
+            {
+                error =
+                    "Graph group path is required.";
+                return false;
+            }
+
+            var rawSegments =
+                groupPath
+                    .Trim()
+                    .Split(
+                        new[]
+                        {
+                            '/'
+                        },
+                        StringSplitOptions.None);
+            var segments =
+                new List<string>(
+                    rawSegments.Length);
+
+            foreach (var raw in rawSegments)
+            {
+                var segment =
+                    raw?.Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        segment))
+                {
+                    error =
+                        "Graph group path cannot contain empty segments.";
+                    return false;
+                }
+
+                if (segment == "." ||
+                    segment == "..")
+                {
+                    error =
+                        "Graph group path cannot use '.' or '..' segments.";
+                    return false;
+                }
+
+                segments.Add(
+                    segment);
+            }
+
+            normalized =
+                string.Join(
+                    "/",
+                    segments);
+            return true;
+        }
+
+        public static string[] CaptureGroupPaths(
+            AppearanceTransitionPreset transition)
+        {
+            var result =
+                new SortedSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var step in
+                     transition?.Steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null ||
+                    string.IsNullOrWhiteSpace(
+                        step.AuthoringGroup) ||
+                    !TryNormalizeGroupPath(
+                        step.AuthoringGroup,
+                        out var normalized,
+                        out _))
+                {
+                    continue;
+                }
+
+                var segments =
+                    normalized.Split('/');
+
+                for (var i = 1;
+                     i <= segments.Length;
+                     i++)
+                {
+                    result.Add(
+                        string.Join(
+                            "/",
+                            segments,
+                            0,
+                            i));
+                }
+            }
+
+            var paths =
+                new string[
+                    result.Count];
+            result.CopyTo(
+                paths);
+            return paths;
+        }
+
+        public static bool TryRewriteGroupHierarchy(
+            AppearanceTransitionPreset transition,
+            string sourceGroupPath,
+            string destinationGroupPath,
+            bool includeDescendants,
+            out int affectedSteps,
+            out string error)
+        {
+            affectedSteps = 0;
+            error = null;
+
+            if (!TryNormalizeGroupPath(
+                    sourceGroupPath,
+                    out var source,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!TryNormalizeGroupPath(
+                    destinationGroupPath,
+                    out var destination,
+                    out error))
+            {
+                return false;
+            }
+
+            if (string.Equals(
+                    source,
+                    destination,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "Source and destination graph group paths are identical.";
+                return false;
+            }
+
+            if (includeDescendants &&
+                destination.StartsWith(
+                    source + "/",
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "A graph group hierarchy cannot be moved inside itself.";
+                return false;
+            }
+
+            var steps =
+                transition?.Steps;
+
+            if (steps == null ||
+                steps.Length == 0)
+            {
+                error =
+                    "Transition has no authored steps.";
+                return false;
+            }
+
+            foreach (var step in steps)
+            {
+                if (step == null ||
+                    string.IsNullOrWhiteSpace(
+                        step.AuthoringGroup) ||
+                    !TryNormalizeGroupPath(
+                        step.AuthoringGroup,
+                        out var current,
+                        out _))
+                {
+                    continue;
+                }
+
+                if (string.Equals(
+                        current,
+                        source,
+                        StringComparison.Ordinal))
+                {
+                    step.AuthoringGroup =
+                        destination;
+                    affectedSteps++;
+                    continue;
+                }
+
+                if (!includeDescendants ||
+                    !current.StartsWith(
+                        source + "/",
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                step.AuthoringGroup =
+                    destination +
+                    current.Substring(
+                        source.Length);
+                affectedSteps++;
+            }
+
+            if (affectedSteps == 0)
+            {
+                error =
+                    $"Graph group path '{source}' is not assigned to any transition step.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryClearGroupHierarchy(
+            AppearanceTransitionPreset transition,
+            string sourceGroupPath,
+            bool includeDescendants,
+            out int affectedSteps,
+            out string error)
+        {
+            affectedSteps = 0;
+            error = null;
+
+            if (!TryNormalizeGroupPath(
+                    sourceGroupPath,
+                    out var source,
+                    out error))
+            {
+                return false;
+            }
+
+            var steps =
+                transition?.Steps;
+
+            if (steps == null ||
+                steps.Length == 0)
+            {
+                error =
+                    "Transition has no authored steps.";
+                return false;
+            }
+
+            foreach (var step in steps)
+            {
+                if (step == null ||
+                    string.IsNullOrWhiteSpace(
+                        step.AuthoringGroup) ||
+                    !TryNormalizeGroupPath(
+                        step.AuthoringGroup,
+                        out var current,
+                        out _))
+                {
+                    continue;
+                }
+
+                var exact =
+                    string.Equals(
+                        current,
+                        source,
+                        StringComparison.Ordinal);
+                var descendant =
+                    includeDescendants &&
+                    current.StartsWith(
+                        source + "/",
+                        StringComparison.Ordinal);
+
+                if (!exact &&
+                    !descendant)
+                {
+                    continue;
+                }
+
+                step.AuthoringGroup =
+                    string.Empty;
+                affectedSteps++;
+            }
+
+            if (affectedSteps == 0)
+            {
+                error =
+                    $"Graph group path '{source}' is not assigned to any transition step.";
+                return false;
             }
 
             return true;
