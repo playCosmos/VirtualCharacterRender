@@ -175,6 +175,53 @@ namespace VCR.Editor.P5
                         epsilon: 0.001f),
                 "expression convergence check must reject materially different values",
                 failures);
+
+            Expect(
+                ReferenceEquals(
+                    ExpressionMixerMath.Blend(
+                        baseState,
+                        layerState,
+                        weight: 0f,
+                        deadzone: 0.5f,
+                        ExpressionBlendMode.Additive),
+                    baseState),
+                "zero-weight expression blend must preserve the immutable base-state reference without allocating a replacement state",
+                failures);
+
+            var duplicateBase =
+                CreateExpressionState(
+                    aa: 0f,
+                    new NamedExpressionValue(
+                        "duplicate",
+                        0.1f),
+                    new NamedExpressionValue(
+                        "duplicate",
+                        0.3f));
+            var duplicateLayer =
+                CreateExpressionState(
+                    aa: 0f,
+                    new NamedExpressionValue(
+                        "duplicate",
+                        0.5f),
+                    new NamedExpressionValue(
+                        "duplicate",
+                        0.7f));
+
+            var duplicateBlend =
+                ExpressionMixerMath.Blend(
+                    duplicateBase,
+                    duplicateLayer,
+                    weight: 0.5f,
+                    deadzone: 0f,
+                    ExpressionBlendMode.Override);
+
+            ExpectClose(
+                GetCustom(
+                    duplicateBlend,
+                    "duplicate"),
+                0.5f,
+                "optimized custom-expression merge must preserve last-value-wins semantics for duplicate names",
+                failures);
         }
 
         private static void ValidatePoseMath(
