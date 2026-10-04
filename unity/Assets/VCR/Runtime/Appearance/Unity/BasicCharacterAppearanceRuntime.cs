@@ -50,6 +50,12 @@ namespace VCR.Runtime.Appearance.Unity
         private readonly Dictionary<string, List<AppearanceAccessoryBinding>>
             _accessoriesBySlot =
                 new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Transform>
+            _resolvedAccessoryAnchors =
+                new(StringComparer.Ordinal);
+        private readonly Dictionary<GameObject, AccessoryTransformState>
+            _accessoryOriginalTransforms =
+                new();
         private readonly Dictionary<string, AppearancePreset>
             _presets =
                 new(StringComparer.Ordinal);
@@ -222,6 +228,7 @@ namespace VCR.Runtime.Appearance.Unity
             _outfits.Clear();
             _accessories.Clear();
             _accessoriesBySlot.Clear();
+            _resolvedAccessoryAnchors.Clear();
             _presets.Clear();
             _authoredPresetIds.Clear();
             _transitions.Clear();
@@ -336,7 +343,35 @@ namespace VCR.Runtime.Appearance.Unity
                     binding.SlotId +
                     "/" +
                     binding.AccessoryId;
+
+                if (!_accessoryOriginalTransforms.ContainsKey(
+                        binding.Root))
+                {
+                    _accessoryOriginalTransforms[
+                        binding.Root] =
+                            AccessoryTransformState.Capture(
+                                binding.Root.transform);
+                }
+
+                if (!TryResolveAccessoryAnchor(
+                        binding,
+                        out var anchor,
+                        out error))
+                {
+                    error =
+                        $"Accessory '{binding.SlotId}/{binding.AccessoryId}' anchor is invalid: {error}";
+                    return false;
+                }
+
+                if (anchor != null)
+                {
+                    _resolvedAccessoryAnchors[
+                        key] =
+                            anchor;
+                }
             }
+
+            PruneAccessoryTransformStates();
 
             foreach (var binding in
                      presets ??
@@ -1832,6 +1867,8 @@ namespace VCR.Runtime.Appearance.Unity
             var previous =
                 new Dictionary<GameObject, bool>(
                     desired.Count);
+            var previousTransforms =
+                new Dictionary<GameObject, AccessoryTransformState>();
 
             try
             {
@@ -1840,14 +1877,108 @@ namespace VCR.Runtime.Appearance.Unity
                     previous[
                         pair.Key] =
                             pair.Key.activeSelf;
-                    pair.Key.SetActive(
-                        pair.Value);
+                }
+
+                foreach (var binding in
+                         _accessories.Values)
+                {
+                    if (binding?.Root != null)
+                    {
+                        previousTransforms[
+                            binding.Root] =
+                                AccessoryTransformState.Capture(
+                                    binding.Root.transform);
+                    }
+                }
+
+                foreach (var binding in
+                         _outfits.Values)
+                {
+                    foreach (var root in
+                             binding?.Roots ??
+                             Array.Empty<GameObject>())
+                    {
+                        if (root != null &&
+                            desired.TryGetValue(
+                                root,
+                                out var active))
+                        {
+                            root.SetActive(
+                                active);
+                        }
+                    }
+                }
+
+                var selectedKeys =
+                    new HashSet<string>(
+                        StringComparer.Ordinal);
+
+                foreach (var selection in
+                         request.Accessories ??
+                         Array.Empty<
+                             AppearanceAccessorySelection>())
+                {
+                    if (selection == null)
+                    {
+                        continue;
+                    }
+
+                    selectedKeys.Add(
+                        AccessoryKey(
+                            selection.SlotId,
+                            selection.AccessoryId));
+                }
+
+                foreach (var pair in
+                         _accessories)
+                {
+                    var binding =
+                        pair.Value;
+                    var active =
+                        selectedKeys.Contains(
+                            pair.Key);
+
+                    if (active)
+                    {
+                        if (!ApplyAccessoryAnchor(
+                                pair.Key,
+                                binding,
+                                out error))
+                        {
+                            throw new InvalidOperationException(
+                                error);
+                        }
+
+                        binding.Root.SetActive(
+                            true);
+                    }
+                    else
+                    {
+                        binding.Root.SetActive(
+                            false);
+
+                        if (binding
+                            .RestoreOriginalTransformWhenInactive)
+                        {
+                            RestoreOriginalAccessoryTransform(
+                                binding.Root);
+                        }
+                    }
                 }
 
                 return true;
             }
             catch (Exception exception)
             {
+                foreach (var pair in previousTransforms)
+                {
+                    if (pair.Key != null)
+                    {
+                        pair.Value.Apply(
+                            pair.Key.transform);
+                    }
+                }
+
                 foreach (var pair in previous)
                 {
                     if (pair.Key != null)
@@ -1861,6 +1992,230 @@ namespace VCR.Runtime.Appearance.Unity
                     "Appearance apply failed and was rolled back: " +
                     exception.Message;
                 return false;
+            }
+        }
+
+        private bool TryResolveAccessoryAnchor(
+            AppearanceAccessoryBinding binding,
+            out Transform anchor,
+            out string error)
+        {
+            anchor = null;
+            error = null;
+
+            if (binding == null ||
+                binding.Root == null)
+            {
+                error =
+                    "Accessory binding/root is missing.";
+                return false;
+            }
+
+            switch (binding.AnchorMode)
+            {
+                case AppearanceAccessoryAnchorMode.None:
+                    return true;
+
+                case AppearanceAccessoryAnchorMode.Transform:
+                    anchor =
+                        binding.AnchorTransform;
+
+                    if (anchor == null)
+                    {
+                        error =
+                            "Transform anchor mode requires AnchorTransform.";
+                        return false;
+                    }
+
+                    break;
+
+                case AppearanceAccessoryAnchorMode.HumanoidBone:
+                    if (binding.AnchorBone ==
+                        HumanBodyBones.LastBone)
+                    {
+                        error =
+                            "Humanoid bone anchor requires a concrete HumanBodyBones value.";
+                        return false;
+                    }
+
+                    var animator =
+                        binding.AnchorAnimator;
+
+                    if (animator == null)
+                    {
+                        animator =
+                            binding.Root
+                                .GetComponentInParent<Animator>();
+                    }
+
+                    if (animator == null)
+                    {
+                        animator =
+                            GetComponentInParent<Animator>();
+                    }
+
+                    if (animator == null)
+                    {
+                        animator =
+                            GetComponentInChildren<Animator>(
+                                true);
+                    }
+
+                    if (animator == null ||
+                        animator.avatar == null ||
+                        !animator.isHuman)
+                    {
+                        error =
+                            "Humanoid bone anchor requires a humanoid Animator.";
+                        return false;
+                    }
+
+                    anchor =
+                        animator.GetBoneTransform(
+                            binding.AnchorBone);
+
+                    if (anchor == null)
+                    {
+                        error =
+                            $"Humanoid Animator does not expose bone '{binding.AnchorBone}'.";
+                        return false;
+                    }
+
+                    break;
+
+                default:
+                    error =
+                        $"Unsupported accessory anchor mode '{binding.AnchorMode}'.";
+                    return false;
+            }
+
+            if (ReferenceEquals(
+                    anchor,
+                    binding.Root.transform) ||
+                anchor.IsChildOf(
+                    binding.Root.transform))
+            {
+                error =
+                    "Accessory anchor cannot be the accessory root or one of its descendants.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool ApplyAccessoryAnchor(
+            string key,
+            AppearanceAccessoryBinding binding,
+            out string error)
+        {
+            error = null;
+
+            if (binding == null ||
+                binding.Root == null)
+            {
+                error =
+                    "Accessory binding/root is missing.";
+                return false;
+            }
+
+            if (binding.AnchorMode ==
+                AppearanceAccessoryAnchorMode.None)
+            {
+                RestoreOriginalAccessoryTransform(
+                    binding.Root);
+                return true;
+            }
+
+            if (!_resolvedAccessoryAnchors.TryGetValue(
+                    key,
+                    out var anchor) ||
+                anchor == null)
+            {
+                if (!TryResolveAccessoryAnchor(
+                        binding,
+                        out anchor,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (anchor != null)
+                {
+                    _resolvedAccessoryAnchors[
+                        key] =
+                            anchor;
+                }
+            }
+
+            binding.Root.transform.SetParent(
+                anchor,
+                false);
+            binding.Root.transform.localPosition =
+                binding.LocalPosition;
+            binding.Root.transform.localRotation =
+                Quaternion.Euler(
+                    binding.LocalEulerAngles);
+
+            if (binding.OverrideLocalScale)
+            {
+                binding.Root.transform.localScale =
+                    binding.LocalScale;
+            }
+
+            return true;
+        }
+
+        private void RestoreOriginalAccessoryTransform(
+            GameObject root)
+        {
+            if (root == null ||
+                !_accessoryOriginalTransforms.TryGetValue(
+                    root,
+                    out var state))
+            {
+                return;
+            }
+
+            state.Apply(
+                root.transform);
+        }
+
+        private void PruneAccessoryTransformStates()
+        {
+            var registered =
+                new HashSet<GameObject>();
+
+            foreach (var binding in
+                     accessories ??
+                     Array.Empty<
+                         AppearanceAccessoryBinding>())
+            {
+                if (binding?.Root != null)
+                {
+                    registered.Add(
+                        binding.Root);
+                }
+            }
+
+            var stale =
+                new List<GameObject>();
+
+            foreach (var pair in
+                     _accessoryOriginalTransforms)
+            {
+                if (pair.Key == null ||
+                    !registered.Contains(
+                        pair.Key))
+                {
+                    stale.Add(
+                        pair.Key);
+                }
+            }
+
+            foreach (var root in stale)
+            {
+                _accessoryOriginalTransforms.Remove(
+                    root);
             }
         }
 
@@ -3434,6 +3789,70 @@ namespace VCR.Runtime.Appearance.Unity
                     "appearance.transition.progress",
                     Status.TransitionProgress01,
                     "ratio"));
+        }
+
+        private readonly struct AccessoryTransformState
+        {
+            private AccessoryTransformState(
+                Transform parent,
+                Vector3 localPosition,
+                Quaternion localRotation,
+                Vector3 localScale,
+                int siblingIndex)
+            {
+                Parent = parent;
+                LocalPosition = localPosition;
+                LocalRotation = localRotation;
+                LocalScale = localScale;
+                SiblingIndex = siblingIndex;
+            }
+
+            public Transform Parent { get; }
+            public Vector3 LocalPosition { get; }
+            public Quaternion LocalRotation { get; }
+            public Vector3 LocalScale { get; }
+            public int SiblingIndex { get; }
+
+            public static AccessoryTransformState Capture(
+                Transform transform)
+            {
+                return new AccessoryTransformState(
+                    transform.parent,
+                    transform.localPosition,
+                    transform.localRotation,
+                    transform.localScale,
+                    transform.GetSiblingIndex());
+            }
+
+            public void Apply(
+                Transform transform)
+            {
+                if (transform == null)
+                {
+                    return;
+                }
+
+                transform.SetParent(
+                    Parent,
+                    false);
+                transform.localPosition =
+                    LocalPosition;
+                transform.localRotation =
+                    LocalRotation;
+                transform.localScale =
+                    LocalScale;
+
+                if (Parent != null &&
+                    Parent.childCount > 0)
+                {
+                    transform.SetSiblingIndex(
+                        Math.Max(
+                            0,
+                            Math.Min(
+                                SiblingIndex,
+                                Parent.childCount - 1)));
+                }
+            }
         }
 
         private sealed class AppearanceChangeRequest
