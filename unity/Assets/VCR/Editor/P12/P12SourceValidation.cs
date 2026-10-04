@@ -1302,6 +1302,62 @@ namespace VCR.Editor.P12
 
             Expect(
                 P12TransitionDependencyAuthoringUtility
+                    .TryAssignDependencyGroup(
+                        transition,
+                        2,
+                        "Wardrobe Swap",
+                        includeSources:
+                            true,
+                        out var groupedCount,
+                        out var groupError) &&
+                groupedCount ==
+                    3 &&
+                transition.Steps[0]
+                    .AuthoringGroup ==
+                    "Wardrobe Swap" &&
+                transition.Steps[1]
+                    .AuthoringGroup ==
+                    "Wardrobe Swap" &&
+                transition.Steps[2]
+                    .AuthoringGroup ==
+                    "Wardrobe Swap" &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    2,
+                "P12 dependency cluster grouping must label the target and all connected sources without changing dependency edges: " +
+                groupError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryAssignDependencyGroup(
+                        transition,
+                        2,
+                        string.Empty,
+                        includeSources:
+                            true,
+                        out var clearedGroupCount,
+                        out var clearGroupError) &&
+                clearedGroupCount ==
+                    3 &&
+                transition.Steps[0]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[1]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[2]
+                    .AuthoringGroup ==
+                    string.Empty &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    2,
+                "P12 dependency cluster group clearing must remove only authoring metadata and preserve dependency edges: " +
+                clearGroupError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
                     .TryRemoveDependency(
                         transition,
                         0,
