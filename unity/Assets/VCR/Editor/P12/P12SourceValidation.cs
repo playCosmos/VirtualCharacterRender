@@ -27,7 +27,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance convention discovery, explicit wardrobe/accessory bindings, authored preset capture, duplicate-id rejection, serialized authoring contract)");
+                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, authored preset capture, duplicate-id rejection, serialized authoring contract)");
                 return true;
             }
 
@@ -108,6 +108,58 @@ namespace VCR.Editor.P12
                     discoveryError,
                     failures);
 
+                var hatBinding =
+                    Array.Find(
+                        accessories,
+                        binding =>
+                            binding != null &&
+                            binding.SlotId ==
+                                "Head" &&
+                            binding.AccessoryId ==
+                                "Hat");
+                var originalHatParent =
+                    hat.parent;
+                hat.localPosition =
+                    new Vector3(
+                        0.1f,
+                        0.2f,
+                        0.3f);
+                hat.localRotation =
+                    Quaternion.Euler(
+                        5f,
+                        10f,
+                        15f);
+                var originalHatPosition =
+                    hat.localPosition;
+                var originalHatRotation =
+                    hat.localRotation;
+                var anchor =
+                    CreateChild(
+                        root.transform,
+                        "AccessoryAnchor");
+
+                if (hatBinding != null)
+                {
+                    hatBinding.AnchorMode =
+                        AppearanceAccessoryAnchorMode
+                            .Transform;
+                    hatBinding.AnchorTransform =
+                        anchor;
+                    hatBinding.LocalPosition =
+                        new Vector3(
+                            1f,
+                            2f,
+                            3f);
+                    hatBinding.LocalEulerAngles =
+                        new Vector3(
+                            10f,
+                            20f,
+                            30f);
+                    hatBinding
+                        .RestoreOriginalTransformWhenInactive =
+                            true;
+                }
+
                 var preset =
                     new AppearancePresetBinding
                     {
@@ -169,6 +221,61 @@ namespace VCR.Editor.P12
                     applyError,
                     failures);
 
+                Expect(
+                    hatBinding != null &&
+                    ReferenceEquals(
+                        hat.parent,
+                        anchor) &&
+                    Vector3.Distance(
+                        hat.localPosition,
+                        new Vector3(
+                            1f,
+                            2f,
+                            3f)) <
+                        0.0001f &&
+                    Quaternion.Angle(
+                        hat.localRotation,
+                        Quaternion.Euler(
+                            10f,
+                            20f,
+                            30f)) <
+                        0.01f,
+                    "active transform-anchored accessory must reparent and apply authored local offset atomically",
+                    failures);
+
+                Expect(
+                    runtime.ClearAccessory(
+                        "Head",
+                        "Immediate",
+                        out var clearAccessoryError) &&
+                    ReferenceEquals(
+                        hat.parent,
+                        originalHatParent) &&
+                    Vector3.Distance(
+                        hat.localPosition,
+                        originalHatPosition) <
+                        0.0001f &&
+                    Quaternion.Angle(
+                        hat.localRotation,
+                        originalHatRotation) <
+                        0.01f,
+                    "inactive anchored accessory must restore its original parent/local transform: " +
+                    clearAccessoryError,
+                    failures);
+
+                Expect(
+                    runtime.SetAccessory(
+                        "Head",
+                        "Hat",
+                        "Immediate",
+                        out var restoreAccessoryError) &&
+                    ReferenceEquals(
+                        hat.parent,
+                        anchor),
+                    "anchored accessory must remain reusable after original-transform restoration: " +
+                    restoreAccessoryError,
+                    failures);
+
                 var captured =
                     P12AppearanceAuthoringUtility
                         .CreatePresetFromCurrent(
@@ -212,8 +319,68 @@ namespace VCR.Editor.P12
                         null &&
                     serialized.FindProperty(
                         "appearanceRootName") !=
+                        null &&
+                    serialized.FindProperty(
+                            "accessories")
+                        .GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "AnchorMode") !=
+                        null &&
+                    serialized.FindProperty(
+                            "accessories")
+                        .GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "AnchorBone") !=
+                        null &&
+                    serialized.FindProperty(
+                            "accessories")
+                        .GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "LocalPosition") !=
                         null,
                     "P12 appearance authoring window serialized property contract must remain available",
+                    failures);
+
+                Expect(
+                    P12AppearanceAuthoringUtility
+                        .TryCaptureAnchorOffset(
+                            hat,
+                            anchor,
+                            out var capturedPosition,
+                            out var capturedEuler,
+                            out var offsetError) &&
+                    Vector3.Distance(
+                        capturedPosition,
+                        hat.localPosition) <
+                        0.0001f &&
+                    Quaternion.Angle(
+                        Quaternion.Euler(
+                            capturedEuler),
+                        hat.localRotation) <
+                        0.01f,
+                    "P12 anchor offset capture must derive the current accessory transform relative to its anchor: " +
+                    offsetError,
+                    failures);
+
+                var cycleChild =
+                    CreateChild(
+                        hat,
+                        "CycleAnchor");
+
+                Expect(
+                    !P12AppearanceAuthoringUtility
+                        .TryCaptureAnchorOffset(
+                            hat,
+                            cycleChild,
+                            out _,
+                            out _,
+                            out var cycleError) &&
+                    !string.IsNullOrWhiteSpace(
+                        cycleError),
+                    "P12 anchor authoring must reject accessory-descendant anchors that would create a transform cycle",
                     failures);
 
                 var duplicate =
