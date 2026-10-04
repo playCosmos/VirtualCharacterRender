@@ -36,6 +36,7 @@ namespace VCR.Runtime.UI
         [Header("UI")]
         [SerializeField] private bool buildOnAwake = true;
         [SerializeField, Min(0.25f)] private float refreshIntervalSeconds = 0.5f;
+        [SerializeField, Min(0.5f)] private float dependencyResolveIntervalSeconds = 2f;
         [SerializeField] private Font uiFont;
 
         private readonly ApplicationUiModel _model =
@@ -159,6 +160,7 @@ namespace VCR.Runtime.UI
         private MaterialOverrideController _materialController;
 
         private float _nextRefreshTime;
+        private float _nextDependencyResolveTime;
         private string _lastActionMessage;
         private int _trackingControlIndex;
         private int _appearanceTransitionIndex;
@@ -173,7 +175,8 @@ namespace VCR.Runtime.UI
 
         private void Awake()
         {
-            ResolveDependencies();
+            ResolveDependencies(
+                force: true);
             RefreshAvailability();
 
             if (buildOnAwake)
@@ -334,79 +337,97 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
-        private void ResolveDependencies()
+        private void ResolveDependencies(
+            bool force = false)
         {
-            applicationBootstrap ??=
-                FindFirstObjectByType<
-                    ApplicationRuntimeBootstrap>(
-                    FindObjectsInactive.Exclude);
+            var now =
+                Time.unscaledTime;
+            var resolveMissing =
+                force ||
+                now >=
+                _nextDependencyResolveTime;
 
-            sceneRuntime ??=
-                applicationBootstrap?.SceneRuntime ??
-                FindFirstObjectByType<
-                    SingleCharacterSceneRuntime>(
-                    FindObjectsInactive.Exclude);
+            if (resolveMissing)
+            {
+                _nextDependencyResolveTime =
+                    now +
+                    Mathf.Max(
+                        0.5f,
+                        dependencyResolveIntervalSeconds);
 
-            diagnostics ??=
-                FindFirstObjectByType<
-                    RuntimeDiagnostics>(
-                    FindObjectsInactive.Exclude);
+                applicationBootstrap ??=
+                    FindFirstObjectByType<
+                        ApplicationRuntimeBootstrap>(
+                        FindObjectsInactive.Exclude);
 
-            eventRuntime ??=
-                FindFirstObjectByType<
-                    EventRuntimeHost>(
-                    FindObjectsInactive.Exclude);
+                sceneRuntime ??=
+                    applicationBootstrap?.SceneRuntime ??
+                    FindFirstObjectByType<
+                        SingleCharacterSceneRuntime>(
+                        FindObjectsInactive.Exclude);
 
-            _mixer ??=
-                FindFirstObjectByType<
-                    MotionExpressionMixer>(
-                    FindObjectsInactive.Exclude);
+                diagnostics ??=
+                    FindFirstObjectByType<
+                        RuntimeDiagnostics>(
+                        FindObjectsInactive.Exclude);
 
-            _manualExpressionSource ??=
-                FindFirstObjectByType<
-                    ManualExpressionLayerSource>(
-                    FindObjectsInactive.Exclude);
+                eventRuntime ??=
+                    FindFirstObjectByType<
+                        EventRuntimeHost>(
+                        FindObjectsInactive.Exclude);
 
-            _materialController ??=
-                FindFirstObjectByType<
-                    MaterialOverrideController>(
-                    FindObjectsInactive.Exclude);
+                _mixer ??=
+                    FindFirstObjectByType<
+                        MotionExpressionMixer>(
+                        FindObjectsInactive.Exclude);
 
-            ResolveTrackingControls();
-            ResolveCharacterFileSelectionAdapter();
-            ResolveAppearanceRuntime();
+                _manualExpressionSource ??=
+                    FindFirstObjectByType<
+                        ManualExpressionLayerSource>(
+                        FindObjectsInactive.Exclude);
+
+                _materialController ??=
+                    FindFirstObjectByType<
+                        MaterialOverrideController>(
+                        FindObjectsInactive.Exclude);
+
+                ResolveTrackingControls();
+                ResolveCharacterFileSelectionAdapter();
+                ResolveAppearanceRuntime();
+
+                if (_trackingPresence == null)
+                {
+                    var behaviours =
+                        FindObjectsByType<MonoBehaviour>(
+                            FindObjectsInactive.Exclude,
+                            FindObjectsSortMode.None);
+
+                    ITrackingPresenceProvider direct = null;
+
+                    foreach (var behaviour in behaviours)
+                    {
+                        if (behaviour is
+                            ITrackingMixProvider mix)
+                        {
+                            _trackingPresence = mix;
+                            break;
+                        }
+
+                        if (direct == null &&
+                            behaviour is
+                                ITrackingPresenceProvider presence)
+                        {
+                            direct = presence;
+                        }
+                    }
+
+                    _trackingPresence ??=
+                        direct;
+                }
+            }
+
             EnsureAppearanceUserPresetsLoaded();
             EnsureEventRulesLoaded();
-
-            if (_trackingPresence == null)
-            {
-                var behaviours =
-                    FindObjectsByType<MonoBehaviour>(
-                        FindObjectsInactive.Exclude,
-                        FindObjectsSortMode.None);
-
-                ITrackingPresenceProvider direct = null;
-
-                foreach (var behaviour in behaviours)
-                {
-                    if (behaviour is
-                        ITrackingMixProvider mix)
-                    {
-                        _trackingPresence = mix;
-                        break;
-                    }
-
-                    if (direct == null &&
-                        behaviour is
-                            ITrackingPresenceProvider presence)
-                    {
-                        direct = presence;
-                    }
-                }
-
-                _trackingPresence ??=
-                    direct;
-            }
         }
 
         private void RefreshAvailability()
