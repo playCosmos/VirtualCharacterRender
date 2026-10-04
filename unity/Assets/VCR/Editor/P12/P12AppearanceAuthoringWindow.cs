@@ -352,8 +352,219 @@ namespace VCR.Editor.P12
                     EditorGUILayout.PropertyField(
                         accessory.FindPropertyRelative(
                             "Root"));
+                    DrawAccessoryAnchor(
+                        accessory);
                 }
             }
+        }
+
+        private void DrawAccessoryAnchor(
+            SerializedProperty accessory)
+        {
+            var anchorMode =
+                accessory.FindPropertyRelative(
+                    "AnchorMode");
+
+            EditorGUILayout.Space();
+            EditorGUILayout.PropertyField(
+                anchorMode,
+                new GUIContent(
+                    "Anchor Mode"));
+
+            var mode =
+                (AppearanceAccessoryAnchorMode)
+                anchorMode.enumValueIndex;
+
+            switch (mode)
+            {
+                case AppearanceAccessoryAnchorMode.Transform:
+                    EditorGUILayout.PropertyField(
+                        accessory.FindPropertyRelative(
+                            "AnchorTransform"));
+
+                    using (new EditorGUI.DisabledScope(
+                               Selection.activeTransform ==
+                               null))
+                    {
+                        if (GUILayout.Button(
+                                "Use Selected Transform As Anchor"))
+                        {
+                            accessory.FindPropertyRelative(
+                                    "AnchorTransform")
+                                .objectReferenceValue =
+                                    Selection.activeTransform;
+                        }
+                    }
+
+                    break;
+
+                case AppearanceAccessoryAnchorMode.HumanoidBone:
+                    EditorGUILayout.PropertyField(
+                        accessory.FindPropertyRelative(
+                            "AnchorAnimator"));
+                    EditorGUILayout.PropertyField(
+                        accessory.FindPropertyRelative(
+                            "AnchorBone"));
+
+                    using (new EditorGUI.DisabledScope(
+                               _runtime == null))
+                    {
+                        if (GUILayout.Button(
+                                "Use Runtime Humanoid Animator"))
+                        {
+                            var animator =
+                                _runtime
+                                    .GetComponentInChildren<Animator>(
+                                        true);
+
+                            if (animator == null)
+                            {
+                                animator =
+                                    _runtime
+                                        .GetComponentInParent<Animator>();
+                            }
+
+                            accessory.FindPropertyRelative(
+                                    "AnchorAnimator")
+                                .objectReferenceValue =
+                                    animator;
+                        }
+                    }
+
+                    break;
+            }
+
+            if (mode !=
+                AppearanceAccessoryAnchorMode.None)
+            {
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    if (GUILayout.Button(
+                            "Capture Current Offset"))
+                    {
+                        CaptureAccessoryAnchorOffset(
+                            accessory);
+                    }
+
+                    if (GUILayout.Button(
+                            "Reset Offset"))
+                    {
+                        accessory.FindPropertyRelative(
+                                "LocalPosition")
+                            .vector3Value =
+                                Vector3.zero;
+                        accessory.FindPropertyRelative(
+                                "LocalEulerAngles")
+                            .vector3Value =
+                                Vector3.zero;
+                    }
+                }
+
+                EditorGUILayout.PropertyField(
+                    accessory.FindPropertyRelative(
+                        "LocalPosition"));
+                EditorGUILayout.PropertyField(
+                    accessory.FindPropertyRelative(
+                        "LocalEulerAngles"));
+
+                var overrideScale =
+                    accessory.FindPropertyRelative(
+                        "OverrideLocalScale");
+                EditorGUILayout.PropertyField(
+                    overrideScale);
+
+                if (overrideScale.boolValue)
+                {
+                    EditorGUILayout.PropertyField(
+                        accessory.FindPropertyRelative(
+                            "LocalScale"));
+                }
+
+                EditorGUILayout.PropertyField(
+                    accessory.FindPropertyRelative(
+                        "RestoreOriginalTransformWhenInactive"));
+            }
+        }
+
+        private void CaptureAccessoryAnchorOffset(
+            SerializedProperty accessory)
+        {
+            var root =
+                accessory.FindPropertyRelative(
+                        "Root")
+                    .objectReferenceValue as
+                    GameObject;
+            var mode =
+                (AppearanceAccessoryAnchorMode)
+                accessory.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex;
+            var explicitAnchor =
+                accessory.FindPropertyRelative(
+                        "AnchorTransform")
+                    .objectReferenceValue as
+                    Transform;
+            var animator =
+                accessory.FindPropertyRelative(
+                        "AnchorAnimator")
+                    .objectReferenceValue as
+                    Animator;
+            var bone =
+                (HumanBodyBones)
+                accessory.FindPropertyRelative(
+                        "AnchorBone")
+                    .enumValueIndex;
+
+            if (!P12AppearanceAuthoringUtility
+                .TryResolveAccessoryAnchor(
+                    mode,
+                    explicitAnchor,
+                    animator,
+                    bone,
+                    out var anchor,
+                    out var resolveError))
+            {
+                _message =
+                    "Accessory anchor resolve failed: " +
+                    resolveError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!P12AppearanceAuthoringUtility
+                .TryCaptureAnchorOffset(
+                    root != null
+                        ? root.transform
+                        : null,
+                    anchor,
+                    out var localPosition,
+                    out var localEulerAngles,
+                    out var captureError))
+            {
+                _message =
+                    "Accessory offset capture failed: " +
+                    captureError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            accessory.FindPropertyRelative(
+                    "LocalPosition")
+                .vector3Value =
+                    localPosition;
+            accessory.FindPropertyRelative(
+                    "LocalEulerAngles")
+                .vector3Value =
+                    localEulerAngles;
+            _hasPendingChanges =
+                true;
+            _message =
+                "Captured accessory local position/rotation relative to the selected anchor.";
+            _messageType =
+                MessageType.Info;
         }
 
         private void DrawPresets()
@@ -597,6 +808,8 @@ namespace VCR.Editor.P12
                     "Root")
                 .objectReferenceValue =
                     null;
+            ResetAccessoryAnchor(
+                accessory);
         }
 
         private void AddSelectedAccessory()
@@ -640,6 +853,50 @@ namespace VCR.Editor.P12
                     "Root")
                 .objectReferenceValue =
                     selected;
+            ResetAccessoryAnchor(
+                accessory);
+        }
+
+        private static void ResetAccessoryAnchor(
+            SerializedProperty accessory)
+        {
+            accessory.FindPropertyRelative(
+                    "AnchorMode")
+                .enumValueIndex =
+                    (int)
+                    AppearanceAccessoryAnchorMode.None;
+            accessory.FindPropertyRelative(
+                    "AnchorTransform")
+                .objectReferenceValue =
+                    null;
+            accessory.FindPropertyRelative(
+                    "AnchorAnimator")
+                .objectReferenceValue =
+                    null;
+            accessory.FindPropertyRelative(
+                    "AnchorBone")
+                .enumValueIndex =
+                    (int)HumanBodyBones.Head;
+            accessory.FindPropertyRelative(
+                    "LocalPosition")
+                .vector3Value =
+                    Vector3.zero;
+            accessory.FindPropertyRelative(
+                    "LocalEulerAngles")
+                .vector3Value =
+                    Vector3.zero;
+            accessory.FindPropertyRelative(
+                    "OverrideLocalScale")
+                .boolValue =
+                    false;
+            accessory.FindPropertyRelative(
+                    "LocalScale")
+                .vector3Value =
+                    Vector3.one;
+            accessory.FindPropertyRelative(
+                    "RestoreOriginalTransformWhenInactive")
+                .boolValue =
+                    true;
         }
 
         private void AddEmptyPreset()
@@ -874,6 +1131,51 @@ namespace VCR.Editor.P12
                         "Root")
                     .objectReferenceValue =
                         binding?.Root;
+                property.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex =
+                        (int)(
+                            binding?.AnchorMode ??
+                            AppearanceAccessoryAnchorMode.None);
+                property.FindPropertyRelative(
+                        "AnchorTransform")
+                    .objectReferenceValue =
+                        binding?.AnchorTransform;
+                property.FindPropertyRelative(
+                        "AnchorAnimator")
+                    .objectReferenceValue =
+                        binding?.AnchorAnimator;
+                property.FindPropertyRelative(
+                        "AnchorBone")
+                    .enumValueIndex =
+                        (int)(
+                            binding?.AnchorBone ??
+                            HumanBodyBones.Head);
+                property.FindPropertyRelative(
+                        "LocalPosition")
+                    .vector3Value =
+                        binding?.LocalPosition ??
+                        Vector3.zero;
+                property.FindPropertyRelative(
+                        "LocalEulerAngles")
+                    .vector3Value =
+                        binding?.LocalEulerAngles ??
+                        Vector3.zero;
+                property.FindPropertyRelative(
+                        "OverrideLocalScale")
+                    .boolValue =
+                        binding?.OverrideLocalScale ??
+                        false;
+                property.FindPropertyRelative(
+                        "LocalScale")
+                    .vector3Value =
+                        binding?.LocalScale ??
+                        Vector3.one;
+                property.FindPropertyRelative(
+                        "RestoreOriginalTransformWhenInactive")
+                    .boolValue =
+                        binding?.RestoreOriginalTransformWhenInactive ??
+                        true;
             }
         }
 
