@@ -6,6 +6,7 @@ using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.Tracking.Mixing;
+using VCR.Editor.P12;
 
 namespace VCR.Editor.P11
 {
@@ -35,6 +36,11 @@ namespace VCR.Editor.P11
         private BakedMotionCueAsset _markerCueAsset;
         private float _markerSnapThresholdSeconds = 0.08f;
         private bool _showDependencyOverview = true;
+        private int _dependencyGraphSourceIndex = -1;
+        private int _dependencyGraphTargetIndex = -1;
+        private AppearanceTransitionDependencyMode
+            _dependencyGraphMode =
+                AppearanceTransitionDependencyMode.All;
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
@@ -149,6 +155,8 @@ namespace VCR.Editor.P11
             {
                 _runtime = nextRuntime;
                 _selectedTransitionIndex = 0;
+                _dependencyGraphSourceIndex = -1;
+                _dependencyGraphTargetIndex = -1;
                 Rebind();
             }
 
@@ -1400,7 +1408,7 @@ namespace VCR.Editor.P11
             }
         }
 
-        private static void DrawDependencyGraphPreview(
+        private void DrawDependencyGraphPreview(
             SerializedProperty transition,
             SerializedProperty steps)
         {
@@ -1699,11 +1707,31 @@ namespace VCR.Editor.P11
                         ? $"{baseLabel}{flags}"
                         : $"{baseLabel}{flags}  {resolved:0.##}s";
 
-                GUI.Label(
-                    nodeRects[
-                        i],
-                    label,
-                    EditorStyles.miniButton);
+                var selectedSource =
+                    i ==
+                    _dependencyGraphSourceIndex;
+                var selectedTarget =
+                    i ==
+                    _dependencyGraphTargetIndex;
+                var interactiveLabel =
+                    selectedSource
+                        ? "[S] " +
+                          label
+                        : selectedTarget
+                            ? "[T] " +
+                              label
+                            : label;
+
+                if (GUI.Button(
+                        nodeRects[
+                            i],
+                        interactiveLabel,
+                        EditorStyles.miniButton))
+                {
+                    SelectDependencyGraphNode(
+                        steps,
+                        i);
+                }
             }
 
             GUI.Label(
@@ -1729,6 +1757,309 @@ namespace VCR.Editor.P11
                     alignment =
                         TextAnchor.MiddleRight
                 });
+
+            EditorGUILayout.Space();
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                EditorGUILayout.LabelField(
+                    DependencySelectionLabel(
+                        steps),
+                    GUILayout.MinWidth(
+                        260f));
+
+                _dependencyGraphMode =
+                    (AppearanceTransitionDependencyMode)
+                    EditorGUILayout.EnumPopup(
+                        _dependencyGraphMode,
+                        GUILayout.Width(
+                            80f));
+
+                using (new EditorGUI
+                           .DisabledScope(
+                               !HasDependencyGraphSelection(
+                                   steps)))
+                {
+                    if (GUILayout.Button(
+                            "Add / Set Edge",
+                            GUILayout.Width(
+                                110f)))
+                    {
+                        ApplyDependencyGraphEdge(
+                            transition,
+                            remove:
+                                false);
+                    }
+
+                    if (GUILayout.Button(
+                            "Remove Edge",
+                            GUILayout.Width(
+                                100f)))
+                    {
+                        ApplyDependencyGraphEdge(
+                            transition,
+                            remove:
+                                true);
+                    }
+                }
+
+                if (GUILayout.Button(
+                        "Clear Selection",
+                        GUILayout.Width(
+                            105f)))
+                {
+                    _dependencyGraphSourceIndex =
+                        -1;
+                    _dependencyGraphTargetIndex =
+                        -1;
+                }
+            }
+
+            EditorGUILayout.HelpBox(
+                "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency.",
+                MessageType.None);
+        }
+
+        private void SelectDependencyGraphNode(
+            SerializedProperty steps,
+            int index)
+        {
+            if (steps == null ||
+                index < 0 ||
+                index >=
+                    steps.arraySize)
+            {
+                return;
+            }
+
+            var step =
+                steps.GetArrayElementAtIndex(
+                    index);
+            var kind =
+                (AppearanceTransitionStepKind)
+                step.FindPropertyRelative(
+                        "Kind")
+                    .enumValueIndex;
+            var stepId =
+                step.FindPropertyRelative(
+                        "StepId")
+                    .stringValue;
+            var validSource =
+                kind ==
+                    AppearanceTransitionStepKind.Action &&
+                !string.IsNullOrWhiteSpace(
+                    stepId);
+
+            if (_dependencyGraphSourceIndex < 0)
+            {
+                if (!validSource)
+                {
+                    _lastMessage =
+                        "Dependency source must be an Action node with a non-empty Step ID.";
+                    _lastMessageType =
+                        MessageType.Warning;
+                    return;
+                }
+
+                _dependencyGraphSourceIndex =
+                    index;
+                _dependencyGraphTargetIndex =
+                    -1;
+                return;
+            }
+
+            if (index ==
+                _dependencyGraphSourceIndex)
+            {
+                _dependencyGraphSourceIndex =
+                    -1;
+                _dependencyGraphTargetIndex =
+                    -1;
+                return;
+            }
+
+            if (index >
+                _dependencyGraphSourceIndex)
+            {
+                _dependencyGraphTargetIndex =
+                    index;
+                return;
+            }
+
+            if (validSource)
+            {
+                _dependencyGraphSourceIndex =
+                    index;
+                _dependencyGraphTargetIndex =
+                    -1;
+                return;
+            }
+
+            _lastMessage =
+                "Dependency target must come after its source.";
+            _lastMessageType =
+                MessageType.Warning;
+        }
+
+        private bool HasDependencyGraphSelection(
+            SerializedProperty steps)
+        {
+            return
+                steps != null &&
+                _dependencyGraphSourceIndex >= 0 &&
+                _dependencyGraphTargetIndex >
+                    _dependencyGraphSourceIndex &&
+                _dependencyGraphTargetIndex <
+                    steps.arraySize;
+        }
+
+        private string DependencySelectionLabel(
+            SerializedProperty steps)
+        {
+            if (steps == null ||
+                _dependencyGraphSourceIndex < 0 ||
+                _dependencyGraphSourceIndex >=
+                    steps.arraySize)
+            {
+                return
+                    "Source: <select Action node> | Target: <none>";
+            }
+
+            var source =
+                steps.GetArrayElementAtIndex(
+                    _dependencyGraphSourceIndex);
+            var sourceId =
+                source.FindPropertyRelative(
+                        "StepId")
+                    .stringValue;
+            var targetLabel =
+                "<select later node>";
+
+            if (_dependencyGraphTargetIndex >=
+                    0 &&
+                _dependencyGraphTargetIndex <
+                    steps.arraySize)
+            {
+                var target =
+                    steps.GetArrayElementAtIndex(
+                        _dependencyGraphTargetIndex);
+                var targetKind =
+                    (AppearanceTransitionStepKind)
+                    target.FindPropertyRelative(
+                            "Kind")
+                        .enumValueIndex;
+                var targetId =
+                    target.FindPropertyRelative(
+                            "StepId")
+                        .stringValue;
+
+                targetLabel =
+                    targetKind ==
+                        AppearanceTransitionStepKind.Commit
+                        ? "appearance.commit"
+                        : !string.IsNullOrWhiteSpace(
+                              targetId)
+                            ? targetId
+                            : $"action#{_dependencyGraphTargetIndex + 1}";
+            }
+
+            return
+                $"Source: {sourceId} | Target: {targetLabel}";
+        }
+
+        private void ApplyDependencyGraphEdge(
+            SerializedProperty transition,
+            bool remove)
+        {
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+
+            if (!HasDependencyGraphSelection(
+                    steps))
+            {
+                _lastMessage =
+                    "Select a valid dependency Source and later Target first.";
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            if (!remove &&
+                _dependencyGraphMode !=
+                    AppearanceTransitionDependencyMode.All &&
+                _dependencyGraphMode !=
+                    AppearanceTransitionDependencyMode.Any)
+            {
+                _lastMessage =
+                    "Dependency graph edge mode must be All or Any.";
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var authored =
+                CaptureTransition(
+                    transition);
+            string error;
+            bool changed;
+
+            if (remove)
+            {
+                changed =
+                    P12TransitionDependencyAuthoringUtility
+                        .TryRemoveDependency(
+                            authored,
+                            _dependencyGraphSourceIndex,
+                            _dependencyGraphTargetIndex,
+                            out error);
+            }
+            else
+            {
+                changed =
+                    P12TransitionDependencyAuthoringUtility
+                        .TryAddDependency(
+                            authored,
+                            _dependencyGraphSourceIndex,
+                            _dependencyGraphTargetIndex,
+                            _dependencyGraphMode,
+                            out error);
+            }
+
+            if (!changed)
+            {
+                _lastMessage =
+                    (remove
+                        ? "Dependency edge removal failed: "
+                        : "Dependency edge authoring failed: ") +
+                    (error ??
+                     "unknown error");
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                remove
+                    ? "Remove Transition Dependency Edge"
+                    : "Add Transition Dependency Edge");
+            WriteTransition(
+                transition,
+                authored);
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                remove
+                    ? "Dependency edge removed. Use Validate & Apply to run full runtime validation."
+                    : $"Dependency edge authored as {_dependencyGraphMode}. Use Validate & Apply to run full runtime validation.";
+            _lastMessageType =
+                MessageType.Info;
+            Repaint();
         }
 
         private void DrawSteps(
