@@ -953,6 +953,89 @@ namespace VCR.Editor.P12
                     compatibleError,
                     failures);
 
+                var originalSourceBones =
+                    renderer.bones;
+
+                Expect(
+                    P12SkinnedRebindPreview
+                        .TryCreate(
+                            renderer,
+                            targetRoot.transform,
+                            compatibleReport,
+                            out var previewSession,
+                            out var previewError) &&
+                    previewSession != null &&
+                    previewSession.PreviewObject !=
+                        null &&
+                    previewSession.PreviewRenderer !=
+                        null &&
+                    !ReferenceEquals(
+                        previewSession.PreviewRenderer,
+                        renderer) &&
+                    ReferenceEquals(
+                        previewSession.PreviewRenderer
+                            .sharedMesh,
+                        renderer.sharedMesh) &&
+                    previewSession.PreviewRenderer
+                        .bones.Length ==
+                        2 &&
+                    ReferenceEquals(
+                        previewSession.PreviewRenderer
+                            .bones[0],
+                        targetHips) &&
+                    ReferenceEquals(
+                        previewSession.PreviewRenderer
+                            .bones[1],
+                        targetHead) &&
+                    ReferenceEquals(
+                        previewSession.PreviewRenderer
+                            .rootBone,
+                        targetHips) &&
+                    (previewSession.PreviewObject.hideFlags &
+                     HideFlags.DontSaveInEditor) !=
+                        0 &&
+                    (previewSession.PreviewObject.hideFlags &
+                     HideFlags.DontSaveInBuild) !=
+                        0 &&
+                    !float.IsNaN(
+                        previewSession
+                            .AverageBindMatrixDelta) &&
+                    !float.IsInfinity(
+                        previewSession
+                            .AverageBindMatrixDelta) &&
+                    !float.IsNaN(
+                        previewSession
+                            .MaxBindMatrixDelta) &&
+                    !float.IsInfinity(
+                        previewSession
+                            .MaxBindMatrixDelta) &&
+                    ReferenceEquals(
+                        renderer.bones,
+                        originalSourceBones),
+                    "non-destructive rebind preview must create a DontSave renderer mapped to target bones without mutating the source renderer: " +
+                    previewError,
+                    failures);
+
+                if (previewSession != null)
+                {
+                    var previewObject =
+                        previewSession
+                            .PreviewObject;
+                    previewSession.Dispose();
+
+                    Expect(
+                        previewSession
+                            .PreviewObject ==
+                            null &&
+                        previewSession
+                            .PreviewRenderer ==
+                            null &&
+                        previewObject ==
+                            null,
+                        "disposing a skinned rebind preview must destroy the temporary preview object",
+                        failures);
+                }
+
                 targetHead.name =
                     "MissingHead";
 
@@ -973,6 +1056,19 @@ namespace VCR.Editor.P12
                         0,
                     "structural compatibility must report a missing target bone as incompatible: " +
                     missingError,
+                    failures);
+
+                Expect(
+                    !P12SkinnedRebindPreview
+                        .TryCreate(
+                            renderer,
+                            targetRoot.transform,
+                            missingReport,
+                            out _,
+                            out var incompatiblePreviewError) &&
+                    incompatiblePreviewError !=
+                        null,
+                    "rebind preview must reject a structurally incompatible report",
                     failures);
 
                 targetHead.name =
