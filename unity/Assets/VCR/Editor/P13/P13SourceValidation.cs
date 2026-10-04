@@ -23,6 +23,8 @@ namespace VCR.Editor.P13
 
             RunBackendHostChecks(
                 failures);
+            RunBackendSwapLifecycleChecks(
+                failures);
             RunParameterMappingChecks(
                 failures);
 
@@ -346,6 +348,80 @@ namespace VCR.Editor.P13
                     UnityEngine.Object
                         .DestroyImmediate(
                             root);
+                }
+            }
+        }
+
+        private static void RunBackendSwapLifecycleChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P13 Backend Swap Validation");
+
+                var firstBackend =
+                    root.AddComponent<
+                        P13FakeCharacter2DBackend>();
+                var secondBackend =
+                    root.AddComponent<
+                        P13FakeCharacter2DBackend>();
+                var provider =
+                    root.AddComponent<
+                        P13FakeTrackingProvider>();
+                var runtime =
+                    root.AddComponent<
+                        Character2DRuntime>();
+
+                runtime.Configure(
+                    firstBackend,
+                    provider,
+                    Character2DInputDomain.Face);
+
+                Expect(
+                    runtime.TryLoadModel(
+                        new Character2DModelRequest(
+                            firstBackend.BackendId,
+                            "swap-source",
+                            "/tmp/swap-source"),
+                        out var loadError) &&
+                    firstBackend.Status.State ==
+                        Character2DBackendState.ModelLoaded,
+                    "2D backend swap validation must load the source backend model: " +
+                    loadError,
+                    failures);
+
+                runtime.Configure(
+                    secondBackend,
+                    provider,
+                    Character2DInputDomain.Face);
+
+                Expect(
+                    firstBackend.Status.State ==
+                        Character2DBackendState.Ready &&
+                    ReferenceEquals(
+                        runtime.Backend,
+                        secondBackend) &&
+                    secondBackend.Status.State ==
+                        Character2DBackendState.Ready,
+                    "reconfiguring the 2D runtime to another backend must unload the previous loaded backend before dropping its reference",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P13 backend swap lifecycle validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(root);
                 }
             }
         }
