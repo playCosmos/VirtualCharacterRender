@@ -87,6 +87,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private long _facePoolDrops;
         private long _holisticPoolDrops;
         private long _readbackErrors;
+        private long _faceReadbackCount;
+        private long _holisticReadbackCount;
+        private long _faceLastReadbackUs;
+        private long _holisticLastReadbackUs;
 
         private TrackingFrame _latestFaceFrame;
         private TrackingFrame _latestBodyHandsFrame;
@@ -503,6 +507,28 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 "tracking.mediapipe.readback_errors",
                 Interlocked.Read(ref _readbackErrors),
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.readbacks",
+                Interlocked.Read(ref _faceReadbackCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.readback_wait",
+                Interlocked.Read(ref _faceLastReadbackUs) /
+                1000.0,
+                "ms"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.readbacks",
+                Interlocked.Read(ref _holisticReadbackCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.readback_wait",
+                Interlocked.Read(ref _holisticLastReadbackUs) /
+                1000.0,
+                "ms"));
         }
 
         private void BeginStart()
@@ -774,6 +800,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         lowLightExposure,
                         lowLightGamma);
 
+                var readbackStartedUs =
+                    MonotonicClock
+                        .NowMicroseconds();
+
                 readback =
                     textureFrame.ReadTextureAsync(
                         inferenceTexture,
@@ -781,6 +811,30 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         flipVertically);
 
                 yield return waitForReadback;
+
+                var readbackElapsedUs =
+                    Math.Max(
+                        0L,
+                        MonotonicClock
+                            .NowMicroseconds() -
+                        readbackStartedUs);
+
+                if (faceTask)
+                {
+                    Interlocked.Increment(
+                        ref _faceReadbackCount);
+                    Interlocked.Exchange(
+                        ref _faceLastReadbackUs,
+                        readbackElapsedUs);
+                }
+                else
+                {
+                    Interlocked.Increment(
+                        ref _holisticReadbackCount);
+                    Interlocked.Exchange(
+                        ref _holisticLastReadbackUs,
+                        readbackElapsedUs);
+                }
 
                 if (readback.hasError)
                 {
