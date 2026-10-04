@@ -147,6 +147,137 @@ namespace VCR.Editor.P12
             return true;
         }
 
+        public static bool TryAssignDependencyGroup(
+            AppearanceTransitionPreset transition,
+            int targetIndex,
+            string groupName,
+            bool includeSources,
+            out int affectedSteps,
+            out string error)
+        {
+            affectedSteps = 0;
+            error = null;
+
+            var steps =
+                transition?.Steps;
+
+            if (steps == null ||
+                steps.Length == 0)
+            {
+                error =
+                    "Transition has no authored steps.";
+                return false;
+            }
+
+            if (targetIndex < 0 ||
+                targetIndex >=
+                    steps.Length)
+            {
+                error =
+                    "Dependency group target index is outside the transition step range.";
+                return false;
+            }
+
+            var target =
+                steps[targetIndex];
+
+            if (target == null)
+            {
+                error =
+                    "Dependency group target step is missing.";
+                return false;
+            }
+
+            var dependencies =
+                target.DependsOnStepIds ??
+                Array.Empty<string>();
+
+            if (dependencies.Length == 0)
+            {
+                error =
+                    "Dependency group target has no dependency sources.";
+                return false;
+            }
+
+            var resolvedSources =
+                new List<
+                    AppearanceTransitionStep>();
+            var seen =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var dependencyId in
+                     dependencies)
+            {
+                if (string.IsNullOrWhiteSpace(
+                        dependencyId) ||
+                    !seen.Add(
+                        dependencyId))
+                {
+                    error =
+                        "Dependency group contains an empty or duplicate source id.";
+                    return false;
+                }
+
+                AppearanceTransitionStep
+                    match = null;
+
+                for (var i = 0;
+                     i < targetIndex;
+                     i++)
+                {
+                    var candidate =
+                        steps[i];
+
+                    if (candidate == null ||
+                        candidate.Kind !=
+                            AppearanceTransitionStepKind.Action ||
+                        !string.Equals(
+                            candidate.StepId,
+                            dependencyId,
+                            StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    match =
+                        candidate;
+                    break;
+                }
+
+                if (match == null)
+                {
+                    error =
+                        $"Dependency group source '{dependencyId}' does not resolve to an earlier Action step.";
+                    return false;
+                }
+
+                resolvedSources.Add(
+                    match);
+            }
+
+            var normalized =
+                groupName?.Trim() ??
+                string.Empty;
+
+            target.AuthoringGroup =
+                normalized;
+            affectedSteps++;
+
+            if (includeSources)
+            {
+                foreach (var source in
+                         resolvedSources)
+                {
+                    source.AuthoringGroup =
+                        normalized;
+                    affectedSteps++;
+                }
+            }
+
+            return true;
+        }
+
         public static bool HasDependency(
             AppearanceTransitionPreset transition,
             int sourceIndex,
