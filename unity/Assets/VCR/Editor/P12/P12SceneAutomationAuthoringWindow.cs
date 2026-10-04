@@ -13,6 +13,8 @@ namespace VCR.Editor.P12
         private PropEventActionHandler _props;
         private EffectEventActionHandler _effects;
         private P12EffectPresetAsset _effectPreset;
+        private string _newEffectPresetId =
+            "effect";
 
         private SerializedObject _environmentSerialized;
         private SerializedObject _propsSerialized;
@@ -304,19 +306,40 @@ namespace VCR.Editor.P12
                             P12EffectPresetAsset),
                         false);
 
-                using (new EditorGUI
-                           .DisabledScope(
-                               _effectPreset == null))
+                _newEffectPresetId =
+                    EditorGUILayout.TextField(
+                        "New Preset ID",
+                        _newEffectPresetId);
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
                 {
-                    if (GUILayout.Button(
-                            "Install Effect Preset"))
+                    using (new EditorGUI
+                               .DisabledScope(
+                                   Selection.activeGameObject ==
+                                       null))
                     {
-                        InstallEffectPreset();
+                        if (GUILayout.Button(
+                                "Create Preset From Selection"))
+                        {
+                            CreateEffectPresetFromSelection();
+                        }
+                    }
+
+                    using (new EditorGUI
+                               .DisabledScope(
+                                   _effectPreset == null))
+                    {
+                        if (GUILayout.Button(
+                                "Install Effect Preset"))
+                        {
+                            InstallEffectPreset();
+                        }
                     }
                 }
 
                 EditorGUILayout.HelpBox(
-                    "Effect Preset v1 is project-local and accepts only prefab hierarchies made of Transform, ParticleSystem, and ParticleSystemRenderer components. Installation creates one inactive scene instance and registers it through the existing EffectEventActionHandler binding.",
+                    "Effect Preset v1 is project-local and accepts only prefab hierarchies made of Transform, ParticleSystem, and ParticleSystemRenderer components. Create saves a reusable prefab + preset asset under Assets/VCR/EffectPresets; Install creates one scene instance and registers it through the existing EffectEventActionHandler binding.",
                     MessageType.None);
             }
 
@@ -436,6 +459,47 @@ namespace VCR.Editor.P12
 
             SetMessage(
                 $"Added prop '{element.FindPropertyRelative("PropId").stringValue}' from '{selected.name}'.",
+                MessageType.Info);
+        }
+
+        private void CreateEffectPresetFromSelection()
+        {
+            var selected =
+                Selection.activeGameObject;
+
+            if (selected == null)
+            {
+                SetMessage(
+                    "Select a ParticleSystem root in the scene to create an effect preset.",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (!P12EffectPresetUtility
+                .TryCreateFromSceneRoot(
+                    selected,
+                    _newEffectPresetId,
+                    P12EffectPresetUtility
+                        .DefaultPresetFolder,
+                    out var preset,
+                    out var error))
+            {
+                SetMessage(
+                    "Effect preset creation failed: " +
+                    (error ?? "unknown error"),
+                    MessageType.Error);
+                return;
+            }
+
+            _effectPreset =
+                preset;
+            Selection.activeObject =
+                preset;
+            EditorGUIUtility.PingObject(
+                preset);
+
+            SetMessage(
+                $"Created effect preset '{preset.EffectId}' from '{selected.name}'.",
                 MessageType.Info);
         }
 
