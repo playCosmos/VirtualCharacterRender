@@ -37,6 +37,8 @@ Convenience authoring includes:
 - add the currently selected GameObject as an accessory root
 - infer the accessory slot from `VCRAppearance/Accessories/<slot>/<item>` when selection follows the convention hierarchy
 - capture the runtime's current outfit/accessory state into a new authored preset
+- preview an authored preset without mutating `IAppearanceRuntime.Current` or firing runtime appearance events; preview state is restored before scene save/Play Mode entry/window close/runtime switch
+- restore the current editor preview explicitly
 - set an authored preset as the default
 - open the existing P11 transition timeline from the same authoring workflow
 
@@ -141,7 +143,6 @@ Required later evidence includes:
 - real humanoid Animator/bone anchor verification on loaded VRM characters
 - real rigid-FBX package import/render verification
 - optional compatible skinned-outfit compatibility checks
-- richer appearance preset preview before activation
 - interactive transition dependency graph editing/grouping
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - visual event/node tooling and richer environment/prop/effect automation
