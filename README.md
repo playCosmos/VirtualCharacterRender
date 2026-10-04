@@ -1,5 +1,7 @@
 # VirtualCharacterRender
 
+> **Development baseline:** the current P0-P13 implementation is integrated on `develop`. The `main` branch remains the promoted/stable baseline until the pinned Unity reproducibility files and latest source-free validation gates pass. Historical `checkpoint/*` branches are not active product baselines.
+
 VirtualCharacterRender is a real-time virtual character rendering and broadcast overlay project.
 
 The project is designed around a renderer-independent runtime boundary: tracking, motion, expressions, events, materials, shaders, protocols, and output are separated so that individual backends can evolve without coupling the whole application to one input source or rendering implementation.
