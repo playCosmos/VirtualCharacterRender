@@ -274,6 +274,33 @@ namespace VCR.Editor.P13
                         1.0,
                     "2D host metrics must expose model/apply success and failure counts",
                     failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    provider);
+
+                Expect(
+                    runtime.TrackingProvider == null &&
+                    !runtime.ProcessLatest(
+                        out var destroyedProviderError) &&
+                    destroyedProviderError == null,
+                    "2D host must treat a destroyed Unity tracking provider as unavailable instead of retaining its interface reference",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    backend);
+
+                Expect(
+                    runtime.Backend == null &&
+                    runtime.EffectiveInputs ==
+                        Character2DInputDomain.None &&
+                    !runtime.TryLoadConfiguredModel(
+                        out var destroyedBackendError) &&
+                    destroyedBackendError != null &&
+                    destroyedBackendError.IndexOf(
+                        "unavailable",
+                        StringComparison.OrdinalIgnoreCase) >= 0,
+                    "2D host must treat a destroyed Unity backend as unavailable instead of calling a stale interface reference",
+                    failures);
             }
             catch (Exception exception)
             {
