@@ -233,6 +233,10 @@ namespace VCR.Editor.P12
                             _props
                                 .DeleteArrayElementAtIndex(
                                     i);
+                            _serializedProps
+                                .ApplyModifiedProperties();
+                            EditorUtility.SetDirty(
+                                _propHandler);
                             _propPending = true;
                             GUIUtility.ExitGUI();
                         }
@@ -331,6 +335,10 @@ namespace VCR.Editor.P12
                             _effects
                                 .DeleteArrayElementAtIndex(
                                     i);
+                            _serializedEffects
+                                .ApplyModifiedProperties();
+                            EditorUtility.SetDirty(
+                                _effectHandler);
                             _effectPending = true;
                             GUIUtility.ExitGUI();
                         }
