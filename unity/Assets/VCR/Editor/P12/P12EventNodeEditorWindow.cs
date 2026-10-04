@@ -1818,6 +1818,16 @@ namespace VCR.Editor.P12
                 "Scene / Chat → Environment Fade",
                 P12BuiltInEventRuleTemplate
                     .ChatEnvironmentState);
+            AddTemplateMenuItem(
+                menu,
+                "Scene / Manual → Environment + Prop + Effect",
+                P12BuiltInEventRuleTemplate
+                    .ManualSceneSequence);
+            AddTemplateMenuItem(
+                menu,
+                "Scene / Donation → Prop + Effect",
+                P12BuiltInEventRuleTemplate
+                    .DonationSceneBurst);
 
             menu.ShowAsContext();
         }
