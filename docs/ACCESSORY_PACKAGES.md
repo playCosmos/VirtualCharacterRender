@@ -95,10 +95,11 @@ The importer:
 8. rejects any `SkinnedMeshRenderer`,
 9. resolves requested humanoid-bone anchors against the selected appearance runtime,
 10. instantiates the imported model into the authoring scene,
-11. adds an explicit accessory binding, and
-12. leaves the edited configuration pending until `Validate & Apply`.
+11. adds an explicit accessory binding,
+12. immediately validates the complete appearance configuration through `RebuildConfiguration`, and
+13. commits the import only when the full asset + scene + runtime-registration transaction succeeds.
 
-Imported scene instances are initially inactive so importing a package does not silently replace the current appearance.
+Imported scene instances are initially inactive so importing a package does not silently replace the current appearance. The importer refuses to run while unrelated appearance edits are pending; those edits must be handled with `Validate & Apply` first.
 
 ## Safety and compatibility rules
 
@@ -114,8 +115,10 @@ The v1 importer fails closed for:
 - any `SkinnedMeshRenderer`
 - missing humanoid Animator/bone when `HumanoidBone` anchoring is requested
 - duplicate `SlotId/AccessoryId` binding in the active authoring runtime
+- an already installed identical `PackageId + PackageVersion`
+- runtime configuration failure after scene binding creation
 
-If package asset import or scene registration fails, assets created by that import attempt are rolled back.
+A package version has one canonical destination under `Assets/VCR/ImportedAccessories`. Re-importing the same package/version is rejected instead of producing `-2`, `-3`, and similar duplicate installs. If asset import, scene registration, or runtime registration fails, the imported folder, created scene instance, and serialized binding changes are rolled back.
 
 ## Why skinned accessories are rejected
 
@@ -138,6 +141,6 @@ Appearance switching snapshots both active state and accessory Transform state. 
 
 ## Validation status
 
-Source validation covers manifest security, version checks, path rules, anchor metadata, scale validation, and package-path resolution.
+Source validation covers manifest security, version checks, path rules, portable anchor metadata, scale validation, package-path resolution, and canonical duplicate-version rejection.
 
 Actual FBX import, real VRM humanoid-bone attachment, rendering, tracking stability, and memory/performance behavior require Unity Editor/runtime evidence and are not marked PASS by source inspection alone.
