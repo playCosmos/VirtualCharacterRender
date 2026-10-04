@@ -104,6 +104,24 @@ After a structural pass, the same window can create a temporary non-destructive 
 
 See `SKINNED_COMPATIBILITY.md` for result semantics and the evidence boundary.
 
+## Transition Dependency Graph Authoring
+
+The existing P11 resolved-time dependency graph is extended on the P12 branch with direct edge authoring rather than remaining preview-only.
+
+Implemented interaction:
+
+- click an earlier Action node with a non-empty `StepId` to select the dependency source
+- click a later Action or `appearance.commit` node to select the target
+- choose `All` or `Any`
+- `Add / Set Edge` adds the source `StepId` to the target dependency list and sets the target mode
+- `Remove Edge` removes only the selected source→target edge
+- removing the final edge resets the target dependency mode to `None`
+- source must be earlier than target; forward/backward-invalid edges are rejected before serialized mutation
+- source Actions without `StepId` are rejected
+- graph edits reuse the existing transition preset contract and still require `Validate & Apply` for full runtime executor/completion-probe validation
+
+P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, and missing-StepId rejection.
+
 ## Visual Event Node Editor
 
 Menu:
@@ -182,7 +200,7 @@ Required later evidence includes:
 - real rigid-FBX package import/render verification
 - real VRM bind-pose/deformation preview evidence for the implemented non-destructive preview
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
-- interactive transition dependency graph editing/grouping
+- richer dependency grouping/labels beyond the implemented interactive source→target edge editing and All/Any target groups
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - richer event graph grouping/templates/rule-library UX beyond the implemented first node editor slice
 - richer environment/prop/effect automation
