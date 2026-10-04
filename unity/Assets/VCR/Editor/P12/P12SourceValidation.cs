@@ -1581,6 +1581,15 @@ namespace VCR.Editor.P12
 
             transition.Steps[0].StepId =
                 missingId;
+            transition.Steps[0]
+                .AuthoringGroup =
+                    "Wardrobe Swap";
+            transition.Steps[1]
+                .AuthoringGroup =
+                    string.Empty;
+            transition.Steps[2]
+                .AuthoringGroup =
+                    "Wardrobe Swap";
 
             var cloned =
                 VCR.Editor.P11
@@ -1654,6 +1663,35 @@ namespace VCR.Editor.P12
                 metadataSerializeError +
                 " / " +
                 metadataParseError,
+                failures);
+
+            var invalidGroupPackage =
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .CreatePackage(
+                        "invalid-group-path",
+                        new[]
+                        {
+                            transition
+                        });
+            invalidGroupPackage.Transitions[0]
+                .Steps[0]
+                .AuthoringGroup =
+                    "wardrobe//change";
+
+            Expect(
+                !VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .Validate(
+                        invalidGroupPackage,
+                        out var invalidPackageGroupError) &&
+                invalidPackageGroupError != null &&
+                invalidPackageGroupError.IndexOf(
+                    "graph",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 transition package validation must reject malformed graph group hierarchy paths: " +
+                invalidPackageGroupError,
                 failures);
 
             var v2Package =
