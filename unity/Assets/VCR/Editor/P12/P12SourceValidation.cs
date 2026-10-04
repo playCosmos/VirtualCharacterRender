@@ -953,9 +953,6 @@ namespace VCR.Editor.P12
                     compatibleError,
                     failures);
 
-                var originalSourceBones =
-                    renderer.bones;
-
                 Expect(
                     P12SkinnedRebindPreview
                         .TryCreate(
@@ -1009,9 +1006,17 @@ namespace VCR.Editor.P12
                     !float.IsInfinity(
                         previewSession
                             .MaxBindMatrixDelta) &&
+                    renderer.bones.Length ==
+                        2 &&
                     ReferenceEquals(
-                        renderer.bones,
-                        originalSourceBones),
+                        renderer.bones[0],
+                        sourceHips) &&
+                    ReferenceEquals(
+                        renderer.bones[1],
+                        sourceHead) &&
+                    ReferenceEquals(
+                        renderer.rootBone,
+                        sourceHips),
                     "non-destructive rebind preview must create a DontSave renderer mapped to target bones without mutating the source renderer: " +
                     previewError,
                     failures);
