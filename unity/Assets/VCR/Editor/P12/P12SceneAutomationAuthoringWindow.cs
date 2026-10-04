@@ -37,6 +37,19 @@ namespace VCR.Editor.P12
                 .Show();
         }
 
+        public static void OpenWithEffectPreset(
+            P12EffectPresetAsset preset)
+        {
+            var window =
+                GetWindow<
+                    P12SceneAutomationAuthoringWindow>(
+                    "VCR Scene Automation");
+            window._effectPreset =
+                preset;
+            window.Show();
+            window.Repaint();
+        }
+
         private void OnEnable()
         {
             ResolveFromSelection();
@@ -335,6 +348,13 @@ namespace VCR.Editor.P12
                         {
                             InstallEffectPreset();
                         }
+                    }
+
+                    if (GUILayout.Button(
+                            "Open Preset Library"))
+                    {
+                        P12EffectPresetLibraryWindow
+                            .Open();
                     }
                 }
 
