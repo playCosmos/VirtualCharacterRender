@@ -172,6 +172,12 @@ namespace VCR.Editor.P12
                 }
 
                 if (GUILayout.Button(
+                        "Import Accessory Package"))
+                {
+                    ImportAccessoryPackage();
+                }
+
+                if (GUILayout.Button(
                         "Open Transition Timeline"))
                 {
                     VCR.Editor.P11
@@ -1064,6 +1070,190 @@ namespace VCR.Editor.P12
                 container,
                 false);
             return slotObject.transform;
+        }
+
+        private void ImportAccessoryPackage()
+        {
+            if (_runtime == null)
+            {
+                return;
+            }
+
+            var manifestPath =
+                EditorUtility.OpenFilePanel(
+                    "Import VCR Accessory Package",
+                    string.Empty,
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    manifestPath))
+            {
+                return;
+            }
+
+            if (!P12AccessoryPackageImporter
+                .TryLoadManifest(
+                    manifestPath,
+                    out var manifest,
+                    out var anchorMode,
+                    out var bone,
+                    out var manifestError))
+            {
+                _message =
+                    "Accessory package validation failed: " +
+                    manifestError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (AccessoryIdExists(
+                    manifest.SlotId,
+                    manifest.AccessoryId))
+            {
+                _message =
+                    $"Accessory package conflicts with existing binding '{manifest.SlotId}/{manifest.AccessoryId}'. Rename/version the package or remove the existing binding explicitly.";
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!P12AccessoryPackageImporter
+                .TryImport(
+                    manifestPath,
+                    P12AccessoryPackageImporter
+                        .DefaultDestinationRoot,
+                    out var importResult,
+                    out var importError))
+            {
+                _message =
+                    "Accessory package import failed: " +
+                    importError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            GameObject instance = null;
+
+            try
+            {
+                instance =
+                    PrefabUtility.InstantiatePrefab(
+                        importResult.ModelAsset,
+                        _runtime.transform) as
+                    GameObject;
+
+                if (instance == null)
+                {
+                    throw new InvalidOperationException(
+                        "Imported accessory FBX could not be instantiated as a scene GameObject.");
+                }
+
+                Undo.RegisterCreatedObjectUndo(
+                    instance,
+                    "Import Accessory Package");
+                instance.name =
+                    manifest.AccessoryId;
+                instance.SetActive(
+                    false);
+
+                Undo.RecordObject(
+                    _runtime,
+                    "Register Imported Accessory");
+                var index =
+                    _accessories.arraySize;
+                _accessories.arraySize =
+                    index + 1;
+                var accessory =
+                    _accessories
+                        .GetArrayElementAtIndex(
+                            index);
+
+                accessory.FindPropertyRelative(
+                        "SlotId")
+                    .stringValue =
+                        manifest.SlotId;
+                accessory.FindPropertyRelative(
+                        "AccessoryId")
+                    .stringValue =
+                        manifest.AccessoryId;
+                accessory.FindPropertyRelative(
+                        "Root")
+                    .objectReferenceValue =
+                        instance;
+                accessory.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex =
+                        (int)anchorMode;
+                accessory.FindPropertyRelative(
+                        "AnchorTransform")
+                    .objectReferenceValue =
+                        null;
+                accessory.FindPropertyRelative(
+                        "AnchorAnimator")
+                    .objectReferenceValue =
+                        null;
+                accessory.FindPropertyRelative(
+                        "AnchorBone")
+                    .enumValueIndex =
+                        (int)bone;
+                accessory.FindPropertyRelative(
+                        "LocalPosition")
+                    .vector3Value =
+                        manifest.LocalPosition;
+                accessory.FindPropertyRelative(
+                        "LocalEulerAngles")
+                    .vector3Value =
+                        manifest.LocalEulerAngles;
+                accessory.FindPropertyRelative(
+                        "OverrideLocalScale")
+                    .boolValue =
+                        manifest.OverrideLocalScale;
+                accessory.FindPropertyRelative(
+                        "LocalScale")
+                    .vector3Value =
+                        manifest.LocalScale;
+                accessory.FindPropertyRelative(
+                        "RestoreOriginalTransformWhenInactive")
+                    .boolValue =
+                        manifest.RestoreOriginalTransformWhenInactive;
+
+                _serializedRuntime
+                    .ApplyModifiedProperties();
+                EditorUtility.SetDirty(
+                    _runtime);
+                _hasPendingChanges =
+                    true;
+                Selection.activeGameObject =
+                    instance;
+
+                _message =
+                    $"Imported accessory package '{manifest.PackageId}' {manifest.PackageVersion} as '{manifest.SlotId}/{manifest.AccessoryId}'. Validate & Apply to register the scene binding.";
+                _messageType =
+                    MessageType.Info;
+            }
+            catch (Exception exception)
+            {
+                if (instance != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            instance);
+                }
+
+                P12AccessoryPackageImporter
+                    .DeleteImportedPackage(
+                        importResult);
+
+                RebindSerializedOnly();
+
+                _message =
+                    "Accessory package scene registration failed and imported assets were rolled back: " +
+                    exception.Message;
+                _messageType =
+                    MessageType.Error;
+            }
         }
 
         private void DiscoverConventionBindings()
