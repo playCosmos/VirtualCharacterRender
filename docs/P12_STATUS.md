@@ -110,6 +110,7 @@ The existing P11 resolved-time dependency graph is extended on the P12 branch wi
 
 Implemented interaction:
 
+- per-step `Graph Label` and `Graph Group` authoring metadata for readable graph nodes; these fields do not change runtime semantics
 - click an earlier Action node with a non-empty `StepId` to select the dependency source
 - click a later Action or `appearance.commit` node to select the target
 - choose `All` or `Any`
@@ -119,8 +120,10 @@ Implemented interaction:
 - source must be earlier than target; forward/backward-invalid edges are rejected before serialized mutation
 - source Actions without `StepId` are rejected
 - graph edits reuse the existing transition preset contract and still require `Validate & Apply` for full runtime executor/completion-probe validation
+- `Apply Group` assigns one Graph Group to the selected target plus all currently connected dependency sources
+- `Clear Group` removes only that cluster's authoring metadata; dependency edges remain unchanged
 
-P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, missing-StepId rejection, Graph Label / Graph Group clone preservation, transition package v3 JSON round trip, and v2→v3 authoring-metadata migration.
+P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, missing-StepId rejection, cluster group assign/clear without edge mutation, Graph Label / Graph Group clone preservation, transition package v3 JSON round trip, and v2→v3 authoring-metadata migration.
 
 ## Visual Event Node Editor
 
@@ -207,7 +210,7 @@ Required later evidence includes:
 - real rigid-FBX package import/render verification
 - real VRM bind-pose/deformation preview evidence for the implemented non-destructive preview
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
-- richer dependency group operations beyond the implemented per-step Graph Label / Graph Group metadata, interactive source→target edge editing, and All/Any target groups
+- richer nested/group-hierarchy operations beyond the implemented per-step Graph Label / Graph Group metadata, cluster Apply/Clear Group, interactive source→target edge editing, and All/Any target groups
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - richer event graph visual grouping/higher-level composition and library tags/descriptions/version history beyond the implemented starter templates + JSON import/export + project library browser
 - richer environment/prop/effect automation
