@@ -20,6 +20,9 @@ namespace VCR.Editor.P12
         private string _message;
         private MessageType _messageType =
             MessageType.Info;
+        private P12EventRuleLibraryDiff _revisionDiff;
+        private string _revisionDiffFromAssetPath;
+        private string _revisionDiffToAssetPath;
 
         [MenuItem("VCR/P12/Open Event Rule Library")]
         public static void Open()
@@ -177,8 +180,8 @@ namespace VCR.Editor.P12
                             label,
                             "Button"))
                     {
-                        _selectedAssetPath =
-                            entry.AssetPath;
+                        SelectAsset(
+                            entry.AssetPath);
                     }
                 }
 
@@ -258,6 +261,10 @@ namespace VCR.Editor.P12
                         : entry.LastWriteUtc
                             .ToString(
                                 "u"));
+
+                EditorGUILayout.Space();
+                DrawRevisionHistory(
+                    entry);
 
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField(
@@ -371,8 +378,8 @@ namespace VCR.Editor.P12
                 return;
             }
 
-            _selectedAssetPath =
-                entry.AssetPath;
+            SelectAsset(
+                entry.AssetPath);
             _message =
                 $"Added event rule package '{entry.PackageId}' to the library.";
             _messageType =
@@ -431,6 +438,286 @@ namespace VCR.Editor.P12
             }
 
             Repaint();
+        }
+
+        private void SelectAsset(
+            string assetPath)
+        {
+            if (string.Equals(
+                    _selectedAssetPath,
+                    assetPath,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _selectedAssetPath =
+                assetPath;
+            ClearRevisionDiff();
+        }
+
+        private void DrawRevisionHistory(
+            P12EventRuleLibraryEntry entry)
+        {
+            EditorGUILayout.LabelField(
+                "Revision History",
+                EditorStyles.boldLabel);
+
+            if (!entry.Valid)
+            {
+                EditorGUILayout.HelpBox(
+                    "Revision history is available only for valid packages.",
+                    MessageType.None);
+                return;
+            }
+
+            if (!P12EventRuleLibraryBrowserUtility
+                .TryGetRevisionHistory(
+                    _entries,
+                    entry,
+                    out var history,
+                    out var historyError))
+            {
+                EditorGUILayout.HelpBox(
+                    historyError ??
+                    "Revision history is unavailable.",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (history.Length == 0)
+            {
+                EditorGUILayout.LabelField(
+                    "<none>");
+                return;
+            }
+
+            P12EventRuleLibraryBrowserUtility
+                .TryFindPreviousRevision(
+                    _entries,
+                    entry,
+                    out var previous,
+                    out _);
+            P12EventRuleLibraryBrowserUtility
+                .TryFindNextRevision(
+                    _entries,
+                    entry,
+                    out var next,
+                    out _);
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(
+                           previous == null))
+                {
+                    if (GUILayout.Button(
+                            "Previous Revision"))
+                    {
+                        SelectAsset(
+                            previous.AssetPath);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           next == null))
+                {
+                    if (GUILayout.Button(
+                            "Next Revision"))
+                    {
+                        SelectAsset(
+                            next.AssetPath);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           previous == null))
+                {
+                    if (GUILayout.Button(
+                            "Compare Previous"))
+                    {
+                        CompareRevision(
+                            previous,
+                            entry);
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           _revisionDiff == null))
+                {
+                    if (GUILayout.Button(
+                            "Clear Diff"))
+                    {
+                        ClearRevisionDiff();
+                    }
+                }
+            }
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                foreach (var revisionEntry in history)
+                {
+                    var current =
+                        string.Equals(
+                            revisionEntry.AssetPath,
+                            entry.AssetPath,
+                            StringComparison.Ordinal);
+                    var label =
+                        $"r{revisionEntry.Revision}" +
+                        (current
+                            ? "  [selected]"
+                            : string.Empty) +
+                        $"  {Path.GetFileName(revisionEntry.AssetPath)}";
+
+                    if (GUILayout.Button(
+                            label,
+                            current
+                                ? EditorStyles.miniButtonMid
+                                : EditorStyles.miniButton))
+                    {
+                        SelectAsset(
+                            revisionEntry.AssetPath);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+            }
+
+            DrawRevisionDiff(
+                entry);
+        }
+
+        private void CompareRevision(
+            P12EventRuleLibraryEntry from,
+            P12EventRuleLibraryEntry to)
+        {
+            if (from == null ||
+                to == null ||
+                !from.Valid ||
+                !to.Valid)
+            {
+                _message =
+                    "Revision diff requires two valid packages.";
+                _messageType =
+                    MessageType.Warning;
+                ClearRevisionDiff();
+                return;
+            }
+
+            if (!P12EventRuleLibraryUtility
+                .TryDiffPackages(
+                    from.Package,
+                    to.Package,
+                    out _revisionDiff,
+                    out var error))
+            {
+                _message =
+                    "Revision diff failed: " +
+                    (error ?? "unknown error");
+                _messageType =
+                    MessageType.Error;
+                ClearRevisionDiff();
+                return;
+            }
+
+            _revisionDiffFromAssetPath =
+                from.AssetPath;
+            _revisionDiffToAssetPath =
+                to.AssetPath;
+            _message =
+                $"Compared '{to.PackageId}' revision {from.Revision} → {to.Revision}.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void DrawRevisionDiff(
+            P12EventRuleLibraryEntry selected)
+        {
+            if (_revisionDiff == null ||
+                !string.Equals(
+                    _revisionDiffToAssetPath,
+                    selected.AssetPath,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(
+                $"Diff r{_revisionDiff.FromRevision} → r{_revisionDiff.ToRevision}",
+                EditorStyles.boldLabel);
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField(
+                    "Metadata",
+                    $"description {FormatChanged(_revisionDiff.DescriptionChanged)}, tags {FormatChanged(_revisionDiff.TagsChanged)}");
+                EditorGUILayout.LabelField(
+                    "Rules",
+                    $"+{_revisionDiff.AddedRuleIds.Length} / -{_revisionDiff.RemovedRuleIds.Length} / changed {_revisionDiff.ChangedRuleIds.Length} / unchanged {_revisionDiff.UnchangedRuleIds.Length}");
+
+                DrawRuleIdGroup(
+                    "Added",
+                    _revisionDiff.AddedRuleIds);
+                DrawRuleIdGroup(
+                    "Removed",
+                    _revisionDiff.RemovedRuleIds);
+                DrawRuleIdGroup(
+                    "Changed",
+                    _revisionDiff.ChangedRuleIds);
+
+                if (!_revisionDiff.HasChanges)
+                {
+                    EditorGUILayout.HelpBox(
+                        "No metadata or rule changes were detected between these revisions.",
+                        MessageType.Info);
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        _revisionDiffFromAssetPath))
+                {
+                    EditorGUILayout.LabelField(
+                        "From",
+                        _revisionDiffFromAssetPath,
+                        EditorStyles.miniLabel);
+                }
+            }
+        }
+
+        private static void DrawRuleIdGroup(
+            string label,
+            string[] ids)
+        {
+            if (ids == null ||
+                ids.Length == 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.LabelField(
+                label,
+                string.Join(
+                    ", ",
+                    ids),
+                EditorStyles.wordWrappedMiniLabel);
+        }
+
+        private static string FormatChanged(
+            bool changed) =>
+                changed
+                    ? "changed"
+                    : "same";
+
+        private void ClearRevisionDiff()
+        {
+            _revisionDiff = null;
+            _revisionDiffFromAssetPath = null;
+            _revisionDiffToAssetPath = null;
         }
 
         private P12EventRuleLibraryEntry FindSelected()
