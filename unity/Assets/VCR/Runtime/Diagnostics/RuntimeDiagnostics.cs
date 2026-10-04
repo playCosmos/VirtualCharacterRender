@@ -127,10 +127,6 @@ namespace VCR.Runtime.Diagnostics
                 _provider = null;
                 _presenceProvider = null;
 
-                if (trackingProviderBehaviour == null)
-                {
-                    trackingProviderBehaviour = null;
-                }
             }
 
             if (_provider == null &&
