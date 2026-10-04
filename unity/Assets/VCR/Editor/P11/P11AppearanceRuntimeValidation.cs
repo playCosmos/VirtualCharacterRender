@@ -2061,6 +2061,131 @@ namespace VCR.Editor.P11
                             motionClip);
                 }
             }
+
+            ValidateDestroyedExecutorRefresh(
+                failures);
+        }
+
+        private static void ValidateDestroyedExecutorRefresh(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Executor Refresh Validation");
+
+                var outfit =
+                    new GameObject(
+                        "Outfit");
+                outfit.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var runtime =
+                    root.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+                var oldExecutor =
+                    root.AddComponent<
+                        P11ProbeAppearanceExecutor>();
+
+                runtime.ConfigureBindings(
+                    new[]
+                    {
+                        new AppearanceOutfitBinding
+                        {
+                            OutfitId = "target",
+                            Roots = new[]
+                            {
+                                outfit
+                            }
+                        }
+                    },
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    new[]
+                    {
+                        new AppearancePresetBinding
+                        {
+                            PresetId = "target",
+                            OutfitId = "target"
+                        }
+                    },
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "refresh-executor",
+                            DurationSeconds = 0.1f,
+                            FallbackPolicy =
+                                AppearanceTransitionFallbackPolicy
+                                    .Fail,
+                            Steps = new[]
+                            {
+                                new AppearanceTransitionStepBinding
+                                {
+                                    TimeSeconds = 0f,
+                                    Kind =
+                                        AppearanceTransitionStepKind
+                                            .Action,
+                                    ActionType =
+                                        P11ProbeAppearanceExecutor
+                                            .ActionType,
+                                    Required = true
+                                },
+                                new AppearanceTransitionStepBinding
+                                {
+                                    TimeSeconds = 0.05f,
+                                    Kind =
+                                        AppearanceTransitionStepKind
+                                            .Commit
+                                }
+                            }
+                        }
+                    },
+                    new MonoBehaviour[]
+                    {
+                        oldExecutor
+                    });
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldExecutor);
+
+                var replacementExecutor =
+                    root.AddComponent<
+                        P11ProbeAppearanceExecutor>();
+
+                Expect(
+                    runtime.SetPreset(
+                        "target",
+                        "refresh-executor",
+                        out var error),
+                    "appearance runtime must discard a destroyed cached transition executor and auto-discover its replacement: " +
+                    error,
+                    failures);
+
+                Expect(
+                    replacementExecutor != null,
+                    "replacement transition executor must remain alive during refresh validation",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed transition executor refresh validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void Expect(
@@ -2072,6 +2197,32 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11ProbeAppearanceExecutor :
+        MonoBehaviour,
+        IAppearanceTransitionStepExecutor
+    {
+        public const string ActionType =
+            "probe.executor";
+
+        public bool CanExecute(
+            AppearanceTransitionStep step)
+        {
+            return step != null &&
+                   string.Equals(
+                       step.ActionType,
+                       ActionType,
+                       StringComparison.Ordinal);
+        }
+
+        public bool TryExecute(
+            AppearanceTransitionStep step,
+            out string error)
+        {
+            error = null;
+            return CanExecute(step);
         }
     }
 
