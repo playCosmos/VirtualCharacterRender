@@ -113,6 +113,8 @@ namespace VCR.Runtime.Appearance.Unity
         public string MarkerName;
         public float MarkerOffsetSeconds;
         public string StepId;
+        public string AuthoringLabel;
+        public string AuthoringGroup;
         public AppearanceTransitionDependencyMode DependencyMode =
             AppearanceTransitionDependencyMode.None;
         public string[] DependsOnStepIds =
@@ -138,6 +140,8 @@ namespace VCR.Runtime.Appearance.Unity
                 MarkerName = MarkerName,
                 MarkerOffsetSeconds = MarkerOffsetSeconds,
                 StepId = StepId,
+                AuthoringLabel = AuthoringLabel,
+                AuthoringGroup = AuthoringGroup,
                 DependencyMode = DependencyMode,
                 DependsOnStepIds =
                     DependsOnStepIds != null
