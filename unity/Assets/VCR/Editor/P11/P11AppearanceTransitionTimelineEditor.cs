@@ -1258,6 +1258,10 @@ namespace VCR.Editor.P11
                 new System.Collections.Generic
                     .HashSet<string>(
                         StringComparer.Ordinal);
+            var authoringGroups =
+                new System.Collections.Generic
+                    .HashSet<string>(
+                        StringComparer.Ordinal);
             var allGroups = 0;
             var anyGroups = 0;
             var edges = 0;
@@ -1283,15 +1287,44 @@ namespace VCR.Editor.P11
                         step.FindPropertyRelative(
                                 "StepId")
                             .stringValue;
+                    var authoringLabel =
+                        step.FindPropertyRelative(
+                                "AuthoringLabel")
+                            .stringValue;
+                    var authoringGroup =
+                        step.FindPropertyRelative(
+                                "AuthoringGroup")
+                            .stringValue;
+
+                    if (!string.IsNullOrWhiteSpace(
+                            authoringGroup))
+                    {
+                        authoringGroups.Add(
+                            authoringGroup.Trim());
+                    }
+
                     var nodeLabel =
-                        kind ==
-                            AppearanceTransitionStepKind
-                                .Commit
-                            ? "appearance.commit"
-                            : !string.IsNullOrWhiteSpace(
-                                  stepId)
-                                ? stepId
-                                : $"action#{i + 1}";
+                        !string.IsNullOrWhiteSpace(
+                            authoringLabel)
+                            ? authoringLabel.Trim()
+                            : kind ==
+                                AppearanceTransitionStepKind
+                                    .Commit
+                                ? "appearance.commit"
+                                : !string.IsNullOrWhiteSpace(
+                                      stepId)
+                                    ? stepId
+                                    : $"action#{i + 1}";
+
+                    if (!string.IsNullOrWhiteSpace(
+                            authoringGroup))
+                    {
+                        nodeLabel =
+                            "[" +
+                            authoringGroup.Trim() +
+                            "] " +
+                            nodeLabel;
+                    }
 
                     var mode =
                         (AppearanceTransitionDependencyMode)
@@ -1388,7 +1421,7 @@ namespace VCR.Editor.P11
 
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField(
-                    $"Edges: {edges}    All groups: {allGroups}    Any groups: {anyGroups}    Invalid: {invalidEdges}",
+                    $"Edges: {edges}    All groups: {allGroups}    Any groups: {anyGroups}    Graph groups: {authoringGroups.Count}    Invalid: {invalidEdges}",
                     invalidEdges == 0
                         ? EditorStyles.miniLabel
                         : EditorStyles.miniBoldLabel);
