@@ -35,6 +35,7 @@ namespace VCR.Editor.P12
             _pendingLibraryPackage;
         private string _pendingLibrarySource;
         private bool _showLibraryExportMetadata;
+        private bool _showGroupOverview = true;
         private string _libraryExportDescription;
         private string _libraryExportTags;
         private int _libraryExportRevision = 1;
@@ -160,6 +161,7 @@ namespace VCR.Editor.P12
 
             DrawPendingLibraryPackage();
             DrawLibraryExportMetadata();
+            DrawGroupOverview();
             DrawRuleToolbar();
 
             if (_rules.arraySize == 0)
@@ -319,6 +321,291 @@ namespace VCR.Editor.P12
             }
         }
 
+        private void DrawGroupOverview()
+        {
+            _showGroupOverview =
+                EditorGUILayout.Foldout(
+                    _showGroupOverview,
+                    "Rule Group Overview",
+                    toggleOnLabelClick:
+                        true);
+
+            if (!_showGroupOverview ||
+                _rules == null)
+            {
+                return;
+            }
+
+            var groups =
+                new System.Collections.Generic
+                    .SortedDictionary<
+                        string,
+                        System.Collections.Generic
+                            .List<int>>(
+                        StringComparer.Ordinal);
+            var ungrouped = 0;
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var rule =
+                    _rules.GetArrayElementAtIndex(
+                        i);
+                var group =
+                    rule.FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue
+                        ?.Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        group))
+                {
+                    ungrouped++;
+                    continue;
+                }
+
+                if (!groups.TryGetValue(
+                        group,
+                        out var members))
+                {
+                    members =
+                        new System.Collections.Generic
+                            .List<int>();
+                    groups.Add(
+                        group,
+                        members);
+                }
+
+                members.Add(
+                    i);
+            }
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                if (groups.Count == 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        "No rule groups are authored. Set Graph Group on one or more rules to organize the graph without changing runtime semantics.",
+                        MessageType.None);
+                }
+
+                foreach (var pair in groups)
+                {
+                    var enabledCount = 0;
+
+                    foreach (var index in
+                             pair.Value)
+                    {
+                        if (_rules
+                            .GetArrayElementAtIndex(
+                                index)
+                            .FindPropertyRelative(
+                                "Enabled")
+                            .boolValue)
+                        {
+                            enabledCount++;
+                        }
+                    }
+
+                    using (new EditorGUILayout
+                               .HorizontalScope())
+                    {
+                        EditorGUILayout.LabelField(
+                            pair.Key,
+                            $"{pair.Value.Count} rule(s), {enabledCount} enabled");
+
+                        if (GUILayout.Button(
+                                "Select",
+                                GUILayout.Width(
+                                    62f)))
+                        {
+                            SelectRuleIndex(
+                                pair.Value[0]);
+                        }
+
+                        if (GUILayout.Button(
+                                "Enable",
+                                GUILayout.Width(
+                                    62f)))
+                        {
+                            SetGroupEnabled(
+                                pair.Key,
+                                true);
+                        }
+
+                        if (GUILayout.Button(
+                                "Disable",
+                                GUILayout.Width(
+                                    62f)))
+                        {
+                            SetGroupEnabled(
+                                pair.Key,
+                                false);
+                        }
+                    }
+                }
+
+                EditorGUILayout.LabelField(
+                    "Ungrouped",
+                    ungrouped.ToString(),
+                    EditorStyles.miniLabel);
+                EditorGUILayout.HelpBox(
+                    "Graph Label and Graph Group are authoring metadata only. EventRuntime evaluation order and rule semantics are unchanged.",
+                    MessageType.None);
+            }
+        }
+
+        private void SelectAdjacentRuleInGroup(
+            int direction)
+        {
+            if (_rules == null ||
+                _rules.arraySize == 0 ||
+                direction == 0)
+            {
+                return;
+            }
+
+            var current =
+                _rules.GetArrayElementAtIndex(
+                    _ruleIndex);
+            var group =
+                current.FindPropertyRelative(
+                        "GraphGroup")
+                    .stringValue
+                    ?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    group))
+            {
+                return;
+            }
+
+            var step =
+                direction < 0
+                    ? -1
+                    : 1;
+
+            for (var offset = 1;
+                 offset <
+                 _rules.arraySize;
+                 offset++)
+            {
+                var index =
+                    (_ruleIndex +
+                     step * offset +
+                     _rules.arraySize) %
+                    _rules.arraySize;
+                var candidateGroup =
+                    _rules
+                        .GetArrayElementAtIndex(
+                            index)
+                        .FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue
+                        ?.Trim();
+
+                if (string.Equals(
+                        candidateGroup,
+                        group,
+                        StringComparison.Ordinal))
+                {
+                    SelectRuleIndex(
+                        index);
+                    return;
+                }
+            }
+        }
+
+        private void SetSelectedGroupEnabled(
+            bool enabled)
+        {
+            if (_rules == null ||
+                _rules.arraySize == 0)
+            {
+                return;
+            }
+
+            var group =
+                _rules.GetArrayElementAtIndex(
+                        _ruleIndex)
+                    .FindPropertyRelative(
+                        "GraphGroup")
+                    .stringValue
+                    ?.Trim();
+
+            SetGroupEnabled(
+                group,
+                enabled);
+        }
+
+        private void SetGroupEnabled(
+            string group,
+            bool enabled)
+        {
+            if (_rules == null ||
+                string.IsNullOrWhiteSpace(
+                    group))
+            {
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                enabled
+                    ? "Enable Event Rule Group"
+                    : "Disable Event Rule Group");
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var rule =
+                    _rules.GetArrayElementAtIndex(
+                        i);
+                var candidateGroup =
+                    rule.FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue
+                        ?.Trim();
+
+                if (string.Equals(
+                        candidateGroup,
+                        group,
+                        StringComparison.Ordinal))
+                {
+                    rule.FindPropertyRelative(
+                            "Enabled")
+                        .boolValue =
+                            enabled;
+                }
+            }
+
+            _hasPendingChanges =
+                true;
+        }
+
+        private void SelectRuleIndex(
+            int index)
+        {
+            if (_rules == null ||
+                index < 0 ||
+                index >=
+                    _rules.arraySize)
+            {
+                return;
+            }
+
+            _ruleIndex =
+                index;
+            _selectedStage =
+                GraphStage.Filter;
+            _selectedItemIndex =
+                -1;
+        }
+
         private void DrawRuleToolbar()
         {
             using (new EditorGUILayout
@@ -416,7 +703,60 @@ namespace VCR.Editor.P12
                     "Id"));
             EditorGUILayout.PropertyField(
                 rule.FindPropertyRelative(
+                    "GraphLabel"),
+                new GUIContent(
+                    "Graph Label"));
+            EditorGUILayout.PropertyField(
+                rule.FindPropertyRelative(
+                    "GraphGroup"),
+                new GUIContent(
+                    "Graph Group"));
+            EditorGUILayout.PropertyField(
+                rule.FindPropertyRelative(
                     "Enabled"));
+
+            var graphGroup =
+                rule.FindPropertyRelative(
+                        "GraphGroup")
+                    .stringValue
+                    ?.Trim();
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(
+                           string.IsNullOrWhiteSpace(
+                               graphGroup)))
+                {
+                    if (GUILayout.Button(
+                            "Prev in Group"))
+                    {
+                        SelectAdjacentRuleInGroup(
+                            -1);
+                    }
+
+                    if (GUILayout.Button(
+                            "Next in Group"))
+                    {
+                        SelectAdjacentRuleInGroup(
+                            1);
+                    }
+
+                    if (GUILayout.Button(
+                            "Enable Group"))
+                    {
+                        SetSelectedGroupEnabled(
+                            true);
+                    }
+
+                    if (GUILayout.Button(
+                            "Disable Group"))
+                    {
+                        SetSelectedGroupEnabled(
+                            false);
+                    }
+                }
+            }
 
             using (new EditorGUILayout
                        .HorizontalScope())
@@ -451,8 +791,34 @@ namespace VCR.Editor.P12
             SerializedProperty rule)
         {
             EditorGUILayout.Space();
+            var graphLabel =
+                rule.FindPropertyRelative(
+                        "GraphLabel")
+                    .stringValue
+                    ?.Trim();
+            var graphGroup =
+                rule.FindPropertyRelative(
+                        "GraphGroup")
+                    .stringValue
+                    ?.Trim();
+            var graphTitle =
+                string.IsNullOrWhiteSpace(
+                    graphLabel)
+                    ? "Rule Graph"
+                    : "Rule Graph — " +
+                      graphLabel;
+
+            if (!string.IsNullOrWhiteSpace(
+                    graphGroup))
+            {
+                graphTitle +=
+                    "  [" +
+                    graphGroup +
+                    "]";
+            }
+
             EditorGUILayout.LabelField(
-                "Rule Graph",
+                graphTitle,
                 EditorStyles.boldLabel);
 
             var rect =
@@ -1600,6 +1966,14 @@ namespace VCR.Editor.P12
                     "Id")
                 .stringValue =
                     id;
+            rule.FindPropertyRelative(
+                    "GraphLabel")
+                .stringValue =
+                    string.Empty;
+            rule.FindPropertyRelative(
+                    "GraphGroup")
+                .stringValue =
+                    string.Empty;
             rule.FindPropertyRelative(
                     "Enabled")
                 .boolValue =
