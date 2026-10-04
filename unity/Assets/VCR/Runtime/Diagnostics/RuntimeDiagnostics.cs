@@ -277,11 +277,17 @@ namespace VCR.Runtime.Diagnostics
         public void SetTrackingProvider(
             ITrackingFrameProvider provider)
         {
-            _provider = provider;
+            _provider =
+                IsServiceAlive(provider)
+                    ? provider
+                    : null;
             _presenceProvider =
-                provider as ITrackingPresenceProvider;
+                IsServiceAlive(_provider)
+                    ? _provider as
+                        ITrackingPresenceProvider
+                    : null;
             trackingProviderBehaviour =
-                provider as MonoBehaviour;
+                _provider as MonoBehaviour;
 
             _lastFaceSequence = -1;
             _lastBodySequence = -1;
