@@ -221,7 +221,7 @@ Character UI now has the first Appearance / Quick Change source implementation: 
 
 ## P12 — Advanced One-Character Scene Tooling
 
-The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` promotes the conventional wardrobe hierarchy into explicit outfit/accessory bindings, authors optional Transform/humanoid-bone accessory anchors and local offsets, edits authored presets/default state over `BasicCharacterAppearanceRuntime`, captures the current appearance as an authored preset, and validates/rolls back invalid serialized binding edits. See `P12_STATUS.md`.
+The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` promotes the conventional wardrobe hierarchy into explicit outfit/accessory bindings, authors optional Transform/humanoid-bone accessory anchors and local offsets, imports validated rigid-FBX accessory packages, edits authored presets/default state over `BasicCharacterAppearanceRuntime`, captures the current appearance as an authored preset, and validates/rolls back invalid serialized binding edits. See `P12_STATUS.md`.
 
 - visual event/node editor
 - richer environment/prop/effect automation
@@ -229,7 +229,7 @@ The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` p
 - advanced shader bindings
 - advanced plugin workflows
 - full-body tracking integration as optional capability
-- wardrobe/accessory authoring and import tooling: outfit-root registration, Transform/humanoid-bone accessory anchors, local offset authoring, preset authoring, validated external accessory packages, and optional compatible skinned-outfit packages
+- wardrobe/accessory authoring and import tooling: outfit-root registration, Transform/humanoid-bone accessory anchors, local offset authoring, preset authoring, implemented rigid-FBX accessory package v1, and optional compatible skinned-outfit/accessory packages with explicit skeleton checks
 - appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, Unity-native `.fbx`/`.dae`/`.anim` import, built-in `.bvh` → additive humanoid cue conversion, Blocking plus StepId-based All/Any dependencies, versioned JSON v2 package import/export, and the project package-library browser with additional external-format adapters (for example glTF motion), richer interactive dependency editing/grouping, particle/effect preset registration, and richer interruption/fallback policy editing
 
 ## P13 — 2D Extension
