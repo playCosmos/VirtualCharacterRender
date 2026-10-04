@@ -5,6 +5,12 @@ namespace VCR.Runtime.Tracking.Mixing
 {
     public static class ExpressionMixerMath
     {
+        private struct CustomBlendValues
+        {
+            public float BaseValue;
+            public float LayerValue;
+        }
+
         public static NormalizedExpressionState Blend(
             NormalizedExpressionState baseState,
             NormalizedExpressionState layerState,
@@ -14,6 +20,13 @@ namespace VCR.Runtime.Tracking.Mixing
         {
             var clampedWeight = Clamp01(weight);
             var clampedDeadzone = Clamp01(deadzone);
+
+            if (clampedWeight <= 0f &&
+                baseState != null)
+            {
+                return baseState;
+            }
+
             var standard = new float[(int)StandardExpression.Count];
 
             for (var i = 0; i < standard.Length; i++)
@@ -170,50 +183,65 @@ namespace VCR.Runtime.Tracking.Mixing
             float deadzone,
             ExpressionBlendMode mode)
         {
-            var baseValues =
-                new Dictionary<string, float>(
-                    StringComparer.Ordinal);
-            var layerValues =
-                new Dictionary<string, float>(
-                    StringComparer.Ordinal);
+            var capacity =
+                (baseState != null
+                    ? baseState.Custom.Length
+                    : 0) +
+                (layerState != null
+                    ? layerState.Custom.Length
+                    : 0);
 
-            AddCustom(baseState, baseValues, 0f);
-            AddCustom(layerState, layerValues, deadzone);
-
-            if (baseValues.Count == 0 &&
-                layerValues.Count == 0)
+            if (capacity == 0)
             {
                 return Array.Empty<NamedExpressionValue>();
             }
 
-            var names =
-                new HashSet<string>(
-                    baseValues.Keys,
+            var values =
+                new Dictionary<string, CustomBlendValues>(
+                    capacity,
                     StringComparer.Ordinal);
-            names.UnionWith(layerValues.Keys);
 
-            var ordered = new List<string>(names);
-            ordered.Sort(StringComparer.Ordinal);
+            AddCustom(
+                baseState,
+                values,
+                deadzone: 0f,
+                layer: false);
+            AddCustom(
+                layerState,
+                values,
+                deadzone,
+                layer: true);
+
+            if (values.Count == 0)
+            {
+                return Array.Empty<NamedExpressionValue>();
+            }
+
+            var ordered =
+                new List<string>(
+                    values.Keys);
+            ordered.Sort(
+                StringComparer.Ordinal);
 
             var result =
-                new NamedExpressionValue[ordered.Count];
+                new NamedExpressionValue[
+                    ordered.Count];
 
-            for (var i = 0; i < ordered.Count; i++)
+            for (var i = 0;
+                 i < ordered.Count;
+                 i++)
             {
-                var name = ordered[i];
-                baseValues.TryGetValue(
-                    name,
-                    out var baseValue);
-                layerValues.TryGetValue(
-                    name,
-                    out var layerValue);
+                var name =
+                    ordered[i];
+                var custom =
+                    values[name];
 
                 result[i] =
                     new NamedExpressionValue(
                         name,
                         BlendValue(
-                            baseValue,
-                            layerValue,
+                            custom.BaseValue,
+                            custom.LayerValue,
                             weight,
                             mode));
             }
@@ -247,8 +275,9 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private static void AddCustom(
             NormalizedExpressionState state,
-            Dictionary<string, float> output,
-            float deadzone)
+            Dictionary<string, CustomBlendValues> output,
+            float deadzone,
+            bool layer)
         {
             if (state == null)
             {
@@ -262,10 +291,28 @@ namespace VCR.Runtime.Tracking.Mixing
                     continue;
                 }
 
-                output[item.Name] =
+                output.TryGetValue(
+                    item.Name,
+                    out var values);
+
+                var value =
                     ApplyDeadzone(
                         item.Value,
                         deadzone);
+
+                if (layer)
+                {
+                    values.LayerValue =
+                        value;
+                }
+                else
+                {
+                    values.BaseValue =
+                        value;
+                }
+
+                output[item.Name] =
+                    values;
             }
         }
 
