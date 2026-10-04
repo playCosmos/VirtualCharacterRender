@@ -205,9 +205,12 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         public void SetHandler(
             IWebSocketTextMessageHandler handler)
         {
-            _handler = handler;
+            _handler =
+                IsServiceAlive(handler)
+                    ? handler
+                    : null;
             messageHandlerBehaviour =
-                handler as MonoBehaviour;
+                _handler as MonoBehaviour;
         }
 
         public bool StartTransport(
