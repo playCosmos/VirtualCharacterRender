@@ -1820,6 +1820,11 @@ namespace VCR.Editor.P12
                     .ChatEnvironmentState);
             AddTemplateMenuItem(
                 menu,
+                "Scene / Manual → Timed Sequence",
+                P12BuiltInEventRuleTemplate
+                    .ManualTimedSceneSequence);
+            AddTemplateMenuItem(
+                menu,
                 "Scene / Manual → Environment + Prop + Effect",
                 P12BuiltInEventRuleTemplate
                     .ManualSceneSequence);
