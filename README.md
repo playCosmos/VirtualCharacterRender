@@ -1,5 +1,7 @@
 # VirtualCharacterRender
 
+> **Development baseline:** the current P0-P13 implementation is integrated on `develop`. The `main` branch remains the promoted/stable baseline until the pinned Unity reproducibility files and latest source-free validation gates pass. Historical `checkpoint/*` branches are not active product baselines.
+
 VirtualCharacterRender is a cross-platform real-time 3D virtual-character rendering, basic motion-capture, dynamic-environment, event, and broadcast-overlay project for Windows and macOS.
 
 The initial product is designed for exactly one active performer/avatar. It uses one scalable runtime pipeline: a lightweight one-character session initializes only the services it needs, while the same character/runtime pipeline can enable advanced scenes, dynamic environments, broadcast events, custom shaders, protocols, and plugin-driven workflows.
