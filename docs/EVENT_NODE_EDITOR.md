@@ -47,7 +47,7 @@ The editor supports:
 - add/delete/reorder Condition, Mutation and Action nodes
 - full serialized field editing for the selected node
 - deterministic unique rule-id generation
-- built-in starter templates for local manual restore-default, subject-lost restore-default, chat → appearance preset, and donation → effect workflows
+- built-in starter templates for local manual restore-default, subject-lost restore-default, chat → appearance preset, donation → effect, manual → prop toggle, and chat → environment fade workflows
 - export of the selected rule or the complete host rule set as a versioned JSON rule-library package
 - import/merge of a rule-library package after current pending edits pass authoring validation
 - deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
