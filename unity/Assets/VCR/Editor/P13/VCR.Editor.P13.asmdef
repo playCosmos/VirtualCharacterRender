@@ -1,0 +1,21 @@
+{
+  "name": "VCR.Editor.P13",
+  "rootNamespace": "VCR.Editor.P13",
+  "references": [
+    "VCR.Editor.P12",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Presentation2D",
+    "VCR.Runtime.Tracking"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
