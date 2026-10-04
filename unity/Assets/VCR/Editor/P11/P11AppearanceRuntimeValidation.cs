@@ -2064,6 +2064,8 @@ namespace VCR.Editor.P11
 
             ValidateDestroyedExecutorRefresh(
                 failures);
+            ValidateDestroyedActionHandlerRefresh(
+                failures);
         }
 
         private static void ValidateDestroyedExecutorRefresh(
@@ -2176,6 +2178,78 @@ namespace VCR.Editor.P11
             {
                 failures.Add(
                     "destroyed transition executor refresh validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateDestroyedActionHandlerRefresh(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Action Handler Refresh Validation");
+
+                var oldHandler =
+                    root.AddComponent<
+                        P11FakeTransitionActionHandler>();
+                var executor =
+                    root.AddComponent<
+                        AppearanceTransitionActionExecutor>();
+
+                executor.SetActionHandlers(
+                    oldHandler);
+
+                var step =
+                    new AppearanceTransitionStep
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind.Action,
+                        ActionType =
+                            "custom.transition",
+                        Text =
+                            "replacement-handler"
+                    };
+
+                Expect(
+                    executor.CanExecute(step),
+                    "transition action executor must initially resolve the configured fake handler",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldHandler);
+
+                var replacement =
+                    root.AddComponent<
+                        P11FakeTransitionActionHandler>();
+
+                Expect(
+                    executor.CanExecute(step) &&
+                    executor.TryExecute(
+                        step,
+                        out var error) &&
+                    replacement.ExecutionCount == 1 &&
+                    replacement.LastText ==
+                        "replacement-handler",
+                    "transition action executor must discard a destroyed cached event handler and auto-discover its replacement: " +
+                    error,
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed transition action handler refresh validation unexpected exception: " +
                     exception);
             }
             finally
