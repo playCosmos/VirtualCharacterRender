@@ -5,6 +5,8 @@ using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
+using VCR.Runtime.EventRuntime;
+using VCR.Runtime.EventRuntime.Unity;
 
 namespace VCR.Editor.P12
 {
@@ -27,12 +29,14 @@ namespace VCR.Editor.P12
                 failures);
             RunSkinnedCompatibilityChecks(
                 failures);
+            RunEventNodeAuthoringChecks(
+                failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, anchor preview/capture safety, authored preset capture, duplicate-id/cycle/non-finite rejection, accessory-package manifest/path/version isolation, serialized authoring contract)");
+                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, event-node rule validation and serialized contracts)");
                 return true;
             }
 
@@ -1171,6 +1175,315 @@ namespace VCR.Editor.P12
                             mesh);
                 }
             }
+        }
+
+        private static void RunEventNodeAuthoringChecks(
+            List<string> failures)
+        {
+            var valid =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "donation-thanks",
+                    Enabled =
+                        true,
+                    Filter =
+                        new EventRuleFilter
+                        {
+                            Type =
+                                "donation",
+                            RequireAmount =
+                                true,
+                            HasMinimumAmount =
+                                true,
+                            MinimumAmount =
+                                1000.0
+                        },
+                    Conditions =
+                        new[]
+                        {
+                            new EventStateCondition
+                            {
+                                Kind =
+                                    EventStateConditionKind
+                                        .Missing,
+                                Key =
+                                    "busy"
+                            }
+                        },
+                    StateMutations =
+                        new[]
+                        {
+                            new EventStateMutation
+                            {
+                                Kind =
+                                    EventStateMutationKind
+                                        .SetText,
+                                Key =
+                                    "last.donor",
+                                TextSource =
+                                    EventTextValueSource
+                                        .EventActorName
+                            }
+                        },
+                    Actions =
+                        new[]
+                        {
+                            new EventActionTemplate
+                            {
+                                ActionType =
+                                    "expression.set",
+                                Name =
+                                    "Joy",
+                                HasValue =
+                                    true,
+                                ConstantNumber =
+                                    1.0
+                            }
+                        },
+                    CooldownSeconds =
+                        0.5,
+                    RateLimitWindowSeconds =
+                        10.0,
+                    RateLimitMaxExecutions =
+                        5
+                };
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            valid
+                        },
+                        out var validError),
+                "P12 event graph must accept a complete rule matching the existing runtime contract: " +
+                validError,
+                failures);
+
+            var duplicate =
+                new EventRuntimeRule
+                {
+                    Id =
+                        valid.Id
+                };
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            valid,
+                            duplicate
+                        },
+                        out var duplicateError) &&
+                duplicateError != null &&
+                duplicateError.IndexOf(
+                    "Duplicate",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 event graph must reject duplicate rule ids",
+                failures);
+
+            var invalidRange =
+                CloneRule(
+                    valid);
+            invalidRange.Filter.HasMaximumAmount =
+                true;
+            invalidRange.Filter.MaximumAmount =
+                100.0;
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            invalidRange
+                        },
+                        out var rangeError) &&
+                !string.IsNullOrWhiteSpace(
+                    rangeError),
+                "P12 event graph must reject minimum amount greater than maximum amount",
+                failures);
+
+            var halfRateLimit =
+                CloneRule(
+                    valid);
+            halfRateLimit.RateLimitWindowSeconds =
+                10.0;
+            halfRateLimit.RateLimitMaxExecutions =
+                0;
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            halfRateLimit
+                        },
+                        out var rateError) &&
+                !string.IsNullOrWhiteSpace(
+                    rateError),
+                "P12 event graph must reject incomplete rate-limit configuration",
+                failures);
+
+            var invalidCondition =
+                CloneRule(
+                    valid);
+            invalidCondition.Conditions[0].Key =
+                " ";
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            invalidCondition
+                        },
+                        out var conditionError) &&
+                !string.IsNullOrWhiteSpace(
+                    conditionError),
+                "P12 event graph must reject a condition without a state key",
+                failures);
+
+            var invalidAction =
+                CloneRule(
+                    valid);
+            invalidAction.Actions[0].ActionType =
+                string.Empty;
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            invalidAction
+                        },
+                        out var actionError) &&
+                !string.IsNullOrWhiteSpace(
+                    actionError),
+                "P12 event graph must reject an action node without ActionType",
+                failures);
+
+            var nonFinite =
+                CloneRule(
+                    valid);
+            nonFinite.Actions[0].NumericScale =
+                double.NaN;
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            nonFinite
+                        },
+                        out var finiteError) &&
+                !string.IsNullOrWhiteSpace(
+                    finiteError),
+                "P12 event graph must reject non-finite action numeric values",
+                failures);
+
+            var unique =
+                P12EventRuleAuthoringUtility
+                    .BuildUniqueRuleId(
+                        "rule",
+                        candidate =>
+                            candidate ==
+                                "rule" ||
+                            candidate ==
+                                "rule-2");
+
+            Expect(
+                unique ==
+                    "rule-3",
+                "P12 event graph must generate deterministic suffix ids",
+                failures);
+
+            GameObject hostRoot = null;
+
+            try
+            {
+                hostRoot =
+                    new GameObject(
+                        "P12 Event Node Validation");
+                var host =
+                    hostRoot.AddComponent<
+                        EventRuntimeHost>();
+                host.SetRules(
+                    valid);
+
+                var serialized =
+                    new SerializedObject(
+                        host);
+                var rules =
+                    serialized.FindProperty(
+                        "rules");
+                var first =
+                    rules != null &&
+                    rules.arraySize >
+                        0
+                        ? rules.GetArrayElementAtIndex(
+                            0)
+                        : null;
+
+                Expect(
+                    rules != null &&
+                    first != null &&
+                    first.FindPropertyRelative(
+                        "Filter") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "Conditions") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "StateMutations") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "Actions") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "CooldownSeconds") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "RateLimitWindowSeconds") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "RateLimitMaxExecutions") !=
+                        null,
+                    "P12 event node editor SerializedProperty contract must match EventRuntimeHost/EventRuntimeRule fields",
+                    failures);
+            }
+            finally
+            {
+                if (hostRoot != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            hostRoot);
+                }
+            }
+        }
+
+        private static EventRuntimeRule CloneRule(
+            EventRuntimeRule source)
+        {
+            var envelope =
+                new EventRuntimeConfigurationEnvelope
+                {
+                    Version = 1,
+                    Rules =
+                        new[]
+                        {
+                            source
+                        }
+                };
+
+            return JsonUtility.FromJson<
+                    EventRuntimeConfigurationEnvelope>(
+                    JsonUtility.ToJson(
+                        envelope))
+                .Rules[0];
         }
 
         private static P12AccessoryPackageManifest
