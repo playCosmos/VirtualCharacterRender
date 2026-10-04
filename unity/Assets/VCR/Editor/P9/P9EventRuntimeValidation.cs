@@ -1163,6 +1163,54 @@ namespace VCR.Editor.P9
                         stateBeforeAmbiguous,
                     "multiple matching action handlers must fail closed without mutating the target",
                     failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    handler);
+                UnityEngine.Object.DestroyImmediate(
+                    duplicateHandler);
+
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "destroyed-environment-handlers",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                EnvironmentAction(
+                                    "environment.main",
+                                    "must-stay-unchanged")
+                            }
+                    });
+
+                var unhandledBeforeDestroyed =
+                    host.UnhandledActions;
+                var stateBeforeDestroyed =
+                    environment.Status.StateId;
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        13));
+
+                InvokeUpdate(hub);
+
+                Expect(
+                    host.UnhandledActions ==
+                        unhandledBeforeDestroyed + 1 &&
+                    environment.Status.StateId ==
+                        stateBeforeDestroyed,
+                    "destroyed event action handlers cached through interfaces must be ignored and fail closed as unhandled",
+                    failures);
             }
             catch (Exception exception)
             {
