@@ -2341,6 +2341,101 @@ namespace VCR.Editor.P12
                     failures);
             }
 
+            var sceneSequence =
+                P12EventRuleLibraryUtility
+                    .CreateTemplate(
+                        P12BuiltInEventRuleTemplate
+                            .ManualSceneSequence);
+            var sceneEngine =
+                new EventRuntimeEngine();
+            var sceneCommands =
+                new List<
+                    EventActionCommand>();
+            sceneEngine.SetRules(
+                sceneSequence);
+            sceneEngine.Process(
+                new VCR.Runtime.Events.NormalizedEvent(
+                    VCR.Runtime.Events
+                        .NormalizedEventTypes
+                        .LocalManual,
+                    "validation",
+                    1_000_000,
+                    sequence:
+                        1),
+                sceneCommands);
+
+            Expect(
+                sceneSequence.GraphGroup ==
+                    "scene-automation/manual" &&
+                sceneSequence.Actions.Length ==
+                    3 &&
+                sceneCommands.Count ==
+                    3 &&
+                sceneCommands[0].ActionType ==
+                    EventActionTypes.EnvironmentSetState &&
+                sceneCommands[0].Name ==
+                    "Fade" &&
+                sceneCommands[0].Text ==
+                    "state-id" &&
+                sceneCommands[0].HasValue &&
+                Math.Abs(
+                    sceneCommands[0].Value -
+                    0.5) <
+                    0.0001 &&
+                sceneCommands[1].ActionType ==
+                    EventActionTypes.PropSetActive &&
+                sceneCommands[1].TargetId ==
+                    "props.main" &&
+                sceneCommands[1].Text ==
+                    "prop-id" &&
+                sceneCommands[1].HasValue &&
+                Math.Abs(
+                    sceneCommands[1].Value -
+                    1.0) <
+                    0.0001 &&
+                sceneCommands[2].ActionType ==
+                    EventActionTypes.EffectPlay &&
+                sceneCommands[2].TargetId ==
+                    "effects.main" &&
+                sceneCommands[2].Text ==
+                    "effect-id",
+                "P12 manual scene automation template must emit environment → prop → effect commands in authored order with explicit placeholder ids and activation value",
+                failures);
+
+            var donationBurst =
+                P12EventRuleLibraryUtility
+                    .CreateTemplate(
+                        P12BuiltInEventRuleTemplate
+                            .DonationSceneBurst);
+
+            Expect(
+                donationBurst.GraphGroup ==
+                    "scene-automation/broadcast" &&
+                donationBurst.Filter != null &&
+                donationBurst.Filter.Type ==
+                    VCR.Runtime.Events
+                        .NormalizedEventTypes
+                        .BroadcastDonation &&
+                donationBurst.Filter
+                    .HasMinimumAmount &&
+                donationBurst.Actions.Length ==
+                    2 &&
+                donationBurst.Actions[0]
+                    .ActionType ==
+                    EventActionTypes.PropSetActive &&
+                donationBurst.Actions[0]
+                    .HasValue &&
+                Math.Abs(
+                    donationBurst.Actions[0]
+                        .ConstantNumber -
+                    1.0) <
+                    0.0001 &&
+                donationBurst.Actions[1]
+                    .ActionType ==
+                    EventActionTypes.EffectPlay,
+                "P12 donation scene burst template must compose prop activation before effect playback under the broadcast scene-automation group",
+                failures);
+
             var manualTemplate =
                 P12EventRuleLibraryUtility
                     .CreateTemplate(
