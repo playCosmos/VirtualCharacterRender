@@ -2971,8 +2971,10 @@ namespace VCR.Runtime.UI
         private void EnsureAppearanceUserPresetsLoaded()
         {
             var registry =
-                _appearanceRuntime as
-                    IAppearanceUserPresetRegistry;
+                IsServiceAlive(_appearanceRuntime)
+                    ? _appearanceRuntime as
+                        IAppearanceUserPresetRegistry
+                    : null;
             var characterPath =
                 sceneRuntime?.CurrentCharacterPath;
 
@@ -5220,8 +5222,10 @@ namespace VCR.Runtime.UI
                 }
 
                 var presetRegistry =
-                    _appearanceRuntime as
-                        IAppearanceUserPresetRegistry;
+                    IsServiceAlive(_appearanceRuntime)
+                        ? _appearanceRuntime as
+                            IAppearanceUserPresetRegistry
+                        : null;
                 var hasPresetRegistry =
                     presetRegistry != null;
                 var selectedUserPresetId =
