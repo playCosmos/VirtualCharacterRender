@@ -79,7 +79,8 @@ namespace VCR.Runtime.EventRuntime.Unity
         {
             RefreshEventHubSubscription();
 
-            if (autoFindEventHub)
+            if (Application.isPlaying &&
+                autoFindEventHub)
             {
                 CancelInvoke(
                     nameof(
