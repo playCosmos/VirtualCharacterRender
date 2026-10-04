@@ -364,6 +364,14 @@ namespace VCR.Runtime.Environment.Unity
                 out _);
         }
 
+        public bool RebuildStateBindings(
+            out string error)
+        {
+            return ConfigureStateBindings(
+                stateBindings,
+                out error);
+        }
+
         public void SetUpdateTargets(
             params MonoBehaviour[] targets)
         {
