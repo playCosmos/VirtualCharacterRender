@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Appearance;
@@ -21,6 +22,8 @@ namespace VCR.Editor.P12
                 new List<string>();
 
             RunAppearanceAuthoringChecks(
+                failures);
+            RunAccessoryPackageChecks(
                 failures);
 
             if (failures.Count == 0)
@@ -513,6 +516,267 @@ namespace VCR.Editor.P12
                             root);
                 }
             }
+        }
+
+        private static void RunAccessoryPackageChecks(
+            List<string> failures)
+        {
+            var valid =
+                new P12AccessoryPackageManifest
+                {
+                    PackageId =
+                        "vcr.test.hat",
+                    PackageVersion =
+                        "1.0.0",
+                    SlotId =
+                        "Head",
+                    AccessoryId =
+                        "Hat",
+                    ModelFile =
+                        "models/hat.fbx",
+                    AnchorMode =
+                        "HumanoidBone",
+                    HumanoidBone =
+                        "Head",
+                    LocalPosition =
+                        new Vector3(
+                            0f,
+                            0.1f,
+                            0f),
+                    LocalEulerAngles =
+                        new Vector3(
+                            0f,
+                            15f,
+                            0f),
+                    OverrideLocalScale =
+                        true,
+                    LocalScale =
+                        Vector3.one
+                };
+
+            Expect(
+                P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        valid,
+                        out var anchorMode,
+                        out var bone,
+                        out var validError) &&
+                anchorMode ==
+                    AppearanceAccessoryAnchorMode
+                        .HumanoidBone &&
+                bone ==
+                    HumanBodyBones.Head,
+                "valid rigid accessory package manifest must validate and resolve humanoid anchor metadata: " +
+                validError,
+                failures);
+
+            var traversal =
+                CloneManifest(
+                    valid);
+            traversal.ModelFile =
+                "../escape.fbx";
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        traversal,
+                        out _,
+                        out _,
+                        out _),
+                "accessory package manifest must reject path traversal",
+                failures);
+
+            var prefab =
+                CloneManifest(
+                    valid);
+            prefab.ModelFile =
+                "models/hat.prefab";
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        prefab,
+                        out _,
+                        out _,
+                        out _),
+                "accessory package v1 must reject external prefab payloads",
+                failures);
+
+            var unsafeId =
+                CloneManifest(
+                    valid);
+            unsafeId.PackageId =
+                "../unsafe";
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        unsafeId,
+                        out _,
+                        out _,
+                        out _),
+                "accessory package must reject unsafe package identifiers",
+                failures);
+
+            var future =
+                CloneManifest(
+                    valid);
+            future.FormatVersion =
+                P12AccessoryPackageManifest
+                    .CurrentFormatVersion +
+                1;
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        future,
+                        out _,
+                        out _,
+                        out _),
+                "accessory package must reject unsupported newer manifest versions",
+                failures);
+
+            var invalidBone =
+                CloneManifest(
+                    valid);
+            invalidBone.HumanoidBone =
+                "NotABone";
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        invalidBone,
+                        out _,
+                        out _,
+                        out _),
+                "humanoid-bone accessory package must reject unknown bones",
+                failures);
+
+            var zeroScale =
+                CloneManifest(
+                    valid);
+            zeroScale.LocalScale =
+                new Vector3(
+                    1f,
+                    0f,
+                    1f);
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        zeroScale,
+                        out _,
+                        out _,
+                        out _),
+                "accessory package scale override must reject a zero axis",
+                failures);
+
+            var tempRoot =
+                Path.Combine(
+                    Path.GetTempPath(),
+                    "vcr-p12-accessory-" +
+                    Guid.NewGuid()
+                        .ToString("N"));
+
+            try
+            {
+                Directory.CreateDirectory(
+                    Path.Combine(
+                        tempRoot,
+                        "models"));
+
+                var manifestPath =
+                    Path.Combine(
+                        tempRoot,
+                        "manifest.json");
+                var modelPath =
+                    Path.Combine(
+                        tempRoot,
+                        "models",
+                        "hat.fbx");
+
+                File.WriteAllText(
+                    manifestPath,
+                    JsonUtility.ToJson(
+                        valid,
+                        prettyPrint:
+                            true));
+                File.WriteAllBytes(
+                    modelPath,
+                    new byte[]
+                    {
+                        0x56,
+                        0x43,
+                        0x52,
+                        0x31,
+                        0x32
+                    });
+
+                Expect(
+                    P12AccessoryPackageImporter
+                        .TryLoadManifest(
+                            manifestPath,
+                            out var loaded,
+                            out var loadedAnchorMode,
+                            out var loadedBone,
+                            out var loadError) &&
+                    loaded != null &&
+                    loaded.PackageId ==
+                        valid.PackageId &&
+                    loadedAnchorMode ==
+                        AppearanceAccessoryAnchorMode
+                            .HumanoidBone &&
+                    loadedBone ==
+                        HumanBodyBones.Head,
+                    "accessory package loader must resolve a validated manifest and in-package FBX path before Unity import: " +
+                    loadError,
+                    failures);
+
+                Expect(
+                    !P12AccessoryPackageImporter
+                        .TryResolveModelPath(
+                            manifestPath,
+                            "../escape.fbx",
+                            out _,
+                            out var escapeError) &&
+                    !string.IsNullOrWhiteSpace(
+                        escapeError),
+                    "accessory package path resolver must reject escaping the manifest directory",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 accessory package validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (Directory.Exists(
+                        tempRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(
+                            tempRoot,
+                            recursive:
+                                true);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        private static P12AccessoryPackageManifest
+            CloneManifest(
+                P12AccessoryPackageManifest source)
+        {
+            return JsonUtility.FromJson<
+                P12AccessoryPackageManifest>(
+                    JsonUtility.ToJson(
+                        source));
         }
 
         private static Transform CreateChild(
