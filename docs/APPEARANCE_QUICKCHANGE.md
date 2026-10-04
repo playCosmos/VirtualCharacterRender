@@ -364,8 +364,8 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - register outfit roots
 - create/edit accessory slots and anchors
 - build appearance presets
-- import validated external accessory packages
-- optional compatible skinned-outfit package workflow
+- import validated external rigid-FBX accessory packages through the P12 v1 manifest/importer; see `ACCESSORY_PACKAGES.md`
+- optional compatible skinned-outfit/accessory package workflow remains separate and requires explicit skeleton/bind-pose validation
 - preview and validate an appearance preset before making it active
 - richer transition timeline authoring: interactive dependency editing/grouping beyond the implemented StepId-based All/Any graph and non-scene workflows; the project package-library browser is implemented
 - additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
