@@ -2170,6 +2170,66 @@ namespace VCR.Editor.P12
                 rewriteRuleGroupError,
                 failures);
 
+            var capturedHierarchyRules =
+                P12EventRuleAuthoringUtility
+                    .CaptureGroupHierarchyRules(
+                        hierarchyRules,
+                        "audience/support",
+                        includeDescendants:
+                            true);
+
+            Expect(
+                capturedHierarchyRules.Length ==
+                    3 &&
+                capturedHierarchyRules[0].Id ==
+                    "donation-high" &&
+                capturedHierarchyRules[1].Id ==
+                    "donation-low" &&
+                capturedHierarchyRules[2].Id ==
+                    "donation-root",
+                "P12 event rule hierarchy capture must preserve authored rule order for composition/export",
+                failures);
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .TryDuplicateGroupHierarchy(
+                        hierarchyRules,
+                        "audience/support",
+                        "library/support-copy",
+                        includeDescendants:
+                            true,
+                        out var duplicatedHierarchyRules,
+                        out var duplicatedHierarchyCount,
+                        out var duplicateHierarchyError) &&
+                duplicatedHierarchyCount ==
+                    3 &&
+                duplicatedHierarchyRules.Length ==
+                    6 &&
+                duplicatedHierarchyRules[0].Id ==
+                    "donation-high" &&
+                duplicatedHierarchyRules[3].Id ==
+                    "donation-high-copy" &&
+                duplicatedHierarchyRules[3]
+                    .GraphGroup ==
+                    "library/support-copy/high" &&
+                duplicatedHierarchyRules[4].Id ==
+                    "donation-low-copy" &&
+                duplicatedHierarchyRules[4]
+                    .GraphGroup ==
+                    "library/support-copy/low" &&
+                duplicatedHierarchyRules[5].Id ==
+                    "donation-root-copy" &&
+                duplicatedHierarchyRules[5]
+                    .GraphGroup ==
+                    "library/support-copy" &&
+                hierarchyRules.Length ==
+                    3 &&
+                hierarchyRules[0].Id ==
+                    "donation-high",
+                "P12 event rule hierarchy duplicate must deep-clone the selected subtree, preserve original rules, suffix ids deterministically, and rewrite destination groups: " +
+                duplicateHierarchyError,
+                failures);
+
             Expect(
                 !P12EventRuleAuthoringUtility
                     .TryRewriteGroupHierarchy(
