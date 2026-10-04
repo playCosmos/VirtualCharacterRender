@@ -426,6 +426,8 @@ namespace VCR.Runtime.UI
 
                 if (!IsServiceAlive(_trackingPresence))
                 {
+                    _trackingPresence = null;
+
                     var behaviours =
                         FindObjectsByType<MonoBehaviour>(
                             FindObjectsInactive.Exclude,
