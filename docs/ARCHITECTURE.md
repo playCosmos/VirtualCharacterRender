@@ -2,7 +2,7 @@
 
 ## Purpose
 
-VirtualCharacterRender is a cross-platform, one-character-first real-time 3D character runtime, built-in motion-capture system, dynamic-environment system, broadcast-event system, and overlay.
+VirtualCharacterRender is a cross-platform, one-character-first real-time 3D character runtime with an optional backend-neutral 2D presentation extension, built-in motion-capture system, dynamic-environment system, broadcast-event system, and overlay.
 
 The product is implemented for one active performer/avatar. Advanced features deepen the scene, environment, events, shaders, effects, and integrations around that character rather than introducing multi-character orchestration.
 
@@ -56,7 +56,7 @@ Current implementation scope:
 - broadcast/local event automation
 - Windows and macOS
 
-Multi-character and 2D are future expansion areas, not current implementation targets.
+Multi-character remains a future expansion area. P13 now develops 2D as an optional extension while the supported/default production path remains 3D/VRM-first.
 
 ## Capability-driven runtime
 
@@ -66,6 +66,7 @@ Optional systems are capabilities, not separate editions.
 Runtime
  ├─ Core — always active
  ├─ Character
+ ├─ Optional 2D Presentation Backend
  ├─ Appearance / Wardrobe
  ├─ Rendering
  ├─ Tracking adapters
@@ -93,7 +94,7 @@ See `RUNTIME_PROFILES.md`.
 - Treat environment, events, and custom shaders as first-class capabilities.
 - Keep streaming-platform integrations outside event/runtime internals.
 - Make renderer, shader, tracking, plugin, event-adapter, and output failures recoverable where practical.
-- Preserve future paths to multi-character and 2D without implementing them now.
+- Preserve the future multi-character path while keeping the active 2D extension isolated behind backend-neutral contracts.
 
 ## Platform boundary
 
@@ -113,6 +114,8 @@ Tracking                → normalized tracking abstraction
 Runtime                 → rendering abstraction
 Environment             → scene/rendering abstractions
 Backend                 → rendering abstraction implementation
+2D presentation host     → normalized tracking + optional backend adapter
+2D backend adapter       → backend-specific SDK/package only
 Output                  → platform output abstraction
 UI                      → application services
 ```
@@ -125,6 +128,7 @@ Chat/Donation Adapter → GameObject
 Protocol → Material
 Event → concrete renderer object
 Character domain → concrete shader implementation
+Presentation2D core → Live2D/Inochi2D concrete SDK type
 Shared runtime → Win32/Cocoa object
 ```
 
@@ -168,3 +172,4 @@ tools/      Build, validation, conversion, diagnostics
 - Lightweight and advanced feature sets use the same character/runtime contracts.
 - Runtime capability settings and graphics quality settings are independent.
 - External protocols expose application concepts, not backend object handles.
+- 2D presentation reuses normalized tracking/expression and existing output/event boundaries; concrete 2D SDK types remain in optional adapter assemblies.
