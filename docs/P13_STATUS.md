@@ -76,6 +76,7 @@ Metrics:
 
 ```text
 presentation2d.model.loaded
+presentation2d.mapping.enabled
 presentation2d.apply.count
 presentation2d.apply.failures
 presentation2d.load.count
@@ -97,7 +98,7 @@ Supported mapping sources are:
 
 Each binding defines a target parameter id, input/output ranges, optional input clamping, and optional fallback input when the source domain is unavailable. Validation rejects blank/duplicate target ids, non-finite values, zero-width input ranges, unsupported source kinds, invalid face coefficients, and out-of-range standard expressions.
 
-`Character2DParameterMapper.TryEvaluate` requires the profile backend id to match the active adapter id and produces backend-agnostic target-id/value pairs. This keeps common normalized semantics reusable while leaving the final SDK parameter write inside the backend adapter.
+`Character2DParameterMapper.TryEvaluate` requires the profile backend id to match the active adapter id and produces backend-agnostic target-id/value pairs. Backends may implement optional `ICharacter2DParameterSink`; when a profile is configured, `Character2DRuntime` validates the backend/profile match before model activation, evaluates changed tracking snapshots, and routes the mapped values to that sink instead of the raw-snapshot apply path. Empty mapped results are treated as a no-op and cached without incrementing apply count. The final SDK parameter write remains inside the backend adapter.
 
 Editor menu:
 
@@ -134,6 +135,8 @@ The first validator uses fake backend/provider MonoBehaviours and covers:
 - mapping-profile backend mismatch rejection
 - duplicate target-parameter rejection
 - out-of-range standard-expression rejection
+- host-side backend/profile mismatch rejection before model activation
+- mapped-value routing through `ICharacter2DParameterSink` without also invoking the raw snapshot path
 
 These validation paths are implemented but have not been executed in this environment because Unity Editor/runtime execution is unavailable here.
 
@@ -166,8 +169,7 @@ An experimental Windows-only adapter may be useful for contract testing but must
 
 ## Next P13 source work
 
-- backend adapter package/assembly layout and dependency gates
-- backend-specific parameter sink integration using the shared mapping profile/evaluator
+- backend adapter package/assembly layout and compile-time dependency gates for optional SDK integrations
 - Live2D adapter spike after license/package acceptance
 - Inochi2D adapter spike when a macOS native path is available or intentionally built/maintained
 - P13 UI surface for selecting an installed 2D backend/model only after at least one adapter is actually available
