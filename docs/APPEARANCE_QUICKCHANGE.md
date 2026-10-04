@@ -367,7 +367,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - import validated external rigid-FBX accessory packages through the P12 v1 manifest/importer; see `ACCESSORY_PACKAGES.md`
 - optional compatible skinned-outfit/accessory package workflow remains separate and requires explicit skeleton/bind-pose validation
 - preview and validate an appearance preset before making it active
-- richer transition timeline authoring: interactive dependency editing/grouping beyond the implemented StepId-based All/Any graph and non-scene workflows; the project package-library browser is implemented
+- richer transition timeline authoring: direct source→target dependency edge editing is implemented on the P12 branch over the existing StepId-based All/Any graph; richer named grouping/labels and non-scene workflows remain later tooling; the project package-library browser is implemented
 - additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
 - custom particle/effect preset import/registration
 - richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
@@ -539,7 +539,7 @@ Not yet implemented as built-ins:
 
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
 - automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
-- richer interactive graph editing/grouping beyond the implemented resolved-time dependency graph preview and StepId-based `All` / `Any` completion graph
+- richer named dependency grouping/labels beyond the implemented resolved-time graph plus direct source→target edge add/remove editing over StepId-based `All` / `Any` completion groups
 - richer transition package management beyond the implemented project library browser, v2 JSON import/export, v1 migration visibility, package search, and Timeline handoff; future work may add tags/descriptions/version history if evidence justifies schema expansion
 - external appearance package import
 - compatible external skinned-garment workflow
