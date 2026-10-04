@@ -580,6 +580,24 @@ namespace VCR.Editor.P12
                 }
             }
 
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Duplicate Hierarchy"))
+                {
+                    DuplicateRuleGroupHierarchy(
+                        source);
+                }
+
+                if (GUILayout.Button(
+                        "Export Hierarchy"))
+                {
+                    ExportRuleGroupHierarchy(
+                        source);
+                }
+            }
+
             foreach (var path in paths)
             {
                 var depth =
@@ -603,6 +621,96 @@ namespace VCR.Editor.P12
                     $"  ({exactCount} exact / {descendantCount} subtree)",
                     EditorStyles.miniLabel);
             }
+        }
+
+        private void DuplicateRuleGroupHierarchy(
+            string source)
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var existing))
+            {
+                return;
+            }
+
+            if (!P12EventRuleAuthoringUtility
+                .TryDuplicateGroupHierarchy(
+                    existing,
+                    source,
+                    _groupHierarchyDestination,
+                    _groupHierarchyIncludeDescendants,
+                    out var duplicated,
+                    out var duplicatedCount,
+                    out var error))
+            {
+                _message =
+                    "Rule group hierarchy duplicate failed: " +
+                    (error ?? "unknown error");
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                "Duplicate Event Rule Group Hierarchy");
+            _host.SetRules(
+                duplicated);
+            EditorUtility.SetDirty(
+                _host);
+            _ruleIndex =
+                Math.Max(
+                    0,
+                    duplicated.Length -
+                    duplicatedCount);
+            _selectedStage =
+                GraphStage.Filter;
+            _selectedItemIndex =
+                -1;
+            Rebind();
+
+            _message =
+                $"Duplicated {duplicatedCount} rule(s) from hierarchy '{source}' into '{_groupHierarchyDestination}'.";
+            _messageType =
+                MessageType.Info;
+            GUIUtility.ExitGUI();
+        }
+
+        private void ExportRuleGroupHierarchy(
+            string source)
+        {
+            if (!TryPrepareLibraryOperation(
+                    out var rules))
+            {
+                return;
+            }
+
+            var selected =
+                P12EventRuleAuthoringUtility
+                    .CaptureGroupHierarchyRules(
+                        rules,
+                        source,
+                        _groupHierarchyIncludeDescendants);
+
+            if (selected.Length == 0)
+            {
+                _message =
+                    $"Rule group hierarchy '{source}' contains no exportable rules.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var packageId =
+                source
+                    .Replace(
+                        '/',
+                        '-') +
+                "-event-rules";
+
+            ExportRulePackage(
+                packageId,
+                selected);
+            GUIUtility.ExitGUI();
         }
 
         private void RewriteSerializedGroupHierarchy(
