@@ -44,7 +44,7 @@ The editor supports:
 - export of the selected rule or the complete host rule set as a versioned JSON rule-library package
 - import/merge of a rule-library package after current pending edits pass authoring validation
 - deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
-- `VCR/P12/Open Event Rule Library` project browser with package/rule-id/path/error search
+- `VCR/P12/Open Event Rule Library` project browser with package/rule-id/description/tag/path/error search
 - valid and invalid project packages remain visible; external JSON can be validated and added to the project library
 - asset ping/path copy and pending-package handoff back into the Event Node Editor
 - Validate & Apply
@@ -78,15 +78,20 @@ The editor includes editor-only authoring conveniences that do not change runtim
 
 Built-in templates create ordinary `EventRuntimeRule` instances using existing normalized event/action contracts. Placeholder ids such as `preset-id` or `effect-id` are intentionally visible and must be edited to match the selected runtime configuration.
 
-Rule-library package v1 contains:
+Rule-library package v2 contains:
 
 ```text
 Version
 PackageId
+Description
+Tags[]
+Revision
 Rules[]
 ```
 
-Import validates the package version and every contained rule through the same `P12EventRuleAuthoringUtility` used by the graph editor. Unsupported newer versions fail closed. Existing host rules are preserved and imported rules are appended; id collisions are renamed deterministically rather than silently replacing existing behavior.
+Version 1 packages migrate automatically to v2 with an empty description, no tags, and revision 1. Description/tags/revision are editor-library metadata only and never alter EventRuntime execution.
+
+Import validates the package version, metadata, and every contained rule through the same `P12EventRuleAuthoringUtility` used by the graph editor. Unsupported newer versions fail closed. Revision must be >=1; blank or case-insensitive duplicate tags are rejected. Existing host rules are preserved and imported rules are appended; id collisions are renamed deterministically rather than silently replacing existing behavior.
 
 Template insertion/import/export first applies the current serialized edits and requires them to pass validation. This prevents a library operation from discarding an invalid pending graph silently.
 
@@ -94,7 +99,7 @@ Template insertion/import/export first applies the current serialized edits and 
 
 This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-Future P12 extensions may add visual grouping, higher-level node composition, library tags/descriptions/version history, and richer package metadata workflows, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+Future P12 extensions may add visual grouping, higher-level node composition, package revision history/diff workflows, and richer metadata editing/browsing, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -109,7 +114,9 @@ Future P12 extensions may add visual grouping, higher-level node composition, li
 - non-finite action numeric rejection
 - deterministic unique rule ids
 - every built-in starter template validates against the existing runtime rule contract
-- rule-library JSON package round trip
+- rule-library v2 JSON metadata/rule round trip
+- v1→v2 metadata migration
+- blank/duplicate tag validation
 - deterministic imported-id collision suffixing
 - unsupported newer library-version rejection
 - project library valid/invalid package indexing
