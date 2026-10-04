@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
+using VCR.Runtime.Appearance.Unity;
 
 namespace VCR.Editor.P12
 {
