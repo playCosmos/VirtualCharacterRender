@@ -275,6 +275,37 @@ namespace VCR.Editor.P13
                     "2D host metrics must expose model/apply success and failure counts",
                     failures);
 
+                runtime.Configure(
+                    backend,
+                    null,
+                    Character2DInputDomain.Face |
+                    Character2DInputDomain.Expressions);
+
+                Expect(
+                    !runtime.enabled &&
+                    backend.Status.State ==
+                        Character2DBackendState.ModelLoaded,
+                    "2D host internal idle-disable must not unload a loaded backend model when tracking is temporarily unavailable",
+                    failures);
+
+                runtime.Configure(
+                    backend,
+                    provider,
+                    Character2DInputDomain.Face |
+                    Character2DInputDomain.Expressions);
+
+                Expect(
+                    runtime.enabled &&
+                    backend.Status.State ==
+                        Character2DBackendState.ModelLoaded &&
+                    runtime.ProcessLatest(
+                        out var recoveredProviderError) &&
+                    backend.ApplyCount ==
+                        5,
+                    "2D host must re-enable from explicit dependency reconfiguration without reloading the model: " +
+                    recoveredProviderError,
+                    failures);
+
                 UnityEngine.Object.DestroyImmediate(
                     provider);
 
