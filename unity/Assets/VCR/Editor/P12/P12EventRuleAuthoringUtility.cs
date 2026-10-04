@@ -54,16 +54,21 @@ namespace VCR.Editor.P12
                 }
 
                 if (!string.IsNullOrWhiteSpace(
-                        rule.GraphGroup) &&
-                    !P12GraphGroupPathUtility
+                        rule.GraphGroup))
+                {
+                    if (!P12GraphGroupPathUtility
                         .TryNormalize(
                             rule.GraphGroup,
-                            out _,
+                            out var normalizedGroup,
                             out var groupError))
-                {
-                    error =
-                        $"Rule '{id}' graph group is invalid: {groupError}";
-                    return false;
+                    {
+                        error =
+                            $"Rule '{id}' graph group is invalid: {groupError}";
+                        return false;
+                    }
+
+                    rule.GraphGroup =
+                        normalizedGroup;
                 }
 
                 if (!IsFiniteNonNegative(
@@ -136,11 +141,17 @@ namespace VCR.Editor.P12
                      rules ??
                      Array.Empty<EventRuntimeRule>())
             {
-                var group =
-                    rule?.GraphGroup?.Trim();
+                var rawGroup =
+                    rule?.GraphGroup;
+                string group;
 
                 if (string.IsNullOrWhiteSpace(
-                        group))
+                        rawGroup) ||
+                    !P12GraphGroupPathUtility
+                        .TryNormalize(
+                            rawGroup,
+                            out group,
+                            out _))
                 {
                     continue;
                 }
@@ -236,14 +247,19 @@ namespace VCR.Editor.P12
                 return -1;
             }
 
-            var group =
+            var rawGroup =
                 rules[
                     currentIndex]
-                    ?.GraphGroup
-                    ?.Trim();
+                    ?.GraphGroup;
+            string group;
 
             if (string.IsNullOrWhiteSpace(
-                    group))
+                    rawGroup) ||
+                !P12GraphGroupPathUtility
+                    .TryNormalize(
+                        rawGroup,
+                        out group,
+                        out _))
             {
                 return -1;
             }
@@ -270,10 +286,17 @@ namespace VCR.Editor.P12
                     break;
                 }
 
-                if (string.Equals(
-                        rules[index]
-                            ?.GraphGroup
-                            ?.Trim(),
+                var candidateRaw =
+                    rules[index]
+                        ?.GraphGroup;
+
+                if (P12GraphGroupPathUtility
+                        .TryNormalize(
+                            candidateRaw,
+                            out var candidateGroup,
+                            out _) &&
+                    string.Equals(
+                        candidateGroup,
                         group,
                         StringComparison.Ordinal))
                 {
