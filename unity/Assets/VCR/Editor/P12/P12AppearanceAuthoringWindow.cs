@@ -1,6 +1,8 @@
 using System;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 
@@ -35,6 +37,13 @@ namespace VCR.Editor.P12
         private string _message;
         private MessageType _messageType =
             MessageType.Info;
+        private readonly System.Collections.Generic.Dictionary<
+            GameObject,
+            AppearancePreviewObjectState>
+            _appearancePreviewStates =
+                new();
+        private bool _appearancePreviewActive;
+        private string _appearancePreviewPresetId;
 
         [MenuItem("VCR/P12/Open Appearance Authoring")]
         public static void Open()
@@ -47,8 +56,44 @@ namespace VCR.Editor.P12
 
         private void OnEnable()
         {
+            EditorSceneManager.sceneSaving +=
+                OnSceneSaving;
+            EditorApplication.playModeStateChanged +=
+                OnPlayModeStateChanged;
             ResolveFromSelection();
             Rebind();
+        }
+
+        private void OnDisable()
+        {
+            EditorSceneManager.sceneSaving -=
+                OnSceneSaving;
+            EditorApplication.playModeStateChanged -=
+                OnPlayModeStateChanged;
+            RestoreAppearancePreview(
+                repaint:
+                    false);
+        }
+
+        private void OnSceneSaving(
+            Scene scene,
+            string path)
+        {
+            RestoreAppearancePreview(
+                repaint:
+                    false);
+        }
+
+        private void OnPlayModeStateChanged(
+            PlayModeStateChange state)
+        {
+            if (state ==
+                PlayModeStateChange.ExitingEditMode)
+            {
+                RestoreAppearancePreview(
+                    repaint:
+                        false);
+            }
         }
 
         private void OnSelectionChange()
@@ -65,6 +110,9 @@ namespace VCR.Editor.P12
                     selected,
                     _runtime))
             {
+                RestoreAppearancePreview(
+                    repaint:
+                        false);
                 _runtime =
                     selected;
                 Rebind();
@@ -94,6 +142,9 @@ namespace VCR.Editor.P12
                     nextRuntime,
                     _runtime))
             {
+                RestoreAppearancePreview(
+                    repaint:
+                        false);
                 _runtime =
                     nextRuntime;
                 Rebind();
@@ -696,6 +747,460 @@ namespace VCR.Editor.P12
                     out error);
         }
 
+        private void PreviewAuthoredPreset(
+            SerializedProperty preset)
+        {
+            if (_runtime == null ||
+                preset == null)
+            {
+                return;
+            }
+
+            RestoreAppearancePreview(
+                repaint:
+                    false);
+
+            if (!CaptureAppearancePreviewBaseline(
+                    out var captureError))
+            {
+                _message =
+                    "Appearance preset preview failed: " +
+                    captureError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            var presetId =
+                preset.FindPropertyRelative(
+                        "PresetId")
+                    .stringValue;
+            var outfitId =
+                preset.FindPropertyRelative(
+                        "OutfitId")
+                    .stringValue;
+            var selectedAccessories =
+                new System.Collections.Generic.HashSet<string>(
+                    StringComparer.Ordinal);
+            var selections =
+                preset.FindPropertyRelative(
+                    "Accessories");
+
+            for (var i = 0;
+                 i < selections.arraySize;
+                 i++)
+            {
+                var selection =
+                    selections.GetArrayElementAtIndex(
+                        i);
+                var slotId =
+                    selection.FindPropertyRelative(
+                            "SlotId")
+                        .stringValue;
+                var accessoryId =
+                    selection.FindPropertyRelative(
+                            "AccessoryId")
+                        .stringValue;
+
+                if (string.IsNullOrWhiteSpace(
+                        slotId) ||
+                    string.IsNullOrWhiteSpace(
+                        accessoryId))
+                {
+                    RestoreAppearancePreview(
+                        repaint:
+                            false);
+                    _message =
+                        $"Preset '{presetId}' contains an incomplete accessory selection.";
+                    _messageType =
+                        MessageType.Error;
+                    return;
+                }
+
+                selectedAccessories.Add(
+                    slotId +
+                    "\n" +
+                    accessoryId);
+            }
+
+            try
+            {
+                var outfitFound =
+                    string.IsNullOrWhiteSpace(
+                        outfitId);
+
+                for (var i = 0;
+                     i < _outfits.arraySize;
+                     i++)
+                {
+                    var outfit =
+                        _outfits.GetArrayElementAtIndex(
+                            i);
+                    var candidateId =
+                        outfit.FindPropertyRelative(
+                                "OutfitId")
+                            .stringValue;
+                    var active =
+                        string.Equals(
+                            candidateId,
+                            outfitId,
+                            StringComparison.Ordinal);
+
+                    if (active)
+                    {
+                        outfitFound = true;
+                    }
+
+                    var roots =
+                        outfit.FindPropertyRelative(
+                            "Roots");
+
+                    for (var rootIndex = 0;
+                         rootIndex < roots.arraySize;
+                         rootIndex++)
+                    {
+                        var root =
+                            roots.GetArrayElementAtIndex(
+                                    rootIndex)
+                                .objectReferenceValue as
+                            GameObject;
+
+                        if (root != null)
+                        {
+                            root.SetActive(
+                                active);
+                        }
+                    }
+                }
+
+                if (!outfitFound)
+                {
+                    throw new InvalidOperationException(
+                        $"Unknown outfit '{outfitId}'.");
+                }
+
+                var matchedAccessories =
+                    new System.Collections.Generic.HashSet<string>(
+                        StringComparer.Ordinal);
+
+                for (var i = 0;
+                     i < _accessories.arraySize;
+                     i++)
+                {
+                    var accessory =
+                        _accessories.GetArrayElementAtIndex(
+                            i);
+                    var slotId =
+                        accessory.FindPropertyRelative(
+                                "SlotId")
+                            .stringValue;
+                    var accessoryId =
+                        accessory.FindPropertyRelative(
+                                "AccessoryId")
+                            .stringValue;
+                    var key =
+                        slotId +
+                        "\n" +
+                        accessoryId;
+                    var active =
+                        selectedAccessories.Contains(
+                            key);
+                    var root =
+                        accessory.FindPropertyRelative(
+                                "Root")
+                            .objectReferenceValue as
+                        GameObject;
+
+                    if (root == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Accessory '{slotId}/{accessoryId}' has no root.");
+                    }
+
+                    if (active)
+                    {
+                        matchedAccessories.Add(
+                            key);
+                        PreviewAccessoryBinding(
+                            accessory,
+                            root);
+                    }
+
+                    root.SetActive(
+                        active);
+                }
+
+                foreach (var key in
+                         selectedAccessories)
+                {
+                    if (!matchedAccessories.Contains(
+                            key))
+                    {
+                        throw new InvalidOperationException(
+                            $"Preset references unknown accessory '{key.Replace("\n", "/")}'.");
+                    }
+                }
+
+                _appearancePreviewActive =
+                    true;
+                _appearancePreviewPresetId =
+                    presetId;
+                SceneView.RepaintAll();
+                _message =
+                    $"Previewing authored preset '{presetId}'. Runtime appearance state/events were not changed. Restore Preview, close the window, enter Play Mode, or save the scene to restore the pre-preview scene state.";
+                _messageType =
+                    MessageType.Info;
+            }
+            catch (Exception exception)
+            {
+                RestoreAppearancePreview(
+                    repaint:
+                        false);
+                _message =
+                    "Appearance preset preview failed and scene state was restored: " +
+                    exception.Message;
+                _messageType =
+                    MessageType.Error;
+            }
+        }
+
+        private void PreviewAccessoryBinding(
+            SerializedProperty accessory,
+            GameObject root)
+        {
+            var mode =
+                (AppearanceAccessoryAnchorMode)
+                accessory.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex;
+
+            if (mode ==
+                AppearanceAccessoryAnchorMode.None)
+            {
+                return;
+            }
+
+            if (!TryResolveAccessoryAnchor(
+                    accessory,
+                    out _,
+                    out var anchor,
+                    out var resolveError))
+            {
+                throw new InvalidOperationException(
+                    resolveError);
+            }
+
+            var localPosition =
+                accessory.FindPropertyRelative(
+                        "LocalPosition")
+                    .vector3Value;
+            var localEulerAngles =
+                accessory.FindPropertyRelative(
+                        "LocalEulerAngles")
+                    .vector3Value;
+            var overrideScale =
+                accessory.FindPropertyRelative(
+                        "OverrideLocalScale")
+                    .boolValue;
+            var localScale =
+                accessory.FindPropertyRelative(
+                        "LocalScale")
+                    .vector3Value;
+
+            if (!P12AppearanceAuthoringUtility
+                .TryValidateAccessoryAnchorPose(
+                    localPosition,
+                    localEulerAngles,
+                    overrideScale,
+                    localScale,
+                    out var poseError))
+            {
+                throw new InvalidOperationException(
+                    poseError);
+            }
+
+            root.transform.SetParent(
+                anchor,
+                false);
+            root.transform.localPosition =
+                localPosition;
+            root.transform.localRotation =
+                Quaternion.Euler(
+                    localEulerAngles);
+
+            if (overrideScale)
+            {
+                root.transform.localScale =
+                    localScale;
+            }
+        }
+
+        private bool CaptureAppearancePreviewBaseline(
+            out string error)
+        {
+            error = null;
+            _appearancePreviewStates.Clear();
+
+            void Capture(
+                GameObject root)
+            {
+                if (root == null ||
+                    _appearancePreviewStates.ContainsKey(
+                        root))
+                {
+                    return;
+                }
+
+                _appearancePreviewStates.Add(
+                    root,
+                    AppearancePreviewObjectState.Capture(
+                        root));
+            }
+
+            for (var i = 0;
+                 i < _outfits.arraySize;
+                 i++)
+            {
+                var roots =
+                    _outfits.GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "Roots");
+
+                for (var rootIndex = 0;
+                     rootIndex < roots.arraySize;
+                     rootIndex++)
+                {
+                    Capture(
+                        roots.GetArrayElementAtIndex(
+                                rootIndex)
+                            .objectReferenceValue as
+                        GameObject);
+                }
+            }
+
+            for (var i = 0;
+                 i < _accessories.arraySize;
+                 i++)
+            {
+                Capture(
+                    _accessories.GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "Root")
+                        .objectReferenceValue as
+                    GameObject);
+            }
+
+            if (_appearancePreviewStates.Count == 0)
+            {
+                error =
+                    "No outfit/accessory scene roots are available to preview.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void RestoreAppearancePreview(
+            bool repaint = true)
+        {
+            if (_appearancePreviewStates.Count > 0)
+            {
+                foreach (var pair in
+                         _appearancePreviewStates)
+                {
+                    if (pair.Key != null)
+                    {
+                        pair.Value.Restore(
+                            pair.Key);
+                    }
+                }
+            }
+
+            _appearancePreviewStates.Clear();
+            _appearancePreviewActive =
+                false;
+            _appearancePreviewPresetId =
+                null;
+
+            if (repaint)
+            {
+                SceneView.RepaintAll();
+                Repaint();
+            }
+        }
+
+        private readonly struct AppearancePreviewObjectState
+        {
+            private AppearancePreviewObjectState(
+                bool active,
+                Transform parent,
+                Vector3 localPosition,
+                Quaternion localRotation,
+                Vector3 localScale,
+                int siblingIndex)
+            {
+                Active = active;
+                Parent = parent;
+                LocalPosition = localPosition;
+                LocalRotation = localRotation;
+                LocalScale = localScale;
+                SiblingIndex = siblingIndex;
+            }
+
+            public bool Active { get; }
+            public Transform Parent { get; }
+            public Vector3 LocalPosition { get; }
+            public Quaternion LocalRotation { get; }
+            public Vector3 LocalScale { get; }
+            public int SiblingIndex { get; }
+
+            public static AppearancePreviewObjectState Capture(
+                GameObject root)
+            {
+                return new AppearancePreviewObjectState(
+                    root.activeSelf,
+                    root.transform.parent,
+                    root.transform.localPosition,
+                    root.transform.localRotation,
+                    root.transform.localScale,
+                    root.transform.GetSiblingIndex());
+            }
+
+            public void Restore(
+                GameObject root)
+            {
+                if (root == null)
+                {
+                    return;
+                }
+
+                root.transform.SetParent(
+                    Parent,
+                    false);
+                root.transform.localPosition =
+                    LocalPosition;
+                root.transform.localRotation =
+                    LocalRotation;
+                root.transform.localScale =
+                    LocalScale;
+
+                if (Parent != null &&
+                    Parent.childCount > 0)
+                {
+                    root.transform.SetSiblingIndex(
+                        Mathf.Clamp(
+                            SiblingIndex,
+                            0,
+                            Parent.childCount - 1));
+                }
+
+                root.SetActive(
+                    Active);
+            }
+        }
+
         private void DrawPresets()
         {
             EditorGUILayout.Space();
@@ -717,6 +1222,18 @@ namespace VCR.Editor.P12
                         "Add Empty Preset"))
                 {
                     AddEmptyPreset();
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           !_appearancePreviewActive))
+                {
+                    if (GUILayout.Button(
+                            _appearancePreviewActive
+                                ? $"Restore Preview ({_appearancePreviewPresetId})"
+                                : "Restore Preview"))
+                    {
+                        RestoreAppearancePreview();
+                    }
                 }
 
                 _newPresetId =
@@ -757,6 +1274,15 @@ namespace VCR.Editor.P12
                                 "PresetId"),
                             new GUIContent(
                                 $"Preset {i + 1} ID"));
+
+                        if (GUILayout.Button(
+                                "Preview",
+                                GUILayout.Width(
+                                    78f)))
+                        {
+                            PreviewAuthoredPreset(
+                                preset);
+                        }
 
                         if (GUILayout.Button(
                                 "Set Default",
@@ -1074,6 +1600,10 @@ namespace VCR.Editor.P12
 
         private void ImportAccessoryPackage()
         {
+            RestoreAppearancePreview(
+                repaint:
+                    false);
+
             if (_runtime == null)
             {
                 return;
@@ -1307,6 +1837,10 @@ namespace VCR.Editor.P12
 
         private void DiscoverConventionBindings()
         {
+            RestoreAppearancePreview(
+                repaint:
+                    false);
+
             if (_runtime == null)
             {
                 return;
@@ -1622,6 +2156,9 @@ namespace VCR.Editor.P12
 
         private void ValidateAndApply()
         {
+            RestoreAppearancePreview(
+                repaint:
+                    false);
             _serializedRuntime
                 .ApplyModifiedProperties();
             EditorUtility.SetDirty(
