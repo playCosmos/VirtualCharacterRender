@@ -46,6 +46,8 @@ The editor supports:
 - deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
 - `VCR/P12/Open Event Rule Library` project browser with package/rule-id/description/tag/path/error search
 - valid and invalid project packages remain visible; external JSON can be validated and added to the project library
+- same-PackageId revision history with deterministic revision ordering, Previous/Next navigation, Compare Previous, and added/removed/changed rule summaries
+- duplicate valid files for the same PackageId+Revision are treated as ambiguous and revision navigation/diff fails closed instead of picking one silently
 - asset ping/path copy and pending-package handoff back into the Event Node Editor
 - Validate & Apply
 - rollback to the last valid serialized host snapshot when validation fails
@@ -99,7 +101,7 @@ Template insertion/import/export first applies the current serialized edits and 
 
 This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-Future P12 extensions may add visual grouping, higher-level node composition, package revision history/diff workflows, and richer metadata editing/browsing, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+Future P12 extensions may add richer visual grouping/higher-level node composition and deeper revision workflows such as explicit branch/merge semantics. Basic same-PackageId revision history and previous-revision diff are implemented. Any new branching/dependency runtime semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -121,6 +123,9 @@ Future P12 extensions may add visual grouping, higher-level node composition, pa
 - unsupported newer library-version rejection
 - project library valid/invalid package indexing
 - package-id and rule-id search matching
+- revision-history grouping/sorting and Previous/Next lookup
+- previous-revision metadata/rule diff
+- duplicate-revision ambiguity rejection
 - the SerializedProperty contract used by the editor
 
 These source validations have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
