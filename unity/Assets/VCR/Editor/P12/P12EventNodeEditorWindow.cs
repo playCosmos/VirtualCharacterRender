@@ -229,6 +229,31 @@ namespace VCR.Editor.P12
                 EditorGUILayout.LabelField(
                     "Rules",
                     count.ToString());
+                EditorGUILayout.LabelField(
+                    "Revision",
+                    _pendingLibraryPackage
+                        .Revision
+                        .ToString());
+                EditorGUILayout.LabelField(
+                    "Description",
+                    string.IsNullOrWhiteSpace(
+                        _pendingLibraryPackage
+                            .Description)
+                        ? "<none>"
+                        : _pendingLibraryPackage
+                            .Description,
+                    EditorStyles.wordWrappedLabel);
+                EditorGUILayout.LabelField(
+                    "Tags",
+                    _pendingLibraryPackage.Tags !=
+                        null &&
+                    _pendingLibraryPackage.Tags
+                        .Length >
+                        0
+                        ? string.Join(
+                            ", ",
+                            _pendingLibraryPackage.Tags)
+                        : "<none>");
 
                 using (new EditorGUILayout
                            .HorizontalScope())
