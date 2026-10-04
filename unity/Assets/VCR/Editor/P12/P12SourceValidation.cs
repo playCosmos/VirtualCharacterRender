@@ -2067,6 +2067,191 @@ namespace VCR.Editor.P12
                 "P12 event graph group enable/disable must mutate only matching grouped rules and report changed counts",
                 failures);
 
+            var hierarchyHigh =
+                CloneRule(
+                    valid);
+            hierarchyHigh.Id =
+                "donation-high";
+            hierarchyHigh.GraphGroup =
+                "broadcast/donation/high";
+            hierarchyHigh.Enabled =
+                true;
+
+            var hierarchyLow =
+                CloneRule(
+                    valid);
+            hierarchyLow.Id =
+                "donation-low";
+            hierarchyLow.GraphGroup =
+                "broadcast/donation/low";
+            hierarchyLow.Enabled =
+                false;
+
+            var hierarchyRoot =
+                CloneRule(
+                    valid);
+            hierarchyRoot.Id =
+                "donation-root";
+            hierarchyRoot.GraphGroup =
+                "broadcast/donation";
+            hierarchyRoot.Enabled =
+                true;
+
+            var hierarchyRules =
+                new[]
+                {
+                    hierarchyHigh,
+                    hierarchyLow,
+                    hierarchyRoot
+                };
+            var eventGroupPaths =
+                P12EventRuleAuthoringUtility
+                    .CaptureGroupPaths(
+                        hierarchyRules);
+
+            Expect(
+                Array.IndexOf(
+                    eventGroupPaths,
+                    "broadcast") >= 0 &&
+                Array.IndexOf(
+                    eventGroupPaths,
+                    "broadcast/donation") >= 0 &&
+                Array.IndexOf(
+                    eventGroupPaths,
+                    "broadcast/donation/high") >= 0 &&
+                Array.IndexOf(
+                    eventGroupPaths,
+                    "broadcast/donation/low") >= 0,
+                "P12 event rule group hierarchy must expose implicit parent paths",
+                failures);
+
+            var disabledHierarchy =
+                P12EventRuleAuthoringUtility
+                    .SetGroupEnabled(
+                        hierarchyRules,
+                        "broadcast/donation",
+                        false,
+                        includeDescendants:
+                            true);
+
+            Expect(
+                disabledHierarchy ==
+                    2 &&
+                !hierarchyRules[0].Enabled &&
+                !hierarchyRules[1].Enabled &&
+                !hierarchyRules[2].Enabled,
+                "P12 event rule group hierarchy enable/disable must include descendants only when requested",
+                failures);
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .TryRewriteGroupHierarchy(
+                        hierarchyRules,
+                        " broadcast / donation ",
+                        "audience/support",
+                        includeDescendants:
+                            true,
+                        out var rewrittenRuleGroups,
+                        out var rewriteRuleGroupError) &&
+                rewrittenRuleGroups ==
+                    3 &&
+                hierarchyRules[0]
+                    .GraphGroup ==
+                    "audience/support/high" &&
+                hierarchyRules[1]
+                    .GraphGroup ==
+                    "audience/support/low" &&
+                hierarchyRules[2]
+                    .GraphGroup ==
+                    "audience/support",
+                "P12 event rule group hierarchy rewrite must preserve descendant suffixes: " +
+                rewriteRuleGroupError,
+                failures);
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryRewriteGroupHierarchy(
+                        hierarchyRules,
+                        "audience/support",
+                        "audience/support/nested",
+                        includeDescendants:
+                            true,
+                        out _,
+                        out var eventSelfNestError) &&
+                !string.IsNullOrWhiteSpace(
+                    eventSelfNestError),
+                "P12 event rule group hierarchy must reject self-nesting moves",
+                failures);
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .TryClearGroupHierarchy(
+                        hierarchyRules,
+                        "audience/support",
+                        includeDescendants:
+                            false,
+                        out var exactEventClear,
+                        out var exactEventClearError) &&
+                exactEventClear ==
+                    1 &&
+                hierarchyRules[2]
+                    .GraphGroup ==
+                    string.Empty &&
+                hierarchyRules[0]
+                    .GraphGroup ==
+                    "audience/support/high" &&
+                hierarchyRules[1]
+                    .GraphGroup ==
+                    "audience/support/low",
+                "P12 event rule group hierarchy exact clear must keep child groups: " +
+                exactEventClearError,
+                failures);
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .TryClearGroupHierarchy(
+                        hierarchyRules,
+                        "audience/support",
+                        includeDescendants:
+                            true,
+                        out var recursiveEventClear,
+                        out var recursiveEventClearError) &&
+                recursiveEventClear ==
+                    2 &&
+                hierarchyRules[0]
+                    .GraphGroup ==
+                    string.Empty &&
+                hierarchyRules[1]
+                    .GraphGroup ==
+                    string.Empty,
+                "P12 event rule group hierarchy recursive clear must remove descendant authoring metadata: " +
+                recursiveEventClearError,
+                failures);
+
+            var invalidRuleGroup =
+                CloneRule(
+                    valid);
+            invalidRuleGroup.Id =
+                "invalid-group-path";
+            invalidRuleGroup.GraphGroup =
+                "broadcast//donation";
+
+            Expect(
+                !P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        new[]
+                        {
+                            invalidRuleGroup
+                        },
+                        out var invalidRuleGroupError) &&
+                invalidRuleGroupError != null &&
+                invalidRuleGroupError.IndexOf(
+                    "group",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 event graph authoring validation must reject malformed nested group paths",
+                failures);
+
             foreach (P12BuiltInEventRuleTemplate
                      templateKind in
                      Enum.GetValues(
