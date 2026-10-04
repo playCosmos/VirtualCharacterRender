@@ -231,6 +231,9 @@ The validation source covers:
 - event-rule project-library valid/invalid indexing and package/rule-id search matching
 - same-PackageId revision history ordering, Previous/Next lookup, previous-revision diff, and duplicate-revision ambiguity rejection
 - EventRuntimeRule Graph Label / Graph Group serialization, canonical nested group paths, group summary/navigation, exact/subtree enable-disable, hierarchy rewrite/clear, hierarchy capture/duplicate, and canonical group metadata rule-library round trip
+- logical Prop set/toggle behavior, immediate completion, mixed-state rejection, and shared-root binding rejection
+- Scene Automation Prop/Effect SerializedProperty contracts and read-only Environment state binding contract
+- Prop/Environment starter-template semantics
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
