@@ -38,15 +38,19 @@ namespace VCR.Runtime.Presentation2D
         private string _lastError;
 
         public ICharacter2DBackend Backend =>
-            _backend;
+            IsServiceAlive(_backend)
+                ? _backend
+                : null;
         public ITrackingFrameProvider TrackingProvider =>
-            _trackingProvider;
+            IsServiceAlive(_trackingProvider)
+                ? _trackingProvider
+                : null;
         public Character2DInputDomain RequestedInputs =>
             requestedInputs;
         public Character2DParameterMappingProfile ParameterMappingProfile =>
             parameterMappingProfile;
         public Character2DInputDomain EffectiveInputs =>
-            _backend != null
+            IsServiceAlive(_backend)
                 ? requestedInputs &
                   _backend.SupportedInputs
                 : Character2DInputDomain.None;
@@ -63,7 +67,7 @@ namespace VCR.Runtime.Presentation2D
             ResolveDependencies();
 
             if (loadOnEnable &&
-                _backend != null &&
+                IsServiceAlive(_backend) &&
                 _backend.Status.State !=
                     Character2DBackendState.ModelLoaded &&
                 !string.IsNullOrWhiteSpace(
@@ -79,7 +83,7 @@ namespace VCR.Runtime.Presentation2D
         private void OnDisable()
         {
             if (!unloadOnDisable ||
-                _backend == null)
+                !IsServiceAlive(_backend))
             {
                 return;
             }
@@ -144,9 +148,13 @@ namespace VCR.Runtime.Presentation2D
         public bool TryLoadConfiguredModel(
             out string error)
         {
+            ResolveDependencies();
+
             return TryLoadModel(
                 new Character2DModelRequest(
-                    _backend?.BackendId,
+                    IsServiceAlive(_backend)
+                        ? _backend.BackendId
+                        : null,
                     modelId,
                     modelPath),
                 out error);
@@ -159,7 +167,7 @@ namespace VCR.Runtime.Presentation2D
             error = null;
             ResolveDependencies();
 
-            if (_backend == null)
+            if (!IsServiceAlive(_backend))
             {
                 error =
                     "2D backend is unavailable.";
@@ -239,7 +247,7 @@ namespace VCR.Runtime.Presentation2D
         {
             ResolveDependencies();
 
-            if (_backend != null)
+            if (IsServiceAlive(_backend))
             {
                 try
                 {
@@ -268,8 +276,8 @@ namespace VCR.Runtime.Presentation2D
             error = null;
             ResolveDependencies();
 
-            if (_backend == null ||
-                _trackingProvider == null ||
+            if (!IsServiceAlive(_backend) ||
+                !IsServiceAlive(_trackingProvider) ||
                 _backend.Status.State !=
                     Character2DBackendState.ModelLoaded)
             {
@@ -430,7 +438,7 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            if (_backend == null)
+            if (!IsServiceAlive(_backend))
             {
                 error =
                     "2D backend is unavailable.";
@@ -461,19 +469,36 @@ namespace VCR.Runtime.Presentation2D
         private void ResolveDependencies()
         {
             _backend =
-                backendBehaviour as
-                    ICharacter2DBackend;
+                backendBehaviour != null
+                    ? backendBehaviour as
+                        ICharacter2DBackend
+                    : null;
             _trackingProvider =
-                trackingProviderBehaviour as
-                    ITrackingFrameProvider;
+                trackingProviderBehaviour != null
+                    ? trackingProviderBehaviour as
+                        ITrackingFrameProvider
+                    : null;
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void RefreshUpdateState()
         {
             var shouldRun =
                 isActiveAndEnabled &&
-                _backend != null &&
-                _trackingProvider != null &&
+                IsServiceAlive(_backend) &&
+                IsServiceAlive(_trackingProvider) &&
                 _backend.Status.State ==
                     Character2DBackendState.ModelLoaded &&
                 EffectiveInputs !=
@@ -608,7 +633,7 @@ namespace VCR.Runtime.Presentation2D
             output.Add(
                 new RuntimeMetric(
                     "presentation2d.model.loaded",
-                    _backend != null &&
+                    IsServiceAlive(_backend) &&
                     _backend.Status.State ==
                         Character2DBackendState.ModelLoaded
                         ? 1.0
