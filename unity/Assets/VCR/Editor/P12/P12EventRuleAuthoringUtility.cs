@@ -4,6 +4,14 @@ using VCR.Runtime.EventRuntime;
 
 namespace VCR.Editor.P12
 {
+    internal sealed class P12EventRuleGroupSummary
+    {
+        public string Group;
+        public string[] RuleIds =
+            Array.Empty<string>();
+        public int EnabledCount;
+    }
+
     internal static class P12EventRuleAuthoringUtility
     {
         public static bool TryValidateRules(
@@ -99,6 +107,208 @@ namespace VCR.Editor.P12
             }
 
             return true;
+        }
+
+        public static P12EventRuleGroupSummary[]
+            CaptureGroupSummaries(
+                EventRuntimeRule[] rules)
+        {
+            var groups =
+                new Dictionary<
+                    string,
+                    List<EventRuntimeRule>>(
+                    StringComparer.Ordinal);
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                var group =
+                    rule?.GraphGroup?.Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        group))
+                {
+                    continue;
+                }
+
+                if (!groups.TryGetValue(
+                        group,
+                        out var members))
+                {
+                    members =
+                        new List<EventRuntimeRule>();
+                    groups.Add(
+                        group,
+                        members);
+                }
+
+                members.Add(
+                    rule);
+            }
+
+            var names =
+                new List<string>(
+                    groups.Keys);
+            names.Sort(
+                StringComparer.Ordinal);
+
+            var result =
+                new P12EventRuleGroupSummary[
+                    names.Count];
+
+            for (var i = 0;
+                 i < names.Count;
+                 i++)
+            {
+                var name =
+                    names[i];
+                var members =
+                    groups[
+                        name];
+                var ids =
+                    new string[
+                        members.Count];
+                var enabled = 0;
+
+                for (var memberIndex = 0;
+                     memberIndex <
+                     members.Count;
+                     memberIndex++)
+                {
+                    ids[
+                        memberIndex] =
+                            members[
+                                memberIndex]
+                                ?.Id ??
+                            "<null>";
+
+                    if (members[
+                            memberIndex]
+                            ?.Enabled ==
+                        true)
+                    {
+                        enabled++;
+                    }
+                }
+
+                result[i] =
+                    new P12EventRuleGroupSummary
+                    {
+                        Group =
+                            name,
+                        RuleIds =
+                            ids,
+                        EnabledCount =
+                            enabled
+                    };
+            }
+
+            return result;
+        }
+
+        public static int FindAdjacentRuleIndexInGroup(
+            EventRuntimeRule[] rules,
+            int currentIndex,
+            int direction)
+        {
+            rules ??=
+                Array.Empty<EventRuntimeRule>();
+
+            if (currentIndex < 0 ||
+                currentIndex >=
+                    rules.Length ||
+                direction == 0)
+            {
+                return -1;
+            }
+
+            var group =
+                rules[
+                    currentIndex]
+                    ?.GraphGroup
+                    ?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    group))
+            {
+                return -1;
+            }
+
+            var step =
+                direction < 0
+                    ? -1
+                    : 1;
+
+            for (var offset = 1;
+                 offset <=
+                 rules.Length;
+                 offset++)
+            {
+                var index =
+                    (currentIndex +
+                     step * offset +
+                     rules.Length) %
+                    rules.Length;
+
+                if (index ==
+                    currentIndex)
+                {
+                    break;
+                }
+
+                if (string.Equals(
+                        rules[index]
+                            ?.GraphGroup
+                            ?.Trim(),
+                        group,
+                        StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        public static int SetGroupEnabled(
+            EventRuntimeRule[] rules,
+            string group,
+            bool enabled)
+        {
+            var normalized =
+                group?.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    normalized))
+            {
+                return 0;
+            }
+
+            var changed = 0;
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule == null ||
+                    !string.Equals(
+                        rule.GraphGroup
+                            ?.Trim(),
+                        normalized,
+                        StringComparison.Ordinal) ||
+                    rule.Enabled ==
+                        enabled)
+                {
+                    continue;
+                }
+
+                rule.Enabled =
+                    enabled;
+                changed++;
+            }
+
+            return changed;
         }
 
         public static string BuildUniqueRuleId(
