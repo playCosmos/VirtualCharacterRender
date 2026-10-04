@@ -46,6 +46,10 @@ namespace VCR.Runtime.UI
             _sectionButtons =
                 new();
 
+        private readonly Dictionary<ApplicationUiSection, Text>
+            _sectionLabels =
+                new();
+
         private readonly List<ITrackingRuntimeControl>
             _trackingControls =
                 new();
@@ -240,6 +244,7 @@ namespace VCR.Runtime.UI
             }
 
             _sectionButtons.Clear();
+            _sectionLabels.Clear();
             _root = null;
             _statusText = null;
             _sectionTitle = null;
@@ -666,15 +671,17 @@ namespace VCR.Runtime.UI
             navLayout.childControlHeight = true;
             navLayout.childForceExpandHeight = false;
 
-            foreach (var state in
-                     _model.CaptureSections())
+            for (var i = 0;
+                 i < (int)ApplicationUiSection.Count;
+                 i++)
             {
                 var section =
-                    state.Section;
+                    (ApplicationUiSection)i;
 
                 var button =
                     CreateButton(
-                        state.Title,
+                        ApplicationUiModel.GetTitle(
+                            section),
                         navigation,
                         () =>
                         {
@@ -689,6 +696,8 @@ namespace VCR.Runtime.UI
 
                 _sectionButtons[section] =
                     button;
+                _sectionLabels[section] =
+                    button.GetComponentInChildren<Text>();
             }
 
             var content =
@@ -4456,27 +4465,41 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            foreach (var state in
-                     _model.CaptureSections())
+            for (var i = 0;
+                 i < (int)ApplicationUiSection.Count;
+                 i++)
             {
+                var section =
+                    (ApplicationUiSection)i;
+
                 if (!_sectionButtons.TryGetValue(
-                        state.Section,
+                        section,
                         out var button) ||
                     button == null)
                 {
                     continue;
                 }
 
-                button.interactable =
-                    state.Available;
+                var available =
+                    _model.IsAvailable(
+                        section);
 
-                if (button.GetComponentInChildren<Text>()
-                    is Text label)
+                button.interactable =
+                    available;
+
+                if (_sectionLabels.TryGetValue(
+                        section,
+                        out var label) &&
+                    label != null)
                 {
+                    var title =
+                        ApplicationUiModel.GetTitle(
+                            section);
+
                     label.text =
-                        state.Available
-                            ? state.Title
-                            : state.Title +
+                        available
+                            ? title
+                            : title +
                               "  — unavailable";
                 }
             }
