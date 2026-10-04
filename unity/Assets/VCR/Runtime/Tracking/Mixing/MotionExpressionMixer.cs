@@ -87,9 +87,10 @@ namespace VCR.Runtime.Tracking.Mixing
             poseLayerSettings?.Weight ?? 0f;
 
         public bool PrimaryPoseLayerConfigured =>
-            _poseLayerProvider != null ||
-            poseLayerProviderBehaviour is
-                ITrackingFrameProvider;
+            IsServiceAlive(_poseLayerProvider) ||
+            (poseLayerProviderBehaviour != null &&
+             poseLayerProviderBehaviour is
+                 ITrackingFrameProvider);
 
         public float ExpressionLayerWeight =>
             Mathf.Clamp01(
