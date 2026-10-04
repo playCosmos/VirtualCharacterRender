@@ -493,7 +493,6 @@ namespace VCR.Runtime.Presentation2D
         private void RefreshUpdateState()
         {
             var shouldRun =
-                gameObject.activeInHierarchy &&
                 IsServiceAlive(_backend) &&
                 IsServiceAlive(_trackingProvider) &&
                 _backend.Status.State ==
