@@ -36,6 +36,11 @@ namespace VCR.Editor.P12
         private string _pendingLibrarySource;
         private bool _showLibraryExportMetadata;
         private bool _showGroupOverview = true;
+        private int _groupHierarchyIndex;
+        private string _groupHierarchyDestination =
+            "event-group-renamed";
+        private bool _groupHierarchyIncludeDescendants =
+            true;
         private string _libraryExportDescription;
         private string _libraryExportTags;
         private int _libraryExportRevision = 1;
@@ -452,10 +457,412 @@ namespace VCR.Editor.P12
                     "Ungrouped",
                     ungrouped.ToString(),
                     EditorStyles.miniLabel);
+
+                DrawRuleGroupHierarchyControls();
+
                 EditorGUILayout.HelpBox(
                     "Graph Label and Graph Group are authoring metadata only. EventRuntime evaluation order and rule semantics are unchanged.",
                     MessageType.None);
             }
+        }
+
+        private void DrawRuleGroupHierarchyControls()
+        {
+            var rawGroups =
+                new System.Collections.Generic
+                    .List<string>();
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var group =
+                    _rules
+                        .GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue;
+
+                if (!string.IsNullOrWhiteSpace(
+                        group))
+                {
+                    rawGroups.Add(
+                        group);
+                }
+            }
+
+            var paths =
+                P12GraphGroupPathUtility
+                    .CaptureHierarchyPaths(
+                        rawGroups);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(
+                "Rule Group Hierarchy",
+                EditorStyles.boldLabel);
+
+            if (paths.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Nested rule groups use '/' paths such as broadcast/donation/high-value.",
+                    MessageType.None);
+                return;
+            }
+
+            _groupHierarchyIndex =
+                Mathf.Clamp(
+                    _groupHierarchyIndex,
+                    0,
+                    paths.Length - 1);
+
+            _groupHierarchyIndex =
+                EditorGUILayout.Popup(
+                    "Source Group",
+                    _groupHierarchyIndex,
+                    paths);
+
+            var source =
+                paths[
+                    _groupHierarchyIndex];
+
+            _groupHierarchyDestination =
+                EditorGUILayout.TextField(
+                    "Destination Path",
+                    _groupHierarchyDestination);
+            _groupHierarchyIncludeDescendants =
+                EditorGUILayout.Toggle(
+                    "Include Child Groups",
+                    _groupHierarchyIncludeDescendants);
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Enable Hierarchy"))
+                {
+                    SetSerializedGroupEnabled(
+                        source,
+                        true,
+                        _groupHierarchyIncludeDescendants);
+                }
+
+                if (GUILayout.Button(
+                        "Disable Hierarchy"))
+                {
+                    SetSerializedGroupEnabled(
+                        source,
+                        false,
+                        _groupHierarchyIncludeDescendants);
+                }
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Rename / Move Hierarchy"))
+                {
+                    RewriteSerializedGroupHierarchy(
+                        source);
+                }
+
+                if (GUILayout.Button(
+                        "Clear Hierarchy"))
+                {
+                    ClearSerializedGroupHierarchy(
+                        source);
+                }
+            }
+
+            foreach (var path in paths)
+            {
+                var depth =
+                    path.Split('/')
+                        .Length -
+                    1;
+                var exactCount =
+                    CountSerializedGroupAssignments(
+                        path);
+                var descendantCount =
+                    CountSerializedGroupAssignments(
+                        path,
+                        includeDescendants:
+                            true);
+
+                EditorGUILayout.LabelField(
+                    new string(
+                        ' ',
+                        depth * 4) +
+                    path +
+                    $"  ({exactCount} exact / {descendantCount} subtree)",
+                    EditorStyles.miniLabel);
+            }
+        }
+
+        private void RewriteSerializedGroupHierarchy(
+            string source)
+        {
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    source,
+                    out var normalizedSource,
+                    out var sourceError) ||
+                !P12GraphGroupPathUtility
+                    .TryNormalize(
+                        _groupHierarchyDestination,
+                        out var normalizedDestination,
+                        out var destinationError))
+            {
+                _message =
+                    "Rule group hierarchy edit failed: " +
+                    (sourceError ??
+                     destinationError ??
+                     "invalid path");
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            if (string.Equals(
+                    normalizedSource,
+                    normalizedDestination,
+                    StringComparison.Ordinal))
+            {
+                _message =
+                    "Rule group hierarchy edit failed: source and destination are identical.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            if (_groupHierarchyIncludeDescendants &&
+                normalizedDestination.StartsWith(
+                    normalizedSource + "/",
+                    StringComparison.Ordinal))
+            {
+                _message =
+                    "Rule group hierarchy edit failed: a group cannot be moved inside itself.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                "Rewrite Event Rule Group Hierarchy");
+
+            var affected = 0;
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var property =
+                    _rules
+                        .GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "GraphGroup");
+
+                if (!P12GraphGroupPathUtility
+                    .TryRewrite(
+                        property.stringValue,
+                        normalizedSource,
+                        normalizedDestination,
+                        _groupHierarchyIncludeDescendants,
+                        out var rewritten))
+                {
+                    continue;
+                }
+
+                property.stringValue =
+                    rewritten;
+                affected++;
+            }
+
+            if (affected == 0)
+            {
+                _message =
+                    $"Rule group '{normalizedSource}' is not assigned to any rule.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            _hasPendingChanges =
+                true;
+            _message =
+                $"Rewrote rule group hierarchy '{normalizedSource}' to '{normalizedDestination}' across {affected} rule(s).";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void ClearSerializedGroupHierarchy(
+            string source)
+        {
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    source,
+                    out var normalizedSource,
+                    out var error))
+            {
+                _message =
+                    "Rule group hierarchy clear failed: " +
+                    error;
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                "Clear Event Rule Group Hierarchy");
+
+            var affected = 0;
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var property =
+                    _rules
+                        .GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "GraphGroup");
+
+                if (!P12GraphGroupPathUtility
+                    .Matches(
+                        property.stringValue,
+                        normalizedSource,
+                        _groupHierarchyIncludeDescendants))
+                {
+                    continue;
+                }
+
+                property.stringValue =
+                    string.Empty;
+                affected++;
+            }
+
+            if (affected == 0)
+            {
+                _message =
+                    $"Rule group '{normalizedSource}' is not assigned to any rule.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            _hasPendingChanges =
+                true;
+            _message =
+                $"Cleared rule group hierarchy '{normalizedSource}' from {affected} rule(s).";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private void SetSerializedGroupEnabled(
+            string source,
+            bool enabled,
+            bool includeDescendants)
+        {
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    source,
+                    out var normalizedSource,
+                    out var error))
+            {
+                _message =
+                    "Rule group hierarchy enable/disable failed: " +
+                    error;
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _host,
+                enabled
+                    ? "Enable Event Rule Group Hierarchy"
+                    : "Disable Event Rule Group Hierarchy");
+
+            var affected = 0;
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var rule =
+                    _rules.GetArrayElementAtIndex(
+                        i);
+                var group =
+                    rule.FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue;
+
+                if (!P12GraphGroupPathUtility
+                    .Matches(
+                        group,
+                        normalizedSource,
+                        includeDescendants))
+                {
+                    continue;
+                }
+
+                var enabledProperty =
+                    rule.FindPropertyRelative(
+                        "Enabled");
+
+                if (enabledProperty.boolValue ==
+                    enabled)
+                {
+                    continue;
+                }
+
+                enabledProperty.boolValue =
+                    enabled;
+                affected++;
+            }
+
+            _hasPendingChanges =
+                true;
+            _message =
+                $"{(enabled ? "Enabled" : "Disabled")} {affected} rule(s) in hierarchy '{normalizedSource}'.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private int CountSerializedGroupAssignments(
+            string groupPath,
+            bool includeDescendants = false)
+        {
+            var count = 0;
+
+            for (var i = 0;
+                 i < _rules.arraySize;
+                 i++)
+            {
+                var group =
+                    _rules
+                        .GetArrayElementAtIndex(
+                            i)
+                        .FindPropertyRelative(
+                            "GraphGroup")
+                        .stringValue;
+
+                if (P12GraphGroupPathUtility
+                    .Matches(
+                        group,
+                        groupPath,
+                        includeDescendants))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private void SelectAdjacentRuleInGroup(
