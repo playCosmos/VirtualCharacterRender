@@ -75,8 +75,9 @@ namespace VCR.Runtime.Tracking.Mixing
         private float _nextProviderSearchTime;
 
         public TrackingPresenceSnapshot Presence =>
-            _presenceProvider?.Presence ??
-            default;
+            IsServiceAlive(_presenceProvider)
+                ? _presenceProvider.Presence
+                : default;
 
         public bool HumanoidPosePreSmoothed => false;
         public bool ExpressionsPreSmoothed =>
@@ -111,6 +112,27 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private void Update()
         {
+            if (!IsServiceAlive(_routedProvider))
+            {
+                _routedProvider = null;
+                _presenceProvider = null;
+
+                if (routedProviderBehaviour == null)
+                {
+                    routedProviderBehaviour = null;
+                }
+            }
+
+            if (!IsServiceAlive(_poseLayerProvider))
+            {
+                _poseLayerProvider = null;
+            }
+
+            if (!IsServiceAlive(_expressionLayerProvider))
+            {
+                _expressionLayerProvider = null;
+            }
+
             if (_routedProvider == null &&
                 autoFindRoutedProvider &&
                 Time.unscaledTime >=
@@ -121,7 +143,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 ResolveProviders();
             }
 
-            if (_routedProvider == null)
+            if (!IsServiceAlive(_routedProvider))
             {
                 ResetPoseState();
                 ResetExpressionState();
@@ -304,7 +326,7 @@ namespace VCR.Runtime.Tracking.Mixing
         public bool TryGetLatestFace(
             out TrackingFrame frame)
         {
-            if (_routedProvider == null)
+            if (!IsServiceAlive(_routedProvider))
             {
                 frame = null;
                 return false;
@@ -318,7 +340,7 @@ namespace VCR.Runtime.Tracking.Mixing
         public bool TryGetLatestBodyHands(
             out TrackingFrame frame)
         {
-            if (_routedProvider == null)
+            if (!IsServiceAlive(_routedProvider))
             {
                 frame = null;
                 return false;
@@ -358,7 +380,7 @@ namespace VCR.Runtime.Tracking.Mixing
             output.Add(
                 new RuntimeMetric(
                     "mixer.pose.layer_configured",
-                    _poseLayerProvider != null
+                    IsServiceAlive(_poseLayerProvider)
                         ? 1.0
                         : 0.0,
                     "bool"));
@@ -422,15 +444,29 @@ namespace VCR.Runtime.Tracking.Mixing
             output.Add(
                 new RuntimeMetric(
                     "mixer.expression.layer_configured",
-                    _expressionLayerProvider != null
+                    IsServiceAlive(_expressionLayerProvider)
                         ? 1.0
                         : 0.0,
                     "bool"));
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveProviders()
         {
-            if (routedProviderBehaviour is
+            if (routedProviderBehaviour != null &&
+                routedProviderBehaviour is
                     ITrackingFrameProvider configured &&
                 !(configured is ITrackingMixProvider))
             {
@@ -441,7 +477,8 @@ namespace VCR.Runtime.Tracking.Mixing
                         ITrackingPresenceProvider;
             }
 
-            if (poseLayerProviderBehaviour is
+            if (poseLayerProviderBehaviour != null &&
+                poseLayerProviderBehaviour is
                     ITrackingFrameProvider poseLayer &&
                 !ReferenceEquals(
                     poseLayer,
@@ -451,7 +488,8 @@ namespace VCR.Runtime.Tracking.Mixing
                     poseLayer;
             }
 
-            if (expressionLayerProviderBehaviour is
+            if (expressionLayerProviderBehaviour != null &&
+                expressionLayerProviderBehaviour is
                     ITrackingFrameProvider layer &&
                 !ReferenceEquals(
                     layer,
@@ -461,7 +499,7 @@ namespace VCR.Runtime.Tracking.Mixing
                     layer;
             }
 
-            if (_routedProvider != null ||
+            if (IsServiceAlive(_routedProvider) ||
                 !autoFindRoutedProvider)
             {
                 return;
@@ -528,7 +566,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 .TryGetLatestHumanoidPose(
                     out baseFrame);
 
-            if (_poseLayerProvider != null &&
+            if (IsServiceAlive(_poseLayerProvider) &&
                 !ReferenceEquals(
                     _poseLayerProvider,
                     _routedProvider))
@@ -767,7 +805,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 .TryGetLatestExpressions(
                     out baseFrame);
 
-            if (_expressionLayerProvider != null &&
+            if (IsServiceAlive(_expressionLayerProvider) &&
                 !ReferenceEquals(
                     _expressionLayerProvider,
                     _routedProvider))
