@@ -16,6 +16,9 @@ namespace VCR.Editor.P12
 
     internal static class P12EffectPresetUtility
     {
+        public const string DefaultPresetFolder =
+            "Assets/VCR/EffectPresets";
+
         public static bool TryValidatePreset(
             P12EffectPresetAsset preset,
             out string error)
@@ -37,14 +40,6 @@ namespace VCR.Editor.P12
                 return false;
             }
 
-            if (!IsSafeLogicalId(
-                    preset.EffectId))
-            {
-                error =
-                    "Effect preset requires a safe non-empty EffectId using letters, digits, '.', '_', or '-'.";
-                return false;
-            }
-
             if (preset.Prefab == null)
             {
                 error =
@@ -63,47 +58,155 @@ namespace VCR.Editor.P12
                 return false;
             }
 
-            var systems =
-                preset.Prefab
-                    .GetComponentsInChildren<
-                        ParticleSystem>(
-                        includeInactive:
-                            true);
+            return TryValidateHierarchy(
+                preset.Prefab,
+                preset.EffectId,
+                out _,
+                out error);
+        }
 
-            if (systems == null ||
-                systems.Length == 0)
+        public static bool TryCreateFromSceneRoot(
+            GameObject sceneRoot,
+            string effectId,
+            string destinationFolder,
+            out P12EffectPresetAsset preset,
+            out string error)
+        {
+            preset = null;
+            error = null;
+
+            if (sceneRoot == null ||
+                EditorUtility.IsPersistent(
+                    sceneRoot))
             {
                 error =
-                    $"Effect preset '{preset.EffectId}' prefab requires at least one ParticleSystem.";
+                    "Select a scene GameObject as the effect preset source.";
                 return false;
             }
 
-            foreach (var component in
-                     preset.Prefab.GetComponentsInChildren<
-                         Component>(
-                         includeInactive:
-                             true))
+            if (!TryValidateHierarchy(
+                    sceneRoot,
+                    effectId,
+                    out _,
+                    out error))
             {
-                if (component == null)
+                return false;
+            }
+
+            destinationFolder =
+                string.IsNullOrWhiteSpace(
+                    destinationFolder)
+                    ? DefaultPresetFolder
+                    : destinationFolder.Trim()
+                        .Replace(
+                            '\\',
+                            '/')
+                        .TrimEnd('/');
+
+            var createdFolders =
+                new System.Collections.Generic
+                    .List<string>();
+
+            if (!TryEnsureAssetFolder(
+                    destinationFolder,
+                    createdFolders,
+                    out error))
+            {
+                RollbackFolders(
+                    createdFolders);
+                return false;
+            }
+
+            var safeName =
+                SafeAssetName(
+                    effectId);
+            var prefabPath =
+                AssetDatabase.GenerateUniqueAssetPath(
+                    destinationFolder +
+                    "/" +
+                    safeName +
+                    ".prefab");
+            var presetPath =
+                AssetDatabase.GenerateUniqueAssetPath(
+                    destinationFolder +
+                    "/" +
+                    safeName +
+                    ".asset");
+
+            try
+            {
+                var prefab =
+                    PrefabUtility.SaveAsPrefabAsset(
+                        sceneRoot,
+                        prefabPath);
+
+                if (prefab == null)
                 {
                     error =
-                        $"Effect preset '{preset.EffectId}' prefab contains a missing component/script.";
+                        "Effect preset prefab creation failed.";
+                    RollbackAssetsAndFolders(
+                        prefabPath,
+                        null,
+                        createdFolders);
                     return false;
                 }
 
-                if (component is Transform ||
-                    component is ParticleSystem ||
-                    component is ParticleSystemRenderer)
+                preset =
+                    ScriptableObject.CreateInstance<
+                        P12EffectPresetAsset>();
+                preset.EffectId =
+                    effectId.Trim();
+                preset.Prefab =
+                    prefab;
+                preset.RestartOnPlay =
+                    true;
+                preset.DeactivateOnStop =
+                    true;
+                preset.StartInactive =
+                    true;
+
+                AssetDatabase.CreateAsset(
+                    preset,
+                    presetPath);
+
+                if (!TryValidatePreset(
+                        preset,
+                        out error))
                 {
-                    continue;
+                    RollbackAssetsAndFolders(
+                        prefabPath,
+                        presetPath,
+                        createdFolders);
+                    preset = null;
+                    return false;
+                }
+
+                EditorUtility.SetDirty(
+                    preset);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                RollbackAssetsAndFolders(
+                    prefabPath,
+                    presetPath,
+                    createdFolders);
+
+                if (preset != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            preset);
+                    preset = null;
                 }
 
                 error =
-                    $"Effect preset '{preset.EffectId}' prefab contains unsupported component '{component.GetType().FullName}'. v1 permits only Transform, ParticleSystem, and ParticleSystemRenderer.";
+                    "Effect preset authoring failed: " +
+                    exception.Message;
                 return false;
             }
-
-            return true;
         }
 
         public static bool TryInstall(
@@ -327,6 +430,221 @@ namespace VCR.Editor.P12
                     exception.Message;
                 return false;
             }
+        }
+
+        private static bool TryValidateHierarchy(
+            GameObject root,
+            string effectId,
+            out int particleSystemCount,
+            out string error)
+        {
+            particleSystemCount = 0;
+            error = null;
+
+            if (!IsSafeLogicalId(
+                    effectId))
+            {
+                error =
+                    "Effect preset requires a safe non-empty EffectId using letters, digits, '.', '_', or '-'.";
+                return false;
+            }
+
+            if (root == null)
+            {
+                error =
+                    $"Effect preset '{effectId}' requires a root GameObject.";
+                return false;
+            }
+
+            var systems =
+                root.GetComponentsInChildren<
+                    ParticleSystem>(
+                    includeInactive:
+                        true);
+            particleSystemCount =
+                systems?.Length ?? 0;
+
+            if (particleSystemCount == 0)
+            {
+                error =
+                    $"Effect preset '{effectId}' requires at least one ParticleSystem.";
+                return false;
+            }
+
+            foreach (var component in
+                     root.GetComponentsInChildren<
+                         Component>(
+                         includeInactive:
+                             true))
+            {
+                if (component == null)
+                {
+                    error =
+                        $"Effect preset '{effectId}' contains a missing component/script.";
+                    return false;
+                }
+
+                if (component is Transform ||
+                    component is ParticleSystem ||
+                    component is ParticleSystemRenderer)
+                {
+                    continue;
+                }
+
+                error =
+                    $"Effect preset '{effectId}' contains unsupported component '{component.GetType().FullName}'. v1 permits only Transform, ParticleSystem, and ParticleSystemRenderer.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryEnsureAssetFolder(
+            string assetFolder,
+            System.Collections.Generic.ICollection<string>
+                createdFolders,
+            out string error)
+        {
+            error = null;
+
+            if (!string.Equals(
+                    assetFolder,
+                    "Assets",
+                    StringComparison.Ordinal) &&
+                !assetFolder.StartsWith(
+                    "Assets/",
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "Effect preset destination must be inside the Unity Assets folder.";
+                return false;
+            }
+
+            if (AssetDatabase.IsValidFolder(
+                    assetFolder))
+            {
+                return true;
+            }
+
+            var parts =
+                assetFolder.Split(
+                    new[]
+                    {
+                        '/'
+                    },
+                    StringSplitOptions
+                        .RemoveEmptyEntries);
+            var current =
+                "Assets";
+
+            for (var i = 1;
+                 i < parts.Length;
+                 i++)
+            {
+                var next =
+                    current +
+                    "/" +
+                    parts[i];
+
+                if (!AssetDatabase.IsValidFolder(
+                        next))
+                {
+                    var guid =
+                        AssetDatabase.CreateFolder(
+                            current,
+                            parts[i]);
+
+                    if (string.IsNullOrWhiteSpace(
+                            guid))
+                    {
+                        error =
+                            $"Could not create effect preset folder '{next}'.";
+                        return false;
+                    }
+
+                    createdFolders?.Add(
+                        next);
+                }
+
+                current =
+                    next;
+            }
+
+            return true;
+        }
+
+        private static void RollbackAssetsAndFolders(
+            string prefabPath,
+            string presetPath,
+            System.Collections.Generic.IEnumerable<string>
+                createdFolders)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    presetPath))
+            {
+                AssetDatabase.DeleteAsset(
+                    presetPath);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    prefabPath))
+            {
+                AssetDatabase.DeleteAsset(
+                    prefabPath);
+            }
+
+            RollbackFolders(
+                createdFolders);
+            AssetDatabase.Refresh();
+        }
+
+        private static void RollbackFolders(
+            System.Collections.Generic.IEnumerable<string>
+                createdFolders)
+        {
+            if (createdFolders == null)
+            {
+                return;
+            }
+
+            var ordered =
+                new System.Collections.Generic.List<string>(
+                    createdFolders);
+            ordered.Reverse();
+
+            foreach (var folder in ordered)
+            {
+                if (!string.IsNullOrWhiteSpace(
+                        folder) &&
+                    AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                }
+            }
+        }
+
+        private static string SafeAssetName(
+            string value)
+        {
+            value =
+                string.IsNullOrWhiteSpace(
+                    value)
+                    ? "effect"
+                    : value.Trim();
+
+            foreach (var invalid in
+                     System.IO.Path
+                         .GetInvalidFileNameChars())
+            {
+                value =
+                    value.Replace(
+                        invalid,
+                        '_');
+            }
+
+            return value;
         }
 
         private static bool ContainsEffectId(
