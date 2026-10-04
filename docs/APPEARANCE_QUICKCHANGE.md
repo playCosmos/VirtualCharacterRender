@@ -539,7 +539,7 @@ Not yet implemented as built-ins:
 
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
 - automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
-- P12 Graph Label / Graph Group metadata is implemented for transition steps; labels/groups are authoring-only and do not alter runtime `All` / `Any` completion semantics
+- P12 Graph Label / Graph Group metadata is implemented for transition steps; labels/groups are authoring-only and do not alter runtime `All` / `Any` completion semantics. The graph editor can assign/clear one group across a selected dependency target and all of its connected sources without modifying dependency edges.
 - P12 transition package schema is v3 so Graph Label / Graph Group metadata survives export/import; v1→v2→v3 and v2→v3 migration are supported. P11 checkpoint remains v2. Future package-library work may add tags/descriptions/version history if evidence justifies further schema expansion
 - external appearance package import
 - compatible external skinned-garment workflow
