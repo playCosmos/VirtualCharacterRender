@@ -347,6 +347,54 @@ namespace VCR.Editor.P12
             return true;
         }
 
+        public static bool TryValidateAccessoryAnchorPose(
+            Vector3 localPosition,
+            Vector3 localEulerAngles,
+            bool overrideLocalScale,
+            Vector3 localScale,
+            out string error)
+        {
+            error = null;
+
+            if (!IsFinite(
+                    localPosition))
+            {
+                error =
+                    "Accessory local position must contain only finite values.";
+                return false;
+            }
+
+            if (!IsFinite(
+                    localEulerAngles))
+            {
+                error =
+                    "Accessory local rotation must contain only finite values.";
+                return false;
+            }
+
+            if (overrideLocalScale &&
+                !IsFinite(
+                    localScale))
+            {
+                error =
+                    "Accessory local scale must contain only finite values when scale override is enabled.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsFinite(
+            Vector3 value) =>
+                IsFinite(value.x) &&
+                IsFinite(value.y) &&
+                IsFinite(value.z);
+
+        private static bool IsFinite(
+            float value) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
+
         public static string BuildUniqueId(
             string preferred,
             Func<string, bool> exists)
