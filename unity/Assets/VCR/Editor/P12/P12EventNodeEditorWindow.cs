@@ -34,6 +34,10 @@ namespace VCR.Editor.P12
         private P12EventRuleLibraryPackage
             _pendingLibraryPackage;
         private string _pendingLibrarySource;
+        private bool _showLibraryExportMetadata;
+        private string _libraryExportDescription;
+        private string _libraryExportTags;
+        private int _libraryExportRevision = 1;
 
         [MenuItem("VCR/P12/Open Event Node Editor")]
         public static void Open()
@@ -155,6 +159,7 @@ namespace VCR.Editor.P12
             }
 
             DrawPendingLibraryPackage();
+            DrawLibraryExportMetadata();
             DrawRuleToolbar();
 
             if (_rules.arraySize == 0)
@@ -245,6 +250,47 @@ namespace VCR.Editor.P12
                             null;
                     }
                 }
+            }
+        }
+
+        private void DrawLibraryExportMetadata()
+        {
+            _showLibraryExportMetadata =
+                EditorGUILayout.Foldout(
+                    _showLibraryExportMetadata,
+                    "Rule Library Export Metadata",
+                    toggleOnLabelClick:
+                        true);
+
+            if (!_showLibraryExportMetadata)
+            {
+                return;
+            }
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                _libraryExportDescription =
+                    EditorGUILayout.TextField(
+                        "Description",
+                        _libraryExportDescription ??
+                        string.Empty);
+                _libraryExportTags =
+                    EditorGUILayout.TextField(
+                        "Tags (comma-separated)",
+                        _libraryExportTags ??
+                        string.Empty);
+                _libraryExportRevision =
+                    Mathf.Max(
+                        1,
+                        EditorGUILayout.IntField(
+                            "Revision",
+                            _libraryExportRevision));
+
+                EditorGUILayout.HelpBox(
+                    "Description, tags and revision are package-library metadata only. They do not change EventRuntime execution semantics.",
+                    MessageType.None);
             }
         }
 
@@ -960,6 +1006,10 @@ namespace VCR.Editor.P12
             if (!P12EventRuleLibraryUtility
                 .TryCreatePackage(
                     packageId,
+                    _libraryExportDescription,
+                    ParseExportTags(
+                        _libraryExportTags),
+                    _libraryExportRevision,
                     rules,
                     out var package,
                     out var error) ||
@@ -1192,6 +1242,24 @@ namespace VCR.Editor.P12
                 false;
             RebindSerializedOnly();
             return true;
+        }
+
+        private static string[] ParseExportTags(
+            string value)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    value))
+            {
+                return Array.Empty<string>();
+            }
+
+            return value.Split(
+                new[]
+                {
+                    ','
+                },
+                StringSplitOptions
+                    .RemoveEmptyEntries);
         }
 
         private static string SanitizeFileName(
