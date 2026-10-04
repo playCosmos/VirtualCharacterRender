@@ -967,6 +967,55 @@ namespace VCR.Editor.P9
                     "main-thread hub dispatch must execute environment.set_state through the application-level handler",
                     failures);
 
+                var ambiguousBeforeDuplicateReference =
+                    host.AmbiguousActions;
+
+                host.SetActionHandlers(
+                    handler,
+                    handler,
+                    cameraHandler);
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "duplicate-handler-reference",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                EnvironmentAction(
+                                    "environment.main",
+                                    "duplicate-reference-ok")
+                            }
+                    });
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        10));
+
+                InvokeUpdate(hub);
+
+                Expect(
+                    environment.Status.StateId ==
+                        "duplicate-reference-ok" &&
+                    host.AmbiguousActions ==
+                        ambiguousBeforeDuplicateReference,
+                    "registering the same event action handler instance more than once must be deduplicated instead of reported as ambiguous",
+                    failures);
+
+                host.SetActionHandlers(
+                    handler,
+                    cameraHandler);
+
                 host.SetRules(
                     new EventRuntimeRule
                     {
