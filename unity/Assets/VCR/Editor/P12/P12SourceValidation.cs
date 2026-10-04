@@ -30,7 +30,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, anchor preview/capture safety, authored preset capture, duplicate-id/cycle/non-finite rejection, serialized authoring contract)");
+                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, anchor preview/capture safety, authored preset capture, duplicate-id/cycle/non-finite rejection, accessory-package manifest/path/version isolation, serialized authoring contract)");
                 return true;
             }
 
@@ -652,6 +652,24 @@ namespace VCR.Editor.P12
                 "humanoid-bone accessory package must reject unknown bones",
                 failures);
 
+            var sceneTransformAnchor =
+                CloneManifest(
+                    valid);
+            sceneTransformAnchor.AnchorMode =
+                "Transform";
+
+            Expect(
+                !P12AccessoryPackageManifestValidator
+                    .TryValidate(
+                        sceneTransformAnchor,
+                        out _,
+                        out _,
+                        out var sceneTransformError) &&
+                !string.IsNullOrWhiteSpace(
+                    sceneTransformError),
+                "portable accessory package manifests must reject scene-specific Transform anchors",
+                failures);
+
             var zeroScale =
                 CloneManifest(
                     valid);
@@ -743,6 +761,42 @@ namespace VCR.Editor.P12
                         escapeError),
                     "accessory package path resolver must reject escaping the manifest directory",
                     failures);
+
+                const string destinationRoot =
+                    "Assets/VCR/Editor/P12/__AccessoryPackageValidation";
+                EnsureAssetFolder(
+                    destinationRoot);
+                var canonicalFolder =
+                    P12AccessoryPackageImporter
+                        .BuildPackageFolder(
+                            destinationRoot,
+                            valid.PackageId,
+                            valid.PackageVersion);
+                EnsureAssetFolder(
+                    canonicalFolder);
+
+                Expect(
+                    !P12AccessoryPackageImporter
+                        .TryImport(
+                            manifestPath,
+                            destinationRoot,
+                            out _,
+                            out var duplicateInstallError) &&
+                    duplicateInstallError != null &&
+                    duplicateInstallError.IndexOf(
+                        "already installed",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "accessory package importer must reject duplicate installation of the same package id/version",
+                    failures);
+
+                if (AssetDatabase.IsValidFolder(
+                        destinationRoot))
+                {
+                    AssetDatabase.DeleteAsset(
+                        destinationRoot);
+                    AssetDatabase.Refresh();
+                }
             }
             catch (Exception exception)
             {
@@ -766,6 +820,50 @@ namespace VCR.Editor.P12
                     {
                     }
                 }
+            }
+        }
+
+        private static void EnsureAssetFolder(
+            string assetFolder)
+        {
+            var parts =
+                assetFolder.Split(
+                    new[]
+                    {
+                        '/'
+                    },
+                    StringSplitOptions
+                        .RemoveEmptyEntries);
+            var current =
+                "Assets";
+
+            for (var i = 1;
+                 i < parts.Length;
+                 i++)
+            {
+                var next =
+                    current +
+                    "/" +
+                    parts[i];
+
+                if (!AssetDatabase.IsValidFolder(
+                        next))
+                {
+                    var guid =
+                        AssetDatabase.CreateFolder(
+                            current,
+                            parts[i]);
+
+                    if (string.IsNullOrWhiteSpace(
+                            guid))
+                    {
+                        throw new InvalidOperationException(
+                            $"Could not create validation asset folder '{next}'.");
+                    }
+                }
+
+                current =
+                    next;
             }
         }
 
