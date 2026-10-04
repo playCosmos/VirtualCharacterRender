@@ -351,6 +351,53 @@ namespace VCR.Editor.P12
             return true;
         }
 
+        public static bool TryValidateGroupMetadata(
+            AppearanceTransitionPreset transition,
+            out string error)
+        {
+            error = null;
+
+            foreach (var step in
+                     transition?.Steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null ||
+                    string.IsNullOrWhiteSpace(
+                        step.AuthoringGroup))
+                {
+                    continue;
+                }
+
+                if (!TryNormalizeGroupPath(
+                        step.AuthoringGroup,
+                        out _,
+                        out var groupError))
+                {
+                    error =
+                        $"Graph group '{step.AuthoringGroup}' is invalid: {groupError}";
+                    return false;
+                }
+            }
+
+            foreach (var cleanup in
+                     transition?.CancellationSteps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (cleanup != null &&
+                    !string.IsNullOrWhiteSpace(
+                        cleanup.AuthoringGroup))
+                {
+                    error =
+                        "Cancellation cleanup steps cannot carry graph group metadata.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static string[] CaptureGroupPaths(
             AppearanceTransitionPreset transition)
         {
