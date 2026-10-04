@@ -1200,6 +1200,10 @@ namespace VCR.Editor.P12
                                     0.0,
                                 StepId =
                                     "motion",
+                                AuthoringLabel =
+                                    "Spin Motion",
+                                AuthoringGroup =
+                                    "Wardrobe Swap",
                                 Kind =
                                     AppearanceTransitionStepKind
                                         .Action,
@@ -1222,6 +1226,10 @@ namespace VCR.Editor.P12
                             {
                                 TimeSeconds =
                                     0.2,
+                                AuthoringLabel =
+                                    "Commit Outfit",
+                                AuthoringGroup =
+                                    "Wardrobe Swap",
                                 Kind =
                                     AppearanceTransitionStepKind
                                         .Commit
@@ -1369,6 +1377,27 @@ namespace VCR.Editor.P12
 
             transition.Steps[0].StepId =
                 missingId;
+
+            var cloned =
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .CloneTransition(
+                        transition);
+
+            Expect(
+                cloned != null &&
+                cloned.Steps.Length ==
+                    transition.Steps.Length &&
+                cloned.Steps[0].AuthoringLabel ==
+                    "Spin Motion" &&
+                cloned.Steps[0].AuthoringGroup ==
+                    "Wardrobe Swap" &&
+                cloned.Steps[2].AuthoringLabel ==
+                    "Commit Outfit" &&
+                cloned.Steps[2].AuthoringGroup ==
+                    "Wardrobe Swap",
+                "P12 transition graph labels/groups must survive the existing transition package clone path",
+                failures);
         }
 
         private static void RunEventNodeAuthoringChecks(
