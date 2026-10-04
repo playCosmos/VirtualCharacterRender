@@ -13,7 +13,9 @@ namespace VCR.Editor.P12
         ChatAppearancePreset = 2,
         DonationEffect = 3,
         ManualPropToggle = 4,
-        ChatEnvironmentState = 5
+        ChatEnvironmentState = 5,
+        ManualSceneSequence = 6,
+        DonationSceneBurst = 7
     }
 
     [Serializable]
@@ -712,6 +714,135 @@ namespace VCR.Editor.P12
                                             .Constant,
                                     ConstantText =
                                         "state-id"
+                                }
+                            }
+                    };
+
+                case P12BuiltInEventRuleTemplate
+                    .ManualSceneSequence:
+                    return new EventRuntimeRule
+                    {
+                        Id =
+                            "manual-scene-sequence",
+                        GraphLabel =
+                            "Manual Scene Sequence",
+                        GraphGroup =
+                            "scene-automation/manual",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .EnvironmentSetState,
+                                    Name =
+                                        "Fade",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        0.5,
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "state-id"
+                                },
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropSetActive,
+                                    TargetId =
+                                        "props.main",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        1.0,
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "prop-id"
+                                },
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectPlay,
+                                    TargetId =
+                                        "effects.main",
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "effect-id"
+                                }
+                            }
+                    };
+
+                case P12BuiltInEventRuleTemplate
+                    .DonationSceneBurst:
+                    return new EventRuntimeRule
+                    {
+                        Id =
+                            "donation-scene-burst",
+                        GraphLabel =
+                            "Donation Scene Burst",
+                        GraphGroup =
+                            "scene-automation/broadcast",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .BroadcastDonation,
+                                RequireAmount =
+                                    true,
+                                HasMinimumAmount =
+                                    true,
+                                MinimumAmount =
+                                    1.0
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropSetActive,
+                                    TargetId =
+                                        "props.main",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        1.0,
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "prop-id"
+                                },
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .EffectPlay,
+                                    TargetId =
+                                        "effects.main",
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "effect-id"
                                 }
                             }
                     };
