@@ -136,7 +136,7 @@ The visual pipeline is:
 Event / Filter → Conditions (AND) → State Mutations → Actions
 ```
 
-Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, and Validate & Apply rollback to the last valid host snapshot.
+Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, built-in starter templates, selected/all rule-library JSON export, validated library import/merge with deterministic id suffixing, and Validate & Apply rollback to the last valid host snapshot.
 
 Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, incomplete rate limits, missing condition/mutation keys, missing action types, and non-finite numeric values before rules are applied through `EventRuntimeHost.SetRules`.
 
@@ -176,6 +176,10 @@ The validation source covers:
 - source renderer remains unchanged during preview
 - DontSave preview lifetime/disposal and finite bind-matrix diagnostics
 - structurally incompatible report cannot create a preview
+- built-in event-rule templates validate against the existing P9 rule contract
+- event-rule library JSON version/rule round trip
+- deterministic collision suffixing when imported rule ids already exist
+- unsupported newer event-rule-library version rejection
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -202,6 +206,6 @@ Required later evidence includes:
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
 - richer dependency grouping/labels beyond the implemented interactive source→target edge editing and All/Any target groups
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
-- richer event graph grouping/templates/rule-library UX beyond the implemented first node editor slice
+- richer event graph visual grouping/composition and library browsing/search beyond the implemented starter templates + JSON rule-library import/export
 - richer environment/prop/effect automation
 
