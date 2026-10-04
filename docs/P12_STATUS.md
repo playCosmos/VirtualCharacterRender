@@ -175,6 +175,7 @@ Implemented authoring includes:
 - Effect Preset installation into the existing `EffectEventActionHandler` binding array
 - preset safety whitelist: Transform + ParticleSystem + ParticleSystemRenderer only; arbitrary scripts/audio/animator/physics/skinned components rejected
 - preset creation/installation rollback on asset or binding failure
+- `VCR/P12/Open Effect Preset Library` indexes valid/invalid project presets, searches logical id/path/error text, and hands valid presets to Scene Automation Authoring
 - Prop/Effect `Validate & Apply` with rollback to the last valid serialized handler snapshot
 - read-only Environment state-id/root inspection from the existing P6 `BasicEnvironmentRuntime`
 - direct handoff to the Event Node Editor
@@ -238,7 +239,7 @@ The validation source covers:
 - same-PackageId revision history ordering, Previous/Next lookup, previous-revision diff, and duplicate-revision ambiguity rejection
 - EventRuntimeRule Graph Label / Graph Group serialization, canonical nested group paths, group summary/navigation, exact/subtree enable-disable, hierarchy rewrite/clear, hierarchy capture/duplicate, and canonical group metadata rule-library round trip
 - Scene Automation Environment/Prop/Effect SerializedProperty contracts and runtime rebuild boundaries
-- Effect Preset v1 hierarchy whitelist, persistent prefab validation, scene-root authoring, install, duplicate EffectId rejection, and handler binding creation
+- Effect Preset v1 hierarchy whitelist, persistent prefab validation, scene-root authoring, install, duplicate EffectId rejection, handler binding creation, project-library valid/invalid indexing, and search matching
 - duplicate prop/effect/environment logical id rejection plus last-valid snapshot restoration pattern
 - composite scene automation templates and emitted Environment → Prop → Effect command ordering
 - logical Prop set/toggle behavior, immediate completion, mixed-state rejection, and shared-root binding rejection
@@ -271,5 +272,5 @@ Required later evidence includes:
 - richer graph interaction beyond the implemented nested Graph Group hierarchy, cluster Apply/Clear, hierarchy rename/move/clear, interactive source→target edge editing, and All/Any target groups; possible future work is collapse/lasso/multi-select only if it improves real authoring
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - higher-level event graph composition beyond the implemented nested GraphGroup hierarchy, subtree enable-disable/rename-move-clear/duplicate/export, metadata-aware JSON v2 import/export, project library browser, and same-PackageId revision navigation/diff; future work should focus on real authoring pain points such as collapse/lasso or explicit revision branch/merge only if justified
-- richer environment/prop/effect automation beyond the implemented logical binding authoring window, project-local Effect Preset v1, validated rollback, and ordered composite Event Rule templates; later additions should be driven by concrete scene/effect requirements rather than a second automation engine. External/downloadable effect packages remain a separate reviewed contract if justified.
+- richer environment/prop/effect automation beyond the implemented logical binding authoring window, project-local Effect Preset v1 + library, validated rollback, timed scene sequences, and ordered Event Rule templates should be driven by concrete scene/effect requirements rather than a second automation engine. External/downloadable effect packages remain a separate reviewed contract if justified.
 
