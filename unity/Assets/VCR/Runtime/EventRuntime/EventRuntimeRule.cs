@@ -6,6 +6,8 @@ namespace VCR.Runtime.EventRuntime
     public sealed class EventRuntimeRule
     {
         public string Id;
+        public string GraphLabel;
+        public string GraphGroup;
         public bool Enabled = true;
         public EventRuleFilter Filter = new();
         public EventStateCondition[] Conditions =
