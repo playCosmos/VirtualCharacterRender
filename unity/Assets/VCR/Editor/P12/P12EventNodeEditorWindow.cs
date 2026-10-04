@@ -31,6 +31,9 @@ namespace VCR.Editor.P12
         private MessageType _messageType =
             MessageType.Info;
         private Vector2 _scroll;
+        private P12EventRuleLibraryPackage
+            _pendingLibraryPackage;
+        private string _pendingLibrarySource;
 
         [MenuItem("VCR/P12/Open Event Node Editor")]
         public static void Open()
@@ -51,6 +54,22 @@ namespace VCR.Editor.P12
             window._host =
                 host;
             window.Rebind();
+            window.Show();
+            window.Repaint();
+        }
+
+        public static void OpenWithLibraryPackage(
+            P12EventRuleLibraryPackage package,
+            string sourceLabel)
+        {
+            var window =
+                GetWindow<
+                    P12EventNodeEditorWindow>(
+                    "VCR Event Nodes");
+            window._pendingLibraryPackage =
+                package;
+            window._pendingLibrarySource =
+                sourceLabel;
             window.Show();
             window.Repaint();
         }
@@ -135,6 +154,7 @@ namespace VCR.Editor.P12
                     MessageType.Warning);
             }
 
+            DrawPendingLibraryPackage();
             DrawRuleToolbar();
 
             if (_rules.arraySize == 0)
@@ -169,6 +189,63 @@ namespace VCR.Editor.P12
 
             EditorGUILayout.EndScrollView();
             ApplyModifiedProperties();
+        }
+
+        private void DrawPendingLibraryPackage()
+        {
+            if (_pendingLibraryPackage == null)
+            {
+                return;
+            }
+
+            var source =
+                string.IsNullOrWhiteSpace(
+                    _pendingLibrarySource)
+                    ? "<library>"
+                    : _pendingLibrarySource;
+            var count =
+                _pendingLibraryPackage.Rules?.Length ??
+                0;
+
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField(
+                    "Pending Event Rule Library",
+                    EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(
+                    "Package",
+                    _pendingLibraryPackage.PackageId ??
+                    "<missing>");
+                EditorGUILayout.LabelField(
+                    "Source",
+                    source);
+                EditorGUILayout.LabelField(
+                    "Rules",
+                    count.ToString());
+
+                using (new EditorGUILayout
+                           .HorizontalScope())
+                {
+                    if (GUILayout.Button(
+                            "Import Pending Package"))
+                    {
+                        ImportPackage(
+                            _pendingLibraryPackage,
+                            source);
+                    }
+
+                    if (GUILayout.Button(
+                            "Dismiss"))
+                    {
+                        _pendingLibraryPackage =
+                            null;
+                        _pendingLibrarySource =
+                            null;
+                    }
+                }
+            }
         }
 
         private void DrawRuleToolbar()
@@ -982,6 +1059,34 @@ namespace VCR.Editor.P12
                 return;
             }
 
+            ImportPackage(
+                package,
+                path);
+        }
+
+        private void ImportPackage(
+            P12EventRuleLibraryPackage package,
+            string sourceLabel)
+        {
+            if (!P12EventRuleLibraryUtility
+                .TryValidatePackage(
+                    package,
+                    out var error))
+            {
+                _message =
+                    "Event rule library import rejected: " +
+                    (error ?? "unknown error");
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!TryPrepareLibraryOperation(
+                    out var existing))
+            {
+                return;
+            }
+
             var merged =
                 P12EventRuleLibraryUtility
                     .MergeRules(
@@ -1017,8 +1122,16 @@ namespace VCR.Editor.P12
                         merged.Length - 1);
             Rebind();
 
+            _pendingLibraryPackage =
+                null;
+            _pendingLibrarySource =
+                null;
             _message =
-                $"Imported event rule library '{package.PackageId}': {package.Rules.Length} rule(s), {merged.Length} total. ID collisions were suffixed deterministically.";
+                $"Imported event rule library '{package.PackageId}': {package.Rules.Length} rule(s), {merged.Length} total. ID collisions were suffixed deterministically." +
+                (string.IsNullOrWhiteSpace(
+                    sourceLabel)
+                    ? string.Empty
+                    : $" Source: {sourceLabel}");
             _messageType =
                 MessageType.Info;
         }
