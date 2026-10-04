@@ -1592,6 +1592,128 @@ namespace VCR.Editor.P12
                 "P12 event graph must generate deterministic suffix ids",
                 failures);
 
+            foreach (P12BuiltInEventRuleTemplate
+                     templateKind in
+                     Enum.GetValues(
+                         typeof(
+                             P12BuiltInEventRuleTemplate)))
+            {
+                var template =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            templateKind);
+
+                Expect(
+                    P12EventRuleAuthoringUtility
+                        .TryValidateRules(
+                            new[]
+                            {
+                                template
+                            },
+                            out var templateError),
+                    $"P12 built-in event template '{templateKind}' must satisfy the existing runtime rule contract: " +
+                    templateError,
+                    failures);
+            }
+
+            var manualTemplate =
+                P12EventRuleLibraryUtility
+                    .CreateTemplate(
+                        P12BuiltInEventRuleTemplate
+                            .ManualRestoreDefault);
+
+            Expect(
+                P12EventRuleLibraryUtility
+                    .TryCreatePackage(
+                        "validation-library",
+                        new[]
+                        {
+                            valid,
+                            manualTemplate
+                        },
+                        out var libraryPackage,
+                        out var packageError) &&
+                P12EventRuleLibraryUtility
+                    .TrySerialize(
+                        libraryPackage,
+                        out var packageJson,
+                        out var serializeError) &&
+                P12EventRuleLibraryUtility
+                    .TryParse(
+                        packageJson,
+                        out var roundTripPackage,
+                        out var parseError) &&
+                roundTripPackage.Rules.Length ==
+                    2 &&
+                roundTripPackage.Rules[0].Id ==
+                    "donation-thanks" &&
+                roundTripPackage.Rules[1].Id ==
+                    "manual-restore-default",
+                "P12 event rule library JSON must preserve package id and ordered rules: " +
+                packageError +
+                " / " +
+                serializeError +
+                " / " +
+                parseError,
+                failures);
+
+            var collisionMerge =
+                P12EventRuleLibraryUtility
+                    .MergeRules(
+                        new[]
+                        {
+                            manualTemplate
+                        },
+                        new[]
+                        {
+                            manualTemplate,
+                            valid
+                        });
+
+            Expect(
+                collisionMerge.Length ==
+                    3 &&
+                collisionMerge[0].Id ==
+                    "manual-restore-default" &&
+                collisionMerge[1].Id ==
+                    "manual-restore-default-2" &&
+                collisionMerge[2].Id ==
+                    "donation-thanks" &&
+                P12EventRuleAuthoringUtility
+                    .TryValidateRules(
+                        collisionMerge,
+                        out var collisionError),
+                "P12 event rule library merge must suffix colliding rule ids deterministically without invalidating rules: " +
+                collisionError,
+                failures);
+
+            var newerPackage =
+                new P12EventRuleLibraryPackage
+                {
+                    Version =
+                        P12EventRuleLibraryPackage
+                            .CurrentVersion +
+                        1,
+                    PackageId =
+                        "future",
+                    Rules =
+                        Array.Empty<
+                            EventRuntimeRule>()
+                };
+
+            Expect(
+                !P12EventRuleLibraryUtility
+                    .TryValidatePackage(
+                        newerPackage,
+                        out var newerPackageError) &&
+                newerPackageError != null &&
+                newerPackageError.IndexOf(
+                    "newer",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 event rule library must reject unsupported newer package versions",
+                failures);
+
             GameObject hostRoot = null;
 
             try
