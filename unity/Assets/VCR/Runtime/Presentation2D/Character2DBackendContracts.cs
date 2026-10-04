@@ -82,6 +82,20 @@ namespace VCR.Runtime.Presentation2D
     }
 
     /// <summary>
+    /// Optional capability implemented by backends that want the shared
+    /// Character2DParameterMappingProfile evaluator to provide final
+    /// backend parameter-id/value pairs.
+    ///
+    /// The backend still owns the SDK-specific parameter write.
+    /// </summary>
+    public interface ICharacter2DParameterSink
+    {
+        bool TryApplyParameters(
+            Character2DParameterValue[] values,
+            out string error);
+    }
+
+    /// <summary>
     /// Optional 2D presentation backend boundary.
     ///
     /// Implementations live in backend-specific assemblies so the core runtime
