@@ -35,6 +35,8 @@ The stage order is intentionally fixed because it is already part of the P9 runt
 The editor supports:
 
 - previous/next rule navigation
+- optional per-rule `Graph Label` / `Graph Group` authoring metadata
+- grouped-rule overview with member/enabled counts, same-group Prev/Next navigation, and group-wide Enable/Disable authoring actions
 - add/duplicate/delete rule
 - visual stage/node selection
 - add/delete/reorder Condition, Mutation and Action nodes
@@ -101,7 +103,7 @@ Template insertion/import/export first applies the current serialized edits and 
 
 This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-Future P12 extensions may add richer visual grouping/higher-level node composition and deeper revision workflows such as explicit branch/merge semantics. Basic same-PackageId revision history and previous-revision diff are implemented. Any new branching/dependency runtime semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+`Graph Label` and `Graph Group` are authoring metadata only and are preserved through normal rule serialization/library packages; they never change EventRuntime matching or execution order. Future P12 extensions may add higher-level node composition and deeper revision workflows such as explicit branch/merge semantics. Basic same-PackageId revision history and previous-revision diff are implemented. Any new branching/dependency runtime semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -126,6 +128,8 @@ Future P12 extensions may add richer visual grouping/higher-level node compositi
 - revision-history grouping/sorting and Previous/Next lookup
 - previous-revision metadata/rule diff
 - duplicate-revision ambiguity rejection
-- the SerializedProperty contract used by the editor
+- Graph Label / Graph Group package round trip
+- grouped rule summary, same-group navigation, and group enable/disable helpers
+- the SerializedProperty contract used by the editor, including Graph Label / Graph Group
 
 These source validations have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
