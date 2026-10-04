@@ -138,12 +138,19 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     this);
             }
 
-            if (_sink == null)
+            if (!IsServiceAlive(_sink))
             {
+                _sink = null;
+
+                if (eventSinkBehaviour == null)
+                {
+                    eventSinkBehaviour = null;
+                }
+
                 ResolveSink();
             }
 
-            if (_sink == null)
+            if (!IsServiceAlive(_sink))
             {
                 return;
             }
@@ -473,11 +480,25 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             return true;
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveSink(
             bool force = false)
         {
-            if (eventSinkBehaviour is
-                INormalizedEventSink configured)
+            if (eventSinkBehaviour != null &&
+                eventSinkBehaviour is
+                    INormalizedEventSink configured)
             {
                 _sink = configured;
                 _nextSinkResolveRealtime = 0f;
