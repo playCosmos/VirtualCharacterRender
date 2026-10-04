@@ -38,6 +38,8 @@ namespace VCR.Editor.P12
                 failures);
             RunSceneAutomationAuthoringChecks(
                 failures);
+            RunEffectPresetChecks(
+                failures);
             RunSceneSequenceChecks(
                 failures);
             RunEventRuleLibraryBrowserChecks(
@@ -47,7 +49,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node grouping/library revision workflows, prop automation, and serialized contracts)");
+                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node grouping/library revision workflows, prop/effect automation including project-local effect presets, and serialized contracts)");
                 return true;
             }
 
@@ -3294,6 +3296,259 @@ namespace VCR.Editor.P12
                     UnityEngine.Object
                         .DestroyImmediate(
                             root);
+                }
+            }
+        }
+
+        private static void RunEffectPresetChecks(
+            List<string> failures)
+        {
+            const string folder =
+                "Assets/VCR/Editor/P12/__EffectPresetValidation";
+            const string validPrefabPath =
+                folder +
+                "/valid-effect.prefab";
+            const string emptyPrefabPath =
+                folder +
+                "/empty-effect.prefab";
+            const string unsafePrefabPath =
+                folder +
+                "/unsafe-effect.prefab";
+
+            GameObject validSource = null;
+            GameObject emptySource = null;
+            GameObject unsafeSource = null;
+            GameObject handlerRoot = null;
+            P12EffectPresetAsset preset = null;
+
+            try
+            {
+                if (AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                }
+
+                EnsureAssetFolder(
+                    folder);
+
+                validSource =
+                    new GameObject(
+                        "Valid Effect Preset");
+                validSource.AddComponent<
+                    ParticleSystem>();
+                var validPrefab =
+                    PrefabUtility.SaveAsPrefabAsset(
+                        validSource,
+                        validPrefabPath);
+
+                emptySource =
+                    new GameObject(
+                        "Empty Effect Preset");
+                var emptyPrefab =
+                    PrefabUtility.SaveAsPrefabAsset(
+                        emptySource,
+                        emptyPrefabPath);
+
+                unsafeSource =
+                    new GameObject(
+                        "Unsafe Effect Preset");
+                unsafeSource.AddComponent<
+                    ParticleSystem>();
+                unsafeSource.AddComponent<
+                    AudioSource>();
+                var unsafePrefab =
+                    PrefabUtility.SaveAsPrefabAsset(
+                        unsafeSource,
+                        unsafePrefabPath);
+
+                preset =
+                    ScriptableObject.CreateInstance<
+                        P12EffectPresetAsset>();
+                preset.EffectId =
+                    "sparkle";
+                preset.Prefab =
+                    validPrefab;
+                preset.RestartOnPlay =
+                    true;
+                preset.DeactivateOnStop =
+                    true;
+                preset.StartInactive =
+                    true;
+
+                Expect(
+                    P12EffectPresetUtility
+                        .TryValidatePreset(
+                            preset,
+                            out var validError),
+                    "project-local ParticleSystem-only effect preset must validate: " +
+                    validError,
+                    failures);
+
+                preset.Prefab =
+                    emptyPrefab;
+
+                Expect(
+                    !P12EffectPresetUtility
+                        .TryValidatePreset(
+                            preset,
+                            out var emptyError) &&
+                    !string.IsNullOrWhiteSpace(
+                        emptyError),
+                    "effect preset must reject a prefab with no ParticleSystem",
+                    failures);
+
+                preset.Prefab =
+                    unsafePrefab;
+
+                Expect(
+                    !P12EffectPresetUtility
+                        .TryValidatePreset(
+                            preset,
+                            out var unsafeError) &&
+                    unsafeError != null &&
+                    unsafeError.IndexOf(
+                        "unsupported component",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "effect preset v1 must reject unsupported prefab components such as AudioSource",
+                    failures);
+
+                preset.Prefab =
+                    validPrefab;
+                preset.EffectId =
+                    "../unsafe";
+
+                Expect(
+                    !P12EffectPresetUtility
+                        .TryValidatePreset(
+                            preset,
+                            out var unsafeIdError) &&
+                    !string.IsNullOrWhiteSpace(
+                        unsafeIdError),
+                    "effect preset must reject unsafe logical ids",
+                    failures);
+
+                preset.EffectId =
+                    "sparkle";
+
+                handlerRoot =
+                    new GameObject(
+                        "Effect Preset Handler");
+                var handler =
+                    handlerRoot.AddComponent<
+                        EffectEventActionHandler>();
+
+                Expect(
+                    P12EffectPresetUtility
+                        .TryInstall(
+                            preset,
+                            handler,
+                            out var installed,
+                            out var installError) &&
+                    installed != null &&
+                    installed.Instance !=
+                        null &&
+                    installed.EffectId ==
+                        "sparkle" &&
+                    installed.ParticleSystemCount ==
+                        1 &&
+                    !installed.Instance.activeSelf &&
+                    handler.RebuildBindings(
+                        out var rebuildError),
+                    "effect preset install must create one inactive scene instance and register a valid logical effect binding: " +
+                    installError +
+                    " / " +
+                    rebuildError,
+                    failures);
+
+                Expect(
+                    !P12EffectPresetUtility
+                        .TryInstall(
+                            preset,
+                            handler,
+                            out _,
+                            out var duplicateError) &&
+                    duplicateError != null &&
+                    duplicateError.IndexOf(
+                        "already registered",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "effect preset install must reject duplicate EffectId registration",
+                    failures);
+
+                var serialized =
+                    new SerializedObject(
+                        handler);
+                serialized.Update();
+                var effects =
+                    serialized.FindProperty(
+                        "effects");
+
+                Expect(
+                    effects != null &&
+                    effects.arraySize ==
+                        1 &&
+                    effects
+                        .GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "EffectId")
+                        .stringValue ==
+                        "sparkle",
+                    "effect preset install must append exactly one serialized EffectEventActionHandler binding",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 effect preset validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (handlerRoot != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            handlerRoot);
+                }
+
+                if (validSource != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            validSource);
+                }
+
+                if (emptySource != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            emptySource);
+                }
+
+                if (unsafeSource != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            unsafeSource);
+                }
+
+                if (preset != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            preset);
+                }
+
+                if (AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                    AssetDatabase.Refresh();
                 }
             }
         }
