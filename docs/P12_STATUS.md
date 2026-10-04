@@ -19,6 +19,8 @@ It can author:
 - explicit outfit bindings
 - outfit root arrays
 - accessory slot/id/root bindings
+- optional accessory anchors: explicit Transform or humanoid Animator bone
+- accessory local position/rotation offsets, optional local scale override, and restore-original-transform policy
 - authored appearance presets
 - default preset id / apply-on-awake
 - convention hierarchy names and auto-discovery policy
@@ -26,6 +28,11 @@ It can author:
 Convenience authoring includes:
 
 - add empty outfit/accessory/preset rows
+- select a Transform as an accessory anchor
+- select a humanoid Animator + HumanBodyBones anchor
+- resolve the runtime humanoid Animator from the authoring window
+- capture the accessory's current position/rotation as anchor-local offsets
+- reset authored anchor offsets
 - add the currently selected GameObject as an outfit root
 - add the currently selected GameObject as an accessory root
 - infer the accessory slot from `VCRAppearance/Accessories/<slot>/<item>` when selection follows the convention hierarchy
@@ -73,6 +80,8 @@ This keeps invalid root sharing, duplicate ids, missing roots or invalid preset 
 
 The rollback uses editor-only serialized JSON over the scene component; runtime dictionaries and transition executors are rebuilt from the restored serialized fields.
 
+Accessory application remains transactional as well. The runtime snapshots active states and accessory Transform parent/local state before switching. Transform-anchored accessories are reparented and offset only for the requested appearance; inactive anchored accessories can restore their original hierarchy transform. Any anchor/apply failure restores both active-state and Transform-state snapshots. Humanoid-bone anchors resolve through a humanoid `Animator.GetBoneTransform` and fail closed if the animator/bone is unavailable.
+
 ## Source validation
 
 Menu:
@@ -89,6 +98,11 @@ The validation source covers:
 - required serialized-property names used by the authoring window
 - duplicate discovered outfit-id rejection
 - stable suffix generation for duplicate logical ids
+- Transform-anchor reparent + authored local offset application
+- inactive accessory original-parent/local-transform restoration
+- repeated reactivation after restoration
+- descendant-anchor cycle rejection
+- serialized anchor property contract
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -100,7 +114,7 @@ Required later evidence includes:
 
 - real VRM wardrobe hierarchy authoring
 - outfit/accessory root activation against a loaded UniVRM character
-- accessory anchor stability during face/body/hand/full-body tracking
+- accessory Transform/humanoid-bone anchor stability during face/body/hand/full-body tracking
 - failed authoring validation rollback inside the real Unity Editor
 - scene save/reload preservation of explicit bindings
 - imported accessory/skinned-outfit compatibility checks
@@ -108,8 +122,8 @@ Required later evidence includes:
 
 ## Next P12 source work
 
-- accessory anchor/bone authoring instead of root-only registration
 - validated external accessory package format and importer
+- real humanoid Animator/bone anchor verification on loaded VRM characters
 - optional compatible skinned-outfit compatibility checks
 - richer appearance preset preview before activation
 - interactive transition dependency graph editing/grouping
