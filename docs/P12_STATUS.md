@@ -155,6 +155,40 @@ Rule grouping now supports nested `/` hierarchy paths. The Node Editor exposes i
 
 See `EVENT_NODE_EDITOR.md` for the exact first-slice semantics and limits.
 
+## Scene Automation Authoring
+
+Menu:
+
+- `VCR/P12/Open Scene Automation`
+
+P12 now exposes logical scene automation authoring over the existing runtime contracts rather than adding a second scene-control engine.
+
+Implemented authoring includes:
+
+- Prop bindings: logical `PropId` → one or more scene GameObject roots
+- Effect bindings: logical `EffectId` → optional root plus ParticleSystem array
+- add-empty and add-selected convenience actions for Prop/Effect bindings
+- deterministic logical-id suffixing for selection-derived ids
+- Prop/Effect `Validate & Apply` with rollback to the last valid serialized handler snapshot
+- read-only Environment state-id/root inspection from the existing P6 `BasicEnvironmentRuntime`
+- direct handoff to the Event Node Editor
+
+New EventRuntime action types:
+
+- `prop.set_active`
+- `prop.toggle`
+
+`prop.set_active` requires a numeric boolean value and applies it to every root in one logical Prop binding. `prop.toggle` requires all roots in the binding to have a uniform active state; mixed states fail closed instead of choosing an arbitrary direction. Prop actions expose immediate completion so they can also participate in transition completion dependencies.
+
+The P11/P12 runtime-scene builder adds `PropEventActionHandler` by default. EventRuntime handler discovery continues to use the established `IEventActionHandler` path.
+
+New Event Node starter templates include:
+
+- Scene / Manual → Toggle Prop
+- Scene / Chat → Environment Fade
+
+Environment state editing remains owned by P6 runtime contracts. Scene Automation deliberately exposes existing environment state ids read-only instead of duplicating Environment Runtime configuration.
+
 ## Source validation
 
 Menu:
