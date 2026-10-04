@@ -201,6 +201,10 @@ Environment state editing remains owned by P6 runtime contracts. Scene Automatio
 Menu:
 
 - `VCR/P12/Run Source Validation`
+- batch entrypoint: `VCR.Editor.P12.P12BatchValidation.RunSourceFreeAndExit`
+- launchers: `tools/validate-p12-source-free.sh`, `tools/validate-p12-source-free.ps1`
+
+The P12 batch entrypoint first executes the inherited P0-P11 validation chain and only then the P12 checks, preventing a later-phase validation pass from hiding an earlier-phase regression.
 
 The validation source covers:
 
