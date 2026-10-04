@@ -29,6 +29,8 @@ namespace VCR.Editor.P12
                 failures);
             RunSkinnedCompatibilityChecks(
                 failures);
+            RunTransitionDependencyGraphChecks(
+                failures);
             RunEventNodeAuthoringChecks(
                 failures);
 
@@ -36,7 +38,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, event-node rule validation and serialized contracts)");
+                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node rule validation and serialized contracts)");
                 return true;
             }
 
@@ -1175,6 +1177,196 @@ namespace VCR.Editor.P12
                             mesh);
                 }
             }
+        }
+
+        private static void RunTransitionDependencyGraphChecks(
+            List<string> failures)
+        {
+            var transition =
+                new AppearanceTransitionPreset
+                {
+                    Id =
+                        "dependency-authoring",
+                    DurationSeconds =
+                        1.0,
+                    Steps =
+                        new[]
+                        {
+                            new AppearanceTransitionStep
+                            {
+                                TimeSeconds =
+                                    0.0,
+                                StepId =
+                                    "motion",
+                                Kind =
+                                    AppearanceTransitionStepKind
+                                        .Action,
+                                ActionType =
+                                    "motion.play"
+                            },
+                            new AppearanceTransitionStep
+                            {
+                                TimeSeconds =
+                                    0.1,
+                                StepId =
+                                    "effect",
+                                Kind =
+                                    AppearanceTransitionStepKind
+                                        .Action,
+                                ActionType =
+                                    "effect.play"
+                            },
+                            new AppearanceTransitionStep
+                            {
+                                TimeSeconds =
+                                    0.2,
+                                Kind =
+                                    AppearanceTransitionStepKind
+                                        .Commit
+                            }
+                        }
+                };
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryAddDependency(
+                        transition,
+                        0,
+                        2,
+                        AppearanceTransitionDependencyMode
+                            .All,
+                        out var addAllError) &&
+                transition.Steps[2]
+                    .DependencyMode ==
+                    AppearanceTransitionDependencyMode
+                        .All &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    1 &&
+                transition.Steps[2]
+                    .DependsOnStepIds[0] ==
+                    "motion",
+                "P12 dependency graph authoring must add an earlier Action StepId to a later commit target: " +
+                addAllError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryAddDependency(
+                        transition,
+                        1,
+                        2,
+                        AppearanceTransitionDependencyMode
+                            .Any,
+                        out var addAnyError) &&
+                transition.Steps[2]
+                    .DependencyMode ==
+                    AppearanceTransitionDependencyMode
+                        .Any &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    2 &&
+                transition.Steps[2]
+                    .DependsOnStepIds[0] ==
+                    "motion" &&
+                transition.Steps[2]
+                    .DependsOnStepIds[1] ==
+                    "effect",
+                "P12 dependency graph authoring must preserve existing edges while switching the target group to Any: " +
+                addAnyError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .HasDependency(
+                        transition,
+                        0,
+                        2) &&
+                P12TransitionDependencyAuthoringUtility
+                    .HasDependency(
+                        transition,
+                        1,
+                        2),
+                "P12 dependency graph authoring must report existing source-to-target edges",
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryRemoveDependency(
+                        transition,
+                        0,
+                        2,
+                        out var removeFirstError) &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    1 &&
+                transition.Steps[2]
+                    .DependencyMode ==
+                    AppearanceTransitionDependencyMode
+                        .Any,
+                "removing one dependency must preserve the target mode while other edges remain: " +
+                removeFirstError,
+                failures);
+
+            Expect(
+                P12TransitionDependencyAuthoringUtility
+                    .TryRemoveDependency(
+                        transition,
+                        1,
+                        2,
+                        out var removeLastError) &&
+                transition.Steps[2]
+                    .DependsOnStepIds.Length ==
+                    0 &&
+                transition.Steps[2]
+                    .DependencyMode ==
+                    AppearanceTransitionDependencyMode
+                        .None,
+                "removing the final dependency must reset the target mode to None: " +
+                removeLastError,
+                failures);
+
+            Expect(
+                !P12TransitionDependencyAuthoringUtility
+                    .TryAddDependency(
+                        transition,
+                        2,
+                        1,
+                        AppearanceTransitionDependencyMode
+                            .All,
+                        out var forwardError) &&
+                forwardError != null &&
+                forwardError.IndexOf(
+                    "earlier",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 dependency graph authoring must reject forward/backward-invalid endpoint ordering",
+                failures);
+
+            var missingId =
+                transition.Steps[0].StepId;
+            transition.Steps[0].StepId =
+                string.Empty;
+
+            Expect(
+                !P12TransitionDependencyAuthoringUtility
+                    .TryAddDependency(
+                        transition,
+                        0,
+                        2,
+                        AppearanceTransitionDependencyMode
+                            .All,
+                        out var missingIdError) &&
+                missingIdError != null &&
+                missingIdError.IndexOf(
+                    "StepId",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 dependency graph authoring must reject source Actions without StepId",
+                failures);
+
+            transition.Steps[0].StepId =
+                missingId;
         }
 
         private static void RunEventNodeAuthoringChecks(
