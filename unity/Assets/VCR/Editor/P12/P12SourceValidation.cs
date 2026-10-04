@@ -1398,6 +1398,109 @@ namespace VCR.Editor.P12
                     "Wardrobe Swap",
                 "P12 transition graph labels/groups must survive the existing transition package clone path",
                 failures);
+
+            var metadataPackage =
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .CreatePackage(
+                        "p12-authoring-metadata",
+                        new[]
+                        {
+                            transition
+                        });
+            var metadataSerialized =
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .TrySerialize(
+                        metadataPackage,
+                        out var metadataJson,
+                        out var metadataSerializeError);
+            var metadataParsed =
+                metadataSerialized &&
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .TryDeserialize(
+                        metadataJson,
+                        out var metadataRoundTrip,
+                        out var metadataParseError);
+
+            Expect(
+                metadataParsed &&
+                metadataRoundTrip != null &&
+                metadataRoundTrip.Version ==
+                    AppearanceTransitionPackage
+                        .CurrentVersion &&
+                metadataRoundTrip.Transitions.Length ==
+                    1 &&
+                metadataRoundTrip.Transitions[0]
+                    .Steps[0]
+                    .AuthoringLabel ==
+                    "Spin Motion" &&
+                metadataRoundTrip.Transitions[0]
+                    .Steps[0]
+                    .AuthoringGroup ==
+                    "Wardrobe Swap",
+                "P12 transition package v3 JSON must preserve graph authoring labels/groups: " +
+                metadataSerializeError +
+                " / " +
+                metadataParseError,
+                failures);
+
+            var v2Package =
+                new AppearanceTransitionPackage
+                {
+                    Version = 2,
+                    PackageId =
+                        "legacy-v2",
+                    Transitions =
+                        new[]
+                        {
+                            new AppearanceTransitionPreset
+                            {
+                                Id =
+                                    "legacy-v2-transition",
+                                DurationSeconds =
+                                    0.5,
+                                Steps =
+                                    new[]
+                                    {
+                                        new AppearanceTransitionStep
+                                        {
+                                            TimeSeconds =
+                                                0.25,
+                                            Kind =
+                                                AppearanceTransitionStepKind
+                                                    .Commit,
+                                            AuthoringLabel =
+                                                null,
+                                            AuthoringGroup =
+                                                null
+                                        }
+                                    }
+                            }
+                        }
+                };
+
+            Expect(
+                VCR.Editor.P11
+                    .P11AppearanceTransitionPackageUtility
+                    .Validate(
+                        v2Package,
+                        out var v2MigrationError) &&
+                v2Package.Version ==
+                    AppearanceTransitionPackage
+                        .CurrentVersion &&
+                v2Package.Transitions[0]
+                    .Steps[0]
+                    .AuthoringLabel ==
+                    string.Empty &&
+                v2Package.Transitions[0]
+                    .Steps[0]
+                    .AuthoringGroup ==
+                    string.Empty,
+                "P12 transition package v2 must migrate to v3 authoring metadata defaults: " +
+                v2MigrationError,
+                failures);
         }
 
         private static void RunEventNodeAuthoringChecks(
