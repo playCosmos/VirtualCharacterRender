@@ -1,12 +1,13 @@
 using System;
-using System.Collections.Generic;
+using System.Buffers;
 
 namespace VCR.Runtime.Tracking.Mixing
 {
     public static class ExpressionMixerMath
     {
-        private struct CustomBlendValues
+        private struct CustomBlendEntry
         {
+            public string Name;
             public float BaseValue;
             public float LayerValue;
         }
@@ -196,57 +197,71 @@ namespace VCR.Runtime.Tracking.Mixing
                 return Array.Empty<NamedExpressionValue>();
             }
 
-            var values =
-                new Dictionary<string, CustomBlendValues>(
-                    capacity,
-                    StringComparer.Ordinal);
+            var entries =
+                ArrayPool<CustomBlendEntry>
+                    .Shared
+                    .Rent(capacity);
+            var count = 0;
 
-            AddCustom(
-                baseState,
-                values,
-                deadzone: 0f,
-                layer: false);
-            AddCustom(
-                layerState,
-                values,
-                deadzone,
-                layer: true);
-
-            if (values.Count == 0)
+            try
             {
-                return Array.Empty<NamedExpressionValue>();
+                AddCustom(
+                    baseState,
+                    entries,
+                    ref count,
+                    deadzone: 0f,
+                    layer: false);
+                AddCustom(
+                    layerState,
+                    entries,
+                    ref count,
+                    deadzone,
+                    layer: true);
+
+                if (count == 0)
+                {
+                    return Array.Empty<NamedExpressionValue>();
+                }
+
+                SortCustomEntries(
+                    entries,
+                    count);
+
+                var result =
+                    new NamedExpressionValue[count];
+
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    var entry =
+                        entries[i];
+
+                    result[i] =
+                        new NamedExpressionValue(
+                            entry.Name,
+                            BlendValue(
+                                entry.BaseValue,
+                                entry.LayerValue,
+                                weight,
+                                mode));
+                }
+
+                return result;
             }
-
-            var ordered =
-                new List<string>(
-                    values.Keys);
-            ordered.Sort(
-                StringComparer.Ordinal);
-
-            var result =
-                new NamedExpressionValue[
-                    ordered.Count];
-
-            for (var i = 0;
-                 i < ordered.Count;
-                 i++)
+            finally
             {
-                var name =
-                    ordered[i];
-                var custom =
-                    values[name];
+                for (var i = 0;
+                     i < count;
+                     i++)
+                {
+                    entries[i] = default;
+                }
 
-                result[i] =
-                    new NamedExpressionValue(
-                        name,
-                        BlendValue(
-                            custom.BaseValue,
-                            custom.LayerValue,
-                            weight,
-                            mode));
+                ArrayPool<CustomBlendEntry>
+                    .Shared
+                    .Return(entries);
             }
-
-            return result;
         }
 
         private static float GetCustomValue(
@@ -275,7 +290,8 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private static void AddCustom(
             NormalizedExpressionState state,
-            Dictionary<string, CustomBlendValues> output,
+            CustomBlendEntry[] output,
+            ref int count,
             float deadzone,
             bool layer)
         {
@@ -286,15 +302,30 @@ namespace VCR.Runtime.Tracking.Mixing
 
             foreach (var item in state.Custom)
             {
-                if (string.IsNullOrWhiteSpace(item.Name))
+                if (string.IsNullOrWhiteSpace(
+                        item.Name))
                 {
                     continue;
                 }
 
-                output.TryGetValue(
-                    item.Name,
-                    out var values);
+                var index =
+                    FindCustomEntry(
+                        output,
+                        count,
+                        item.Name);
 
+                if (index < 0)
+                {
+                    index = count++;
+                    output[index] =
+                        new CustomBlendEntry
+                        {
+                            Name = item.Name
+                        };
+                }
+
+                var entry =
+                    output[index];
                 var value =
                     ApplyDeadzone(
                         item.Value,
@@ -302,17 +333,68 @@ namespace VCR.Runtime.Tracking.Mixing
 
                 if (layer)
                 {
-                    values.LayerValue =
+                    entry.LayerValue =
                         value;
                 }
                 else
                 {
-                    values.BaseValue =
+                    entry.BaseValue =
                         value;
                 }
 
-                output[item.Name] =
-                    values;
+                output[index] =
+                    entry;
+            }
+        }
+
+        private static int FindCustomEntry(
+            CustomBlendEntry[] entries,
+            int count,
+            string name)
+        {
+            for (var i = 0;
+                 i < count;
+                 i++)
+            {
+                if (string.Equals(
+                        entries[i].Name,
+                        name,
+                        StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static void SortCustomEntries(
+            CustomBlendEntry[] entries,
+            int count)
+        {
+            for (var i = 1;
+                 i < count;
+                 i++)
+            {
+                var current =
+                    entries[i];
+                var cursor =
+                    i - 1;
+
+                while (cursor >= 0 &&
+                       string.Compare(
+                           entries[cursor].Name,
+                           current.Name,
+                           StringComparison.Ordinal) >
+                       0)
+                {
+                    entries[cursor + 1] =
+                        entries[cursor];
+                    cursor--;
+                }
+
+                entries[cursor + 1] =
+                    current;
             }
         }
 
