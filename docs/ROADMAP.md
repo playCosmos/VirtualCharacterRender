@@ -223,7 +223,7 @@ Character UI now has the first Appearance / Quick Change source implementation: 
 
 The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` promotes the conventional wardrobe hierarchy into explicit outfit/accessory bindings, authors optional Transform/humanoid-bone accessory anchors and local offsets, imports validated rigid-FBX accessory packages transactionally, edits authored presets/default state over `BasicCharacterAppearanceRuntime`, captures the current appearance as an authored preset, previews authored presets without changing runtime state, and validates/rolls back invalid serialized binding edits. See `P12_STATUS.md`.
 
-- visual event/node editor: EventRuntimeRule graph/editor, built-in starter templates, versioned JSON rule-library import/export, and project library browsing/search are implemented; richer visual grouping/higher-level composition and library metadata/version-history UX remain
+- visual event/node editor: EventRuntimeRule graph/editor, built-in starter templates, metadata-aware versioned JSON v2 rule-library import/export, and project browsing/search are implemented; richer visual grouping/higher-level composition and revision-history/diff UX remain
 - richer environment/prop/effect automation
 - multiple scene cameras if justified
 - advanced shader bindings
