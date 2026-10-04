@@ -29,6 +29,9 @@ namespace VCR.Editor.P12
         private string _lastValidJson;
         private string _newPresetId =
             "new-preset";
+        private string _accessoryPackageDestination =
+            P12AccessoryPackageImporter
+                .DefaultDestinationRoot;
         private string _message;
         private MessageType _messageType =
             MessageType.Info;
@@ -163,6 +166,12 @@ namespace VCR.Editor.P12
                 }
 
                 if (GUILayout.Button(
+                        "Import Accessory Package"))
+                {
+                    ImportAccessoryPackage();
+                }
+
+                if (GUILayout.Button(
                         "Open Transition Timeline"))
                 {
                     VCR.Editor.P11
@@ -170,6 +179,11 @@ namespace VCR.Editor.P12
                         .Open();
                 }
             }
+
+            _accessoryPackageDestination =
+                EditorGUILayout.TextField(
+                    "Accessory Import Destination",
+                    _accessoryPackageDestination);
         }
 
         private void DrawRuntimeSettings()
@@ -773,6 +787,272 @@ namespace VCR.Editor.P12
                             true);
                 }
             }
+        }
+
+        private void ImportAccessoryPackage()
+        {
+            var manifestPath =
+                EditorUtility.OpenFilePanel(
+                    "Import VCR Accessory Package Manifest",
+                    string.Empty,
+                    "json");
+
+            if (string.IsNullOrWhiteSpace(
+                    manifestPath))
+            {
+                return;
+            }
+
+            if (!P12AccessoryPackageImporter
+                .TryLoadManifest(
+                    manifestPath,
+                    out var manifest,
+                    out var anchorMode,
+                    out var bone,
+                    out var manifestError))
+            {
+                _message =
+                    "Accessory package validation failed: " +
+                    manifestError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (AccessoryIdExists(
+                    manifest.SlotId,
+                    manifest.AccessoryId))
+            {
+                _message =
+                    $"Accessory package conflicts with existing binding '{manifest.SlotId}/{manifest.AccessoryId}'.";
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (!P12AccessoryPackageImporter
+                .TryImport(
+                    manifestPath,
+                    _accessoryPackageDestination,
+                    out var importResult,
+                    out var importError))
+            {
+                _message =
+                    "Accessory package import failed: " +
+                    importError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            GameObject instance = null;
+
+            try
+            {
+                instance =
+                    PrefabUtility.InstantiatePrefab(
+                        importResult.ModelAsset) as
+                        GameObject;
+
+                if (instance == null)
+                {
+                    instance =
+                        UnityEngine.Object.Instantiate(
+                            importResult.ModelAsset);
+                }
+
+                if (instance == null)
+                {
+                    throw new InvalidOperationException(
+                        "Imported accessory model could not be instantiated.");
+                }
+
+                Undo.RegisterCreatedObjectUndo(
+                    instance,
+                    "Import Accessory Package");
+                instance.name =
+                    manifest.AccessoryId;
+                instance.SetActive(
+                    false);
+
+                var parent =
+                    FindOrCreateImportedAccessorySlot(
+                        manifest.SlotId);
+                instance.transform.SetParent(
+                    parent,
+                    false);
+
+                Undo.RecordObject(
+                    _runtime,
+                    "Register Imported Accessory");
+
+                var index =
+                    _accessories.arraySize;
+                _accessories.arraySize =
+                    index + 1;
+                var accessory =
+                    _accessories
+                        .GetArrayElementAtIndex(
+                            index);
+
+                accessory.FindPropertyRelative(
+                        "SlotId")
+                    .stringValue =
+                        manifest.SlotId;
+                accessory.FindPropertyRelative(
+                        "AccessoryId")
+                    .stringValue =
+                        manifest.AccessoryId;
+                accessory.FindPropertyRelative(
+                        "Root")
+                    .objectReferenceValue =
+                        instance;
+                accessory.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex =
+                        (int)anchorMode;
+                accessory.FindPropertyRelative(
+                        "AnchorTransform")
+                    .objectReferenceValue =
+                        null;
+
+                var animator =
+                    _runtime
+                        .GetComponentInChildren<Animator>(
+                            true);
+
+                if (animator == null)
+                {
+                    animator =
+                        _runtime
+                            .GetComponentInParent<Animator>();
+                }
+
+                accessory.FindPropertyRelative(
+                        "AnchorAnimator")
+                    .objectReferenceValue =
+                        anchorMode ==
+                            AppearanceAccessoryAnchorMode
+                                .HumanoidBone
+                            ? animator
+                            : null;
+                accessory.FindPropertyRelative(
+                        "AnchorBone")
+                    .enumValueIndex =
+                        (int)bone;
+                accessory.FindPropertyRelative(
+                        "LocalPosition")
+                    .vector3Value =
+                        manifest.LocalPosition;
+                accessory.FindPropertyRelative(
+                        "LocalEulerAngles")
+                    .vector3Value =
+                        manifest.LocalEulerAngles;
+                accessory.FindPropertyRelative(
+                        "OverrideLocalScale")
+                    .boolValue =
+                        manifest.OverrideLocalScale;
+                accessory.FindPropertyRelative(
+                        "LocalScale")
+                    .vector3Value =
+                        manifest.LocalScale;
+                accessory.FindPropertyRelative(
+                        "RestoreOriginalTransformWhenInactive")
+                    .boolValue =
+                        manifest
+                            .RestoreOriginalTransformWhenInactive;
+
+                _serializedRuntime
+                    .ApplyModifiedProperties();
+                EditorUtility.SetDirty(
+                    _runtime);
+                _hasPendingChanges =
+                    true;
+
+                _message =
+                    $"Imported accessory package '{manifest.PackageId}' {manifest.PackageVersion} as '{manifest.SlotId}/{manifest.AccessoryId}'. Validate & Apply to register the scene binding.";
+
+                if (anchorMode ==
+                        AppearanceAccessoryAnchorMode
+                            .HumanoidBone &&
+                    animator == null)
+                {
+                    _message +=
+                        " The package requests a humanoid-bone anchor, but no Animator was found; assign one before validation.";
+                    _messageType =
+                        MessageType.Warning;
+                }
+                else
+                {
+                    _messageType =
+                        MessageType.Info;
+                }
+
+                Selection.activeGameObject =
+                    instance;
+            }
+            catch (Exception exception)
+            {
+                if (instance != null)
+                {
+                    Undo.DestroyObjectImmediate(
+                        instance);
+                }
+
+                P12AccessoryPackageImporter
+                    .DeleteImportedPackage(
+                        importResult);
+
+                _serializedRuntime.Update();
+                _message =
+                    "Accessory package scene registration failed and imported assets were rolled back: " +
+                    exception.Message;
+                _messageType =
+                    MessageType.Error;
+            }
+        }
+
+        private Transform FindOrCreateImportedAccessorySlot(
+            string slotId)
+        {
+            var container =
+                _runtime.transform.Find(
+                    "VCRImportedAccessories");
+
+            if (container == null)
+            {
+                var containerObject =
+                    new GameObject(
+                        "VCRImportedAccessories");
+                Undo.RegisterCreatedObjectUndo(
+                    containerObject,
+                    "Create Imported Accessory Container");
+                containerObject.transform.SetParent(
+                    _runtime.transform,
+                    false);
+                container =
+                    containerObject.transform;
+            }
+
+            var slot =
+                container.Find(
+                    slotId);
+
+            if (slot != null)
+            {
+                return slot;
+            }
+
+            var slotObject =
+                new GameObject(
+                    slotId);
+            Undo.RegisterCreatedObjectUndo(
+                slotObject,
+                "Create Imported Accessory Slot");
+            slotObject.transform.SetParent(
+                container,
+                false);
+            return slotObject.transform;
         }
 
         private void DiscoverConventionBindings()
