@@ -142,11 +142,6 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             {
                 _sink = null;
 
-                if (eventSinkBehaviour == null)
-                {
-                    eventSinkBehaviour = null;
-                }
-
                 ResolveSink();
             }
 
