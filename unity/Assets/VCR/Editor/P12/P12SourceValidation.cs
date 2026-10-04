@@ -1759,6 +1759,10 @@ namespace VCR.Editor.P12
                 {
                     Id =
                         "donation-thanks",
+                    GraphLabel =
+                        "Donation Thanks",
+                    GraphGroup =
+                        "broadcast-reactions",
                     Enabled =
                         true,
                     Filter =
@@ -1974,6 +1978,95 @@ namespace VCR.Editor.P12
                 "P12 event graph must generate deterministic suffix ids",
                 failures);
 
+            var groupedSecond =
+                CloneRule(
+                    valid);
+            groupedSecond.Id =
+                "donation-thanks-secondary";
+            groupedSecond.GraphLabel =
+                "Secondary Thanks";
+            groupedSecond.Enabled =
+                false;
+            var groupSummaries =
+                P12EventRuleAuthoringUtility
+                    .CaptureGroupSummaries(
+                        new[]
+                        {
+                            valid,
+                            groupedSecond
+                        });
+
+            Expect(
+                groupSummaries.Length ==
+                    1 &&
+                groupSummaries[0].Group ==
+                    "broadcast-reactions" &&
+                groupSummaries[0].RuleIds.Length ==
+                    2 &&
+                groupSummaries[0].RuleIds[0] ==
+                    "donation-thanks" &&
+                groupSummaries[0].RuleIds[1] ==
+                    "donation-thanks-secondary" &&
+                groupSummaries[0].EnabledCount ==
+                    1,
+                "P12 event graph grouping must summarize ordered rule ids and enabled counts without changing runtime semantics",
+                failures);
+
+            Expect(
+                P12EventRuleAuthoringUtility
+                    .FindAdjacentRuleIndexInGroup(
+                        new[]
+                        {
+                            valid,
+                            groupedSecond
+                        },
+                        0,
+                        1) ==
+                    1 &&
+                P12EventRuleAuthoringUtility
+                    .FindAdjacentRuleIndexInGroup(
+                        new[]
+                        {
+                            valid,
+                            groupedSecond
+                        },
+                        1,
+                        1) ==
+                    0,
+                "P12 event graph grouping must navigate within a group deterministically with wraparound",
+                failures);
+
+            var groupEnableRules =
+                new[]
+                {
+                    CloneRule(
+                        valid),
+                    CloneRule(
+                        groupedSecond)
+                };
+            var enabledChanges =
+                P12EventRuleAuthoringUtility
+                    .SetGroupEnabled(
+                        groupEnableRules,
+                        "broadcast-reactions",
+                        true);
+            var disabledChanges =
+                P12EventRuleAuthoringUtility
+                    .SetGroupEnabled(
+                        groupEnableRules,
+                        "broadcast-reactions",
+                        false);
+
+            Expect(
+                enabledChanges ==
+                    1 &&
+                disabledChanges ==
+                    2 &&
+                !groupEnableRules[0].Enabled &&
+                !groupEnableRules[1].Enabled,
+                "P12 event graph group enable/disable must mutate only matching grouped rules and report changed counts",
+                failures);
+
             foreach (P12BuiltInEventRuleTemplate
                      templateKind in
                      Enum.GetValues(
@@ -2063,6 +2156,10 @@ namespace VCR.Editor.P12
                     3 &&
                 roundTripPackage.Rules[0].Id ==
                     "donation-thanks" &&
+                roundTripPackage.Rules[0].GraphLabel ==
+                    "Donation Thanks" &&
+                roundTripPackage.Rules[0].GraphGroup ==
+                    "broadcast-reactions" &&
                 roundTripPackage.Rules[1].Id ==
                     "manual-restore-default",
                 "P12 event rule library JSON must preserve metadata and ordered rules: " +
@@ -2220,6 +2317,12 @@ namespace VCR.Editor.P12
                 Expect(
                     rules != null &&
                     first != null &&
+                    first.FindPropertyRelative(
+                        "GraphLabel") !=
+                        null &&
+                    first.FindPropertyRelative(
+                        "GraphGroup") !=
+                        null &&
                     first.FindPropertyRelative(
                         "Filter") !=
                         null &&
