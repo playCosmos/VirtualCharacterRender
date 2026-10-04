@@ -1831,6 +1831,13 @@ namespace VCR.Editor.P12
                 P12EventRuleLibraryUtility
                     .TryCreatePackage(
                         "validation-library",
+                        "Broadcast reaction examples",
+                        new[]
+                        {
+                            "broadcast",
+                            "appearance"
+                        },
+                        3,
                         new[]
                         {
                             valid,
@@ -1858,11 +1865,21 @@ namespace VCR.Editor.P12
                 roundTripPackage != null &&
                 roundTripPackage.Rules.Length ==
                     2 &&
+                roundTripPackage.Description ==
+                    "Broadcast reaction examples" &&
+                roundTripPackage.Tags.Length ==
+                    2 &&
+                roundTripPackage.Tags[0] ==
+                    "broadcast" &&
+                roundTripPackage.Tags[1] ==
+                    "appearance" &&
+                roundTripPackage.Revision ==
+                    3 &&
                 roundTripPackage.Rules[0].Id ==
                     "donation-thanks" &&
                 roundTripPackage.Rules[1].Id ==
                     "manual-restore-default",
-                "P12 event rule library JSON must preserve package id and ordered rules: " +
+                "P12 event rule library JSON must preserve metadata and ordered rules: " +
                 packageError +
                 " / " +
                 serializeError +
@@ -1898,6 +1915,66 @@ namespace VCR.Editor.P12
                         out var collisionError),
                 "P12 event rule library merge must suffix colliding rule ids deterministically without invalidating rules: " +
                 collisionError,
+                failures);
+
+            var duplicateTags =
+                new P12EventRuleLibraryPackage
+                {
+                    PackageId =
+                        "duplicate-tags",
+                    Description =
+                        "duplicate validation",
+                    Tags =
+                        new[]
+                        {
+                            "Broadcast",
+                            "broadcast"
+                        },
+                    Revision = 1,
+                    Rules =
+                        new[]
+                        {
+                            manualTemplate
+                        }
+                };
+
+            Expect(
+                !P12EventRuleLibraryUtility
+                    .TryValidatePackage(
+                        duplicateTags,
+                        out var duplicateTagError) &&
+                duplicateTagError != null &&
+                duplicateTagError.IndexOf(
+                    "duplicate tag",
+                    StringComparison.OrdinalIgnoreCase) >=
+                    0,
+                "P12 event rule library metadata must reject duplicate tags case-insensitively",
+                failures);
+
+            const string legacyV1Json =
+@"{
+  ""Version"": 1,
+  ""PackageId"": ""legacy-v1-library"",
+  ""Rules"": []
+}";
+
+            Expect(
+                P12EventRuleLibraryUtility
+                    .TryParse(
+                        legacyV1Json,
+                        out var legacyV1Package,
+                        out var legacyV1Error) &&
+                legacyV1Package.Version ==
+                    P12EventRuleLibraryPackage
+                        .CurrentVersion &&
+                legacyV1Package.Description ==
+                    string.Empty &&
+                legacyV1Package.Tags.Length ==
+                    0 &&
+                legacyV1Package.Revision ==
+                    1,
+                "P12 event rule library v1 must migrate to v2 metadata defaults: " +
+                legacyV1Error,
                 failures);
 
             var newerPackage =
@@ -2031,6 +2108,13 @@ namespace VCR.Editor.P12
                     P12EventRuleLibraryUtility
                         .TryCreatePackage(
                             "browser-validation",
+                            "Reaction library for streamer events",
+                            new[]
+                            {
+                                "broadcast",
+                                "effects"
+                            },
+                            4,
                             new[]
                             {
                                 template,
@@ -2142,6 +2226,12 @@ namespace VCR.Editor.P12
                     valid != null &&
                     valid.PackageId ==
                         "browser-validation" &&
+                    valid.Description ==
+                        "Reaction library for streamer events" &&
+                    valid.Revision ==
+                        4 &&
+                    valid.Tags.Length ==
+                        2 &&
                     valid.RuleIds.Length ==
                         2 &&
                     P12EventRuleLibraryBrowserUtility
@@ -2151,8 +2241,16 @@ namespace VCR.Editor.P12
                     P12EventRuleLibraryBrowserUtility
                         .MatchesSearch(
                             valid,
-                            "browser-validation"),
-                    "P12 event rule library browser must expose package/rule ids to search",
+                            "browser-validation") &&
+                    P12EventRuleLibraryBrowserUtility
+                        .MatchesSearch(
+                            valid,
+                            "streamer") &&
+                    P12EventRuleLibraryBrowserUtility
+                        .MatchesSearch(
+                            valid,
+                            "effects"),
+                    "P12 event rule library browser must expose package/rule ids plus description/tags to search",
                     failures);
 
                 Expect(
