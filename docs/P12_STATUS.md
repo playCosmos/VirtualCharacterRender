@@ -139,7 +139,7 @@ The visual pipeline is:
 Event / Filter → Conditions (AND) → State Mutations → Actions
 ```
 
-Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, built-in starter templates, selected/all rule-library JSON export, validated library import/merge with deterministic id suffixing, project library browsing/search, and Validate & Apply rollback to the last valid host snapshot.
+Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, built-in starter templates, selected/all rule-library JSON v2 export with description/tags/revision metadata, validated library import/merge with deterministic id suffixing, project library browsing/search across package/rule/description/tag fields, and Validate & Apply rollback to the last valid host snapshot.
 
 Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, incomplete rate limits, missing condition/mutation keys, missing action types, and non-finite numeric values before rules are applied through `EventRuntimeHost.SetRules`.
 
@@ -182,7 +182,8 @@ The validation source covers:
 - DontSave preview lifetime/disposal and finite bind-matrix diagnostics
 - structurally incompatible report cannot create a preview
 - built-in event-rule templates validate against the existing P9 rule contract
-- event-rule library JSON version/rule round trip
+- event-rule library v2 metadata/rule round trip and v1→v2 migration
+- duplicate/blank tag and invalid revision rejection
 - deterministic collision suffixing when imported rule ids already exist
 - unsupported newer event-rule-library version rejection
 - event-rule project-library valid/invalid indexing and package/rule-id search matching
@@ -212,6 +213,6 @@ Required later evidence includes:
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
 - richer nested/group-hierarchy operations beyond the implemented per-step Graph Label / Graph Group metadata, cluster Apply/Clear Group, interactive source→target edge editing, and All/Any target groups
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
-- richer event graph visual grouping/higher-level composition and library tags/descriptions/version history beyond the implemented starter templates + JSON import/export + project library browser
+- richer event graph visual grouping/higher-level composition and package revision-history/diff workflows beyond the implemented starter templates + metadata-aware JSON v2 import/export + project library browser
 - richer environment/prop/effect automation
 
