@@ -40,6 +40,7 @@ namespace VCR.Runtime.Appearance.Unity
         [SerializeField] private MonoBehaviour[] transitionExecutorBehaviours =
             Array.Empty<MonoBehaviour>();
         [SerializeField] private bool autoFindTransitionExecutors = true;
+        [SerializeField, Range(1, 256)] private int maxQueuedTransitions = 32;
 
         private readonly Dictionary<string, AppearanceOutfitBinding>
             _outfits =
@@ -97,6 +98,7 @@ namespace VCR.Runtime.Appearance.Unity
         private long _transitionCommitCount;
         private long _transitionFailureCount;
         private long _transitionQueuedCount;
+        private long _transitionQueueRejectedCount;
         private long _transitionInterruptedCount;
         private long _transitionCancelledCount;
 
@@ -154,6 +156,15 @@ namespace VCR.Runtime.Appearance.Unity
 
         public IReadOnlyList<string> TransitionIds =>
             _transitionIds;
+
+        public int MaxQueuedTransitions =>
+            Mathf.Clamp(
+                maxQueuedTransitions,
+                1,
+                256);
+
+        public int PendingTransitionCount =>
+            _pending.Count;
 
         public IReadOnlyList<string> UserPresetIds =>
             _userPresetIds;
@@ -529,6 +540,23 @@ namespace VCR.Runtime.Appearance.Unity
                     : AppearanceRuntimeState.Unconfigured,
                 null);
 
+            return true;
+        }
+
+        public bool TrySetMaxQueuedTransitions(
+            int value,
+            out string error)
+        {
+            if (value < 1 || value > 256)
+            {
+                error =
+                    "Max queued appearance transitions must be in the 1..256 range.";
+                return false;
+            }
+
+            maxQueuedTransitions =
+                value;
+            error = null;
             return true;
         }
 
@@ -1376,6 +1404,15 @@ namespace VCR.Runtime.Appearance.Unity
 
                 case AppearanceTransitionQueuePolicy
                     .QueueAll:
+                    if (_pending.Count >=
+                        MaxQueuedTransitions)
+                    {
+                        _transitionQueueRejectedCount++;
+                        error =
+                            $"Appearance transition queue is full ({MaxQueuedTransitions}).";
+                        return false;
+                    }
+
                     _pending.Enqueue(request);
                     _transitionQueuedCount++;
                     return true;
@@ -3397,6 +3434,21 @@ namespace VCR.Runtime.Appearance.Unity
                 new RuntimeMetric(
                     "appearance.transition.queued",
                     _transitionQueuedCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.queue_depth",
+                    _pending.Count,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.queue_limit",
+                    MaxQueuedTransitions,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.queue_rejected",
+                    _transitionQueueRejectedCount,
                     "count"));
             output.Add(
                 new RuntimeMetric(
