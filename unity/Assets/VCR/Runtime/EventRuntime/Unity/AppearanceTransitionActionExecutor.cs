@@ -32,8 +32,10 @@ namespace VCR.Runtime.EventRuntime.Unity
             params MonoBehaviour[] behaviours)
         {
             actionHandlerBehaviours =
-                behaviours ??
-                Array.Empty<MonoBehaviour>();
+                behaviours == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        behaviours.Clone();
             RebuildHandlers();
         }
 
