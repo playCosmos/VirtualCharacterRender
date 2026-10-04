@@ -229,7 +229,7 @@ The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` p
 - advanced shader bindings
 - advanced plugin workflows
 - full-body tracking integration as optional capability
-- wardrobe/accessory authoring and import tooling: outfit-root registration, Transform/humanoid-bone accessory anchors, local offset authoring, preset authoring, implemented rigid-FBX accessory package v1, structural skinned compatibility analysis, and a later explicit bind-pose preview/rebind gate
+- wardrobe/accessory authoring and import tooling: outfit-root registration, Transform/humanoid-bone accessory anchors, local offset authoring, preset authoring, implemented rigid-FBX accessory package v1, structural skinned compatibility analysis, implemented non-destructive target-bone rebind preview, and a later evidence-gated explicit rebind/package acceptance workflow
 - appearance-transition authoring: extend the implemented marker-aware editor, Unity AnimationClip/BakedCue marker extraction/import/snapping, Unity-native `.fbx`/`.dae`/`.anim` import, built-in `.bvh` → additive humanoid cue conversion, Blocking plus StepId-based All/Any dependencies, versioned JSON v2 package import/export, and the project package-library browser with additional external-format adapters (for example glTF motion), richer interactive dependency editing/grouping, particle/effect preset registration, and richer interruption/fallback policy editing
 
 ## P13 — 2D Extension
