@@ -173,6 +173,32 @@ namespace VCR.Editor.P11
                         "casual-hat");
 
                 Expect(
+                    runtime.TrySetMaxQueuedTransitions(
+                        32,
+                        out var queueLimitError) &&
+                    runtime.MaxQueuedTransitions == 32 &&
+                    runtime.PendingTransitionCount == 0 &&
+                    string.IsNullOrEmpty(
+                        queueLimitError),
+                    "appearance queue limit must accept the bounded default range",
+                    failures);
+
+                Expect(
+                    !runtime.TrySetMaxQueuedTransitions(
+                        0,
+                        out var queueMinError) &&
+                    !string.IsNullOrEmpty(
+                        queueMinError) &&
+                    !runtime.TrySetMaxQueuedTransitions(
+                        257,
+                        out var queueMaxError) &&
+                    !string.IsNullOrEmpty(
+                        queueMaxError) &&
+                    runtime.MaxQueuedTransitions == 32,
+                    "appearance queue limit must reject values outside the 1..256 safety range",
+                    failures);
+
+                Expect(
                     runtime.RebuildConfiguration(
                         out var configError),
                     "appearance configuration must validate: " +
