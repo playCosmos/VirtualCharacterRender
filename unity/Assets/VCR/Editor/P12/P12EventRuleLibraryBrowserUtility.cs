@@ -11,6 +11,10 @@ namespace VCR.Editor.P12
         public string AssetPath;
         public string PackageId;
         public int Version;
+        public string Description;
+        public string[] Tags =
+            Array.Empty<string>();
+        public int Revision;
         public string[] RuleIds =
             Array.Empty<string>();
         public long FileBytes;
@@ -310,6 +314,9 @@ namespace VCR.Editor.P12
                     entry.PackageId,
                     term) ||
                 Contains(
+                    entry.Description,
+                    term) ||
+                Contains(
                     entry.AssetPath,
                     term) ||
                 Contains(
@@ -317,6 +324,18 @@ namespace VCR.Editor.P12
                     term))
             {
                 return true;
+            }
+
+            foreach (var tag in
+                     entry.Tags ??
+                     Array.Empty<string>())
+            {
+                if (Contains(
+                        tag,
+                        term))
+                {
+                    return true;
+                }
             }
 
             foreach (var ruleId in
@@ -361,6 +380,14 @@ namespace VCR.Editor.P12
                 entry.Version =
                     source?.Version ??
                     0;
+                entry.Description =
+                    source?.Description;
+                entry.Tags =
+                    source?.Tags ??
+                    Array.Empty<string>();
+                entry.Revision =
+                    source?.Revision ??
+                    0;
 
                 if (!P12EventRuleLibraryUtility
                     .TryParse(
@@ -380,6 +407,13 @@ namespace VCR.Editor.P12
                         package.PackageId;
                     entry.Version =
                         package.Version;
+                    entry.Description =
+                        package.Description;
+                    entry.Tags =
+                        package.Tags ??
+                        Array.Empty<string>();
+                    entry.Revision =
+                        package.Revision;
                     var rules =
                         package.Rules ??
                         Array.Empty<
