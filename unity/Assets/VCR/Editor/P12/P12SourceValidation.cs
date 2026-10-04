@@ -2133,6 +2133,33 @@ namespace VCR.Editor.P12
                     serializeError,
                     failures);
 
+                Expect(
+                    P12EventRuleLibraryUtility
+                        .TryCreatePackage(
+                            "browser-validation",
+                            "Earlier streamer reaction library",
+                            new[]
+                            {
+                                "broadcast"
+                            },
+                            3,
+                            new[]
+                            {
+                                template
+                            },
+                            out var previousPackage,
+                            out var previousPackageError) &&
+                    P12EventRuleLibraryUtility
+                        .TrySerialize(
+                            previousPackage,
+                            out var previousJson,
+                            out var previousSerializeError),
+                    "P12 event rule library previous revision must serialize for history validation: " +
+                    previousPackageError +
+                    " / " +
+                    previousSerializeError,
+                    failures);
+
                 var projectRoot =
                     Directory.GetParent(
                             Application.dataPath)
@@ -2155,6 +2182,9 @@ namespace VCR.Editor.P12
                 var validPath =
                     folder +
                     "/valid.json";
+                var previousPath =
+                    folder +
+                    "/revision3.json";
                 var invalidPath =
                     folder +
                     "/future.json";
@@ -2167,6 +2197,11 @@ namespace VCR.Editor.P12
                 File.WriteAllText(
                     Path.Combine(
                         absoluteFolder,
+                        "revision3.json"),
+                    previousJson);
+                File.WriteAllText(
+                    Path.Combine(
+                        absoluteFolder,
                         "future.json"),
 @"{
   ""Version"": 999,
@@ -2176,6 +2211,12 @@ namespace VCR.Editor.P12
 
                 AssetDatabase.ImportAsset(
                     validPath,
+                    ImportAssetOptions
+                        .ForceSynchronousImport |
+                    ImportAssetOptions
+                        .ForceUpdate);
+                AssetDatabase.ImportAsset(
+                    previousPath,
                     ImportAssetOptions
                         .ForceSynchronousImport |
                     ImportAssetOptions
@@ -2194,7 +2235,7 @@ namespace VCR.Editor.P12
                             out var entries,
                             out var scanError) &&
                     entries.Length ==
-                        2,
+                        3,
                     "P12 event rule library browser must index valid and invalid project JSON files: " +
                     scanError,
                     failures);
@@ -2209,12 +2250,15 @@ namespace VCR.Editor.P12
                     foreach (var entry in entries)
                     {
                         if (entry != null &&
-                            entry.Valid)
+                            entry.Valid &&
+                            entry.Revision ==
+                                4)
                         {
                             valid =
                                 entry;
                         }
-                        else if (entry != null)
+                        else if (entry != null &&
+                                 !entry.Valid)
                         {
                             invalid =
                                 entry;
@@ -2261,6 +2305,105 @@ namespace VCR.Editor.P12
                     !string.IsNullOrWhiteSpace(
                         invalid.Error),
                     "P12 event rule library browser must retain invalid/future packages for diagnostics",
+                    failures);
+
+                Expect(
+                    valid != null &&
+                    P12EventRuleLibraryBrowserUtility
+                        .TryGetRevisionHistory(
+                            entries,
+                            valid,
+                            out var history,
+                            out var historyError) &&
+                    history.Length ==
+                        2 &&
+                    history[0].Revision ==
+                        3 &&
+                    history[1].Revision ==
+                        4,
+                    "P12 event rule library revision history must group matching PackageId files and sort them by revision: " +
+                    historyError,
+                    failures);
+
+                Expect(
+                    valid != null &&
+                    P12EventRuleLibraryBrowserUtility
+                        .TryFindPreviousRevision(
+                            entries,
+                            valid,
+                            out var previousEntry,
+                            out var previousError) &&
+                    previousEntry != null &&
+                    previousEntry.Revision ==
+                        3,
+                    "P12 event rule library must resolve the immediate previous revision deterministically: " +
+                    previousError,
+                    failures);
+
+                if (valid != null &&
+                    P12EventRuleLibraryBrowserUtility
+                        .TryFindPreviousRevision(
+                            entries,
+                            valid,
+                            out var diffFrom,
+                            out _) &&
+                    diffFrom != null)
+                {
+                    Expect(
+                        P12EventRuleLibraryUtility
+                            .TryDiffPackages(
+                                diffFrom.Package,
+                                valid.Package,
+                                out var revisionDiff,
+                                out var revisionDiffError) &&
+                        revisionDiff.FromRevision ==
+                            3 &&
+                        revisionDiff.ToRevision ==
+                            4 &&
+                        revisionDiff.DescriptionChanged &&
+                        revisionDiff.TagsChanged &&
+                        revisionDiff.AddedRuleIds.Length ==
+                            1,
+                        "P12 event rule library previous-revision diff must report metadata and added-rule changes: " +
+                        revisionDiffError,
+                        failures);
+                }
+
+                File.WriteAllText(
+                    Path.Combine(
+                        absoluteFolder,
+                        "revision3-duplicate.json"),
+                    previousJson);
+                AssetDatabase.ImportAsset(
+                    folder +
+                    "/revision3-duplicate.json",
+                    ImportAssetOptions
+                        .ForceSynchronousImport |
+                    ImportAssetOptions
+                        .ForceUpdate);
+
+                Expect(
+                    P12EventRuleLibraryBrowserUtility
+                        .TryScan(
+                            folder,
+                            out var duplicateRevisionEntries,
+                            out var duplicateRevisionScanError) &&
+                    valid != null &&
+                    !P12EventRuleLibraryBrowserUtility
+                        .TryGetRevisionHistory(
+                            duplicateRevisionEntries,
+                            valid,
+                            out _,
+                            out var duplicateRevisionError) &&
+                    duplicateRevisionError != null &&
+                    duplicateRevisionError.IndexOf(
+                        "ambiguous",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "P12 event rule library history must reject duplicate valid files for the same PackageId revision instead of choosing one silently: " +
+                    duplicateRevisionScanError +
+                    " / " +
+                    duplicateRevisionError,
                     failures);
             }
             catch (Exception exception)
