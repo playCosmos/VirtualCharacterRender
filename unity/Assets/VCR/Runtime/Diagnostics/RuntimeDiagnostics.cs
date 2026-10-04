@@ -122,6 +122,17 @@ namespace VCR.Runtime.Diagnostics
         {
             SampleFrameTime();
 
+            if (!IsServiceAlive(_provider))
+            {
+                _provider = null;
+                _presenceProvider = null;
+
+                if (trackingProviderBehaviour == null)
+                {
+                    trackingProviderBehaviour = null;
+                }
+            }
+
             if (_provider == null &&
                 Time.unscaledTime >= _nextProviderSearchTime)
             {
@@ -130,7 +141,7 @@ namespace VCR.Runtime.Diagnostics
                 ResolveProvider();
             }
 
-            if (_provider != null)
+            if (IsServiceAlive(_provider))
             {
                 ObserveTracking();
             }
@@ -398,8 +409,10 @@ namespace VCR.Runtime.Diagnostics
             _metrics.Clear();
             CollectSubsystemMetrics(_metrics);
 
-            var presence =
-                _presenceProvider?.Presence;
+            TrackingPresenceSnapshot? presence =
+                IsServiceAlive(_presenceProvider)
+                    ? _presenceProvider.Presence
+                    : null;
 
             var metricSnapshot =
                 _metrics.ToArray();
@@ -545,10 +558,24 @@ namespace VCR.Runtime.Diagnostics
             }
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveProvider()
         {
-            if (trackingProviderBehaviour is
-                ITrackingFrameProvider configured)
+            if (trackingProviderBehaviour != null &&
+                trackingProviderBehaviour is
+                    ITrackingFrameProvider configured)
             {
                 SetTrackingProvider(configured);
                 return;
