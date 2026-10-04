@@ -1429,6 +1429,8 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
+            RefreshExecutorsIfNeeded();
+
             if (!ValidateRequiredExecutors(
                     transition,
                     out error))
@@ -2919,7 +2921,7 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var executor in
                      _executors)
             {
-                if (executor == null ||
+                if (!IsExecutorAlive(executor) ||
                     !executor.CanExecute(step))
                 {
                     continue;
@@ -3043,7 +3045,8 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var executor in
                      _executors)
             {
-                if (executor is not
+                if (!IsExecutorAlive(executor) ||
+                    executor is not
                         IAppearanceTransitionStepCompletionProbe
                             probe ||
                     !executor.CanExecute(
@@ -3096,7 +3099,8 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var executor in
                      _executors)
             {
-                if (executor is
+                if (IsExecutorAlive(executor) &&
+                    executor is
                         IAppearanceTransitionStepCompletionProbe
                             probe &&
                     executor.CanExecute(
@@ -3119,7 +3123,7 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var executor in
                      _executors)
             {
-                if (executor != null &&
+                if (IsExecutorAlive(executor) &&
                     executor.CanExecute(step))
                 {
                     count++;
@@ -3127,6 +3131,42 @@ namespace VCR.Runtime.Appearance.Unity
             }
 
             return count;
+        }
+
+        private void RefreshExecutorsIfNeeded()
+        {
+            if (!autoFindTransitionExecutors)
+            {
+                return;
+            }
+
+            if (_executors.Length == 0)
+            {
+                RebuildExecutors();
+                return;
+            }
+
+            foreach (var executor in _executors)
+            {
+                if (!IsExecutorAlive(executor))
+                {
+                    RebuildExecutors();
+                    return;
+                }
+            }
+        }
+
+        private static bool IsExecutorAlive(
+            IAppearanceTransitionStepExecutor executor)
+        {
+            if (executor == null)
+            {
+                return false;
+            }
+
+            return executor is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void RebuildExecutors()
@@ -3139,7 +3179,8 @@ namespace VCR.Runtime.Appearance.Unity
                      transitionExecutorBehaviours ??
                      Array.Empty<MonoBehaviour>())
             {
-                if (behaviour is
+                if (behaviour != null &&
+                    behaviour is
                     IAppearanceTransitionStepExecutor
                         executor &&
                     !list.Contains(executor))
