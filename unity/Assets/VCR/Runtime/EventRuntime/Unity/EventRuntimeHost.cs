@@ -249,7 +249,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 if (behaviour != null &&
                     behaviour is
-                        IEventActionHandler handler)
+                        IEventActionHandler handler &&
+                    !list.Contains(handler))
                 {
                     list.Add(handler);
                 }
