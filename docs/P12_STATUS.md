@@ -120,7 +120,7 @@ Implemented interaction:
 - source Actions without `StepId` are rejected
 - graph edits reuse the existing transition preset contract and still require `Validate & Apply` for full runtime executor/completion-probe validation
 
-P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, and missing-StepId rejection.
+P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, missing-StepId rejection, Graph Label / Graph Group clone preservation, transition package v3 JSON round trip, and v2→v3 authoring-metadata migration.
 
 ## Visual Event Node Editor
 
@@ -207,7 +207,7 @@ Required later evidence includes:
 - real rigid-FBX package import/render verification
 - real VRM bind-pose/deformation preview evidence for the implemented non-destructive preview
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
-- richer dependency grouping/labels beyond the implemented interactive source→target edge editing and All/Any target groups
+- richer dependency group operations beyond the implemented per-step Graph Label / Graph Group metadata, interactive source→target edge editing, and All/Any target groups
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - richer event graph visual grouping/higher-level composition and library tags/descriptions/version history beyond the implemented starter templates + JSON import/export + project library browser
 - richer environment/prop/effect automation
