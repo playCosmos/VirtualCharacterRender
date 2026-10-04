@@ -153,7 +153,9 @@ Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, in
 
 Rule grouping now supports nested `/` hierarchy paths. The Node Editor exposes implicit parents, exact/subtree Enable/Disable, hierarchy Rename/Move/Clear, subtree Duplicate with deterministic copied rule ids, and hierarchy-only Export through the existing validated rule-library package path. These remain authoring-only operations and do not alter EventRuntime matching/order.
 
-See `EVENT_NODE_EDITOR.md` for the exact first-slice semantics and limits.
+See `EVENT_NODE_EDITOR.md` for the exact event-authoring semantics and limits.
+
+`VCR/P12/Open Scene Automation Authoring` adds one validated authoring surface for the logical environment/prop/effect ids already consumed by Event Runtime handlers. It edits `BasicEnvironmentRuntime` state bindings, `PropEventActionHandler` bindings, and `EffectEventActionHandler` bindings, can seed rows from the selected GameObject, validates all assigned registries together, and rolls all three components back to their last valid EditorJson snapshots if any registry fails. The Event Node Editor also includes ordered `Manual Scene Sequence` and `Donation Scene Burst` starter rules built from existing environment/prop/effect action types. See `SCENE_AUTOMATION.md`.
 
 ## Scene Automation Authoring
 
@@ -231,6 +233,9 @@ The validation source covers:
 - event-rule project-library valid/invalid indexing and package/rule-id search matching
 - same-PackageId revision history ordering, Previous/Next lookup, previous-revision diff, and duplicate-revision ambiguity rejection
 - EventRuntimeRule Graph Label / Graph Group serialization, canonical nested group paths, group summary/navigation, exact/subtree enable-disable, hierarchy rewrite/clear, hierarchy capture/duplicate, and canonical group metadata rule-library round trip
+- Scene Automation Environment/Prop/Effect SerializedProperty contracts and runtime rebuild boundaries
+- duplicate prop/effect/environment logical id rejection plus last-valid snapshot restoration pattern
+- composite scene automation templates and emitted Environment → Prop → Effect command ordering
 - logical Prop set/toggle behavior, immediate completion, mixed-state rejection, and shared-root binding rejection
 - Scene Automation Prop/Effect SerializedProperty contracts and read-only Environment state binding contract
 - Prop/Environment starter-template semantics
@@ -261,5 +266,5 @@ Required later evidence includes:
 - richer graph interaction beyond the implemented nested Graph Group hierarchy, cluster Apply/Clear, hierarchy rename/move/clear, interactive source→target edge editing, and All/Any target groups; possible future work is collapse/lasso/multi-select only if it improves real authoring
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - higher-level event graph composition beyond the implemented nested GraphGroup hierarchy, subtree enable-disable/rename-move-clear/duplicate/export, metadata-aware JSON v2 import/export, project library browser, and same-PackageId revision navigation/diff; future work should focus on real authoring pain points such as collapse/lasso or explicit revision branch/merge only if justified
-- richer environment/prop/effect automation beyond the implemented logical Prop/Effect binding authoring, Prop actions, Environment state-id reference surface, and starter templates
+- richer environment/prop/effect automation beyond the implemented logical binding authoring window, validated rollback, and ordered composite Event Rule templates; later additions should be driven by concrete scene/effect requirements rather than a second automation engine beyond the implemented logical Prop/Effect binding authoring, Prop actions, Environment state-id reference surface, and starter templates
 
