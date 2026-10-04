@@ -6,7 +6,7 @@ namespace VCR.Editor.P12
     [CreateAssetMenu(
         menuName = "VCR/P12/Effect Preset",
         fileName = "VCR Effect Preset")]
-    internal sealed class P12EffectPresetAsset :
+    public sealed class P12EffectPresetAsset :
         ScriptableObject
     {
         public const int CurrentFormatVersion = 1;
