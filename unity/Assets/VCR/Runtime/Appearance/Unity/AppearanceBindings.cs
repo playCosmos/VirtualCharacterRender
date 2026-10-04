@@ -11,12 +11,36 @@ namespace VCR.Runtime.Appearance.Unity
             Array.Empty<GameObject>();
     }
 
+    public enum AppearanceAccessoryAnchorMode
+    {
+        None = 0,
+        Transform = 1,
+        HumanoidBone = 2
+    }
+
     [Serializable]
     public sealed class AppearanceAccessoryBinding
     {
         public string SlotId;
         public string AccessoryId;
         public GameObject Root;
+
+        [Header("Optional anchor")]
+        public AppearanceAccessoryAnchorMode AnchorMode =
+            AppearanceAccessoryAnchorMode.None;
+        public Transform AnchorTransform;
+        public Animator AnchorAnimator;
+        public HumanBodyBones AnchorBone =
+            HumanBodyBones.Head;
+        public Vector3 LocalPosition =
+            Vector3.zero;
+        public Vector3 LocalEulerAngles =
+            Vector3.zero;
+        public bool OverrideLocalScale = false;
+        public Vector3 LocalScale =
+            Vector3.one;
+        public bool RestoreOriginalTransformWhenInactive =
+            true;
     }
 
     [Serializable]
