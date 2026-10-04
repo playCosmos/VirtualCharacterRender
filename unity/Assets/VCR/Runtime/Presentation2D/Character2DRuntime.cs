@@ -303,6 +303,7 @@ namespace VCR.Runtime.Presentation2D
                 _backend.Status.State !=
                     Character2DBackendState.ModelLoaded)
             {
+                RefreshUpdateState();
                 return false;
             }
 
@@ -312,6 +313,7 @@ namespace VCR.Runtime.Presentation2D
             if (inputs ==
                 Character2DInputDomain.None)
             {
+                RefreshUpdateState();
                 return false;
             }
 
