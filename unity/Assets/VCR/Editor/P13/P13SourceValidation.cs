@@ -297,6 +297,8 @@ namespace VCR.Editor.P13
         {
             Character2DParameterMappingProfile profile =
                 null;
+            GameObject root =
+                null;
 
             try
             {
@@ -448,6 +450,139 @@ namespace VCR.Editor.P13
                         5f),
                     "2D parameter mapper must evaluate face/expression/head-position bindings with configured ranges: " +
                     evaluateError,
+                    failures);
+
+                root =
+                    new GameObject(
+                        "P13 2D Mapping Validation");
+                var backend =
+                    root.AddComponent<
+                        P13FakeCharacter2DBackend>();
+                var provider =
+                    root.AddComponent<
+                        P13FakeTrackingProvider>();
+                var runtime =
+                    root.AddComponent<
+                        Character2DRuntime>();
+
+                backend.SetSupportedInputs(
+                    Character2DInputDomain.Face |
+                    Character2DInputDomain.Expressions);
+                provider.Face =
+                    faceFrame;
+                provider.Expressions =
+                    expressionFrame;
+
+                runtime.Configure(
+                    backend,
+                    provider,
+                    Character2DInputDomain.Face |
+                    Character2DInputDomain.Expressions);
+
+                profile.Configure(
+                    "wrong.backend",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamMouthOpen",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .FaceCoefficient,
+                        FaceCoefficient =
+                            FaceCoefficient.JawOpen
+                    });
+
+                runtime.ConfigureParameterMapping(
+                    profile);
+
+                Expect(
+                    !runtime.TryLoadModel(
+                        new Character2DModelRequest(
+                            backend.BackendId,
+                            "mapped-model-invalid",
+                            "/tmp/mapped-model-invalid"),
+                        out var hostMismatchError) &&
+                    hostMismatchError != null &&
+                    hostMismatchError.IndexOf(
+                        "does not match",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0 &&
+                    backend.Status.State ==
+                        Character2DBackendState.Ready,
+                    "2D host must fail model load before backend activation when the configured mapping profile targets another backend",
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamMouthOpen",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .FaceCoefficient,
+                        FaceCoefficient =
+                            FaceCoefficient.JawOpen,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = -1f,
+                        OutputMax = 1f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            false
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHappy",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 2f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            true,
+                        DefaultInputValue = 0.25f
+                    });
+
+                Expect(
+                    runtime.TryLoadModel(
+                        new Character2DModelRequest(
+                            backend.BackendId,
+                            "mapped-model",
+                            "/tmp/mapped-model"),
+                        out var mappedLoadError) &&
+                    runtime.ProcessLatest(
+                        out var mappedApplyError) &&
+                    backend.ApplyCount == 0 &&
+                    backend.ParameterApplyCount == 1 &&
+                    backend.LastParameterValues !=
+                        null &&
+                    backend.LastParameterValues.Length ==
+                        2 &&
+                    backend.LastParameterValues[0]
+                            .ParameterId ==
+                        "ParamMouthOpen" &&
+                    Mathf.Approximately(
+                        backend.LastParameterValues[0]
+                            .Value,
+                        0.5f) &&
+                    backend.LastParameterValues[1]
+                            .ParameterId ==
+                        "ParamHappy" &&
+                    Mathf.Approximately(
+                        backend.LastParameterValues[1]
+                            .Value,
+                        0.8f),
+                    "2D host must route a configured mapping profile through ICharacter2DParameterSink instead of the raw snapshot path: " +
+                    mappedLoadError +
+                    " / " +
+                    mappedApplyError,
                     failures);
 
                 var faceOnlySnapshot =
@@ -603,6 +738,13 @@ namespace VCR.Editor.P13
             }
             finally
             {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+
                 if (profile != null)
                 {
                     UnityEngine.Object
@@ -657,7 +799,8 @@ namespace VCR.Editor.P13
 
     internal sealed class P13FakeCharacter2DBackend :
         MonoBehaviour,
-        ICharacter2DBackend
+        ICharacter2DBackend,
+        ICharacter2DParameterSink
     {
         private Character2DInputDomain _supportedInputs =
             Character2DInputDomain.Face |
@@ -679,6 +822,8 @@ namespace VCR.Editor.P13
         public int ApplyAttemptCount;
         public int ApplyCount;
         public Character2DInputSnapshot LastSnapshot;
+        public int ParameterApplyCount;
+        public Character2DParameterValue[] LastParameterValues;
 
         public void SetSupportedInputs(
             Character2DInputDomain value)
@@ -728,6 +873,17 @@ namespace VCR.Editor.P13
             LastSnapshot =
                 snapshot;
             ApplyCount++;
+            return true;
+        }
+
+        public bool TryApplyParameters(
+            Character2DParameterValue[] values,
+            out string error)
+        {
+            error = null;
+            LastParameterValues =
+                values;
+            ParameterApplyCount++;
             return true;
         }
     }
