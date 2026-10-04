@@ -215,11 +215,38 @@ namespace VCR.Runtime.EventRuntime.Unity
 
         private void EnsureHandlers()
         {
-            if (_handlers.Length == 0 &&
-                autoFindHandlers)
+            if (!autoFindHandlers)
+            {
+                return;
+            }
+
+            if (_handlers.Length == 0)
             {
                 RebuildHandlers();
+                return;
             }
+
+            foreach (var handler in _handlers)
+            {
+                if (!IsServiceAlive(handler))
+                {
+                    RebuildHandlers();
+                    return;
+                }
+            }
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void RebuildHandlers()
@@ -231,8 +258,9 @@ namespace VCR.Runtime.EventRuntime.Unity
                      actionHandlerBehaviours ??
                      Array.Empty<MonoBehaviour>())
             {
-                if (behaviour is
-                    IEventActionHandler handler)
+                if (behaviour != null &&
+                    behaviour is
+                        IEventActionHandler handler)
                 {
                     list.Add(handler);
                 }
@@ -271,7 +299,7 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             foreach (var candidate in _handlers)
             {
-                if (candidate == null ||
+                if (!IsServiceAlive(candidate) ||
                     !candidate.CanHandle(
                         command))
                 {
