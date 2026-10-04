@@ -22,8 +22,10 @@ namespace VCR.Runtime.Tracking.Mixing
             providerBehaviour;
 
         public ITrackingFrameProvider Provider =>
-            providerBehaviour as
-                ITrackingFrameProvider;
+            providerBehaviour != null
+                ? providerBehaviour as
+                    ITrackingFrameProvider
+                : null;
 
         public HumanoidPoseLayerSettings Settings =>
             settings ??=
