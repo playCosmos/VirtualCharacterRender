@@ -15,7 +15,8 @@ namespace VCR.Editor.P12
         ManualPropToggle = 4,
         ChatEnvironmentState = 5,
         ManualSceneSequence = 6,
-        DonationSceneBurst = 7
+        DonationSceneBurst = 7,
+        ManualTimedSceneSequence = 8
     }
 
     [Serializable]
@@ -714,6 +715,42 @@ namespace VCR.Editor.P12
                                             .Constant,
                                     ConstantText =
                                         "state-id"
+                                }
+                            }
+                    };
+
+                case P12BuiltInEventRuleTemplate
+                    .ManualTimedSceneSequence:
+                    return new EventRuntimeRule
+                    {
+                        Id =
+                            "manual-timed-scene-sequence",
+                        GraphLabel =
+                            "Timed Scene Sequence",
+                        GraphGroup =
+                            "scene-automation/manual",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .SceneSequencePlay,
+                                    TargetId =
+                                        "scene.sequences",
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "sequence-id"
                                 }
                             }
                     };
