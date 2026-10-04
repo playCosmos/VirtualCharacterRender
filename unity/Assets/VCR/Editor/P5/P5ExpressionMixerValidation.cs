@@ -951,6 +951,82 @@ namespace VCR.Editor.P5
                         .DestroyImmediate(root);
                 }
             }
+
+            ValidateDestroyedProviderRecovery(
+                failures);
+        }
+
+        private static void ValidateDestroyedProviderRecovery(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P5 Destroyed Provider Recovery");
+
+                var oldRoute =
+                    root.AddComponent<
+                        P5FakeRouteProvider>();
+                var mixer =
+                    root.AddComponent<
+                        MotionExpressionMixer>();
+
+                mixer.SetRoutedProvider(
+                    oldRoute);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldRoute);
+
+                var replacement =
+                    root.AddComponent<
+                        P5FakeRouteProvider>();
+                var nowUs =
+                    MonotonicClock
+                        .NowMicroseconds();
+                replacement.FaceFrame =
+                    CreateFaceFrame(
+                        "replacement-route",
+                        1,
+                        nowUs);
+                replacement.Presence =
+                    CreatePresence(
+                        nowUs);
+
+                InvokeUpdate(
+                    mixer);
+
+                Expect(
+                    mixer.TryGetLatestFace(
+                        out var recovered) &&
+                    ReferenceEquals(
+                        recovered,
+                        replacement.FaceFrame),
+                    "mixer must discard a destroyed routed provider and auto-discover a live replacement",
+                    failures);
+
+                Expect(
+                    mixer.Presence.SubjectState ==
+                        replacement.Presence.SubjectState,
+                    "mixer presence must rebind with the recovered routed provider",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed mixer provider recovery unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(root);
+                }
+            }
         }
 
         private static NormalizedExpressionState
