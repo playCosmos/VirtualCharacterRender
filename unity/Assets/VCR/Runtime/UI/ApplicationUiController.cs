@@ -163,6 +163,9 @@ namespace VCR.Runtime.UI
         private ManualExpressionLayerSource _manualExpressionSource;
         private MaterialOverrideController _materialController;
 
+        private SingleCharacterSceneRuntime _subscribedSceneRuntime;
+        private RuntimeDiagnostics _subscribedDiagnostics;
+
         private float _nextRefreshTime;
         private float _nextDependencyResolveTime;
         private string _lastActionMessage;
@@ -360,41 +363,62 @@ namespace VCR.Runtime.UI
                         0.5f,
                         dependencyResolveIntervalSeconds);
 
-                applicationBootstrap ??=
-                    FindFirstObjectByType<
-                        ApplicationRuntimeBootstrap>(
-                        FindObjectsInactive.Exclude);
+                if (applicationBootstrap == null)
+                {
+                    applicationBootstrap =
+                        FindFirstObjectByType<
+                            ApplicationRuntimeBootstrap>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                sceneRuntime ??=
-                    applicationBootstrap?.SceneRuntime ??
-                    FindFirstObjectByType<
-                        SingleCharacterSceneRuntime>(
-                        FindObjectsInactive.Exclude);
+                if (sceneRuntime == null)
+                {
+                    sceneRuntime =
+                        applicationBootstrap?.SceneRuntime ??
+                        FindFirstObjectByType<
+                            SingleCharacterSceneRuntime>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                diagnostics ??=
-                    FindFirstObjectByType<
-                        RuntimeDiagnostics>(
-                        FindObjectsInactive.Exclude);
+                if (diagnostics == null)
+                {
+                    diagnostics =
+                        FindFirstObjectByType<
+                            RuntimeDiagnostics>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                eventRuntime ??=
-                    FindFirstObjectByType<
-                        EventRuntimeHost>(
-                        FindObjectsInactive.Exclude);
+                if (eventRuntime == null)
+                {
+                    eventRuntime =
+                        FindFirstObjectByType<
+                            EventRuntimeHost>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                _mixer ??=
-                    FindFirstObjectByType<
-                        MotionExpressionMixer>(
-                        FindObjectsInactive.Exclude);
+                if (_mixer == null)
+                {
+                    _mixer =
+                        FindFirstObjectByType<
+                            MotionExpressionMixer>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                _manualExpressionSource ??=
-                    FindFirstObjectByType<
-                        ManualExpressionLayerSource>(
-                        FindObjectsInactive.Exclude);
+                if (_manualExpressionSource == null)
+                {
+                    _manualExpressionSource =
+                        FindFirstObjectByType<
+                            ManualExpressionLayerSource>(
+                            FindObjectsInactive.Exclude);
+                }
 
-                _materialController ??=
-                    FindFirstObjectByType<
-                        MaterialOverrideController>(
-                        FindObjectsInactive.Exclude);
+                if (_materialController == null)
+                {
+                    _materialController =
+                        FindFirstObjectByType<
+                            MaterialOverrideController>(
+                            FindObjectsInactive.Exclude);
+                }
 
                 ResolveTrackingControls();
                 ResolveCharacterFileSelectionAdapter();
@@ -429,6 +453,11 @@ namespace VCR.Runtime.UI
                     _trackingPresence ??=
                         direct;
                 }
+            }
+
+            if (isActiveAndEnabled)
+            {
+                RebindSubscriptions();
             }
 
             EnsureAppearanceUserPresetsLoaded();
@@ -486,36 +515,68 @@ namespace VCR.Runtime.UI
 
         private void Subscribe()
         {
-            if (sceneRuntime != null)
+            RebindSubscriptions();
+        }
+
+        private void RebindSubscriptions()
+        {
+            if (!ReferenceEquals(
+                    _subscribedSceneRuntime,
+                    sceneRuntime))
             {
-                sceneRuntime.StatusChanged -=
-                    OnSceneStatusChanged;
-                sceneRuntime.StatusChanged +=
-                    OnSceneStatusChanged;
+                if (_subscribedSceneRuntime != null)
+                {
+                    _subscribedSceneRuntime.StatusChanged -=
+                        OnSceneStatusChanged;
+                }
+
+                _subscribedSceneRuntime =
+                    sceneRuntime;
+
+                if (_subscribedSceneRuntime != null)
+                {
+                    _subscribedSceneRuntime.StatusChanged +=
+                        OnSceneStatusChanged;
+                }
             }
 
-            if (diagnostics != null)
+            if (!ReferenceEquals(
+                    _subscribedDiagnostics,
+                    diagnostics))
             {
-                diagnostics.SnapshotUpdated -=
-                    OnDiagnosticsUpdated;
-                diagnostics.SnapshotUpdated +=
-                    OnDiagnosticsUpdated;
+                if (_subscribedDiagnostics != null)
+                {
+                    _subscribedDiagnostics.SnapshotUpdated -=
+                        OnDiagnosticsUpdated;
+                }
+
+                _subscribedDiagnostics =
+                    diagnostics;
+
+                if (_subscribedDiagnostics != null)
+                {
+                    _subscribedDiagnostics.SnapshotUpdated +=
+                        OnDiagnosticsUpdated;
+                }
             }
         }
 
         private void Unsubscribe()
         {
-            if (sceneRuntime != null)
+            if (_subscribedSceneRuntime != null)
             {
-                sceneRuntime.StatusChanged -=
+                _subscribedSceneRuntime.StatusChanged -=
                     OnSceneStatusChanged;
             }
 
-            if (diagnostics != null)
+            if (_subscribedDiagnostics != null)
             {
-                diagnostics.SnapshotUpdated -=
+                _subscribedDiagnostics.SnapshotUpdated -=
                     OnDiagnosticsUpdated;
             }
+
+            _subscribedSceneRuntime = null;
+            _subscribedDiagnostics = null;
         }
 
         private void OnSceneStatusChanged(
