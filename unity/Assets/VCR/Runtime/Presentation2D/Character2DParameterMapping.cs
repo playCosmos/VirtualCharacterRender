@@ -176,10 +176,10 @@ namespace VCR.Runtime.Presentation2D
                 if (binding.SourceKind ==
                         Character2DParameterSourceKind
                             .StandardExpression &&
-                    (binding.StandardExpression <
+                    ((int)binding.StandardExpression <
                          0 ||
-                     binding.StandardExpression >=
-                         StandardExpression.Count))
+                     (int)binding.StandardExpression >=
+                         (int)StandardExpression.Count))
                 {
                     error =
                         $"2D parameter '{binding.TargetParameterId}' uses an invalid standard expression.";
