@@ -52,3 +52,4 @@ ADR files record consequential technical decisions and their reasoning.
 | [0027](0027-univrm-control-rig-tracking-target.md) | Apply normalized tracking through the UniVRM control rig | Accepted |
 | [0028](0028-ifacialmocap-arkit-udp-transport.md) | iFacialMocap/FaceMotion3D UDP as first ARKit compatibility transport | Accepted |
 | [0029](0029-precompiled-runtime-shader-assets.md) | Runtime custom shaders use precompiled shader assets | Accepted |
+| [0030](0030-2d-backend-adapter-boundary.md) | Backend-neutral 2D presentation extension boundary | Accepted |
