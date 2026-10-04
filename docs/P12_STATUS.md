@@ -104,6 +104,26 @@ After a structural pass, the same window can create a temporary non-destructive 
 
 See `SKINNED_COMPATIBILITY.md` for result semantics and the evidence boundary.
 
+## Visual Event Node Editor
+
+Menu:
+
+- `VCR/P12/Open Event Node Editor`
+
+The first graph-authoring slice is implemented as a view/editor over the existing P9 `EventRuntimeRule[]` contract. It does not create a second event execution engine.
+
+The visual pipeline is:
+
+```text
+Event / Filter → Conditions (AND) → State Mutations → Actions
+```
+
+Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, and Validate & Apply rollback to the last valid host snapshot.
+
+Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, incomplete rate limits, missing condition/mutation keys, missing action types, and non-finite numeric values before rules are applied through `EventRuntimeHost.SetRules`.
+
+See `EVENT_NODE_EDITOR.md` for the exact first-slice semantics and limits.
+
 ## Source validation
 
 Menu:
@@ -164,5 +184,6 @@ Required later evidence includes:
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
 - interactive transition dependency graph editing/grouping
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
-- visual event/node tooling and richer environment/prop/effect automation
+- richer event graph grouping/templates/rule-library UX beyond the implemented first node editor slice
+- richer environment/prop/effect automation
 
