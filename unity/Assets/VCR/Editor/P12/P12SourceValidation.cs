@@ -25,6 +25,8 @@ namespace VCR.Editor.P12
                 failures);
             RunAccessoryPackageChecks(
                 failures);
+            RunSkinnedCompatibilityChecks(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -864,6 +866,209 @@ namespace VCR.Editor.P12
 
                 current =
                     next;
+            }
+        }
+
+        private static void RunSkinnedCompatibilityChecks(
+            List<string> failures)
+        {
+            GameObject sourceRoot = null;
+            GameObject targetRoot = null;
+            Mesh mesh = null;
+
+            try
+            {
+                sourceRoot =
+                    new GameObject(
+                        "P12 Source Skeleton");
+                var sourceHips =
+                    CreateChild(
+                        sourceRoot.transform,
+                        "Hips");
+                var sourceHead =
+                    CreateChild(
+                        sourceHips,
+                        "Head");
+                var renderer =
+                    sourceRoot.AddComponent<
+                        SkinnedMeshRenderer>();
+
+                mesh =
+                    new Mesh
+                    {
+                        name =
+                            "P12 Compatibility Mesh",
+                        bindposes =
+                            new[]
+                            {
+                                Matrix4x4.identity,
+                                Matrix4x4.identity
+                            }
+                    };
+                renderer.sharedMesh =
+                    mesh;
+                renderer.bones =
+                    new[]
+                    {
+                        sourceHips,
+                        sourceHead
+                    };
+                renderer.rootBone =
+                    sourceHips;
+
+                targetRoot =
+                    new GameObject(
+                        "P12 Target Skeleton");
+                var targetHips =
+                    CreateChild(
+                        targetRoot.transform,
+                        "Hips");
+                var targetHead =
+                    CreateChild(
+                        targetHips,
+                        "Head");
+
+                Expect(
+                    P12SkinnedCompatibilityAnalyzer
+                        .TryAnalyzeStructure(
+                            renderer,
+                            targetRoot.transform,
+                            null,
+                            requireHumanoidTarget:
+                                false,
+                            out var compatibleReport,
+                            out var compatibleError) &&
+                    compatibleReport != null &&
+                    compatibleReport
+                        .StructurallyCompatible &&
+                    compatibleReport.SourceBoneCount ==
+                        2 &&
+                    compatibleReport.MappedBoneCount ==
+                        2 &&
+                    compatibleReport.ExactNameMappedCount ==
+                        2 &&
+                    compatibleReport
+                        .RequiresBindPosePreview,
+                    "matching source/target skeleton names and hierarchy must pass structural compatibility while still requiring bind-pose preview: " +
+                    compatibleError,
+                    failures);
+
+                targetHead.name =
+                    "MissingHead";
+
+                Expect(
+                    P12SkinnedCompatibilityAnalyzer
+                        .TryAnalyzeStructure(
+                            renderer,
+                            targetRoot.transform,
+                            null,
+                            requireHumanoidTarget:
+                                false,
+                            out var missingReport,
+                            out var missingError) &&
+                    missingReport != null &&
+                    !missingReport
+                        .StructurallyCompatible &&
+                    missingReport.Errors.Length >
+                        0,
+                    "structural compatibility must report a missing target bone as incompatible: " +
+                    missingError,
+                    failures);
+
+                targetHead.name =
+                    "Head";
+                var duplicateHead =
+                    CreateChild(
+                        targetHips,
+                        "Head");
+
+                Expect(
+                    P12SkinnedCompatibilityAnalyzer
+                        .TryAnalyzeStructure(
+                            renderer,
+                            targetRoot.transform,
+                            null,
+                            requireHumanoidTarget:
+                                false,
+                            out var ambiguousReport,
+                            out var ambiguousError) &&
+                    ambiguousReport != null &&
+                    !ambiguousReport
+                        .StructurallyCompatible &&
+                    Array.Exists(
+                        ambiguousReport.Errors,
+                        message =>
+                            message != null &&
+                            message.IndexOf(
+                                "ambiguous",
+                                StringComparison.OrdinalIgnoreCase) >=
+                            0),
+                    "structural compatibility must reject ambiguous exact-name target bone mappings: " +
+                    ambiguousError,
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    duplicateHead.gameObject);
+
+                mesh.bindposes =
+                    new[]
+                    {
+                        Matrix4x4.identity
+                    };
+
+                Expect(
+                    P12SkinnedCompatibilityAnalyzer
+                        .TryAnalyzeStructure(
+                            renderer,
+                            targetRoot.transform,
+                            null,
+                            requireHumanoidTarget:
+                                false,
+                            out var bindposeReport,
+                            out var bindposeError) &&
+                    bindposeReport != null &&
+                    !bindposeReport
+                        .StructurallyCompatible &&
+                    Array.Exists(
+                        bindposeReport.Errors,
+                        message =>
+                            message != null &&
+                            message.IndexOf(
+                                "bindpose",
+                                StringComparison.OrdinalIgnoreCase) >=
+                            0),
+                    "structural compatibility must reject mismatched bindpose/bone counts: " +
+                    bindposeError,
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 skinned compatibility validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (sourceRoot != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            sourceRoot);
+                }
+
+                if (targetRoot != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            targetRoot);
+                }
+
+                if (mesh != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            mesh);
+                }
             }
         }
 
