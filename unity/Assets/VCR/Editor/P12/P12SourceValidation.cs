@@ -1622,7 +1622,16 @@ namespace VCR.Editor.P12
                         P12BuiltInEventRuleTemplate
                             .ManualRestoreDefault);
 
-            Expect(
+            P12EventRuleLibraryPackage
+                libraryPackage = null;
+            P12EventRuleLibraryPackage
+                roundTripPackage = null;
+            string packageError = null;
+            string serializeError = null;
+            string parseError = null;
+            string packageJson = null;
+
+            var packageCreated =
                 P12EventRuleLibraryUtility
                     .TryCreatePackage(
                         "validation-library",
@@ -1631,18 +1640,26 @@ namespace VCR.Editor.P12
                             valid,
                             manualTemplate
                         },
-                        out var libraryPackage,
-                        out var packageError) &&
+                        out libraryPackage,
+                        out packageError);
+            var packageSerialized =
+                packageCreated &&
                 P12EventRuleLibraryUtility
                     .TrySerialize(
                         libraryPackage,
-                        out var packageJson,
-                        out var serializeError) &&
+                        out packageJson,
+                        out serializeError);
+            var packageParsed =
+                packageSerialized &&
                 P12EventRuleLibraryUtility
                     .TryParse(
                         packageJson,
-                        out var roundTripPackage,
-                        out var parseError) &&
+                        out roundTripPackage,
+                        out parseError);
+
+            Expect(
+                packageParsed &&
+                roundTripPackage != null &&
                 roundTripPackage.Rules.Length ==
                     2 &&
                 roundTripPackage.Rules[0].Id ==
