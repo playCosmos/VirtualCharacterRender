@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using VCR.Runtime.EventRuntime;
 
 namespace VCR.Editor.P12
@@ -507,6 +508,181 @@ namespace VCR.Editor.P12
             return true;
         }
 
+        public static EventRuntimeRule[]
+            CaptureGroupHierarchyRules(
+                EventRuntimeRule[] rules,
+                string groupPath,
+                bool includeDescendants)
+        {
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    groupPath,
+                    out var normalized,
+                    out _))
+            {
+                return Array.Empty<
+                    EventRuntimeRule>();
+            }
+
+            var result =
+                new List<EventRuntimeRule>();
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule != null &&
+                    P12GraphGroupPathUtility
+                        .Matches(
+                            rule.GraphGroup,
+                            normalized,
+                            includeDescendants))
+                {
+                    result.Add(
+                        rule);
+                }
+            }
+
+            return result.ToArray();
+        }
+
+        public static bool TryDuplicateGroupHierarchy(
+            EventRuntimeRule[] rules,
+            string sourceGroupPath,
+            string destinationGroupPath,
+            bool includeDescendants,
+            out EventRuntimeRule[] duplicatedRules,
+            out int duplicatedCount,
+            out string error)
+        {
+            duplicatedRules =
+                Array.Empty<
+                    EventRuntimeRule>();
+            duplicatedCount = 0;
+            error = null;
+
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    sourceGroupPath,
+                    out var source,
+                    out error) ||
+                !P12GraphGroupPathUtility
+                    .TryNormalize(
+                        destinationGroupPath,
+                        out var destination,
+                        out error))
+            {
+                return false;
+            }
+
+            var existing =
+                new List<EventRuntimeRule>();
+            var ids =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                var clone =
+                    CloneRule(
+                        rule);
+
+                if (clone == null)
+                {
+                    error =
+                        "Event rule hierarchy contains a null rule.";
+                    return false;
+                }
+
+                existing.Add(
+                    clone);
+
+                if (!string.IsNullOrWhiteSpace(
+                        clone.Id))
+                {
+                    ids.Add(
+                        clone.Id);
+                }
+            }
+
+            var additions =
+                new List<EventRuntimeRule>();
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule == null ||
+                    !P12GraphGroupPathUtility
+                        .Matches(
+                            rule.GraphGroup,
+                            source,
+                            includeDescendants))
+                {
+                    continue;
+                }
+
+                var clone =
+                    CloneRule(
+                        rule);
+
+                if (clone == null ||
+                    !P12GraphGroupPathUtility
+                        .TryRewrite(
+                            rule.GraphGroup,
+                            source,
+                            destination,
+                            includeDescendants,
+                            out var rewrittenGroup))
+                {
+                    continue;
+                }
+
+                clone.Id =
+                    BuildUniqueRuleId(
+                        string.IsNullOrWhiteSpace(
+                            clone.Id)
+                            ? "event-rule-copy"
+                            : clone.Id +
+                              "-copy",
+                        ids.Contains);
+                ids.Add(
+                    clone.Id);
+                clone.GraphGroup =
+                    rewrittenGroup;
+                additions.Add(
+                    clone);
+            }
+
+            if (additions.Count == 0)
+            {
+                error =
+                    $"Rule group hierarchy '{source}' contains no rules to duplicate.";
+                return false;
+            }
+
+            existing.AddRange(
+                additions);
+
+            var result =
+                existing.ToArray();
+
+            if (!TryValidateRules(
+                    result,
+                    out error))
+            {
+                return false;
+            }
+
+            duplicatedRules =
+                result;
+            duplicatedCount =
+                additions.Count;
+            return true;
+        }
+
         public static string BuildUniqueRuleId(
             string preferred,
             Func<string, bool> exists)
@@ -531,6 +707,23 @@ namespace VCR.Editor.P12
             }
 
             return candidate;
+        }
+
+        private static EventRuntimeRule CloneRule(
+            EventRuntimeRule source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var json =
+                JsonUtility.ToJson(
+                    source);
+
+            return JsonUtility.FromJson<
+                EventRuntimeRule>(
+                    json);
         }
 
         private static bool ValidateFilter(
