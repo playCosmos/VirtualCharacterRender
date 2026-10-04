@@ -344,6 +344,15 @@ namespace VCR.Runtime.Appearance.Unity
                     "/" +
                     binding.AccessoryId;
 
+                if (!ValidateAccessoryAnchorPose(
+                        binding,
+                        out error))
+                {
+                    error =
+                        $"Accessory '{binding.SlotId}/{binding.AccessoryId}' anchor pose is invalid: {error}";
+                    return false;
+                }
+
                 if (!_accessoryOriginalTransforms.ContainsKey(
                         binding.Root))
                 {
@@ -1993,6 +2002,64 @@ namespace VCR.Runtime.Appearance.Unity
                     exception.Message;
                 return false;
             }
+        }
+
+        private static bool ValidateAccessoryAnchorPose(
+            AppearanceAccessoryBinding binding,
+            out string error)
+        {
+            error = null;
+
+            if (binding == null)
+            {
+                error =
+                    "Accessory binding is missing.";
+                return false;
+            }
+
+            if (!IsFinite(
+                    binding.LocalPosition))
+            {
+                error =
+                    "LocalPosition must contain only finite values.";
+                return false;
+            }
+
+            if (!IsFinite(
+                    binding.LocalEulerAngles))
+            {
+                error =
+                    "LocalEulerAngles must contain only finite values.";
+                return false;
+            }
+
+            if (binding.OverrideLocalScale &&
+                !IsFinite(
+                    binding.LocalScale))
+            {
+                error =
+                    "LocalScale must contain only finite values when scale override is enabled.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsFinite(
+            Vector3 value)
+        {
+            return
+                IsFinite(value.x) &&
+                IsFinite(value.y) &&
+                IsFinite(value.z);
+        }
+
+        private static bool IsFinite(
+            float value)
+        {
+            return
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
         }
 
         private bool TryResolveAccessoryAnchor(
