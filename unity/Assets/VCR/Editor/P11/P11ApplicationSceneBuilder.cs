@@ -86,6 +86,15 @@ namespace VCR.Editor.P11
             }
 
             if (bootstrap.GetComponent<
+                    SceneSequenceEventActionHandler>() ==
+                null)
+            {
+                Undo.AddComponent<
+                    SceneSequenceEventActionHandler>(
+                        bootstrap.gameObject);
+            }
+
+            if (bootstrap.GetComponent<
                     AppearanceEventActionHandler>() ==
                 null)
             {
