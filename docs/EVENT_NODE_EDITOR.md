@@ -80,7 +80,7 @@ It rejects:
 - non-finite Action numeric values
 - malformed `GraphGroup` paths with empty segments or `.` / `..`; valid paths are canonicalized on validation
 
-Action-handler availability is deliberately not hard-coded into the editor. Handler registration remains a runtime capability of the selected `EventRuntimeHost`, so custom action handlers can continue to work without modifying the node editor.
+Action-handler availability is deliberately not hard-coded into the editor. Handler registration remains a runtime capability of the selected `EventRuntimeHost`, so custom action handlers can continue to work without modifying the node editor. P12 Scene Automation authors logical Prop/Effect bindings while Environment state ids remain owned by the established P6 runtime.
 
 ## Rule templates and library packages
 
