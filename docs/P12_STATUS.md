@@ -147,9 +147,11 @@ Event / Filter → Conditions (AND) → State Mutations → Actions
 
 Implemented authoring controls include rule add/duplicate/delete/navigation, rule-level cooldown/rate-limit/StopAfterMatch fields, per-rule Graph Label / Graph Group metadata, grouped-rule overview/navigation and group-wide enable/disable authoring actions, node/stage selection, Condition/Mutation/Action add-delete-reorder, selected-node property editing, deterministic rule-id generation, built-in starter templates, selected/all rule-library JSON v2 export with description/tags/revision metadata, validated library import/merge with deterministic id suffixing, project library browsing/search across package/rule/description/tag fields, same-PackageId revision history/navigation and previous-revision diff, and Validate & Apply rollback to the last valid host snapshot.
 
-Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, incomplete rate limits, missing condition/mutation keys, missing action types, and non-finite numeric values before rules are applied through `EventRuntimeHost.SetRules`.
+Authoring validation rejects duplicate/blank rule ids, invalid amount ranges, incomplete rate limits, missing condition/mutation keys, missing action types, non-finite numeric values, and malformed nested `GraphGroup` paths before rules are applied through `EventRuntimeHost.SetRules`. Valid group paths are canonicalized.
 
 `VCR/P12/Open Event Rule Library` indexes project JSON packages under `Assets/VCR/EventRuleLibraries`, keeps invalid packages visible for diagnostics, searches package/rule IDs plus path/error text, validates external JSON before copying it into the project, and hands valid packages to the Event Node Editor as pending imports. Final merge still uses the Node Editor's existing validated merge path and deterministic collision suffixing.
+
+Rule grouping now supports nested `/` hierarchy paths. The Node Editor exposes implicit parents, exact/subtree Enable/Disable, hierarchy Rename/Move/Clear, subtree Duplicate with deterministic copied rule ids, and hierarchy-only Export through the existing validated rule-library package path. These remain authoring-only operations and do not alter EventRuntime matching/order.
 
 See `EVENT_NODE_EDITOR.md` for the exact first-slice semantics and limits.
 
@@ -194,7 +196,7 @@ The validation source covers:
 - unsupported newer event-rule-library version rejection
 - event-rule project-library valid/invalid indexing and package/rule-id search matching
 - same-PackageId revision history ordering, Previous/Next lookup, previous-revision diff, and duplicate-revision ambiguity rejection
-- EventRuntimeRule Graph Label / Graph Group serialization, group summary/navigation, and group enable/disable authoring behavior
+- EventRuntimeRule Graph Label / Graph Group serialization, canonical nested group paths, group summary/navigation, exact/subtree enable-disable, hierarchy rewrite/clear, hierarchy capture/duplicate, and canonical group metadata rule-library round trip
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -221,6 +223,6 @@ Required later evidence includes:
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
 - richer graph interaction beyond the implemented nested Graph Group hierarchy, cluster Apply/Clear, hierarchy rename/move/clear, interactive source→target edge editing, and All/Any target groups; possible future work is collapse/lasso/multi-select only if it improves real authoring
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
-- higher-level event graph composition beyond the implemented per-rule Graph Label/Graph Group overview/navigation + metadata-aware JSON v2 import/export + project library browser + same-PackageId revision navigation/diff
+- higher-level event graph composition beyond the implemented nested GraphGroup hierarchy, subtree enable-disable/rename-move-clear/duplicate/export, metadata-aware JSON v2 import/export, project library browser, and same-PackageId revision navigation/diff; future work should focus on real authoring pain points such as collapse/lasso or explicit revision branch/merge only if justified
 - richer environment/prop/effect automation
 
