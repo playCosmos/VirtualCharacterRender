@@ -47,7 +47,7 @@ The editor supports:
 - add/delete/reorder Condition, Mutation and Action nodes
 - full serialized field editing for the selected node
 - deterministic unique rule-id generation
-- built-in starter templates for local manual restore-default, subject-lost restore-default, chat → appearance preset, donation → effect, manual → prop toggle, and chat → environment fade workflows
+- built-in starter templates for local manual restore-default, subject-lost restore-default, chat → appearance preset, donation → effect, manual → prop toggle, chat → environment fade, manual Environment → Prop → Effect, and donation Prop → Effect workflows
 - export of the selected rule or the complete host rule set as a versioned JSON rule-library package
 - import/merge of a rule-library package after current pending edits pass authoring validation
 - deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
@@ -86,7 +86,9 @@ Action-handler availability is deliberately not hard-coded into the editor. Hand
 
 The editor includes editor-only authoring conveniences that do not change runtime semantics.
 
-Built-in templates create ordinary `EventRuntimeRule` instances using existing normalized event/action contracts. Placeholder ids such as `preset-id` or `effect-id` are intentionally visible and must be edited to match the selected runtime configuration.
+Built-in templates create ordinary `EventRuntimeRule` instances using existing normalized event/action contracts. Placeholder ids such as `preset-id`, `state-id`, `prop-id`, or `effect-id` are intentionally visible and must be edited to match the selected runtime configuration.
+
+Composite scene templates still use the ordinary ordered `Actions[]` contract. `Manual Scene Sequence` emits `environment.set_state` → `prop.set_active` → `effect.play`; `Donation Scene Burst` emits `prop.set_active` → `effect.play`. These templates do not create delays, parallel branches, or another timeline engine. Timed choreography belongs in the Appearance Transition timeline.
 
 Rule-library package v2 contains:
 
@@ -124,6 +126,7 @@ This remains a visual editor for the current linear rule contract. It does not p
 - non-finite action numeric rejection
 - deterministic unique rule ids
 - every built-in starter template validates against the existing runtime rule contract
+- composite scene templates preserve expected logical ids, numeric activation value, nested graph grouping, and Environment → Prop → Effect command emission order
 - rule-library v2 JSON metadata/rule round trip
 - v1→v2 metadata migration
 - blank/duplicate tag validation
