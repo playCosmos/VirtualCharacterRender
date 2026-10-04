@@ -88,7 +88,19 @@ namespace VCR.Runtime.Capabilities
                 return true;
             }
 
-            DisposeInstance(entry);
+            var cleanupError =
+                TryDisposeInstance(entry);
+
+            if (cleanupError != null)
+            {
+                entry.State =
+                    CapabilityState.Faulted;
+                entry.Error =
+                    "Capability cleanup failed before enable: " +
+                    cleanupError.Message;
+                error = entry.Error;
+                return false;
+            }
 
             try
             {
@@ -125,7 +137,19 @@ namespace VCR.Runtime.Capabilities
                 return false;
             }
 
-            DisposeInstance(entry);
+            var cleanupError =
+                TryDisposeInstance(entry);
+
+            if (cleanupError != null)
+            {
+                entry.State =
+                    CapabilityState.Faulted;
+                entry.Error =
+                    "Capability cleanup failed while disabling: " +
+                    cleanupError.Message;
+                return false;
+            }
+
             entry.State =
                 CapabilityState.Disabled;
             entry.Error = null;
@@ -192,34 +216,70 @@ namespace VCR.Runtime.Capabilities
             return result;
         }
 
-        private static void DisposeInstance(
+        private static Exception TryDisposeInstance(
             Entry entry)
         {
-            if (entry.Instance == null)
+            var instance =
+                entry.Instance;
+
+            entry.Instance = null;
+
+            if (instance == null)
             {
-                return;
+                return null;
             }
 
             try
             {
-                entry.Instance.Dispose();
+                instance.Dispose();
+                return null;
             }
-            finally
+            catch (Exception exception)
             {
-                entry.Instance = null;
+                return exception;
             }
         }
 
         public void Dispose()
         {
-            foreach (var entry in _entries.Values)
+            List<Exception> failures = null;
+
+            foreach (var pair in _entries)
             {
-                DisposeInstance(entry);
+                var entry = pair.Value;
+                var cleanupError =
+                    TryDisposeInstance(entry);
+
                 entry.State =
                     CapabilityState.Disabled;
+
+                if (cleanupError == null)
+                {
+                    entry.Error = null;
+                    continue;
+                }
+
+                entry.Error =
+                    "Capability cleanup failed while disposing: " +
+                    cleanupError.Message;
+
+                failures ??=
+                    new List<Exception>();
+
+                failures.Add(
+                    new InvalidOperationException(
+                        $"Capability '{pair.Key}' cleanup failed.",
+                        cleanupError));
             }
 
             _entries.Clear();
+
+            if (failures != null)
+            {
+                throw new AggregateException(
+                    "One or more capabilities failed to dispose.",
+                    failures);
+            }
         }
     }
 }
