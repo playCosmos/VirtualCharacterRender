@@ -247,8 +247,9 @@ namespace VCR.Runtime.EventRuntime.Unity
             foreach (var behaviour in
                      actionHandlerBehaviours)
             {
-                if (behaviour is
-                    IEventActionHandler handler)
+                if (behaviour != null &&
+                    behaviour is
+                        IEventActionHandler handler)
                 {
                     list.Add(handler);
                 }
@@ -301,6 +302,19 @@ namespace VCR.Runtime.EventRuntime.Unity
             }
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void Dispatch(
             EventActionCommand command)
         {
@@ -309,7 +323,7 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             foreach (var candidate in _handlers)
             {
-                if (candidate == null ||
+                if (!IsServiceAlive(candidate) ||
                     !candidate.CanHandle(command))
                 {
                     continue;
