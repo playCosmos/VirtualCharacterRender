@@ -2293,6 +2293,9 @@ namespace VCR.Editor.P12
             string parseError = null;
             string packageJson = null;
 
+            valid.GraphGroup =
+                " broadcast / reactions ";
+
             var packageCreated =
                 P12EventRuleLibraryUtility
                     .TryCreatePackage(
@@ -2346,7 +2349,7 @@ namespace VCR.Editor.P12
                 roundTripPackage.Rules[0].GraphLabel ==
                     "Donation Thanks" &&
                 roundTripPackage.Rules[0].GraphGroup ==
-                    "broadcast-reactions" &&
+                    "broadcast/reactions" &&
                 roundTripPackage.Rules[1].Id ==
                     "manual-restore-default",
                 "P12 event rule library JSON must preserve metadata and ordered rules: " +
