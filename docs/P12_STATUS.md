@@ -261,5 +261,5 @@ Required later evidence includes:
 - richer graph interaction beyond the implemented nested Graph Group hierarchy, cluster Apply/Clear, hierarchy rename/move/clear, interactive source→target edge editing, and All/Any target groups; possible future work is collapse/lasso/multi-select only if it improves real authoring
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - higher-level event graph composition beyond the implemented nested GraphGroup hierarchy, subtree enable-disable/rename-move-clear/duplicate/export, metadata-aware JSON v2 import/export, project library browser, and same-PackageId revision navigation/diff; future work should focus on real authoring pain points such as collapse/lasso or explicit revision branch/merge only if justified
-- richer environment/prop/effect automation
+- richer environment/prop/effect automation beyond the implemented logical Prop/Effect binding authoring, Prop actions, Environment state-id reference surface, and starter templates
 
