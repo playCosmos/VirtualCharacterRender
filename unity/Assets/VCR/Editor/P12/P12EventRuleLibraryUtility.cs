@@ -17,11 +17,15 @@ namespace VCR.Editor.P12
     [Serializable]
     internal sealed class P12EventRuleLibraryPackage
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int Version =
             CurrentVersion;
         public string PackageId;
+        public string Description;
+        public string[] Tags =
+            Array.Empty<string>();
+        public int Revision = 1;
         public EventRuntimeRule[] Rules =
             Array.Empty<EventRuntimeRule>();
     }
@@ -30,6 +34,23 @@ namespace VCR.Editor.P12
     {
         public static bool TryCreatePackage(
             string packageId,
+            EventRuntimeRule[] rules,
+            out P12EventRuleLibraryPackage package,
+            out string error) =>
+                TryCreatePackage(
+                    packageId,
+                    null,
+                    Array.Empty<string>(),
+                    1,
+                    rules,
+                    out package,
+                    out error);
+
+        public static bool TryCreatePackage(
+            string packageId,
+            string description,
+            string[] tags,
+            int revision,
             EventRuntimeRule[] rules,
             out P12EventRuleLibraryPackage package,
             out string error)
@@ -64,11 +85,20 @@ namespace VCR.Editor.P12
                 {
                     PackageId =
                         id,
+                    Description =
+                        description,
+                    Tags =
+                        tags ??
+                        Array.Empty<string>(),
+                    Revision =
+                        revision,
                     Rules =
                         cloned
                 };
 
-            return true;
+            return TryValidatePackage(
+                package,
+                out error);
         }
 
         public static bool TrySerialize(
@@ -153,17 +183,32 @@ namespace VCR.Editor.P12
                 return false;
             }
 
-            if (package.Version !=
+            if (package.Version >
                 P12EventRuleLibraryPackage
                     .CurrentVersion)
             {
                 error =
-                    package.Version >
-                    P12EventRuleLibraryPackage
-                        .CurrentVersion
-                        ? $"Event rule library version {package.Version} is newer than supported version {P12EventRuleLibraryPackage.CurrentVersion}."
-                        : $"Event rule library version {package.Version} is unsupported.";
+                    $"Event rule library version {package.Version} is newer than supported version {P12EventRuleLibraryPackage.CurrentVersion}.";
                 return false;
+            }
+
+            if (package.Version < 1)
+            {
+                error =
+                    $"Event rule library version {package.Version} is unsupported.";
+                return false;
+            }
+
+            if (package.Version == 1)
+            {
+                package.Description =
+                    string.Empty;
+                package.Tags =
+                    Array.Empty<string>();
+                package.Revision = 1;
+                package.Version =
+                    P12EventRuleLibraryPackage
+                        .CurrentVersion;
             }
 
             if (string.IsNullOrWhiteSpace(
@@ -176,6 +221,55 @@ namespace VCR.Editor.P12
 
             package.PackageId =
                 package.PackageId.Trim();
+            package.Description =
+                package.Description?.Trim() ??
+                string.Empty;
+
+            if (package.Revision < 1)
+            {
+                error =
+                    "Event rule library revision must be at least 1.";
+                return false;
+            }
+
+            package.Tags ??=
+                Array.Empty<string>();
+            var normalizedTags =
+                new string[
+                    package.Tags.Length];
+            var tagSet =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            for (var i = 0;
+                 i < package.Tags.Length;
+                 i++)
+            {
+                var tag =
+                    package.Tags[i]?.Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        tag))
+                {
+                    error =
+                        "Event rule library tags cannot be blank.";
+                    return false;
+                }
+
+                if (!tagSet.Add(
+                        tag))
+                {
+                    error =
+                        $"Event rule library contains duplicate tag '{tag}'.";
+                    return false;
+                }
+
+                normalizedTags[i] =
+                    tag;
+            }
+
+            package.Tags =
+                normalizedTags;
             package.Rules ??=
                 Array.Empty<
                     EventRuntimeRule>();
