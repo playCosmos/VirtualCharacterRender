@@ -16,6 +16,7 @@ namespace VCR.Runtime.Presentation2D
         [SerializeField] private Character2DInputDomain requestedInputs =
             Character2DInputDomain.Face |
             Character2DInputDomain.Expressions;
+        [SerializeField] private Character2DParameterMappingProfile parameterMappingProfile;
         [SerializeField] private string modelId =
             "character-2d";
         [SerializeField] private string modelPath;
@@ -42,6 +43,8 @@ namespace VCR.Runtime.Presentation2D
             _trackingProvider;
         public Character2DInputDomain RequestedInputs =>
             requestedInputs;
+        public Character2DParameterMappingProfile ParameterMappingProfile =>
+            parameterMappingProfile;
         public Character2DInputDomain EffectiveInputs =>
             _backend != null
                 ? requestedInputs &
@@ -117,6 +120,14 @@ namespace VCR.Runtime.Presentation2D
             RefreshUpdateState();
         }
 
+        public void ConfigureParameterMapping(
+            Character2DParameterMappingProfile profile)
+        {
+            parameterMappingProfile =
+                profile;
+            ResetFrameCache();
+        }
+
         public void ConfigureModel(
             string id,
             string path,
@@ -176,6 +187,13 @@ namespace VCR.Runtime.Presentation2D
             {
                 error =
                     "2D model request requires a non-empty model id and path.";
+                return FailLoad(
+                    error);
+            }
+
+            if (!TryValidateConfiguredMapping(
+                    out error))
+            {
                 return FailLoad(
                     error);
             }
@@ -325,9 +343,52 @@ namespace VCR.Runtime.Presentation2D
 
             try
             {
-                if (!_backend.TryApply(
-                        snapshot,
-                        out error))
+                if (parameterMappingProfile != null)
+                {
+                    var sink =
+                        _backend as
+                            ICharacter2DParameterSink;
+
+                    if (sink == null)
+                    {
+                        return FailApply(
+                            "The active 2D backend does not implement the mapped-parameter sink required by the configured mapping profile.");
+                    }
+
+                    if (!Character2DParameterMapper
+                        .TryEvaluate(
+                            parameterMappingProfile,
+                            _backend.BackendId,
+                            snapshot,
+                            out var values,
+                            out error))
+                    {
+                        return FailApply(
+                            error ??
+                            "2D parameter mapping evaluation failed.");
+                    }
+
+                    if (values.Length == 0)
+                    {
+                        Remember(
+                            snapshot,
+                            inputs);
+                        _lastError = null;
+                        return false;
+                    }
+
+                    if (!sink.TryApplyParameters(
+                            values,
+                            out error))
+                    {
+                        return FailApply(
+                            error ??
+                            "2D backend rejected mapped parameter values.");
+                    }
+                }
+                else if (!_backend.TryApply(
+                             snapshot,
+                             out error))
                 {
                     return FailApply(
                         error ??
@@ -348,6 +409,52 @@ namespace VCR.Runtime.Presentation2D
                 inputs);
             _applyCount++;
             _lastError = null;
+            return true;
+        }
+
+        private bool TryValidateConfiguredMapping(
+            out string error)
+        {
+            error = null;
+
+            if (parameterMappingProfile == null)
+            {
+                return true;
+            }
+
+            if (!Character2DParameterMapper
+                .TryValidate(
+                    parameterMappingProfile,
+                    out error))
+            {
+                return false;
+            }
+
+            if (_backend == null)
+            {
+                error =
+                    "2D backend is unavailable.";
+                return false;
+            }
+
+            if (!string.Equals(
+                    parameterMappingProfile.BackendId,
+                    _backend.BackendId,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    $"2D parameter profile backend '{parameterMappingProfile.BackendId}' does not match active backend '{_backend.BackendId}'.";
+                return false;
+            }
+
+            if (!(_backend is
+                  ICharacter2DParameterSink))
+            {
+                error =
+                    "The active 2D backend does not implement ICharacter2DParameterSink required by the configured mapping profile.";
+                return false;
+            }
+
             return true;
         }
 
@@ -504,6 +611,13 @@ namespace VCR.Runtime.Presentation2D
                     _backend != null &&
                     _backend.Status.State ==
                         Character2DBackendState.ModelLoaded
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
+            output.Add(
+                new RuntimeMetric(
+                    "presentation2d.mapping.enabled",
+                    parameterMappingProfile != null
                         ? 1.0
                         : 0.0,
                     "bool"));
