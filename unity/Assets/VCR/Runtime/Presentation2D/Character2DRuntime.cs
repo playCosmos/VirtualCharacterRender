@@ -115,6 +115,31 @@ namespace VCR.Runtime.Presentation2D
             MonoBehaviour trackingProvider,
             Character2DInputDomain inputs)
         {
+            var nextBackend =
+                backend != null
+                    ? backend as
+                        ICharacter2DBackend
+                    : null;
+
+            if (IsServiceAlive(_backend) &&
+                !ReferenceEquals(
+                    _backend,
+                    nextBackend) &&
+                _backend.Status.State ==
+                    Character2DBackendState.ModelLoaded)
+            {
+                try
+                {
+                    _backend.UnloadModel();
+                }
+                catch (Exception exception)
+                {
+                    _lastError =
+                        "Previous 2D backend unload during reconfiguration failed: " +
+                        exception.Message;
+                }
+            }
+
             backendBehaviour =
                 backend;
             trackingProviderBehaviour =
