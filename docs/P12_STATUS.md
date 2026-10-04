@@ -86,9 +86,9 @@ Accessory application remains transactional as well. The runtime snapshots activ
 
 P12 now includes a declarative accessory package v1 and importer. The format is intentionally limited to one rigid FBX model plus logical slot/id and optional humanoid-bone anchor metadata. External prefabs, scripts, executable payloads, and skinned meshes are rejected.
 
-`VCR/P12/Open Appearance Authoring` exposes `Import Accessory Package`. A successful import copies the manifest/FBX into the project, validates the Unity import result, creates an inactive scene instance, and appends an explicit accessory binding. Humanoid-bone packages fail closed unless the selected runtime exposes the requested bone through a humanoid Animator.
+`VCR/P12/Open Appearance Authoring` exposes `Import Accessory Package`. Import is transactional: existing unrelated pending authoring edits must be validated first, then the importer copies the manifest/FBX, validates the Unity import result, creates an inactive scene instance, appends the explicit binding, and immediately runs `RebuildConfiguration`. The package is retained only if the full asset + scene + runtime-registration transaction succeeds. Humanoid-bone packages fail closed unless the selected runtime exposes the requested bone through a humanoid Animator.
 
-Package asset/scene registration failures roll back assets created by that import attempt. The resulting scene binding is still treated as pending authoring state until `Validate & Apply` succeeds.
+Package asset/scene/runtime-registration failures roll back the imported package folder, created scene instance, and serialized binding changes. `PackageId + PackageVersion` maps to one canonical project folder; importing the same version twice is rejected rather than silently creating suffixed duplicates.
 
 See `ACCESSORY_PACKAGES.md` for the v1 manifest, safety rules, and importer contract.
 
@@ -111,11 +111,13 @@ The validation source covers:
 - Transform-anchor reparent + authored local offset application
 - inactive accessory original-parent/local-transform restoration
 - repeated reactivation after restoration
-- descendant-anchor cycle rejection
+- descendant-anchor cycle rejection at both authoring-helper and runtime-configuration boundaries
+- non-finite accessory anchor pose rejection before preview/runtime use
 - serialized anchor property contract
 - valid rigid accessory package manifest + humanoid anchor metadata
-- traversal/non-FBX/unsafe-id/future-version/invalid-bone/zero-scale rejection
+- traversal/non-FBX/unsafe-id/future-version/invalid-bone/zero-scale/scene-Transform-anchor rejection
 - package-local FBX path resolution before Unity import
+- canonical package/version installation identity and duplicate-version rejection
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
