@@ -23,12 +23,14 @@ namespace VCR.Editor.P13
 
             RunBackendHostChecks(
                 failures);
+            RunParameterMappingChecks(
+                failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P13 source validation: PASS " +
-                    "(backend-neutral 2D host, model/backend validation, supported-domain polling, immutable-frame deduplication, failure metrics)");
+                    "(backend-neutral 2D host, parameter mapping validation/evaluation, model/backend validation, supported-domain polling, immutable-frame deduplication, failure metrics)");
                 return true;
             }
 
@@ -286,6 +288,326 @@ namespace VCR.Editor.P13
                     UnityEngine.Object
                         .DestroyImmediate(
                             root);
+                }
+            }
+        }
+
+        private static void RunParameterMappingChecks(
+            List<string> failures)
+        {
+            Character2DParameterMappingProfile profile =
+                null;
+
+            try
+            {
+                profile =
+                    ScriptableObject.CreateInstance<
+                        Character2DParameterMappingProfile>();
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamMouthOpen",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .FaceCoefficient,
+                        FaceCoefficient =
+                            FaceCoefficient.JawOpen,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = -1f,
+                        OutputMax = 1f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            false
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHappy",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 2f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            true,
+                        DefaultInputValue = 0.25f
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHeadX",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .HeadPositionX,
+                        InputMin = -1f,
+                        InputMax = 1f,
+                        OutputMin = -10f,
+                        OutputMax = 10f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            false
+                    });
+
+                var faceCoefficients =
+                    new float[
+                        (int)FaceCoefficient.Count];
+                faceCoefficients[
+                        (int)FaceCoefficient.JawOpen] =
+                    0.75f;
+
+                var standardExpressions =
+                    new float[
+                        (int)StandardExpression.Count];
+                standardExpressions[
+                        (int)StandardExpression.Happy] =
+                    0.4f;
+
+                var face =
+                    new NormalizedFaceState(
+                        TrackingQuaternion.Identity,
+                        new TrackingVector3(
+                            0.5f,
+                            0f,
+                            0f),
+                        faceCoefficients);
+                var expressions =
+                    new NormalizedExpressionState(
+                        standardExpressions);
+
+                var faceFrame =
+                    new TrackingFrame(
+                        10,
+                        10000,
+                        TrackingRegion.Face,
+                        1f,
+                        true,
+                        face:
+                            face,
+                        sourceId:
+                            "p13-mapping");
+                var expressionFrame =
+                    new TrackingFrame(
+                        11,
+                        11000,
+                        TrackingRegion.Expressions,
+                        1f,
+                        true,
+                        expressions:
+                            expressions,
+                        sourceId:
+                            "p13-mapping");
+
+                var snapshot =
+                    new Character2DInputSnapshot(
+                        faceFrame,
+                        null,
+                        null,
+                        expressionFrame);
+
+                Expect(
+                    Character2DParameterMapper
+                        .TryValidate(
+                            profile,
+                            out var validationError),
+                    "2D parameter mapping profile must accept a valid backend-bound mapping: " +
+                    validationError,
+                    failures);
+
+                Expect(
+                    Character2DParameterMapper
+                        .TryEvaluate(
+                            profile,
+                            "p13.fake",
+                            snapshot,
+                            out var values,
+                            out var evaluateError) &&
+                    values.Length == 3 &&
+                    values[0].ParameterId ==
+                        "ParamMouthOpen" &&
+                    Mathf.Approximately(
+                        values[0].Value,
+                        0.5f) &&
+                    values[1].ParameterId ==
+                        "ParamHappy" &&
+                    Mathf.Approximately(
+                        values[1].Value,
+                        0.8f) &&
+                    values[2].ParameterId ==
+                        "ParamHeadX" &&
+                    Mathf.Approximately(
+                        values[2].Value,
+                        5f),
+                    "2D parameter mapper must evaluate face/expression/head-position bindings with configured ranges: " +
+                    evaluateError,
+                    failures);
+
+                var faceOnlySnapshot =
+                    new Character2DInputSnapshot(
+                        faceFrame,
+                        null,
+                        null,
+                        null);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHappy",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 2f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            true,
+                        DefaultInputValue = 0.25f
+                    });
+
+                Expect(
+                    Character2DParameterMapper
+                        .TryEvaluate(
+                            profile,
+                            "p13.fake",
+                            faceOnlySnapshot,
+                            out var fallbackValues,
+                            out var fallbackError) &&
+                    fallbackValues.Length == 1 &&
+                    Mathf.Approximately(
+                        fallbackValues[0].Value,
+                        0.5f),
+                    "2D parameter mapper must use authored defaults when a source domain is unavailable: " +
+                    fallbackError,
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHappy",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 1f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            false
+                    });
+
+                Expect(
+                    Character2DParameterMapper
+                        .TryEvaluate(
+                            profile,
+                            "p13.fake",
+                            faceOnlySnapshot,
+                            out var skippedValues,
+                            out var skippedError) &&
+                    skippedValues.Length == 0,
+                    "2D parameter mapper must skip unavailable sources when no default is requested: " +
+                    skippedError,
+                    failures);
+
+                Expect(
+                    !Character2DParameterMapper
+                        .TryEvaluate(
+                            profile,
+                            "other.backend",
+                            faceOnlySnapshot,
+                            out _,
+                            out var backendError) &&
+                    backendError != null &&
+                    backendError.IndexOf(
+                        "does not match",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "2D parameter mapper must reject a profile authored for another backend",
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "Duplicate"
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "Duplicate"
+                    });
+
+                Expect(
+                    !Character2DParameterMapper
+                        .TryValidate(
+                            profile,
+                            out var duplicateError) &&
+                    duplicateError != null &&
+                    duplicateError.IndexOf(
+                        "Duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "2D parameter mapping validation must reject duplicate target parameter ids",
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "InvalidExpression",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            (StandardExpression)999
+                    });
+
+                Expect(
+                    !Character2DParameterMapper
+                        .TryValidate(
+                            profile,
+                            out var expressionError) &&
+                    expressionError != null &&
+                    expressionError.IndexOf(
+                        "invalid standard expression",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "2D parameter mapping validation must reject out-of-range standard-expression enum values",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P13 2D parameter mapping validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (profile != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            profile);
                 }
             }
         }
