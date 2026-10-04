@@ -2060,6 +2060,7 @@ namespace VCR.Editor.P11
             _lastMessageType =
                 MessageType.Info;
             Repaint();
+            GUIUtility.ExitGUI();
         }
 
         private void DrawSteps(
