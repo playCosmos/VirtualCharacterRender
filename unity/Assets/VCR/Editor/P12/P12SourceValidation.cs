@@ -27,7 +27,7 @@ namespace VCR.Editor.P12
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, authored preset capture, duplicate-id rejection, serialized authoring contract)");
+                    "(appearance convention discovery, explicit wardrobe/accessory bindings, transform-anchor application/restoration, anchor preview/capture safety, authored preset capture, duplicate-id/cycle/non-finite rejection, serialized authoring contract)");
                 return true;
             }
 
@@ -382,6 +382,70 @@ namespace VCR.Editor.P12
                         cycleError),
                     "P12 anchor authoring must reject accessory-descendant anchors that would create a transform cycle",
                     failures);
+
+                if (hatBinding != null)
+                {
+                    var validAnchor =
+                        hatBinding.AnchorTransform;
+                    var validLocalPosition =
+                        hatBinding.LocalPosition;
+
+                    hatBinding.AnchorTransform =
+                        cycleChild;
+
+                    Expect(
+                        !runtime.RebuildConfiguration(
+                            out var runtimeCycleError) &&
+                        runtimeCycleError != null &&
+                        runtimeCycleError.IndexOf(
+                            "descendant",
+                            StringComparison.OrdinalIgnoreCase) >=
+                            0,
+                        "appearance runtime configuration must reject descendant accessory anchors before activation",
+                        failures);
+
+                    hatBinding.AnchorTransform =
+                        validAnchor;
+                    hatBinding.LocalPosition =
+                        new Vector3(
+                            float.NaN,
+                            0f,
+                            0f);
+
+                    Expect(
+                        !runtime.RebuildConfiguration(
+                            out var nonFiniteRuntimeError) &&
+                        nonFiniteRuntimeError != null &&
+                        nonFiniteRuntimeError.IndexOf(
+                            "finite",
+                            StringComparison.OrdinalIgnoreCase) >=
+                            0,
+                        "appearance runtime configuration must reject non-finite accessory anchor poses",
+                        failures);
+
+                    Expect(
+                        !P12AppearanceAuthoringUtility
+                            .TryValidateAccessoryAnchorPose(
+                                hatBinding.LocalPosition,
+                                hatBinding.LocalEulerAngles,
+                                hatBinding.OverrideLocalScale,
+                                hatBinding.LocalScale,
+                                out var nonFiniteAuthoringError) &&
+                        !string.IsNullOrWhiteSpace(
+                            nonFiniteAuthoringError),
+                        "P12 accessory authoring validation must reject non-finite local pose input before preview",
+                        failures);
+
+                    hatBinding.LocalPosition =
+                        validLocalPosition;
+
+                    Expect(
+                        runtime.RebuildConfiguration(
+                            out var restoredAnchorError),
+                        "restoring a valid accessory anchor after validation failures must rebuild successfully: " +
+                        restoredAnchorError,
+                        failures);
+                }
 
                 var duplicate =
                     CreateChild(
