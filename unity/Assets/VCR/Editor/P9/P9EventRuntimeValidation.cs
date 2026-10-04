@@ -32,6 +32,7 @@ namespace VCR.Editor.P9
             ValidateEngine(failures);
             ValidateRulePersistence(failures);
             ValidateUnityDispatch(failures);
+            ValidateEventHubReplacement(failures);
             ValidateMaterialAction(failures);
             P9ExpressionEventValidation.RunChecks(
                 failures);
@@ -1277,6 +1278,104 @@ namespace VCR.Editor.P9
             }
         }
 
+        private static void ValidateEventHubReplacement(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P9 Event Hub Replacement Validation");
+
+                var oldHub =
+                    root.AddComponent<
+                        NormalizedEventHub>();
+                var environment =
+                    root.AddComponent<
+                        P9FakeEnvironmentRuntime>();
+                environment.Configure(
+                    "environment.main",
+                    "default");
+
+                var handler =
+                    root.AddComponent<
+                        EnvironmentStateEventActionHandler>();
+                handler.SetEnvironmentRuntime(
+                    environment);
+
+                var host =
+                    root.AddComponent<
+                        EventRuntimeHost>();
+                host.SetEventHub(
+                    oldHub);
+                host.SetActionHandlers(
+                    handler);
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "replacement-hub",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                EnvironmentAction(
+                                    "environment.main",
+                                    "replacement-ok")
+                            }
+                    });
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldHub);
+
+                var replacementHub =
+                    root.AddComponent<
+                        NormalizedEventHub>();
+
+                InvokeEventHubRefresh(
+                    host);
+
+                replacementHub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        20));
+
+                InvokeUpdate(
+                    replacementHub);
+
+                Expect(
+                    environment.Status.StateId ==
+                        "replacement-ok" &&
+                    host.ExecutedActions == 1,
+                    "event runtime must rebind to a replacement NormalizedEventHub after the previously subscribed hub is destroyed",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "event hub replacement validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static void ValidateMaterialAction(
             List<string> failures)
         {
@@ -1699,6 +1798,29 @@ namespace VCR.Editor.P9
                 ConstantText =
                     stateId
             };
+        }
+
+        private static void InvokeEventHubRefresh(
+            EventRuntimeHost host)
+        {
+            var method =
+                typeof(EventRuntimeHost)
+                    .GetMethod(
+                        "RefreshEventHubSubscription",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(EventRuntimeHost)
+                        .FullName,
+                    "RefreshEventHubSubscription");
+            }
+
+            method.Invoke(
+                host,
+                null);
         }
 
         private static void InvokeUpdate(
