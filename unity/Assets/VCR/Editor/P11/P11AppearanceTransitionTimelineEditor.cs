@@ -2126,6 +2126,14 @@ namespace VCR.Editor.P11
                             .stringValue =
                                 string.Empty;
                         step.FindPropertyRelative(
+                                "AuthoringLabel")
+                            .stringValue =
+                                string.Empty;
+                        step.FindPropertyRelative(
+                                "AuthoringGroup")
+                            .stringValue =
+                                string.Empty;
+                        step.FindPropertyRelative(
                                 "DependencyMode")
                             .enumValueIndex =
                                 (int)
@@ -2163,6 +2171,24 @@ namespace VCR.Editor.P11
                                     .FindPropertyRelative(
                                         "Kind")
                                     .enumValueIndex;
+
+                    if (!cleanup)
+                    {
+                        using (new EditorGUILayout
+                                   .HorizontalScope())
+                        {
+                            EditorGUILayout.PropertyField(
+                                step.FindPropertyRelative(
+                                    "AuthoringLabel"),
+                                new GUIContent(
+                                    "Graph Label"));
+                            EditorGUILayout.PropertyField(
+                                step.FindPropertyRelative(
+                                    "AuthoringGroup"),
+                                new GUIContent(
+                                    "Graph Group"));
+                        }
+                    }
 
                     if (kind ==
                         AppearanceTransitionStepKind
@@ -3007,6 +3033,14 @@ namespace VCR.Editor.P11
                 .stringValue =
                     string.Empty;
             step.FindPropertyRelative(
+                    "AuthoringLabel")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "AuthoringGroup")
+                .stringValue =
+                    string.Empty;
+            step.FindPropertyRelative(
                     "DependencyMode")
                 .enumValueIndex =
                     (int)
@@ -3155,6 +3189,18 @@ namespace VCR.Editor.P11
                     .stringValue =
                         from.FindPropertyRelative(
                                 "StepId")
+                            .stringValue;
+                to.FindPropertyRelative(
+                        "AuthoringLabel")
+                    .stringValue =
+                        from.FindPropertyRelative(
+                                "AuthoringLabel")
+                            .stringValue;
+                to.FindPropertyRelative(
+                        "AuthoringGroup")
+                    .stringValue =
+                        from.FindPropertyRelative(
+                                "AuthoringGroup")
                             .stringValue;
                 to.FindPropertyRelative(
                         "DependencyMode")
@@ -4365,6 +4411,14 @@ namespace VCR.Editor.P11
                             step.FindPropertyRelative(
                                     "StepId")
                                 .stringValue,
+                        AuthoringLabel =
+                            step.FindPropertyRelative(
+                                    "AuthoringLabel")
+                                .stringValue,
+                        AuthoringGroup =
+                            step.FindPropertyRelative(
+                                    "AuthoringGroup")
+                                .stringValue,
                         DependencyMode =
                             (AppearanceTransitionDependencyMode)
                             step.FindPropertyRelative(
@@ -4514,6 +4568,16 @@ namespace VCR.Editor.P11
                         "StepId")
                     .stringValue =
                         step.StepId ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "AuthoringLabel")
+                    .stringValue =
+                        step.AuthoringLabel ??
+                        string.Empty;
+                property.FindPropertyRelative(
+                        "AuthoringGroup")
+                    .stringValue =
+                        step.AuthoringGroup ??
                         string.Empty;
                 property.FindPropertyRelative(
                         "DependencyMode")
