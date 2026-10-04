@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VCR.Runtime.Appearance;
+using VCR.Editor.P12;
 
 namespace VCR.Editor.P11
 {
@@ -208,6 +209,16 @@ namespace VCR.Editor.P11
                     transition.CancellationSteps =
                         Array.Empty<
                             AppearanceTransitionStep>();
+                }
+
+                if (!P12TransitionDependencyAuthoringUtility
+                    .TryValidateGroupMetadata(
+                        transition,
+                        out var metadataError))
+                {
+                    error =
+                        $"Transition '{transition.Id}' contains invalid graph authoring metadata: {metadataError}";
+                    return false;
                 }
             }
 
