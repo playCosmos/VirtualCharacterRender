@@ -179,7 +179,7 @@ Effect Preset v1 deliberately permits only Transform, ParticleSystem, and Partic
 
 Creation writes under `Assets/VCR/EffectPresets` by default. Installation is transactional: a scene instance is created, all ParticleSystems are discovered, one `EffectBinding` is appended, and `RebuildBindings` must succeed or both the handler mutation and created instance are rolled back.
 
-See `EFFECT_PRESETS.md` for the exact contract and limits.
+See `EFFECT_PRESETS.md` for the exact contract and limits. `VCR/P12/Open Effect Preset Library` indexes project presets, keeps invalid entries visible for diagnostics, supports search, and hands valid presets back to Scene Automation Authoring for installation through the same validated binding path.
 
 ## Scope and evidence
 
