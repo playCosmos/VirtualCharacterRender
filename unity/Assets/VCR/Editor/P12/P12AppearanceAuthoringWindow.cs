@@ -1079,6 +1079,24 @@ namespace VCR.Editor.P12
                 return;
             }
 
+            if (_hasPendingChanges)
+            {
+                _message =
+                    "Validate & Apply the current appearance edits before importing an accessory package. Package import is transactional and will not silently commit unrelated pending edits.";
+                _messageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var rollbackJson =
+                !string.IsNullOrWhiteSpace(
+                    _lastValidJson)
+                    ? _lastValidJson
+                    : EditorJsonUtility.ToJson(
+                        _runtime,
+                        prettyPrint:
+                            false);
+
             var manifestPath =
                 EditorUtility.OpenFilePanel(
                     "Import VCR Accessory Package",
@@ -1223,13 +1241,28 @@ namespace VCR.Editor.P12
                     .ApplyModifiedProperties();
                 EditorUtility.SetDirty(
                     _runtime);
+
+                if (!_runtime.RebuildConfiguration(
+                        out var configurationError))
+                {
+                    throw new InvalidOperationException(
+                        "Imported accessory binding failed runtime validation: " +
+                        configurationError);
+                }
+
+                _lastValidJson =
+                    EditorJsonUtility.ToJson(
+                        _runtime,
+                        prettyPrint:
+                            false);
                 _hasPendingChanges =
-                    true;
+                    false;
+                RebindSerializedOnly();
                 Selection.activeGameObject =
                     instance;
 
                 _message =
-                    $"Imported accessory package '{manifest.PackageId}' {manifest.PackageVersion} as '{manifest.SlotId}/{manifest.AccessoryId}'. Validate & Apply to register the scene binding.";
+                    $"Imported and registered accessory package '{manifest.PackageId}' {manifest.PackageVersion} as '{manifest.SlotId}/{manifest.AccessoryId}'.";
                 _messageType =
                     MessageType.Info;
             }
@@ -1246,10 +1279,26 @@ namespace VCR.Editor.P12
                     .DeleteImportedPackage(
                         importResult);
 
-                RebindSerializedOnly();
+                try
+                {
+                    EditorJsonUtility.FromJsonOverwrite(
+                        rollbackJson,
+                        _runtime);
+                    EditorUtility.SetDirty(
+                        _runtime);
+                    RebindSerializedOnly();
+                    _runtime.RebuildConfiguration(
+                        out _);
+                    _hasPendingChanges =
+                        false;
+                }
+                catch
+                {
+                    RebindSerializedOnly();
+                }
 
                 _message =
-                    "Accessory package scene registration failed and imported assets were rolled back: " +
+                    "Accessory package import/registration failed and package assets, scene instance, and serialized binding changes were rolled back: " +
                     exception.Message;
                 _messageType =
                     MessageType.Error;
