@@ -1653,6 +1653,14 @@ namespace VCR.Editor.P11
                     step.FindPropertyRelative(
                             "StepId")
                         .stringValue;
+                var authoringLabel =
+                    step.FindPropertyRelative(
+                            "AuthoringLabel")
+                        .stringValue;
+                var authoringGroup =
+                    step.FindPropertyRelative(
+                            "AuthoringGroup")
+                        .stringValue;
                 var actionType =
                     step.FindPropertyRelative(
                             "ActionType")
@@ -1671,14 +1679,27 @@ namespace VCR.Editor.P11
                         transition,
                         step);
                 var baseLabel =
-                    kind ==
-                        AppearanceTransitionStepKind.Commit
-                        ? "commit"
-                        : !string.IsNullOrWhiteSpace(
-                              stepId)
-                            ? stepId
-                            : ShortActionLabel(
-                                actionType);
+                    !string.IsNullOrWhiteSpace(
+                        authoringLabel)
+                        ? authoringLabel.Trim()
+                        : kind ==
+                            AppearanceTransitionStepKind.Commit
+                            ? "commit"
+                            : !string.IsNullOrWhiteSpace(
+                                  stepId)
+                                ? stepId
+                                : ShortActionLabel(
+                                    actionType);
+
+                if (!string.IsNullOrWhiteSpace(
+                        authoringGroup))
+                {
+                    baseLabel =
+                        "[" +
+                        authoringGroup.Trim() +
+                        "] " +
+                        baseLabel;
+                }
                 var flags =
                     string.Empty;
 
@@ -1817,7 +1838,7 @@ namespace VCR.Editor.P11
             }
 
             EditorGUILayout.HelpBox(
-                "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency.",
+                "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency. Graph Label/Group are authoring-only metadata and do not change runtime dependency semantics.",
                 MessageType.None);
         }
 
