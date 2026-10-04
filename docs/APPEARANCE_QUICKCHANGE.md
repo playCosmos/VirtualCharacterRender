@@ -369,7 +369,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - preview and validate an appearance preset before making it active
 - richer transition timeline authoring: direct source→target dependency edge editing is implemented on the P12 branch over the existing StepId-based All/Any graph; Graph Label plus nested `GraphGroup` paths and hierarchy rename/move/clear are implemented as authoring-only metadata; richer canvas interactions such as collapse/lasso remain optional later tooling; the project package-library browser is implemented
 - additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
-- custom particle/effect preset import/registration
+- project-local ParticleSystem Effect Preset v1 authoring/registration is implemented in P12 Scene Automation; see `EFFECT_PRESETS.md`. External/downloadable effect-package import remains separate and evidence-gated.
 - richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
 - transition interruption/fallback policy editing
 
