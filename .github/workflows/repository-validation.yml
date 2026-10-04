@@ -1,0 +1,25 @@
+name: Repository validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "checkpoint/**"
+      - "feature/**"
+      - "fix/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-structure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate repository structure
+        run: python3 tools/validate-repository-structure.py
