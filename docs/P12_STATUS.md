@@ -98,7 +98,9 @@ See `ACCESSORY_PACKAGES.md` for the v1 manifest, safety rules, and importer cont
 
 P12 includes `VCR/P12/Open Skinned Compatibility`. It compares one source `SkinnedMeshRenderer` against one target humanoid `Animator` without modifying either asset. Humanoid-bone identity is preferred when available; unique exact-name mapping is the fallback for non-humanoid or extra bones.
 
-The analyzer rejects missing or ambiguous target bones, null source bones, bindpose-count mismatch, non-finite or singular bind poses, root-bone mapping failure, and incompatible mapped hierarchy. A structurally compatible report still sets `RequiresBindPosePreview = true`; structural compatibility is not a deformation/fit PASS and automatic rebind remains disabled.
+The analyzer rejects missing or ambiguous target bones, null source bones, bindpose-count mismatch, non-finite or singular bind poses, root-bone mapping failure, and incompatible mapped hierarchy. A structurally compatible report still sets `RequiresBindPosePreview = true`; structural compatibility is not a deformation/fit PASS.
+
+After a structural pass, the same window can create a temporary non-destructive rebind preview. The preview uses a separate DontSave renderer mapped to target bones, preserves the original source renderer, and exposes current-pose average/max bind-matrix delta only as diagnostic evidence. Closing/removing/re-analyzing destroys the preview. No persistent/accepted rebind action is enabled yet.
 
 See `SKINNED_COMPATIBILITY.md` for result semantics and the evidence boundary.
 
@@ -132,6 +134,10 @@ The validation source covers:
 - missing/ambiguous target bone rejection
 - bindpose/bone-count mismatch rejection
 - mandatory bind-pose-preview flag on structurally compatible skinned reports
+- non-destructive preview renderer mapping to target bones/root bone
+- source renderer remains unchanged during preview
+- DontSave preview lifetime/disposal and finite bind-matrix diagnostics
+- structurally incompatible report cannot create a preview
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -154,7 +160,8 @@ Required later evidence includes:
 
 - real humanoid Animator/bone anchor verification on loaded VRM characters
 - real rigid-FBX package import/render verification
-- real bind-pose preview/rebind workflow after structural compatibility passes
+- real VRM bind-pose/deformation preview evidence for the implemented non-destructive preview
+- explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
 - interactive transition dependency graph editing/grouping
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - visual event/node tooling and richer environment/prop/effect automation
