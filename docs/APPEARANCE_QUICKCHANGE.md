@@ -367,7 +367,7 @@ The transition timeline editor, named markers, Blocking dependencies, and JSON t
 - import validated external rigid-FBX accessory packages through the P12 v1 manifest/importer; see `ACCESSORY_PACKAGES.md`
 - optional compatible skinned-outfit/accessory package workflow remains separate and requires explicit skeleton/bind-pose validation
 - preview and validate an appearance preset before making it active
-- richer transition timeline authoring: direct source→target dependency edge editing is implemented on the P12 branch over the existing StepId-based All/Any graph; richer named grouping/labels and non-scene workflows remain later tooling; the project package-library browser is implemented
+- richer transition timeline authoring: direct source→target dependency edge editing is implemented on the P12 branch over the existing StepId-based All/Any graph; Graph Label plus nested `GraphGroup` paths and hierarchy rename/move/clear are implemented as authoring-only metadata; richer canvas interactions such as collapse/lasso remain optional later tooling; the project package-library browser is implemented
 - additional external motion adapters for formats not yet covered by Unity-native import or the built-in BVH adapter, such as glTF motion workflows
 - custom particle/effect preset import/registration
 - richer marker/event conversion for non-native motion formats before they become Unity AnimationClips
@@ -539,7 +539,7 @@ Not yet implemented as built-ins:
 
 - external motion adapters beyond the implemented BVH path, such as glTF motion workflows
 - automatic marker/event extraction from additional non-native external motion formats; BVH sidecar markers are applied directly to the generated baked cue, while explicit VCR sidecar markers and Unity AnimationClip VCR marker extraction are implemented
-- P12 Graph Label / Graph Group metadata is implemented for transition steps; labels/groups are authoring-only and do not alter runtime `All` / `Any` completion semantics. The graph editor can assign/clear one group across a selected dependency target and all of its connected sources without modifying dependency edges.
+- P12 Graph Label / Graph Group metadata is implemented for transition steps; labels/groups are authoring-only and do not alter runtime `All` / `Any` completion semantics. Graph Group accepts nested `/` paths, the editor exposes implicit parent hierarchy, and group rename/move/clear can include descendants without modifying dependency edges.
 - P12 transition package schema is v3 so Graph Label / Graph Group metadata survives export/import; v1→v2→v3 and v2→v3 migration are supported. P11 checkpoint remains v2. Future package-library work may add tags/descriptions/version history if evidence justifies further schema expansion
 - external appearance package import
 - compatible external skinned-garment workflow
