@@ -88,6 +88,7 @@ The source implementation has progressed through the P11 Application UI and P12 
 - [P11 status](docs/P11_STATUS.md)
 - [P12 status](docs/P12_STATUS.md)
 - [P13 status](docs/P13_STATUS.md)
+- [2D backend adapter contract](docs/PRESENTATION2D_ADAPTERS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -117,6 +118,6 @@ The source implementation has progressed through the P11 Application UI and P12 
 
 ## Status
 
-P1-P12 source implementations are preserved as source checkpoints. P13 2D Extension is active with a backend-neutral presentation runtime, backend/model lifecycle contract, supported-domain tracking polling, immutable-frame deduplication, diagnostics, and SDK-neutral parameter mapping authoring/evaluation. No production 2D backend has been accepted yet; Live2D/Inochi2D integration remains isolated behind optional adapter/package boundaries. Timed transition behavior, real VRM appearance switching, and real 2D rendering are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
+P1-P12 source implementations are preserved as source checkpoints. P13's common 2D source slice is checkpoint-ready with a backend-neutral presentation runtime, backend/model lifecycle contract, supported-domain tracking polling, immutable-frame deduplication, diagnostics, SDK-neutral parameter mapping authoring/evaluation, and an optional mapped-parameter sink contract. No production 2D backend has been accepted yet; Live2D/Inochi2D integration remains isolated behind optional adapter/package boundaries. Timed transition behavior, real VRM appearance switching, and real 2D rendering are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
