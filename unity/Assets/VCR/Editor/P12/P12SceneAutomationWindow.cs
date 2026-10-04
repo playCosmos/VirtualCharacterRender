@@ -11,19 +11,24 @@ namespace VCR.Editor.P12
     {
         private PropEventActionHandler _propHandler;
         private EffectEventActionHandler _effectHandler;
+        private SceneSequenceEventActionHandler _sequenceHandler;
         private BasicEnvironmentRuntime _environmentRuntime;
 
         private SerializedObject _serializedProps;
         private SerializedObject _serializedEffects;
+        private SerializedObject _serializedSequences;
         private SerializedObject _serializedEnvironment;
         private SerializedProperty _props;
         private SerializedProperty _effects;
+        private SerializedProperty _sequences;
         private SerializedProperty _environmentStates;
 
         private string _lastValidPropJson;
         private string _lastValidEffectJson;
+        private string _lastValidSequenceJson;
         private bool _propPending;
         private bool _effectPending;
+        private bool _sequencePending;
         private Vector2 _scroll;
         private string _message;
         private MessageType _messageType =
@@ -78,6 +83,8 @@ namespace VCR.Editor.P12
             EditorGUILayout.Space();
             DrawEffectAuthoring();
             EditorGUILayout.Space();
+            DrawSequenceAuthoring();
+            EditorGUILayout.Space();
             DrawEnvironmentReference();
 
             EditorGUILayout.EndScrollView();
@@ -103,6 +110,14 @@ namespace VCR.Editor.P12
                     typeof(
                         EffectEventActionHandler),
                     true);
+            var nextSequence =
+                (SceneSequenceEventActionHandler)
+                EditorGUILayout.ObjectField(
+                    "Sequence Handler",
+                    _sequenceHandler,
+                    typeof(
+                        SceneSequenceEventActionHandler),
+                    true);
             var nextEnvironment =
                 (BasicEnvironmentRuntime)
                 EditorGUILayout.ObjectField(
@@ -119,6 +134,9 @@ namespace VCR.Editor.P12
                     nextEffect,
                     _effectHandler) ||
                 !ReferenceEquals(
+                    nextSequence,
+                    _sequenceHandler) ||
+                !ReferenceEquals(
                     nextEnvironment,
                     _environmentRuntime))
             {
@@ -126,6 +144,8 @@ namespace VCR.Editor.P12
                     nextProp;
                 _effectHandler =
                     nextEffect;
+                _sequenceHandler =
+                    nextSequence;
                 _environmentRuntime =
                     nextEnvironment;
                 RebindAll();
@@ -387,6 +407,333 @@ namespace VCR.Editor.P12
                     ValidateEffectBindings();
                 }
             }
+        }
+
+        private void DrawSequenceAuthoring()
+        {
+            EditorGUILayout.LabelField(
+                "Timed Scene Sequences",
+                EditorStyles.boldLabel);
+
+            if (_sequenceHandler == null ||
+                _serializedSequences == null ||
+                _sequences == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Assign a SceneSequenceEventActionHandler. Runtime-scene generation adds one to the application bootstrap by default.",
+                    MessageType.None);
+                return;
+            }
+
+            _serializedSequences.Update();
+
+            if (_sequencePending)
+            {
+                EditorGUILayout.HelpBox(
+                    "Scene sequences contain pending edits. Validate & Apply before treating them as runtime-ready.",
+                    MessageType.Warning);
+            }
+
+            for (var i = 0;
+                 i < _sequences.arraySize;
+                 i++)
+            {
+                var sequence =
+                    _sequences.GetArrayElementAtIndex(
+                        i);
+
+                using (new EditorGUILayout
+                           .VerticalScope(
+                               EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout
+                               .HorizontalScope())
+                    {
+                        EditorGUILayout.PropertyField(
+                            sequence.FindPropertyRelative(
+                                "SequenceId"),
+                            new GUIContent(
+                                $"Sequence {i + 1} ID"));
+
+                        if (GUILayout.Button(
+                                "Delete",
+                                GUILayout.Width(
+                                    64f)))
+                        {
+                            Undo.RecordObject(
+                                _sequenceHandler,
+                                "Delete Scene Sequence");
+                            _sequences
+                                .DeleteArrayElementAtIndex(
+                                    i);
+                            _serializedSequences
+                                .ApplyModifiedProperties();
+                            EditorUtility.SetDirty(
+                                _sequenceHandler);
+                            _sequencePending = true;
+                            GUIUtility.ExitGUI();
+                        }
+                    }
+
+                    EditorGUILayout.PropertyField(
+                        sequence.FindPropertyRelative(
+                            "Steps"),
+                        includeChildren:
+                            true);
+                    EditorGUILayout.PropertyField(
+                        sequence.FindPropertyRelative(
+                            "CancellationSteps"),
+                        new GUIContent(
+                            "Cancellation Cleanup"),
+                        includeChildren:
+                            true);
+                }
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Add Empty Sequence"))
+                {
+                    AddEmptySequence();
+                }
+
+                if (GUILayout.Button(
+                        "Add Scene Change Starter"))
+                {
+                    AddSceneChangeStarterSequence();
+                }
+
+                if (GUILayout.Button(
+                        "Validate & Apply"))
+                {
+                    ValidateSequenceBindings();
+                }
+            }
+
+            EditorGUILayout.HelpBox(
+                "scene.sequence_play runs one authored sequence at a time using unscaled time. Required-step failure executes cancellation cleanup. scene.sequence_cancel is accepted only when the active sequence defines explicit cleanup actions.",
+                MessageType.None);
+        }
+
+        private void AddEmptySequence()
+        {
+            Undo.RecordObject(
+                _sequenceHandler,
+                "Add Scene Sequence");
+
+            var index =
+                _sequences.arraySize;
+            _sequences.arraySize =
+                index + 1;
+            var sequence =
+                _sequences.GetArrayElementAtIndex(
+                    index);
+            sequence.FindPropertyRelative(
+                    "SequenceId")
+                .stringValue =
+                    BuildUniqueLogicalId(
+                        "scene-sequence",
+                        _sequences,
+                        "SequenceId",
+                        index);
+            sequence.FindPropertyRelative(
+                    "Steps")
+                .arraySize = 0;
+            sequence.FindPropertyRelative(
+                    "CancellationSteps")
+                .arraySize = 0;
+            _sequencePending = true;
+        }
+
+        private void AddSceneChangeStarterSequence()
+        {
+            AddEmptySequence();
+
+            var index =
+                _sequences.arraySize - 1;
+            var sequence =
+                _sequences.GetArrayElementAtIndex(
+                    index);
+            sequence.FindPropertyRelative(
+                    "SequenceId")
+                .stringValue =
+                    BuildUniqueLogicalId(
+                        "scene-change",
+                        _sequences,
+                        "SequenceId",
+                        index);
+
+            var steps =
+                sequence.FindPropertyRelative(
+                    "Steps");
+            steps.arraySize = 3;
+            ConfigureSequenceStep(
+                steps.GetArrayElementAtIndex(
+                    0),
+                0f,
+                EventActionTypes
+                    .EnvironmentSetState,
+                null,
+                "Fade",
+                "state-id",
+                0.5,
+                true,
+                true);
+            ConfigureSequenceStep(
+                steps.GetArrayElementAtIndex(
+                    1),
+                0.2f,
+                EventActionTypes
+                    .PropSetActive,
+                "props.main",
+                null,
+                "prop-id",
+                1.0,
+                true,
+                true);
+            ConfigureSequenceStep(
+                steps.GetArrayElementAtIndex(
+                    2),
+                0.35f,
+                EventActionTypes
+                    .EffectPlay,
+                "effects.main",
+                null,
+                "effect-id",
+                0.0,
+                false,
+                false);
+
+            var cleanup =
+                sequence.FindPropertyRelative(
+                    "CancellationSteps");
+            cleanup.arraySize = 2;
+            ConfigureSequenceStep(
+                cleanup.GetArrayElementAtIndex(
+                    0),
+                0f,
+                EventActionTypes
+                    .EffectStop,
+                "effects.main",
+                null,
+                "effect-id",
+                0.0,
+                false,
+                false);
+            ConfigureSequenceStep(
+                cleanup.GetArrayElementAtIndex(
+                    1),
+                0f,
+                EventActionTypes
+                    .PropSetActive,
+                "props.main",
+                null,
+                "prop-id",
+                0.0,
+                true,
+                false);
+
+            _sequencePending = true;
+        }
+
+        private static void ConfigureSequenceStep(
+            SerializedProperty step,
+            float timeSeconds,
+            string actionType,
+            string targetId,
+            string name,
+            string text,
+            double value,
+            bool hasValue,
+            bool required)
+        {
+            step.FindPropertyRelative(
+                    "TimeSeconds")
+                .floatValue =
+                    timeSeconds;
+            step.FindPropertyRelative(
+                    "ActionType")
+                .stringValue =
+                    actionType ??
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "TargetId")
+                .stringValue =
+                    targetId ??
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "Name")
+                .stringValue =
+                    name ??
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "Text")
+                .stringValue =
+                    text ??
+                    string.Empty;
+            step.FindPropertyRelative(
+                    "Value")
+                .doubleValue =
+                    value;
+            step.FindPropertyRelative(
+                    "HasValue")
+                .boolValue =
+                    hasValue;
+            step.FindPropertyRelative(
+                    "Required")
+                .boolValue =
+                    required;
+        }
+
+        private void ValidateSequenceBindings()
+        {
+            _serializedSequences
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _sequenceHandler);
+
+            if (_sequenceHandler.RebuildBindings(
+                    out var error))
+            {
+                _lastValidSequenceJson =
+                    EditorJsonUtility.ToJson(
+                        _sequenceHandler,
+                        prettyPrint:
+                            false);
+                _sequencePending = false;
+                SetMessage(
+                    $"Scene sequences validated: {_sequences.arraySize}.",
+                    MessageType.Info);
+                RebindSequences();
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    _lastValidSequenceJson))
+            {
+                EditorJsonUtility
+                    .FromJsonOverwrite(
+                        _lastValidSequenceJson,
+                        _sequenceHandler);
+                _sequenceHandler.RebuildBindings(
+                    out _);
+                EditorUtility.SetDirty(
+                    _sequenceHandler);
+                RebindSequences();
+                _sequencePending = false;
+                SetMessage(
+                    "Scene sequence validation failed and edits were rolled back: " +
+                    error,
+                    MessageType.Error);
+                return;
+            }
+
+            SetMessage(
+                "Scene sequence validation failed: " +
+                error,
+                MessageType.Error);
         }
 
         private void DrawEnvironmentReference()
@@ -761,6 +1108,15 @@ namespace VCR.Editor.P12
                 EditorUtility.SetDirty(
                     _effectHandler);
             }
+
+            if (_serializedSequences != null &&
+                _serializedSequences
+                    .ApplyModifiedProperties())
+            {
+                _sequencePending = true;
+                EditorUtility.SetDirty(
+                    _sequenceHandler);
+            }
         }
 
         private void ResolveFromSelection(
@@ -786,6 +1142,13 @@ namespace VCR.Editor.P12
                         EffectEventActionHandler>(
                             true) ??
                     _effectHandler;
+                _sequenceHandler =
+                    selected.GetComponentInParent<
+                        SceneSequenceEventActionHandler>() ??
+                    selected.GetComponentInChildren<
+                        SceneSequenceEventActionHandler>(
+                            true) ??
+                    _sequenceHandler;
                 _environmentRuntime =
                     selected.GetComponentInParent<
                         BasicEnvironmentRuntime>() ??
@@ -806,6 +1169,11 @@ namespace VCR.Editor.P12
                     .FindFirstObjectByType<
                         EffectEventActionHandler>(
                         FindObjectsInactive.Include);
+            _sequenceHandler =
+                UnityEngine.Object
+                    .FindFirstObjectByType<
+                        SceneSequenceEventActionHandler>(
+                        FindObjectsInactive.Include);
             _environmentRuntime =
                 UnityEngine.Object
                     .FindFirstObjectByType<
@@ -817,6 +1185,7 @@ namespace VCR.Editor.P12
         {
             RebindProps();
             RebindEffects();
+            RebindSequences();
             RebindEnvironment();
         }
 
@@ -879,6 +1248,38 @@ namespace VCR.Editor.P12
             {
                 SetMessage(
                     "Current effect bindings are invalid: " +
+                    error,
+                    MessageType.Warning);
+            }
+        }
+
+        private void RebindSequences()
+        {
+            _serializedSequences =
+                _sequenceHandler != null
+                    ? new SerializedObject(
+                        _sequenceHandler)
+                    : null;
+            _sequences =
+                _serializedSequences?.FindProperty(
+                    "sequences");
+            _sequencePending = false;
+            _lastValidSequenceJson = null;
+
+            if (_sequenceHandler != null &&
+                _sequenceHandler.RebuildBindings(
+                    out var error))
+            {
+                _lastValidSequenceJson =
+                    EditorJsonUtility.ToJson(
+                        _sequenceHandler,
+                        prettyPrint:
+                            false);
+            }
+            else if (_sequenceHandler != null)
+            {
+                SetMessage(
+                    "Current scene sequences are invalid: " +
                     error,
                     MessageType.Warning);
             }
