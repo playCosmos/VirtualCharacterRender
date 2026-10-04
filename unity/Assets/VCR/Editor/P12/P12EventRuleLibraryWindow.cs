@@ -165,7 +165,7 @@ namespace VCR.Editor.P12
                             ? "OK"
                             : "INVALID";
                     var label =
-                        $"[{state}] {id}  ({entry.RuleIds.Length})";
+                        $"[{state}] {id}  r{entry.Revision}  ({entry.RuleIds.Length})";
                     var selected =
                         string.Equals(
                             _selectedAssetPath,
@@ -228,6 +228,24 @@ namespace VCR.Editor.P12
                 EditorGUILayout.LabelField(
                     "Version",
                     entry.Version.ToString());
+                EditorGUILayout.LabelField(
+                    "Revision",
+                    entry.Revision.ToString());
+                EditorGUILayout.LabelField(
+                    "Description",
+                    string.IsNullOrWhiteSpace(
+                        entry.Description)
+                        ? "<none>"
+                        : entry.Description,
+                    EditorStyles.wordWrappedLabel);
+                EditorGUILayout.LabelField(
+                    "Tags",
+                    entry.Tags != null &&
+                    entry.Tags.Length > 0
+                        ? string.Join(
+                            ", ",
+                            entry.Tags)
+                        : "<none>");
                 EditorGUILayout.LabelField(
                     "File Size",
                     FormatBytes(
