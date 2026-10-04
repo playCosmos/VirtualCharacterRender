@@ -845,6 +845,42 @@ namespace VCR.Editor.P12
                 return;
             }
 
+            Animator packageAnimator =
+                null;
+
+            if (anchorMode ==
+                AppearanceAccessoryAnchorMode
+                    .HumanoidBone)
+            {
+                packageAnimator =
+                    _runtime
+                        .GetComponentInChildren<Animator>(
+                            true);
+
+                if (packageAnimator == null)
+                {
+                    packageAnimator =
+                        _runtime
+                            .GetComponentInParent<Animator>();
+                }
+
+                if (packageAnimator == null ||
+                    packageAnimator.avatar == null ||
+                    !packageAnimator.isHuman ||
+                    packageAnimator.GetBoneTransform(
+                        bone) == null)
+                {
+                    P12AccessoryPackageImporter
+                        .DeleteImportedPackage(
+                            importResult);
+                    _message =
+                        $"Accessory package requests humanoid bone '{bone}', but the selected appearance runtime does not expose that bone through a humanoid Animator. Imported assets were rolled back.";
+                    _messageType =
+                        MessageType.Error;
+                    return;
+                }
+            }
+
             GameObject instance = null;
 
             try
@@ -916,25 +952,13 @@ namespace VCR.Editor.P12
                     .objectReferenceValue =
                         null;
 
-                var animator =
-                    _runtime
-                        .GetComponentInChildren<Animator>(
-                            true);
-
-                if (animator == null)
-                {
-                    animator =
-                        _runtime
-                            .GetComponentInParent<Animator>();
-                }
-
                 accessory.FindPropertyRelative(
                         "AnchorAnimator")
                     .objectReferenceValue =
                         anchorMode ==
                             AppearanceAccessoryAnchorMode
                                 .HumanoidBone
-                            ? animator
+                            ? packageAnimator
                             : null;
                 accessory.FindPropertyRelative(
                         "AnchorBone")
@@ -972,21 +996,8 @@ namespace VCR.Editor.P12
                 _message =
                     $"Imported accessory package '{manifest.PackageId}' {manifest.PackageVersion} as '{manifest.SlotId}/{manifest.AccessoryId}'. Validate & Apply to register the scene binding.";
 
-                if (anchorMode ==
-                        AppearanceAccessoryAnchorMode
-                            .HumanoidBone &&
-                    animator == null)
-                {
-                    _message +=
-                        " The package requests a humanoid-bone anchor, but no Animator was found; assign one before validation.";
-                    _messageType =
-                        MessageType.Warning;
-                }
-                else
-                {
-                    _messageType =
-                        MessageType.Info;
-                }
+                _messageType =
+                    MessageType.Info;
 
                 Selection.activeGameObject =
                     instance;
