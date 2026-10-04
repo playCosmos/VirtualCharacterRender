@@ -36,7 +36,12 @@ The editor supports:
 
 - previous/next rule navigation
 - optional per-rule `Graph Label` / `Graph Group` authoring metadata
-- grouped-rule overview with member/enabled counts, same-group Prev/Next navigation, and group-wide Enable/Disable authoring actions
+- grouped-rule overview with member/enabled counts, same-group Prev/Next navigation, and exact-group Enable/Disable authoring actions
+- nested `GraphGroup` paths using `/`, with implicit parent hierarchy display
+- hierarchy-wide Enable/Disable with optional descendant inclusion
+- hierarchy Rename/Move and exact-vs-recursive Clear without changing EventRuntime semantics
+- hierarchy Duplicate that deep-clones the selected subtree, assigns deterministic copy ids, and rewrites the destination group path
+- hierarchy Export that emits only the selected exact/subtree rules through the existing validated rule-library package path
 - add/duplicate/delete rule
 - visual stage/node selection
 - add/delete/reorder Condition, Mutation and Action nodes
@@ -73,6 +78,7 @@ It rejects:
 - non-finite Mutation numeric constants/scales/offsets
 - Action nodes without `ActionType`
 - non-finite Action numeric values
+- malformed `GraphGroup` paths with empty segments or `.` / `..`; valid paths are canonicalized on validation
 
 Action-handler availability is deliberately not hard-coded into the editor. Handler registration remains a runtime capability of the selected `EventRuntimeHost`, so custom action handlers can continue to work without modifying the node editor.
 
@@ -103,7 +109,7 @@ Template insertion/import/export first applies the current serialized edits and 
 
 This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-`Graph Label` and `Graph Group` are authoring metadata only and are preserved through normal rule serialization/library packages; they never change EventRuntime matching or execution order. Future P12 extensions may add higher-level node composition and deeper revision workflows such as explicit branch/merge semantics. Basic same-PackageId revision history and previous-revision diff are implemented. Any new branching/dependency runtime semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+`Graph Label` and `Graph Group` are authoring metadata only and are preserved through normal rule serialization/library packages; they never change EventRuntime matching or execution order. `GraphGroup` supports canonical nested `/` paths. Parent/subtree enable-disable, rename/move/clear, deep-clone duplicate, and subtree package export are authoring operations over ordinary rules, not new runtime control-flow semantics. Future P12 extensions may add deeper revision workflows such as explicit branch/merge semantics or visual collapse/lasso only when justified. Any new branching/dependency runtime semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -129,7 +135,10 @@ This remains a visual editor for the current linear rule contract. It does not p
 - previous-revision metadata/rule diff
 - duplicate-revision ambiguity rejection
 - Graph Label / Graph Group package round trip
-- grouped rule summary, same-group navigation, and group enable/disable helpers
+- grouped rule summary, same-group navigation, and exact-group enable/disable helpers
+- nested group parent-path capture, subtree enable/disable, rename/move, exact/recursive clear, self-nesting/malformed-path rejection
+- hierarchy rule capture plus deep-clone duplicate with deterministic ids and destination path rewrite
+- rule-library JSON round trip preserves canonical nested GraphGroup metadata
 - the SerializedProperty contract used by the editor, including Graph Label / Graph Group
 
 These source validations have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
