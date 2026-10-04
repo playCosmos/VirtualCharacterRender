@@ -56,6 +56,12 @@ namespace VCR.Runtime.EventRuntime
         public const string PropToggle =
             "prop.toggle";
 
+        public const string SceneSequencePlay =
+            "scene.sequence_play";
+
+        public const string SceneSequenceCancel =
+            "scene.sequence_cancel";
+
         public const string AudioPlay =
             "audio.play";
 
