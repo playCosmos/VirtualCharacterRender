@@ -94,6 +94,14 @@ Package asset/scene/runtime-registration failures roll back the imported package
 
 See `ACCESSORY_PACKAGES.md` for the v1 manifest, safety rules, and importer contract.
 
+## Skinned compatibility analysis
+
+P12 includes `VCR/P12/Open Skinned Compatibility`. It compares one source `SkinnedMeshRenderer` against one target humanoid `Animator` without modifying either asset. Humanoid-bone identity is preferred when available; unique exact-name mapping is the fallback for non-humanoid or extra bones.
+
+The analyzer rejects missing or ambiguous target bones, null source bones, bindpose-count mismatch, non-finite or singular bind poses, root-bone mapping failure, and incompatible mapped hierarchy. A structurally compatible report still sets `RequiresBindPosePreview = true`; structural compatibility is not a deformation/fit PASS and automatic rebind remains disabled.
+
+See `SKINNED_COMPATIBILITY.md` for result semantics and the evidence boundary.
+
 ## Source validation
 
 Menu:
@@ -120,6 +128,10 @@ The validation source covers:
 - traversal/non-FBX/unsafe-id/future-version/invalid-bone/zero-scale/scene-Transform-anchor rejection
 - package-local FBX path resolution before Unity import
 - canonical package/version installation identity and duplicate-version rejection
+- structurally compatible exact-name skeleton mapping
+- missing/ambiguous target bone rejection
+- bindpose/bone-count mismatch rejection
+- mandatory bind-pose-preview flag on structurally compatible skinned reports
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
@@ -135,14 +147,14 @@ Required later evidence includes:
 - failed authoring validation rollback inside the real Unity Editor
 - scene save/reload preservation of explicit bindings
 - real imported rigid-FBX accessory rendering/anchor evidence
-- skinned-outfit/accessory compatibility checks
+- real skinned-outfit/accessory bind-pose, deformation, clipping, and tracking stability evidence
 - performance/memory behavior with realistic wardrobe counts
 
 ## Next P12 source work
 
 - real humanoid Animator/bone anchor verification on loaded VRM characters
 - real rigid-FBX package import/render verification
-- optional compatible skinned-outfit compatibility checks
+- real bind-pose preview/rebind workflow after structural compatibility passes
 - interactive transition dependency graph editing/grouping
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - visual event/node tooling and richer environment/prop/effect automation
