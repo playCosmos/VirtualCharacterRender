@@ -3440,13 +3440,24 @@ namespace VCR.Editor.P12
                     handlerRoot.AddComponent<
                         EffectEventActionHandler>();
 
-                Expect(
+                P12EffectPresetInstallResult
+                    installed = null;
+                string installError = null;
+                var installedSuccessfully =
                     P12EffectPresetUtility
                         .TryInstall(
                             preset,
                             handler,
-                            out var installed,
-                            out var installError) &&
+                            out installed,
+                            out installError);
+                string rebuildError = null;
+                var rebuilt =
+                    installedSuccessfully &&
+                    handler.RebuildBindings(
+                        out rebuildError);
+
+                Expect(
+                    installedSuccessfully &&
                     installed != null &&
                     installed.Instance !=
                         null &&
@@ -3455,8 +3466,7 @@ namespace VCR.Editor.P12
                     installed.ParticleSystemCount ==
                         1 &&
                     !installed.Instance.activeSelf &&
-                    handler.RebuildBindings(
-                        out var rebuildError),
+                    rebuilt,
                     "effect preset install must create one inactive scene instance and register a valid logical effect binding: " +
                     installError +
                     " / " +
