@@ -171,10 +171,23 @@ namespace VCR.Editor.P12
             }
 
             var packageFolder =
-                BuildUniquePackageFolder(
+                BuildPackageFolder(
                     destinationRoot,
                     manifest.PackageId,
                     manifest.PackageVersion);
+
+            if (AssetDatabase.IsValidFolder(
+                    packageFolder) ||
+                Directory.Exists(
+                    AssetPathToAbsolutePath(
+                        packageFolder)))
+            {
+                error =
+                    $"Accessory package '{manifest.PackageId}' version '{manifest.PackageVersion}' is already installed at '{packageFolder}'. Remove or version the package explicitly before importing again.";
+                RollbackFolders(
+                    createdFolders);
+                return false;
+            }
 
             if (!TryEnsureAssetFolder(
                     packageFolder,
@@ -378,37 +391,19 @@ namespace VCR.Editor.P12
             return true;
         }
 
-        private static string BuildUniquePackageFolder(
+        internal static string BuildPackageFolder(
             string destinationRoot,
             string packageId,
             string packageVersion)
         {
-            var baseName =
+            return
+                NormalizeAssetFolder(
+                    destinationRoot) +
+                "/" +
                 SafeFileName(
                     packageId +
                     "-" +
                     packageVersion);
-            var candidate =
-                destinationRoot +
-                "/" +
-                baseName;
-            var suffix = 2;
-
-            while (AssetDatabase.IsValidFolder(
-                       candidate) ||
-                   Directory.Exists(
-                       AssetPathToAbsolutePath(
-                           candidate)))
-            {
-                candidate =
-                    destinationRoot +
-                    "/" +
-                    baseName +
-                    "-" +
-                    suffix++;
-            }
-
-            return candidate;
         }
 
         private static bool TryEnsureAssetFolder(
