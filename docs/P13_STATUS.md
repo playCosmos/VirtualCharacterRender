@@ -82,7 +82,30 @@ presentation2d.load.count
 presentation2d.load.failures
 ```
 
-No backend-specific parameter mapping exists in the core host.
+The host itself does not own backend-specific parameter ids. Adapter packages may use the shared mapping profile/evaluator below without moving SDK-specific types into the core host.
+
+### Common 2D parameter mapping
+
+P13 now includes a backend-bound, SDK-neutral `Character2DParameterMappingProfile`.
+
+Supported mapping sources are:
+
+- normalized face coefficients
+- normalized standard expressions
+- head position X/Y/Z
+- signed head pitch/yaw/roll degrees
+
+Each binding defines a target parameter id, input/output ranges, optional input clamping, and optional fallback input when the source domain is unavailable. Validation rejects blank/duplicate target ids, non-finite values, zero-width input ranges, unsupported source kinds, invalid face coefficients, and out-of-range standard expressions.
+
+`Character2DParameterMapper.TryEvaluate` requires the profile backend id to match the active adapter id and produces backend-agnostic target-id/value pairs. This keeps common normalized semantics reusable while leaving the final SDK parameter write inside the backend adapter.
+
+Editor menu:
+
+```text
+VCR/P13/Open 2D Parameter Mapping
+```
+
+The Editor window creates/selects mapping-profile assets, exposes backend id/bindings through serialized authoring, and provides Validate / Validate & Save without installing or selecting a 2D SDK backend.
 
 ## Source validation
 
@@ -105,6 +128,12 @@ The first validator uses fake backend/provider MonoBehaviours and covers:
 - failed-frame retry behavior
 - unload/reload cache reset
 - runtime diagnostics metrics for load/apply success/failure
+- valid face/expression/head-position parameter evaluation
+- authored fallback values for unavailable input domains
+- skip behavior when unavailable inputs have no fallback
+- mapping-profile backend mismatch rejection
+- duplicate target-parameter rejection
+- out-of-range standard-expression rejection
 
 These validation paths are implemented but have not been executed in this environment because Unity Editor/runtime execution is unavailable here.
 
@@ -138,7 +167,7 @@ An experimental Windows-only adapter may be useful for contract testing but must
 ## Next P13 source work
 
 - backend adapter package/assembly layout and dependency gates
-- common parameter-mapping authoring model for mapping normalized face/expression semantics to backend parameter ids
+- backend-specific parameter sink integration using the shared mapping profile/evaluator
 - Live2D adapter spike after license/package acceptance
 - Inochi2D adapter spike when a macOS native path is available or intentionally built/maintained
 - P13 UI surface for selecting an installed 2D backend/model only after at least one adapter is actually available
