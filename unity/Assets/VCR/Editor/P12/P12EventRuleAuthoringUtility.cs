@@ -53,6 +53,19 @@ namespace VCR.Editor.P12
                     return false;
                 }
 
+                if (!string.IsNullOrWhiteSpace(
+                        rule.GraphGroup) &&
+                    !P12GraphGroupPathUtility
+                        .TryNormalize(
+                            rule.GraphGroup,
+                            out _,
+                            out var groupError))
+                {
+                    error =
+                        $"Rule '{id}' graph group is invalid: {groupError}";
+                    return false;
+                }
+
                 if (!IsFiniteNonNegative(
                         rule.CooldownSeconds))
                 {
@@ -274,13 +287,25 @@ namespace VCR.Editor.P12
         public static int SetGroupEnabled(
             EventRuntimeRule[] rules,
             string group,
-            bool enabled)
-        {
-            var normalized =
-                group?.Trim();
+            bool enabled) =>
+                SetGroupEnabled(
+                    rules,
+                    group,
+                    enabled,
+                    includeDescendants:
+                        false);
 
-            if (string.IsNullOrWhiteSpace(
-                    normalized))
+        public static int SetGroupEnabled(
+            EventRuntimeRule[] rules,
+            string group,
+            bool enabled,
+            bool includeDescendants)
+        {
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    group,
+                    out var normalized,
+                    out _))
             {
                 return 0;
             }
@@ -292,11 +317,11 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule == null ||
-                    !string.Equals(
-                        rule.GraphGroup
-                            ?.Trim(),
-                        normalized,
-                        StringComparison.Ordinal) ||
+                    !P12GraphGroupPathUtility
+                        .Matches(
+                            rule.GraphGroup,
+                            normalized,
+                            includeDescendants) ||
                     rule.Enabled ==
                         enabled)
                 {
@@ -309,6 +334,154 @@ namespace VCR.Editor.P12
             }
 
             return changed;
+        }
+
+        public static string[] CaptureGroupPaths(
+            EventRuntimeRule[] rules)
+        {
+            var groups =
+                new List<string>();
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule != null &&
+                    !string.IsNullOrWhiteSpace(
+                        rule.GraphGroup))
+                {
+                    groups.Add(
+                        rule.GraphGroup);
+                }
+            }
+
+            return P12GraphGroupPathUtility
+                .CaptureHierarchyPaths(
+                    groups);
+        }
+
+        public static bool TryRewriteGroupHierarchy(
+            EventRuntimeRule[] rules,
+            string sourceGroupPath,
+            string destinationGroupPath,
+            bool includeDescendants,
+            out int affectedRules,
+            out string error)
+        {
+            affectedRules = 0;
+            error = null;
+
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    sourceGroupPath,
+                    out var source,
+                    out error) ||
+                !P12GraphGroupPathUtility
+                    .TryNormalize(
+                        destinationGroupPath,
+                        out var destination,
+                        out error))
+            {
+                return false;
+            }
+
+            if (string.Equals(
+                    source,
+                    destination,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "Source and destination rule group paths are identical.";
+                return false;
+            }
+
+            if (includeDescendants &&
+                destination.StartsWith(
+                    source + "/",
+                    StringComparison.Ordinal))
+            {
+                error =
+                    "A rule group hierarchy cannot be moved inside itself.";
+                return false;
+            }
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule == null ||
+                    !P12GraphGroupPathUtility
+                        .TryRewrite(
+                            rule.GraphGroup,
+                            source,
+                            destination,
+                            includeDescendants,
+                            out var rewritten))
+                {
+                    continue;
+                }
+
+                rule.GraphGroup =
+                    rewritten;
+                affectedRules++;
+            }
+
+            if (affectedRules == 0)
+            {
+                error =
+                    $"Rule group path '{source}' is not assigned to any rule.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryClearGroupHierarchy(
+            EventRuntimeRule[] rules,
+            string sourceGroupPath,
+            bool includeDescendants,
+            out int affectedRules,
+            out string error)
+        {
+            affectedRules = 0;
+            error = null;
+
+            if (!P12GraphGroupPathUtility
+                .TryNormalize(
+                    sourceGroupPath,
+                    out var source,
+                    out error))
+            {
+                return false;
+            }
+
+            foreach (var rule in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (rule == null ||
+                    !P12GraphGroupPathUtility
+                        .Matches(
+                            rule.GraphGroup,
+                            source,
+                            includeDescendants))
+                {
+                    continue;
+                }
+
+                rule.GraphGroup =
+                    string.Empty;
+                affectedRules++;
+            }
+
+            if (affectedRules == 0)
+            {
+                error =
+                    $"Rule group path '{source}' is not assigned to any rule.";
+                return false;
+            }
+
+            return true;
         }
 
         public static string BuildUniqueRuleId(
