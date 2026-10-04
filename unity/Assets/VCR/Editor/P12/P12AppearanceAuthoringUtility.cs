@@ -237,6 +237,116 @@ namespace VCR.Editor.P12
             };
         }
 
+        public static bool TryResolveAccessoryAnchor(
+            AppearanceAccessoryAnchorMode mode,
+            Transform explicitAnchor,
+            Animator animator,
+            HumanBodyBones bone,
+            out Transform anchor,
+            out string error)
+        {
+            anchor = null;
+            error = null;
+
+            switch (mode)
+            {
+                case AppearanceAccessoryAnchorMode.None:
+                    return true;
+
+                case AppearanceAccessoryAnchorMode.Transform:
+                    anchor =
+                        explicitAnchor;
+
+                    if (anchor == null)
+                    {
+                        error =
+                            "Transform anchor mode requires an anchor Transform.";
+                        return false;
+                    }
+
+                    return true;
+
+                case AppearanceAccessoryAnchorMode.HumanoidBone:
+                    if (animator == null ||
+                        animator.avatar == null ||
+                        !animator.isHuman)
+                    {
+                        error =
+                            "Humanoid bone anchor requires a humanoid Animator.";
+                        return false;
+                    }
+
+                    if (bone ==
+                        HumanBodyBones.LastBone)
+                    {
+                        error =
+                            "Select a concrete humanoid bone.";
+                        return false;
+                    }
+
+                    anchor =
+                        animator.GetBoneTransform(
+                            bone);
+
+                    if (anchor == null)
+                    {
+                        error =
+                            $"Humanoid Animator does not expose bone '{bone}'.";
+                        return false;
+                    }
+
+                    return true;
+
+                default:
+                    error =
+                        $"Unsupported accessory anchor mode '{mode}'.";
+                    return false;
+            }
+        }
+
+        public static bool TryCaptureAnchorOffset(
+            Transform accessoryRoot,
+            Transform anchor,
+            out Vector3 localPosition,
+            out Vector3 localEulerAngles,
+            out string error)
+        {
+            localPosition =
+                Vector3.zero;
+            localEulerAngles =
+                Vector3.zero;
+            error = null;
+
+            if (accessoryRoot == null ||
+                anchor == null)
+            {
+                error =
+                    "Accessory root and anchor Transform are required.";
+                return false;
+            }
+
+            if (ReferenceEquals(
+                    accessoryRoot,
+                    anchor) ||
+                anchor.IsChildOf(
+                    accessoryRoot))
+            {
+                error =
+                    "Accessory anchor cannot be the root or one of its descendants.";
+                return false;
+            }
+
+            localPosition =
+                anchor.InverseTransformPoint(
+                    accessoryRoot.position);
+            localEulerAngles =
+                (Quaternion.Inverse(
+                     anchor.rotation) *
+                 accessoryRoot.rotation)
+                .eulerAngles;
+            return true;
+        }
+
         public static string BuildUniqueId(
             string preferred,
             Func<string, bool> exists)
