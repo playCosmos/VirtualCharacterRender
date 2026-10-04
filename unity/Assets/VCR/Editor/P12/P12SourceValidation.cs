@@ -7,6 +7,7 @@ using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
+using VCR.Runtime.Environment.Unity;
 
 namespace VCR.Editor.P12
 {
@@ -34,6 +35,8 @@ namespace VCR.Editor.P12
             RunEventNodeAuthoringChecks(
                 failures);
             RunPropActionChecks(
+                failures);
+            RunSceneAutomationAuthoringChecks(
                 failures);
             RunEventRuleLibraryBrowserChecks(
                 failures);
@@ -2771,6 +2774,269 @@ namespace VCR.Editor.P12
             {
                 failures.Add(
                     "P12 prop automation validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
+        }
+
+        private static void RunSceneAutomationAuthoringChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P12 Scene Automation Validation");
+
+                var propRoot =
+                    new GameObject(
+                        "Desk Lamp");
+                propRoot.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var effectRoot =
+                    new GameObject(
+                        "Sparkle Effect");
+                effectRoot.transform.SetParent(
+                    root.transform,
+                    false);
+                var particle =
+                    effectRoot.AddComponent<
+                        ParticleSystem>();
+
+                var dayRoot =
+                    new GameObject(
+                        "Day Environment");
+                dayRoot.transform.SetParent(
+                    root.transform,
+                    false);
+                var nightRoot =
+                    new GameObject(
+                        "Night Environment");
+                nightRoot.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var propHandler =
+                    root.AddComponent<
+                        PropEventActionHandler>();
+                propHandler.ConfigureBindings(
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "desk-lamp",
+                        Roots =
+                            new[]
+                            {
+                                propRoot
+                            }
+                    });
+
+                var effectHandler =
+                    root.AddComponent<
+                        EffectEventActionHandler>();
+                effectHandler.ConfigureBindings(
+                    new EffectEventActionHandler
+                        .EffectBinding
+                    {
+                        EffectId =
+                            "sparkle",
+                        Root =
+                            effectRoot,
+                        ParticleSystems =
+                            new[]
+                            {
+                                particle
+                            },
+                        RestartOnPlay =
+                            true,
+                        DeactivateOnStop =
+                            true
+                    });
+
+                var environment =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                environment.Configure(
+                    "environment.validation",
+                    "day");
+
+                var day =
+                    new EnvironmentStateBinding();
+                day.Configure(
+                    "day",
+                    dayRoot);
+                var night =
+                    new EnvironmentStateBinding();
+                night.Configure(
+                    "night",
+                    nightRoot);
+
+                Expect(
+                    environment.ConfigureStateBindings(
+                        new[]
+                        {
+                            day,
+                            night
+                        },
+                        out var environmentError),
+                    "P12 scene automation validation environment must accept explicit logical state bindings: " +
+                    environmentError,
+                    failures);
+
+                var propSerialized =
+                    new SerializedObject(
+                        propHandler);
+                var effectSerialized =
+                    new SerializedObject(
+                        effectHandler);
+                var environmentSerialized =
+                    new SerializedObject(
+                        environment);
+
+                var props =
+                    propSerialized.FindProperty(
+                        "props");
+                var effects =
+                    effectSerialized.FindProperty(
+                        "effects");
+                var states =
+                    environmentSerialized.FindProperty(
+                        "stateBindings");
+
+                Expect(
+                    props != null &&
+                    props.arraySize ==
+                        1 &&
+                    props.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "PropId") !=
+                        null &&
+                    props.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "Roots") !=
+                        null,
+                    "P12 Scene Automation Prop SerializedProperty contract must match PropEventActionHandler bindings",
+                    failures);
+
+                Expect(
+                    effects != null &&
+                    effects.arraySize ==
+                        1 &&
+                    effects.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "EffectId") !=
+                        null &&
+                    effects.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "Root") !=
+                        null &&
+                    effects.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "ParticleSystems") !=
+                        null &&
+                    effects.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "RestartOnPlay") !=
+                        null &&
+                    effects.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "DeactivateOnStop") !=
+                        null,
+                    "P12 Scene Automation Effect SerializedProperty contract must match EffectEventActionHandler bindings",
+                    failures);
+
+                Expect(
+                    states != null &&
+                    states.arraySize ==
+                        2 &&
+                    states.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "stateId") !=
+                        null &&
+                    states.GetArrayElementAtIndex(
+                            0)
+                        .FindPropertyRelative(
+                            "root") !=
+                        null,
+                    "P12 Scene Automation Environment reference contract must expose existing P6 state id/root bindings read-only",
+                    failures);
+
+                var propTemplate =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            P12BuiltInEventRuleTemplate
+                                .ManualPropToggle);
+                var environmentTemplate =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            P12BuiltInEventRuleTemplate
+                                .ChatEnvironmentState);
+
+                Expect(
+                    propTemplate.GraphGroup ==
+                        "scene-controls" &&
+                    propTemplate.Actions.Length ==
+                        1 &&
+                    propTemplate.Actions[0]
+                        .ActionType ==
+                        EventActionTypes
+                            .PropToggle &&
+                    propTemplate.Actions[0]
+                        .ConstantText ==
+                        "prop-id",
+                    "P12 manual prop starter template must target logical prop ids through prop.toggle",
+                    failures);
+
+                Expect(
+                    environmentTemplate.GraphGroup ==
+                        "scene-controls" &&
+                    environmentTemplate.Actions.Length ==
+                        1 &&
+                    environmentTemplate.Actions[0]
+                        .ActionType ==
+                        EventActionTypes
+                            .EnvironmentSetState &&
+                    environmentTemplate.Actions[0]
+                        .Name ==
+                        "Fade" &&
+                    environmentTemplate.Actions[0]
+                        .HasValue &&
+                    Math.Abs(
+                        environmentTemplate.Actions[0]
+                            .ConstantNumber -
+                        0.5) <
+                        0.001 &&
+                    environmentTemplate.Actions[0]
+                        .ConstantText ==
+                        "state-id",
+                    "P12 chat environment starter template must author a logical environment.set_state Fade transition",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 scene automation authoring validation unexpected exception: " +
                     exception);
             }
             finally
