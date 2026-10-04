@@ -2,6 +2,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Environment.Unity;
+using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 
 namespace VCR.Editor.P12
