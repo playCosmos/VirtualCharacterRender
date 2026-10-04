@@ -272,6 +272,8 @@ namespace VCR.Editor.P1
 
                 var capabilityCreateCount = 0;
                 var capabilityDisposeCount = 0;
+                var capabilityThrowingDisposeCount = 0;
+                var capabilityAfterThrowDisposeCount = 0;
                 var capabilities =
                     scene.Capabilities;
 
@@ -308,6 +310,40 @@ namespace VCR.Editor.P1
                             capabilityError) &&
                         capabilityCreateCount == 1,
                         "capability enable must instantiate exactly once",
+                        failures);
+
+                    Expect(
+                        capabilities.Register(
+                            "p1.validation.throwing-dispose",
+                            () =>
+                                new ProbeDisposable(
+                                    () =>
+                                    {
+                                        capabilityThrowingDisposeCount++;
+                                        throw new InvalidOperationException(
+                                            "expected validation dispose failure");
+                                    })) &&
+                        capabilities.Register(
+                            "p1.validation.after-throw",
+                            () =>
+                                new ProbeDisposable(
+                                    () =>
+                                        capabilityAfterThrowDisposeCount++)),
+                        "capability registry must accept disposal-isolation validation entries",
+                        failures);
+
+                    Expect(
+                        capabilities.Enable(
+                            "p1.validation.throwing-dispose",
+                            out var throwingCapabilityError) &&
+                        string.IsNullOrEmpty(
+                            throwingCapabilityError) &&
+                        capabilities.Enable(
+                            "p1.validation.after-throw",
+                            out var afterThrowCapabilityError) &&
+                        string.IsNullOrEmpty(
+                            afterThrowCapabilityError),
+                        "disposal-isolation validation capabilities must enable successfully",
                         failures);
                 }
 
@@ -538,7 +574,7 @@ namespace VCR.Editor.P1
                     outputAdapter.ShutdownCount == 1 &&
                     capabilityDisposeCount == 0 &&
                     capabilities != null &&
-                    capabilities.EnabledCount == 1,
+                    capabilities.EnabledCount == 3,
                     "suspend must stop overlay output without disposing active capabilities",
                     failures);
 
@@ -595,10 +631,12 @@ namespace VCR.Editor.P1
 
                 Expect(
                     capabilityDisposeCount == 1 &&
+                    capabilityThrowingDisposeCount == 1 &&
+                    capabilityAfterThrowDisposeCount == 1 &&
                     scene.Capabilities == null &&
                     (capabilities == null ||
                      capabilities.RegisteredCount == 0),
-                    "scene shutdown must dispose and release enabled capabilities",
+                    "scene shutdown must isolate capability disposal failures, dispose remaining capabilities, and release the registry",
                     failures);
 
                 Expect(
