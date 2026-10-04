@@ -158,6 +158,27 @@ Those should be separate reviewed package/runtime contracts if concrete requirem
 
 For mixed scene logic, keep effect presentation in this logical binding layer and orchestrate it through existing Event Runtime / Scene Sequence contracts instead of embedding scripts inside the effect prefab.
 
+## Library
+
+Open:
+
+```text
+VCR/P12/Open Effect Preset Library
+```
+
+The library indexes `P12EffectPresetAsset` files recursively under `Assets/VCR/EffectPresets` by default.
+
+It shows both valid and invalid presets so broken assets are diagnosable instead of silently disappearing. Search matches EffectId, preset path, prefab path, and validation error text.
+
+For a valid preset the library can:
+
+- send the preset to Scene Automation Authoring
+- ping the preset asset
+- ping the referenced prefab
+- copy the preset asset path
+
+Final scene registration still goes through the Scene Automation Authoring install path and the same transactional `EffectEventActionHandler.RebuildBindings` boundary.
+
 ## Validation boundary
 
 P12 source validation covers:
