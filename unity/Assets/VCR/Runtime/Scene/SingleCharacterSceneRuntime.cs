@@ -535,23 +535,76 @@ namespace VCR.Runtime.Scene
             }
 
             SetState(SceneRuntimeState.ShuttingDown);
-            CancelActiveOperation();
 
-            _capabilities?.Dispose();
+            var failures =
+                new List<string>();
+
+            RunShutdownStep(
+                "active operation cancellation",
+                CancelActiveOperation,
+                failures);
+
+            var capabilities =
+                _capabilities;
             _capabilities = null;
+
+            if (capabilities != null)
+            {
+                RunShutdownStep(
+                    "capability disposal",
+                    capabilities.Dispose,
+                    failures);
+            }
 
             if (unloadCharacterOnShutdown &&
                 characterLoader != null)
             {
-                characterLoader.Unload();
+                RunShutdownStep(
+                    "character unload",
+                    characterLoader.Unload,
+                    failures);
             }
 
-            _overlayOutput?.Shutdown();
-            lightController?.Restore();
-            cameraController?.Restore();
-            renderBootstrap?.RestoreRuntimeOverrides();
+            if (_overlayOutput != null)
+            {
+                RunShutdownStep(
+                    "overlay output shutdown",
+                    _overlayOutput.Shutdown,
+                    failures);
+            }
 
-            _lastError = null;
+            if (lightController != null)
+            {
+                RunShutdownStep(
+                    "light restore",
+                    lightController.Restore,
+                    failures);
+            }
+
+            if (cameraController != null)
+            {
+                RunShutdownStep(
+                    "camera restore",
+                    cameraController.Restore,
+                    failures);
+            }
+
+            if (renderBootstrap != null)
+            {
+                RunShutdownStep(
+                    "render override restore",
+                    renderBootstrap.RestoreRuntimeOverrides,
+                    failures);
+            }
+
+            _lastError =
+                failures.Count == 0
+                    ? null
+                    : "Shutdown completed with cleanup errors: " +
+                      string.Join(
+                          " | ",
+                          failures);
+
             SetState(SceneRuntimeState.Stopped);
         }
 
@@ -797,6 +850,32 @@ namespace VCR.Runtime.Scene
             StatusChanged?.Invoke(Status);
         }
 
+        private void RunShutdownStep(
+            string label,
+            Action action,
+            List<string> failures)
+        {
+            if (action == null)
+            {
+                return;
+            }
+
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                failures?.Add(
+                    label + ": " +
+                    exception.Message);
+
+                Debug.LogException(
+                    exception,
+                    this);
+            }
+        }
+
         private void OnApplicationQuit()
         {
             _applicationQuitting = true;
@@ -805,10 +884,36 @@ namespace VCR.Runtime.Scene
 
         private void OnDestroy()
         {
-            CancelActiveOperation();
+            try
+            {
+                CancelActiveOperation();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(
+                    exception,
+                    this);
+            }
 
-            _capabilities?.Dispose();
+            var capabilities =
+                _capabilities;
             _capabilities = null;
+
+            if (capabilities == null)
+            {
+                return;
+            }
+
+            try
+            {
+                capabilities.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(
+                    exception,
+                    this);
+            }
         }
     }
 }
