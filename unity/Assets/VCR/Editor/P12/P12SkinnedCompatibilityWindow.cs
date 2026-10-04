@@ -9,6 +9,7 @@ namespace VCR.Editor.P12
         private SkinnedMeshRenderer _sourceRenderer;
         private Animator _targetAnimator;
         private P12SkinnedCompatibilityReport _report;
+        private P12SkinnedRebindPreviewSession _previewSession;
         private string _error;
         private Vector2 _scroll;
 
@@ -45,6 +46,11 @@ namespace VCR.Editor.P12
                             SkinnedMeshRenderer>(
                             true);
             }
+        }
+
+        private void OnDisable()
+        {
+            DisposePreview();
         }
 
         private void OnGUI()
@@ -90,6 +96,33 @@ namespace VCR.Editor.P12
                         "Use Selection"))
                 {
                     UseSelection();
+                }
+            }
+
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(
+                           _report == null ||
+                           !_report
+                               .StructurallyCompatible ||
+                           _targetAnimator == null))
+                {
+                    if (GUILayout.Button(
+                            "Create Rebind Preview"))
+                    {
+                        CreatePreview();
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(
+                           _previewSession == null))
+                {
+                    if (GUILayout.Button(
+                            "Remove Preview"))
+                    {
+                        DisposePreview();
+                    }
                 }
             }
 
@@ -146,6 +179,7 @@ namespace VCR.Editor.P12
 
         private void Analyze()
         {
+            DisposePreview();
             _error = null;
             _report = null;
 
@@ -158,6 +192,35 @@ namespace VCR.Editor.P12
             {
                 return;
             }
+        }
+
+        private void CreatePreview()
+        {
+            DisposePreview();
+            _error = null;
+
+            if (!P12SkinnedRebindPreview
+                .TryCreate(
+                    _sourceRenderer,
+                    _targetAnimator != null
+                        ? _targetAnimator.transform
+                        : null,
+                    _report,
+                    out _previewSession,
+                    out _error))
+            {
+                return;
+            }
+
+            Selection.activeGameObject =
+                _previewSession
+                    .PreviewObject;
+        }
+
+        private void DisposePreview()
+        {
+            _previewSession?.Dispose();
+            _previewSession = null;
         }
 
         private void DrawReport()
@@ -179,6 +242,13 @@ namespace VCR.Editor.P12
 
             EditorGUILayout.LabelField(
                 $"Humanoid mappings: {_report.HumanoidMappedCount} | Exact-name mappings: {_report.ExactNameMappedCount}");
+
+            if (_previewSession != null)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Preview active. Current-pose bind matrix delta: avg {_previewSession.AverageBindMatrixDelta:0.#####}, max {_previewSession.MaxBindMatrixDelta:0.#####}. These values are diagnostic only and do not convert structural compatibility into a PASS.",
+                    MessageType.Warning);
+            }
 
             _scroll =
                 EditorGUILayout.BeginScrollView(
