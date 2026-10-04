@@ -236,7 +236,11 @@ The first P12 source slice is implemented: `VCR/P12/Open Appearance Authoring` p
 
 ## P13 — 2D Extension
 
-Evaluate Inochi2D, Live2D integration, or another backend/extension against the established tracking/event/output contracts.
+Status: Active source implementation; backend SDK/runtime evidence remains deferred. See `P13_STATUS.md` and ADR-0030.
+
+The first source slice establishes `VCR.Runtime.Presentation2D` with a backend-neutral `ICharacter2DBackend`, source-neutral model/status/input contracts, and `Character2DRuntime`. The host reuses the existing `ITrackingFrameProvider`, polls only backend-supported requested domains, skips unchanged immutable snapshots, contains load/apply failures, resets input caches across model reload, and reports diagnostics without requiring Live2D/Inochi2D SDK assemblies.
+
+Backend evaluation currently keeps Live2D as the stronger Windows+macOS prototype candidate subject to package/licensing acceptance, while Inochi2D remains the preferred open alternative direction once a validated macOS/Apple-Silicon Unity/native path is available. Core runtime code depends on neither backend.
 
 ## Future only — Multi-character
 
