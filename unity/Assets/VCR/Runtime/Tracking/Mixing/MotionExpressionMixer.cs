@@ -162,9 +162,13 @@ namespace VCR.Runtime.Tracking.Mixing
         {
             routedProviderBehaviour = provider;
             _routedProvider =
-                provider as ITrackingFrameProvider;
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
             _presenceProvider =
-                provider as ITrackingPresenceProvider;
+                provider != null
+                    ? provider as ITrackingPresenceProvider
+                    : null;
             ResetPoseState();
             ResetExpressionState();
         }
@@ -175,7 +179,9 @@ namespace VCR.Runtime.Tracking.Mixing
             poseLayerProviderBehaviour =
                 provider;
             _poseLayerProvider =
-                provider as ITrackingFrameProvider;
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
             ResetPoseState();
         }
 
@@ -304,7 +310,9 @@ namespace VCR.Runtime.Tracking.Mixing
             expressionLayerProviderBehaviour =
                 provider;
             _expressionLayerProvider =
-                provider as ITrackingFrameProvider;
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
             ResetExpressionState();
         }
 
@@ -781,7 +789,7 @@ namespace VCR.Runtime.Tracking.Mixing
             var provider =
                 additionalPoseLayers[index]?.Provider;
 
-            if (provider == null ||
+            if (!IsServiceAlive(provider) ||
                 ReferenceEquals(
                     provider,
                     this) ||
