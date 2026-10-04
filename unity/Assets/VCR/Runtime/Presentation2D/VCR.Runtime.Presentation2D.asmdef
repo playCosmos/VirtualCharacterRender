@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Presentation2D",
+  "rootNamespace": "VCR.Runtime.Presentation2D",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
