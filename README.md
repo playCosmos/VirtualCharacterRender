@@ -70,7 +70,7 @@ VirtualCharacterRender/
 └─ tools/                Development and content-pipeline tools
 ```
 
-The source implementation has progressed into P11 Application UI. P10 broadcast output is preserved as a source checkpoint, and P11 now provides the runtime navigation/status shell plus character/output/tracking controls and the first Appearance / Quick Change runtime slice. Registered outfit/accessory presets can switch atomically, transition definitions can sequence logical actions around one commit marker, and built-in effect plus procedural motion-cue actions are wired through the shared event-action boundary. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, timed appearance choreography, and measured performance still require evidence before those gates can be called complete.
+The source implementation has progressed through the P11 Application UI and P12 Advanced One-Character Scene Tooling checkpoints into P13 2D Extension work. P11 provides the runtime application shell and Appearance / Quick Change runtime; P12 adds wardrobe/accessory authoring, scene/effect automation, event-node authoring, package/import tooling, and skinned-compatibility preview; P13 now adds a backend-neutral optional 2D presentation host plus shared normalized parameter-mapping profiles without making Live2D/Inochi2D SDKs core dependencies. P0 real-device/platform evidence remains intentionally deferred: Windows/macOS standalone, hardware tracking quality, OBS output, timed appearance choreography, real 2D SDK/model rendering, and measured performance still require evidence before those gates can be called complete.
 
 ## Architecture documents
 
@@ -86,6 +86,8 @@ The source implementation has progressed into P11 Application UI. P10 broadcast 
 - [P9 status](docs/P9_STATUS.md)
 - [P10 status](docs/P10_STATUS.md)
 - [P11 status](docs/P11_STATUS.md)
+- [P12 status](docs/P12_STATUS.md)
+- [P13 status](docs/P13_STATUS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -115,6 +117,6 @@ The source implementation has progressed into P11 Application UI. P10 broadcast 
 
 ## Status
 
-P1-P10 source implementations are preserved as source checkpoints. P11 Application UI is active with a nine-section navigation model, runtime status summaries, configuration save/output recovery, character and tracking controls, broadcast-target actions, and a source-level Appearance / Quick Change runtime with effect/procedural-motion transition hooks. Timed transition behavior and real VRM appearance switching are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
+P1-P12 source implementations are preserved as source checkpoints. P13 2D Extension is active with a backend-neutral presentation runtime, backend/model lifecycle contract, supported-domain tracking polling, immutable-frame deduplication, diagnostics, and SDK-neutral parameter mapping authoring/evaluation. No production 2D backend has been accepted yet; Live2D/Inochi2D integration remains isolated behind optional adapter/package boundaries. Timed transition behavior, real VRM appearance switching, and real 2D rendering are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
