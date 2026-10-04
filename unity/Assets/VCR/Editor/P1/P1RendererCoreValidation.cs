@@ -871,6 +871,9 @@ namespace VCR.Editor.P1
                 }
             }
 
+            ValidateDestroyedInterfaceAdapters(
+                failures);
+
             if (failures.Count == 0)
             {
                 Debug.Log(
@@ -883,6 +886,102 @@ namespace VCR.Editor.P1
                 "VCR P1 renderer core validation: FAIL\n" +
                 string.Join("\n", failures));
             return false;
+        }
+
+        private static void ValidateDestroyedInterfaceAdapters(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P1 Destroyed Interface Adapter Validation");
+
+                var scene =
+                    root.AddComponent<
+                        SingleCharacterSceneRuntime>();
+                var overlay =
+                    root.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+                var environment =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+
+                SetPrivateField(
+                    scene,
+                    "overlayOutputBehaviour",
+                    overlay);
+                SetPrivateField(
+                    scene,
+                    "_overlayOutput",
+                    overlay);
+                SetPrivateField(
+                    scene,
+                    "environmentRuntimeBehaviour",
+                    environment);
+                SetPrivateField(
+                    scene,
+                    "_environmentRuntime",
+                    environment);
+
+                UnityEngine.Object.DestroyImmediate(
+                    overlay);
+                UnityEngine.Object.DestroyImmediate(
+                    environment);
+
+                Expect(
+                    scene.OverlayOutput == null,
+                    "destroyed overlay adapters cached through an interface must be treated as unavailable",
+                    failures);
+
+                var readiness =
+                    scene.OverlayCaptureReadiness;
+
+                Expect(
+                    !readiness.Ready &&
+                    readiness.Failure ==
+                        OverlayCaptureReadinessFailure.NotActive,
+                    "overlay readiness must discard a destroyed cached adapter instead of reusing its managed interface reference",
+                    failures);
+
+                Expect(
+                    scene.EnvironmentRuntime == null,
+                    "destroyed environment runtimes cached through an interface must be treated as unavailable",
+                    failures);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void SetPrivateField(
+            object target,
+            string fieldName,
+            object value)
+        {
+            var field =
+                target.GetType().GetField(
+                    fieldName,
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            field.SetValue(
+                target,
+                value);
         }
 
         private static void ExpectNoUpdate<T>(
