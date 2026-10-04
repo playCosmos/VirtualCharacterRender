@@ -318,6 +318,13 @@ namespace VCR.Editor.P12
                 }
 
                 if (GUILayout.Button(
+                        "Project Library"))
+                {
+                    P12EventRuleLibraryWindow
+                        .Open();
+                }
+
+                if (GUILayout.Button(
                         "Validate & Apply"))
                 {
                     ValidateAndApply();
