@@ -33,12 +33,14 @@ namespace VCR.Editor.P12
                 failures);
             RunEventNodeAuthoringChecks(
                 failures);
+            RunEventRuleLibraryBrowserChecks(
+                failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P12 source validation: PASS " +
-                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node rule validation and serialized contracts)");
+                    "(appearance authoring/anchors/packages/preset preview, skinned structural compatibility, transition dependency graph authoring, event-node rule validation/library browsing and serialized contracts)");
                 return true;
             }
 
@@ -1792,6 +1794,197 @@ namespace VCR.Editor.P12
                     UnityEngine.Object
                         .DestroyImmediate(
                             hostRoot);
+                }
+            }
+        }
+
+        private static void RunEventRuleLibraryBrowserChecks(
+            List<string> failures)
+        {
+            const string folder =
+                "Assets/VCR/Editor/P12/__EventRuleLibraryValidation";
+
+            try
+            {
+                if (AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                }
+
+                Expect(
+                    P12EventRuleLibraryBrowserUtility
+                        .TryEnsureFolder(
+                            folder,
+                            out var folderError),
+                    "P12 event rule library browser must create an Assets-scoped library folder: " +
+                    folderError,
+                    failures);
+
+                var template =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            P12BuiltInEventRuleTemplate
+                                .ManualRestoreDefault);
+                var donation =
+                    P12EventRuleLibraryUtility
+                        .CreateTemplate(
+                            P12BuiltInEventRuleTemplate
+                                .DonationEffect);
+
+                Expect(
+                    P12EventRuleLibraryUtility
+                        .TryCreatePackage(
+                            "browser-validation",
+                            new[]
+                            {
+                                template,
+                                donation
+                            },
+                            out var package,
+                            out var packageError) &&
+                    P12EventRuleLibraryUtility
+                        .TrySerialize(
+                            package,
+                            out var json,
+                            out var serializeError),
+                    "P12 event rule library browser validation package must serialize: " +
+                    packageError +
+                    " / " +
+                    serializeError,
+                    failures);
+
+                var projectRoot =
+                    Directory.GetParent(
+                            Application.dataPath)
+                        ?.FullName;
+
+                if (string.IsNullOrWhiteSpace(
+                        projectRoot))
+                {
+                    failures.Add(
+                        "P12 event rule library validation could not resolve Unity project root");
+                    return;
+                }
+
+                var absoluteFolder =
+                    Path.Combine(
+                        projectRoot,
+                        folder.Replace(
+                            '/',
+                            Path.DirectorySeparatorChar));
+                var validPath =
+                    folder +
+                    "/valid.json";
+                var invalidPath =
+                    folder +
+                    "/future.json";
+
+                File.WriteAllText(
+                    Path.Combine(
+                        absoluteFolder,
+                        "valid.json"),
+                    json);
+                File.WriteAllText(
+                    Path.Combine(
+                        absoluteFolder,
+                        "future.json"),
+@"{
+  ""Version"": 999,
+  ""PackageId"": ""future-library"",
+  ""Rules"": []
+}");
+
+                AssetDatabase.ImportAsset(
+                    validPath,
+                    ImportAssetOptions
+                        .ForceSynchronousImport |
+                    ImportAssetOptions
+                        .ForceUpdate);
+                AssetDatabase.ImportAsset(
+                    invalidPath,
+                    ImportAssetOptions
+                        .ForceSynchronousImport |
+                    ImportAssetOptions
+                        .ForceUpdate);
+
+                Expect(
+                    P12EventRuleLibraryBrowserUtility
+                        .TryScan(
+                            folder,
+                            out var entries,
+                            out var scanError) &&
+                    entries.Length ==
+                        2,
+                    "P12 event rule library browser must index valid and invalid project JSON files: " +
+                    scanError,
+                    failures);
+
+                P12EventRuleLibraryEntry valid =
+                    null;
+                P12EventRuleLibraryEntry invalid =
+                    null;
+
+                if (entries != null)
+                {
+                    foreach (var entry in entries)
+                    {
+                        if (entry != null &&
+                            entry.Valid)
+                        {
+                            valid =
+                                entry;
+                        }
+                        else if (entry != null)
+                        {
+                            invalid =
+                                entry;
+                        }
+                    }
+                }
+
+                Expect(
+                    valid != null &&
+                    valid.PackageId ==
+                        "browser-validation" &&
+                    valid.RuleIds.Length ==
+                        2 &&
+                    P12EventRuleLibraryBrowserUtility
+                        .MatchesSearch(
+                            valid,
+                            "manual-restore-default") &&
+                    P12EventRuleLibraryBrowserUtility
+                        .MatchesSearch(
+                            valid,
+                            "browser-validation"),
+                    "P12 event rule library browser must expose package/rule ids to search",
+                    failures);
+
+                Expect(
+                    invalid != null &&
+                    !invalid.Valid &&
+                    invalid.PackageId ==
+                        "future-library" &&
+                    !string.IsNullOrWhiteSpace(
+                        invalid.Error),
+                    "P12 event rule library browser must retain invalid/future packages for diagnostics",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 event rule library browser validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (AssetDatabase.IsValidFolder(
+                        folder))
+                {
+                    AssetDatabase.DeleteAsset(
+                        folder);
+                    AssetDatabase.Refresh();
                 }
             }
         }
