@@ -175,9 +175,12 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         public void SetSink(
             INormalizedEventSink sink)
         {
-            _sink = sink;
+            _sink =
+                IsServiceAlive(sink)
+                    ? sink
+                    : null;
             eventSinkBehaviour =
-                sink as MonoBehaviour;
+                _sink as MonoBehaviour;
         }
 
         /// <summary>
