@@ -372,6 +372,10 @@ namespace VCR.Editor.P11
                             step.MarkerOffsetSeconds,
                         StepId =
                             step.StepId,
+                        AuthoringLabel =
+                            step.AuthoringLabel,
+                        AuthoringGroup =
+                            step.AuthoringGroup,
                         DependencyMode =
                             step.DependencyMode,
                         DependsOnStepIds =
