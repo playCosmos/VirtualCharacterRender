@@ -116,8 +116,16 @@ The source implementation has progressed through the P11 Application UI and P12 
 - Custom shaders are first-class but always have a safe fallback path.
 - 2D is a later extension; the initial implementation is 3D-first.
 
+## Development baseline
+
+- `develop` is the canonical active integration branch for the current P0-P13 source implementation.
+- `checkpoint/p*-source-implementation` branches are historical phase references only; new product work must not branch from an older checkpoint when `develop` already contains it.
+- short-lived `feature/*` and `fix/*` branches merge or fast-forward into `develop`; they are not independent product baselines.
+- `main` remains the promoted/stable baseline until the pinned Unity Editor has generated and committed `Packages/packages-lock.json` and `ProjectSettings/ProjectSettings.asset`, the strict repository reproducibility gate passes, and the latest P13 source-free Unity validation chain passes.
+- deferred physical-device/platform evidence remains explicitly deferred; it must not be inferred from source-free validation.
+
 ## Status
 
-P1-P12 source implementations are preserved as source checkpoints. P13's common 2D source slice is checkpoint-ready with a backend-neutral presentation runtime, backend/model lifecycle contract, supported-domain tracking polling, immutable-frame deduplication, diagnostics, SDK-neutral parameter mapping authoring/evaluation, and an optional mapped-parameter sink contract. No production 2D backend has been accepted yet; Live2D/Inochi2D integration remains isolated behind optional adapter/package boundaries. Timed transition behavior, real VRM appearance switching, and real 2D rendering are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
+P1-P12 source implementations are preserved as historical source checkpoints. P13's common 2D source slice is checkpoint-ready with a backend-neutral presentation runtime, backend/model lifecycle contract, supported-domain tracking polling, immutable-frame deduplication, diagnostics, SDK-neutral parameter mapping authoring/evaluation, and an optional mapped-parameter sink contract. No production 2D backend has been accepted yet; Live2D/Inochi2D integration remains isolated behind optional adapter/package boundaries. Timed transition behavior, real VRM appearance switching, and real 2D rendering are not marked PASS without Unity runtime evidence. Executable third-party plugins remain deferred under ADR-0015.
 
 Real-device/platform validation remains deferred rather than assumed: real VRM 0.x/1.0 runtime validation, webcam/ARKit tracking quality and cost, VMC external interoperability, Windows/macOS transparent output + OBS capture, custom-shader bundle validation, and 720p60/1080p60 measurements still require evidence.
