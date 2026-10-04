@@ -4,6 +4,12 @@ P13 starts from `checkpoint/p12-source-implementation`.
 
 The product remains 3D/VRM-first and one-active-performer. P13 adds an optional 2D presentation extension over the existing tracking/event/output contracts rather than turning the existing VRM runtime into a mixed 2D/3D renderer.
 
+## Status
+
+Source implementation is checkpoint-ready.
+
+Unity Editor/runtime execution, real backend SDK integration, model rendering, Windows/macOS standalone packaging, OBS capture, and measured performance remain deferred evidence and are not marked PASS.
+
 ## Current decision
 
 See ADR-0030.
@@ -167,13 +173,17 @@ Before production acceptance:
 
 An experimental Windows-only adapter may be useful for contract testing but must not be labeled the project default.
 
-## Next P13 source work
+## Remaining backend-dependent work
 
-- backend adapter package/assembly layout and compile-time dependency gates for optional SDK integrations
+The common source boundary is defined in `PRESENTATION2D_ADAPTERS.md`.
+
+The remaining P13 work depends on an actual backend/package decision or real platform evidence:
+
 - Live2D adapter spike after license/package acceptance
 - Inochi2D adapter spike when a macOS native path is available or intentionally built/maintained
-- P13 UI surface for selecting an installed 2D backend/model only after at least one adapter is actually available
-- reuse existing transparent output / OBS path rather than adding a 2D-specific window layer
+- P13 runtime UI for selecting an installed 2D backend/model only after at least one adapter is actually available
+- real parameter sink behavior against backend model parameters
+- reuse and validate the existing transparent output / OBS path rather than adding a 2D-specific window layer
 
 ## Evidence boundary
 
