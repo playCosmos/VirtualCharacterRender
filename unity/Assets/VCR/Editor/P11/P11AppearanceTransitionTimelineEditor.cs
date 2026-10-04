@@ -41,6 +41,8 @@ namespace VCR.Editor.P11
         private AppearanceTransitionDependencyMode
             _dependencyGraphMode =
                 AppearanceTransitionDependencyMode.All;
+        private string _dependencyGraphGroupName =
+            "transition-group";
         private string _lastMessage;
         private MessageType _lastMessageType =
             MessageType.Info;
@@ -1870,8 +1872,45 @@ namespace VCR.Editor.P11
                 }
             }
 
+            using (new EditorGUILayout
+                       .HorizontalScope())
+            {
+                _dependencyGraphGroupName =
+                    EditorGUILayout.TextField(
+                        "Cluster Group",
+                        _dependencyGraphGroupName);
+
+                using (new EditorGUI
+                           .DisabledScope(
+                               !HasDependencyGraphSelection(
+                                   steps)))
+                {
+                    if (GUILayout.Button(
+                            "Apply Group",
+                            GUILayout.Width(
+                                100f)))
+                    {
+                        ApplyDependencyGraphGroup(
+                            transition,
+                            clear:
+                                false);
+                    }
+
+                    if (GUILayout.Button(
+                            "Clear Group",
+                            GUILayout.Width(
+                                100f)))
+                    {
+                        ApplyDependencyGraphGroup(
+                            transition,
+                            clear:
+                                true);
+                    }
+                }
+            }
+
             EditorGUILayout.HelpBox(
-                "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency. Graph Label/Group are authoring-only metadata and do not change runtime dependency semantics.",
+                "Graph edit: click an earlier Action node with a Step ID to select Source, then click a later Action/commit node as Target. Add/Set Edge writes the selected All/Any dependency; Remove Edge removes only that source→target dependency. Apply Group assigns the same authoring-only Graph Group to the selected target and every dependency source currently connected to it; Clear Group removes that metadata. Group metadata never changes runtime dependency semantics.",
                 MessageType.None);
         }
 
@@ -2111,6 +2150,85 @@ namespace VCR.Editor.P11
                 remove
                     ? "Dependency edge removed. Use Validate & Apply to run full runtime validation."
                     : $"Dependency edge authored as {_dependencyGraphMode}. Use Validate & Apply to run full runtime validation.";
+            _lastMessageType =
+                MessageType.Info;
+            Repaint();
+            GUIUtility.ExitGUI();
+        }
+
+        private void ApplyDependencyGraphGroup(
+            SerializedProperty transition,
+            bool clear)
+        {
+            var steps =
+                transition.FindPropertyRelative(
+                    "Steps");
+
+            if (!HasDependencyGraphSelection(
+                    steps))
+            {
+                _lastMessage =
+                    "Select a dependency Source and later Target before grouping the cluster.";
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            if (!clear &&
+                string.IsNullOrWhiteSpace(
+                    _dependencyGraphGroupName))
+            {
+                _lastMessage =
+                    "Enter a non-empty Cluster Group name.";
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            var authored =
+                CaptureTransition(
+                    transition);
+            var groupName =
+                clear
+                    ? string.Empty
+                    : _dependencyGraphGroupName;
+
+            if (!P12TransitionDependencyAuthoringUtility
+                .TryAssignDependencyGroup(
+                    authored,
+                    _dependencyGraphTargetIndex,
+                    groupName,
+                    includeSources:
+                        true,
+                    out var affected,
+                    out var error))
+            {
+                _lastMessage =
+                    "Dependency cluster group update failed: " +
+                    (error ??
+                     "unknown error");
+                _lastMessageType =
+                    MessageType.Warning;
+                return;
+            }
+
+            Undo.RecordObject(
+                _runtime,
+                clear
+                    ? "Clear Transition Dependency Group"
+                    : "Assign Transition Dependency Group");
+            WriteTransition(
+                transition,
+                authored);
+            _serializedRuntime
+                .ApplyModifiedProperties();
+            EditorUtility.SetDirty(
+                _runtime);
+
+            _lastMessage =
+                clear
+                    ? $"Cleared Graph Group from {affected} dependency-cluster step(s)."
+                    : $"Assigned Graph Group '{groupName.Trim()}' to {affected} dependency-cluster step(s).";
             _lastMessageType =
                 MessageType.Info;
             Repaint();
