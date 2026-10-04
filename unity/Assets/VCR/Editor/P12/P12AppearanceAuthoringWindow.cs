@@ -448,6 +448,13 @@ namespace VCR.Editor.P12
                     }
 
                     if (GUILayout.Button(
+                            "Preview Attachment"))
+                    {
+                        PreviewAccessoryAttachment(
+                            accessory);
+                    }
+
+                    if (GUILayout.Button(
                             "Reset Offset"))
                     {
                         accessory.FindPropertyRelative(
@@ -490,38 +497,9 @@ namespace VCR.Editor.P12
         private void CaptureAccessoryAnchorOffset(
             SerializedProperty accessory)
         {
-            var root =
-                accessory.FindPropertyRelative(
-                        "Root")
-                    .objectReferenceValue as
-                    GameObject;
-            var mode =
-                (AppearanceAccessoryAnchorMode)
-                accessory.FindPropertyRelative(
-                        "AnchorMode")
-                    .enumValueIndex;
-            var explicitAnchor =
-                accessory.FindPropertyRelative(
-                        "AnchorTransform")
-                    .objectReferenceValue as
-                    Transform;
-            var animator =
-                accessory.FindPropertyRelative(
-                        "AnchorAnimator")
-                    .objectReferenceValue as
-                    Animator;
-            var bone =
-                (HumanBodyBones)
-                accessory.FindPropertyRelative(
-                        "AnchorBone")
-                    .enumValueIndex;
-
-            if (!P12AppearanceAuthoringUtility
-                .TryResolveAccessoryAnchor(
-                    mode,
-                    explicitAnchor,
-                    animator,
-                    bone,
+            if (!TryResolveAccessoryAnchor(
+                    accessory,
+                    out var root,
                     out var anchor,
                     out var resolveError))
             {
@@ -565,6 +543,137 @@ namespace VCR.Editor.P12
                 "Captured accessory local position/rotation relative to the selected anchor.";
             _messageType =
                 MessageType.Info;
+        }
+
+        private void PreviewAccessoryAttachment(
+            SerializedProperty accessory)
+        {
+            if (!TryResolveAccessoryAnchor(
+                    accessory,
+                    out var root,
+                    out var anchor,
+                    out var resolveError))
+            {
+                _message =
+                    "Accessory anchor resolve failed: " +
+                    resolveError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            if (root == null ||
+                anchor == null)
+            {
+                _message =
+                    "Accessory preview requires a root and a resolved anchor.";
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            var localPosition =
+                accessory.FindPropertyRelative(
+                        "LocalPosition")
+                    .vector3Value;
+            var localEulerAngles =
+                accessory.FindPropertyRelative(
+                        "LocalEulerAngles")
+                    .vector3Value;
+            var overrideLocalScale =
+                accessory.FindPropertyRelative(
+                        "OverrideLocalScale")
+                    .boolValue;
+            var localScale =
+                accessory.FindPropertyRelative(
+                        "LocalScale")
+                    .vector3Value;
+
+            if (!P12AppearanceAuthoringUtility
+                .TryValidateAccessoryAnchorPose(
+                    localPosition,
+                    localEulerAngles,
+                    overrideLocalScale,
+                    localScale,
+                    out var poseError))
+            {
+                _message =
+                    "Accessory preview rejected: " +
+                    poseError;
+                _messageType =
+                    MessageType.Error;
+                return;
+            }
+
+            Undo.SetTransformParent(
+                root.transform,
+                anchor,
+                "Preview Accessory Attachment");
+            Undo.RecordObject(
+                root.transform,
+                "Preview Accessory Attachment");
+            root.transform.localPosition =
+                localPosition;
+            root.transform.localRotation =
+                Quaternion.Euler(
+                    localEulerAngles);
+
+            if (overrideLocalScale)
+            {
+                root.transform.localScale =
+                    localScale;
+            }
+
+            EditorUtility.SetDirty(
+                root.transform);
+            SceneView.RepaintAll();
+
+            _message =
+                $"Previewed '{root.name}' on anchor '{anchor.name}'. Use Undo to restore the previous hierarchy/pose, then Validate & Apply when the authored values are final.";
+            _messageType =
+                MessageType.Info;
+        }
+
+        private static bool TryResolveAccessoryAnchor(
+            SerializedProperty accessory,
+            out GameObject root,
+            out Transform anchor,
+            out string error)
+        {
+            root =
+                accessory.FindPropertyRelative(
+                        "Root")
+                    .objectReferenceValue as
+                    GameObject;
+            var mode =
+                (AppearanceAccessoryAnchorMode)
+                accessory.FindPropertyRelative(
+                        "AnchorMode")
+                    .enumValueIndex;
+            var explicitAnchor =
+                accessory.FindPropertyRelative(
+                        "AnchorTransform")
+                    .objectReferenceValue as
+                    Transform;
+            var animator =
+                accessory.FindPropertyRelative(
+                        "AnchorAnimator")
+                    .objectReferenceValue as
+                    Animator;
+            var bone =
+                (HumanBodyBones)
+                accessory.FindPropertyRelative(
+                        "AnchorBone")
+                    .enumValueIndex;
+
+            return P12AppearanceAuthoringUtility
+                .TryResolveAccessoryAnchor(
+                    mode,
+                    explicitAnchor,
+                    animator,
+                    bone,
+                    out anchor,
+                    out error);
         }
 
         private void DrawPresets()
