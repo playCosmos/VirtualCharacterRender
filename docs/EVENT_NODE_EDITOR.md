@@ -44,6 +44,9 @@ The editor supports:
 - export of the selected rule or the complete host rule set as a versioned JSON rule-library package
 - import/merge of a rule-library package after current pending edits pass authoring validation
 - deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
+- `VCR/P12/Open Event Rule Library` project browser with package/rule-id/path/error search
+- valid and invalid project packages remain visible; external JSON can be validated and added to the project library
+- asset ping/path copy and pending-package handoff back into the Event Node Editor
 - Validate & Apply
 - rollback to the last valid serialized host snapshot when validation fails
 
@@ -91,7 +94,7 @@ Template insertion/import/export first applies the current serialized edits and 
 
 This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-Future P12 extensions may add visual grouping, higher-level node composition, package metadata/search, and library browsing, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+Future P12 extensions may add visual grouping, higher-level node composition, library tags/descriptions/version history, and richer package metadata workflows, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -109,6 +112,8 @@ Future P12 extensions may add visual grouping, higher-level node composition, pa
 - rule-library JSON package round trip
 - deterministic imported-id collision suffixing
 - unsupported newer library-version rejection
+- project library valid/invalid package indexing
+- package-id and rule-id search matching
 - the SerializedProperty contract used by the editor
 
 These source validations have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
