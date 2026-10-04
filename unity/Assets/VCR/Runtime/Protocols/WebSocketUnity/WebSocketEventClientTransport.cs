@@ -153,12 +153,19 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     this);
             }
 
-            if (_handler == null)
+            if (!IsServiceAlive(_handler))
             {
+                _handler = null;
+
+                if (messageHandlerBehaviour == null)
+                {
+                    messageHandlerBehaviour = null;
+                }
+
                 ResolveHandler();
             }
 
-            if (_handler == null)
+            if (!IsServiceAlive(_handler))
             {
                 return;
             }
@@ -724,11 +731,25 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             }
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveHandler(
             bool force = false)
         {
-            if (messageHandlerBehaviour is
-                IWebSocketTextMessageHandler configured)
+            if (messageHandlerBehaviour != null &&
+                messageHandlerBehaviour is
+                    IWebSocketTextMessageHandler configured)
             {
                 _handler = configured;
                 _nextHandlerResolveRealtime = 0f;
