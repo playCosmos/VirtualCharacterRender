@@ -115,6 +115,9 @@ Diagnostics must attribute at least:
 - memory use
 - render-target/texture allocation
 - active capabilities/services
+- MediaPipe Face/Holistic GPU→CPU readback count and latest readback wait time when webcam tracking is active
+
+The desktop MediaPipe baseline currently uses separate LIVE_STREAM Face and Holistic submissions. The optional low-light preprocessor already caches its processed texture once per Unity frame, but CPU async readback and MediaPipe `Image` creation remain task-specific. Do not share one `Image` between both native tasks until the pinned plugin's ownership/lifetime contract is proven under concurrent LIVE_STREAM use. Use `tracking.mediapipe.face.readbacks`, `tracking.mediapipe.face.readback_wait`, `tracking.mediapipe.holistic.readbacks`, and `tracking.mediapipe.holistic.readback_wait` to measure this cost before changing the capture topology.
 
 ## Disabled capability rule
 
