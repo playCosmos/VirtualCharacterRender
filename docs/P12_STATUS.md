@@ -122,8 +122,14 @@ Implemented interaction:
 - graph edits reuse the existing transition preset contract and still require `Validate & Apply` for full runtime executor/completion-probe validation
 - `Apply Group` assigns one Graph Group to the selected target plus all currently connected dependency sources
 - `Clear Group` removes only that cluster's authoring metadata; dependency edges remain unchanged
+- Graph Group now supports nested authoring paths such as `wardrobe/change/spin`
+- the hierarchy panel lists implicit parent paths even when only descendants are assigned
+- `Rename / Move Hierarchy` rewrites one group path and, optionally, all descendants while preserving dependency edges/timing/actions
+- `Clear Hierarchy` can clear only the exact group or the selected group plus descendants
+- empty path segments, `.` / `..`, and self-nesting moves are rejected before serialized mutation
+- Timeline Validate/Preview/Export and transition-package validation reuse the same group-path validation
 
-P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, missing-StepId rejection, cluster group assign/clear without edge mutation, Graph Label / Graph Group clone preservation, transition package v3 JSON round trip, and v2→v3 authoring-metadata migration.
+P12 source validation covers edge add/remove, All→Any mode changes with existing edges preserved, existing-edge lookup, final-edge mode reset, invalid ordering rejection, missing-StepId rejection, cluster group assign/clear without edge mutation, nested group-path capture, descendant rewrite/move, exact-vs-recursive clear, malformed/self-nesting path rejection, Graph Label / Graph Group clone preservation, transition package v3 JSON round trip, malformed package-group rejection, and v2→v3 authoring-metadata migration.
 
 ## Visual Event Node Editor
 
@@ -212,7 +218,7 @@ Required later evidence includes:
 - real rigid-FBX package import/render verification
 - real VRM bind-pose/deformation preview evidence for the implemented non-destructive preview
 - explicit reviewed/accepted rebind packaging workflow only if real preview evidence justifies it
-- richer nested/group-hierarchy operations beyond the implemented per-step Graph Label / Graph Group metadata, cluster Apply/Clear Group, interactive source→target edge editing, and All/Any target groups
+- richer graph interaction beyond the implemented nested Graph Group hierarchy, cluster Apply/Clear, hierarchy rename/move/clear, interactive source→target edge editing, and All/Any target groups; possible future work is collapse/lasso/multi-select only if it improves real authoring
 - additional motion adapters beyond BVH when a concrete format/import contract is justified
 - richer event graph visual grouping/higher-level composition and deeper revision workflows beyond the implemented starter templates + metadata-aware JSON v2 import/export + project library browser + same-PackageId revision navigation/diff
 - richer environment/prop/effect automation
