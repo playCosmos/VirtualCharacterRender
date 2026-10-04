@@ -1694,6 +1694,16 @@ namespace VCR.Editor.P12
                 "Broadcast / Donation → Effect",
                 P12BuiltInEventRuleTemplate
                     .DonationEffect);
+            AddTemplateMenuItem(
+                menu,
+                "Scene / Manual → Toggle Prop",
+                P12BuiltInEventRuleTemplate
+                    .ManualPropToggle);
+            AddTemplateMenuItem(
+                menu,
+                "Scene / Chat → Environment Fade",
+                P12BuiltInEventRuleTemplate
+                    .ChatEnvironmentState);
 
             menu.ShowAsContext();
         }
