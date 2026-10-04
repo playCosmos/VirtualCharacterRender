@@ -3309,7 +3309,7 @@ namespace VCR.Runtime.Appearance.Unity
             CaptureCurrentAccessories()
         {
             return ToSelections(
-                CaptureCurrentAccessoryMap());
+                _currentAccessories);
         }
 
         private Dictionary<string, string>
@@ -3322,7 +3322,7 @@ namespace VCR.Runtime.Appearance.Unity
 
         private static AppearanceAccessorySelection[]
             ToSelections(
-                Dictionary<string, string> map)
+                IReadOnlyDictionary<string, string> map)
         {
             if (map == null ||
                 map.Count == 0)
