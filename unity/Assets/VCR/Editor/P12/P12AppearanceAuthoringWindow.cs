@@ -229,6 +229,26 @@ namespace VCR.Editor.P12
                 }
 
                 if (GUILayout.Button(
+                        "Skinned Compatibility"))
+                {
+                    var animator =
+                        _runtime
+                            .GetComponentInChildren<Animator>(
+                                true);
+
+                    if (animator == null)
+                    {
+                        animator =
+                            _runtime
+                                .GetComponentInParent<Animator>();
+                    }
+
+                    P12SkinnedCompatibilityWindow
+                        .OpenWithTarget(
+                            animator);
+                }
+
+                if (GUILayout.Button(
                         "Open Transition Timeline"))
                 {
                     VCR.Editor.P11
