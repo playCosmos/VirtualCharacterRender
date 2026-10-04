@@ -56,6 +56,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         [SerializeField]
         private bool autoFindMessageHandler = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         private static readonly UTF8Encoding StrictUtf8 =
             new(
                 encoderShouldEmitUTF8Identifier: false,
@@ -68,6 +71,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             new();
 
         private IWebSocketTextMessageHandler _handler;
+        private float _nextHandlerResolveRealtime;
         private CancellationTokenSource _cancellation;
         private Task _runTask;
         private ClientWebSocket _client;
@@ -116,11 +120,15 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
         private void Awake()
         {
-            ResolveHandler();
+            ResolveHandler(
+                force: true);
         }
 
         private void OnEnable()
         {
+            ResolveHandler(
+                force: true);
+
             if (Application.isPlaying &&
                 autoConnect)
             {
@@ -716,12 +724,14 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             }
         }
 
-        private void ResolveHandler()
+        private void ResolveHandler(
+            bool force = false)
         {
             if (messageHandlerBehaviour is
                 IWebSocketTextMessageHandler configured)
             {
                 _handler = configured;
+                _nextHandlerResolveRealtime = 0f;
                 return;
             }
 
@@ -729,6 +739,22 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             {
                 return;
             }
+
+            var now =
+                Time.realtimeSinceStartup;
+
+            if (!force &&
+                now <
+                _nextHandlerResolveRealtime)
+            {
+                return;
+            }
+
+            _nextHandlerResolveRealtime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
 
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
