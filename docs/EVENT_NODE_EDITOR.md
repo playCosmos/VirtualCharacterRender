@@ -40,6 +40,10 @@ The editor supports:
 - add/delete/reorder Condition, Mutation and Action nodes
 - full serialized field editing for the selected node
 - deterministic unique rule-id generation
+- built-in starter templates for local manual restore-default, subject-lost restore-default, chat → appearance preset, and donation → effect workflows
+- export of the selected rule or the complete host rule set as a versioned JSON rule-library package
+- import/merge of a rule-library package after current pending edits pass authoring validation
+- deterministic `-2`, `-3`, ... suffixing when imported rule ids collide with existing ids
 - Validate & Apply
 - rollback to the last valid serialized host snapshot when validation fails
 
@@ -65,11 +69,29 @@ It rejects:
 
 Action-handler availability is deliberately not hard-coded into the editor. Handler registration remains a runtime capability of the selected `EventRuntimeHost`, so custom action handlers can continue to work without modifying the node editor.
 
+## Rule templates and library packages
+
+The editor includes editor-only authoring conveniences that do not change runtime semantics.
+
+Built-in templates create ordinary `EventRuntimeRule` instances using existing normalized event/action contracts. Placeholder ids such as `preset-id` or `effect-id` are intentionally visible and must be edited to match the selected runtime configuration.
+
+Rule-library package v1 contains:
+
+```text
+Version
+PackageId
+Rules[]
+```
+
+Import validates the package version and every contained rule through the same `P12EventRuleAuthoringUtility` used by the graph editor. Unsupported newer versions fail closed. Existing host rules are preserved and imported rules are appended; id collisions are renamed deterministically rather than silently replacing existing behavior.
+
+Template insertion/import/export first applies the current serialized edits and requires them to pass validation. This prevents a library operation from discarding an invalid pending graph silently.
+
 ## Scope
 
-This first slice is a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
+This remains a visual editor for the current linear rule contract. It does not pretend that the runtime already supports arbitrary graph control flow.
 
-Future P12 extensions may add richer grouping, templates, rule libraries, and higher-level node composition, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
+Future P12 extensions may add visual grouping, higher-level node composition, package metadata/search, and library browsing, but any new branching/dependency semantics must first be defined in the runtime contract rather than being hidden inside editor-only behavior.
 
 ## Validation status
 
@@ -83,6 +105,10 @@ Future P12 extensions may add richer grouping, templates, rule libraries, and hi
 - blank action-type rejection
 - non-finite action numeric rejection
 - deterministic unique rule ids
+- every built-in starter template validates against the existing runtime rule contract
+- rule-library JSON package round trip
+- deterministic imported-id collision suffixing
+- unsupported newer library-version rejection
 - the SerializedProperty contract used by the editor
 
 These source validations have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
