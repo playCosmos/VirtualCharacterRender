@@ -36,6 +36,7 @@ namespace VCR.Runtime.Presentation2D
         private long _loadCount;
         private long _loadFailureCount;
         private string _lastError;
+        private bool _suppressUnloadOnDisable;
 
         public ICharacter2DBackend Backend =>
             IsServiceAlive(_backend)
@@ -82,7 +83,8 @@ namespace VCR.Runtime.Presentation2D
 
         private void OnDisable()
         {
-            if (!unloadOnDisable ||
+            if (_suppressUnloadOnDisable ||
+                !unloadOnDisable ||
                 !IsServiceAlive(_backend))
             {
                 return;
@@ -233,11 +235,6 @@ namespace VCR.Runtime.Presentation2D
             _loadCount++;
             _lastError = null;
             ResetFrameCache();
-
-            if (!enabled)
-            {
-                enabled = true;
-            }
 
             RefreshUpdateState();
             return true;
@@ -496,7 +493,7 @@ namespace VCR.Runtime.Presentation2D
         private void RefreshUpdateState()
         {
             var shouldRun =
-                isActiveAndEnabled &&
+                gameObject.activeInHierarchy &&
                 IsServiceAlive(_backend) &&
                 IsServiceAlive(_trackingProvider) &&
                 _backend.Status.State ==
@@ -504,10 +501,26 @@ namespace VCR.Runtime.Presentation2D
                 EffectiveInputs !=
                     Character2DInputDomain.None;
 
-            if (enabled != shouldRun)
+            if (enabled == shouldRun)
             {
-                enabled =
-                    shouldRun;
+                return;
+            }
+
+            if (shouldRun)
+            {
+                enabled = true;
+                return;
+            }
+
+            _suppressUnloadOnDisable = true;
+
+            try
+            {
+                enabled = false;
+            }
+            finally
+            {
+                _suppressUnloadOnDisable = false;
             }
         }
 
