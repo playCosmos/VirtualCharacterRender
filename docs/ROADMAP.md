@@ -199,7 +199,7 @@ Windows/macOS standalone transparency, OBS alpha capture, resize/high-DPI behavi
 
 ## P11 — Application UI
 
-Status: Active. See `P11_STATUS.md`.
+Status: Source implementation checkpointed; Unity Editor/standalone/device/OBS evidence remains deferred. See `P11_STATUS.md`.
 
 The first source slice establishes a programmatic uGUI shell, stable navigation/availability model, runtime status summaries, configuration save, overlay recovery, desktop character file browsing, tracking controls, motion/expression controls, environment transitions, material/shader overrides, persisted event-rule controls, camera/output controls, capability/render settings, diagnostics capture/evidence controls, and a dedicated P11 runtime-scene builder.
 
