@@ -11,7 +11,9 @@ namespace VCR.Editor.P12
         ManualRestoreDefault = 0,
         SubjectLostRestoreDefault = 1,
         ChatAppearancePreset = 2,
-        DonationEffect = 3
+        DonationEffect = 3,
+        ManualPropToggle = 4,
+        ChatEnvironmentState = 5
     }
 
     [Serializable]
@@ -604,6 +606,10 @@ namespace VCR.Editor.P12
                     {
                         Id =
                             "donation-effect",
+                        GraphLabel =
+                            "Donation Effect",
+                        GraphGroup =
+                            "broadcast-reactions",
                         Filter =
                             new EventRuleFilter
                             {
@@ -630,6 +636,82 @@ namespace VCR.Editor.P12
                                             .Constant,
                                     ConstantText =
                                         "effect-id"
+                                }
+                            }
+                    };
+
+                case P12BuiltInEventRuleTemplate
+                    .ManualPropToggle:
+                    return new EventRuntimeRule
+                    {
+                        Id =
+                            "manual-prop-toggle",
+                        GraphLabel =
+                            "Manual Prop Toggle",
+                        GraphGroup =
+                            "scene-controls",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .PropToggle,
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "prop-id"
+                                }
+                            }
+                    };
+
+                case P12BuiltInEventRuleTemplate
+                    .ChatEnvironmentState:
+                    return new EventRuntimeRule
+                    {
+                        Id =
+                            "chat-environment-state",
+                        GraphLabel =
+                            "Chat Environment",
+                        GraphGroup =
+                            "scene-controls",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .BroadcastChatMessage,
+                                TextContains =
+                                    "!scene"
+                            },
+                        Actions =
+                            new[]
+                            {
+                                new EventActionTemplate
+                                {
+                                    ActionType =
+                                        EventActionTypes
+                                            .EnvironmentSetState,
+                                    Name =
+                                        "Fade",
+                                    HasValue =
+                                        true,
+                                    ConstantNumber =
+                                        0.5,
+                                    TextSource =
+                                        EventTextValueSource
+                                            .Constant,
+                                    ConstantText =
+                                        "state-id"
                                 }
                             }
                     };
