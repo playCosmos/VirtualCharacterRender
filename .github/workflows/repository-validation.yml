@@ -9,6 +9,13 @@ on:
       - "feature/**"
       - "fix/**"
   pull_request:
+  workflow_dispatch:
+    inputs:
+      strict_reproducibility:
+        description: "Fail when Unity-generated lock/settings evidence is missing"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -23,3 +30,7 @@ jobs:
 
       - name: Validate repository structure
         run: python3 tools/validate-repository-structure.py
+
+      - name: Validate strict Unity reproducibility
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.strict_reproducibility }}
+        run: python3 tools/validate-repository-structure.py --strict-reproducibility
