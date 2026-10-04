@@ -86,6 +86,8 @@ namespace VCR.Runtime.Appearance
         public string MarkerName;
         public double MarkerOffsetSeconds;
         public string StepId;
+        public string AuthoringLabel;
+        public string AuthoringGroup;
         public AppearanceTransitionDependencyMode DependencyMode =
             AppearanceTransitionDependencyMode.None;
         public string[] DependsOnStepIds =
