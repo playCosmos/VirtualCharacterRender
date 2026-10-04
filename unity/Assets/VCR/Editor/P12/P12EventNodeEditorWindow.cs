@@ -603,16 +603,29 @@ namespace VCR.Editor.P12
         private void RewriteSerializedGroupHierarchy(
             string source)
         {
-            if (!P12GraphGroupPathUtility
-                .TryNormalize(
-                    source,
-                    out var normalizedSource,
-                    out var sourceError) ||
-                !P12GraphGroupPathUtility
+            string normalizedSource =
+                null;
+            string normalizedDestination =
+                null;
+            string sourceError =
+                null;
+            string destinationError =
+                null;
+            var sourceValid =
+                P12GraphGroupPathUtility
+                    .TryNormalize(
+                        source,
+                        out normalizedSource,
+                        out sourceError);
+            var destinationValid =
+                P12GraphGroupPathUtility
                     .TryNormalize(
                         _groupHierarchyDestination,
-                        out var normalizedDestination,
-                        out var destinationError))
+                        out normalizedDestination,
+                        out destinationError);
+
+            if (!sourceValid ||
+                !destinationValid)
             {
                 _message =
                     "Rule group hierarchy edit failed: " +
