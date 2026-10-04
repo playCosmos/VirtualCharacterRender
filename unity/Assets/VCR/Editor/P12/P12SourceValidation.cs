@@ -3089,13 +3089,26 @@ namespace VCR.Editor.P12
                     "P12 Scene Automation Environment SerializedProperty contract must expose editable state bindings and transition defaults",
                     failures);
 
-                Expect(
+                string environmentRebuildError =
+                    null;
+                string propRebuildError =
+                    null;
+                string effectRebuildError =
+                    null;
+                var environmentRebuilt =
                     environment.RebuildStateBindings(
-                        out var environmentRebuildError) &&
+                        out environmentRebuildError);
+                var propsRebuilt =
                     propHandler.RebuildBindings(
-                        out var propRebuildError) &&
+                        out propRebuildError);
+                var effectsRebuilt =
                     effectHandler.RebuildBindings(
-                        out var effectRebuildError),
+                        out effectRebuildError);
+
+                Expect(
+                    environmentRebuilt &&
+                    propsRebuilt &&
+                    effectsRebuilt,
                     "P12 Scene Automation valid environment/prop/effect registries must rebuild through their runtime validation boundaries: " +
                     environmentRebuildError +
                     " / " +
