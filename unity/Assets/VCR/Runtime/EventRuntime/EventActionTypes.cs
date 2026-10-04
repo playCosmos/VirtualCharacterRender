@@ -50,6 +50,12 @@ namespace VCR.Runtime.EventRuntime
         public const string EffectStop =
             "effect.stop";
 
+        public const string PropSetActive =
+            "prop.set_active";
+
+        public const string PropToggle =
+            "prop.toggle";
+
         public const string AudioPlay =
             "audio.play";
 
