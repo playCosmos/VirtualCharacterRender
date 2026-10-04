@@ -3386,6 +3386,26 @@ namespace VCR.Editor.P12
                     validError,
                     failures);
 
+                Expect(
+                    P12EffectPresetUtility
+                        .TryCreateFromSceneRoot(
+                            validSource,
+                            "authored-sparkle",
+                            folder,
+                            out var authoredPreset,
+                            out var authoringError) &&
+                    authoredPreset != null &&
+                    EditorUtility.IsPersistent(
+                        authoredPreset) &&
+                    authoredPreset.Prefab != null &&
+                    EditorUtility.IsPersistent(
+                        authoredPreset.Prefab) &&
+                    authoredPreset.EffectId ==
+                        "authored-sparkle",
+                    "effect preset authoring must convert a valid scene ParticleSystem root into persistent prefab + preset assets: " +
+                    authoringError,
+                    failures);
+
                 preset.Prefab =
                     emptyPrefab;
 
