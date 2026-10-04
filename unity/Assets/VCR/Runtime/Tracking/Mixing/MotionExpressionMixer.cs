@@ -118,10 +118,6 @@ namespace VCR.Runtime.Tracking.Mixing
                 _routedProvider = null;
                 _presenceProvider = null;
 
-                if (routedProviderBehaviour == null)
-                {
-                    routedProviderBehaviour = null;
-                }
             }
 
             if (!IsServiceAlive(_poseLayerProvider))
