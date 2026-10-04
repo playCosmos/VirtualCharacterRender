@@ -296,6 +296,167 @@ namespace VCR.Editor.P12
             }
         }
 
+        public static bool TryGetRevisionHistory(
+            P12EventRuleLibraryEntry[] entries,
+            P12EventRuleLibraryEntry selected,
+            out P12EventRuleLibraryEntry[] history,
+            out string error)
+        {
+            history =
+                Array.Empty<P12EventRuleLibraryEntry>();
+            error = null;
+
+            if (selected == null ||
+                !selected.Valid ||
+                string.IsNullOrWhiteSpace(
+                    selected.PackageId))
+            {
+                error =
+                    "A valid event rule package with PackageId is required for revision history.";
+                return false;
+            }
+
+            var matches =
+                new List<
+                    P12EventRuleLibraryEntry>();
+
+            foreach (var entry in
+                     entries ??
+                     Array.Empty<
+                         P12EventRuleLibraryEntry>())
+            {
+                if (entry == null ||
+                    !entry.Valid ||
+                    !string.Equals(
+                        entry.PackageId,
+                        selected.PackageId,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                matches.Add(
+                    entry);
+            }
+
+            matches.Sort(
+                (left, right) =>
+                {
+                    var byRevision =
+                        left.Revision.CompareTo(
+                            right.Revision);
+
+                    return byRevision != 0
+                        ? byRevision
+                        : string.Compare(
+                            left.AssetPath,
+                            right.AssetPath,
+                            StringComparison.Ordinal);
+                });
+
+            for (var i = 1;
+                 i < matches.Count;
+                 i++)
+            {
+                if (matches[i - 1].Revision ==
+                    matches[i].Revision)
+                {
+                    error =
+                        $"Event rule package '{selected.PackageId}' has multiple valid files for revision {matches[i].Revision}; revision history is ambiguous.";
+                    return false;
+                }
+            }
+
+            history =
+                matches.ToArray();
+            return true;
+        }
+
+        public static bool TryFindAdjacentRevision(
+            P12EventRuleLibraryEntry[] entries,
+            P12EventRuleLibraryEntry selected,
+            int direction,
+            out P12EventRuleLibraryEntry adjacent,
+            out string error)
+        {
+            adjacent = null;
+
+            if (!TryGetRevisionHistory(
+                    entries,
+                    selected,
+                    out var history,
+                    out error))
+            {
+                return false;
+            }
+
+            if (direction == 0)
+            {
+                error =
+                    "Revision navigation direction cannot be zero.";
+                return false;
+            }
+
+            var selectedIndex =
+                Array.FindIndex(
+                    history,
+                    candidate =>
+                        candidate != null &&
+                        string.Equals(
+                            candidate.AssetPath,
+                            selected.AssetPath,
+                            StringComparison.Ordinal));
+
+            if (selectedIndex < 0)
+            {
+                error =
+                    "Selected event rule package is not present in its revision history.";
+                return false;
+            }
+
+            var targetIndex =
+                selectedIndex +
+                (direction < 0
+                    ? -1
+                    : 1);
+
+            if (targetIndex < 0 ||
+                targetIndex >=
+                history.Length)
+            {
+                return true;
+            }
+
+            adjacent =
+                history[
+                    targetIndex];
+            return true;
+        }
+
+        public static bool TryFindPreviousRevision(
+            P12EventRuleLibraryEntry[] entries,
+            P12EventRuleLibraryEntry selected,
+            out P12EventRuleLibraryEntry previous,
+            out string error) =>
+                TryFindAdjacentRevision(
+                    entries,
+                    selected,
+                    -1,
+                    out previous,
+                    out error);
+
+        public static bool TryFindNextRevision(
+            P12EventRuleLibraryEntry[] entries,
+            P12EventRuleLibraryEntry selected,
+            out P12EventRuleLibraryEntry next,
+            out string error) =>
+                TryFindAdjacentRevision(
+                    entries,
+                    selected,
+                    1,
+                    out next,
+                    out error);
+
         public static bool MatchesSearch(
             P12EventRuleLibraryEntry entry,
             string search)
