@@ -12,6 +12,7 @@ namespace VCR.Editor.P12
         private BasicEnvironmentRuntime _environment;
         private PropEventActionHandler _props;
         private EffectEventActionHandler _effects;
+        private P12EffectPresetAsset _effectPreset;
 
         private SerializedObject _environmentSerialized;
         private SerializedObject _propsSerialized;
@@ -290,6 +291,35 @@ namespace VCR.Editor.P12
                 _effectsSerialized.FindProperty(
                     "handlerId"));
 
+            using (new EditorGUILayout
+                       .VerticalScope(
+                           EditorStyles.helpBox))
+            {
+                _effectPreset =
+                    (P12EffectPresetAsset)
+                    EditorGUILayout.ObjectField(
+                        "Effect Preset",
+                        _effectPreset,
+                        typeof(
+                            P12EffectPresetAsset),
+                        false);
+
+                using (new EditorGUI
+                           .DisabledScope(
+                               _effectPreset == null))
+                {
+                    if (GUILayout.Button(
+                            "Install Effect Preset"))
+                    {
+                        InstallEffectPreset();
+                    }
+                }
+
+                EditorGUILayout.HelpBox(
+                    "Effect Preset v1 is project-local and accepts only prefab hierarchies made of Transform, ParticleSystem, and ParticleSystemRenderer components. Installation creates one inactive scene instance and registers it through the existing EffectEventActionHandler binding.",
+                    MessageType.None);
+            }
+
             var effects =
                 _effectsSerialized.FindProperty(
                     "effects");
@@ -406,6 +436,66 @@ namespace VCR.Editor.P12
 
             SetMessage(
                 $"Added prop '{element.FindPropertyRelative("PropId").stringValue}' from '{selected.name}'.",
+                MessageType.Info);
+        }
+
+        private void InstallEffectPreset()
+        {
+            if (_effects == null)
+            {
+                SetMessage(
+                    "Assign an EffectEventActionHandler before installing an effect preset.",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (_effectPreset == null)
+            {
+                SetMessage(
+                    "Select an effect preset asset to install.",
+                    MessageType.Warning);
+                return;
+            }
+
+            ApplyModifiedProperties();
+
+            if (!TryValidateCurrent(
+                    out var pendingError))
+            {
+                RestoreLastValid(
+                    "Effect preset installation was blocked because current scene-automation edits are invalid: " +
+                    (pendingError ?? "unknown error"),
+                    MessageType.Error);
+                return;
+            }
+
+            RecordLastValid();
+
+            if (!P12EffectPresetUtility
+                .TryInstall(
+                    _effectPreset,
+                    _effects,
+                    out var result,
+                    out var error))
+            {
+                RebindSerializedOnly();
+                SetMessage(
+                    "Effect preset installation failed: " +
+                    (error ?? "unknown error"),
+                    MessageType.Error);
+                return;
+            }
+
+            RebindSerializedOnly();
+            RecordLastValid();
+
+            Selection.activeObject =
+                result.Instance;
+            EditorGUIUtility.PingObject(
+                result.Instance);
+
+            SetMessage(
+                $"Installed effect preset '{result.EffectId}' with {result.ParticleSystemCount} ParticleSystem(s).",
                 MessageType.Info);
         }
 
