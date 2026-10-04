@@ -122,6 +122,8 @@ Menu:
 VCR/P13/Run Source Validation
 ```
 
+The source-free batch entrypoint is `VCR.Editor.P13.P13BatchValidation.RunSourceFreeAndExit`, with Windows/macOS launchers under `tools/validate-p13-source-free.*`. It executes the inherited P0-P12 chain before the P13 checks.
+
 The first validator uses fake backend/provider MonoBehaviours and covers:
 
 - requested input domain ∩ backend supported domain behavior
