@@ -15,6 +15,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         [Header("Ingress")]
         [SerializeField] private NormalizedEventHub eventHub;
         [SerializeField] private bool autoFindEventHub = true;
+        [SerializeField, Min(0.25f)] private float eventHubResolveIntervalSeconds = 1f;
 
         [Header("Rules")]
         [SerializeField] private EventRuntimeRule[] rules =
@@ -38,7 +39,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         private IEventActionHandler[] _handlers =
             Array.Empty<IEventActionHandler>();
 
-        private bool _subscribed;
+        private NormalizedEventHub _subscribedHub;
         private long _executedActions;
         private long _failedActions;
         private long _unhandledActions;
@@ -76,12 +77,30 @@ namespace VCR.Runtime.EventRuntime.Unity
 
         private void OnEnable()
         {
-            ResolveEventHub();
-            Subscribe();
+            RefreshEventHubSubscription();
+
+            if (autoFindEventHub)
+            {
+                CancelInvoke(
+                    nameof(
+                        RefreshEventHubSubscription));
+                InvokeRepeating(
+                    nameof(
+                        RefreshEventHubSubscription),
+                    Mathf.Max(
+                        0.25f,
+                        eventHubResolveIntervalSeconds),
+                    Mathf.Max(
+                        0.25f,
+                        eventHubResolveIntervalSeconds));
+            }
         }
 
         private void OnDisable()
         {
+            CancelInvoke(
+                nameof(
+                    RefreshEventHubSubscription));
             Unsubscribe();
         }
 
@@ -93,7 +112,7 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             if (isActiveAndEnabled)
             {
-                Subscribe();
+                RefreshEventHubSubscription();
             }
         }
 
@@ -259,33 +278,53 @@ namespace VCR.Runtime.EventRuntime.Unity
             _handlers = list.ToArray();
         }
 
-        private void Subscribe()
+        private void RefreshEventHubSubscription()
         {
-            if (_subscribed ||
-                eventHub == null)
+            if (eventHub == null)
+            {
+                ResolveEventHub();
+            }
+
+            if (_subscribedHub == eventHub &&
+                eventHub != null)
             {
                 return;
             }
 
+            Unsubscribe();
+            Subscribe();
+        }
+
+        private void Subscribe()
+        {
+            if (eventHub == null)
+            {
+                return;
+            }
+
+            if (_subscribedHub == eventHub)
+            {
+                return;
+            }
+
+            Unsubscribe();
             eventHub.Published +=
                 OnEventPublished;
-            _subscribed = true;
+            _subscribedHub =
+                eventHub;
         }
 
         private void Unsubscribe()
         {
-            if (!_subscribed)
-            {
-                return;
-            }
+            var hub =
+                _subscribedHub;
+            _subscribedHub = null;
 
-            if (eventHub != null)
+            if (hub != null)
             {
-                eventHub.Published -=
+                hub.Published -=
                     OnEventPublished;
             }
-
-            _subscribed = false;
         }
 
         private void OnEventPublished(
