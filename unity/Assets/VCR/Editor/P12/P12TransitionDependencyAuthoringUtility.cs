@@ -293,63 +293,12 @@ namespace VCR.Editor.P12
         public static bool TryNormalizeGroupPath(
             string groupPath,
             out string normalized,
-            out string error)
-        {
-            normalized = null;
-            error = null;
-
-            if (string.IsNullOrWhiteSpace(
-                    groupPath))
-            {
-                error =
-                    "Graph group path is required.";
-                return false;
-            }
-
-            var rawSegments =
-                groupPath
-                    .Trim()
-                    .Split(
-                        new[]
-                        {
-                            '/'
-                        },
-                        StringSplitOptions.None);
-            var segments =
-                new List<string>(
-                    rawSegments.Length);
-
-            foreach (var raw in rawSegments)
-            {
-                var segment =
-                    raw?.Trim();
-
-                if (string.IsNullOrWhiteSpace(
-                        segment))
-                {
-                    error =
-                        "Graph group path cannot contain empty segments.";
-                    return false;
-                }
-
-                if (segment == "." ||
-                    segment == "..")
-                {
-                    error =
-                        "Graph group path cannot use '.' or '..' segments.";
-                    return false;
-                }
-
-                segments.Add(
-                    segment);
-            }
-
-            normalized =
-                string.Join(
-                    "/",
-                    segments);
-            return true;
-        }
+            out string error) =>
+                P12GraphGroupPathUtility
+                    .TryNormalize(
+                        groupPath,
+                        out normalized,
+                        out error);
 
         public static bool TryValidateGroupMetadata(
             AppearanceTransitionPreset transition,
@@ -401,48 +350,26 @@ namespace VCR.Editor.P12
         public static string[] CaptureGroupPaths(
             AppearanceTransitionPreset transition)
         {
-            var result =
-                new SortedSet<string>(
-                    StringComparer.Ordinal);
+            var groups =
+                new List<string>();
 
             foreach (var step in
                      transition?.Steps ??
                      Array.Empty<
                          AppearanceTransitionStep>())
             {
-                if (step == null ||
-                    string.IsNullOrWhiteSpace(
-                        step.AuthoringGroup) ||
-                    !TryNormalizeGroupPath(
-                        step.AuthoringGroup,
-                        out var normalized,
-                        out _))
+                if (step != null &&
+                    !string.IsNullOrWhiteSpace(
+                        step.AuthoringGroup))
                 {
-                    continue;
-                }
-
-                var segments =
-                    normalized.Split('/');
-
-                for (var i = 1;
-                     i <= segments.Length;
-                     i++)
-                {
-                    result.Add(
-                        string.Join(
-                            "/",
-                            segments,
-                            0,
-                            i));
+                    groups.Add(
+                        step.AuthoringGroup);
                 }
             }
 
-            var paths =
-                new string[
-                    result.Count];
-            result.CopyTo(
-                paths);
-            return paths;
+            return P12GraphGroupPathUtility
+                .CaptureHierarchyPaths(
+                    groups);
         }
 
         public static bool TryRewriteGroupHierarchy(
@@ -516,29 +443,19 @@ namespace VCR.Editor.P12
                     continue;
                 }
 
-                if (string.Equals(
+                if (!P12GraphGroupPathUtility
+                    .TryRewrite(
                         current,
                         source,
-                        StringComparison.Ordinal))
-                {
-                    step.AuthoringGroup =
-                        destination;
-                    affectedSteps++;
-                    continue;
-                }
-
-                if (!includeDescendants ||
-                    !current.StartsWith(
-                        source + "/",
-                        StringComparison.Ordinal))
+                        destination,
+                        includeDescendants,
+                        out var rewritten))
                 {
                     continue;
                 }
 
                 step.AuthoringGroup =
-                    destination +
-                    current.Substring(
-                        source.Length);
+                    rewritten;
                 affectedSteps++;
             }
 
@@ -594,19 +511,11 @@ namespace VCR.Editor.P12
                     continue;
                 }
 
-                var exact =
-                    string.Equals(
+                if (!P12GraphGroupPathUtility
+                    .Matches(
                         current,
                         source,
-                        StringComparison.Ordinal);
-                var descendant =
-                    includeDescendants &&
-                    current.StartsWith(
-                        source + "/",
-                        StringComparison.Ordinal);
-
-                if (!exact &&
-                    !descendant)
+                        includeDescendants))
                 {
                     continue;
                 }
