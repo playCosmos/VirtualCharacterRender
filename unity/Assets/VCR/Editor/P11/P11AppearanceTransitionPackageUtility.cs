@@ -145,6 +145,12 @@ namespace VCR.Editor.P11
                     package);
             }
 
+            if (package.Version == 2)
+            {
+                MigrateV2ToV3(
+                    package);
+            }
+
             if (package.Version !=
                 AppearanceTransitionPackage
                     .CurrentVersion)
@@ -239,9 +245,51 @@ namespace VCR.Editor.P11
                     transition.CancellationSteps);
             }
 
-            package.Version =
-                AppearanceTransitionPackage
-                    .CurrentVersion;
+            package.Version = 2;
+        }
+
+        private static void MigrateV2ToV3(
+            AppearanceTransitionPackage package)
+        {
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                if (transition == null)
+                {
+                    continue;
+                }
+
+                NormalizeV3AuthoringMetadata(
+                    transition.Steps);
+                NormalizeV3AuthoringMetadata(
+                    transition.CancellationSteps);
+            }
+
+            package.Version = 3;
+        }
+
+        private static void NormalizeV3AuthoringMetadata(
+            AppearanceTransitionStep[] steps)
+        {
+            foreach (var step in
+                     steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null)
+                {
+                    continue;
+                }
+
+                step.AuthoringLabel ??=
+                    string.Empty;
+                step.AuthoringGroup ??=
+                    string.Empty;
+            }
         }
 
         private static void NormalizeV2Defaults(
