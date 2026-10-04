@@ -3406,6 +3406,52 @@ namespace VCR.Editor.P12
                     authoringError,
                     failures);
 
+                var invalidLibraryPreset =
+                    ScriptableObject.CreateInstance<
+                        P12EffectPresetAsset>();
+                invalidLibraryPreset.EffectId =
+                    "invalid-library";
+                invalidLibraryPreset.Prefab =
+                    emptyPrefab;
+                AssetDatabase.CreateAsset(
+                    invalidLibraryPreset,
+                    folder +
+                    "/invalid-library.asset");
+                AssetDatabase.SaveAssets();
+
+                Expect(
+                    P12EffectPresetLibraryUtility
+                        .TryScan(
+                            folder,
+                            out var libraryEntries,
+                            out var libraryError) &&
+                    libraryEntries.Length ==
+                        2 &&
+                    Array.Exists(
+                        libraryEntries,
+                        entry =>
+                            entry != null &&
+                            entry.Valid &&
+                            entry.EffectId ==
+                                "authored-sparkle") &&
+                    Array.Exists(
+                        libraryEntries,
+                        entry =>
+                            entry != null &&
+                            !entry.Valid &&
+                            entry.EffectId ==
+                                "invalid-library") &&
+                    Array.Exists(
+                        libraryEntries,
+                        entry =>
+                            P12EffectPresetLibraryUtility
+                                .MatchesSearch(
+                                    entry,
+                                    "sparkle")),
+                    "effect preset library must index valid and invalid project presets while supporting id/path search: " +
+                    libraryError,
+                    failures);
+
                 preset.Prefab =
                     emptyPrefab;
 
