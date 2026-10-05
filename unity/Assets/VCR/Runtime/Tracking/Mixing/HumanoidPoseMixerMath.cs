@@ -189,7 +189,8 @@ namespace VCR.Runtime.Tracking.Mixing
                 rootPosition,
                 rootRotation,
                 bones,
-                hasBone);
+                hasBone,
+                SnapshotArrayOwnership.Transfer);
         }
 
         private static TrackingVector3 Add(
