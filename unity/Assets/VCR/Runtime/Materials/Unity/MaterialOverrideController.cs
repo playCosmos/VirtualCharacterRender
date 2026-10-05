@@ -499,6 +499,14 @@ namespace VCR.Runtime.Materials.Unity
             float value,
             out string error)
         {
+            if (!IsFinite(
+                    value))
+            {
+                error =
+                    "Material float value must be finite.";
+                return false;
+            }
+
             return TrySet(
                 slotId,
                 propertyName,
@@ -544,6 +552,16 @@ namespace VCR.Runtime.Materials.Unity
             Color value,
             out string error)
         {
+            if (!IsFinite(value.r) ||
+                !IsFinite(value.g) ||
+                !IsFinite(value.b) ||
+                !IsFinite(value.a))
+            {
+                error =
+                    "Material color components must be finite.";
+                return false;
+            }
+
             return TrySet(
                 slotId,
                 propertyName,
@@ -560,6 +578,16 @@ namespace VCR.Runtime.Materials.Unity
             Vector4 value,
             out string error)
         {
+            if (!IsFinite(value.x) ||
+                !IsFinite(value.y) ||
+                !IsFinite(value.z) ||
+                !IsFinite(value.w))
+            {
+                error =
+                    "Material vector components must be finite.";
+                return false;
+            }
+
             return TrySet(
                 slotId,
                 propertyName,
@@ -810,27 +838,31 @@ namespace VCR.Runtime.Materials.Unity
         private static bool HasFiniteNumericValue(
             MaterialParameterOverride parameter)
         {
-            static bool Finite(float value) =>
-                !float.IsNaN(value) &&
-                !float.IsInfinity(value);
-
             return parameter.Kind switch
             {
                 ShaderParameterKind.Float =>
-                    Finite(parameter.X),
+                    IsFinite(parameter.X),
                 ShaderParameterKind.Color =>
-                    Finite(parameter.X) &&
-                    Finite(parameter.Y) &&
-                    Finite(parameter.Z) &&
-                    Finite(parameter.W),
+                    IsFinite(parameter.X) &&
+                    IsFinite(parameter.Y) &&
+                    IsFinite(parameter.Z) &&
+                    IsFinite(parameter.W),
                 ShaderParameterKind.Vector =>
-                    Finite(parameter.X) &&
-                    Finite(parameter.Y) &&
-                    Finite(parameter.Z) &&
-                    Finite(parameter.W),
+                    IsFinite(parameter.X) &&
+                    IsFinite(parameter.Y) &&
+                    IsFinite(parameter.Z) &&
+                    IsFinite(parameter.W),
                 _ =>
                     true
             };
+        }
+
+        private static bool IsFinite(
+            float value)
+        {
+            return
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
         }
 
         private static bool TryGetShaderPropertyType(
