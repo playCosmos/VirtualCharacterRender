@@ -31,6 +31,8 @@ namespace VCR.Editor.P8
 
             ValidateIngress(
                 failures);
+            ValidateEventSubscriberIsolation(
+                failures);
             ValidateEventHubBounds(
                 failures);
             ValidateTrackingPresenceRecovery(
@@ -131,6 +133,69 @@ namespace VCR.Editor.P8
                 !string.IsNullOrEmpty(
                     amountError),
                 "external ingress must reject non-finite donation amounts",
+                failures);
+        }
+
+        private static void ValidateEventSubscriberIsolation(
+            List<string> failures)
+        {
+            var bus =
+                new NormalizedEventBus();
+            var delivered = 0;
+            long deliveredSequence = 0;
+
+            Action<NormalizedEvent> throwing =
+                _ =>
+                    throw new InvalidOperationException(
+                        "synthetic subscriber failure");
+            Action<NormalizedEvent> healthy =
+                value =>
+                {
+                    delivered++;
+                    deliveredSequence =
+                        value.Sequence;
+                };
+
+            bus.Published +=
+                throwing;
+            bus.Published +=
+                healthy;
+
+            bus.Publish(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .LocalManual,
+                    "subscriber.validation",
+                    1));
+
+            Expect(
+                delivered == 1 &&
+                deliveredSequence == 1 &&
+                bus.Sequence == 1 &&
+                bus.SubscriberFailureCount == 1 &&
+                bus.LastSubscriberError != null &&
+                bus.LastSubscriberError.Contains(
+                    "synthetic",
+                    StringComparison.OrdinalIgnoreCase),
+                "normalized event bus must isolate a throwing subscriber and continue delivery to later subscribers with the same assigned sequence",
+                failures);
+
+            bus.Published -=
+                throwing;
+
+            bus.Publish(
+                new NormalizedEvent(
+                    NormalizedEventTypes
+                        .LocalManual,
+                    "subscriber.validation",
+                    2));
+
+            Expect(
+                delivered == 2 &&
+                deliveredSequence == 2 &&
+                bus.Sequence == 2 &&
+                bus.SubscriberFailureCount == 1,
+                "removing the throwing subscriber must preserve later delivery without incrementing the failure count",
                 failures);
         }
 
