@@ -29,36 +29,40 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
+            var supported =
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetInt,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetBool,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetColor,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetVector,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetTexture,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialSetShader,
+                    StringComparison.Ordinal);
+
+            if (!supported)
+            {
+                return false;
+            }
+
             ResolveController();
-
-            return
-                controller != null &&
-                (string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetInt,
-                     StringComparison.Ordinal) ||
-                 string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetBool,
-                     StringComparison.Ordinal) ||
-                 string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetColor,
-                     StringComparison.Ordinal) ||
-                 string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetVector,
-                     StringComparison.Ordinal) ||
-                 string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetTexture,
-                     StringComparison.Ordinal) ||
-                 string.Equals(
-                     command.ActionType,
-                     EventActionTypes.MaterialSetShader,
-                     StringComparison.Ordinal));
+            return controller != null;
         }
-
         public bool TryExecute(
             EventActionCommand command,
             out string error)
