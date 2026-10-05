@@ -51,18 +51,34 @@ namespace VCR.Runtime.EventRuntime
             }
 
             if (HasMinimumAmount &&
-                (!value.HasAmount || value.Amount < MinimumAmount))
+                (!IsFinite(
+                     MinimumAmount) ||
+                 !value.HasAmount ||
+                 value.Amount <
+                 MinimumAmount))
             {
                 return false;
             }
 
             if (HasMaximumAmount &&
-                (!value.HasAmount || value.Amount > MaximumAmount))
+                (!IsFinite(
+                     MaximumAmount) ||
+                 !value.HasAmount ||
+                 value.Amount >
+                 MaximumAmount))
             {
                 return false;
             }
 
             return true;
+        }
+
+        private static bool IsFinite(
+            double value)
+        {
+            return
+                !double.IsNaN(value) &&
+                !double.IsInfinity(value);
         }
     }
 }
