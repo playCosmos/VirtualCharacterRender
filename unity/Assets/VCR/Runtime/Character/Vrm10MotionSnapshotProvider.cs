@@ -17,6 +17,7 @@ namespace VCR.Runtime.Character
     public sealed class Vrm10MotionSnapshotProvider :
         MonoBehaviour,
         ISelectiveNormalizedMotionSnapshotProvider,
+        IBorrowedNormalizedMotionProvider,
         IBorrowedHumanoidPoseProvider
     {
         [SerializeField] private Vrm10Instance target;
@@ -29,6 +30,12 @@ namespace VCR.Runtime.Character
         private Transform[] _boneTransforms;
         private NormalizedBonePose[] _borrowedBones;
         private bool[] _borrowedHasBone;
+        private readonly float[] _borrowedStandardExpressions =
+            new float[
+                (int)StandardExpression.Count];
+        private NamedExpressionValue[] _borrowedCustomExpressions =
+            new NamedExpressionValue[16];
+        private int _borrowedCustomExpressionCount;
         private long _sequence;
 
         private void Awake()
@@ -101,6 +108,57 @@ namespace VCR.Runtime.Character
                     sourceId: "character-runtime",
                     runtimeTimestampUs:
                         timestampUs);
+
+            return true;
+        }
+
+        public bool TryBorrowMotion(
+            in NormalizedMotionSnapshotRequest request,
+            out BorrowedMotionSample sample)
+        {
+            sample = default;
+
+            if (!request.HasAnyDomain ||
+                target == null ||
+                target.Runtime == null ||
+                (request.IncludeHumanoidPose &&
+                 target.Humanoid == null))
+            {
+                return false;
+            }
+
+            var regions =
+                TrackingRegion.None;
+            var pose =
+                default(BorrowedHumanoidPose);
+            var expressions =
+                default(BorrowedExpressionState);
+
+            if (request.IncludeHumanoidPose)
+            {
+                if (!TryBorrowHumanoidPose(
+                        out pose))
+                {
+                    return false;
+                }
+
+                regions |=
+                    TrackingRegion.FullBody;
+            }
+
+            if (request.IncludeExpressions)
+            {
+                SampleBorrowedExpressions(
+                    out expressions);
+                regions |=
+                    TrackingRegion.Expressions;
+            }
+
+            sample =
+                new BorrowedMotionSample(
+                    regions,
+                    pose,
+                    expressions);
 
             return true;
         }
@@ -242,6 +300,93 @@ namespace VCR.Runtime.Character
                 _borrowedHasBone =
                     new bool[count];
             }
+        }
+
+        private void SampleBorrowedExpressions(
+            out BorrowedExpressionState expressions)
+        {
+            Array.Clear(
+                _borrowedStandardExpressions,
+                0,
+                _borrowedStandardExpressions.Length);
+
+            var previousCustomCount =
+                _borrowedCustomExpressionCount;
+            var customCount = 0;
+
+            foreach (var pair in
+                target.Runtime.Expression.GetWeights())
+            {
+                var key =
+                    pair.Key;
+                var value =
+                    Mathf.Clamp01(
+                        pair.Value);
+
+                if (StandardExpressionNames.TryParse(
+                        key.Name,
+                        out var expression))
+                {
+                    _borrowedStandardExpressions[
+                        (int)expression] =
+                            value;
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(
+                        key.Name))
+                {
+                    continue;
+                }
+
+                EnsureBorrowedCustomExpressionCapacity(
+                    customCount + 1);
+
+                _borrowedCustomExpressions[
+                    customCount++] =
+                        new NamedExpressionValue(
+                            key.Name,
+                            value);
+            }
+
+            if (customCount <
+                previousCustomCount)
+            {
+                Array.Clear(
+                    _borrowedCustomExpressions,
+                    customCount,
+                    previousCustomCount -
+                    customCount);
+            }
+
+            _borrowedCustomExpressionCount =
+                customCount;
+
+            expressions =
+                new BorrowedExpressionState(
+                    _borrowedStandardExpressions,
+                    _borrowedCustomExpressions,
+                    customCount);
+        }
+
+        private void EnsureBorrowedCustomExpressionCapacity(
+            int required)
+        {
+            if (_borrowedCustomExpressions.Length >=
+                required)
+            {
+                return;
+            }
+
+            var next =
+                Math.Max(
+                    required,
+                    _borrowedCustomExpressions.Length *
+                    2);
+
+            Array.Resize(
+                ref _borrowedCustomExpressions,
+                next);
         }
 
         private NormalizedExpressionState CaptureExpressions()
