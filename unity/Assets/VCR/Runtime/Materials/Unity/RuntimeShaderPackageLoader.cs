@@ -642,13 +642,24 @@ namespace VCR.Runtime.Materials.Unity
                 return false;
             }
 
+            if (!BoundedTextFile.TryReadUtf8(
+                    manifestPath,
+                    ManifestSizeLimit,
+                    out var manifestJson,
+                    out var manifestReadError))
+            {
+                error =
+                    "Shader package manifest load failed: " +
+                    manifestReadError;
+                return false;
+            }
+
             try
             {
                 manifest =
                     JsonUtility.FromJson<
                         ShaderPackageManifest>(
-                        File.ReadAllText(
-                            manifestPath));
+                        manifestJson);
             }
             catch (Exception exception)
             {
@@ -906,10 +917,26 @@ namespace VCR.Runtime.Materials.Unity
                     texture.name =
                         textureResource.TextureId;
 
+                    if (!BoundedBinaryFile.TryRead(
+                            texturePath,
+                            TextureSizeLimit,
+                            out var textureBytes,
+                            out var textureReadError))
+                    {
+                        error =
+                            $"Texture '{textureResource.TextureId}' load failed: {textureReadError}";
+
+                        DestroyTexture(
+                            texture);
+                        DestroyTextures(
+                            staged.Values);
+                        staged.Clear();
+                        return false;
+                    }
+
                     if (!ImageConversion.LoadImage(
                             texture,
-                            File.ReadAllBytes(
-                                texturePath),
+                            textureBytes,
                             markNonReadable: false))
                     {
                         error =
