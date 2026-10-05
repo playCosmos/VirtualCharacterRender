@@ -14,6 +14,10 @@ namespace VCR.Runtime.Protocols.Vmc
     /// </summary>
     public sealed class VmcFrameAccumulator
     {
+        public const int MaxCustomExpressions =
+            256;
+        public const int MaxCustomExpressionNameCharacters =
+            256;
         private readonly string _sourceId;
         private readonly HumanoidPoseSpace _poseSpace;
         private readonly NormalizedBonePose[] _bones =
@@ -38,6 +42,13 @@ namespace VCR.Runtime.Protocols.Vmc
         private bool _hasAnyBone;
         private long _sequence;
         private long _senderTimestampUs;
+        private long _droppedCustomExpressionCount;
+
+        public int CustomExpressionCount =>
+            _customExpressionStaging.Count;
+
+        public long DroppedCustomExpressionCount =>
+            _droppedCustomExpressionCount;
 
         public VmcFrameAccumulator(
             string sourceId,
@@ -47,6 +58,35 @@ namespace VCR.Runtime.Protocols.Vmc
                 ? "vmc"
                 : sourceId;
             _poseSpace = poseSpace;
+        }
+
+        public void ResetState()
+        {
+            Array.Clear(
+                _bones,
+                0,
+                _bones.Length);
+            Array.Clear(
+                _hasBone,
+                0,
+                _hasBone.Length);
+            Array.Clear(
+                _expressionStaging,
+                0,
+                _expressionStaging.Length);
+            _customExpressionStaging.Clear();
+
+            _rootPosition =
+                TrackingVector3.Zero;
+            _rootRotation =
+                TrackingQuaternion.Identity;
+            _committedExpressions = null;
+            _loadedKnown = false;
+            _loaded = false;
+            _trackingKnown = false;
+            _trackingOk = false;
+            _hasAnyBone = false;
+            _senderTimestampUs = 0;
         }
 
         public bool Process(
@@ -263,9 +303,37 @@ namespace VCR.Runtime.Protocols.Vmc
             {
                 _expressionStaging[(int)expression] = value;
             }
-            else if (!string.IsNullOrEmpty(name))
+            else
             {
-                _customExpressionStaging[name] = value;
+                if (string.IsNullOrWhiteSpace(
+                        name) ||
+                    name.Length >
+                        MaxCustomExpressionNameCharacters)
+                {
+                    _droppedCustomExpressionCount++;
+                    return;
+                }
+
+                if (_customExpressionStaging
+                    .ContainsKey(
+                        name))
+                {
+                    _customExpressionStaging[
+                        name] =
+                        value;
+                    return;
+                }
+
+                if (_customExpressionStaging.Count >=
+                    MaxCustomExpressions)
+                {
+                    _droppedCustomExpressionCount++;
+                    return;
+                }
+
+                _customExpressionStaging.Add(
+                    name,
+                    value);
             }
         }
 
