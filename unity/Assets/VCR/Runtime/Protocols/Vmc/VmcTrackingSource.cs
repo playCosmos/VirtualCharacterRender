@@ -76,53 +76,50 @@ namespace VCR.Runtime.Protocols.Vmc
             lock (_sync)
             {
                 ThrowIfDisposed();
+
                 if (!_started)
                 {
                     return false;
                 }
-            }
 
-            if (!_accumulator.Process(
-                messages,
-                arrivalTimestampUs,
-                out var frame))
-            {
-                lock (_sync)
+                if (!_accumulator.Process(
+                        messages,
+                        arrivalTimestampUs,
+                        out var frame))
                 {
-                    _health = new TrackingSourceHealth(
+                    _health =
+                        new TrackingSourceHealth(
+                            TrackingSourceHealthState.Healthy,
+                            arrivalTimestampUs,
+                            _health.Confidence,
+                            null);
+                    return false;
+                }
+
+                _latest.Publish(frame);
+                Volatile.Write(
+                    ref _lastSubjectDetected,
+                    frame.SubjectDetected ? 1 : 0);
+
+                if (frame.HumanoidPose != null)
+                {
+                    _latestPose.Publish(frame);
+                }
+
+                if (frame.Expressions != null)
+                {
+                    _latestExpressions.Publish(frame);
+                }
+
+                _health =
+                    new TrackingSourceHealth(
                         TrackingSourceHealthState.Healthy,
                         arrivalTimestampUs,
-                        _health.Confidence,
+                        frame.Confidence,
                         null);
-                }
-                return false;
+
+                return true;
             }
-
-            _latest.Publish(frame);
-            Volatile.Write(
-                ref _lastSubjectDetected,
-                frame.SubjectDetected ? 1 : 0);
-
-            if (frame.HumanoidPose != null)
-            {
-                _latestPose.Publish(frame);
-            }
-
-            if (frame.Expressions != null)
-            {
-                _latestExpressions.Publish(frame);
-            }
-
-            lock (_sync)
-            {
-                _health = new TrackingSourceHealth(
-                    TrackingSourceHealthState.Healthy,
-                    arrivalTimestampUs,
-                    frame.Confidence,
-                    null);
-            }
-
-            return true;
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
@@ -175,13 +172,22 @@ namespace VCR.Runtime.Protocols.Vmc
 
         public void Dispose()
         {
-            if (_disposed)
+            lock (_sync)
             {
-                return;
-            }
+                if (_disposed)
+                {
+                    return;
+                }
 
-            Stop();
-            _disposed = true;
+                _started = false;
+                _disposed = true;
+                _health =
+                    new TrackingSourceHealth(
+                        TrackingSourceHealthState.Stopped,
+                        _health.LastUpdateTimestampUs,
+                        _health.Confidence,
+                        null);
+            }
         }
 
         private void ThrowIfDisposed()
