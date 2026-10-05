@@ -3,7 +3,12 @@ using System;
 namespace VCR.Runtime.Tracking
 {
     /// <summary>
-    /// Engine-independent face/head state for one performer.
+    /// Engine-independent immutable face/head state for one performer.
+    ///
+    /// The default constructor preserves the historical allocation-free
+    /// ownership-transfer behavior. Prefer the explicit ownership overload at
+    /// producer boundaries so callers state whether they relinquish or copy
+    /// their coefficient buffer.
     /// </summary>
     public sealed class NormalizedFaceState
     {
@@ -13,17 +18,28 @@ namespace VCR.Runtime.Tracking
             TrackingQuaternion headRotation,
             TrackingVector3 headPosition,
             float[] coefficients)
+            : this(
+                headRotation,
+                headPosition,
+                coefficients,
+                SnapshotArrayOwnership.Transfer)
+        {
+        }
+
+        public NormalizedFaceState(
+            TrackingQuaternion headRotation,
+            TrackingVector3 headPosition,
+            float[] coefficients,
+            SnapshotArrayOwnership ownership)
         {
             HeadRotation = headRotation;
             HeadPosition = headPosition;
-            _coefficients = coefficients ?? throw new ArgumentNullException(nameof(coefficients));
-
-            if (_coefficients.Length != (int)FaceCoefficient.Count)
-            {
-                throw new ArgumentException(
-                    $"Expected {(int)FaceCoefficient.Count} coefficients, got {_coefficients.Length}.",
+            _coefficients =
+                SnapshotArrayOwnershipUtility.Acquire(
+                    coefficients,
+                    (int)FaceCoefficient.Count,
+                    ownership,
                     nameof(coefficients));
-            }
         }
 
         public TrackingQuaternion HeadRotation { get; }
@@ -32,7 +48,9 @@ namespace VCR.Runtime.Tracking
         public float Get(FaceCoefficient coefficient)
         {
             var index = (int)coefficient;
-            if (index < 0 || index >= (int)FaceCoefficient.Count)
+            if (index < 0 ||
+                index >=
+                    (int)FaceCoefficient.Count)
             {
                 return 0f;
             }
@@ -40,8 +58,18 @@ namespace VCR.Runtime.Tracking
             return _coefficients[index];
         }
 
-        public float EyeOpenLeft => 1f - Get(FaceCoefficient.EyeBlinkLeft);
-        public float EyeOpenRight => 1f - Get(FaceCoefficient.EyeBlinkRight);
-        public float MouthOpen => Get(FaceCoefficient.JawOpen);
+        public float EyeOpenLeft =>
+            1f -
+            Get(
+                FaceCoefficient.EyeBlinkLeft);
+
+        public float EyeOpenRight =>
+            1f -
+            Get(
+                FaceCoefficient.EyeBlinkRight);
+
+        public float MouthOpen =>
+            Get(
+                FaceCoefficient.JawOpen);
     }
 }
