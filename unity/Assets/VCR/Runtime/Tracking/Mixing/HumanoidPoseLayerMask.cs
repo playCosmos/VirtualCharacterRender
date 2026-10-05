@@ -106,11 +106,13 @@ namespace VCR.Runtime.Tracking.Mixing
             boneOverrides ??=
                 Array.Empty<HumanoidBoneWeight>();
 
-            for (var i = 0;
-                 i < boneOverrides.Length;
-                 i++)
+            for (var i =
+                     boneOverrides.Length - 1;
+                 i >= 0;
+                 i--)
             {
-                if (boneOverrides[i].Bone != bone)
+                if (boneOverrides[i].Bone !=
+                    bone)
                 {
                     continue;
                 }
