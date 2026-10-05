@@ -114,7 +114,18 @@ namespace VCR.Editor.P0
                         out var publishedFrame) &&
                     publishedFrame != null;
 
+                source.Publish(
+                    new NormalizedFaceState(
+                        TrackingQuaternion.Identity,
+                        TrackingVector3.Zero,
+                        frame.Coefficients),
+                    timestampUs: 2);
+
                 source.Stop();
+
+                var stoppedCleared =
+                    !source.TryTakeLatest(
+                        out _);
 
                 var stoppedRejected =
                     false;
@@ -126,7 +137,7 @@ namespace VCR.Editor.P0
                             TrackingQuaternion.Identity,
                             TrackingVector3.Zero,
                             frame.Coefficients),
-                        timestampUs: 2);
+                        timestampUs: 3);
                 }
                 catch (InvalidOperationException)
                 {
@@ -149,6 +160,7 @@ namespace VCR.Editor.P0
 
                 sourceLifecyclePass =
                     published &&
+                    stoppedCleared &&
                     stoppedRejected &&
                     disposedRejected;
             }
