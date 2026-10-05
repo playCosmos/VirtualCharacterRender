@@ -161,6 +161,16 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     out error);
             }
 
+            if (!SoopBridgeEventMapper
+                .TryValidateEventId(
+                    document.eventId,
+                    out var eventIdError))
+            {
+                return Reject(
+                    eventIdError,
+                    out error);
+            }
+
             if (IsDuplicate(
                     document.eventId))
             {
