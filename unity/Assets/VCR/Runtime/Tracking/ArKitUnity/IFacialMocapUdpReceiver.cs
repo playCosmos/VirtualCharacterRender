@@ -431,6 +431,10 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             var bytes =
                 new byte[
                     UdpReceiveBufferBytes];
+            var textCharacters =
+                new char[
+                    IFacialMocapFrameParser
+                        .MaxTextCharacters];
 
             while (_running)
             {
@@ -473,15 +477,17 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         continue;
                     }
 
-                    string text;
+                    int textLength;
 
                     try
                     {
-                        text =
-                            StrictUtf8.GetString(
+                        textLength =
+                            StrictUtf8.GetChars(
                                 bytes,
                                 0,
-                                byteCount);
+                                byteCount,
+                                textCharacters,
+                                0);
                     }
                     catch (DecoderFallbackException)
                     {
@@ -492,8 +498,20 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         continue;
                     }
 
+                    if (textLength <= 0 ||
+                        textLength >
+                            IFacialMocapFrameParser
+                                .MaxTextCharacters)
+                    {
+                        Interlocked.Increment(
+                            ref _parseFailureCount);
+                        continue;
+                    }
+
                     if (IFacialMocapFrameParser.TryParse(
-                        text,
+                        textCharacters.AsSpan(
+                            0,
+                            textLength),
                         out var frame))
                     {
                         _rawFrames.Publish(frame);
