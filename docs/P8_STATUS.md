@@ -1,14 +1,16 @@
 # P8 Status
 
-Updated: 2026-10-03
+Updated: 2026-10-05
 
 ## Active branch
 
+Current integrated source of truth:
+
 ```text
-feature/p8-protocol-event-adapters
+develop
 ```
 
-P8 starts from the preserved P7 source checkpoint:
+The P8 feature/checkpoint branches are historical references. P8 originally starts from the preserved P7 source checkpoint:
 
 ```text
 checkpoint/p7-source-implementation
@@ -62,6 +64,7 @@ P8 adds the VCR OSC address:
 - bounded internal event queue
 - main-thread-only publication to `INormalizedEventSink`
 - bounded dispatch per frame
+- destroyed Unity event-sink references are rejected; the bounded resolver can discover a live replacement
 - oldest-event dropping under sustained overload
 - packet/malformed/accepted/rejected/dropped/dispatched/rejected-sender diagnostics
 - no receive work while the component is disabled
@@ -106,6 +109,7 @@ P8 defines version 1 of the transport-neutral WebSocket event message:
 - bounded text-message queue
 - main-thread-only delivery to `IWebSocketTextMessageHandler`
 - bounded dispatch per frame
+- destroyed Unity message-handler references are rejected; the bounded resolver can discover a live replacement
 - configurable automatic reconnect delay
 - generation-guarded restart so an old async loop cannot overwrite a new connection state
 - transport connection/receive/drop/dispatch/rejection diagnostics
@@ -178,6 +182,7 @@ The P8 suite runs P0-P7 checks first and then covers:
 - SOOP invalid donation rejection
 - SOOP duplicate event-id suppression
 - WebSocket/OSC/SOOP diagnostics
+- replacement WebSocket handler and OSC sink recovery after the previous Unity component is destroyed
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
