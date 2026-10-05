@@ -301,6 +301,9 @@ namespace VCR.Editor.P4
                 }
             }
 
+            ValidateDestroyedProviderRecovery(
+                failures);
+
             if (failures.Count == 0)
             {
                 Debug.Log(
@@ -316,6 +319,163 @@ namespace VCR.Editor.P4
                     failures));
 
             return false;
+        }
+
+        private static void ValidateDestroyedProviderRecovery(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P4 Destroyed Provider Recovery");
+
+                var preferred =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var fallback =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var router =
+                    root.AddComponent<
+                        PriorityTrackingRouter>();
+
+                preferred.SourceId =
+                    "arkit-face";
+                preferred.Kind =
+                    TrackingSourceKind.ArKitFace;
+                preferred.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                preferred.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
+                fallback.SourceId =
+                    "mediapipe-webcam";
+                fallback.Kind =
+                    TrackingSourceKind.MediaPipeFaceWebcam;
+                fallback.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                fallback.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
+                var nowUs =
+                    MonotonicClock.NowMicroseconds();
+
+                preferred.FaceFrame =
+                    CreateFaceFrame(
+                        preferred.SourceId,
+                        sequence: 1,
+                        nowUs);
+                preferred.Presence =
+                    CreatePresence(
+                        nowUs,
+                        faceAvailable: true,
+                        faceEvidence: true);
+
+                fallback.FaceFrame =
+                    CreateFaceFrame(
+                        fallback.SourceId,
+                        sequence: 1,
+                        nowUs);
+                fallback.Presence =
+                    CreatePresence(
+                        nowUs,
+                        faceAvailable: true,
+                        faceEvidence: true);
+
+                router.SetPreferredFaceProvider(
+                    preferred);
+                router.SetFallbackProvider(
+                    fallback);
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.PreferredFaceActive &&
+                    router.RouteStatus.FaceSourceId ==
+                        preferred.SourceId,
+                    "router recovery validation must start on the healthy preferred provider",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    preferred);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    !router.RouteStatus.PreferredFaceActive &&
+                    router.RouteStatus.FaceSourceId ==
+                        fallback.SourceId,
+                    "router must discard a destroyed preferred provider and continue through the live fallback without invoking stale interfaces",
+                    failures);
+
+                var replacement =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                replacement.SourceId =
+                    "arkit-face";
+                replacement.Kind =
+                    TrackingSourceKind.ArKitFace;
+                replacement.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                replacement.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                replacement.FaceFrame =
+                    CreateFaceFrame(
+                        replacement.SourceId,
+                        sequence: 1,
+                        nowUs + 1);
+                replacement.Presence =
+                    CreatePresence(
+                        nowUs + 1,
+                        faceAvailable: true,
+                        faceEvidence: true);
+
+                router.SetPreferredFaceProvider(
+                    replacement);
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.PreferredFaceActive &&
+                    router.RouteStatus.FaceSourceId ==
+                        replacement.SourceId,
+                    "router must reset source-selection caches when a replacement provider reuses the previous source id and sequence",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    fallback);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.PreferredFaceActive &&
+                    router.RouteStatus.FaceSourceId ==
+                        replacement.SourceId,
+                    "router must ignore a destroyed fallback activation/provider interface while the preferred route remains healthy",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed routing provider recovery unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static TrackingFrame CreateFaceFrame(
