@@ -1,30 +1,44 @@
-using System;
-
 namespace VCR.Runtime.Tracking
 {
     /// <summary>
-    /// Upper-body joint positions in normalized tracking coordinates:
-    /// +X right, +Y up, +Z forward.
+    /// Immutable upper-body joint positions in normalized tracking
+    /// coordinates: +X right, +Y up, +Z forward.
     /// </summary>
     public sealed class NormalizedUpperBodyState
     {
         private readonly TrackingPoint[] _joints;
 
-        public NormalizedUpperBodyState(TrackingPoint[] joints)
+        public NormalizedUpperBodyState(
+            TrackingPoint[] joints)
+            : this(
+                joints,
+                SnapshotArrayOwnership.Transfer)
         {
-            _joints = joints ?? throw new ArgumentNullException(nameof(joints));
-
-            if (_joints.Length != (int)UpperBodyJoint.Count)
-            {
-                throw new ArgumentException(
-                    $"Expected {(int)UpperBodyJoint.Count} joints, got {_joints.Length}.",
-                    nameof(joints));
-            }
         }
 
-        public TrackingPoint Get(UpperBodyJoint joint)
+        public NormalizedUpperBodyState(
+            TrackingPoint[] joints,
+            SnapshotArrayOwnership ownership)
         {
-            return _joints[(int)joint];
+            _joints =
+                SnapshotArrayOwnershipUtility.Acquire(
+                    joints,
+                    (int)UpperBodyJoint.Count,
+                    ownership,
+                    nameof(joints));
+        }
+
+        public TrackingPoint Get(
+            UpperBodyJoint joint)
+        {
+            var index =
+                (int)joint;
+
+            return
+                index >= 0 &&
+                index < _joints.Length
+                    ? _joints[index]
+                    : default;
         }
     }
 }
