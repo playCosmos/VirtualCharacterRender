@@ -44,6 +44,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         private long _failedActions;
         private long _unhandledActions;
         private long _ambiguousActions;
+        private long _handlerProbeFailureCount;
         private string _lastError;
 
         public EventRuntimeEngine Engine => _engine;
@@ -51,6 +52,8 @@ namespace VCR.Runtime.EventRuntime.Unity
         public long FailedActions => _failedActions;
         public long UnhandledActions => _unhandledActions;
         public long AmbiguousActions => _ambiguousActions;
+        public long HandlerProbeFailureCount =>
+            _handlerProbeFailureCount;
         public string LastError => _lastError;
         public int MaxCommandsPerEvent =>
             maxCommandsPerEvent;
@@ -362,10 +365,35 @@ namespace VCR.Runtime.EventRuntime.Unity
             IEventActionHandler handler = null;
             var handlerCount = 0;
 
+            string firstProbeError = null;
+
             foreach (var candidate in _handlers)
             {
-                if (!IsServiceAlive(candidate) ||
-                    !candidate.CanHandle(command))
+                if (!IsServiceAlive(candidate))
+                {
+                    continue;
+                }
+
+                bool canHandle;
+
+                try
+                {
+                    canHandle =
+                        candidate.CanHandle(command);
+                }
+                catch (Exception exception)
+                {
+                    _handlerProbeFailureCount++;
+                    firstProbeError ??=
+                        exception.Message;
+
+                    Debug.LogException(
+                        exception,
+                        this);
+                    continue;
+                }
+
+                if (!canHandle)
                 {
                     continue;
                 }
@@ -382,7 +410,9 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 _unhandledActions++;
                 _lastError =
-                    $"No event action handler for '{command.ActionType}'.";
+                    firstProbeError == null
+                        ? $"No event action handler for '{command.ActionType}'."
+                        : $"No event action handler completed capability probing for '{command.ActionType}': {firstProbeError}";
                 return;
             }
 
@@ -488,6 +518,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                 new RuntimeMetric(
                     "events.runtime.actions_ambiguous",
                     _ambiguousActions,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "events.runtime.handler_probe_failures",
+                    _handlerProbeFailureCount,
                     "count"));
         }
     }
