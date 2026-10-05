@@ -19,6 +19,9 @@ namespace VCR.Runtime.Character
     [DisallowMultipleComponent]
     public sealed class Vrm10CharacterLoader : MonoBehaviour
     {
+        private const long MaxVrmFileBytes =
+            1024L * 1024L * 1024L;
+
         [Header("Placement")]
         [SerializeField] private Transform characterParent;
         [SerializeField] private Vector3 localPosition = Vector3.zero;
@@ -62,6 +65,24 @@ namespace VCR.Runtime.Character
                 throw new FileNotFoundException(
                     "VRM file was not found.",
                     path);
+            }
+
+            var fileLength =
+                new FileInfo(
+                    path)
+                    .Length;
+
+            if (fileLength <= 0)
+            {
+                throw new InvalidDataException(
+                    "VRM file is empty.");
+            }
+
+            if (fileLength >
+                MaxVrmFileBytes)
+            {
+                throw new InvalidDataException(
+                    $"VRM file exceeds the {MaxVrmFileBytes} byte safety limit.");
             }
 
             CancelPendingLoad();
