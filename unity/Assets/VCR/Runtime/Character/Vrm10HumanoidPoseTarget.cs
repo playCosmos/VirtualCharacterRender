@@ -96,6 +96,14 @@ namespace VCR.Runtime.Character
 
         private void Update()
         {
+            if (!IsServiceAlive(_provider))
+            {
+                _provider = null;
+                _presenceProvider = null;
+                SetPoseUnavailable(true);
+                SetExpressionsUnavailable(true);
+            }
+
             if (_provider == null &&
                 Time.unscaledTime >= _nextProviderSearchTime)
             {
@@ -104,7 +112,7 @@ namespace VCR.Runtime.Character
                 ResolveProvider();
             }
 
-            if (_provider == null)
+            if (!IsServiceAlive(_provider))
             {
                 return;
             }
@@ -120,7 +128,7 @@ namespace VCR.Runtime.Character
                 expressionFrame?.Expressions != null;
 
             var presence =
-                _presenceProvider != null
+                IsServiceAlive(_presenceProvider)
                     ? _presenceProvider.Presence
                     : (TrackingPresenceSnapshot?)null;
 
@@ -224,11 +232,17 @@ namespace VCR.Runtime.Character
 
         public void SetTrackingProvider(ITrackingFrameProvider provider)
         {
-            _provider = provider;
+            _provider =
+                IsServiceAlive(provider)
+                    ? provider
+                    : null;
             _presenceProvider =
-                provider as ITrackingPresenceProvider;
+                IsServiceAlive(_provider)
+                    ? _provider as
+                        ITrackingPresenceProvider
+                    : null;
             trackingProviderBehaviour =
-                provider as MonoBehaviour;
+                _provider as MonoBehaviour;
             _lastPoseSequence = -1;
             _lastExpressionSequence = -1;
             _lastPoseSourceId = null;
@@ -293,10 +307,24 @@ namespace VCR.Runtime.Character
             _lastExpressionSequence = -1;
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveProvider()
         {
-            if (trackingProviderBehaviour is
-                ITrackingFrameProvider configured)
+            if (trackingProviderBehaviour != null &&
+                trackingProviderBehaviour is
+                    ITrackingFrameProvider configured)
             {
                 SetTrackingProvider(configured);
                 return;
