@@ -135,6 +135,7 @@ For steady-state tracking and UI operation:
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
 - VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; OSC serialization writes directly into one reusable packet buffer plus reusable argument scratch, so the sender must not reintroduce per-message `byte[]` bundle staging,
+- VMC uses `ISelectiveNormalizedMotionSnapshotProvider` when available; disabling expression transmission must skip expression capture/allocation at the VRM snapshot source rather than capturing and discarding it afterward,
 - iFacialMocap UDP receive decodes UTF-8 into one reusable worker character buffer and parses a `ReadOnlySpan<char>`; packet-wide strings, part substrings, coefficient-name strings, and head-component split strings are not created, while immutable coefficient/frame output still owns its published arrays,
 - OSC receive parsing must not allocate transient bundle-tag or type-tag strings; VMC, generic OSC-event, and ARKit UDP receive loops use one reusable datagram buffer per worker instead of `UdpClient.Receive()` packet arrays,
 - OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
