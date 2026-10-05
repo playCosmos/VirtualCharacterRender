@@ -107,6 +107,44 @@ namespace VCR.Editor.P0
                         "_BaseColor") ==
                         Color.magenta;
 
+                var materialBeforeNonFinite =
+                    renderer.sharedMaterial;
+                var nonFinitePreset =
+                    new MaterialOverridePreset
+                    {
+                        PresetId =
+                            "p0.non-finite",
+                        Parameters =
+                            new[]
+                            {
+                                MaterialParameterOverride.Color(
+                                    "_BaseColor",
+                                    float.NaN,
+                                    0f,
+                                    0f,
+                                    1f)
+                            }
+                    };
+
+                var nonFiniteApplied =
+                    controller.TryApplyPreset(
+                        slot.Id,
+                        nonFinitePreset,
+                        out var nonFiniteReport,
+                        out var nonFiniteError);
+
+                var nonFiniteRejected =
+                    !nonFiniteApplied &&
+                    !string.IsNullOrWhiteSpace(
+                        nonFiniteError) &&
+                    nonFiniteReport != null &&
+                    nonFiniteReport.Issues.Length >
+                        0 &&
+                    nonFiniteReport.Issues[0].Code ==
+                        "property_value_non_finite" &&
+                    renderer.sharedMaterial ==
+                        materialBeforeNonFinite;
+
                 var invalidApplied =
                     controller.TryApplyShaderId(
                         slot.Id,
@@ -173,6 +211,7 @@ namespace VCR.Editor.P0
                     cloneApplied &&
                     sourcePreserved &&
                     parameterIsolated &&
+                    nonFiniteRejected &&
                     fallbackRestored &&
                     destroyedResolverFallback &&
                     controller.ErrorCount >= 1;
@@ -188,7 +227,7 @@ namespace VCR.Editor.P0
                         "VCR P0 material override: FAIL - " +
                         $"applied={applied}, cloneApplied={cloneApplied}, " +
                         $"sourcePreserved={sourcePreserved}, parameterIsolated={parameterIsolated}, " +
-                        $"fallbackRestored={fallbackRestored}, destroyedResolverFallback={destroyedResolverFallback}, " +
+                        $"nonFiniteRejected={nonFiniteRejected}, fallbackRestored={fallbackRestored}, destroyedResolverFallback={destroyedResolverFallback}, " +
                         $"applyError='{applyError}', parameterError='{parameterError}', invalidError='{invalidError}', textureError='{textureError}'.");
                 }
             }
