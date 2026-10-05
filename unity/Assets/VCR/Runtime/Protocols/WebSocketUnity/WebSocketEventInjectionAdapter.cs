@@ -145,8 +145,18 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 return false;
             }
 
-            _sink.Publish(
-                value);
+            try
+            {
+                _sink.Publish(
+                    value);
+            }
+            catch (Exception exception)
+            {
+                return Reject(
+                    "Normalized event sink failed: " +
+                    exception.Message,
+                    out error);
+            }
 
             Interlocked.Increment(
                 ref _accepted);
