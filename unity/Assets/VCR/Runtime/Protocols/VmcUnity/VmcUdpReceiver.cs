@@ -546,6 +546,16 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 "protocol.vmc.receive.malformed",
                 MalformedPacketCount,
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.receive.custom_expressions",
+                _source?.CustomExpressionCount ?? 0,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.receive.custom_expression_drops",
+                _source?.DroppedCustomExpressionCount ?? 0L,
+                "count"));
         }
 
         private bool StopReceiver()
