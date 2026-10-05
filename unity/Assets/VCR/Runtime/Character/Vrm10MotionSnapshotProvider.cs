@@ -97,18 +97,23 @@ namespace VCR.Runtime.Character
                 bones,
                 hasBone);
 
-            var expressions = CaptureExpressions();
+            var expressions =
+                CaptureExpressions();
+            var timestampUs =
+                NowUs();
 
             frame = new TrackingFrame(
                 ++_sequence,
-                NowUs(),
-                TrackingRegion.FullBody,
+                timestampUs,
+                TrackingRegion.FullBody |
+                TrackingRegion.Expressions,
                 1f,
                 subjectDetected: true,
                 humanoidPose: pose,
                 expressions: expressions,
                 sourceId: "character-runtime",
-                runtimeTimestampUs: NowUs());
+                runtimeTimestampUs:
+                    timestampUs);
 
             return true;
         }
