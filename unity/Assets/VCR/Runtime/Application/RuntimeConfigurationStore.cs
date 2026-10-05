@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
+using VCR.Runtime.Core;
 using VCR.Runtime.Scene;
 
 namespace VCR.Runtime.Application
@@ -8,6 +9,9 @@ namespace VCR.Runtime.Application
     public sealed class RuntimeConfigurationStore
     {
         public const int CurrentVersion = 1;
+
+        private const long MaxFileBytes =
+            4L * 1024L * 1024L;
 
         private readonly string _path;
 
@@ -41,8 +45,17 @@ namespace VCR.Runtime.Application
 
             try
             {
-                var json =
-                    File.ReadAllText(_path);
+                if (!BoundedTextFile.TryReadUtf8(
+                        _path,
+                        MaxFileBytes,
+                        out var json,
+                        out var readError))
+                {
+                    error =
+                        "Configuration load failed: " +
+                        readError;
+                    return false;
+                }
 
                 var envelope =
                     JsonUtility.FromJson<
@@ -107,6 +120,17 @@ namespace VCR.Runtime.Application
                     _path + ".tmp";
                 var backupPath =
                     _path + ".bak";
+
+                if (!BoundedTextFile.TryValidateUtf8Size(
+                        json,
+                        MaxFileBytes,
+                        out var sizeError))
+                {
+                    error =
+                        "Configuration save failed: " +
+                        sizeError;
+                    return false;
+                }
 
                 File.WriteAllText(
                     temporaryPath,
