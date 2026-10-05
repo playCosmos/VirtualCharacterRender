@@ -15,11 +15,16 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField]
         private bool autoFindEnvironmentRuntime = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         private IEnvironmentRuntime _runtime;
+        private float _nextResolveTime;
 
         private void Awake()
         {
-            ResolveRuntime();
+            ResolveRuntime(
+                force: true);
         }
 
         public void SetEnvironmentRuntime(
@@ -34,6 +39,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     ? environmentRuntimeBehaviour as
                         IEnvironmentRuntime
                     : null;
+            _nextResolveTime = 0f;
         }
 
         public bool CanHandle(
@@ -149,7 +155,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                 : true;
         }
 
-        private void ResolveRuntime()
+        private void ResolveRuntime(
+            bool force = false)
         {
             if (IsServiceAlive(_runtime))
             {
@@ -163,6 +170,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     IEnvironmentRuntime configured)
             {
                 _runtime = configured;
+                _nextResolveTime = 0f;
                 return;
             }
 
@@ -170,6 +178,21 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 return;
             }
+
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextResolveTime)
+            {
+                return;
+            }
+
+            _nextResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
 
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
@@ -184,6 +207,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     environmentRuntimeBehaviour =
                         behaviour;
                     _runtime = runtime;
+                    _nextResolveTime = 0f;
                     return;
                 }
             }
