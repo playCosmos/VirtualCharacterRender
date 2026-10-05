@@ -51,6 +51,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateThrowingConsumerIsolation(
                 failures);
+            ValidateAdapterSinkFailureContracts(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -1583,6 +1585,161 @@ namespace VCR.Editor.P8
                 {
                     UnityEngine.Object.DestroyImmediate(
                         oscRoot);
+                }
+
+                if (soopRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        soopRoot);
+                }
+            }
+        }
+
+        private static void ValidateAdapterSinkFailureContracts(
+            List<string> failures)
+        {
+            GameObject webSocketRoot = null;
+            GameObject soopRoot = null;
+
+            try
+            {
+                webSocketRoot =
+                    new GameObject(
+                        "P8 WebSocket Sink Failure Contract");
+
+                var throwingWebSocketSink =
+                    webSocketRoot.AddComponent<
+                        P8ThrowingEventSink>();
+                var webSocket =
+                    webSocketRoot.AddComponent<
+                        WebSocketEventInjectionAdapter>();
+                webSocket.SetSink(
+                    throwingWebSocketSink);
+
+                var webSocketJson =
+                    JsonUtility.ToJson(
+                        new WebSocketEventMessage
+                        {
+                            version =
+                                WebSocketEventProtocol
+                                    .CurrentVersion,
+                            op =
+                                WebSocketEventProtocol
+                                    .InjectOperation,
+                            type =
+                                NormalizedEventTypes
+                                    .LocalManual,
+                            text =
+                                "retry-websocket"
+                        });
+
+                Expect(
+                    !webSocket.TryHandleText(
+                        webSocketJson,
+                        out var failedWebSocketError) &&
+                    !string.IsNullOrWhiteSpace(
+                        failedWebSocketError) &&
+                    webSocket.AcceptedCount == 0 &&
+                    webSocket.RejectedCount == 1,
+                    "WebSocket injection adapter TryHandleText must contain sink exceptions and count them as rejected",
+                    failures);
+
+                var replacementWebSocketSink =
+                    webSocketRoot.AddComponent<
+                        P8FakeEventSink>();
+                webSocket.SetSink(
+                    replacementWebSocketSink);
+
+                Expect(
+                    webSocket.TryHandleText(
+                        webSocketJson,
+                        out var recoveredWebSocketError) &&
+                    string.IsNullOrEmpty(
+                        recoveredWebSocketError) &&
+                    replacementWebSocketSink.Events.Count == 1 &&
+                    webSocket.AcceptedCount == 1,
+                    "WebSocket injection adapter must recover after a sink failure and accept the next retry: " +
+                    recoveredWebSocketError,
+                    failures);
+
+                soopRoot =
+                    new GameObject(
+                        "P8 SOOP Sink Failure Contract");
+
+                var throwingSoopSink =
+                    soopRoot.AddComponent<
+                        P8ThrowingEventSink>();
+                var soop =
+                    soopRoot.AddComponent<
+                        SoopBridgeEventAdapter>();
+                soop.SetSink(
+                    throwingSoopSink);
+
+                var soopJson =
+                    JsonUtility.ToJson(
+                        new SoopBridgeMessage
+                        {
+                            version =
+                                SoopBridgeEventMapper
+                                    .CurrentVersion,
+                            type =
+                                SoopBridgeEventMapper
+                                    .ChatType,
+                            eventId =
+                                "retry-after-sink-failure",
+                            userId =
+                                "viewer",
+                            nickname =
+                                "Viewer",
+                            text =
+                                "retry-soop"
+                        });
+
+                Expect(
+                    !soop.TryHandleText(
+                        soopJson,
+                        out var failedSoopError) &&
+                    !string.IsNullOrWhiteSpace(
+                        failedSoopError) &&
+                    soop.AcceptedCount == 0 &&
+                    soop.RejectedCount == 1 &&
+                    soop.DuplicateCount == 0,
+                    "SOOP adapter must not commit dedupe state when sink delivery fails",
+                    failures);
+
+                var replacementSoopSink =
+                    soopRoot.AddComponent<
+                        P8FakeEventSink>();
+                soop.SetSink(
+                    replacementSoopSink);
+
+                Expect(
+                    soop.TryHandleText(
+                        soopJson,
+                        out var recoveredSoopError) &&
+                    string.IsNullOrEmpty(
+                        recoveredSoopError) &&
+                    replacementSoopSink.Events.Count == 1 &&
+                    replacementSoopSink.Events[0].Text ==
+                        "retry-soop" &&
+                    soop.AcceptedCount == 1 &&
+                    soop.DuplicateCount == 0,
+                    "SOOP adapter must allow the same event id to retry after failed delivery and commit dedupe only after success: " +
+                    recoveredSoopError,
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "adapter sink failure contract validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (webSocketRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        webSocketRoot);
                 }
 
                 if (soopRoot != null)
