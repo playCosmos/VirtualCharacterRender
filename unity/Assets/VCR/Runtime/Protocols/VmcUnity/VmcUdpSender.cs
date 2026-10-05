@@ -132,8 +132,18 @@ namespace VCR.Runtime.Protocols.VmcUnity
             {
                 int packetLength;
 
-                if (_snapshotProvider is
-                    IBorrowedHumanoidPoseProvider borrowedProvider &&
+                var selective =
+                    _snapshotProvider as
+                        ISelectiveNormalizedMotionSnapshotProvider;
+                var borrowedProvider =
+                    _snapshotProvider as
+                        IBorrowedHumanoidPoseProvider;
+                var canUseBorrowedPose =
+                    borrowedProvider != null &&
+                    (!sendExpressions ||
+                     selective != null);
+
+                if (canUseBorrowedPose &&
                     borrowedProvider.TryBorrowHumanoidPose(
                         out var borrowedPose))
                 {
@@ -142,37 +152,21 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
                     if (sendExpressions)
                     {
-                        if (_snapshotProvider is
-                            ISelectiveNormalizedMotionSnapshotProvider selective)
+                        var expressionRequest =
+                            new NormalizedMotionSnapshotRequest(
+                                includeHumanoidPose: false,
+                                includeExpressions: true);
+
+                        if (!selective.TryCaptureMotion(
+                                in expressionRequest,
+                                out var expressionFrame))
                         {
-                            var expressionRequest =
-                                new NormalizedMotionSnapshotRequest(
-                                    includeHumanoidPose: false,
-                                    includeExpressions: true);
-
-                            if (!selective.TryCaptureMotion(
-                                    in expressionRequest,
-                                    out var expressionFrame))
-                            {
-                                return;
-                            }
-
-                            expressions =
-                                expressionFrame?
-                                    .Expressions;
+                            return;
                         }
-                        else
-                        {
-                            if (!_snapshotProvider.TryCaptureMotion(
-                                    out var expressionFrame))
-                            {
-                                return;
-                            }
 
-                            expressions =
-                                expressionFrame?
-                                    .Expressions;
-                        }
+                        expressions =
+                            expressionFrame?
+                                .Expressions;
                     }
 
                     packetLength =
