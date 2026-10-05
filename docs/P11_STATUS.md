@@ -112,6 +112,7 @@ Implemented source contracts:
 - loaded VRM characters receive an appearance runtime component without forcing any appearance configuration
 - Character UI exposes Previous Look / Next Look / transition selection / Restore Default, direct preset/outfit/accessory ID controls, transition preview, and per-character user preset save/delete/rename/duplicate/reorder
 - user presets are restored automatically from a versioned per-character appearance profile
+- per-character appearance profiles use atomic save plus a 16 MiB strict UTF-8 load/save bound so corrupted or oversized files fail before JSON allocation
 - authored preset ids cannot be overwritten by user presets
 - profile filenames use a SHA-256 key of the normalized character path rather than exposing the full source path
 - persistence failure rolls the in-memory user-preset mutation back
@@ -218,7 +219,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - audio.play/audio.stop transition dispatch, logical audio binding, loop and optional volume override
 - user preset registry save/replace/collision behavior plus rename/duplicate/reorder semantics
 - active user-preset identity preservation across rename and ordered duplicate insertion
-- per-character appearance profile JSON save/load round trip including managed preset order
+- per-character appearance profile JSON save/load round trip including managed preset order and oversized-file rejection
 - saved preset UI gating requires a ready runtime, source/target ids as applicable, and active character path
 - Interrupt definition rejection without cleanup and acceptance with explicit cleanup actions
 - transition cancel UI gating on active/cancelable status
