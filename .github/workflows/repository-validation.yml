@@ -32,5 +32,10 @@ jobs:
         run: python3 tools/validate-repository-structure.py
 
       - name: Validate strict Unity reproducibility
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.strict_reproducibility }}
+        if: >-
+          ${{
+            (github.event_name == 'workflow_dispatch' && inputs.strict_reproducibility) ||
+            github.ref == 'refs/heads/main' ||
+            (github.event_name == 'pull_request' && github.base_ref == 'main')
+          }}
         run: python3 tools/validate-repository-structure.py --strict-reproducibility
