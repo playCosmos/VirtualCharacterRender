@@ -9,6 +9,70 @@ namespace VCR.Editor.P0
         [MenuItem("VCR/P0/Validate Diagnostics Math")]
         public static void Validate()
         {
+            GameObject root = null;
+            var runtimeBounds = false;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "VCR P0 Diagnostics Bounds");
+                var diagnostics =
+                    root.AddComponent<
+                        RuntimeDiagnostics>();
+
+                SetPrivateField(
+                    diagnostics,
+                    "reportIntervalSeconds",
+                    0f);
+                SetPrivateField(
+                    diagnostics,
+                    "frameWindowFrames",
+                    0);
+                InvokeAwake(
+                    diagnostics);
+
+                runtimeBounds =
+                    Mathf.Approximately(
+                        diagnostics
+                            .ReportIntervalSeconds,
+                        1f) &&
+                    diagnostics
+                        .FrameWindowFrames ==
+                        120 &&
+                    GetPrivateArrayLength(
+                        diagnostics,
+                        "_frameMs") ==
+                        120;
+
+                SetPrivateField(
+                    diagnostics,
+                    "reportIntervalSeconds",
+                    float.NaN);
+                SetPrivateField(
+                    diagnostics,
+                    "frameWindowFrames",
+                    int.MaxValue);
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    Mathf.Approximately(
+                        diagnostics
+                            .ReportIntervalSeconds,
+                        5f) &&
+                    diagnostics
+                        .FrameWindowFrames ==
+                        3600;
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    Object.DestroyImmediate(
+                        root);
+                }
+            }
+
             var samples = new float[100];
             var scratch = new float[100];
 
@@ -33,7 +97,8 @@ namespace VCR.Editor.P0
                 Mathf.Approximately(average, 50.5f) &&
                 Mathf.Approximately(p95, 95f) &&
                 Mathf.Approximately(p99, 99f) &&
-                percentileClamp;
+                percentileClamp &&
+                runtimeBounds;
 
             if (pass)
             {
@@ -47,6 +112,79 @@ namespace VCR.Editor.P0
                     "VCR P0 diagnostics math: FAIL " +
                     $"avg={average:F3} p95={p95:F3} p99={p99:F3}");
             }
+        }
+
+        private static void SetPrivateField<T>(
+            object target,
+            string fieldName,
+            T value)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new System.MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            field.SetValue(
+                target,
+                value);
+        }
+
+        private static int GetPrivateArrayLength(
+            object target,
+            string fieldName)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (field?.GetValue(target) is
+                System.Array array)
+            {
+                return array.Length;
+            }
+
+            return -1;
+        }
+
+        private static void InvokeAwake(
+            RuntimeDiagnostics diagnostics)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        "Awake",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    "Awake");
+            }
+
+            method.Invoke(
+                diagnostics,
+                null);
         }
     }
 }
