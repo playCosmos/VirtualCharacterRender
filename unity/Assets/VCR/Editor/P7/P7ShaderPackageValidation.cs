@@ -32,6 +32,8 @@ namespace VCR.Editor.P7
 
             ValidateManifest(
                 failures);
+            ValidateBoundedFileInputs(
+                failures);
             ValidateDeclarativeCapabilityCatalog(
                 failures);
             ValidateTransactionalLoader(
@@ -41,7 +43,7 @@ namespace VCR.Editor.P7
             {
                 Debug.Log(
                     "VCR P7 shader package validation: PASS " +
-                    "(manifest security, declarative capability registration, platform routing, declarative resources, transactional registry rollback)");
+                    "(manifest security, bounded binary/metadata input, declarative capability registration, platform routing, declarative resources, transactional registry rollback)");
                 return true;
             }
 
@@ -228,6 +230,134 @@ namespace VCR.Editor.P7
                         "shaders/source.hlsl"),
                 "resource validation must reject traversal, non-canonical separators, executable code, and raw shader source",
                 failures);
+        }
+
+        private static void ValidateBoundedFileInputs(
+            List<string> failures)
+        {
+            var rootPath =
+                Path.Combine(
+                    Application.temporaryCachePath,
+                    "vcr-p7-input-bounds-" +
+                    Guid.NewGuid()
+                        .ToString("N"));
+            GameObject host =
+                null;
+
+            try
+            {
+                Directory.CreateDirectory(
+                    rootPath);
+
+                var binaryPath =
+                    Path.Combine(
+                        rootPath,
+                        "bounded.bin");
+                File.WriteAllBytes(
+                    binaryPath,
+                    new byte[]
+                    {
+                        0x01,
+                        0x02
+                    });
+
+                Expect(
+                    BoundedBinaryFile.TryRead(
+                        binaryPath,
+                        maxBytes: 2,
+                        out var exactBytes,
+                        out var exactError) &&
+                    exactBytes.Length == 2 &&
+                    string.IsNullOrEmpty(
+                        exactError),
+                    "bounded binary reader must accept a file at the exact configured limit",
+                    failures);
+
+                Expect(
+                    !BoundedBinaryFile.TryRead(
+                        binaryPath,
+                        maxBytes: 1,
+                        out _,
+                        out var binaryLimitError) &&
+                    !string.IsNullOrWhiteSpace(
+                        binaryLimitError),
+                    "bounded binary reader must reject a file larger than its allocation limit",
+                    failures);
+
+                var bundlePath =
+                    Path.Combine(
+                        rootPath,
+                        "shader.bundle");
+                File.WriteAllBytes(
+                    bundlePath,
+                    new byte[]
+                    {
+                        0x00
+                    });
+
+                var metadataPath =
+                    bundlePath +
+                    ".vcr.json";
+
+                using (var stream =
+                       new FileStream(
+                           metadataPath,
+                           FileMode.Create,
+                           FileAccess.Write,
+                           FileShare.None))
+                {
+                    stream.SetLength(
+                        1L * 1024L * 1024L +
+                        1L);
+                }
+
+                host =
+                    new GameObject(
+                        "P7 Shader Bundle Input Bounds");
+                var loader =
+                    host.AddComponent<
+                        RuntimeShaderBundleLoader>();
+
+                Expect(
+                    !loader.TryLoadFromFile(
+                        bundlePath,
+                        out var registeredCount,
+                        out var metadataLimitError) &&
+                    registeredCount == 0 &&
+                    !string.IsNullOrWhiteSpace(
+                        metadataLimitError),
+                    "standalone shader bundle loader must reject oversized metadata before AssetBundle loading",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "bounded shader input validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (host != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        host);
+                }
+
+                try
+                {
+                    if (Directory.Exists(
+                            rootPath))
+                    {
+                        Directory.Delete(
+                            rootPath,
+                            recursive: true);
+                    }
+                }
+                catch
+                {
+                    // Validation cleanup must not hide the assertion.
+                }
+            }
         }
 
         private static void ValidateDeclarativeCapabilityCatalog(
