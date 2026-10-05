@@ -97,6 +97,10 @@ namespace VCR.Runtime.Materials.Unity
                 }
 
                 AssetBundle bundle = null;
+                var registrySnapshot =
+                    RuntimeShaderRegistry
+                        .CaptureRegistered();
+                var committed = false;
 
                 try
                 {
@@ -171,15 +175,6 @@ namespace VCR.Runtime.Materials.Unity
                             shaderIds,
                             out var shaderDeclarationError))
                     {
-                        foreach (var shaderId in
-                                 shaderIds)
-                        {
-                            RuntimeShaderRegistry.Unregister(
-                                shaderId);
-                        }
-
-                        registeredCount = 0;
-
                         return Fail(
                             normalizedPath,
                             shaderDeclarationError,
@@ -188,9 +183,6 @@ namespace VCR.Runtime.Materials.Unity
                             metadataPath,
                             out error);
                     }
-
-                    LoadedShaderCount +=
-                        registeredCount;
 
                     Status =
                         BuildStatus(
@@ -202,10 +194,21 @@ namespace VCR.Runtime.Materials.Unity
                             metadata,
                             metadataPath);
 
+                    LoadedShaderCount +=
+                        registeredCount;
+                    committed = true;
                     return true;
                 }
                 finally
                 {
+                    if (!committed)
+                    {
+                        RuntimeShaderRegistry
+                            .RestoreRegistered(
+                                registrySnapshot);
+                        registeredCount = 0;
+                    }
+
                     // Loaded Shader objects remain alive because the registry
                     // holds references. Release only bundle container metadata.
                     bundle?.Unload(
