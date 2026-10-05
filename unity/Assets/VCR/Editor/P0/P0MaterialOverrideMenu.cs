@@ -21,6 +21,11 @@ namespace VCR.Editor.P0
                 false);
 
             Material source = null;
+            Texture2D resolverTexture = null;
+            Texture2D fallbackTexture = null;
+            var textureRegistrySnapshot =
+                RuntimeTextureRegistry
+                    .CaptureRegistered();
 
             try
             {
@@ -119,11 +124,56 @@ namespace VCR.Editor.P0
                     status.Health ==
                         MaterialOverrideHealth.Fallback;
 
+                resolverTexture =
+                    new Texture2D(1, 1)
+                    {
+                        name =
+                            "P0 Resolver Texture"
+                    };
+                fallbackTexture =
+                    new Texture2D(1, 1)
+                    {
+                        name =
+                            "P0 Registry Fallback Texture"
+                    };
+
+                const string textureId =
+                    "p0.destroyed-resolver";
+                RuntimeTextureRegistry.Register(
+                    textureId,
+                    fallbackTexture);
+
+                var textureResolver =
+                    root.AddComponent<
+                        P0MaterialTextureResolver>();
+                textureResolver.Configure(
+                    textureId,
+                    resolverTexture);
+                controller.SetTextureResolver(
+                    textureResolver);
+
+                Object.DestroyImmediate(
+                    textureResolver);
+
+                var destroyedResolverFallback =
+                    source.HasProperty(
+                        "_BaseMap") &&
+                    controller.TrySetTextureId(
+                        slot.Id,
+                        "_BaseMap",
+                        textureId,
+                        out var textureError) &&
+                    renderer.sharedMaterial != null &&
+                    renderer.sharedMaterial.GetTexture(
+                        "_BaseMap") ==
+                        fallbackTexture;
+
                 var pass =
                     cloneApplied &&
                     sourcePreserved &&
                     parameterIsolated &&
                     fallbackRestored &&
+                    destroyedResolverFallback &&
                     controller.ErrorCount >= 1;
 
                 if (pass)
@@ -137,19 +187,66 @@ namespace VCR.Editor.P0
                         "VCR P0 material override: FAIL - " +
                         $"applied={applied}, cloneApplied={cloneApplied}, " +
                         $"sourcePreserved={sourcePreserved}, parameterIsolated={parameterIsolated}, " +
-                        $"fallbackRestored={fallbackRestored}, applyError='{applyError}', " +
-                        $"parameterError='{parameterError}', invalidError='{invalidError}'.");
+                        $"fallbackRestored={fallbackRestored}, destroyedResolverFallback={destroyedResolverFallback}, " +
+                        $"applyError='{applyError}', parameterError='{parameterError}', invalidError='{invalidError}', textureError='{textureError}'.");
                 }
             }
             finally
             {
+                RuntimeTextureRegistry
+                    .RestoreRegistered(
+                        textureRegistrySnapshot);
+
                 Object.DestroyImmediate(root);
 
                 if (source != null)
                 {
                     Object.DestroyImmediate(source);
                 }
+
+                if (resolverTexture != null)
+                {
+                    Object.DestroyImmediate(
+                        resolverTexture);
+                }
+
+                if (fallbackTexture != null)
+                {
+                    Object.DestroyImmediate(
+                        fallbackTexture);
+                }
             }
+        }
+    }
+
+    internal sealed class P0MaterialTextureResolver :
+        MonoBehaviour,
+        IMaterialTextureResolver
+    {
+        private string _textureId;
+        private Texture _texture;
+
+        public void Configure(
+            string textureId,
+            Texture texture)
+        {
+            _textureId = textureId;
+            _texture = texture;
+        }
+
+        public bool TryResolve(
+            string textureId,
+            out Texture texture)
+        {
+            texture =
+                string.Equals(
+                    textureId,
+                    _textureId,
+                    System.StringComparison.Ordinal)
+                    ? _texture
+                    : null;
+
+            return texture != null;
         }
     }
 }
