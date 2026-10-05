@@ -43,34 +43,67 @@ namespace VCR.Runtime.Core
                         FileAccess.Read,
                         FileShare.Read);
 
-                if (stream.Length >
-                    maxBytes)
+                var length =
+                    stream.Length;
+
+                if (length >
+                    maxBytes ||
+                    length >
+                    int.MaxValue)
                 {
                     error =
-                        $"Text file is too large ({stream.Length} bytes; limit {maxBytes} bytes).";
+                        $"Text file is too large ({length} bytes; limit {maxBytes} bytes).";
                     return false;
                 }
 
-                using var reader =
-                    new StreamReader(
-                        stream,
-                        Utf8,
-                        detectEncodingFromByteOrderMarks: true,
-                        bufferSize: 4096,
-                        leaveOpen: false);
+                var bytes =
+                    new byte[
+                        checked((int)length)];
+                var read = 0;
+
+                while (read <
+                       bytes.Length)
+                {
+                    var count =
+                        stream.Read(
+                            bytes,
+                            read,
+                            bytes.Length -
+                            read);
+
+                    if (count == 0)
+                    {
+                        error =
+                            "Text file changed while it was being read.";
+                        return false;
+                    }
+
+                    read +=
+                        count;
+                }
+
+                if (stream.ReadByte() !=
+                    -1)
+                {
+                    error =
+                        "Text file changed while it was being read.";
+                    return false;
+                }
+
+                var offset =
+                    bytes.Length >= 3 &&
+                    bytes[0] == 0xef &&
+                    bytes[1] == 0xbb &&
+                    bytes[2] == 0xbf
+                        ? 3
+                        : 0;
 
                 text =
-                    reader.ReadToEnd();
-
-                if (!TryValidateUtf8Size(
-                        text,
-                        maxBytes,
-                        out error))
-                {
-                    text = null;
-                    return false;
-                }
-
+                    Utf8.GetString(
+                        bytes,
+                        offset,
+                        bytes.Length -
+                        offset);
                 return true;
             }
             catch (Exception exception)
