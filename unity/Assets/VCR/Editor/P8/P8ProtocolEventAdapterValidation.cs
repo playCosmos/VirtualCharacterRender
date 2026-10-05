@@ -266,6 +266,137 @@ namespace VCR.Editor.P8
                     hub.MaxDispatchPerFrame == 2048,
                     "event hub must enforce maximum queue/dispatch bounds at runtime",
                     failures);
+
+                var webSocketInjection =
+                    root.AddComponent<
+                        WebSocketEventInjectionAdapter>();
+                var webSocketTransport =
+                    root.AddComponent<
+                        WebSocketEventClientTransport>();
+                var oscReceiver =
+                    root.AddComponent<
+                        OscNormalizedEventUdpReceiver>();
+                var soop =
+                    root.AddComponent<
+                        SoopBridgeEventAdapter>();
+
+                SetPrivateField(
+                    webSocketInjection,
+                    "maxMessageCharacters",
+                    int.MaxValue);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxMessageBytes",
+                    int.MaxValue);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxQueuedMessages",
+                    int.MaxValue);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxDispatchPerFrame",
+                    int.MaxValue);
+                SetPrivateField(
+                    oscReceiver,
+                    "localPort",
+                    int.MaxValue);
+                SetPrivateField(
+                    oscReceiver,
+                    "maxQueuedEvents",
+                    int.MaxValue);
+                SetPrivateField(
+                    oscReceiver,
+                    "maxDispatchPerFrame",
+                    int.MaxValue);
+                SetPrivateField(
+                    soop,
+                    "maxMessageCharacters",
+                    int.MaxValue);
+                SetPrivateField(
+                    soop,
+                    "rememberedEventIds",
+                    int.MaxValue);
+
+                Expect(
+                    webSocketInjection.MaxMessageCharacters ==
+                        262144 &&
+                    webSocketTransport.MaxMessageBytes ==
+                        1048576 &&
+                    webSocketTransport.MaxQueuedMessages ==
+                        8192 &&
+                    webSocketTransport.MaxDispatchPerFrame ==
+                        2048 &&
+                    oscReceiver.LocalPort ==
+                        65535 &&
+                    oscReceiver.MaxQueuedEvents ==
+                        8192 &&
+                    oscReceiver.MaxDispatchPerFrame ==
+                        2048 &&
+                    soop.MaxMessageCharacters ==
+                        262144 &&
+                    soop.RememberedEventIdLimit ==
+                        8192,
+                    "protocol ingress must enforce configured maximum memory/dispatch bounds even when serialized values exceed Inspector ranges",
+                    failures);
+
+                SetPrivateField(
+                    webSocketInjection,
+                    "maxMessageCharacters",
+                    0);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxMessageBytes",
+                    0);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxQueuedMessages",
+                    0);
+                SetPrivateField(
+                    webSocketTransport,
+                    "maxDispatchPerFrame",
+                    0);
+                SetPrivateField(
+                    oscReceiver,
+                    "localPort",
+                    0);
+                SetPrivateField(
+                    oscReceiver,
+                    "maxQueuedEvents",
+                    0);
+                SetPrivateField(
+                    oscReceiver,
+                    "maxDispatchPerFrame",
+                    0);
+                SetPrivateField(
+                    soop,
+                    "maxMessageCharacters",
+                    0);
+                SetPrivateField(
+                    soop,
+                    "rememberedEventIds",
+                    0);
+
+                Expect(
+                    webSocketInjection.MaxMessageCharacters ==
+                        256 &&
+                    webSocketTransport.MaxMessageBytes ==
+                        1024 &&
+                    webSocketTransport.MaxQueuedMessages ==
+                        32 &&
+                    webSocketTransport.MaxDispatchPerFrame ==
+                        1 &&
+                    oscReceiver.LocalPort ==
+                        1 &&
+                    oscReceiver.MaxQueuedEvents ==
+                        32 &&
+                    oscReceiver.MaxDispatchPerFrame ==
+                        1 &&
+                    soop.MaxMessageCharacters ==
+                        256 &&
+                    soop.RememberedEventIdLimit ==
+                        32,
+                    "protocol ingress must also enforce minimum runtime bounds for corrupted serialized values",
+                    failures);
             }
             catch (Exception exception)
             {
