@@ -486,6 +486,26 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.pending_submissions",
+                _faceSource?.PendingSubmissionCount ?? 0,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.pending_submissions",
+                _holisticSource?.PendingSubmissionCount ?? 0,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.face.timestamp_evictions",
+                _faceSource?.SubmissionTimestampEvictions ?? 0L,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.mediapipe.holistic.timestamp_evictions",
+                _holisticSource?.SubmissionTimestampEvictions ?? 0L,
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "tracking.mediapipe.face.submitted",
                 Interlocked.Read(ref _faceSubmitted),
                 "count"));
