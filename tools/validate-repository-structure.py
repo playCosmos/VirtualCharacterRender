@@ -54,6 +54,7 @@ required_latest_chain = [
     VCR / "Editor" / "P13" / "P13BatchValidation.cs",
     VCR / "Editor" / "P13" / "VCR.Editor.P13.asmdef",
     VCR / "Runtime" / "Tracking" / "SnapshotArrayOwnership.cs",
+    VCR / "Runtime" / "Tracking" / "BorrowedHumanoidPose.cs",
     VCR / "Runtime" / "Tracking" / "MediaPipe" / "PendingSubmissionTracker.cs",
     ROOT / "tools" / "validate-p12-source-free.sh",
     ROOT / "tools" / "validate-p12-source-free.ps1",
@@ -83,6 +84,28 @@ def forbid_source_pattern(path: Path, pattern: str, label: str) -> None:
     if re.search(pattern, source, flags=re.MULTILINE):
         errors.append(
             f"hot-path source regression: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+def require_source_order(
+    path: Path,
+    first: str,
+    second: str,
+    label: str,
+) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    first_index = source.find(first)
+    second_index = source.find(second)
+    if (
+        first_index < 0
+        or second_index < 0
+        or first_index >= second_index
+    ):
+        errors.append(
+            f"source ordering contract missing: {label}: {path.relative_to(ROOT)}"
         )
 
 
@@ -118,6 +141,17 @@ require_source_contains(
     vmc_sender,
     "includeExpressions:",
     "VMC selective capture must propagate the expression-send setting",
+)
+require_source_contains(
+    vmc_sender,
+    "IBorrowedHumanoidPoseProvider",
+    "VMC sender must prefer synchronous borrowed poses when lifetime-safe",
+)
+require_source_order(
+    vmc_sender,
+    "selective.TryCaptureMotion(",
+    "borrowedProvider.TryBorrowHumanoidPose(",
+    "VMC sender must finish expression capture before borrowing provider-owned pose buffers",
 )
 forbid_source_pattern(
     vmc_sender,
@@ -184,6 +218,23 @@ for mediapipe_submission_source in mediapipe_submission_sources:
         "MediaPipe sources must not drop all in-flight latency correlation at capacity",
     )
 
+borrowed_pose_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "BorrowedHumanoidPose.cs"
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "IBorrowedHumanoidPoseProvider",
+    "borrowed humanoid pose providers must retain an explicit synchronous contract",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "The backing arrays remain owned by the provider",
+    "borrowed pose lifetime must remain documented next to the type",
+)
+
 motion_snapshot_contract = (
     VCR
     / "Runtime"
@@ -211,6 +262,16 @@ require_source_contains(
     vrm_snapshot_provider,
     "request.IncludeExpressions",
     "VRM snapshot provider must skip expression capture when not requested",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "IBorrowedHumanoidPoseProvider",
+    "VRM snapshot provider must expose reusable borrowed pose buffers for synchronous consumers",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "SamplePose(",
+    "VRM owned and borrowed pose paths must share one sampling implementation",
 )
 require_source_contains(
     vrm_snapshot_provider,
