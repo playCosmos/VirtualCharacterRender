@@ -160,92 +160,196 @@ namespace VCR.Runtime.Tracking.Routing
 
         public void SetPreferredFaceProvider(MonoBehaviour provider)
         {
-            preferredFaceProviderBehaviour = provider;
-            _preferredFaceProvider = provider as ITrackingFrameProvider;
-            _preferredPresence = provider as ITrackingPresenceProvider;
-            _preferredFaceHealth =
-                provider as ITrackingSourceHealthProvider;
-            ResetFaceSelection();
+            preferredFaceProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
+            AssignPreferredFaceProvider(
+                preferredFaceProviderBehaviour);
         }
 
         public void SetFallbackProvider(MonoBehaviour provider)
         {
-            RestoreFallbackFace();
-
-            fallbackProviderBehaviour = provider;
-            _fallbackProvider = provider as ITrackingFrameProvider;
-            _fallbackPresence = provider as ITrackingPresenceProvider;
-            _fallbackHealth =
-                provider as ITrackingSourceHealthProvider;
-            _fallbackFaceActivation =
-                provider as IFaceTrackingActivationControl;
-
-            ResetFaceSelection();
-            ResetBodySelection();
+            fallbackProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
+            AssignFallbackProvider(
+                fallbackProviderBehaviour);
         }
 
         public void SetExternalPoseProvider(MonoBehaviour provider)
         {
-            externalPoseProviderBehaviour = provider;
-            _externalPoseProvider = provider as ITrackingFrameProvider;
-            _externalPosePresence = provider as ITrackingPresenceProvider;
-            _externalPoseHealth =
-                provider as ITrackingSourceHealthProvider;
-            ResetPoseSelection();
+            externalPoseProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
+            AssignExternalPoseProvider(
+                externalPoseProviderBehaviour);
         }
 
         public void SetExpressionFallbackProvider(
             MonoBehaviour provider)
         {
-            expressionFallbackProviderBehaviour = provider;
-            _expressionFallbackProvider =
-                provider as ITrackingFrameProvider;
+            expressionFallbackProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
+            AssignExpressionFallbackProvider(
+                expressionFallbackProviderBehaviour);
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
+        private void AssignPreferredFaceProvider(
+            MonoBehaviour behaviour)
+        {
+            var next =
+                behaviour != null
+                    ? behaviour as ITrackingFrameProvider
+                    : null;
+
+            if (ReferenceEquals(
+                    _preferredFaceProvider,
+                    next) &&
+                IsServiceAlive(
+                    _preferredFaceProvider))
+            {
+                return;
+            }
+
+            _preferredFaceProvider = next;
+            _preferredPresence =
+                behaviour != null
+                    ? behaviour as ITrackingPresenceProvider
+                    : null;
+            _preferredFaceHealth =
+                behaviour != null
+                    ? behaviour as ITrackingSourceHealthProvider
+                    : null;
+            ResetFaceSelection();
+        }
+
+        private void AssignFallbackProvider(
+            MonoBehaviour behaviour)
+        {
+            var next =
+                behaviour != null
+                    ? behaviour as ITrackingFrameProvider
+                    : null;
+
+            if (ReferenceEquals(
+                    _fallbackProvider,
+                    next) &&
+                IsServiceAlive(
+                    _fallbackProvider))
+            {
+                return;
+            }
+
+            RestoreFallbackFace();
+
+            _fallbackProvider = next;
+            _fallbackPresence =
+                behaviour != null
+                    ? behaviour as ITrackingPresenceProvider
+                    : null;
+            _fallbackHealth =
+                behaviour != null
+                    ? behaviour as ITrackingSourceHealthProvider
+                    : null;
+            _fallbackFaceActivation =
+                behaviour != null
+                    ? behaviour as IFaceTrackingActivationControl
+                    : null;
+
+            ResetFaceSelection();
+            ResetBodySelection();
+        }
+
+        private void AssignExternalPoseProvider(
+            MonoBehaviour behaviour)
+        {
+            var next =
+                behaviour != null
+                    ? behaviour as ITrackingFrameProvider
+                    : null;
+
+            if (ReferenceEquals(
+                    _externalPoseProvider,
+                    next) &&
+                IsServiceAlive(
+                    _externalPoseProvider))
+            {
+                return;
+            }
+
+            _externalPoseProvider = next;
+            _externalPosePresence =
+                behaviour != null
+                    ? behaviour as ITrackingPresenceProvider
+                    : null;
+            _externalPoseHealth =
+                behaviour != null
+                    ? behaviour as ITrackingSourceHealthProvider
+                    : null;
+            ResetPoseSelection();
+        }
+
+        private void AssignExpressionFallbackProvider(
+            MonoBehaviour behaviour)
+        {
+            var next =
+                behaviour != null
+                    ? behaviour as ITrackingFrameProvider
+                    : null;
+
+            if (ReferenceEquals(
+                    _expressionFallbackProvider,
+                    next) &&
+                IsServiceAlive(
+                    _expressionFallbackProvider))
+            {
+                return;
+            }
+
+            _expressionFallbackProvider = next;
             _expressionFallbackHealth =
-                provider as ITrackingSourceHealthProvider;
+                behaviour != null
+                    ? behaviour as ITrackingSourceHealthProvider
+                    : null;
             ResetExpressionSelection();
         }
 
         private void ResolveProviders()
         {
-            if (preferredFaceProviderBehaviour != null)
-            {
-                _preferredFaceProvider ??=
-                    preferredFaceProviderBehaviour as ITrackingFrameProvider;
-                _preferredPresence ??=
-                    preferredFaceProviderBehaviour as ITrackingPresenceProvider;
-                _preferredFaceHealth ??=
-                    preferredFaceProviderBehaviour as ITrackingSourceHealthProvider;
-            }
-
-            if (fallbackProviderBehaviour != null)
-            {
-                _fallbackProvider ??=
-                    fallbackProviderBehaviour as ITrackingFrameProvider;
-                _fallbackPresence ??=
-                    fallbackProviderBehaviour as ITrackingPresenceProvider;
-                _fallbackHealth ??=
-                    fallbackProviderBehaviour as ITrackingSourceHealthProvider;
-                _fallbackFaceActivation ??=
-                    fallbackProviderBehaviour as IFaceTrackingActivationControl;
-            }
-
-            if (externalPoseProviderBehaviour != null)
-            {
-                _externalPoseProvider ??=
-                    externalPoseProviderBehaviour as ITrackingFrameProvider;
-                _externalPosePresence ??=
-                    externalPoseProviderBehaviour as ITrackingPresenceProvider;
-                _externalPoseHealth ??=
-                    externalPoseProviderBehaviour as ITrackingSourceHealthProvider;
-            }
-
-            if (expressionFallbackProviderBehaviour != null)
-            {
-                _expressionFallbackProvider ??=
-                    expressionFallbackProviderBehaviour as ITrackingFrameProvider;
-                _expressionFallbackHealth ??=
-                    expressionFallbackProviderBehaviour as ITrackingSourceHealthProvider;
-            }
+            AssignPreferredFaceProvider(
+                preferredFaceProviderBehaviour != null
+                    ? preferredFaceProviderBehaviour
+                    : null);
+            AssignFallbackProvider(
+                fallbackProviderBehaviour != null
+                    ? fallbackProviderBehaviour
+                    : null);
+            AssignExternalPoseProvider(
+                externalPoseProviderBehaviour != null
+                    ? externalPoseProviderBehaviour
+                    : null);
+            AssignExpressionFallbackProvider(
+                expressionFallbackProviderBehaviour != null
+                    ? expressionFallbackProviderBehaviour
+                    : null);
         }
 
         private FaceSourceSelection SelectFaceSource()
@@ -287,7 +391,7 @@ namespace VCR.Runtime.Tracking.Routing
             ITrackingPresenceProvider presenceProvider,
             ITrackingSourceHealthProvider healthProvider)
         {
-            if (provider == null ||
+            if (!IsServiceAlive(provider) ||
                 !IsSourceHealthUsable(
                     healthProvider,
                     TrackingRegion.Face))
@@ -295,7 +399,7 @@ namespace VCR.Runtime.Tracking.Routing
                 return false;
             }
 
-            if (presenceProvider != null)
+            if (IsServiceAlive(presenceProvider))
             {
                 var presence =
                     presenceProvider.Presence;
@@ -352,7 +456,7 @@ namespace VCR.Runtime.Tracking.Routing
         private void UpdateFallbackFaceActivation()
         {
             if (!disableFallbackFaceWhenPreferred ||
-                _fallbackFaceActivation == null)
+                !IsServiceAlive(_fallbackFaceActivation))
             {
                 return;
             }
@@ -387,7 +491,7 @@ namespace VCR.Runtime.Tracking.Routing
                         ? _fallbackProvider
                         : null;
 
-            if (selectedProvider == null ||
+            if (!IsServiceAlive(selectedProvider) ||
                 !selectedProvider.TryGetLatestFace(
                     out var selected) ||
                 selected?.Face == null)
@@ -426,7 +530,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void UpdateBodyHandsSnapshot()
         {
-            if (_fallbackProvider == null ||
+            if (!IsServiceAlive(_fallbackProvider) ||
                 !IsSourceHealthUsable(
                     _fallbackHealth,
                     TrackingRegion.UpperBody) ||
@@ -614,7 +718,7 @@ namespace VCR.Runtime.Tracking.Routing
         {
             frame = null;
 
-            if (provider == null ||
+            if (!IsServiceAlive(provider) ||
                 !IsSourceHealthUsable(
                     healthProvider,
                     TrackingRegion.Expressions))
@@ -668,9 +772,18 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            var preferred = _preferredPresence?.Presence;
-            var fallback = _fallbackPresence?.Presence;
-            var external = _externalPosePresence?.Presence;
+            TrackingPresenceSnapshot? preferred =
+                IsServiceAlive(_preferredPresence)
+                    ? _preferredPresence.Presence
+                    : null;
+            TrackingPresenceSnapshot? fallback =
+                IsServiceAlive(_fallbackPresence)
+                    ? _fallbackPresence.Presence
+                    : null;
+            TrackingPresenceSnapshot? external =
+                IsServiceAlive(_externalPosePresence)
+                    ? _externalPosePresence.Presence
+                    : null;
 
             var preferredFaceAvailable =
                 preferred.HasValue &&
@@ -689,7 +802,8 @@ namespace VCR.Runtime.Tracking.Routing
                 (fallbackFaceAvailable &&
                  fallback.Value.FaceSubjectEvidence);
 
-            var bodyConfigured = _fallbackProvider != null;
+            var bodyConfigured =
+                IsServiceAlive(_fallbackProvider);
             var bodyAvailable =
                 fallback.HasValue &&
                 fallback.Value.BodyHandsSourceAvailable;
@@ -699,11 +813,11 @@ namespace VCR.Runtime.Tracking.Routing
                 fallback.Value.BodyHandsSubjectEvidence;
 
             var faceConfigured =
-                _preferredFaceProvider != null ||
-                _fallbackProvider != null;
+                IsServiceAlive(_preferredFaceProvider) ||
+                IsServiceAlive(_fallbackProvider);
 
             var fullBodyConfigured =
-                _externalPoseProvider != null;
+                IsServiceAlive(_externalPoseProvider);
 
             var fullBodyAvailable =
                 external.HasValue &&
@@ -839,8 +953,8 @@ namespace VCR.Runtime.Tracking.Routing
                 MonotonicClock.NowMicroseconds();
 
             var fallbackFaceInferenceEnabled =
-                _fallbackProvider != null &&
-                (_fallbackFaceActivation == null ||
+                IsServiceAlive(_fallbackProvider) &&
+                (!IsServiceAlive(_fallbackFaceActivation) ||
                  _fallbackFaceActivation.FaceTrackingEnabled);
 
             _routeStatus =
@@ -886,7 +1000,7 @@ namespace VCR.Runtime.Tracking.Routing
             ITrackingSourceHealthProvider provider,
             TrackingRegion region)
         {
-            if (provider != null &&
+            if (IsServiceAlive(provider) &&
                 provider.TryGetSourceHealth(
                     region,
                     out var snapshot))
@@ -901,7 +1015,7 @@ namespace VCR.Runtime.Tracking.Routing
             ITrackingSourceHealthProvider provider,
             TrackingRegion region)
         {
-            if (provider == null)
+            if (!IsServiceAlive(provider))
             {
                 return true;
             }
@@ -919,7 +1033,7 @@ namespace VCR.Runtime.Tracking.Routing
             ITrackingSourceHealthProvider provider,
             TrackingRegion region)
         {
-            if (provider == null ||
+            if (!IsServiceAlive(provider) ||
                 !provider.TryGetSourceHealth(
                     region,
                     out var snapshot))
@@ -1004,7 +1118,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void RestoreFallbackFace()
         {
-            if (_fallbackFaceActivation != null &&
+            if (IsServiceAlive(_fallbackFaceActivation) &&
                 !_fallbackFaceActivation.FaceTrackingEnabled)
             {
                 _fallbackFaceActivation.SetFaceTrackingEnabled(true);
