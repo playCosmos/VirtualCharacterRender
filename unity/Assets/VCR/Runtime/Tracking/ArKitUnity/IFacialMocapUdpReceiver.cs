@@ -586,14 +586,16 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         headPositionScale);
             }
 
-            var normalized = new NormalizedFaceState(
-                new TrackingQuaternion(
-                    rotation.x,
-                    rotation.y,
-                    rotation.z,
-                    rotation.w),
-                position,
-                raw.Coefficients);
+            var normalized =
+                new NormalizedFaceState(
+                    new TrackingQuaternion(
+                        rotation.x,
+                        rotation.y,
+                        rotation.z,
+                        rotation.w),
+                    position,
+                    raw.DetachCoefficientOwnership(),
+                    SnapshotArrayOwnership.Transfer);
 
             _source.Publish(
                 normalized,
