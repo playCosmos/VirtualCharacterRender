@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Core;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Tracking.ArKit;
 using VCR.Runtime.Tracking.ArKitUnity;
@@ -108,6 +109,19 @@ namespace VCR.Editor.P3
                     source.Health.State ==
                     TrackingSourceHealthState.Stopped,
                     "ARKit face source must stop cleanly",
+                    failures);
+
+                var latestBuffer =
+                    new LatestValueBuffer<
+                        IFacialMocapFrame>();
+                latestBuffer.Publish(
+                    new IFacialMocapFrame());
+                latestBuffer.Clear();
+
+                Expect(
+                    !latestBuffer.HasValue &&
+                    latestBuffer.TakeLatest() == null,
+                    "latest-value buffers must support explicit stale-frame discard across receiver lifecycles",
                     failures);
 
                 var webcamStatus =
