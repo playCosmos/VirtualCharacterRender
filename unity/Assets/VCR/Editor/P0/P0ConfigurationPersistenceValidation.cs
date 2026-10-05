@@ -39,15 +39,26 @@ namespace VCR.Editor.P0
                 configuration.EnvironmentStateId =
                     "bounded-test";
 
-                var pass =
+                var saved =
                     store.TrySave(
                         configuration,
-                        out var saveError) &&
+                        out var saveError);
+
+                var loaded =
+                    SceneRuntimeConfiguration.Default;
+                string loadError =
+                    null;
+                var loadedSuccessfully =
+                    saved &&
+                    store.TryLoad(
+                        out loaded,
+                        out loadError);
+
+                var pass =
+                    saved &&
                     string.IsNullOrEmpty(
                         saveError) &&
-                    store.TryLoad(
-                        out var loaded,
-                        out var loadError) &&
+                    loadedSuccessfully &&
                     string.IsNullOrEmpty(
                         loadError) &&
                     loaded.EnvironmentStateId ==
