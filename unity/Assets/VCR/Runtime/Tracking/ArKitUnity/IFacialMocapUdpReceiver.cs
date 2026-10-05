@@ -27,6 +27,14 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         ITrackingRuntimeControl,
         IRuntimeMetricsSource
     {
+        private const int MaxDatagramBytes =
+            16 * 1024;
+
+        private static readonly UTF8Encoding StrictUtf8 =
+            new(
+                encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
+
         [Header("iOS sender")]
         [SerializeField] private string iosIPv4Address = "";
         [SerializeField, Range(1, 65535)] private int remotePort =
@@ -65,6 +73,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         private long _packetCount;
         private long _rejectedSenderCount;
         private long _parseFailureCount;
+        private long _oversizedDatagramCount;
+        private long _invalidUtf8Count;
         private long _handshakeCount;
         private long _socketErrorCount;
 
@@ -421,13 +431,24 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     var bytes =
                         receiver.Receive(
                             ref remote);
-                    if (bytes == null || bytes.Length == 0)
+                    if (bytes == null ||
+                        bytes.Length == 0)
                     {
                         continue;
                     }
 
                     Interlocked.Increment(
                         ref _datagramCount);
+
+                    if (bytes.Length >
+                        MaxDatagramBytes)
+                    {
+                        Interlocked.Increment(
+                            ref _oversizedDatagramCount);
+                        Interlocked.Increment(
+                            ref _parseFailureCount);
+                        continue;
+                    }
 
                     if (acceptedAddress != null &&
                         !remote.Address.Equals(
@@ -438,7 +459,23 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                         continue;
                     }
 
-                    var text = Encoding.UTF8.GetString(bytes);
+                    string text;
+
+                    try
+                    {
+                        text =
+                            StrictUtf8.GetString(
+                                bytes);
+                    }
+                    catch (DecoderFallbackException)
+                    {
+                        Interlocked.Increment(
+                            ref _invalidUtf8Count);
+                        Interlocked.Increment(
+                            ref _parseFailureCount);
+                        continue;
+                    }
+
                     if (IFacialMocapFrameParser.TryParse(
                         text,
                         out var frame))
@@ -582,6 +619,18 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             output.Add(new RuntimeMetric(
                 "tracking.arkit.ifacialmocap.parse_failures",
                 Interlocked.Read(ref _parseFailureCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.oversized_datagrams",
+                Interlocked.Read(
+                    ref _oversizedDatagramCount),
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "tracking.arkit.ifacialmocap.invalid_utf8",
+                Interlocked.Read(
+                    ref _invalidUtf8Count),
                 "count"));
 
             output.Add(new RuntimeMetric(
