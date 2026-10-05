@@ -1122,6 +1122,39 @@ namespace VCR.Editor.P8
                 "SOOP chat bridge message must map to normalized chat event",
                 failures);
 
+            var oversizedEventId =
+                new SoopBridgeMessage
+                {
+                    version =
+                        SoopBridgeEventMapper
+                            .CurrentVersion,
+                    type =
+                        SoopBridgeEventMapper
+                            .ChatType,
+                    eventId =
+                        new string(
+                            'x',
+                            SoopBridgeEventMapper
+                                .MaxEventIdLength +
+                            1),
+                    userId =
+                        "viewer",
+                    text =
+                        "hello"
+                };
+
+            Expect(
+                !SoopBridgeEventMapper
+                    .TryCreateEvent(
+                        oversizedEventId,
+                        2001,
+                        out _,
+                        out var eventIdError) &&
+                !string.IsNullOrWhiteSpace(
+                    eventIdError),
+                "SOOP bridge mapper must reject oversized event ids before they can enter dedupe state",
+                failures);
+
             var donation =
                 new SoopBridgeMessage
                 {
