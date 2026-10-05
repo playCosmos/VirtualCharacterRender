@@ -23,6 +23,8 @@ namespace VCR.Runtime.Application
 
         private const long MaxProfileBytes =
             16L * 1024L * 1024L;
+        public const int MaxPresets = 512;
+        public const int MaxAccessoriesPerPreset = 64;
 
         private readonly string _directory;
 
@@ -130,6 +132,13 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
+                if (!TryValidatePresetBounds(
+                        profile.Presets,
+                        out error))
+                {
+                    return false;
+                }
+
                 presets =
                     ClonePresets(
                         profile.Presets);
@@ -154,6 +163,13 @@ namespace VCR.Runtime.Application
             if (!TryNormalizeCharacterPath(
                     characterPath,
                     out var normalized,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!TryValidatePresetBounds(
+                    presets,
                     out error))
             {
                 return false;
@@ -325,6 +341,45 @@ namespace VCR.Runtime.Application
                     exception.Message;
                 return false;
             }
+        }
+
+        private static bool TryValidatePresetBounds(
+            AppearancePreset[] presets,
+            out string error)
+        {
+            error = null;
+            presets ??=
+                Array.Empty<AppearancePreset>();
+
+            if (presets.Length >
+                MaxPresets)
+            {
+                error =
+                    $"Appearance profile contains {presets.Length} presets; limit is {MaxPresets}.";
+                return false;
+            }
+
+            foreach (var preset in presets)
+            {
+                if (preset == null)
+                {
+                    continue;
+                }
+
+                var accessoryCount =
+                    preset.Accessories?.Length ??
+                    0;
+
+                if (accessoryCount >
+                    MaxAccessoriesPerPreset)
+                {
+                    error =
+                        $"Appearance preset '{preset.Id ?? "<unnamed>"}' contains {accessoryCount} accessories; limit is {MaxAccessoriesPerPreset}.";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static AppearancePreset[]
