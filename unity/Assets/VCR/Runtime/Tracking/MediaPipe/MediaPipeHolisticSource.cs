@@ -178,6 +178,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         _landmarker;
                     _landmarker = null;
                     _submittedAtUs.Clear();
+                    _bridge.TryTakeLatest(
+                        out _);
 
                     _health =
                         new TrackingSourceHealth(
@@ -217,6 +219,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         _landmarker;
                     _landmarker = null;
                     _submittedAtUs.Clear();
+                    _bridge.TryTakeLatest(
+                        out _);
 
                     _health =
                         new TrackingSourceHealth(
