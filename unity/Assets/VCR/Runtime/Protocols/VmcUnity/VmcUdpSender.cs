@@ -50,9 +50,15 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private long _packetCount;
         private long _errorCount;
+        private long _borrowedPosePacketCount;
+        private long _snapshotPosePacketCount;
 
         public long PacketCount => _packetCount;
         public long ErrorCount => _errorCount;
+        public long BorrowedPosePacketCount =>
+            _borrowedPosePacketCount;
+        public long SnapshotPosePacketCount =>
+            _snapshotPosePacketCount;
         public int RemotePort => remotePort;
 
         public bool IsLoopbackDestination
@@ -122,43 +128,100 @@ namespace VCR.Runtime.Protocols.VmcUnity
             var interval = 1.0 / Math.Max(1, sendRateHz);
             _nextSendAt = now + interval;
 
-            TrackingFrame frame;
-            bool captured;
-
-            if (_snapshotProvider is
-                ISelectiveNormalizedMotionSnapshotProvider selective)
-            {
-                var request =
-                    new NormalizedMotionSnapshotRequest(
-                        includeHumanoidPose: true,
-                        includeExpressions:
-                            sendExpressions);
-
-                captured =
-                    selective.TryCaptureMotion(
-                        in request,
-                        out frame);
-            }
-            else
-            {
-                captured =
-                    _snapshotProvider
-                        .TryCaptureMotion(
-                            out frame);
-            }
-
-            if (!captured ||
-                frame?.HumanoidPose == null)
-            {
-                return;
-            }
-
             try
             {
-                var packetLength =
-                    BuildBundle(
-                        frame,
-                        (float)now);
+                int packetLength;
+
+                if (_snapshotProvider is
+                    IBorrowedHumanoidPoseProvider borrowedProvider &&
+                    borrowedProvider.TryBorrowHumanoidPose(
+                        out var borrowedPose))
+                {
+                    NormalizedExpressionState expressions =
+                        null;
+
+                    if (sendExpressions)
+                    {
+                        if (_snapshotProvider is
+                            ISelectiveNormalizedMotionSnapshotProvider selective)
+                        {
+                            var expressionRequest =
+                                new NormalizedMotionSnapshotRequest(
+                                    includeHumanoidPose: false,
+                                    includeExpressions: true);
+
+                            if (!selective.TryCaptureMotion(
+                                    in expressionRequest,
+                                    out var expressionFrame))
+                            {
+                                return;
+                            }
+
+                            expressions =
+                                expressionFrame?
+                                    .Expressions;
+                        }
+                        else
+                        {
+                            if (!_snapshotProvider.TryCaptureMotion(
+                                    out var expressionFrame))
+                            {
+                                return;
+                            }
+
+                            expressions =
+                                expressionFrame?
+                                    .Expressions;
+                        }
+                    }
+
+                    packetLength =
+                        BuildBundle(
+                            in borrowedPose,
+                            expressions,
+                            (float)now);
+                    _borrowedPosePacketCount++;
+                }
+                else
+                {
+                    TrackingFrame frame;
+                    bool captured;
+
+                    if (_snapshotProvider is
+                        ISelectiveNormalizedMotionSnapshotProvider selective)
+                    {
+                        var request =
+                            new NormalizedMotionSnapshotRequest(
+                                includeHumanoidPose: true,
+                                includeExpressions:
+                                    sendExpressions);
+
+                        captured =
+                            selective.TryCaptureMotion(
+                                in request,
+                                out frame);
+                    }
+                    else
+                    {
+                        captured =
+                            _snapshotProvider
+                                .TryCaptureMotion(
+                                    out frame);
+                    }
+
+                    if (!captured ||
+                        frame?.HumanoidPose == null)
+                    {
+                        return;
+                    }
+
+                    packetLength =
+                        BuildBundle(
+                            frame,
+                            (float)now);
+                    _snapshotPosePacketCount++;
+                }
+
                 _client.Send(
                     _packetScratch,
                     packetLength,
@@ -182,6 +245,53 @@ namespace VCR.Runtime.Protocols.VmcUnity
             TrackingFrame frame,
             float relativeTime)
         {
+            var pose =
+                frame?.HumanoidPose ??
+                throw new InvalidOperationException(
+                    "VMC sender requires a humanoid pose snapshot.");
+
+            var packetLength =
+                BeginBundle(
+                    relativeTime);
+
+            AppendPose(
+                pose,
+                ref packetLength);
+            AppendOptionalExpressions(
+                frame.Expressions,
+                ref packetLength);
+
+            return packetLength;
+        }
+
+        private int BuildBundle(
+            in BorrowedHumanoidPose pose,
+            NormalizedExpressionState expressions,
+            float relativeTime)
+        {
+            if (!pose.IsValid)
+            {
+                throw new InvalidOperationException(
+                    "VMC sender received an invalid borrowed humanoid pose.");
+            }
+
+            var packetLength =
+                BeginBundle(
+                    relativeTime);
+
+            AppendPose(
+                in pose,
+                ref packetLength);
+            AppendOptionalExpressions(
+                expressions,
+                ref packetLength);
+
+            return packetLength;
+        }
+
+        private int BeginBundle(
+            float relativeTime)
+        {
             if (!OscPacketWriter.TryBeginBundle(
                     _packetScratch,
                     out var packetLength))
@@ -196,16 +306,15 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 relativeTime,
                 ref packetLength);
 
-            var pose =
-                frame.HumanoidPose;
+            return packetLength;
+        }
 
-            if (pose.PoseSpace !=
-                HumanoidPoseSpace.OriginalLocal)
-            {
-                throw new InvalidOperationException(
-                    "VMC sender requires OriginalLocal humanoid bones by default. " +
-                    "Capture original VRM humanoid bones or add an explicit normalized-bone sender mode.");
-            }
+        private void AppendPose(
+            HumanoidPoseState pose,
+            ref int packetLength)
+        {
+            ValidatePoseSpace(
+                pose.PoseSpace);
 
             if (sendRoot)
             {
@@ -232,38 +341,107 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     continue;
                 }
 
-                var name =
-                    HumanoidBoneNames
-                        .GetCanonical(
-                            bone);
+                AppendBoneMessage(
+                    bone,
+                    bonePose,
+                    ref packetLength);
+            }
+        }
 
-                if (string.IsNullOrEmpty(
-                        name))
+        private void AppendPose(
+            in BorrowedHumanoidPose pose,
+            ref int packetLength)
+        {
+            ValidatePoseSpace(
+                pose.PoseSpace);
+
+            if (sendRoot)
+            {
+                AppendTransformMessage(
+                    "/VMC/Ext/Root/Pos",
+                    "root",
+                    pose.RootPosition,
+                    pose.RootRotation,
+                    ref packetLength);
+            }
+
+            for (var i = 0;
+                 i <
+                 (int)HumanoidBoneId.Count;
+                 i++)
+            {
+                var bone =
+                    (HumanoidBoneId)i;
+
+                if (!pose.TryGet(
+                        bone,
+                        out var bonePose))
                 {
                     continue;
                 }
 
-                AppendTransformMessage(
-                    "/VMC/Ext/Bone/Pos",
-                    name,
-                    bonePose.LocalPosition,
-                    bonePose.LocalRotation,
+                AppendBoneMessage(
+                    bone,
+                    bonePose,
                     ref packetLength);
             }
+        }
 
-            if (sendExpressions &&
-                frame.Expressions != null)
+        private void AppendBoneMessage(
+            HumanoidBoneId bone,
+            NormalizedBonePose bonePose,
+            ref int packetLength)
+        {
+            var name =
+                HumanoidBoneNames
+                    .GetCanonical(
+                        bone);
+
+            if (string.IsNullOrEmpty(
+                    name))
             {
-                AppendExpressions(
-                    frame.Expressions,
-                    ref packetLength);
-
-                AppendNoArgumentMessage(
-                    "/VMC/Ext/Blend/Apply",
-                    ref packetLength);
+                return;
             }
 
-            return packetLength;
+            AppendTransformMessage(
+                "/VMC/Ext/Bone/Pos",
+                name,
+                bonePose.LocalPosition,
+                bonePose.LocalRotation,
+                ref packetLength);
+        }
+
+        private static void ValidatePoseSpace(
+            HumanoidPoseSpace poseSpace)
+        {
+            if (poseSpace ==
+                HumanoidPoseSpace.OriginalLocal)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                "VMC sender requires OriginalLocal humanoid bones by default. " +
+                "Capture original VRM humanoid bones or add an explicit normalized-bone sender mode.");
+        }
+
+        private void AppendOptionalExpressions(
+            NormalizedExpressionState expressions,
+            ref int packetLength)
+        {
+            if (!sendExpressions ||
+                expressions == null)
+            {
+                return;
+            }
+
+            AppendExpressions(
+                expressions,
+                ref packetLength);
+
+            AppendNoArgumentMessage(
+                "/VMC/Ext/Blend/Apply",
+                ref packetLength);
         }
 
         private void AppendExpressions(
@@ -449,6 +627,16 @@ namespace VCR.Runtime.Protocols.VmcUnity
             output.Add(new RuntimeMetric(
                 "protocol.vmc.send.errors",
                 ErrorCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.send.borrowed_pose_packets",
+                BorrowedPosePacketCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.send.snapshot_pose_packets",
+                SnapshotPosePacketCount,
                 "count"));
         }
 
