@@ -113,7 +113,8 @@ namespace VCR.Runtime.Character
                     DestroyLoaded(previous);
                 }
 
-                CharacterLoaded?.Invoke(Current);
+                NotifyCharacterLoaded(
+                    Current);
                 return Current;
             }
             catch (OperationCanceledException)
@@ -134,7 +135,8 @@ namespace VCR.Runtime.Character
                     DestroyLoaded(loaded);
                 }
 
-                LoadFailed?.Invoke(exception);
+                NotifyLoadFailed(
+                    exception);
                 throw;
             }
             finally
@@ -167,7 +169,7 @@ namespace VCR.Runtime.Character
 
             current.gameObject.SetActive(false);
             DestroyLoaded(current);
-            CharacterUnloaded?.Invoke();
+            NotifyCharacterUnloaded();
         }
 
         public void CancelPendingLoad()
@@ -284,6 +286,88 @@ namespace VCR.Runtime.Character
             {
                 instance.gameObject.AddComponent<
                     Vrm10MotionSnapshotProvider>();
+            }
+        }
+
+        private void NotifyCharacterLoaded(
+            Vrm10Instance instance)
+        {
+            var subscribers =
+                CharacterLoaded;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<Vrm10Instance> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(
+                        instance);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        exception,
+                        this);
+                }
+            }
+        }
+
+        private void NotifyCharacterUnloaded()
+        {
+            var subscribers =
+                CharacterUnloaded;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        exception,
+                        this);
+                }
+            }
+        }
+
+        private void NotifyLoadFailed(
+            Exception loadException)
+        {
+            var subscribers =
+                LoadFailed;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<Exception> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(
+                        loadException);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        exception,
+                        this);
+                }
             }
         }
 
