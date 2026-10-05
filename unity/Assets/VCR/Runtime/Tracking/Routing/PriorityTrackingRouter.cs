@@ -223,8 +223,9 @@ namespace VCR.Runtime.Tracking.Routing
             if (ReferenceEquals(
                     _preferredFaceProvider,
                     next) &&
-                IsServiceAlive(
-                    _preferredFaceProvider))
+                (next == null ||
+                 IsServiceAlive(
+                     _preferredFaceProvider)))
             {
                 return;
             }
@@ -252,8 +253,9 @@ namespace VCR.Runtime.Tracking.Routing
             if (ReferenceEquals(
                     _fallbackProvider,
                     next) &&
-                IsServiceAlive(
-                    _fallbackProvider))
+                (next == null ||
+                 IsServiceAlive(
+                     _fallbackProvider)))
             {
                 return;
             }
@@ -289,8 +291,9 @@ namespace VCR.Runtime.Tracking.Routing
             if (ReferenceEquals(
                     _externalPoseProvider,
                     next) &&
-                IsServiceAlive(
-                    _externalPoseProvider))
+                (next == null ||
+                 IsServiceAlive(
+                     _externalPoseProvider)))
             {
                 return;
             }
@@ -318,8 +321,9 @@ namespace VCR.Runtime.Tracking.Routing
             if (ReferenceEquals(
                     _expressionFallbackProvider,
                     next) &&
-                IsServiceAlive(
-                    _expressionFallbackProvider))
+                (next == null ||
+                 IsServiceAlive(
+                     _expressionFallbackProvider)))
             {
                 return;
             }
