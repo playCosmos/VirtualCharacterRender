@@ -1,12 +1,16 @@
 using System;
 using System.IO;
 using UnityEngine;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.EventRuntime.Unity
 {
     public sealed class EventRuntimeConfigurationStore
     {
         public const int CurrentVersion = 1;
+
+        private const long MaxFileBytes =
+            16L * 1024L * 1024L;
 
         private readonly string _path;
 
@@ -44,8 +48,17 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             try
             {
-                var json =
-                    File.ReadAllText(_path);
+                if (!BoundedTextFile.TryReadUtf8(
+                        _path,
+                        MaxFileBytes,
+                        out var json,
+                        out var readError))
+                {
+                    error =
+                        "Event runtime configuration load failed: " +
+                        readError;
+                    return false;
+                }
 
                 var envelope =
                     JsonUtility.FromJson<
@@ -118,6 +131,17 @@ namespace VCR.Runtime.EventRuntime.Unity
                     _path + ".tmp";
                 var backupPath =
                     _path + ".bak";
+
+                if (!BoundedTextFile.TryValidateUtf8Size(
+                        json,
+                        MaxFileBytes,
+                        out var sizeError))
+                {
+                    error =
+                        "Event runtime configuration save failed: " +
+                        sizeError;
+                    return false;
+                }
 
                 File.WriteAllText(
                     temporaryPath,
