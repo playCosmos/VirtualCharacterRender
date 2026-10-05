@@ -34,6 +34,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
             "VCR/Models/face_landmarker_v2_with_blendshapes.bytes";
         private const string HolisticModelRelativePath =
             "VCR/Models/holistic_landmarker.bytes";
+        private const long MaxModelBytes =
+            128L * 1024L * 1024L;
 
         [Header("Camera")]
         [SerializeField] private string deviceName = "";
@@ -1074,7 +1076,18 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     path);
             }
 
-            return File.ReadAllBytes(path);
+            if (!BoundedBinaryFile.TryRead(
+                    path,
+                    MaxModelBytes,
+                    out var bytes,
+                    out var error))
+            {
+                throw new IOException(
+                    "MediaPipe model load failed: " +
+                    error);
+            }
+
+            return bytes;
         }
 
         private string SelectDeviceName(
