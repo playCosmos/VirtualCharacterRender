@@ -335,6 +335,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
             _runTask = null;
 
+            DropQueuedMessages();
+
             SetState(
                 WebSocketClientTransportState.Stopped);
         }
@@ -589,7 +591,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
                     await ReceiveLoopAsync(
                         client,
-                        cancellationToken);
+                        cancellationToken,
+                        generation);
                 }
                 catch (OperationCanceledException)
                 {
@@ -655,7 +658,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
         private async Task ReceiveLoopAsync(
             ClientWebSocket client,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            long generation)
         {
             var messageLimit =
                 MaxMessageBytes;
@@ -750,7 +754,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                             offset);
 
                     EnqueueText(
-                        text);
+                        text,
+                        generation);
                 }
                 catch (DecoderFallbackException)
                 {
@@ -770,18 +775,64 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
             lock (_queueSync)
             {
-                _queue.Enqueue(
+                EnqueueTextLocked(
                     message);
-                Interlocked.Increment(
+            }
+        }
+
+        private bool EnqueueText(
+            string message,
+            long generation)
+        {
+            Interlocked.Increment(
+                ref _messagesReceived);
+
+            lock (_queueSync)
+            {
+                if (Interlocked.Read(
+                        ref _generation) !=
+                    generation)
+                {
+                    Interlocked.Increment(
+                        ref _messagesDropped);
+                    return false;
+                }
+
+                EnqueueTextLocked(
+                    message);
+                return true;
+            }
+        }
+
+        private void EnqueueTextLocked(
+            string message)
+        {
+            _queue.Enqueue(
+                message);
+            Interlocked.Increment(
+                ref _queuedCount);
+
+            var limit =
+                MaxQueuedMessages;
+
+            while (Volatile.Read(
+                       ref _queuedCount) >
+                   limit &&
+                   _queue.TryDequeue(
+                       out _))
+            {
+                Interlocked.Decrement(
                     ref _queuedCount);
+                Interlocked.Increment(
+                    ref _messagesDropped);
+            }
+        }
 
-                var limit =
-                    MaxQueuedMessages;
-
-                while (Volatile.Read(
-                           ref _queuedCount) >
-                       limit &&
-                       _queue.TryDequeue(
+        private void DropQueuedMessages()
+        {
+            lock (_queueSync)
+            {
+                while (_queue.TryDequeue(
                            out _))
                 {
                     Interlocked.Decrement(
@@ -789,6 +840,10 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     Interlocked.Increment(
                         ref _messagesDropped);
                 }
+
+                Volatile.Write(
+                    ref _queuedCount,
+                    0);
             }
         }
 
