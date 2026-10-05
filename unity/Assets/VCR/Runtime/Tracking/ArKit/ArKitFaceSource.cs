@@ -113,6 +113,7 @@ namespace VCR.Runtime.Tracking.ArKit
             lock (_sync)
             {
                 _started = false;
+                _latest.TakeLatest();
                 _health = new TrackingSourceHealth(
                     TrackingSourceHealthState.Stopped,
                     _health.LastUpdateTimestampUs,
@@ -132,6 +133,7 @@ namespace VCR.Runtime.Tracking.ArKit
 
                 _started = false;
                 _disposed = true;
+                _latest.TakeLatest();
                 _health = new TrackingSourceHealth(
                     TrackingSourceHealthState.Stopped,
                     _health.LastUpdateTimestampUs,
