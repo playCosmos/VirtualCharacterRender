@@ -123,13 +123,21 @@ namespace VCR.Runtime.Tracking.ArKit
 
         public void Dispose()
         {
-            if (_disposed)
+            lock (_sync)
             {
-                return;
-            }
+                if (_disposed)
+                {
+                    return;
+                }
 
-            Stop();
-            _disposed = true;
+                _started = false;
+                _disposed = true;
+                _health = new TrackingSourceHealth(
+                    TrackingSourceHealthState.Stopped,
+                    _health.LastUpdateTimestampUs,
+                    _health.Confidence,
+                    null);
+            }
         }
 
         private void PublishFrame(
@@ -140,6 +148,7 @@ namespace VCR.Runtime.Tracking.ArKit
             lock (_sync)
             {
                 ThrowIfDisposed();
+
                 if (!_started)
                 {
                     throw new InvalidOperationException(
@@ -151,22 +160,29 @@ namespace VCR.Runtime.Tracking.ArKit
                     timestampUs,
                     subjectDetected ? 1f : 0f,
                     null);
+
+                var sequence =
+                    Interlocked.Increment(
+                        ref _sequence);
+                var regions =
+                    subjectDetected
+                        ? TrackingRegion.Face |
+                          TrackingRegion.Head
+                        : TrackingRegion.None;
+
+                _latest.Publish(
+                    new TrackingFrame(
+                        sequence,
+                        timestampUs,
+                        regions,
+                        subjectDetected ? 1f : 0f,
+                        subjectDetected,
+                        face: face,
+                        sourceId: SourceId,
+                        runtimeTimestampUs:
+                            MonotonicClock
+                                .NowMicroseconds()));
             }
-
-            var sequence = Interlocked.Increment(ref _sequence);
-            var regions = subjectDetected
-                ? TrackingRegion.Face | TrackingRegion.Head
-                : TrackingRegion.None;
-
-            _latest.Publish(new TrackingFrame(
-                sequence,
-                timestampUs,
-                regions,
-                subjectDetected ? 1f : 0f,
-                subjectDetected,
-                face: face,
-                sourceId: SourceId,
-                runtimeTimestampUs: MonotonicClock.NowMicroseconds()));
         }
 
         private void ThrowIfDisposed()
