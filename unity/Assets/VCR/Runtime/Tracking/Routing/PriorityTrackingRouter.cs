@@ -501,6 +501,7 @@ namespace VCR.Runtime.Tracking.Routing
                 selected?.Face == null)
             {
                 _latestFace = null;
+                ResetFaceSelection();
                 return;
             }
 
@@ -542,6 +543,7 @@ namespace VCR.Runtime.Tracking.Routing
                 selected == null)
             {
                 _latestBodyHands = null;
+                ResetBodySelection();
                 return;
             }
 
@@ -585,7 +587,7 @@ namespace VCR.Runtime.Tracking.Routing
         {
             if (!IsServiceAlive(_externalPoseProvider))
             {
-                _latestHumanoidPose = null;
+                ResetHumanoidPoseSelection();
                 return;
             }
 
@@ -603,43 +605,50 @@ namespace VCR.Runtime.Tracking.Routing
 
             if (!usable)
             {
-                _latestHumanoidPose = null;
+                ResetHumanoidPoseSelection();
                 return;
             }
 
-            if (_externalPoseProvider.TryGetLatestHumanoidPose(
-                    out var poseFrame) &&
-                poseFrame?.HumanoidPose != null &&
-                (poseFrame.Sequence != _selectedPoseChildSequence ||
-                 !string.Equals(
-                     poseFrame.SourceId,
-                     _selectedPoseSourceId,
-                     StringComparison.Ordinal)))
+            if (!_externalPoseProvider.TryGetLatestHumanoidPose(
+                    out var poseFrame) ||
+                poseFrame?.HumanoidPose == null)
             {
-                CountSourceSwitch(
-                    _selectedPoseSourceId,
-                    poseFrame.SourceId,
-                    ref _poseSourceSwitches);
-
-                _selectedPoseChildSequence =
-                    poseFrame.Sequence;
-                _selectedPoseSourceId =
-                    poseFrame.SourceId;
-
-                _latestHumanoidPose =
-                    new TrackingFrame(
-                        ++_poseSequence,
-                        poseFrame.SourceTimestampUs,
-                        poseFrame.ValidRegions,
-                        poseFrame.Confidence,
-                        poseFrame.SubjectDetected,
-                        humanoidPose:
-                            poseFrame.HumanoidPose,
-                        sourceId:
-                            poseFrame.SourceId,
-                        runtimeTimestampUs:
-                            poseFrame.RuntimeTimestampUs);
+                ResetHumanoidPoseSelection();
+                return;
             }
+
+            if (poseFrame.Sequence == _selectedPoseChildSequence &&
+                string.Equals(
+                    poseFrame.SourceId,
+                    _selectedPoseSourceId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            CountSourceSwitch(
+                _selectedPoseSourceId,
+                poseFrame.SourceId,
+                ref _poseSourceSwitches);
+
+            _selectedPoseChildSequence =
+                poseFrame.Sequence;
+            _selectedPoseSourceId =
+                poseFrame.SourceId;
+
+            _latestHumanoidPose =
+                new TrackingFrame(
+                    ++_poseSequence,
+                    poseFrame.SourceTimestampUs,
+                    poseFrame.ValidRegions,
+                    poseFrame.Confidence,
+                    poseFrame.SubjectDetected,
+                    humanoidPose:
+                        poseFrame.HumanoidPose,
+                    sourceId:
+                        poseFrame.SourceId,
+                    runtimeTimestampUs:
+                        poseFrame.RuntimeTimestampUs);
         }
 
         private void UpdateExpressionSnapshot()
@@ -1109,10 +1118,15 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void ResetPoseSelection()
         {
+            ResetHumanoidPoseSelection();
+            ResetExpressionSelection();
+        }
+
+        private void ResetHumanoidPoseSelection()
+        {
             _selectedPoseSourceId = null;
             _selectedPoseChildSequence = -1;
             _latestHumanoidPose = null;
-            ResetExpressionSelection();
         }
 
         private void ResetExpressionSelection()
