@@ -107,6 +107,27 @@ namespace VCR.Editor.P0
                         "_BaseColor") ==
                         Color.magenta;
 
+                var colorBeforeDirectNonFinite =
+                    renderer.sharedMaterial.GetColor(
+                        "_BaseColor");
+                var directNonFiniteApplied =
+                    controller.TrySetColor(
+                        slot.Id,
+                        "_BaseColor",
+                        new Color(
+                            float.NaN,
+                            0f,
+                            0f,
+                            1f),
+                        out var directNonFiniteError);
+                var directNonFiniteRejected =
+                    !directNonFiniteApplied &&
+                    !string.IsNullOrWhiteSpace(
+                        directNonFiniteError) &&
+                    renderer.sharedMaterial.GetColor(
+                        "_BaseColor") ==
+                        colorBeforeDirectNonFinite;
+
                 var materialBeforeNonFinite =
                     renderer.sharedMaterial;
                 var nonFinitePreset =
@@ -211,6 +232,7 @@ namespace VCR.Editor.P0
                     cloneApplied &&
                     sourcePreserved &&
                     parameterIsolated &&
+                    directNonFiniteRejected &&
                     nonFiniteRejected &&
                     fallbackRestored &&
                     destroyedResolverFallback &&
@@ -227,7 +249,7 @@ namespace VCR.Editor.P0
                         "VCR P0 material override: FAIL - " +
                         $"applied={applied}, cloneApplied={cloneApplied}, " +
                         $"sourcePreserved={sourcePreserved}, parameterIsolated={parameterIsolated}, " +
-                        $"nonFiniteRejected={nonFiniteRejected}, fallbackRestored={fallbackRestored}, destroyedResolverFallback={destroyedResolverFallback}, " +
+                        $"directNonFiniteRejected={directNonFiniteRejected}, nonFiniteRejected={nonFiniteRejected}, fallbackRestored={fallbackRestored}, destroyedResolverFallback={destroyedResolverFallback}, " +
                         $"applyError='{applyError}', parameterError='{parameterError}', invalidError='{invalidError}', textureError='{textureError}'.");
                 }
             }
