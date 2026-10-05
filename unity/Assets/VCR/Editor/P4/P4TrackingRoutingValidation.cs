@@ -544,7 +544,7 @@ namespace VCR.Editor.P4
                 bodyProvider.SourceId =
                     "restart-body";
                 bodyProvider.Kind =
-                    TrackingSourceKind.MediaPipeHolistic;
+                    TrackingSourceKind.MediaPipeHolisticWebcam;
                 bodyProvider.Regions =
                     TrackingRegion.UpperBody;
                 bodyProvider.HealthState =
