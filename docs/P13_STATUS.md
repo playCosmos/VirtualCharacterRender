@@ -75,6 +75,10 @@ Source behavior:
 - retries a frame after backend apply failure because failed input is not accepted into the cache
 - treats a new frame object as new even if sequence value matches an earlier frame
 - resets frame-object caches across model reload
+- treats destroyed Unity backend/provider objects as unavailable instead of retaining stale interface references
+- internally idle-disables when backend/provider/model/input readiness disappears without unloading an otherwise loaded model
+- re-enables from explicit dependency reconfiguration without forcing a model reload
+- unloads a previously loaded backend before switching the host to a different backend
 - contains backend exceptions/failures and exposes LastError
 - reports model/apply success/failure metrics through `IRuntimeMetricsSource`
 
@@ -137,6 +141,9 @@ The first validator uses fake backend/provider MonoBehaviours and covers:
 - failed-frame retry behavior
 - unload/reload cache reset
 - runtime diagnostics metrics for load/apply success/failure
+- temporary provider removal idle-disable while preserving the loaded model, followed by explicit provider recovery
+- destroyed backend/provider reference rejection
+- previous-backend unload on backend reconfiguration
 - valid face/expression/head-position parameter evaluation
 - authored fallback values for unavailable input domains
 - skip behavior when unavailable inputs have no fallback
