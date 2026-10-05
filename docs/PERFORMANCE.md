@@ -131,7 +131,9 @@ For steady-state tracking and UI operation:
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
-- VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; its bundle message list and OSC argument scratch are reused,
+- VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; OSC serialization writes directly into one reusable packet buffer plus reusable argument scratch, so the sender must not reintroduce per-message `byte[]` bundle staging,
+- iFacialMocap parsing uses span-based token/numeric parsing and span coefficient lookup so packet parts, coefficient names, and head components do not create transient strings; immutable coefficient/frame output still owns its published arrays,
+- OSC receive parsing must not allocate transient bundle-tag or type-tag strings; OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
 - OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
