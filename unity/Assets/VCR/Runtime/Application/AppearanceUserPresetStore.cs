@@ -177,9 +177,6 @@ namespace VCR.Runtime.Application
 
             try
             {
-                Directory.CreateDirectory(
-                    _directory);
-
                 var profile =
                     new AppearanceUserPresetProfile
                     {
@@ -196,76 +193,26 @@ namespace VCR.Runtime.Application
                     JsonUtility.ToJson(
                         profile,
                         prettyPrint: true);
-
                 var path =
                     GetProfilePath(
                         normalized);
-                var temporaryPath =
-                    path + ".tmp";
-                var backupPath =
-                    path + ".bak";
 
-                if (!BoundedTextFile.TryValidateUtf8Size(
+                if (!BoundedTextFile.TryWriteUtf8Atomic(
+                        path,
                         json,
                         MaxProfileBytes,
-                        out var sizeError))
+                        out var writeError))
                 {
                     error =
                         "Appearance profile save failed: " +
-                        sizeError;
+                        writeError;
                     return false;
-                }
-
-                File.WriteAllText(
-                    temporaryPath,
-                    json);
-
-                if (File.Exists(
-                        path))
-                {
-                    File.Replace(
-                        temporaryPath,
-                        path,
-                        backupPath);
-
-                    if (File.Exists(
-                            backupPath))
-                    {
-                        File.Delete(
-                            backupPath);
-                    }
-                }
-                else
-                {
-                    File.Move(
-                        temporaryPath,
-                        path);
                 }
 
                 return true;
             }
             catch (Exception exception)
             {
-                try
-                {
-                    var path =
-                        GetProfilePath(
-                            normalized);
-                    var temporaryPath =
-                        path + ".tmp";
-
-                    if (File.Exists(
-                            temporaryPath))
-                    {
-                        File.Delete(
-                            temporaryPath);
-                    }
-                }
-                catch
-                {
-                    // Preserve the original persistence failure.
-                }
-
                 error =
                     "Appearance profile save failed: " +
                     exception.Message;
