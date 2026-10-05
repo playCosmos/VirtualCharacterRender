@@ -1030,6 +1030,15 @@ namespace VCR.Editor.P1
                 poseTarget.SetTrackingProvider(
                     staleProvider);
 
+                SetPrivateField(
+                    faceTarget,
+                    "_lastFaceSequence",
+                    7L);
+                SetPrivateField(
+                    faceTarget,
+                    "_lastBodySequence",
+                    11L);
+
                 UnityEngine.Object.DestroyImmediate(
                     provider);
 
@@ -1046,8 +1055,14 @@ namespace VCR.Editor.P1
                     GetPrivateField<
                         NormalizedFaceState>(
                             faceTarget,
-                            "_latestFace") == null,
-                    "VRM face/body target must clear a destroyed tracking provider and stale face snapshot before bounded rediscovery",
+                            "_latestFace") == null &&
+                    GetPrivateField<long>(
+                        faceTarget,
+                        "_lastFaceSequence") == -1 &&
+                    GetPrivateField<long>(
+                        faceTarget,
+                        "_lastBodySequence") == -1,
+                    "VRM face/body target must clear a destroyed tracking provider, stale snapshots, and child-sequence caches before bounded rediscovery",
                     failures);
 
                 Expect(
