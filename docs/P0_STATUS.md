@@ -30,6 +30,7 @@ Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated s
 - evidence/performance standalone build menus
 - standalone `--vcr-vrm` real-model autoload
 - optional standalone shader bundle / shader ID / material-slot arguments
+- versioned runtime configuration persistence uses atomic save plus bounded strict UTF-8 load/save (4 MiB); oversized/invalid-encoding files fail closed before JSON parsing
 
 ### Tracking
 
@@ -139,10 +140,11 @@ Current suite:
 3. iFacialMocap parser
 4. OSC/VMC codec
 5. diagnostics math
-6. material override/fallback
-7. normalized events
-8. environment state
-9. lazy capability lifecycle
+6. runtime configuration persistence bounds / atomic-save preservation
+7. material override/fallback
+8. normalized events
+9. environment state
+10. lazy capability lifecycle
 
 Source-free PASS is necessary but not sufficient for P0 completion.
 
