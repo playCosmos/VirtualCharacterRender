@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using VCR.Runtime.Core;
 using Mediapipe;
@@ -17,9 +16,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
     {
         private readonly object _sync = new();
         private readonly object _nativeCallSync = new();
+        private const int PendingSubmissionCapacity =
+            64;
+
         private readonly byte[] _modelBytes;
         private readonly MediaPipeFaceCallbackBridge _bridge;
-        private readonly Dictionary<long, long> _submittedAtUs = new();
+        private readonly PendingSubmissionTracker _pendingSubmissions =
+            new(
+                PendingSubmissionCapacity);
 
         private FaceLandmarker _landmarker;
         private TrackingSourceHealth _health;
@@ -51,9 +55,38 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public TrackingRegion Regions => TrackingRegion.Face | TrackingRegion.Head;
 
-        public long ResultCount => Interlocked.Read(ref _resultCount);
+        public long ResultCount =>
+            Interlocked.Read(
+                ref _resultCount);
+
         public long LastProcessingLatencyUs =>
-            Interlocked.Read(ref _lastProcessingLatencyUs);
+            Interlocked.Read(
+                ref _lastProcessingLatencyUs);
+
+        public int PendingSubmissionCount
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return
+                        _pendingSubmissions.Count;
+                }
+            }
+        }
+
+        public long SubmissionTimestampEvictions
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return
+                        _pendingSubmissions
+                            .EvictionCount;
+                }
+            }
+        }
 
         public TrackingSourceHealth Health
         {
@@ -141,19 +174,28 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         throw new InvalidOperationException(
                             "Tracking source is not started.");
 
-                    if (_submittedAtUs.Count > 64)
-                    {
-                        _submittedAtUs.Clear();
-                    }
-
-                    _submittedAtUs[timestampMillisec] =
+                    _pendingSubmissions.Record(
+                        timestampMillisec,
                         MonotonicClock
-                            .NowMicroseconds();
+                            .NowMicroseconds());
                 }
 
-                landmarker.DetectAsync(
-                    image,
-                    timestampMillisec);
+                try
+                {
+                    landmarker.DetectAsync(
+                        image,
+                        timestampMillisec);
+                }
+                catch
+                {
+                    lock (_sync)
+                    {
+                        _pendingSubmissions.Forget(
+                            timestampMillisec);
+                    }
+
+                    throw;
+                }
             }
         }
 
@@ -177,7 +219,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     landmarker =
                         _landmarker;
                     _landmarker = null;
-                    _submittedAtUs.Clear();
+                    _pendingSubmissions.Clear();
                     _bridge.TryTakeLatest(
                         out _);
 
@@ -218,7 +260,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     landmarker =
                         _landmarker;
                     _landmarker = null;
-                    _submittedAtUs.Clear();
+                    _pendingSubmissions.Clear();
                     _bridge.TryTakeLatest(
                         out _);
 
@@ -261,13 +303,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     return;
                 }
 
-                if (_submittedAtUs.TryGetValue(
-                        timestampMillisec,
-                        out submittedAtUs))
-                {
-                    _submittedAtUs.Remove(
-                        timestampMillisec);
-                }
+                _pendingSubmissions.TryComplete(
+                    timestampMillisec,
+                    out submittedAtUs);
 
                 _bridge.OnResult(in result, image, timestampMillisec);
                 Interlocked.Increment(
