@@ -42,7 +42,8 @@ Static and EventDriven environments still do not add an `Update()` loop to `Basi
 - explicit `IEnvironmentSpaceTarget`
 - Unity `EnvironmentSpaceAnchor`
 - validation before reparenting
-- failed space changes do not partially move content or change the active mode
+- space-target validation/apply exceptions are converted to explicit failure results rather than escaping the runtime
+- failed space changes preserve the active mode and best-effort roll already-applied targets back to the previous mode
 
 ### State transitions
 
@@ -124,6 +125,7 @@ The P6 suite covers:
 - manual/scheduled/state-change update dispatch
 - update-target de-duplication/register/unregister/failure isolation
 - World/Camera/Screen/Character anchors
+- space-target apply-exception fail-closed rollback
 - non-Cut transition rejection without a target
 - Crossfade start/midpoint/completion root semantics
 - CanvasGroup Cut/Fade/Crossfade alpha behavior and Dissolve rejection
