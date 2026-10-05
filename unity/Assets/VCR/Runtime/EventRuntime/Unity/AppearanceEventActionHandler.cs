@@ -36,10 +36,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveRuntime();
-
-            if (!IsServiceAlive(_runtime) ||
-                string.IsNullOrWhiteSpace(
+            if (string.IsNullOrWhiteSpace(
                     command.ActionType))
             {
                 return false;
@@ -60,6 +57,13 @@ namespace VCR.Runtime.EventRuntime.Unity
                     EventActionTypes.AppearanceCancelTransition;
 
             if (!supported)
+            {
+                return false;
+            }
+
+            ResolveRuntime();
+
+            if (!IsServiceAlive(_runtime))
             {
                 return false;
             }
