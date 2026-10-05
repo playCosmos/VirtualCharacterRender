@@ -92,17 +92,19 @@ namespace VCR.Runtime.Protocols.Osc
             int depth)
         {
             var end = offset + length;
-            var cursor = offset;
 
-            if (!TryReadPaddedString(
-                data,
-                end,
-                ref cursor,
-                out var bundleTag) ||
-                bundleTag != "#bundle")
+            if (!StartsWithBundle(
+                    data,
+                    offset,
+                    length))
             {
                 return false;
             }
+
+            // "#bundle\0" is exactly 8 bytes and already 4-byte aligned.
+            // Avoid decoding a transient string for every bundle.
+            var cursor =
+                offset + 8;
 
             // 64-bit OSC timetag. P0 does not schedule future bundles; arrival
             // order is the runtime order.
@@ -164,24 +166,12 @@ namespace VCR.Runtime.Protocols.Osc
                 return false;
             }
 
-            if (!TryReadPaddedString(
-                data,
-                end,
-                ref cursor,
-                out var typeTags) ||
-                string.IsNullOrEmpty(typeTags) ||
-                typeTags[0] != ',')
-            {
-                return false;
-            }
-
-            var argumentCount =
-                Math.Max(
-                    0,
-                    typeTags.Length - 1);
-
-            if (argumentCount >
-                MaxArgumentsPerMessage)
+            if (!TryReadTypeTags(
+                    data,
+                    end,
+                    ref cursor,
+                    out var typeTagStart,
+                    out var argumentCount))
             {
                 return false;
             }
@@ -190,9 +180,12 @@ namespace VCR.Runtime.Protocols.Osc
                 new OscArgument[
                     argumentCount];
 
-            for (var i = 1; i < typeTags.Length; i++)
+            for (var i = 0;
+                 i < argumentCount;
+                 i++)
             {
-                switch (typeTags[i])
+                switch (data[
+                    typeTagStart + i])
                 {
                     case 'i':
                         if (!TryReadInt32(
@@ -204,7 +197,7 @@ namespace VCR.Runtime.Protocols.Osc
                             return false;
                         }
 
-                        arguments[i - 1] =
+                        arguments[i] =
                             OscArgument.FromInt(intValue);
                         break;
 
@@ -218,7 +211,7 @@ namespace VCR.Runtime.Protocols.Osc
                             return false;
                         }
 
-                        arguments[i - 1] =
+                        arguments[i] =
                             OscArgument.FromFloat(floatValue);
                         break;
 
@@ -232,7 +225,7 @@ namespace VCR.Runtime.Protocols.Osc
                             return false;
                         }
 
-                        arguments[i - 1] =
+                        arguments[i] =
                             OscArgument.FromString(stringValue);
                         break;
 
@@ -266,6 +259,53 @@ namespace VCR.Runtime.Protocols.Osc
                 data[offset + 5] == (byte)'l' &&
                 data[offset + 6] == (byte)'e' &&
                 data[offset + 7] == 0;
+        }
+
+        private static bool TryReadTypeTags(
+            byte[] data,
+            int end,
+            ref int cursor,
+            out int typeTagStart,
+            out int argumentCount)
+        {
+            typeTagStart = 0;
+            argumentCount = 0;
+
+            if (cursor >= end ||
+                data[cursor] !=
+                    (byte)',')
+            {
+                return false;
+            }
+
+            cursor++;
+            typeTagStart = cursor;
+
+            while (cursor < end &&
+                   data[cursor] != 0)
+            {
+                argumentCount++;
+
+                if (argumentCount >
+                    MaxArgumentsPerMessage)
+                {
+                    return false;
+                }
+
+                cursor++;
+            }
+
+            if (cursor >= end)
+            {
+                return false;
+            }
+
+            cursor++;
+            cursor =
+                Align4(
+                    cursor);
+
+            return cursor <= end;
         }
 
         private static bool TryReadPaddedString(
