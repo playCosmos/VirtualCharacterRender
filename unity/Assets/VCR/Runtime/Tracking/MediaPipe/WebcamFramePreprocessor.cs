@@ -20,10 +20,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private bool _materialResolveAttempted;
         private int _preparedFrame = -1;
         private Texture _preparedTexture;
-        private Texture _preparedSource;
-        private WebcamPreprocessingMode _preparedMode;
-        private float _preparedExposure;
-        private float _preparedGamma;
 
         public Texture Prepare(
             Texture source,
@@ -38,43 +34,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 return source;
             }
 
-            var clampedExposure =
-                Mathf.Clamp(
-                    exposure,
-                    0.5f,
-                    3f);
-            var clampedGamma =
-                Mathf.Clamp(
-                    gamma,
-                    0.5f,
-                    2f);
-            var targetWidth =
-                Mathf.Max(
-                    16,
-                    source.width);
-            var targetHeight =
-                Mathf.Max(
-                    16,
-                    source.height);
-
+            // One preprocessing result is intentionally frozen per Unity
+            // frame. Face and Holistic may both hold asynchronous readbacks
+            // from this RenderTexture; re-blitting it mid-frame would make the
+            // two task inputs non-deterministic.
             if (_preparedFrame ==
                     Time.frameCount &&
                 _preparedTexture != null &&
-                ReferenceEquals(
-                    _preparedSource,
-                    source) &&
-                _preparedMode == mode &&
-                Mathf.Approximately(
-                    _preparedExposure,
-                    clampedExposure) &&
-                Mathf.Approximately(
-                    _preparedGamma,
-                    clampedGamma) &&
                 _target != null &&
-                _target.width ==
-                    targetWidth &&
-                _target.height ==
-                    targetHeight &&
                 _target.IsCreated())
             {
                 return _preparedTexture;
@@ -84,19 +51,25 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
             if (_material == null ||
                 !EnsureTarget(
-                    targetWidth,
-                    targetHeight))
+                    source.width,
+                    source.height))
             {
                 return source;
             }
 
             _material.SetFloat(
                 "_Exposure",
-                clampedExposure);
+                Mathf.Clamp(
+                    exposure,
+                    0.5f,
+                    3f));
 
             _material.SetFloat(
                 "_Gamma",
-                clampedGamma);
+                Mathf.Clamp(
+                    gamma,
+                    0.5f,
+                    2f));
 
             Graphics.Blit(
                 source,
@@ -107,14 +80,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 Time.frameCount;
             _preparedTexture =
                 _target;
-            _preparedSource =
-                source;
-            _preparedMode =
-                mode;
-            _preparedExposure =
-                clampedExposure;
-            _preparedGamma =
-                clampedGamma;
 
             return _preparedTexture;
         }
@@ -123,11 +88,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             _preparedFrame = -1;
             _preparedTexture = null;
-            _preparedSource = null;
-            _preparedMode =
-                default;
-            _preparedExposure = 0f;
-            _preparedGamma = 0f;
 
             if (_target != null)
             {
