@@ -26,6 +26,9 @@ namespace VCR.Runtime.Broadcast.SoopUnity
         [SerializeField]
         private bool autoFindEventSink = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         [SerializeField, Range(256, 262144)]
         private int maxMessageCharacters =
             65536;
@@ -44,6 +47,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
             new();
 
         private INormalizedEventSink _sink;
+        private float _nextSinkResolveRealtime;
 
         private long _accepted;
         private long _rejected;
@@ -65,7 +69,8 @@ namespace VCR.Runtime.Broadcast.SoopUnity
 
         private void Awake()
         {
-            ResolveSink();
+            ResolveSink(
+                force: true);
         }
 
         public void SetSink(
@@ -77,6 +82,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     : null;
             eventSinkBehaviour =
                 _sink as MonoBehaviour;
+            _nextSinkResolveRealtime = 0f;
         }
 
         public bool TryHandleText(
@@ -105,8 +111,11 @@ namespace VCR.Runtime.Broadcast.SoopUnity
 
             if (!IsServiceAlive(_sink))
             {
+                var hadSink =
+                    _sink != null;
                 _sink = null;
-                ResolveSink();
+                ResolveSink(
+                    force: hadSink);
 
                 if (!IsServiceAlive(_sink))
                 {
@@ -296,13 +305,15 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                 : true;
         }
 
-        private void ResolveSink()
+        private void ResolveSink(
+            bool force = false)
         {
             if (eventSinkBehaviour != null &&
                 eventSinkBehaviour is
                     INormalizedEventSink configured)
             {
                 _sink = configured;
+                _nextSinkResolveRealtime = 0f;
                 return;
             }
 
@@ -310,6 +321,22 @@ namespace VCR.Runtime.Broadcast.SoopUnity
             {
                 return;
             }
+
+            var now =
+                Time.realtimeSinceStartup;
+
+            if (!force &&
+                now <
+                _nextSinkResolveRealtime)
+            {
+                return;
+            }
+
+            _nextSinkResolveRealtime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
 
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
@@ -332,6 +359,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     _sink = sink;
                     eventSinkBehaviour =
                         behaviour;
+                    _nextSinkResolveRealtime = 0f;
                     return;
                 }
             }
