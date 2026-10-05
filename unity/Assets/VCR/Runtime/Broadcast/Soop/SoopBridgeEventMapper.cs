@@ -11,6 +11,7 @@ namespace VCR.Runtime.Broadcast.Soop
         public const string SourceId = "broadcast.soop";
         public const string StarBalloonUnit =
             "SOOP_STAR_BALLOON";
+        public const int MaxEventIdLength = 256;
 
         public static bool TryCreateEvent(
             SoopBridgeMessage message,
@@ -33,6 +34,13 @@ namespace VCR.Runtime.Broadcast.Soop
             {
                 error =
                     $"SOOP bridge version {message.version} is unsupported; expected {CurrentVersion}.";
+                return false;
+            }
+
+            if (!TryValidateEventId(
+                    message.eventId,
+                    out error))
+            {
                 return false;
             }
 
@@ -127,5 +135,27 @@ namespace VCR.Runtime.Broadcast.Soop
 
             return true;
         }
+        public static bool TryValidateEventId(
+            string eventId,
+            out string error)
+        {
+            error = null;
+
+            if (eventId == null)
+            {
+                return true;
+            }
+
+            if (eventId.Length >
+                MaxEventIdLength)
+            {
+                error =
+                    $"SOOP bridge event id exceeds the {MaxEventIdLength} character limit.";
+                return false;
+            }
+
+            return true;
+        }
+
     }
 }
