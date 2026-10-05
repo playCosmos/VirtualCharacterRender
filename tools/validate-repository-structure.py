@@ -109,6 +109,16 @@ require_source_contains(
     "TryAppendBundleMessage",
     "VMC sender must write directly into its reusable OSC packet buffer",
 )
+require_source_contains(
+    vmc_sender,
+    "ISelectiveNormalizedMotionSnapshotProvider",
+    "VMC sender must use selective snapshot capture when the provider supports it",
+)
+require_source_contains(
+    vmc_sender,
+    "includeExpressions:",
+    "VMC selective capture must propagate the expression-send setting",
+)
 forbid_source_pattern(
     vmc_sender,
     r"OscPacketWriter\s*\.\s*WriteBundle\s*\(",
@@ -173,6 +183,40 @@ for mediapipe_submission_source in mediapipe_submission_sources:
         r"_submittedAtUs\s*\.\s*Clear\s*\(",
         "MediaPipe sources must not drop all in-flight latency correlation at capacity",
     )
+
+motion_snapshot_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "INormalizedMotionSnapshotProvider.cs"
+)
+require_source_contains(
+    motion_snapshot_contract,
+    "ISelectiveNormalizedMotionSnapshotProvider",
+    "motion snapshot providers must retain the optional selective capture contract",
+)
+require_source_contains(
+    motion_snapshot_contract,
+    "NormalizedMotionSnapshotRequest",
+    "selective motion capture must retain an explicit domain request value",
+)
+
+vrm_snapshot_provider = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs"
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "request.IncludeExpressions",
+    "VRM snapshot provider must skip expression capture when not requested",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "request.IncludeHumanoidPose",
+    "VRM snapshot provider must skip pose capture when not requested",
+)
 
 snapshot_ownership = (
     VCR
