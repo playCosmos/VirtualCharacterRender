@@ -15,14 +15,18 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField] private MonoBehaviour[] additionalMotionRuntimeBehaviours =
             Array.Empty<MonoBehaviour>();
         [SerializeField] private bool autoFindMotionRuntime = true;
+        [SerializeField, Min(0.1f)] private float autoFindRetrySeconds = 1f;
 
         private readonly List<IMotionCueRuntime>
             _runtimes =
                 new();
 
+        private float _nextRuntimeResolveTime;
+
         private void Awake()
         {
-            RebuildRuntimes();
+            RebuildRuntimes(
+                force: true);
         }
 
         public void SetMotionRuntime(
@@ -32,7 +36,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                 runtime;
             additionalMotionRuntimeBehaviours =
                 Array.Empty<MonoBehaviour>();
-            RebuildRuntimes();
+            RebuildRuntimes(
+                force: true);
         }
 
         public void SetMotionRuntimes(
@@ -65,7 +70,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                     additionalMotionRuntimeBehaviours.Length);
             }
 
-            RebuildRuntimes();
+            RebuildRuntimes(
+                force: true);
         }
 
         public bool CanHandle(
@@ -93,7 +99,6 @@ namespace VCR.Runtime.EventRuntime.Unity
             out string error)
         {
             error = null;
-            ResolveRuntimes();
 
             if (command.ActionType !=
                     EventActionTypes.MotionPlay &&
@@ -104,6 +109,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                     "Motion cue action type is unsupported.";
                 return false;
             }
+
+            ResolveRuntimes();
 
             if (command.ActionType ==
                     EventActionTypes.MotionPlay &&
@@ -179,7 +186,6 @@ namespace VCR.Runtime.EventRuntime.Unity
         {
             complete = false;
             error = null;
-            ResolveRuntimes();
 
             if (!CanTrackCompletion(
                     command))
@@ -212,6 +218,8 @@ namespace VCR.Runtime.EventRuntime.Unity
 
         private void ResolveRuntimes()
         {
+            var staleRuntimeFound = false;
+
             if (_runtimes.Count > 0)
             {
                 var valid = true;
@@ -224,6 +232,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                         behaviour == null)
                     {
                         valid = false;
+                        staleRuntimeFound = true;
                         break;
                     }
                 }
@@ -234,10 +243,12 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            RebuildRuntimes();
+            RebuildRuntimes(
+                force: staleRuntimeFound);
         }
 
-        private void RebuildRuntimes()
+        private void RebuildRuntimes(
+            bool force = false)
         {
             _runtimes.Clear();
 
@@ -257,6 +268,21 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextRuntimeResolveTime)
+            {
+                return;
+            }
+
+            _nextRuntimeResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
                     FindObjectsInactive.Include,
@@ -266,6 +292,11 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 AddRuntime(
                     behaviour);
+            }
+
+            if (_runtimes.Count > 0)
+            {
+                _nextRuntimeResolveTime = 0f;
             }
         }
 
