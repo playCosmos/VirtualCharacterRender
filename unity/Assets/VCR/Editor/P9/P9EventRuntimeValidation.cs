@@ -31,6 +31,7 @@ namespace VCR.Editor.P9
                 new List<string>();
 
             ValidateEngine(failures);
+            ValidateRuleBounds(failures);
             ValidateRulePersistence(failures);
             ValidateUnityDispatch(failures);
             ValidateEventHubReplacement(failures);
@@ -44,7 +45,7 @@ namespace VCR.Editor.P9
             {
                 Debug.Log(
                     "VCR P9 event runtime validation: PASS " +
-                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, versioned rule persistence, rule diagnostics/opt-in tracing, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
+                    "(filter, condition, state mutation, numeric transform, cooldown, window rate limit, text transform, bounded rule fanout, versioned rule persistence, rule diagnostics/opt-in tracing, action cap, environment transition/camera/material scalar/vector/expression action dispatch, unhandled/ambiguous diagnostics)");
                 return true;
             }
 
@@ -711,6 +712,68 @@ namespace VCR.Editor.P9
                 failures);
         }
 
+        private static void ValidateRuleBounds(
+            List<string> failures)
+        {
+            var engine =
+                new EventRuntimeEngine();
+            var baseline =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "bounded-baseline"
+                };
+
+            engine.SetRules(
+                baseline);
+
+            var excessiveRules =
+                new EventRuntimeRule[
+                    EventRuntimeRuleSetBounds
+                        .MaxRules +
+                    1];
+
+            Expect(
+                !engine.TrySetRules(
+                    excessiveRules,
+                    out var ruleCountError) &&
+                !string.IsNullOrWhiteSpace(
+                    ruleCountError) &&
+                engine.GetRuleDiagnostics()
+                    .Length == 1 &&
+                engine.GetRuleDiagnostics()[0]
+                    .RuleId ==
+                    "bounded-baseline",
+                "event engine must reject excessive rule fanout without replacing the active rule set",
+                failures);
+
+            var excessiveActions =
+                new EventRuntimeRule
+                {
+                    Id =
+                        "too-many-actions",
+                    Actions =
+                        new EventActionTemplate[
+                            EventRuntimeRuleSetBounds
+                                .MaxActionsPerRule +
+                            1]
+                };
+
+            Expect(
+                !engine.TrySetRules(
+                    new[]
+                    {
+                        excessiveActions
+                    },
+                    out var actionCountError) &&
+                !string.IsNullOrWhiteSpace(
+                    actionCountError) &&
+                engine.GetRuleDiagnostics()
+                    .Length == 1,
+                "event engine must reject excessive per-rule action fanout transactionally",
+                failures);
+        }
+
         private static void ValidateRulePersistence(
             List<string> failures)
         {
@@ -822,6 +885,24 @@ namespace VCR.Editor.P9
                          EventTextTransformFlags
                              .ToUpperInvariant),
                     "P9 versioned rule persistence must preserve rate-limit, multi-value action, and text-transform fields",
+                    failures);
+
+                var excessivePersistedRules =
+                    new EventRuntimeRule[
+                        EventRuntimeRuleSetBounds
+                            .MaxRules +
+                        1];
+
+                Expect(
+                    !store.TrySave(
+                        excessivePersistedRules,
+                        maxCommandsPerEvent: 32,
+                        out var excessiveRuleSaveError) &&
+                    !string.IsNullOrWhiteSpace(
+                        excessiveRuleSaveError) &&
+                    !File.Exists(
+                        path + ".tmp"),
+                    "P9 persistence must reject excessive rule fanout before writing a temporary file",
                     failures);
 
                 File.WriteAllText(
