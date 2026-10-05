@@ -53,6 +53,7 @@ required_latest_chain = [
     VCR / "Editor" / "P12" / "VCR.Editor.P12.asmdef",
     VCR / "Editor" / "P13" / "P13BatchValidation.cs",
     VCR / "Editor" / "P13" / "VCR.Editor.P13.asmdef",
+    VCR / "Runtime" / "Tracking" / "SnapshotArrayOwnership.cs",
     ROOT / "tools" / "validate-p12-source-free.sh",
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
@@ -137,6 +138,60 @@ for udp_receiver in udp_receivers:
         r"\b(?:receiver|_receiver)\s*\.\s*Receive\s*\(",
         "UDP receive hot paths must not allocate one byte array per datagram",
     )
+
+snapshot_ownership = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "SnapshotArrayOwnership.cs"
+)
+require_source_contains(
+    snapshot_ownership,
+    "SnapshotArrayOwnership.Transfer",
+    "snapshot arrays must retain an explicit zero-copy ownership-transfer mode",
+)
+require_source_contains(
+    snapshot_ownership,
+    "SnapshotArrayOwnership.Copy",
+    "snapshot arrays must retain a defensive-copy ownership mode",
+)
+
+snapshot_hot_paths = [
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeFaceNormalizer.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeHolisticNormalizer.cs",
+    VCR / "Runtime" / "Tracking" / "Mixing" / "ExpressionMixerMath.cs",
+    VCR / "Runtime" / "Tracking" / "Mixing" / "HumanoidPoseMixerMath.cs",
+    VCR / "Runtime" / "Protocols" / "Vmc" / "VmcFrameAccumulator.cs",
+]
+for snapshot_hot_path in snapshot_hot_paths:
+    require_source_contains(
+        snapshot_hot_path,
+        "SnapshotArrayOwnership.Transfer",
+        "fresh hot-path snapshot arrays must explicitly transfer ownership instead of cloning",
+    )
+
+ifacial_frame = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKit"
+    / "IFacialMocapFrame.cs"
+)
+require_source_contains(
+    ifacial_frame,
+    "ReadOnlySpan<float> Coefficients",
+    "raw iFacialMocap coefficients must not expose a mutable array",
+)
+require_source_contains(
+    ifacial_frame,
+    "DetachCoefficientOwnership",
+    "raw iFacialMocap coefficients must retain explicit one-shot transfer",
+)
+forbid_source_pattern(
+    ifacial_frame,
+    r"public\s+float\[\]\s+Coefficients",
+    "raw iFacialMocap coefficients must not expose mutable array ownership",
+)
 
 vmc_accumulator = (
     VCR
