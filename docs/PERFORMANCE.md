@@ -137,6 +137,8 @@ For steady-state tracking and UI operation:
 - OSC receive parsing must not allocate transient bundle-tag or type-tag strings; VMC, generic OSC-event, and ARKit UDP receive loops use one reusable datagram buffer per worker instead of `UdpClient.Receive()` packet arrays,
 - OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
 - OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
+- VMC custom expression staging is bounded to 256 names with 256 characters per custom name; over-limit names are dropped and counted, while existing names remain updatable at capacity,
+- VMC Stop/Dispose clears retained bone/expression session state before a later Start so stale transforms or custom names cannot leak across receiver sessions,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
 A temporary allocation that is necessary for an immutable published frame is evaluated separately from avoidable scratch allocation. Do not trade correctness or frame immutability for unsafe pooling without ownership/lifetime evidence.
