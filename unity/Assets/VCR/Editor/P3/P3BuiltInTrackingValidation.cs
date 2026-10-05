@@ -111,6 +111,9 @@ namespace VCR.Editor.P3
                     "ARKit face source must stop cleanly",
                     failures);
 
+                ValidateSnapshotOwnership(
+                    failures);
+
                 var latestBuffer =
                     new LatestValueBuffer<
                         IFacialMocapFrame>();
@@ -293,7 +296,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot array ownership/copy isolation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
@@ -304,6 +307,250 @@ namespace VCR.Editor.P3
                     failures));
 
             return false;
+        }
+
+        private static void ValidateSnapshotOwnership(
+            List<string> failures)
+        {
+            var faceSource =
+                new float[
+                    (int)FaceCoefficient.Count];
+            faceSource[
+                (int)FaceCoefficient.JawOpen] =
+                    0.35f;
+
+            var copiedFace =
+                new NormalizedFaceState(
+                    TrackingQuaternion.Identity,
+                    TrackingVector3.Zero,
+                    faceSource,
+                    SnapshotArrayOwnership.Copy);
+
+            faceSource[
+                (int)FaceCoefficient.JawOpen] =
+                    0.9f;
+
+            Expect(
+                Math.Abs(
+                    copiedFace.Get(
+                        FaceCoefficient.JawOpen) -
+                    0.35f) <
+                0.0001f,
+                "copy-owned face snapshots must not change when the caller mutates its source array",
+                failures);
+
+            var bodySource =
+                new TrackingPoint[
+                    (int)UpperBodyJoint.Count];
+            bodySource[
+                (int)UpperBodyJoint.LeftShoulder] =
+                    new TrackingPoint(
+                        new TrackingVector3(
+                            1f,
+                            2f,
+                            3f),
+                        0.8f);
+
+            var copiedBody =
+                new NormalizedUpperBodyState(
+                    bodySource,
+                    SnapshotArrayOwnership.Copy);
+
+            bodySource[
+                (int)UpperBodyJoint.LeftShoulder] =
+                    default;
+
+            Expect(
+                Math.Abs(
+                    copiedBody.Get(
+                        UpperBodyJoint.LeftShoulder)
+                        .Position.X -
+                    1f) <
+                0.0001f &&
+                copiedBody.Get(
+                    (UpperBodyJoint)(-1))
+                    .Confidence == 0f,
+                "copy-owned upper-body snapshots must isolate caller mutation and tolerate invalid enum indices",
+                failures);
+
+            var handSource =
+                new TrackingPoint[
+                    (int)HandJoint.Count];
+            handSource[
+                (int)HandJoint.IndexTip] =
+                    new TrackingPoint(
+                        new TrackingVector3(
+                            4f,
+                            5f,
+                            6f),
+                        0.7f);
+
+            var copiedHand =
+                new NormalizedHandState(
+                    isLeft: true,
+                    handSource,
+                    SnapshotArrayOwnership.Copy);
+
+            handSource[
+                (int)HandJoint.IndexTip] =
+                    default;
+
+            Expect(
+                Math.Abs(
+                    copiedHand.Get(
+                        HandJoint.IndexTip)
+                        .Position.X -
+                    4f) <
+                0.0001f &&
+                copiedHand.Get(
+                    (HandJoint)999)
+                    .Confidence == 0f,
+                "copy-owned hand snapshots must isolate caller mutation and tolerate invalid enum indices",
+                failures);
+
+            var standardSource =
+                new float[
+                    (int)StandardExpression.Count];
+            standardSource[
+                (int)StandardExpression.Happy] =
+                    0.4f;
+            var customSource =
+                new[]
+                {
+                    new NamedExpressionValue(
+                        "custom-copy",
+                        0.6f)
+                };
+
+            var copiedExpressions =
+                new NormalizedExpressionState(
+                    standardSource,
+                    customSource,
+                    SnapshotArrayOwnership.Copy);
+
+            standardSource[
+                (int)StandardExpression.Happy] =
+                    1f;
+            customSource[0] =
+                new NamedExpressionValue(
+                    "custom-copy",
+                    1f);
+
+            Expect(
+                Math.Abs(
+                    copiedExpressions.Get(
+                        StandardExpression.Happy) -
+                    0.4f) <
+                0.0001f &&
+                copiedExpressions.Custom.Length == 1 &&
+                Math.Abs(
+                    copiedExpressions.Custom[0]
+                        .Value -
+                    0.6f) <
+                0.0001f,
+                "copy-owned expression snapshots must defensively copy both standard and custom arrays",
+                failures);
+
+            var poseBones =
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
+            var posePresence =
+                new bool[
+                    (int)HumanoidBoneId.Count];
+            var hipsIndex =
+                (int)HumanoidBoneId.Hips;
+
+            poseBones[hipsIndex] =
+                new NormalizedBonePose(
+                    new TrackingVector3(
+                        7f,
+                        0f,
+                        0f),
+                    TrackingQuaternion.Identity);
+            posePresence[hipsIndex] =
+                true;
+
+            var copiedPose =
+                new HumanoidPoseState(
+                    HumanoidPoseSpace.NormalizedLocal,
+                    TrackingVector3.Zero,
+                    TrackingQuaternion.Identity,
+                    poseBones,
+                    posePresence,
+                    SnapshotArrayOwnership.Copy);
+
+            poseBones[hipsIndex] =
+                default;
+            posePresence[hipsIndex] =
+                false;
+
+            Expect(
+                copiedPose.TryGet(
+                    HumanoidBoneId.Hips,
+                    out var copiedHips) &&
+                Math.Abs(
+                    copiedHips.LocalPosition.X -
+                    7f) <
+                0.0001f,
+                "copy-owned humanoid poses must defensively copy both pose arrays",
+                failures);
+
+            var rawSource =
+                new float[
+                    (int)FaceCoefficient.Count];
+            rawSource[
+                (int)FaceCoefficient.JawOpen] =
+                    0.45f;
+
+            var rawFrame =
+                new IFacialMocapFrame(
+                    rawSource,
+                    hasHead: false,
+                    headEulerXDegrees: 0f,
+                    headEulerYDegrees: 0f,
+                    headEulerZDegrees: 0f,
+                    headPositionX: 0f,
+                    headPositionY: 0f,
+                    headPositionZ: 0f,
+                    SnapshotArrayOwnership.Copy);
+
+            rawSource[
+                (int)FaceCoefficient.JawOpen] =
+                    1f;
+
+            var rawCopiedBeforeDetach =
+                rawFrame.Coefficients[
+                    (int)FaceCoefficient.JawOpen];
+            var detached =
+                rawFrame.DetachCoefficientOwnership();
+            var secondDetachRejected =
+                false;
+
+            try
+            {
+                rawFrame
+                    .DetachCoefficientOwnership();
+            }
+            catch (InvalidOperationException)
+            {
+                secondDetachRejected =
+                    true;
+            }
+
+            Expect(
+                Math.Abs(
+                    rawCopiedBeforeDetach -
+                    0.45f) <
+                0.0001f &&
+                rawFrame.Coefficients.Length == 0 &&
+                Math.Abs(
+                    detached[
+                        (int)FaceCoefficient.JawOpen] -
+                    0.45f) <
+                0.0001f &&
+                secondDetachRejected,
+                "raw iFacialMocap buffers must be read-only to consumers and detachable exactly once",
+                failures);
         }
 
         private static void Expect(
