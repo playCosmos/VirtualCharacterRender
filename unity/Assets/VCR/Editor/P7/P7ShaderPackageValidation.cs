@@ -284,6 +284,64 @@ namespace VCR.Editor.P7
                     "bounded binary reader must reject a file larger than its allocation limit",
                     failures);
 
+                var materialStore =
+                    new MaterialPresetStore(
+                        Path.Combine(
+                            rootPath,
+                            "bounded-materials.json"));
+                var excessivePresets =
+                    new MaterialPresetDocument
+                    {
+                        Version =
+                            MaterialPresetStore
+                                .CurrentVersion,
+                        Presets =
+                            new MaterialOverridePreset[
+                                MaterialPresetStore
+                                    .MaxPresets +
+                                1]
+                    };
+
+                Expect(
+                    !materialStore.TrySave(
+                        excessivePresets,
+                        out var excessivePresetError) &&
+                    !string.IsNullOrWhiteSpace(
+                        excessivePresetError),
+                    "material preset persistence must reject excessive preset fanout before serialization",
+                    failures);
+
+                var excessiveParameters =
+                    new MaterialPresetDocument
+                    {
+                        Version =
+                            MaterialPresetStore
+                                .CurrentVersion,
+                        Presets =
+                            new[]
+                            {
+                                new MaterialOverridePreset
+                                {
+                                    PresetId =
+                                        "too-many-parameters",
+                                    Parameters =
+                                        new MaterialParameterOverride[
+                                            MaterialPresetStore
+                                                .MaxParametersPerPreset +
+                                            1]
+                                }
+                            }
+                    };
+
+                Expect(
+                    !materialStore.TrySave(
+                        excessiveParameters,
+                        out var excessiveParameterError) &&
+                    !string.IsNullOrWhiteSpace(
+                        excessiveParameterError),
+                    "material preset persistence must reject excessive parameter fanout before serialization",
+                    failures);
+
                 var bundlePath =
                     Path.Combine(
                         rootPath,
