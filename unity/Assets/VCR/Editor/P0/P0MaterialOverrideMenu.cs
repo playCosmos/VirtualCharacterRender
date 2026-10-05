@@ -155,6 +155,7 @@ namespace VCR.Editor.P0
                 Object.DestroyImmediate(
                     textureResolver);
 
+                string textureError = null;
                 var destroyedResolverFallback =
                     source.HasProperty(
                         "_BaseMap") &&
@@ -162,7 +163,7 @@ namespace VCR.Editor.P0
                         slot.Id,
                         "_BaseMap",
                         textureId,
-                        out var textureError) &&
+                        out textureError) &&
                     renderer.sharedMaterial != null &&
                     renderer.sharedMaterial.GetTexture(
                         "_BaseMap") ==
