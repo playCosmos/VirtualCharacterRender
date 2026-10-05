@@ -579,14 +579,16 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void UpdateExternalPoseSnapshot()
         {
-            if (_externalPoseProvider == null)
+            if (!IsServiceAlive(_externalPoseProvider))
             {
                 _latestHumanoidPose = null;
                 return;
             }
 
-            var presence =
-                _externalPosePresence?.Presence;
+            TrackingPresenceSnapshot? presence =
+                IsServiceAlive(_externalPosePresence)
+                    ? _externalPosePresence.Presence
+                    : null;
             var usable =
                 IsSourceHealthUsable(
                     _externalPoseHealth,
