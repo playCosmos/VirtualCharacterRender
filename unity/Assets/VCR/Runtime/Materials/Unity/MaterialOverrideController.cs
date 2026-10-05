@@ -742,6 +742,17 @@ namespace VCR.Runtime.Materials.Unity
                 return;
             }
 
+            if (!HasFiniteNumericValue(
+                    parameter))
+            {
+                issues.Add(
+                    new MaterialCompatibilityIssue(
+                        "property_value_non_finite",
+                        parameter.Name,
+                        $"Shader property '{parameter.Name}' contains NaN or Infinity."));
+                return;
+            }
+
             if (!TryGetShaderPropertyType(
                     shader,
                     parameter.Name,
@@ -794,6 +805,32 @@ namespace VCR.Runtime.Materials.Unity
                         parameter.Name,
                         $"Texture id '{parameter.StringValue}' could not be resolved."));
             }
+        }
+
+        private static bool HasFiniteNumericValue(
+            MaterialParameterOverride parameter)
+        {
+            static bool Finite(float value) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
+
+            return parameter.Kind switch
+            {
+                ShaderParameterKind.Float =>
+                    Finite(parameter.X),
+                ShaderParameterKind.Color =>
+                    Finite(parameter.X) &&
+                    Finite(parameter.Y) &&
+                    Finite(parameter.Z) &&
+                    Finite(parameter.W),
+                ShaderParameterKind.Vector =>
+                    Finite(parameter.X) &&
+                    Finite(parameter.Y) &&
+                    Finite(parameter.Z) &&
+                    Finite(parameter.W),
+                _ =>
+                    true
+            };
         }
 
         private static bool TryGetShaderPropertyType(
