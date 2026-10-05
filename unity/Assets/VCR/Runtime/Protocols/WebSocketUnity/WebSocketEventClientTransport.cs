@@ -78,6 +78,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private CancellationTokenSource _cancellation;
         private Task _runTask;
         private ClientWebSocket _client;
+        private Uri _pendingStartUri;
+        private bool _pendingStartRequested;
         private long _generation;
 
         private int _state =
@@ -164,6 +166,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
         private void Update()
         {
+            FinalizeTransportLifecycle();
+
             var error =
                 Interlocked.Exchange(
                     ref _backgroundError,
@@ -264,6 +268,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         {
             error = null;
 
+            FinalizeCompletedRun();
+
             if (_runTask != null &&
                 !_runTask.IsCompleted &&
                 _cancellation != null &&
@@ -277,37 +283,39 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     out var uri,
                     out error))
             {
+                ClearPendingStart();
                 SetState(
                     WebSocketClientTransportState.Faulted);
                 return false;
             }
 
-            StopTransport();
+            if (_runTask != null &&
+                !_runTask.IsCompleted)
+            {
+                RequestStopTransport();
+                _pendingStartUri = uri;
+                _pendingStartRequested = true;
+                return true;
+            }
 
-            var generation =
-                Interlocked.Increment(
-                    ref _generation);
-
-            _cancellation =
-                new CancellationTokenSource();
-
-            _runTask =
-                RunTransportAsync(
-                    uri,
-                    _cancellation.Token,
-                    generation);
-
+            BeginTransportRun(
+                uri);
             return true;
         }
 
         public void StopTransport()
+        {
+            ClearPendingStart();
+            RequestStopTransport();
+        }
+
+        private void RequestStopTransport()
         {
             Interlocked.Increment(
                 ref _generation);
 
             var cancellation =
                 _cancellation;
-            _cancellation = null;
 
             if (cancellation != null)
             {
@@ -333,12 +341,119 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 }
             }
 
-            _runTask = null;
-
             DropQueuedMessages();
+            FinalizeCompletedRun();
 
             SetState(
                 WebSocketClientTransportState.Stopped);
+        }
+
+        private void BeginTransportRun(
+            Uri uri)
+        {
+            ClearPendingStart();
+
+            var generation =
+                Interlocked.Increment(
+                    ref _generation);
+            var cancellation =
+                new CancellationTokenSource();
+
+            _cancellation =
+                cancellation;
+            _runTask =
+                RunTransportAsync(
+                    uri,
+                    cancellation.Token,
+                    generation);
+
+            _ = _runTask.ContinueWith(
+                _ =>
+                {
+                    try
+                    {
+                        cancellation.Dispose();
+                    }
+                    catch
+                    {
+                        // Completion cleanup path.
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private void FinalizeTransportLifecycle()
+        {
+            if (_runTask != null &&
+                !_runTask.IsCompleted)
+            {
+                return;
+            }
+
+            FinalizeCompletedRun();
+
+            if (!_pendingStartRequested ||
+                _pendingStartUri == null)
+            {
+                return;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                ClearPendingStart();
+                return;
+            }
+
+            var uri =
+                _pendingStartUri;
+            ClearPendingStart();
+            BeginTransportRun(
+                uri);
+        }
+
+        private void FinalizeCompletedRun()
+        {
+            var task =
+                _runTask;
+
+            if (task == null ||
+                !task.IsCompleted)
+            {
+                return;
+            }
+
+            try
+            {
+                task.GetAwaiter()
+                    .GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown.
+            }
+            catch (Exception exception)
+            {
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    "WebSocket transport task failed: " +
+                    exception.Message);
+            }
+
+            if (ReferenceEquals(
+                    _runTask,
+                    task))
+            {
+                _runTask = null;
+                _cancellation = null;
+            }
+        }
+
+        private void ClearPendingStart()
+        {
+            _pendingStartRequested = false;
+            _pendingStartUri = null;
         }
 
         /// <summary>
@@ -600,6 +715,15 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 }
                 catch (Exception exception)
                 {
+                    if (cancellationToken
+                            .IsCancellationRequested ||
+                        Interlocked.Read(
+                            ref _generation) !=
+                        generation)
+                    {
+                        break;
+                    }
+
                     Interlocked.Increment(
                         ref _connectFailures);
 
