@@ -31,6 +31,7 @@ namespace VCR.Runtime.Application
         [SerializeField] private bool logStartup = true;
 
         private RuntimeConfigurationStore _configurationStore;
+        private Task<bool> _startupTask;
         private bool _started;
         private bool _quitting;
 
@@ -70,14 +71,34 @@ namespace VCR.Runtime.Application
             }
         }
 
-        public async Task<bool> StartRuntimeAsync(
+        public Task<bool> StartRuntimeAsync(
             ApplicationLaunchOptions options)
         {
             if (_started)
             {
-                return true;
+                return Task.FromResult(true);
             }
 
+            if (_quitting)
+            {
+                return Task.FromResult(false);
+            }
+
+            if (_startupTask != null &&
+                !_startupTask.IsCompleted)
+            {
+                return _startupTask;
+            }
+
+            _startupTask =
+                StartRuntimeCoreAsync(
+                    options);
+            return _startupTask;
+        }
+
+        private async Task<bool> StartRuntimeCoreAsync(
+            ApplicationLaunchOptions options)
+        {
             ResolveSceneRuntime();
 
             if (sceneRuntime == null)
@@ -131,11 +152,21 @@ namespace VCR.Runtime.Application
                     await sceneRuntime.LoadCharacterAsync(
                         vrmPath);
 
+                if (_quitting)
+                {
+                    return false;
+                }
+
                 if (loaded == null)
                 {
                     throw new InvalidOperationException(
                         "VRM load returned no active character.");
                 }
+            }
+
+            if (_quitting)
+            {
+                return false;
             }
 
             _started = true;
