@@ -272,8 +272,9 @@ namespace VCR.Runtime.EventRuntime.Unity
         private void AddRuntime(
             MonoBehaviour behaviour)
         {
-            if (behaviour is not
-                IMotionCueRuntime runtime ||
+            if (behaviour == null ||
+                behaviour is not
+                    IMotionCueRuntime runtime ||
                 _runtimes.Contains(
                     runtime))
             {
@@ -318,7 +319,9 @@ namespace VCR.Runtime.EventRuntime.Unity
             IMotionCueRuntime runtime,
             EventActionCommand command)
         {
-            if (runtime == null)
+            if (runtime == null ||
+                runtime is UnityEngine.Object unityObject &&
+                unityObject == null)
             {
                 return false;
             }
