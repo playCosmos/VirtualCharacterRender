@@ -48,13 +48,29 @@ namespace VCR.Runtime.Scene
             OverlayOutputConfiguration.Default;
 
         public SceneRuntimeState State => _state;
-        public Vrm10Instance CurrentCharacter => characterLoader?.Current;
-        public PrimaryCameraController CameraController => cameraController;
-        public PrimaryLightController LightController => lightController;
-        public IOverlayOutputAdapter OverlayOutput =>
-            IsServiceAlive(_overlayOutput)
-                ? _overlayOutput
+        public Vrm10Instance CurrentCharacter =>
+            characterLoader != null
+                ? characterLoader.Current
                 : null;
+        public PrimaryCameraController CameraController =>
+            cameraController != null
+                ? cameraController
+                : null;
+        public PrimaryLightController LightController =>
+            lightController != null
+                ? lightController
+                : null;
+        public IOverlayOutputAdapter OverlayOutput
+        {
+            get
+            {
+                ResolveOverlayOutput();
+
+                return IsServiceAlive(_overlayOutput)
+                    ? _overlayOutput
+                    : null;
+            }
+        }
 
         public OverlayCaptureReadiness OverlayCaptureReadiness
         {
@@ -101,12 +117,23 @@ namespace VCR.Runtime.Scene
                 render.RunInBackground);
         }
 
-        public IEnvironmentRuntime EnvironmentRuntime =>
-            IsServiceAlive(_environmentRuntime)
-                ? _environmentRuntime
-                : null;
+        public IEnvironmentRuntime EnvironmentRuntime
+        {
+            get
+            {
+                ResolveEnvironmentRuntime();
+
+                return IsServiceAlive(_environmentRuntime)
+                    ? _environmentRuntime
+                    : null;
+            }
+        }
+
         public CapabilityRegistry Capabilities => _capabilities;
-        public string CurrentCharacterPath => characterLoader?.CurrentPath;
+        public string CurrentCharacterPath =>
+            characterLoader != null
+                ? characterLoader.CurrentPath
+                : null;
 
         public SceneRuntimeConfiguration Configuration =>
             CaptureConfiguration();
@@ -157,8 +184,14 @@ namespace VCR.Runtime.Scene
                 new CapabilityRegistry();
 
             renderBootstrap.Apply();
-            cameraController?.Apply();
-            lightController?.Apply();
+            if (cameraController != null)
+            {
+                cameraController.Apply();
+            }
+            if (lightController != null)
+            {
+                lightController.Apply();
+            }
 
             _lastError = null;
             SetState(
@@ -282,8 +315,14 @@ namespace VCR.Runtime.Scene
         public void ApplySceneViewSettings()
         {
             EnsureOperational();
-            cameraController?.Apply();
-            lightController?.Apply();
+            if (cameraController != null)
+            {
+                cameraController.Apply();
+            }
+            if (lightController != null)
+            {
+                lightController.Apply();
+            }
         }
 
         public SceneRuntimeConfiguration CaptureConfiguration()
@@ -307,7 +346,9 @@ namespace VCR.Runtime.Scene
                 Overlay =
                     _overlayConfiguration,
                 EnvironmentStateId =
-                    _environmentRuntime?.Status.StateId
+                    IsServiceAlive(_environmentRuntime)
+                        ? _environmentRuntime.Status.StateId
+                        : null
             };
         }
 
@@ -523,9 +564,18 @@ namespace VCR.Runtime.Scene
 
             ResolveDependencies();
 
-            renderBootstrap?.Apply();
-            cameraController?.Apply();
-            lightController?.Apply();
+            if (renderBootstrap != null)
+            {
+                renderBootstrap.Apply();
+            }
+            if (cameraController != null)
+            {
+                cameraController.Apply();
+            }
+            if (lightController != null)
+            {
+                lightController.Apply();
+            }
 
             if (IsServiceAlive(_overlayOutput))
             {
