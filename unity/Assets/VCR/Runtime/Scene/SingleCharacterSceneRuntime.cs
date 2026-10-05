@@ -209,6 +209,8 @@ namespace VCR.Runtime.Scene
 
             var generation = BeginOperation(cancellationToken);
             var operation = _operationCancellation;
+            var operationToken =
+                operation.Token;
 
             _lastError = null;
             SetState(SceneRuntimeState.LoadingCharacter);
@@ -217,10 +219,10 @@ namespace VCR.Runtime.Scene
             {
                 var loaded = await characterLoader.LoadAsync(
                     path,
-                    operation.Token);
+                    operationToken);
 
                 if (generation != _operationGeneration ||
-                    operation.IsCancellationRequested)
+                    operationToken.IsCancellationRequested)
                 {
                     return null;
                 }
