@@ -61,9 +61,12 @@ namespace VCR.Runtime.Materials.Unity
         public void SetTextureResolver(
             IMaterialTextureResolver resolver)
         {
-            _textureResolver = resolver;
+            _textureResolver =
+                IsServiceAlive(resolver)
+                    ? resolver
+                    : null;
             textureResolverBehaviour =
-                resolver as MonoBehaviour;
+                _textureResolver as MonoBehaviour;
         }
 
         [ContextMenu("Refresh Material Slots")]
@@ -933,6 +936,19 @@ namespace VCR.Runtime.Materials.Unity
             }
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private bool TryResolveTexture(
             string textureId,
             out Texture texture)
@@ -943,6 +959,13 @@ namespace VCR.Runtime.Materials.Unity
                     textureId))
             {
                 return false;
+            }
+
+            if (!IsServiceAlive(
+                    _textureResolver))
+            {
+                _textureResolver = null;
+                textureResolverBehaviour = null;
             }
 
             if (_textureResolver != null &&
