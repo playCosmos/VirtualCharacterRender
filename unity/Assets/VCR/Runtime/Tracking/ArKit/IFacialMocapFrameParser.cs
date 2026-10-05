@@ -47,7 +47,7 @@ namespace VCR.Runtime.Tracking.ArKit
             var partStart = 0;
             var partCount = 0;
 
-            while (partStart <=
+            while (partStart <
                    text.Length)
             {
                 if (++partCount >
