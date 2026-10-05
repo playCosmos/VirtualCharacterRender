@@ -23,7 +23,7 @@ P0-P7 runtime/device/network evidence remains deferred where previously document
 
 P8 does not replace the existing protocol/event foundations:
 
-- bounded OSC codec remains shared by VMC and generic OSC input
+- bounded OSC codec remains shared by VMC and generic OSC input; parser limits packet bytes, messages, arguments, bundle depth, and rejects invalid UTF-8
 - VMC UDP receive/send remains the avatar-motion interoperability path
 - `NormalizedEventHub` remains the bounded network/device ingress queue and main-thread dispatcher
 - `TrackingPresenceEventAdapter` remains the source of tracking-derived subject/source lost/restored events
@@ -111,7 +111,8 @@ P8 defines version 1 of the transport-neutral WebSocket event message:
 - bounded dispatch per frame
 - destroyed Unity message-handler references are rejected; the bounded resolver can discover a live replacement
 - configurable automatic reconnect delay
-- generation-guarded restart so an old async loop cannot overwrite a new connection state
+- generation-guarded restart so an old async loop cannot overwrite a new connection state or enqueue into the replacement generation
+- explicit stop discards queued text so stale events cannot execute after transport shutdown
 - transport connection/receive/drop/dispatch/rejection diagnostics
 - no third-party WebSocket package dependency
 
@@ -174,10 +175,12 @@ The P8 suite runs P0-P7 checks first and then covers:
 - WebSocket invalid/tracking-event rejection
 - WebSocket endpoint security rules
 - WebSocket bounded queue -> main-thread handler delivery
+- WebSocket stop queue isolation and stale-generation drop behavior
 - WebSocket transport diagnostics
 - OSC chat/donation mapping
 - OSC wrong-address/tracking-event rejection
 - OSC receiver queue -> main-thread dispatch path
+- OSC message-count/argument-count/strict-UTF-8 fail-closed bounds
 - SOOP chat/donation mapping
 - SOOP invalid donation rejection
 - SOOP duplicate event-id suppression
