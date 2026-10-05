@@ -901,6 +901,7 @@ namespace VCR.Editor.P8
         {
             GameObject webSocketRoot = null;
             GameObject oscRoot = null;
+            GameObject soopRoot = null;
 
             try
             {
@@ -1020,6 +1021,60 @@ namespace VCR.Editor.P8
                         "recovered-osc",
                     "OSC receiver must discard a destroyed cached sink and auto-discover its replacement",
                     failures);
+
+                soopRoot =
+                    new GameObject(
+                        "P8 SOOP Sink Recovery");
+
+                var oldSoopSink =
+                    soopRoot.AddComponent<
+                        P8FakeEventSink>();
+                var soop =
+                    soopRoot.AddComponent<
+                        SoopBridgeEventAdapter>();
+
+                soop.SetSink(
+                    oldSoopSink);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldSoopSink);
+
+                var replacementSoopSink =
+                    soopRoot.AddComponent<
+                        P8FakeEventSink>();
+
+                var soopJson =
+                    JsonUtility.ToJson(
+                        new SoopBridgeMessage
+                        {
+                            version =
+                                SoopBridgeEventMapper
+                                    .CurrentVersion,
+                            type =
+                                SoopBridgeEventMapper
+                                    .ChatType,
+                            eventId =
+                                "soop-recovery",
+                            userId =
+                                "viewer",
+                            nickname =
+                                "Viewer",
+                            text =
+                                "recovered-soop"
+                        });
+
+                Expect(
+                    soop.TryHandleText(
+                        soopJson,
+                        out var soopRecoveryError) &&
+                    string.IsNullOrEmpty(
+                        soopRecoveryError) &&
+                    replacementSoopSink.Events.Count == 1 &&
+                    replacementSoopSink.Events[0].Text ==
+                        "recovered-soop",
+                    "SOOP adapter must discard a destroyed cached sink and auto-discover its replacement: " +
+                    soopRecoveryError,
+                    failures);
             }
             catch (Exception exception)
             {
@@ -1039,6 +1094,12 @@ namespace VCR.Editor.P8
                 {
                     UnityEngine.Object.DestroyImmediate(
                         oscRoot);
+                }
+
+                if (soopRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        soopRoot);
                 }
             }
         }
