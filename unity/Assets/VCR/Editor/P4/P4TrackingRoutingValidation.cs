@@ -414,6 +414,20 @@ namespace VCR.Editor.P4
                     "router must discard a destroyed preferred provider and continue through the live fallback without invoking stale interfaces",
                     failures);
 
+                router.TryGetLatestFace(
+                    out var stableFallbackFrame);
+                InvokeUpdate(
+                    router);
+                router.TryGetLatestFace(
+                    out var repeatedFallbackFrame);
+
+                Expect(
+                    ReferenceEquals(
+                        stableFallbackFrame,
+                        repeatedFallbackFrame),
+                    "an absent optional preferred provider must not reset the active fallback selection and republish an unchanged frame every Update",
+                    failures);
+
                 var replacement =
                     root.AddComponent<
                         P4FakeTrackingProvider>();
