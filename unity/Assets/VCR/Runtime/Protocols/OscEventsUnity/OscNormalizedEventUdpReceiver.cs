@@ -62,6 +62,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         private UdpClient _receiver;
         private Thread _receiveThread;
         private volatile bool _running;
+        private long _generation;
         private IPAddress _allowedSender;
         private INormalizedEventSink _sink;
         private float _nextSinkResolveRealtime;
@@ -318,7 +319,14 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
 
         private void StartReceiver()
         {
-            StopReceiver();
+            if (!StopReceiver())
+            {
+                Debug.LogError(
+                    "VCR OSC event receiver: previous receive thread did not stop cleanly; refusing to start an overlapping receiver.",
+                    this);
+                enabled = false;
+                return;
+            }
 
             if (!TryResolveAllowedSender(
                     out var senderError))
@@ -351,10 +359,22 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 return;
             }
 
+            var receiver =
+                _receiver;
+            var allowedSender =
+                _allowedSender;
+            var generation =
+                Interlocked.Increment(
+                    ref _generation);
+
             _running = true;
             _receiveThread =
                 new Thread(
-                    ReceiveLoop)
+                    () =>
+                        ReceiveLoop(
+                            receiver,
+                            allowedSender,
+                            generation))
                 {
                     IsBackground = true,
                     Name =
@@ -391,8 +411,16 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             return true;
         }
 
-        private void ReceiveLoop()
+        private void ReceiveLoop(
+            UdpClient receiver,
+            IPAddress allowedSender,
+            long generation)
         {
+            if (receiver == null)
+            {
+                return;
+            }
+
             var remote =
                 new IPEndPoint(
                     IPAddress.Any,
@@ -407,7 +435,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 try
                 {
                     var packet =
-                        _receiver.Receive(
+                        receiver.Receive(
                             ref remote);
 
                     if (packet == null ||
@@ -419,9 +447,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     Interlocked.Increment(
                         ref _packetCount);
 
-                    if (_allowedSender != null &&
+                    if (allowedSender != null &&
                         !remote.Address.Equals(
-                            _allowedSender))
+                            allowedSender))
                     {
                         Interlocked.Increment(
                             ref _rejectedSenderCount);
@@ -446,10 +474,19 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     foreach (var message in
                              messages)
                     {
-                        TryQueueMessage(
-                            message,
-                            timestampUs,
-                            out _);
+                        if (!TryQueueMessage(
+                                message,
+                                timestampUs,
+                                generation,
+                                out _))
+                        {
+                            if (Interlocked.Read(
+                                    ref _generation) !=
+                                generation)
+                            {
+                                return;
+                            }
+                        }
                     }
                 }
                 catch (SocketException exception)
@@ -494,6 +531,19 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             long receivedTimestampUs,
             out string error)
         {
+            return TryQueueMessage(
+                message,
+                receivedTimestampUs,
+                generation: null,
+                out error);
+        }
+
+        private bool TryQueueMessage(
+            OscMessage message,
+            long receivedTimestampUs,
+            long? generation,
+            out string error)
+        {
             if (!OscNormalizedEventMapper
                 .TryCreateEvent(
                     message,
@@ -509,6 +559,18 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
 
             lock (_queueSync)
             {
+                if (generation.HasValue &&
+                    Interlocked.Read(
+                        ref _generation) !=
+                    generation.Value)
+                {
+                    error =
+                        "OSC receiver generation is stale.";
+                    Interlocked.Increment(
+                        ref _droppedEventCount);
+                    return false;
+                }
+
                 _queue.Enqueue(
                     value);
                 Interlocked.Increment(
@@ -608,29 +670,67 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             }
         }
 
-        private void StopReceiver()
+        private bool StopReceiver()
         {
             _running = false;
+            Interlocked.Increment(
+                ref _generation);
+
+            var receiver =
+                _receiver;
+            _receiver = null;
 
             try
             {
-                _receiver?.Close();
+                receiver?.Close();
             }
             catch
             {
                 // Shutdown path.
             }
 
-            _receiver = null;
+            var thread =
+                _receiveThread;
 
-            if (_receiveThread != null &&
-                _receiveThread.IsAlive)
+            if (thread != null &&
+                thread.IsAlive &&
+                Thread.CurrentThread != thread)
             {
-                _receiveThread.Join(
-                    500);
+                thread.Join(
+                    750);
+            }
+
+            if (thread != null &&
+                thread.IsAlive)
+            {
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    "OSC event receive thread did not stop within the shutdown deadline.");
+                return false;
             }
 
             _receiveThread = null;
+            DropQueuedEvents();
+            return true;
+        }
+
+        private void DropQueuedEvents()
+        {
+            lock (_queueSync)
+            {
+                while (_queue.TryDequeue(
+                           out _))
+                {
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _droppedEventCount);
+                }
+
+                Volatile.Write(
+                    ref _queuedCount,
+                    0);
+            }
         }
 
         private void OnDisable()
