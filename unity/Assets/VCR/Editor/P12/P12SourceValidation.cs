@@ -42,6 +42,8 @@ namespace VCR.Editor.P12
                 failures);
             RunSceneSequenceChecks(
                 failures);
+            RunSceneSequenceHandlerLifetimeChecks(
+                failures);
             RunEventRuleLibraryBrowserChecks(
                 failures);
 
@@ -4051,6 +4053,168 @@ namespace VCR.Editor.P12
             }
         }
 
+        private static void RunSceneSequenceHandlerLifetimeChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P12 Scene Sequence Handler Lifetime");
+
+                var sequenceHandler =
+                    root.AddComponent<
+                        SceneSequenceEventActionHandler>();
+                var oldHandler =
+                    root.AddComponent<
+                        P12SceneSequenceProbeHandler>();
+
+                sequenceHandler.SetActionHandlers(
+                    oldHandler);
+
+                var command =
+                    new EventActionCommand(
+                        "p12-sequence-lifetime",
+                        "p12.sequence.probe",
+                        null,
+                        null,
+                        null,
+                        0.0,
+                        false,
+                        1);
+
+                Expect(
+                    InvokeSceneSequenceHandlerCount(
+                        sequenceHandler,
+                        command) == 1,
+                    "scene sequence lifetime validation must initially resolve one configured action handler",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldHandler);
+
+                var replacement =
+                    root.AddComponent<
+                        P12SceneSequenceProbeHandler>();
+                var throwing =
+                    root.AddComponent<
+                        P12ThrowingSceneSequenceProbeHandler>();
+
+                InvokeSceneSequenceEnsureHandlers(
+                    sequenceHandler);
+
+                Expect(
+                    InvokeSceneSequenceHandlerCount(
+                        sequenceHandler,
+                        command) == 1 &&
+                    replacement != null &&
+                    throwing != null,
+                    "scene sequence handler must discard a destroyed cached handler, auto-discover its replacement, and isolate throwing capability probes",
+                    failures);
+
+                var metrics =
+                    new List<VCR.Runtime.Core.RuntimeMetric>();
+                sequenceHandler.CollectMetrics(
+                    metrics);
+
+                var probeFailures = 0.0;
+                var foundProbeMetric = false;
+
+                foreach (var metric in metrics)
+                {
+                    if (!string.Equals(
+                            metric.Name,
+                            "scene.sequence.handler_probe_failures",
+                            StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    probeFailures =
+                        metric.Value;
+                    foundProbeMetric =
+                        true;
+                    break;
+                }
+
+                Expect(
+                    foundProbeMetric &&
+                    probeFailures >= 1.0,
+                    "scene sequence diagnostics must expose isolated action-handler capability probe failures",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "P12 scene sequence handler lifetime validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void InvokeSceneSequenceEnsureHandlers(
+            SceneSequenceEventActionHandler handler)
+        {
+            var method =
+                typeof(SceneSequenceEventActionHandler)
+                    .GetMethod(
+                        "EnsureHandlers",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(SceneSequenceEventActionHandler)
+                        .FullName,
+                    "EnsureHandlers");
+            }
+
+            method.Invoke(
+                handler,
+                null);
+        }
+
+        private static int InvokeSceneSequenceHandlerCount(
+            SceneSequenceEventActionHandler handler,
+            EventActionCommand command)
+        {
+            var method =
+                typeof(SceneSequenceEventActionHandler)
+                    .GetMethod(
+                        "FindHandlerCount",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(SceneSequenceEventActionHandler)
+                        .FullName,
+                    "FindHandlerCount");
+            }
+
+            var arguments =
+                new object[]
+                {
+                    command,
+                    null
+                };
+
+            return (int)method.Invoke(
+                handler,
+                arguments);
+        }
+
         private static void RunEventRuleLibraryBrowserChecks(
             List<string> failures)
         {
@@ -4461,6 +4625,50 @@ namespace VCR.Editor.P12
                 failures.Add(
                     message);
             }
+        }
+    }
+
+    internal sealed class P12SceneSequenceProbeHandler :
+        MonoBehaviour,
+        IEventActionHandler
+    {
+        public bool CanHandle(
+            EventActionCommand command)
+        {
+            return string.Equals(
+                command.ActionType,
+                "p12.sequence.probe",
+                StringComparison.Ordinal);
+        }
+
+        public bool TryExecute(
+            EventActionCommand command,
+            out string error)
+        {
+            error = null;
+            return CanHandle(
+                command);
+        }
+    }
+
+    internal sealed class P12ThrowingSceneSequenceProbeHandler :
+        MonoBehaviour,
+        IEventActionHandler
+    {
+        public bool CanHandle(
+            EventActionCommand command)
+        {
+            throw new InvalidOperationException(
+                "synthetic P12 sequence probe failure");
+        }
+
+        public bool TryExecute(
+            EventActionCommand command,
+            out string error)
+        {
+            error =
+                "should not execute";
+            return false;
         }
     }
 }
