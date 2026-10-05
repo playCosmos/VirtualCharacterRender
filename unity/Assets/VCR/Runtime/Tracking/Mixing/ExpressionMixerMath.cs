@@ -52,7 +52,8 @@ namespace VCR.Runtime.Tracking.Mixing
                     layerState,
                     clampedWeight,
                     clampedDeadzone,
-                    mode));
+                    mode),
+                SnapshotArrayOwnership.Transfer);
         }
 
         public static float BlendValue(
