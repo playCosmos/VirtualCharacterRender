@@ -70,6 +70,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         private long _rejectedEventCount;
         private long _droppedEventCount;
         private long _dispatchedEventCount;
+        private long _dispatchFailureCount;
         private long _rejectedSenderCount;
         private string _backgroundError;
 
@@ -181,11 +182,23 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 Interlocked.Decrement(
                     ref _queuedCount);
 
-                _sink.Publish(
-                    value);
+                try
+                {
+                    _sink.Publish(
+                        value);
 
-                Interlocked.Increment(
-                    ref _dispatchedEventCount);
+                    Interlocked.Increment(
+                        ref _dispatchedEventCount);
+                }
+                catch (Exception exception)
+                {
+                    Interlocked.Increment(
+                        ref _dispatchFailureCount);
+                    Interlocked.Exchange(
+                        ref _backgroundError,
+                        "OSC event sink threw: " +
+                        exception.Message);
+                }
             }
         }
 
@@ -268,6 +281,13 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 new RuntimeMetric(
                     "protocol.osc.events.dispatched",
                     DispatchedEventCount,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.osc.events.dispatch_failures",
+                    Interlocked.Read(
+                        ref _dispatchFailureCount),
                     "count"));
 
             output.Add(
