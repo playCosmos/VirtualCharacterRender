@@ -20,9 +20,15 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField]
         private bool autoFindSource = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
+        private float _nextResolveTime;
+
         private void Awake()
         {
-            ResolveSource();
+            ResolveSource(
+                force: true);
         }
 
         public void SetExpressionSource(
@@ -36,6 +42,7 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 layerId = id;
             }
+            _nextResolveTime = 0f;
         }
 
         public bool CanHandle(
@@ -64,6 +71,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     layerId,
                     StringComparison.Ordinal);
         }
+
         public bool TryExecute(
             EventActionCommand command,
             out string error)
@@ -110,7 +118,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             return true;
         }
 
-        private void ResolveSource()
+        private void ResolveSource(
+            bool force = false)
         {
             if (source != null ||
                 !autoFindSource)
@@ -118,10 +127,30 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextResolveTime)
+            {
+                return;
+            }
+
+            _nextResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
             source =
                 FindFirstObjectByType<
                     ManualExpressionLayerSource>(
                     FindObjectsInactive.Exclude);
+
+            if (source != null)
+            {
+                _nextResolveTime = 0f;
+            }
         }
     }
 }
