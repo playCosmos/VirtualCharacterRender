@@ -2094,6 +2094,8 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedAppearanceHandlerRuntime(
                 failures);
+            ValidateDestroyedMotionRuntimeRefresh(
+                failures);
         }
 
         private static void ValidateDestroyedExecutorRefresh(
@@ -2347,6 +2349,75 @@ namespace VCR.Editor.P11
             {
                 failures.Add(
                     "destroyed appearance handler runtime recovery unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateDestroyedMotionRuntimeRefresh(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Motion Runtime Refresh Validation");
+
+                var oldRuntime =
+                    root.AddComponent<
+                        BakedMotionCueSource>();
+                var handler =
+                    root.AddComponent<
+                        MotionCueEventActionHandler>();
+
+                handler.SetMotionRuntime(
+                    oldRuntime);
+
+                var command =
+                    new EventActionCommand(
+                        "motion-runtime-recovery",
+                        EventActionTypes
+                            .MotionRelease,
+                        "motion.clips",
+                        null,
+                        null,
+                        0.0,
+                        false,
+                        41);
+
+                Expect(
+                    handler.CanHandle(
+                        command),
+                    "motion cue handler recovery validation must start with the configured runtime",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldRuntime);
+
+                var replacement =
+                    root.AddComponent<
+                        BakedMotionCueSource>();
+
+                Expect(
+                    handler.CanHandle(
+                        command) &&
+                    replacement != null,
+                    "motion cue handler must ignore a destroyed serialized runtime during rebuild and auto-discover a live replacement",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed motion cue runtime refresh validation unexpected exception: " +
                     exception);
             }
             finally
