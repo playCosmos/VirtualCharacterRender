@@ -6,7 +6,7 @@ namespace VCR.Runtime.Tracking
     /// Allocation-free, non-owning view of one humanoid pose sample.
     ///
     /// The backing arrays remain owned by the provider and may be overwritten
-    /// by the next borrow/capture call. Consumers must finish reading this value
+    /// by a later borrowed-motion call. Consumers must finish reading this value
     /// synchronously and must never publish or retain it as an immutable
     /// TrackingFrame payload.
     /// </summary>
@@ -82,8 +82,123 @@ namespace VCR.Runtime.Tracking
     }
 
     /// <summary>
-    /// Optional synchronous zero-allocation pose path for consumers such as
-    /// protocol senders that serialize a pose immediately and do not retain it.
+    /// Non-owning expression view backed by provider-owned reusable arrays.
+    /// </summary>
+    public readonly struct BorrowedExpressionState
+    {
+        private readonly float[] _standard;
+        private readonly NamedExpressionValue[] _custom;
+        private readonly int _customCount;
+
+        public BorrowedExpressionState(
+            float[] standard,
+            NamedExpressionValue[] custom,
+            int customCount)
+        {
+            if (standard == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(standard));
+            }
+
+            if (standard.Length !=
+                (int)StandardExpression.Count)
+            {
+                throw new ArgumentException(
+                    "Borrowed standard expression array has an invalid length.",
+                    nameof(standard));
+            }
+
+            if (custom == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(custom));
+            }
+
+            if (customCount < 0 ||
+                customCount > custom.Length)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(customCount));
+            }
+
+            _standard = standard;
+            _custom = custom;
+            _customCount = customCount;
+        }
+
+        public bool IsValid =>
+            _standard != null &&
+            _custom != null;
+
+        public float Get(
+            StandardExpression expression)
+        {
+            var index =
+                (int)expression;
+
+            if (_standard == null ||
+                index < 0 ||
+                index >= _standard.Length)
+            {
+                return 0f;
+            }
+
+            return _standard[index];
+        }
+
+        public ReadOnlySpan<
+            NamedExpressionValue> Custom =>
+                _custom == null
+                    ? ReadOnlySpan<
+                        NamedExpressionValue>.Empty
+                    : _custom.AsSpan(
+                        0,
+                        _customCount);
+    }
+
+    /// <summary>
+    /// One synchronous borrowed motion sample. Every included domain is sampled
+    /// together so a consumer never has to keep one borrowed domain alive while
+    /// invoking the provider again for another.
+    /// </summary>
+    public readonly struct BorrowedMotionSample
+    {
+        public BorrowedMotionSample(
+            TrackingRegion validRegions,
+            BorrowedHumanoidPose humanoidPose,
+            BorrowedExpressionState expressions)
+        {
+            ValidRegions = validRegions;
+            HumanoidPose = humanoidPose;
+            Expressions = expressions;
+        }
+
+        public TrackingRegion ValidRegions { get; }
+        public BorrowedHumanoidPose HumanoidPose { get; }
+        public BorrowedExpressionState Expressions { get; }
+
+        public bool HasHumanoidPose =>
+            HumanoidPose.IsValid;
+
+        public bool HasExpressions =>
+            Expressions.IsValid;
+    }
+
+    /// <summary>
+    /// Preferred synchronous zero-allocation contract for protocol/output
+    /// consumers. The returned sample remains valid only until the provider's
+    /// next borrowed-motion call.
+    /// </summary>
+    public interface IBorrowedNormalizedMotionProvider
+    {
+        bool TryBorrowMotion(
+            in NormalizedMotionSnapshotRequest request,
+            out BorrowedMotionSample sample);
+    }
+
+    /// <summary>
+    /// Pose-only compatibility contract for synchronous consumers.
     /// </summary>
     public interface IBorrowedHumanoidPoseProvider
     {
