@@ -41,6 +41,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateWebSocketTransport(
                 failures);
+            ValidateWebSocketStopIsolation(
+                failures);
             ValidateOscMapping(
                 failures);
             ValidateSoopMapping(
@@ -713,6 +715,73 @@ namespace VCR.Editor.P8
                     credentialError),
                 "WebSocket endpoint URI user-info credentials must be rejected",
                 failures);
+        }
+
+        private static void ValidateWebSocketStopIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 WebSocket Stop Isolation");
+
+                var handler =
+                    root.AddComponent<
+                        P8ThrowingWebSocketHandler>();
+                var transport =
+                    root.AddComponent<
+                        WebSocketEventClientTransport>();
+
+                transport.SetHandler(
+                    handler);
+
+                Expect(
+                    transport.TryQueueText(
+                        "stale-after-stop",
+                        out var queueError) &&
+                    transport.QueuedCount == 1,
+                    "WebSocket stop isolation must queue a pending message before stop: " +
+                    queueError,
+                    failures);
+
+                transport.StopTransport();
+
+                InvokeUpdate(
+                    transport);
+
+                var metrics =
+                    new List<RuntimeMetric>();
+                transport.CollectMetrics(
+                    metrics);
+
+                Expect(
+                    transport.QueuedCount == 0 &&
+                    handler.InvocationCount == 0 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.websocket.transport.dropped",
+                        out var dropped) &&
+                    dropped >= 1.0,
+                    "stopping WebSocket transport must discard queued messages so stale events cannot execute after stop",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "WebSocket stop isolation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void ValidateOscMapping(
