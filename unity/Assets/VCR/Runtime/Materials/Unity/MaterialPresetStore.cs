@@ -12,6 +12,8 @@ namespace VCR.Runtime.Materials.Unity
 
         private const long MaxFileBytes =
             16L * 1024L * 1024L;
+        public const int MaxPresets = 512;
+        public const int MaxParametersPerPreset = 256;
 
         private readonly string _path;
 
@@ -159,6 +161,14 @@ namespace VCR.Runtime.Materials.Unity
                 Array.Empty<
                     MaterialOverridePreset>();
 
+            if (document.Presets.Length >
+                MaxPresets)
+            {
+                error =
+                    $"Material preset document contains {document.Presets.Length} presets; limit is {MaxPresets}.";
+                return false;
+            }
+
             var ids =
                 new HashSet<string>(
                     StringComparer.Ordinal);
@@ -192,6 +202,14 @@ namespace VCR.Runtime.Materials.Unity
                 preset.Parameters ??=
                     Array.Empty<
                         MaterialParameterOverride>();
+
+                if (preset.Parameters.Length >
+                    MaxParametersPerPreset)
+                {
+                    error =
+                        $"Material preset '{preset.PresetId}' contains {preset.Parameters.Length} parameters; limit is {MaxParametersPerPreset}.";
+                    return false;
+                }
             }
 
             return true;
