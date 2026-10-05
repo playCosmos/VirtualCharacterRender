@@ -39,13 +39,17 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveRuntime();
-
-            if (!IsServiceAlive(_runtime) ||
-                !string.Equals(
+            if (!string.Equals(
                     command.ActionType,
                     EventActionTypes.EnvironmentSetState,
                     StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveRuntime();
+
+            if (!IsServiceAlive(_runtime))
             {
                 return false;
             }
