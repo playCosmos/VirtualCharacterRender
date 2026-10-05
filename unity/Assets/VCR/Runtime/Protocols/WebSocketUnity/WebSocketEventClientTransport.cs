@@ -102,6 +102,27 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 Volatile.Read(
                     ref _queuedCount));
 
+        public int MaxMessageBytes =>
+            Math.Max(
+                1024,
+                Math.Min(
+                    1048576,
+                    maxMessageBytes));
+
+        public int MaxQueuedMessages =>
+            Math.Max(
+                32,
+                Math.Min(
+                    8192,
+                    maxQueuedMessages));
+
+        public int MaxDispatchPerFrame =>
+            Math.Max(
+                1,
+                Math.Min(
+                    2048,
+                    maxDispatchPerFrame));
+
         public long ConnectSuccessCount =>
             Interlocked.Read(
                 ref _connectSuccesses);
@@ -166,9 +187,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             }
 
             var budget =
-                Math.Max(
-                    1,
-                    maxDispatchPerFrame);
+                MaxDispatchPerFrame;
 
             for (var i = 0;
                  i < budget &&
@@ -331,9 +350,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             }
 
             if (byteCount >
-                Math.Max(
-                    1024,
-                    maxMessageBytes))
+                MaxMessageBytes)
             {
                 error =
                     "WebSocket text message exceeds the configured byte limit.";
@@ -435,6 +452,22 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 new RuntimeMetric(
                     "protocol.websocket.transport.connect_failure",
                     ConnectFailureCount,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.message_limit",
+                    MaxMessageBytes,
+                    "bytes"));
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.queue_limit",
+                    MaxQueuedMessages,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.dispatch_limit",
+                    MaxDispatchPerFrame,
                     "count"));
 
             output.Add(
@@ -711,9 +744,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     ref _queuedCount);
 
             var limit =
-                Math.Max(
-                    32,
-                    maxQueuedMessages);
+                MaxQueuedMessages;
 
             while (count > limit &&
                    _queue.TryDequeue(
