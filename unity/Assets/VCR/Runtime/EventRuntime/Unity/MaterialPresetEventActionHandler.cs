@@ -18,17 +18,26 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField]
         private bool autoFindDependencies = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         private IMaterialPresetResolver _presetResolver;
+        private float _nextResolveTime;
 
         private void Awake()
         {
-            ResolveDependencies();
+            ResolveDependencies(
+                force: true);
         }
 
         public void SetMaterialController(
             MaterialOverrideController value)
         {
-            controller = value;
+            controller =
+                value != null
+                    ? value
+                    : null;
+            _nextResolveTime = 0f;
         }
 
         public void SetPresetResolver(
@@ -43,6 +52,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     ? presetResolverBehaviour as
                         IMaterialPresetResolver
                     : null;
+            _nextResolveTime = 0f;
         }
 
         public bool CanHandle(
@@ -136,7 +146,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                 : true;
         }
 
-        private void ResolveDependencies()
+        private void ResolveDependencies(
+            bool force = false)
         {
             if (!IsServiceAlive(_presetResolver))
             {
@@ -156,6 +167,28 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            if (controller != null &&
+                IsServiceAlive(_presetResolver))
+            {
+                _nextResolveTime = 0f;
+                return;
+            }
+
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextResolveTime)
+            {
+                return;
+            }
+
+            _nextResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
             if (controller == null)
             {
                 controller =
@@ -166,6 +199,11 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             if (IsServiceAlive(_presetResolver))
             {
+                if (controller != null)
+                {
+                    _nextResolveTime = 0f;
+                }
+
                 return;
             }
 
@@ -183,6 +221,12 @@ namespace VCR.Runtime.EventRuntime.Unity
                         behaviour;
                     _presetResolver =
                         resolver;
+
+                    if (controller != null)
+                    {
+                        _nextResolveTime = 0f;
+                    }
+
                     return;
                 }
             }
