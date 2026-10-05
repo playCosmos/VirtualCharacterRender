@@ -94,6 +94,45 @@ namespace VCR.Editor.P0
                 Mathf.Approximately(frame.HeadEulerYDegrees, -20f) &&
                 Mathf.Approximately(frame.HeadEulerZDegrees, 30f);
 
+            var spanLookupPass =
+                FaceCoefficientNames.TryParse(
+                    "eyeBlink_L".AsSpan(),
+                    out var aliasCoefficient) &&
+                aliasCoefficient ==
+                    FaceCoefficient.EyeBlinkLeft &&
+                FaceCoefficientNames.TryParse(
+                    "eyeBlinkRight".AsSpan(),
+                    out var canonicalCoefficient) &&
+                canonicalCoefficient ==
+                    FaceCoefficient.EyeBlinkRight &&
+                !FaceCoefficientNames.TryParse(
+                    "eyeBlink_UNKNOWN".AsSpan(),
+                    out _);
+
+            const string whitespaceSample =
+                "  eyeBlink_L&25  |  jawOpen&50  |" +
+                "  =head# 10, -20, 30, 0.1, -0.2, -0.3  |";
+
+            var whitespacePass =
+                IFacialMocapFrameParser.TryParse(
+                    whitespaceSample,
+                    out var whitespaceFrame) &&
+                whitespaceFrame.HasHead &&
+                Mathf.Approximately(
+                    whitespaceFrame.Coefficients[
+                        (int)FaceCoefficient.EyeBlinkLeft],
+                    0.25f) &&
+                Mathf.Approximately(
+                    whitespaceFrame.Coefficients[
+                        (int)FaceCoefficient.JawOpen],
+                    0.50f) &&
+                Mathf.Approximately(
+                    whitespaceFrame.HeadEulerXDegrees,
+                    10f) &&
+                Mathf.Approximately(
+                    whitespaceFrame.HeadPositionZ,
+                    -0.3f);
+
             var oversizedText =
                 new string(
                     'x',
@@ -206,6 +245,8 @@ namespace VCR.Editor.P0
 
             pass =
                 pass &&
+                spanLookupPass &&
+                whitespacePass &&
                 parserBoundsPass &&
                 sourceLifecyclePass;
 
@@ -216,7 +257,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 iFacialMocap parser: FAIL (mapping, bounds, finite-value, or lifecycle mismatch)");
+                    "VCR P0 iFacialMocap parser: FAIL (mapping/span lookup, whitespace parsing, bounds, finite-value, or lifecycle mismatch)");
             }
         }
     }
