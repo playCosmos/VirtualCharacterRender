@@ -34,9 +34,15 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void SetPresetResolver(
             MonoBehaviour value)
         {
-            presetResolverBehaviour = value;
+            presetResolverBehaviour =
+                value != null
+                    ? value
+                    : null;
             _presetResolver =
-                value as IMaterialPresetResolver;
+                presetResolverBehaviour != null
+                    ? presetResolverBehaviour as
+                        IMaterialPresetResolver
+                    : null;
         }
 
         public bool CanHandle(
@@ -46,7 +52,7 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             return
                 controller != null &&
-                _presetResolver != null &&
+                IsServiceAlive(_presetResolver) &&
                 string.Equals(
                     command.ActionType,
                     EventActionTypes.MaterialApplyPreset,
@@ -113,10 +119,29 @@ namespace VCR.Runtime.EventRuntime.Unity
             return true;
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveDependencies()
         {
-            if (presetResolverBehaviour is
-                IMaterialPresetResolver configured)
+            if (!IsServiceAlive(_presetResolver))
+            {
+                _presetResolver = null;
+            }
+
+            if (presetResolverBehaviour != null &&
+                presetResolverBehaviour is
+                    IMaterialPresetResolver configured)
             {
                 _presetResolver =
                     configured;
@@ -127,12 +152,15 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
-            controller ??=
-                FindFirstObjectByType<
-                    MaterialOverrideController>(
-                    FindObjectsInactive.Exclude);
+            if (controller == null)
+            {
+                controller =
+                    FindFirstObjectByType<
+                        MaterialOverrideController>(
+                        FindObjectsInactive.Exclude);
+            }
 
-            if (_presetResolver != null)
+            if (IsServiceAlive(_presetResolver))
             {
                 return;
             }
