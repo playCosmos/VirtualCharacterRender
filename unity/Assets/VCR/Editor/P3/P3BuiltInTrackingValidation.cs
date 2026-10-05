@@ -302,7 +302,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(snapshot ownership/copy isolation, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot ownership/copy isolation, borrowed-pose lifetime semantics, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
@@ -499,6 +499,73 @@ namespace VCR.Editor.P3
         private static void ValidateSnapshotOwnership(
             List<string> failures)
         {
+            var borrowedBones =
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
+            var borrowedPresence =
+                new bool[
+                    (int)HumanoidBoneId.Count];
+            var borrowedHips =
+                (int)HumanoidBoneId.Hips;
+
+            borrowedBones[borrowedHips] =
+                new NormalizedBonePose(
+                    new TrackingVector3(
+                        1f,
+                        0f,
+                        0f),
+                    TrackingQuaternion.Identity);
+            borrowedPresence[borrowedHips] =
+                true;
+
+            var borrowedPose =
+                new BorrowedHumanoidPose(
+                    HumanoidPoseSpace.OriginalLocal,
+                    TrackingVector3.Zero,
+                    TrackingQuaternion.Identity,
+                    borrowedBones,
+                    borrowedPresence);
+
+            var borrowedInitial =
+                borrowedPose.TryGet(
+                    HumanoidBoneId.Hips,
+                    out var initialBorrowedHips) &&
+                Math.Abs(
+                    initialBorrowedHips
+                        .LocalPosition.X -
+                    1f) <
+                0.0001f;
+
+            borrowedBones[borrowedHips] =
+                new NormalizedBonePose(
+                    new TrackingVector3(
+                        2f,
+                        0f,
+                        0f),
+                    TrackingQuaternion.Identity);
+
+            var borrowedReflectsReuse =
+                borrowedPose.TryGet(
+                    HumanoidBoneId.Hips,
+                    out var reusedBorrowedHips) &&
+                Math.Abs(
+                    reusedBorrowedHips
+                        .LocalPosition.X -
+                    2f) <
+                0.0001f;
+
+            Expect(
+                borrowedPose.IsValid &&
+                borrowedInitial &&
+                borrowedReflectsReuse &&
+                !borrowedPose.TryGet(
+                    (HumanoidBoneId)(-1),
+                    out _) &&
+                !default(BorrowedHumanoidPose)
+                    .IsValid,
+                "borrowed humanoid poses must be explicit non-owning views whose backing data may change on provider reuse",
+                failures);
+
             var poseOnlyRequest =
                 new NormalizedMotionSnapshotRequest(
                     includeHumanoidPose: true,
