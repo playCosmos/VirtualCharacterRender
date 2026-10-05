@@ -35,6 +35,7 @@ namespace VCR.Editor.P9
             ValidateUnityDispatch(failures);
             ValidateEventHubReplacement(failures);
             ValidateDestroyedHandlerDependencies(failures);
+            ValidateThrowingHandlerProbeIsolation(failures);
             ValidateMaterialAction(failures);
             P9ExpressionEventValidation.RunChecks(
                 failures);
@@ -1522,6 +1523,100 @@ namespace VCR.Editor.P9
             }
         }
 
+        private static void ValidateThrowingHandlerProbeIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P9 Handler Probe Isolation Validation");
+
+                var hub =
+                    root.AddComponent<
+                        NormalizedEventHub>();
+                var environment =
+                    root.AddComponent<
+                        P9FakeEnvironmentRuntime>();
+                environment.Configure(
+                    "environment.main",
+                    "default");
+
+                var throwing =
+                    root.AddComponent<
+                        P9ThrowingCanHandleActionHandler>();
+                var environmentHandler =
+                    root.AddComponent<
+                        EnvironmentStateEventActionHandler>();
+                environmentHandler.SetEnvironmentRuntime(
+                    environment);
+
+                var host =
+                    root.AddComponent<
+                        EventRuntimeHost>();
+                host.SetEventHub(
+                    hub);
+                host.SetActionHandlers(
+                    throwing,
+                    environmentHandler);
+                host.SetRules(
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "probe-isolation",
+                        Filter =
+                            new EventRuleFilter
+                            {
+                                Type =
+                                    NormalizedEventTypes
+                                        .LocalManual
+                            },
+                        Actions =
+                            new[]
+                            {
+                                EnvironmentAction(
+                                    "environment.main",
+                                    "probe-ok")
+                            }
+                    });
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "local.validation",
+                        50));
+
+                InvokeUpdate(
+                    hub);
+
+                Expect(
+                    environment.Status.StateId ==
+                        "probe-ok" &&
+                    host.ExecutedActions == 1 &&
+                    host.HandlerProbeFailureCount == 1 &&
+                    host.FailedActions == 0,
+                    "a throwing CanHandle implementation must be isolated so another valid handler can still execute the same action",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "handler probe isolation validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static void ValidateMaterialAction(
             List<string> failures)
         {
@@ -2017,6 +2112,27 @@ namespace VCR.Editor.P9
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P9ThrowingCanHandleActionHandler :
+        MonoBehaviour,
+        IEventActionHandler
+    {
+        public bool CanHandle(
+            EventActionCommand command)
+        {
+            throw new InvalidOperationException(
+                "synthetic CanHandle failure");
+        }
+
+        public bool TryExecute(
+            EventActionCommand command,
+            out string error)
+        {
+            error =
+                "should not execute";
+            return false;
         }
     }
 
