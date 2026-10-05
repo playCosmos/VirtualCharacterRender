@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Scene;
 
@@ -148,9 +149,19 @@ namespace VCR.Runtime.Application
                 vrmPath =
                     Path.GetFullPath(vrmPath);
 
-                var loaded =
-                    await sceneRuntime.LoadCharacterAsync(
-                        vrmPath);
+                Vrm10Instance loaded;
+
+                try
+                {
+                    loaded =
+                        await sceneRuntime.LoadCharacterAsync(
+                            vrmPath);
+                }
+                catch (OperationCanceledException)
+                    when (_quitting)
+                {
+                    return false;
+                }
 
                 if (_quitting)
                 {
