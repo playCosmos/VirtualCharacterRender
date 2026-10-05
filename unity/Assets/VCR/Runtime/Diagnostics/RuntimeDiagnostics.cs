@@ -68,7 +68,20 @@ namespace VCR.Runtime.Diagnostics
             _latestSnapshot;
 
         public float ReportIntervalSeconds =>
-            reportIntervalSeconds;
+            float.IsNaN(
+                reportIntervalSeconds) ||
+            float.IsInfinity(
+                reportIntervalSeconds)
+                ? 5f
+                : Mathf.Max(
+                    1f,
+                    reportIntervalSeconds);
+
+        public int FrameWindowFrames =>
+            Mathf.Clamp(
+                frameWindowFrames,
+                120,
+                3600);
 
         public bool ConsoleLoggingEnabled =>
             logToConsole;
@@ -83,8 +96,13 @@ namespace VCR.Runtime.Diagnostics
 
         protected virtual void Awake()
         {
-            _frameMs = new float[frameWindowFrames];
-            _sortScratch = new float[frameWindowFrames];
+            var frameWindow =
+                FrameWindowFrames;
+
+            _frameMs =
+                new float[frameWindow];
+            _sortScratch =
+                new float[frameWindow];
             ResolveProvider();
         }
 
@@ -146,7 +164,7 @@ namespace VCR.Runtime.Diagnostics
                 Time.realtimeSinceStartupAsDouble;
 
             if (now - _lastReportTime >=
-                reportIntervalSeconds)
+                ReportIntervalSeconds)
             {
                 Report(now);
             }
