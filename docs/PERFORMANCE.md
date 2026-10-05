@@ -128,7 +128,8 @@ For steady-state tracking and UI operation:
 - expression custom-channel merge scratch storage must be reused; do not reintroduce per-frame `Dictionary`, `HashSet`, or `List` construction in the mixer hot path,
 - immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
 - UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
-- missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan,
+- missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
+- event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
 A temporary allocation that is necessary for an immutable published frame is evaluated separately from avoidable scratch allocation. Do not trade correctness or frame immutability for unsafe pooling without ownership/lifetime evidence.
