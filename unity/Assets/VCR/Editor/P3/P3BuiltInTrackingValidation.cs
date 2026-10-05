@@ -41,7 +41,8 @@ namespace VCR.Editor.P3
                     new NormalizedFaceState(
                         TrackingQuaternion.Identity,
                         TrackingVector3.Zero,
-                        coefficients);
+                        coefficients,
+                        SnapshotArrayOwnership.Copy);
 
                 source =
                     new ArKitFaceSource(
@@ -126,7 +127,9 @@ namespace VCR.Editor.P3
                         headEulerZDegrees: 0f,
                         headPositionX: 0f,
                         headPositionY: 0f,
-                        headPositionZ: 0f));
+                        headPositionZ: 0f,
+                        ownership:
+                            SnapshotArrayOwnership.Copy));
                 latestBuffer.Clear();
 
                 Expect(
@@ -388,8 +391,9 @@ namespace VCR.Editor.P3
             var copiedHand =
                 new NormalizedHandState(
                     isLeft: true,
-                    handSource,
-                    SnapshotArrayOwnership.Copy);
+                    joints: handSource,
+                    ownership:
+                        SnapshotArrayOwnership.Copy);
 
             handSource[
                 (int)HandJoint.IndexTip] =
@@ -512,7 +516,8 @@ namespace VCR.Editor.P3
                     headPositionX: 0f,
                     headPositionY: 0f,
                     headPositionZ: 0f,
-                    SnapshotArrayOwnership.Copy);
+                    ownership:
+                        SnapshotArrayOwnership.Copy);
 
             rawSource[
                 (int)FaceCoefficient.JawOpen] =
