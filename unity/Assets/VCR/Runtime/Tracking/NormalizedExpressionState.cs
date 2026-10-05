@@ -2,6 +2,12 @@ using System;
 
 namespace VCR.Runtime.Tracking
 {
+    /// <summary>
+    /// Immutable standard/custom expression snapshot.
+    ///
+    /// Transfer avoids duplicate hot-path copies when the producer created
+    /// dedicated arrays. Copy is available at external ownership boundaries.
+    /// </summary>
     public sealed class NormalizedExpressionState
     {
         private readonly float[] _standard;
@@ -10,24 +16,45 @@ namespace VCR.Runtime.Tracking
         public NormalizedExpressionState(
             float[] standard,
             NamedExpressionValue[] custom = null)
+            : this(
+                standard,
+                custom,
+                SnapshotArrayOwnership.Transfer)
         {
-            _standard = standard ??
-                throw new ArgumentNullException(nameof(standard));
-
-            if (_standard.Length != (int)StandardExpression.Count)
-            {
-                throw new ArgumentException(
-                    "Standard expression array has an invalid length.",
-                    nameof(standard));
-            }
-
-            _custom = custom ?? Array.Empty<NamedExpressionValue>();
         }
 
-        public float Get(StandardExpression expression)
+        public NormalizedExpressionState(
+            float[] standard,
+            NamedExpressionValue[] custom,
+            SnapshotArrayOwnership ownership)
         {
-            var index = (int)expression;
-            if (index < 0 || index >= _standard.Length)
+            _standard =
+                SnapshotArrayOwnershipUtility.Acquire(
+                    standard,
+                    (int)StandardExpression.Count,
+                    ownership,
+                    nameof(standard));
+
+            _custom =
+                custom == null
+                    ? Array.Empty<
+                        NamedExpressionValue>()
+                    : SnapshotArrayOwnershipUtility
+                        .AcquireVariable(
+                            custom,
+                            ownership,
+                            nameof(custom));
+        }
+
+        public float Get(
+            StandardExpression expression)
+        {
+            var index =
+                (int)expression;
+
+            if (index < 0 ||
+                index >=
+                    _standard.Length)
             {
                 return 0f;
             }
@@ -35,6 +62,8 @@ namespace VCR.Runtime.Tracking
             return _standard[index];
         }
 
-        public ReadOnlySpan<NamedExpressionValue> Custom => _custom;
+        public ReadOnlySpan<
+            NamedExpressionValue> Custom =>
+                _custom;
     }
 }
