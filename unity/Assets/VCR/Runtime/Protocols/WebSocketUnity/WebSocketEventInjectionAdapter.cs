@@ -43,6 +43,13 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private long _accepted;
         private long _rejected;
 
+        public int MaxMessageCharacters =>
+            Math.Max(
+                256,
+                Math.Min(
+                    262144,
+                    maxMessageCharacters));
+
         public long AcceptedCount =>
             Interlocked.Read(
                 ref _accepted);
@@ -84,9 +91,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             }
 
             if (message.Length >
-                Math.Max(
-                    256,
-                    maxMessageCharacters))
+                MaxMessageCharacters)
             {
                 return Reject(
                     "WebSocket event message exceeds the configured size limit.",
