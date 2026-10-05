@@ -265,14 +265,19 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
+            if (!TryApplySpaceTargets(
+                    nextTargets,
+                    spaceMode,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
             spaceTargetBehaviours =
                 nextBehaviours;
             _spaceTargets =
                 nextTargets;
-
-            ApplySpaceTargets(
-                _spaceTargets,
-                spaceMode);
 
             _lastError = null;
             return true;
@@ -301,9 +306,20 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            ApplySpaceTargets(
-                _spaceTargets,
-                mode);
+            var previousMode =
+                spaceMode;
+
+            if (!TryApplySpaceTargets(
+                    _spaceTargets,
+                    mode,
+                    out error))
+            {
+                TryRestoreSpaceTargets(
+                    _spaceTargets,
+                    previousMode);
+                _lastError = error;
+                return false;
+            }
 
             spaceMode = mode;
             _lastError = null;
@@ -1702,10 +1718,20 @@ namespace VCR.Runtime.Environment.Unity
                     continue;
                 }
 
-                if (!target.ValidateEnvironmentSpace(
-                        mode,
-                        out error))
+                try
                 {
+                    if (!target.ValidateEnvironmentSpace(
+                            mode,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Environment space target validation failed: " +
+                        exception.Message;
                     return false;
                 }
             }
@@ -1713,7 +1739,43 @@ namespace VCR.Runtime.Environment.Unity
             return true;
         }
 
-        private static void ApplySpaceTargets(
+        private static bool TryApplySpaceTargets(
+            IEnvironmentSpaceTarget[] targets,
+            EnvironmentSpaceMode mode,
+            out string error)
+        {
+            error = null;
+
+            if (targets == null)
+            {
+                return true;
+            }
+
+            foreach (var target in targets)
+            {
+                if (!IsServiceAlive(target))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    target.ApplyEnvironmentSpace(
+                        mode);
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Environment space target apply failed: " +
+                        exception.Message;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void TryRestoreSpaceTargets(
             IEnvironmentSpaceTarget[] targets,
             EnvironmentSpaceMode mode)
         {
@@ -1729,8 +1791,15 @@ namespace VCR.Runtime.Environment.Unity
                     continue;
                 }
 
-                target.ApplyEnvironmentSpace(
-                    mode);
+                try
+                {
+                    target.ApplyEnvironmentSpace(
+                        mode);
+                }
+                catch
+                {
+                    // Best-effort rollback after a failed target apply.
+                }
             }
         }
 
