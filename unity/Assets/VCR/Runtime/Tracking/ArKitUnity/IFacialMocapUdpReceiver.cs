@@ -29,6 +29,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
     {
         private const int MaxDatagramBytes =
             16 * 1024;
+        private const int UdpReceiveBufferBytes =
+            65535;
 
         private static readonly UTF8Encoding StrictUtf8 =
             new(
@@ -410,10 +412,6 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
         private void ReceiveLoop()
         {
-            var remote =
-                new IPEndPoint(
-                    IPAddress.Any,
-                    0);
             var receiver =
                 _receiver;
             var acceptedAddress =
@@ -424,15 +422,31 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 return;
             }
 
+            var socket =
+                receiver.Client;
+            EndPoint remote =
+                new IPEndPoint(
+                    IPAddress.Any,
+                    0);
+            var bytes =
+                new byte[
+                    UdpReceiveBufferBytes];
+
             while (_running)
             {
                 try
                 {
-                    var bytes =
-                        receiver.Receive(
+                    var byteCount =
+                        socket.ReceiveFrom(
+                            bytes,
+                            0,
+                            bytes.Length,
+                            SocketFlags.None,
                             ref remote);
-                    if (bytes == null ||
-                        bytes.Length == 0)
+
+                    if (byteCount <= 0 ||
+                        remote is not
+                            IPEndPoint remoteIp)
                     {
                         continue;
                     }
@@ -440,7 +454,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     Interlocked.Increment(
                         ref _datagramCount);
 
-                    if (bytes.Length >
+                    if (byteCount >
                         MaxDatagramBytes)
                     {
                         Interlocked.Increment(
@@ -451,7 +465,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     }
 
                     if (acceptedAddress != null &&
-                        !remote.Address.Equals(
+                        !remoteIp.Address.Equals(
                             acceptedAddress))
                     {
                         Interlocked.Increment(
@@ -465,7 +479,9 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     {
                         text =
                             StrictUtf8.GetString(
-                                bytes);
+                                bytes,
+                                0,
+                                byteCount);
                     }
                     catch (DecoderFallbackException)
                     {
