@@ -110,17 +110,6 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             try
             {
-                var directory =
-                    System.IO.Path.GetDirectoryName(
-                        _path);
-
-                if (!string.IsNullOrWhiteSpace(
-                        directory))
-                {
-                    Directory.CreateDirectory(
-                        directory);
-                }
-
                 var envelope =
                     new EventRuntimeConfigurationEnvelope
                     {
@@ -138,52 +127,22 @@ namespace VCR.Runtime.EventRuntime.Unity
                         envelope,
                         prettyPrint: true);
 
-                var temporaryPath =
-                    _path + ".tmp";
-                var backupPath =
-                    _path + ".bak";
-
-                if (!BoundedTextFile.TryValidateUtf8Size(
+                if (!BoundedTextFile.TryWriteUtf8Atomic(
+                        _path,
                         json,
                         MaxFileBytes,
-                        out var sizeError))
+                        out var writeError))
                 {
                     error =
                         "Event runtime configuration save failed: " +
-                        sizeError;
+                        writeError;
                     return false;
-                }
-
-                File.WriteAllText(
-                    temporaryPath,
-                    json);
-
-                if (File.Exists(_path))
-                {
-                    File.Replace(
-                        temporaryPath,
-                        _path,
-                        backupPath);
-
-                    if (File.Exists(
-                            backupPath))
-                    {
-                        File.Delete(
-                            backupPath);
-                    }
-                }
-                else
-                {
-                    File.Move(
-                        temporaryPath,
-                        _path);
                 }
 
                 return true;
             }
             catch (Exception exception)
             {
-                TryDeleteTemporary();
                 error =
                     "Event runtime configuration save failed: " +
                     exception.Message;
@@ -244,24 +203,5 @@ namespace VCR.Runtime.EventRuntime.Unity
                     value));
         }
 
-        private void TryDeleteTemporary()
-        {
-            try
-            {
-                var temporaryPath =
-                    _path + ".tmp";
-
-                if (File.Exists(
-                        temporaryPath))
-                {
-                    File.Delete(
-                        temporaryPath);
-                }
-            }
-            catch
-            {
-                // Keep the original save error.
-            }
-        }
     }
 }
