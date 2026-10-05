@@ -143,9 +143,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     (!sendExpressions ||
                      selective != null);
 
-                if (canUseBorrowedPose &&
-                    borrowedProvider.TryBorrowHumanoidPose(
-                        out var borrowedPose))
+                if (canUseBorrowedPose)
                 {
                     NormalizedExpressionState expressions =
                         null;
@@ -167,6 +165,14 @@ namespace VCR.Runtime.Protocols.VmcUnity
                         expressions =
                             expressionFrame?
                                 .Expressions;
+                    }
+
+                    // Borrow last. The provider may invalidate a borrowed pose
+                    // on any subsequent borrow/capture call.
+                    if (!borrowedProvider.TryBorrowHumanoidPose(
+                            out var borrowedPose))
+                    {
+                        return;
                     }
 
                     packetLength =
