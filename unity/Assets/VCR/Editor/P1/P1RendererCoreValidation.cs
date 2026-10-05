@@ -11,6 +11,7 @@ using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Editor.P1
 {
@@ -873,6 +874,8 @@ namespace VCR.Editor.P1
 
             ValidateDestroyedInterfaceAdapters(
                 failures);
+            ValidateDestroyedTrackingProviders(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -987,6 +990,149 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static void ValidateDestroyedTrackingProviders(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P1 Destroyed Tracking Provider Validation");
+                root.SetActive(false);
+
+                var faceTarget =
+                    root.AddComponent<
+                        Vrm10TrackingTarget>();
+                var poseTarget =
+                    root.AddComponent<
+                        Vrm10HumanoidPoseTarget>();
+                var loader =
+                    root.AddComponent<
+                        Vrm10CharacterLoader>();
+                var provider =
+                    root.AddComponent<
+                        P1FakeTrackingProvider>();
+
+                ITrackingFrameProvider staleProvider =
+                    provider;
+
+                faceTarget.SetTrackingProvider(
+                    staleProvider);
+                faceTarget.SubmitFace(
+                    new NormalizedFaceState(
+                        TrackingQuaternion.Identity,
+                        TrackingVector3.Zero,
+                        new float[
+                            (int)FaceCoefficient.Count]));
+
+                poseTarget.SetTrackingProvider(
+                    staleProvider);
+
+                UnityEngine.Object.DestroyImmediate(
+                    provider);
+
+                InvokePrivateUpdate(
+                    faceTarget);
+                InvokePrivateUpdate(
+                    poseTarget);
+
+                Expect(
+                    GetPrivateField<
+                        ITrackingFrameProvider>(
+                            faceTarget,
+                            "_provider") == null &&
+                    GetPrivateField<
+                        NormalizedFaceState>(
+                            faceTarget,
+                            "_latestFace") == null,
+                    "VRM face/body target must clear a destroyed tracking provider and stale face snapshot before bounded rediscovery",
+                    failures);
+
+                Expect(
+                    GetPrivateField<
+                        ITrackingFrameProvider>(
+                            poseTarget,
+                            "_provider") == null &&
+                    GetPrivateField<bool>(
+                        poseTarget,
+                        "_poseUnavailable") &&
+                    GetPrivateField<bool>(
+                        poseTarget,
+                        "_expressionsUnavailable"),
+                    "VRM humanoid target must mark pose and expressions unavailable when its cached tracking provider is destroyed",
+                    failures);
+
+                loader.SetTrackingProvider(
+                    staleProvider);
+
+                Expect(
+                    GetPrivateField<MonoBehaviour>(
+                        loader,
+                        "trackingProviderBehaviour") ==
+                    null,
+                    "VRM character loader must reject a destroyed tracking provider instead of retaining its MonoBehaviour backing reference",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed VRM tracking provider validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void InvokePrivateUpdate(
+            MonoBehaviour target)
+        {
+            var method =
+                target.GetType().GetMethod(
+                    "Update",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    target.GetType().FullName,
+                    "Update");
+            }
+
+            method.Invoke(
+                target,
+                null);
+        }
+
+        private static T GetPrivateField<T>(
+            object target,
+            string fieldName)
+        {
+            var field =
+                target.GetType().GetField(
+                    fieldName,
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            return (T)field.GetValue(
+                target);
+        }
+
         private static void SetPrivateField(
             object target,
             string fieldName,
@@ -1097,6 +1243,39 @@ namespace VCR.Editor.P1
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P1FakeTrackingProvider :
+        MonoBehaviour,
+        ITrackingFrameProvider
+    {
+        public bool TryGetLatestFace(
+            out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+        public bool TryGetLatestBodyHands(
+            out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+        public bool TryGetLatestHumanoidPose(
+            out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
+        }
+
+        public bool TryGetLatestExpressions(
+            out TrackingFrame frame)
+        {
+            frame = null;
+            return false;
         }
     }
 }
