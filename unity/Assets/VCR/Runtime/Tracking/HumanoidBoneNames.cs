@@ -5,6 +5,9 @@ namespace VCR.Runtime.Tracking
 {
     public static class HumanoidBoneNames
     {
+        private static readonly string[] CanonicalNames =
+            BuildCanonicalNames();
+
         private static readonly Dictionary<string, HumanoidBoneId> Lookup =
             BuildLookup();
 
@@ -22,9 +25,28 @@ namespace VCR.Runtime.Tracking
         public static string GetCanonical(HumanoidBoneId bone)
         {
             var index = (int)bone;
-            return index >= 0 && index < (int)HumanoidBoneId.Count
-                ? bone.ToString()
+            return index >= 0 &&
+                   index < CanonicalNames.Length
+                ? CanonicalNames[index]
                 : string.Empty;
+        }
+
+        private static string[] BuildCanonicalNames()
+        {
+            var names =
+                new string[
+                    (int)HumanoidBoneId.Count];
+
+            for (var i = 0;
+                 i < names.Length;
+                 i++)
+            {
+                names[i] =
+                    ((HumanoidBoneId)i)
+                    .ToString();
+            }
+
+            return names;
         }
 
         private static Dictionary<string, HumanoidBoneId> BuildLookup()
@@ -33,10 +55,13 @@ namespace VCR.Runtime.Tracking
                 (int)HumanoidBoneId.Count,
                 StringComparer.OrdinalIgnoreCase);
 
-            for (var i = 0; i < (int)HumanoidBoneId.Count; i++)
+            for (var i = 0;
+                 i < CanonicalNames.Length;
+                 i++)
             {
-                var bone = (HumanoidBoneId)i;
-                lookup[bone.ToString()] = bone;
+                lookup[
+                    CanonicalNames[i]] =
+                        (HumanoidBoneId)i;
             }
 
             return lookup;
