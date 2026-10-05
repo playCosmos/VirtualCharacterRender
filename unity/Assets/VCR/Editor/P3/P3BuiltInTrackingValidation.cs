@@ -302,7 +302,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(snapshot array ownership/copy isolation, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot ownership/copy isolation, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
@@ -499,6 +499,36 @@ namespace VCR.Editor.P3
         private static void ValidateSnapshotOwnership(
             List<string> failures)
         {
+            var poseOnlyRequest =
+                new NormalizedMotionSnapshotRequest(
+                    includeHumanoidPose: true,
+                    includeExpressions: false);
+            var expressionOnlyRequest =
+                new NormalizedMotionSnapshotRequest(
+                    includeHumanoidPose: false,
+                    includeExpressions: true);
+            var emptyRequest =
+                new NormalizedMotionSnapshotRequest(
+                    includeHumanoidPose: false,
+                    includeExpressions: false);
+
+            Expect(
+                poseOnlyRequest.HasAnyDomain &&
+                poseOnlyRequest.IncludeHumanoidPose &&
+                !poseOnlyRequest.IncludeExpressions &&
+                expressionOnlyRequest.HasAnyDomain &&
+                !expressionOnlyRequest.IncludeHumanoidPose &&
+                expressionOnlyRequest.IncludeExpressions &&
+                !emptyRequest.HasAnyDomain &&
+                NormalizedMotionSnapshotRequest
+                    .Full
+                    .IncludeHumanoidPose &&
+                NormalizedMotionSnapshotRequest
+                    .Full
+                    .IncludeExpressions,
+                "selective motion snapshot requests must preserve independent pose/expression domain flags",
+                failures);
+
             var faceSource =
                 new float[
                     (int)FaceCoefficient.Count];
