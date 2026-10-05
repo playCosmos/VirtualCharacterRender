@@ -39,13 +39,17 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveMixer();
-
-            if (mixer == null ||
-                !string.Equals(
+            if (!string.Equals(
                     command.ActionType,
                     EventActionTypes.MotionPoseWeight,
                     StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveMixer();
+
+            if (mixer == null)
             {
                 return false;
             }
@@ -58,7 +62,6 @@ namespace VCR.Runtime.EventRuntime.Unity
                     mixerId,
                     StringComparison.Ordinal);
         }
-
         public bool TryExecute(
             EventActionCommand command,
             out string error)
