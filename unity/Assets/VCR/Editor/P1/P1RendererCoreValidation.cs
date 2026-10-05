@@ -950,6 +950,32 @@ namespace VCR.Editor.P1
                     scene.EnvironmentRuntime == null,
                     "destroyed environment runtimes cached through an interface must be treated as unavailable",
                     failures);
+
+                var replacementOverlay =
+                    root.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+                var replacementEnvironment =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                replacementEnvironment.Configure(
+                    "environment.p1.replacement",
+                    "default",
+                    EnvironmentUpdatePolicy.Static,
+                    EnvironmentSpaceMode.World);
+
+                Expect(
+                    ReferenceEquals(
+                        scene.OverlayOutput,
+                        replacementOverlay),
+                    "overlay output getter must re-resolve a live replacement after the cached Unity adapter is destroyed",
+                    failures);
+
+                Expect(
+                    ReferenceEquals(
+                        scene.EnvironmentRuntime,
+                        replacementEnvironment),
+                    "environment runtime getter must re-resolve a live replacement after the cached Unity runtime is destroyed",
+                    failures);
             }
             finally
             {
