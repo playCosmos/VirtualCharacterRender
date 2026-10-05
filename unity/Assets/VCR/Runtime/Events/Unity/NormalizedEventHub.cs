@@ -126,6 +126,11 @@ namespace VCR.Runtime.Events.Unity
                 "count"));
 
             output.Add(new RuntimeMetric(
+                "events.subscriber_failures",
+                _bus.SubscriberFailureCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
                 "events.dropped",
                 DroppedCount,
                 "count"));
