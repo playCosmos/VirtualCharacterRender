@@ -442,7 +442,8 @@ namespace VCR.Runtime.Diagnostics
 
             if (logToConsole)
             {
-            var builder = new StringBuilder(512);
+                var builder =
+                    new StringBuilder(512);
                 builder.Append(
                     "VCR runtime diagnostics: ");
                 builder.AppendFormat(
@@ -451,7 +452,7 @@ namespace VCR.Runtime.Diagnostics
                     averageMs,
                     p95Ms,
                     p99Ms);
-    
+
                 builder.AppendFormat(
                     CultureInfo.InvariantCulture,
                     " | Hz face={0:F1} body={1:F1} full={2:F1} expr={3:F1}",
@@ -459,7 +460,7 @@ namespace VCR.Runtime.Diagnostics
                     bodyHz,
                     poseHz,
                     expressionHz);
-    
+
                 builder.AppendFormat(
                     CultureInfo.InvariantCulture,
                     " | age-ms face={0} body={1} full={2} expr={3}",
@@ -467,7 +468,7 @@ namespace VCR.Runtime.Diagnostics
                     FormatAge(_bodyAgeMs),
                     FormatAge(_poseAgeMs),
                     FormatAge(_expressionAgeMs));
-    
+
                 if (presence.HasValue)
                 {
                     builder.Append(
@@ -481,7 +482,7 @@ namespace VCR.Runtime.Diagnostics
                             ? "up"
                             : "down");
                 }
-    
+
                 foreach (var metric in _metrics)
                 {
                     builder.Append(" | ");
@@ -493,7 +494,7 @@ namespace VCR.Runtime.Diagnostics
                             CultureInfo.InvariantCulture));
                     builder.Append(metric.Unit);
                 }
-    
+
                 if (p95Ms > 16.67f ||
                     p99Ms > 25f)
                 {
@@ -507,8 +508,6 @@ namespace VCR.Runtime.Diagnostics
                         builder.ToString(),
                         this);
                 }
-    
-    
             }
 
             if (writeCsvEvidence)
