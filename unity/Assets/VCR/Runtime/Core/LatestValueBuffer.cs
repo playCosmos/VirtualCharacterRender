@@ -23,6 +23,13 @@ namespace VCR.Runtime.Core
             return Interlocked.Exchange(ref _latest, null);
         }
 
+        public void Clear()
+        {
+            Interlocked.Exchange(
+                ref _latest,
+                null);
+        }
+
         public bool HasValue => Volatile.Read(ref _latest) != null;
     }
 }
