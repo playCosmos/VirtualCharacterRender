@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
+using VCR.Runtime.Core;
 using VCR.Runtime.Appearance;
 
 namespace VCR.Runtime.Application
@@ -19,6 +20,9 @@ namespace VCR.Runtime.Application
     public sealed class AppearanceUserPresetStore
     {
         public const int CurrentVersion = 1;
+
+        private const long MaxProfileBytes =
+            16L * 1024L * 1024L;
 
         private readonly string _directory;
 
@@ -91,9 +95,17 @@ namespace VCR.Runtime.Application
 
             try
             {
-                var json =
-                    File.ReadAllText(
-                        path);
+                if (!BoundedTextFile.TryReadUtf8(
+                        path,
+                        MaxProfileBytes,
+                        out var json,
+                        out var readError))
+                {
+                    error =
+                        "Appearance profile load failed: " +
+                        readError;
+                    return false;
+                }
 
                 var profile =
                     JsonUtility.FromJson<
@@ -176,6 +188,17 @@ namespace VCR.Runtime.Application
                     path + ".tmp";
                 var backupPath =
                     path + ".bak";
+
+                if (!BoundedTextFile.TryValidateUtf8Size(
+                        json,
+                        MaxProfileBytes,
+                        out var sizeError))
+                {
+                    error =
+                        "Appearance profile save failed: " +
+                        sizeError;
+                    return false;
+                }
 
                 File.WriteAllText(
                     temporaryPath,
