@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UniVRM10;
 using UnityEditor;
 using UnityEngine;
@@ -472,6 +473,9 @@ namespace VCR.Editor.P0
                     dropsAfterCapacity + 1 &&
                 oversizedNameProcessed;
 
+            var borrowedSenderEquivalencePass =
+                ValidateBorrowedSenderEquivalence();
+
             var sourceLifecyclePass =
                 false;
             var lifecycleSource =
@@ -622,6 +626,7 @@ namespace VCR.Editor.P0
                 goldenWriterPass &&
                 reusableWriterPass &&
                 customBoundsPass &&
+                borrowedSenderEquivalencePass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -659,12 +664,12 @@ namespace VCR.Editor.P0
             if (pass)
             {
                 Debug.Log(
-                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; stale-pose/custom-expression/bounds checks passed)");
+                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; borrowed/snapshot sender equivalence and stale-pose/custom-expression/bounds checks passed)");
             }
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, borrowed/snapshot sender equivalence, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -760,6 +765,205 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: VMC sender attached. " +
                 "Default destination is 127.0.0.1:39539 at 60 Hz with VRM0 expression names.");
+        }
+
+        private static bool ValidateBorrowedSenderEquivalence()
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P0 VMC Borrowed Sender Validation");
+                var sender =
+                    root.AddComponent<
+                        VmcUdpSender>();
+
+                var bones =
+                    new NormalizedBonePose[
+                        (int)HumanoidBoneId.Count];
+                var hasBone =
+                    new bool[
+                        (int)HumanoidBoneId.Count];
+                var hips =
+                    (int)HumanoidBoneId.Hips;
+
+                bones[hips] =
+                    new NormalizedBonePose(
+                        new TrackingVector3(
+                            0f,
+                            0.9f,
+                            0f),
+                        TrackingQuaternion.Identity);
+                hasBone[hips] =
+                    true;
+
+                var standard =
+                    new float[
+                        (int)StandardExpression.Count];
+                standard[
+                    (int)StandardExpression.Happy] =
+                        0.6f;
+                var custom =
+                    Array.Empty<
+                        NamedExpressionValue>();
+
+                var poseState =
+                    new HumanoidPoseState(
+                        HumanoidPoseSpace.OriginalLocal,
+                        new TrackingVector3(
+                            0f,
+                            1f,
+                            0f),
+                        TrackingQuaternion.Identity,
+                        bones,
+                        hasBone,
+                        SnapshotArrayOwnership.Copy);
+                var expressionState =
+                    new NormalizedExpressionState(
+                        standard,
+                        custom,
+                        SnapshotArrayOwnership.Copy);
+                var frame =
+                    new TrackingFrame(
+                        sequence: 1,
+                        sourceTimestampUs:
+                            1_250_000,
+                        validRegions:
+                            TrackingRegion.FullBody |
+                            TrackingRegion.Expressions,
+                        confidence: 1f,
+                        subjectDetected: true,
+                        humanoidPose:
+                            poseState,
+                        expressions:
+                            expressionState,
+                        sourceId:
+                            "p0-borrowed-equivalence",
+                        runtimeTimestampUs:
+                            1_250_000);
+
+                var borrowedPose =
+                    new BorrowedHumanoidPose(
+                        HumanoidPoseSpace.OriginalLocal,
+                        new TrackingVector3(
+                            0f,
+                            1f,
+                            0f),
+                        TrackingQuaternion.Identity,
+                        bones,
+                        hasBone);
+                var borrowedExpressions =
+                    new BorrowedExpressionState(
+                        standard,
+                        custom,
+                        customCount: 0);
+                var borrowedMotion =
+                    new BorrowedMotionSample(
+                        TrackingRegion.FullBody |
+                        TrackingRegion.Expressions,
+                        borrowedPose,
+                        borrowedExpressions);
+
+                var senderType =
+                    typeof(VmcUdpSender);
+                var snapshotMethod =
+                    senderType.GetMethod(
+                        "BuildBundle",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic,
+                        binder: null,
+                        types:
+                            new[]
+                            {
+                                typeof(TrackingFrame),
+                                typeof(float)
+                            },
+                        modifiers: null);
+                var borrowedMethod =
+                    senderType.GetMethod(
+                        "BuildBundle",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic,
+                        binder: null,
+                        types:
+                            new[]
+                            {
+                                typeof(BorrowedMotionSample)
+                                    .MakeByRefType(),
+                                typeof(float)
+                            },
+                        modifiers: null);
+                var scratchField =
+                    senderType.GetField(
+                        "_packetScratch",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                if (snapshotMethod == null ||
+                    borrowedMethod == null ||
+                    scratchField == null)
+                {
+                    return false;
+                }
+
+                var snapshotLength =
+                    (int)snapshotMethod.Invoke(
+                        sender,
+                        new object[]
+                        {
+                            frame,
+                            1.25f
+                        });
+                var scratch =
+                    (byte[])scratchField.GetValue(
+                        sender);
+                var snapshotBytes =
+                    new byte[
+                        snapshotLength];
+                Buffer.BlockCopy(
+                    scratch,
+                    0,
+                    snapshotBytes,
+                    0,
+                    snapshotLength);
+
+                var borrowedArguments =
+                    new object[]
+                    {
+                        borrowedMotion,
+                        1.25f
+                    };
+                var borrowedLength =
+                    (int)borrowedMethod.Invoke(
+                        sender,
+                        borrowedArguments);
+
+                return
+                    borrowedLength ==
+                        snapshotLength &&
+                    BytesEqualPrefix(
+                        scratch,
+                        borrowedLength,
+                        snapshotBytes);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "VCR P0 borrowed VMC sender equivalence validation exception: " +
+                    exception);
+                return false;
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
         }
 
         private static float GetCustomExpressionValue(
