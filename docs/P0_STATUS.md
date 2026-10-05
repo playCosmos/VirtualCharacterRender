@@ -1,19 +1,19 @@
 # P0 Status
 
-Updated: 2026-10-02
+Updated: 2026-10-05
 
 > Hardware-dependent P0 validation is currently deferred because the required physical test equipment is unavailable. The implementation checkpoint is preserved at `checkpoint/p0-hardware-validation-deferred` on commit `79bbbe3e0b826c5fe791abe1cd5b17d47a8d94f9`. Remaining evidence gates stay unresolved rather than being marked PASS. P1 development continues from that exact checkpoint.
 
 
 ## Current branch
 
-Implementation work is on:
+Current integrated source of truth:
 
 ```text
-feature/p0-unity-bootstrap
+develop
 ```
 
-The branch is currently ahead of `develop` and not behind it.
+The old P0 feature/checkpoint branches are historical phase/evidence references.
 
 Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated solely from static/source-free checks.
 
@@ -41,9 +41,12 @@ Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated s
 - ARKit-compatible iFacialMocap/FaceMotion3D UDP adapter
 - ARKit face priority / MediaPipe face fallback
 - VMC OSC codec, UDP receiver/sender, full-body route
+- bounded OSC parsing: 16 KiB packet, 256-message, 64-argument limits with strict UTF-8 and fail-closed partial-output clearing
+- VMC/ARKit UDP worker restart is generation-safe: a previous receive thread must terminate before a replacement socket/source can start
+- ARKit/VMC/MediaPipe tracking-source publish/stop/dispose boundaries are synchronized so callbacks cannot publish a new frame after lifecycle shutdown
 - source vs subject loss separation
 - tracking disappearance/restoration events
-- source-free presence/ARKit/VMC checks
+- source-free presence/ARKit/VMC checks, including ARKit/VMC stop/dispose source lifecycle and OSC fanout bounds
 
 ### Character/runtime mapping
 
