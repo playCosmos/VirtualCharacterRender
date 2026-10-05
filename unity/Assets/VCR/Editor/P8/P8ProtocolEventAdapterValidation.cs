@@ -840,6 +840,83 @@ namespace VCR.Editor.P8
                     dropped >= 1.0,
                     "stopping WebSocket transport must discard queued messages so stale events cannot execute after stop",
                     failures);
+
+                using var stoppingCancellation =
+                    new System.Threading
+                        .CancellationTokenSource();
+                var stoppingTaskSource =
+                    new System.Threading.Tasks
+                        .TaskCompletionSource<bool>(
+                            System.Threading.Tasks
+                                .TaskCreationOptions
+                                .RunContinuationsAsynchronously);
+
+                SetPrivateField(
+                    transport,
+                    "_cancellation",
+                    stoppingCancellation);
+                SetPrivateField(
+                    transport,
+                    "_runTask",
+                    stoppingTaskSource.Task);
+
+                transport.StopTransport();
+
+                Expect(
+                    stoppingCancellation
+                        .IsCancellationRequested &&
+                    ReferenceEquals(
+                        GetPrivateField<
+                            System.Threading.Tasks.Task>(
+                                transport,
+                                "_runTask"),
+                        stoppingTaskSource.Task),
+                    "WebSocket stop must retain ownership of an incomplete run task until it actually completes",
+                    failures);
+
+                Expect(
+                    transport.StartTransport(
+                        out var deferredRestartError) &&
+                    string.IsNullOrEmpty(
+                        deferredRestartError) &&
+                    GetPrivateField<bool>(
+                        transport,
+                        "_pendingStartRequested") &&
+                    ReferenceEquals(
+                        GetPrivateField<
+                            System.Threading.Tasks.Task>(
+                                transport,
+                                "_runTask"),
+                        stoppingTaskSource.Task),
+                    "WebSocket restart must be deferred instead of overlapping an earlier run that is still stopping",
+                    failures);
+
+                transport.StopTransport();
+
+                Expect(
+                    !GetPrivateField<bool>(
+                        transport,
+                        "_pendingStartRequested"),
+                    "explicit WebSocket stop must cancel a deferred restart request",
+                    failures);
+
+                stoppingTaskSource.SetResult(
+                    true);
+                InvokeUpdate(
+                    transport);
+
+                Expect(
+                    GetPrivateField<
+                        System.Threading.Tasks.Task>(
+                            transport,
+                            "_runTask") == null &&
+                    GetPrivateField<
+                        System.Threading
+                            .CancellationTokenSource>(
+                                transport,
+                                "_cancellation") == null,
+                    "completed WebSocket stop must release run-task and cancellation ownership on the main-thread lifecycle pass",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -2275,6 +2352,30 @@ namespace VCR.Editor.P8
             field.SetValue(
                 target,
                 value);
+        }
+
+        private static T GetPrivateField<T>(
+            object target,
+            string fieldName)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            return (T)field.GetValue(
+                target);
         }
 
         private static void InvokeUpdate(
