@@ -93,9 +93,17 @@ namespace VCR.Runtime.EventRuntime.Unity
             var activeId =
                 _activeSequenceId;
 
-            TryRunCancellationCleanup(
-                active,
-                out var cleanupError);
+            var cleaned =
+                TryRunCancellationCleanup(
+                    active,
+                    out var cleanupError);
+
+            _cancelledCount++;
+
+            if (!cleaned)
+            {
+                _failureCount++;
+            }
 
             FinishTerminal(
                 activeId,
