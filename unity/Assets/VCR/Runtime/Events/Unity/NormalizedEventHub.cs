@@ -41,6 +41,20 @@ namespace VCR.Runtime.Events.Unity
                 0,
                 Volatile.Read(ref _queuedCount));
 
+        public int MaxQueuedEvents =>
+            Math.Max(
+                32,
+                Math.Min(
+                    8192,
+                    maxQueuedEvents));
+
+        public int MaxDispatchPerFrame =>
+            Math.Max(
+                1,
+                Math.Min(
+                    2048,
+                    maxDispatchPerFrame));
+
         public long DispatchedCount =>
             Interlocked.Read(ref _dispatchedCount);
 
@@ -54,7 +68,7 @@ namespace VCR.Runtime.Events.Unity
                 Interlocked.Increment(
                     ref _queuedCount);
 
-            while (count > maxQueuedEvents &&
+            while (count > MaxQueuedEvents &&
                    _queue.TryDequeue(out _))
             {
                 Interlocked.Decrement(
@@ -68,7 +82,7 @@ namespace VCR.Runtime.Events.Unity
         private void Update()
         {
             var budget =
-                Math.Max(1, maxDispatchPerFrame);
+                MaxDispatchPerFrame;
 
             for (var i = 0;
                  i < budget &&
@@ -94,6 +108,16 @@ namespace VCR.Runtime.Events.Unity
             output.Add(new RuntimeMetric(
                 "events.queue",
                 QueuedCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "events.queue_limit",
+                MaxQueuedEvents,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "events.dispatch_limit",
+                MaxDispatchPerFrame,
                 "count"));
 
             output.Add(new RuntimeMetric(
