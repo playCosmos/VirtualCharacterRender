@@ -127,6 +127,7 @@ For steady-state tracking and UI operation:
 
 - expression custom-channel merge scratch storage must be reused; do not reintroduce per-frame `Dictionary`, `HashSet`, or `List` construction in the mixer hot path,
 - immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
+- array-backed snapshots use explicit ownership: freshly allocated hot-path arrays use `SnapshotArrayOwnership.Transfer` with no second clone, while external/reused caller buffers must use `Copy`; a transferred array must never be mutated or returned to a pool after publication,
 - expression smoothing must not publish replacement frames when smoothing time does not advance; fully zero pose masks preserve the existing immutable base-pose reference instead of cloning pose arrays,
 - UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
