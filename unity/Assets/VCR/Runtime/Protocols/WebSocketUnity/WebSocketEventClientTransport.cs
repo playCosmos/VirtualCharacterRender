@@ -623,19 +623,17 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             ClientWebSocket client,
             CancellationToken cancellationToken)
         {
+            var messageLimit =
+                MaxMessageBytes;
             var chunk =
                 new byte[
                     Math.Min(
                         8192,
-                        Math.Max(
-                            1024,
-                            maxMessageBytes))];
+                        messageLimit)];
 
             var messageBytes =
                 new byte[
-                    Math.Max(
-                        1024,
-                        maxMessageBytes)];
+                    messageLimit];
 
             var offset = 0;
             var discarding = false;
