@@ -127,8 +127,27 @@ namespace VCR.Runtime.Tracking.Mixing
                 }
             }
 
-            foreach (var item in a.Custom)
+            var aCustom =
+                a.Custom;
+            var bCustom =
+                b.Custom;
+
+            for (var i = 0;
+                 i < aCustom.Length;
+                 i++)
             {
+                var item =
+                    aCustom[i];
+
+                if (string.IsNullOrWhiteSpace(
+                        item.Name) ||
+                    !IsLastCustomOccurrence(
+                        aCustom,
+                        i))
+                {
+                    continue;
+                }
+
                 if (Math.Abs(
                         item.Value -
                         GetCustomValue(
@@ -140,8 +159,22 @@ namespace VCR.Runtime.Tracking.Mixing
                 }
             }
 
-            foreach (var item in b.Custom)
+            for (var i = 0;
+                 i < bCustom.Length;
+                 i++)
             {
+                var item =
+                    bCustom[i];
+
+                if (string.IsNullOrWhiteSpace(
+                        item.Name) ||
+                    !IsLastCustomOccurrence(
+                        bCustom,
+                        i))
+                {
+                    continue;
+                }
+
                 if (Math.Abs(
                         item.Value -
                         GetCustomValue(
@@ -274,18 +307,54 @@ namespace VCR.Runtime.Tracking.Mixing
                 return 0f;
             }
 
-            foreach (var item in state.Custom)
+            var custom =
+                state.Custom;
+
+            for (var i =
+                     custom.Length - 1;
+                 i >= 0;
+                 i--)
             {
                 if (string.Equals(
-                    item.Name,
+                    custom[i].Name,
                     name,
                     StringComparison.Ordinal))
                 {
-                    return item.Value;
+                    return custom[i].Value;
                 }
             }
 
             return 0f;
+        }
+
+        private static bool IsLastCustomOccurrence(
+            ReadOnlySpan<NamedExpressionValue> custom,
+            int index)
+        {
+            if (index < 0 ||
+                index >= custom.Length)
+            {
+                return false;
+            }
+
+            var name =
+                custom[index].Name;
+
+            for (var i =
+                     index + 1;
+                 i < custom.Length;
+                 i++)
+            {
+                if (string.Equals(
+                        custom[i].Name,
+                        name,
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static void AddCustom(
