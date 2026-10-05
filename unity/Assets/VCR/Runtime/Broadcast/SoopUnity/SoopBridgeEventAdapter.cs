@@ -71,9 +71,12 @@ namespace VCR.Runtime.Broadcast.SoopUnity
         public void SetSink(
             INormalizedEventSink sink)
         {
-            _sink = sink;
+            _sink =
+                IsServiceAlive(sink)
+                    ? sink
+                    : null;
             eventSinkBehaviour =
-                sink as MonoBehaviour;
+                _sink as MonoBehaviour;
         }
 
         public bool TryHandleText(
@@ -100,11 +103,12 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     out error);
             }
 
-            if (_sink == null)
+            if (!IsServiceAlive(_sink))
             {
+                _sink = null;
                 ResolveSink();
 
-                if (_sink == null)
+                if (!IsServiceAlive(_sink))
                 {
                     return Reject(
                         "Normalized event sink is unavailable.",
@@ -279,10 +283,24 @@ namespace VCR.Runtime.Broadcast.SoopUnity
             }
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveSink()
         {
-            if (eventSinkBehaviour is
-                INormalizedEventSink configured)
+            if (eventSinkBehaviour != null &&
+                eventSinkBehaviour is
+                    INormalizedEventSink configured)
             {
                 _sink = configured;
                 return;
