@@ -16,7 +16,7 @@ namespace VCR.Runtime.Character
     [DefaultExecutionOrder(19000)]
     public sealed class Vrm10MotionSnapshotProvider :
         MonoBehaviour,
-        INormalizedMotionSnapshotProvider
+        ISelectiveNormalizedMotionSnapshotProvider
     {
         [SerializeField] private Vrm10Instance target;
 
@@ -36,23 +36,82 @@ namespace VCR.Runtime.Character
             }
         }
 
-        public bool TryCaptureMotion(out TrackingFrame frame)
+        public bool TryCaptureMotion(
+            out TrackingFrame frame)
+        {
+            var request =
+                NormalizedMotionSnapshotRequest.Full;
+
+            return TryCaptureMotion(
+                in request,
+                out frame);
+        }
+
+        public bool TryCaptureMotion(
+            in NormalizedMotionSnapshotRequest request,
+            out TrackingFrame frame)
         {
             frame = null;
 
-            if (target == null ||
+            if (!request.HasAnyDomain ||
+                target == null ||
                 target.Runtime == null ||
-                target.Humanoid == null)
+                (request.IncludeHumanoidPose &&
+                 target.Humanoid == null))
             {
                 return false;
             }
 
+            HumanoidPoseState pose = null;
+            NormalizedExpressionState expressions = null;
+            var regions =
+                TrackingRegion.None;
+
+            if (request.IncludeHumanoidPose)
+            {
+                pose =
+                    CapturePose();
+                regions |=
+                    TrackingRegion.FullBody;
+            }
+
+            if (request.IncludeExpressions)
+            {
+                expressions =
+                    CaptureExpressions();
+                regions |=
+                    TrackingRegion.Expressions;
+            }
+
+            var timestampUs =
+                NowUs();
+
+            frame =
+                new TrackingFrame(
+                    ++_sequence,
+                    timestampUs,
+                    regions,
+                    1f,
+                    subjectDetected: true,
+                    humanoidPose: pose,
+                    expressions: expressions,
+                    sourceId: "character-runtime",
+                    runtimeTimestampUs:
+                        timestampUs);
+
+            return true;
+        }
+
+        private HumanoidPoseState CapturePose()
+        {
             EnsureBoneCache();
 
             var bones =
-                new NormalizedBonePose[(int)HumanoidBoneId.Count];
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
             var hasBone =
-                new bool[(int)HumanoidBoneId.Count];
+                new bool[
+                    (int)HumanoidBoneId.Count];
 
             for (var i = 0;
                  i < _boneTransforms.Length;
@@ -66,24 +125,32 @@ namespace VCR.Runtime.Character
                     continue;
                 }
 
-                var p = bone.localPosition;
-                var q = bone.localRotation;
+                var p =
+                    bone.localPosition;
+                var q =
+                    bone.localRotation;
 
-                bones[i] = new NormalizedBonePose(
-                    new TrackingVector3(p.x, p.y, p.z),
-                    new TrackingQuaternion(
-                        q.x,
-                        q.y,
-                        q.z,
-                        q.w));
+                bones[i] =
+                    new NormalizedBonePose(
+                        new TrackingVector3(
+                            p.x,
+                            p.y,
+                            p.z),
+                        new TrackingQuaternion(
+                            q.x,
+                            q.y,
+                            q.z,
+                            q.w));
 
                 hasBone[i] = true;
             }
 
-            var rootPosition = target.transform.localPosition;
-            var rootRotation = target.transform.localRotation;
+            var rootPosition =
+                target.transform.localPosition;
+            var rootRotation =
+                target.transform.localRotation;
 
-            var pose = new HumanoidPoseState(
+            return new HumanoidPoseState(
                 HumanoidPoseSpace.OriginalLocal,
                 new TrackingVector3(
                     rootPosition.x,
@@ -97,26 +164,6 @@ namespace VCR.Runtime.Character
                 bones,
                 hasBone,
                 SnapshotArrayOwnership.Transfer);
-
-            var expressions =
-                CaptureExpressions();
-            var timestampUs =
-                NowUs();
-
-            frame = new TrackingFrame(
-                ++_sequence,
-                timestampUs,
-                TrackingRegion.FullBody |
-                TrackingRegion.Expressions,
-                1f,
-                subjectDetected: true,
-                humanoidPose: pose,
-                expressions: expressions,
-                sourceId: "character-runtime",
-                runtimeTimestampUs:
-                    timestampUs);
-
-            return true;
         }
 
         private NormalizedExpressionState CaptureExpressions()
