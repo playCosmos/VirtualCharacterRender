@@ -833,6 +833,18 @@ namespace VCR.Editor.P1
                         SceneRuntimeState.Stopped,
                     "application bootstrap explicit shutdown must stop the scene runtime",
                     failures);
+
+                Expect(
+                    !applicationBootstrap
+                        .StartRuntimeAsync(
+                            applicationOptions)
+                        .GetAwaiter()
+                        .GetResult() &&
+                    !applicationBootstrap.IsStarted &&
+                    applicationScene.State ==
+                        SceneRuntimeState.Stopped,
+                    "application bootstrap must reject restart while shutdown is latched instead of racing startup against a stopped scene",
+                    failures);
             }
             catch (Exception exception)
             {
