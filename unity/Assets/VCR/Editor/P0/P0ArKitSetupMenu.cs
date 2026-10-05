@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Tracking;
@@ -91,6 +92,74 @@ namespace VCR.Editor.P0
                 Mathf.Approximately(frame.HeadEulerXDegrees, 10f) &&
                 Mathf.Approximately(frame.HeadEulerYDegrees, -20f) &&
                 Mathf.Approximately(frame.HeadEulerZDegrees, 30f);
+
+            var sourceLifecyclePass =
+                false;
+            var source =
+                new ArKitFaceSource(
+                    "p0-arkit-lifecycle");
+
+            try
+            {
+                source.Start();
+                source.Publish(
+                    new NormalizedFaceState(
+                        TrackingQuaternion.Identity,
+                        TrackingVector3.Zero,
+                        frame.Coefficients),
+                    timestampUs: 1);
+
+                var published =
+                    source.TryTakeLatest(
+                        out var publishedFrame) &&
+                    publishedFrame != null;
+
+                source.Stop();
+
+                var stoppedRejected =
+                    false;
+
+                try
+                {
+                    source.Publish(
+                        new NormalizedFaceState(
+                            TrackingQuaternion.Identity,
+                            TrackingVector3.Zero,
+                            frame.Coefficients),
+                        timestampUs: 2);
+                }
+                catch (InvalidOperationException)
+                {
+                    stoppedRejected = true;
+                }
+
+                source.Dispose();
+
+                var disposedRejected =
+                    false;
+
+                try
+                {
+                    source.Start();
+                }
+                catch (ObjectDisposedException)
+                {
+                    disposedRejected = true;
+                }
+
+                sourceLifecyclePass =
+                    published &&
+                    stoppedRejected &&
+                    disposedRejected;
+            }
+            finally
+            {
+                source.Dispose();
+            }
+
+            pass =
+                pass &&
+                sourceLifecyclePass;
 
             if (pass)
             {
