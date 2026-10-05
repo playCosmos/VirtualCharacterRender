@@ -548,6 +548,47 @@ namespace VCR.Editor.P11
                         managedProfileLoadError,
                         failures);
 
+                    var excessivePresets =
+                        new AppearancePreset[
+                            AppearanceUserPresetStore
+                                .MaxPresets +
+                            1];
+
+                    Expect(
+                        !store.TrySave(
+                            characterPath,
+                            excessivePresets,
+                            out var excessivePresetError) &&
+                        !string.IsNullOrWhiteSpace(
+                            excessivePresetError),
+                        "appearance profile persistence must reject excessive preset fanout before serialization",
+                        failures);
+
+                    var excessiveAccessories =
+                        new AppearancePreset
+                        {
+                            Id =
+                                "too-many-accessories",
+                            Accessories =
+                                new AppearanceAccessorySelection[
+                                    AppearanceUserPresetStore
+                                        .MaxAccessoriesPerPreset +
+                                    1]
+                        };
+
+                    Expect(
+                        !store.TrySave(
+                            characterPath,
+                            new[]
+                            {
+                                excessiveAccessories
+                            },
+                            out var excessiveAccessoryError) &&
+                        !string.IsNullOrWhiteSpace(
+                            excessiveAccessoryError),
+                        "appearance profile persistence must reject excessive per-preset accessory fanout before serialization",
+                        failures);
+
                     var profilePath =
                         store.GetProfilePath(
                             characterPath);
