@@ -379,6 +379,7 @@ namespace VCR.Runtime.Character
                 if (!fullBodyAvailable)
                 {
                     _latestBody = null;
+                    _lastBodySequence = -1;
                 }
             }
 
@@ -409,6 +410,7 @@ namespace VCR.Runtime.Character
             if (suppressed)
             {
                 _latestFace = null;
+                _lastFaceSequence = -1;
             }
         }
 
@@ -425,6 +427,7 @@ namespace VCR.Runtime.Character
             if (suppressed)
             {
                 _latestBody = null;
+                _lastBodySequence = -1;
             }
         }
 
