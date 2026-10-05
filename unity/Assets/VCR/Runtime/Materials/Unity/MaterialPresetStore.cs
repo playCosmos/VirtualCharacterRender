@@ -2,12 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Materials.Unity
 {
     public sealed class MaterialPresetStore
     {
         public const int CurrentVersion = 1;
+
+        private const long MaxFileBytes =
+            16L * 1024L * 1024L;
 
         private readonly string _path;
 
@@ -48,9 +52,17 @@ namespace VCR.Runtime.Materials.Unity
 
             try
             {
-                var json =
-                    File.ReadAllText(
-                        _path);
+                if (!BoundedTextFile.TryReadUtf8(
+                        _path,
+                        MaxFileBytes,
+                        out var json,
+                        out var readError))
+                {
+                    error =
+                        "Material preset load failed: " +
+                        readError;
+                    return false;
+                }
 
                 var loaded =
                     JsonUtility.FromJson<
@@ -111,6 +123,17 @@ namespace VCR.Runtime.Materials.Unity
                     _path + ".tmp";
                 var backupPath =
                     _path + ".bak";
+
+                if (!BoundedTextFile.TryValidateUtf8Size(
+                        json,
+                        MaxFileBytes,
+                        out var sizeError))
+                {
+                    error =
+                        "Material preset save failed: " +
+                        sizeError;
+                    return false;
+                }
 
                 File.WriteAllText(
                     temporaryPath,
