@@ -94,6 +94,20 @@ namespace VCR.Runtime.EventRuntime.Unity
         {
             error = null;
 
+            var stagedRules =
+                rules == null
+                    ? Array.Empty<EventRuntimeRule>()
+                    : (EventRuntimeRule[])
+                        rules.Clone();
+
+            if (!EventRuntimeRuleSetBounds
+                .TryValidate(
+                    stagedRules,
+                    out error))
+            {
+                return false;
+            }
+
             try
             {
                 var directory =
@@ -116,10 +130,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                             ClampMaxCommands(
                                 maxCommandsPerEvent),
                         Rules =
-                            rules == null
-                                ? Array.Empty<EventRuntimeRule>()
-                                : (EventRuntimeRule[])
-                                    rules.Clone()
+                            stagedRules
                     };
 
                 var json =
@@ -194,9 +205,20 @@ namespace VCR.Runtime.EventRuntime.Unity
             switch (envelope.Version)
             {
                 case CurrentVersion:
-                    rules =
+                    var stagedRules =
                         envelope.Rules ??
                         Array.Empty<EventRuntimeRule>();
+
+                    if (!EventRuntimeRuleSetBounds
+                        .TryValidate(
+                            stagedRules,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    rules =
+                        stagedRules;
                     maxCommandsPerEvent =
                         ClampMaxCommands(
                             envelope.MaxCommandsPerEvent);
