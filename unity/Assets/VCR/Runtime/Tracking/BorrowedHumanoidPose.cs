@@ -6,7 +6,7 @@ namespace VCR.Runtime.Tracking
     /// Allocation-free, non-owning view of one humanoid pose sample.
     ///
     /// The backing arrays remain owned by the provider and may be overwritten
-    /// by a later borrowed-motion call. Consumers must finish reading this value
+    /// by a later pose/motion borrow. Consumers must finish reading this value
     /// synchronously and must never publish or retain it as an immutable
     /// TrackingFrame payload.
     /// </summary>
@@ -188,7 +188,7 @@ namespace VCR.Runtime.Tracking
     /// <summary>
     /// Preferred synchronous zero-allocation contract for protocol/output
     /// consumers. The returned sample remains valid only until the provider's
-    /// next borrowed-motion call.
+    /// next borrowed pose/motion sampling call.
     /// </summary>
     public interface IBorrowedNormalizedMotionProvider
     {
