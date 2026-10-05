@@ -95,7 +95,8 @@ namespace VCR.Runtime.Character
                     rootRotation.z,
                     rootRotation.w),
                 bones,
-                hasBone);
+                hasBone,
+                SnapshotArrayOwnership.Transfer);
 
             var expressions =
                 CaptureExpressions();
@@ -149,7 +150,8 @@ namespace VCR.Runtime.Character
 
             return new NormalizedExpressionState(
                 standard,
-                custom.ToArray());
+                custom.ToArray(),
+                SnapshotArrayOwnership.Transfer);
         }
 
         private void EnsureBoneCache()
