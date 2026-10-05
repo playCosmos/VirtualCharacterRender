@@ -244,7 +244,14 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private void StartReceiver()
         {
-            StopReceiver();
+            if (!StopReceiver())
+            {
+                Debug.LogError(
+                    "VCR VMC receiver: previous receive thread did not stop cleanly; refusing to start an overlapping receiver.",
+                    this);
+                enabled = false;
+                return;
+            }
 
             _allowedSender = null;
             if (!string.IsNullOrWhiteSpace(
@@ -369,7 +376,22 @@ namespace VCR.Runtime.Protocols.VmcUnity
                         continue;
                     }
 
-                    _source.Process(messages, arrivalUs);
+                    if (!_running)
+                    {
+                        return;
+                    }
+
+                    var source =
+                        _source;
+
+                    if (source == null)
+                    {
+                        return;
+                    }
+
+                    source.Process(
+                        messages,
+                        arrivalUs);
                 }
                 catch (SocketException exception)
                 {
@@ -492,35 +514,77 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 "count"));
         }
 
-        private void StopReceiver()
+        private bool StopReceiver()
         {
             _running = false;
 
+            var source =
+                _source;
+
             try
             {
-                _receiver?.Close();
+                source?.Stop();
+            }
+            catch
+            {
+                // Best-effort shutdown. Dispose is deferred until the
+                // receive thread has definitely exited.
+            }
+
+            var receiver =
+                _receiver;
+            _receiver = null;
+
+            try
+            {
+                receiver?.Close();
             }
             catch
             {
                 // Shutdown path.
             }
 
-            _receiver = null;
+            var thread =
+                _receiveThread;
 
-            if (_receiveThread != null &&
-                _receiveThread.IsAlive)
+            if (thread != null &&
+                thread.IsAlive &&
+                Thread.CurrentThread != thread)
             {
-                _receiveThread.Join(500);
+                thread.Join(750);
+            }
+
+            if (thread != null &&
+                thread.IsAlive)
+            {
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    "VMC receive thread did not stop within the shutdown deadline.");
+                return false;
             }
 
             _receiveThread = null;
 
-            _source?.Dispose();
-            _source = null;
+            try
+            {
+                source?.Dispose();
+            }
+            catch
+            {
+                // Shutdown path.
+            }
+
+            if (ReferenceEquals(
+                    _source,
+                    source))
+            {
+                _source = null;
+            }
 
             _latestPoseFrame = null;
             _latestExpressionFrame = null;
             _lastPacketArrivalUs = -1;
+            return true;
         }
 
         private void OnDisable()
