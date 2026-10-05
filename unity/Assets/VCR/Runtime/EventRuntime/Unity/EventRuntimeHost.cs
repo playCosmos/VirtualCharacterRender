@@ -123,12 +123,24 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void SetRules(
             params EventRuntimeRule[] nextRules)
         {
-            rules =
+            var staged =
                 nextRules == null
                     ? Array.Empty<EventRuntimeRule>()
                     : (EventRuntimeRule[])
                         nextRules.Clone();
 
+            if (!EventRuntimeRuleSetBounds
+                .TryValidate(
+                    staged,
+                    out var error))
+            {
+                _lastError =
+                    error;
+                return;
+            }
+
+            rules =
+                staged;
             ApplyRules();
         }
 
@@ -236,7 +248,17 @@ namespace VCR.Runtime.EventRuntime.Unity
                 maxCommandsPerEvent;
             _engine.TraceEnabled =
                 enableRuleTracing;
-            _engine.SetRules(rules);
+
+            if (!_engine.TrySetRules(
+                    rules,
+                    out var error))
+            {
+                _engine.TrySetRules(
+                    Array.Empty<EventRuntimeRule>(),
+                    out _);
+                _lastError =
+                    error;
+            }
         }
 
         private void ResolveEventHub()
