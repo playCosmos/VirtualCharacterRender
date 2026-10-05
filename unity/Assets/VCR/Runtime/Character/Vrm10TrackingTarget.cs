@@ -100,6 +100,16 @@ namespace VCR.Runtime.Character
 
         private void Update()
         {
+            if (!IsServiceAlive(_provider))
+            {
+                _provider = null;
+                _presenceProvider = null;
+
+                SetFaceSuppressed(true);
+                SetBodySuppressed(true);
+                _fullBodyOverrideActive = false;
+            }
+
             if (_provider == null &&
                 Time.unscaledTime >= _nextProviderSearchTime)
             {
@@ -108,7 +118,7 @@ namespace VCR.Runtime.Character
                 ResolveProvider();
             }
 
-            if (_provider == null)
+            if (!IsServiceAlive(_provider))
             {
                 return;
             }
@@ -221,9 +231,16 @@ namespace VCR.Runtime.Character
 
         public void SetTrackingProvider(ITrackingFrameProvider provider)
         {
-            _provider = provider;
-            _presenceProvider = provider as ITrackingPresenceProvider;
-            trackingProviderBehaviour = provider as MonoBehaviour;
+            _provider =
+                IsServiceAlive(provider)
+                    ? provider
+                    : null;
+            _presenceProvider =
+                IsServiceAlive(_provider)
+                    ? _provider as ITrackingPresenceProvider
+                    : null;
+            trackingProviderBehaviour =
+                _provider as MonoBehaviour;
             _lastFaceSequence = -1;
             _lastBodySequence = -1;
             _lastFaceSourceId = null;
@@ -235,9 +252,23 @@ namespace VCR.Runtime.Character
             _fullBodyOverrideActive = false;
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveProvider()
         {
-            if (trackingProviderBehaviour is ITrackingFrameProvider configured)
+            if (trackingProviderBehaviour != null &&
+                trackingProviderBehaviour is ITrackingFrameProvider configured)
             {
                 _provider = configured;
                 _presenceProvider = trackingProviderBehaviour as ITrackingPresenceProvider;
@@ -326,7 +357,7 @@ namespace VCR.Runtime.Character
 
         private void UpdateRegionAvailability()
         {
-            if (_presenceProvider == null)
+            if (!IsServiceAlive(_presenceProvider))
             {
                 SetFaceSuppressed(false);
                 SetBodySuppressed(false);
