@@ -19,9 +19,15 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField]
         private bool autoFindMixer = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
+        private float _nextResolveTime;
+
         private void Awake()
         {
-            ResolveMixer();
+            ResolveMixer(
+                force: true);
         }
 
         public void SetMixer(
@@ -34,6 +40,7 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 mixerId = id;
             }
+            _nextResolveTime = 0f;
         }
 
         public bool CanHandle(
@@ -62,6 +69,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     mixerId,
                     StringComparison.Ordinal);
         }
+
         public bool TryExecute(
             EventActionCommand command,
             out string error)
@@ -91,7 +99,8 @@ namespace VCR.Runtime.EventRuntime.Unity
                 out error);
         }
 
-        private void ResolveMixer()
+        private void ResolveMixer(
+            bool force = false)
         {
             if (mixer != null ||
                 !autoFindMixer)
@@ -99,10 +108,30 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextResolveTime)
+            {
+                return;
+            }
+
+            _nextResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
             mixer =
                 FindFirstObjectByType<
                     MotionExpressionMixer>(
                     FindObjectsInactive.Exclude);
+
+            if (mixer != null)
+            {
+                _nextResolveTime = 0f;
+            }
         }
     }
 }
