@@ -303,6 +303,8 @@ namespace VCR.Editor.P4
 
             ValidateDestroyedProviderRecovery(
                 failures);
+            ValidateSameSequenceRestartRecovery(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -492,6 +494,174 @@ namespace VCR.Editor.P4
             }
         }
 
+        private static void ValidateSameSequenceRestartRecovery(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P4 Same Sequence Restart Recovery");
+
+                var faceProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var bodyProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var poseProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var router =
+                    root.AddComponent<
+                        PriorityTrackingRouter>();
+
+                var nowUs =
+                    MonotonicClock.NowMicroseconds();
+
+                faceProvider.SourceId =
+                    "restart-face";
+                faceProvider.Kind =
+                    TrackingSourceKind.ArKitFace;
+                faceProvider.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                faceProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                faceProvider.FaceFrame =
+                    CreateFaceFrame(
+                        faceProvider.SourceId,
+                        sequence: 7,
+                        nowUs);
+                faceProvider.Presence =
+                    CreatePresence(
+                        nowUs,
+                        faceAvailable: true,
+                        faceEvidence: true);
+
+                bodyProvider.SourceId =
+                    "restart-body";
+                bodyProvider.Kind =
+                    TrackingSourceKind.MediaPipeHolistic;
+                bodyProvider.Regions =
+                    TrackingRegion.UpperBody;
+                bodyProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                bodyProvider.BodyHandsFrame =
+                    CreateBodyFrame(
+                        bodyProvider.SourceId,
+                        sequence: 11,
+                        nowUs);
+
+                poseProvider.SourceId =
+                    "restart-pose";
+                poseProvider.Kind =
+                    TrackingSourceKind.Vmc;
+                poseProvider.Regions =
+                    TrackingRegion.FullBody;
+                poseProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                poseProvider.HumanoidPoseFrame =
+                    CreateHumanoidPoseFrame(
+                        poseProvider.SourceId,
+                        sequence: 13,
+                        nowUs);
+                poseProvider.Presence =
+                    CreateFullBodyPresence(
+                        nowUs,
+                        available: true,
+                        evidence: true);
+
+                router.SetPreferredFaceProvider(
+                    faceProvider);
+                router.SetFallbackProvider(
+                    bodyProvider);
+                router.SetExternalPoseProvider(
+                    poseProvider);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.TryGetLatestFace(
+                        out var initialFace) &&
+                    initialFace != null &&
+                    router.TryGetLatestBodyHands(
+                        out var initialBody) &&
+                    initialBody != null &&
+                    router.TryGetLatestHumanoidPose(
+                        out var initialPose) &&
+                    initialPose != null,
+                    "same-sequence restart validation must establish initial face/body/full-body snapshots",
+                    failures);
+
+                faceProvider.FaceFrame = null;
+                bodyProvider.BodyHandsFrame = null;
+                poseProvider.HumanoidPoseFrame = null;
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    !router.TryGetLatestFace(
+                        out _) &&
+                    !router.TryGetLatestBodyHands(
+                        out _) &&
+                    !router.TryGetLatestHumanoidPose(
+                        out _),
+                    "router must clear face/body/full-body outputs when live providers temporarily stop returning frames",
+                    failures);
+
+                faceProvider.FaceFrame =
+                    CreateFaceFrame(
+                        faceProvider.SourceId,
+                        sequence: 7,
+                        nowUs + 1);
+                bodyProvider.BodyHandsFrame =
+                    CreateBodyFrame(
+                        bodyProvider.SourceId,
+                        sequence: 11,
+                        nowUs + 1);
+                poseProvider.HumanoidPoseFrame =
+                    CreateHumanoidPoseFrame(
+                        poseProvider.SourceId,
+                        sequence: 13,
+                        nowUs + 1);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.TryGetLatestFace(
+                        out var recoveredFace) &&
+                    recoveredFace != null &&
+                    router.TryGetLatestBodyHands(
+                        out var recoveredBody) &&
+                    recoveredBody != null &&
+                    router.TryGetLatestHumanoidPose(
+                        out var recoveredPose) &&
+                    recoveredPose != null,
+                    "router must republish face/body/full-body frames when a restarted provider reuses the previous source id and sequence",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "same-sequence tracking restart recovery unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static TrackingFrame CreateFaceFrame(
             string sourceId,
             long sequence,
@@ -553,6 +723,114 @@ namespace VCR.Editor.P4
                     sourceId,
                 runtimeTimestampUs:
                     runtimeTimestampUs);
+        }
+
+        private static TrackingFrame CreateBodyFrame(
+            string sourceId,
+            long sequence,
+            long runtimeTimestampUs)
+        {
+            var joints =
+                new TrackingPoint[
+                    (int)UpperBodyJoint.Count];
+
+            return new TrackingFrame(
+                sequence,
+                sourceTimestampUs:
+                    runtimeTimestampUs,
+                validRegions:
+                    TrackingRegion.UpperBody,
+                confidence:
+                    1f,
+                subjectDetected:
+                    true,
+                upperBody:
+                    new NormalizedUpperBodyState(
+                        joints),
+                sourceId:
+                    sourceId,
+                runtimeTimestampUs:
+                    runtimeTimestampUs);
+        }
+
+        private static TrackingFrame CreateHumanoidPoseFrame(
+            string sourceId,
+            long sequence,
+            long runtimeTimestampUs)
+        {
+            var bones =
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
+            var hasBone =
+                new bool[
+                    (int)HumanoidBoneId.Count];
+
+            var hips =
+                (int)HumanoidBoneId.Hips;
+            bones[hips] =
+                new NormalizedBonePose(
+                    TrackingVector3.Zero,
+                    TrackingQuaternion.Identity);
+            hasBone[hips] =
+                true;
+
+            return new TrackingFrame(
+                sequence,
+                sourceTimestampUs:
+                    runtimeTimestampUs,
+                validRegions:
+                    TrackingRegion.FullBody,
+                confidence:
+                    1f,
+                subjectDetected:
+                    true,
+                humanoidPose:
+                    new HumanoidPoseState(
+                        HumanoidPoseSpace
+                            .NormalizedLocal,
+                        TrackingVector3.Zero,
+                        TrackingQuaternion.Identity,
+                        bones,
+                        hasBone),
+                sourceId:
+                    sourceId,
+                runtimeTimestampUs:
+                    runtimeTimestampUs);
+        }
+
+        private static TrackingPresenceSnapshot
+            CreateFullBodyPresence(
+                long timestampUs,
+                bool available,
+                bool evidence)
+        {
+            return new TrackingPresenceSnapshot(
+                sequence:
+                    timestampUs,
+                timestampUs:
+                    timestampUs,
+                subjectState:
+                    evidence
+                        ? SubjectPresenceState.Present
+                        : SubjectPresenceState.Unknown,
+                faceSourceAvailable:
+                    false,
+                bodyHandsSourceAvailable:
+                    false,
+                fullBodySourceAvailable:
+                    available,
+                faceSubjectEvidence:
+                    false,
+                bodyHandsSubjectEvidence:
+                    false,
+                fullBodySubjectEvidence:
+                    evidence,
+                anySourceAvailable:
+                    available,
+                subjectEvidence:
+                    evidence,
+                events:
+                    TrackingPresenceEvents.None);
         }
 
         private static TrackingPresenceSnapshot
@@ -656,6 +934,8 @@ namespace VCR.Editor.P4
         public TrackingRegion Regions { get; set; }
         public TrackingSourceHealthState HealthState { get; set; }
         public TrackingFrame FaceFrame { get; set; }
+        public TrackingFrame BodyHandsFrame { get; set; }
+        public TrackingFrame HumanoidPoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
 
         public TrackingPresenceSnapshot Presence
@@ -680,11 +960,31 @@ namespace VCR.Editor.P4
                 return false;
             }
 
-            var latest =
-                (region &
-                 TrackingRegion.Expressions) != 0
-                    ? ExpressionFrame
-                    : FaceFrame;
+            TrackingFrame latest;
+
+            if ((region &
+                 TrackingRegion.Expressions) != 0)
+            {
+                latest =
+                    ExpressionFrame;
+            }
+            else if ((region &
+                      TrackingRegion.FullBody) != 0)
+            {
+                latest =
+                    HumanoidPoseFrame;
+            }
+            else if ((region &
+                      TrackingRegion.UpperBody) != 0)
+            {
+                latest =
+                    BodyHandsFrame;
+            }
+            else
+            {
+                latest =
+                    FaceFrame;
+            }
 
             snapshot =
                 new TrackingSourceHealthSnapshot(
@@ -720,15 +1020,17 @@ namespace VCR.Editor.P4
         public bool TryGetLatestBodyHands(
             out TrackingFrame frame)
         {
-            frame = null;
-            return false;
+            frame =
+                BodyHandsFrame;
+            return frame != null;
         }
 
         public bool TryGetLatestHumanoidPose(
             out TrackingFrame frame)
         {
-            frame = null;
-            return false;
+            frame =
+                HumanoidPoseFrame;
+            return frame != null;
         }
 
         public bool TryGetLatestExpressions(
