@@ -1,14 +1,16 @@
 # P9 Status
 
-Updated: 2026-10-03
+Updated: 2026-10-05
 
 ## Active branch
 
+Current integrated source of truth:
+
 ```text
-feature/p9-event-runtime
+develop
 ```
 
-P9 starts from the preserved P8 source checkpoint:
+The P9 feature/checkpoint branches are historical references. P9 originally starts from the preserved P8 source checkpoint:
 
 ```text
 checkpoint/p8-source-implementation
@@ -94,7 +96,7 @@ motion.pose_weight
 
 `MotionPoseWeightEventActionHandler` applies a validated 0..1 value to the mixer's primary pose-layer weight through the P5 mixer contract.
 
-Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. If more than one configured handler claims the same command, the host fails closed, increments the ambiguous-action metric, and executes none of them.
+Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. Destroyed Unity handlers cached behind interfaces are ignored rather than invoked. Duplicate references to the same handler instance are deduplicated; genuinely distinct handlers claiming the same command still fail closed and increment the ambiguous-action metric. When auto-find is enabled in a Player build, the host rechecks its event-hub subscription at a bounded 1 Hz cadence so a destroyed/replaced `NormalizedEventHub` can be rebound without a per-frame global search.
 
 P11 extends the established P9 action boundary with `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.clear_accessory`, and `appearance.restore_default`. The P11 Appearance Transition Runtime reuses registered application-action handlers directly for presentation cues while owning timing and the single atomic `appearance.commit` boundary. It rejects recursive `appearance.*` transition actions. P11 also adds shared `effect.play` / `effect.stop` and `motion.play` / `motion.release` action handlers; this is a later-phase extension and does not change the preserved P9 checkpoint claim.
 
@@ -138,7 +140,9 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - logical material preset-id resolution through the active package preset resolver without rule-owned file paths
 - expression.set alias/range validation, no redundant frame publication, and Maximum blend preservation of routed lip-sync
 - unknown-action containment and diagnostics
-- multiple-handler ambiguity fails closed without target mutation
+- duplicate references to the same handler instance are deduplicated while multiple distinct matching handlers still fail closed
+- destroyed action handlers fail closed as unhandled instead of invoking stale Unity interface references
+- destroyed/replaced NormalizedEventHub rebinding through the bounded lifecycle refresh path
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
