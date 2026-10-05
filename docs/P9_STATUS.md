@@ -55,7 +55,7 @@ Implemented rule features:
 - optional stop-after-match
 - bounded action-command output per input event
 - dropped-command diagnostics
-- versioned persisted rule documents with atomic save, explicit max-command settings, current-version reload, and fail-closed rejection of newer unsupported versions
+- versioned persisted rule documents with atomic save, explicit max-command settings, current-version reload, fail-closed rejection of newer unsupported versions, and a 16 MiB strict UTF-8 persistence bound checked before JSON allocation
 - per-rule diagnostics snapshots for evaluations, rejects, cooldown/rate-limit suppression, matches, emitted/dropped commands, and last-match timestamp
 - structured opt-in rule tracing that is disabled by default and emits no trace events unless explicitly enabled
 
@@ -127,7 +127,7 @@ The P9 batch entry runs P0-P8 source-free suites first and then checks:
 - numeric scale/offset action transform
 - deterministic text transform mapping for state mutation and action commands
 - bounded commands per event
-- versioned rule save/reload plus newer-version rejection
+- versioned rule save/reload plus newer-version and oversized-file rejection
 - per-rule diagnostics snapshot counts and tracing-disabled-by-default behavior
 - structured matched-rule trace emission after explicit opt-in
 - NormalizedEventHub -> EventRuntimeHost main-thread dispatch
