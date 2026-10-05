@@ -20,6 +20,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
         [Header("Snapshot")]
         [SerializeField] private MonoBehaviour snapshotProviderBehaviour;
         [SerializeField] private bool autoFindSnapshotProvider = true;
+        [SerializeField, Min(0.25f)] private float providerResolveIntervalSeconds = 1f;
 
         [Header("Destination")]
         [SerializeField] private string remoteIPv4Address = "127.0.0.1";
@@ -35,10 +36,14 @@ namespace VCR.Runtime.Protocols.VmcUnity
         [Header("Diagnostics")]
         [SerializeField] private bool logErrors = true;
 
+        private readonly List<byte[]> _bundleMessages =
+            new(96);
+
         private INormalizedMotionSnapshotProvider _snapshotProvider;
         private UdpClient _client;
         private IPEndPoint _endpoint;
         private double _nextSendAt;
+        private float _nextProviderResolveTime;
 
         private long _packetCount;
         private long _errorCount;
@@ -66,6 +71,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 return;
             }
 
+            _nextProviderResolveTime = 0f;
             ResolveProvider();
             OpenClient();
             _nextSendAt = Time.realtimeSinceStartupAsDouble;
@@ -78,10 +84,27 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 return;
             }
 
-            if (_snapshotProvider == null)
+            if (!IsServiceAlive(
+                    _snapshotProvider))
             {
+                _snapshotProvider = null;
+
+                if (!autoFindSnapshotProvider ||
+                    Time.unscaledTime <
+                        _nextProviderResolveTime)
+                {
+                    return;
+                }
+
+                _nextProviderResolveTime =
+                    Time.unscaledTime +
+                    Mathf.Max(
+                        0.25f,
+                        providerResolveIntervalSeconds);
                 ResolveProvider();
-                if (_snapshotProvider == null)
+
+                if (!IsServiceAlive(
+                        _snapshotProvider))
                 {
                     return;
                 }
@@ -128,7 +151,9 @@ namespace VCR.Runtime.Protocols.VmcUnity
             TrackingFrame frame,
             float relativeTime)
         {
-            var messages = new List<byte[]>(96);
+            var messages =
+                _bundleMessages;
+            messages.Clear();
 
             messages.Add(
                 OscPacketWriter.WriteMessage(
@@ -281,15 +306,36 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         public void SetSnapshotProvider(MonoBehaviour provider)
         {
-            snapshotProviderBehaviour = provider;
+            snapshotProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
             _snapshotProvider =
-                provider as INormalizedMotionSnapshotProvider;
+                provider != null
+                    ? provider as
+                        INormalizedMotionSnapshotProvider
+                    : null;
+            _nextProviderResolveTime = 0f;
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void ResolveProvider()
         {
-            if (snapshotProviderBehaviour is
-                INormalizedMotionSnapshotProvider configured)
+            if (snapshotProviderBehaviour != null &&
+                snapshotProviderBehaviour is
+                    INormalizedMotionSnapshotProvider configured)
             {
                 _snapshotProvider = configured;
                 return;
