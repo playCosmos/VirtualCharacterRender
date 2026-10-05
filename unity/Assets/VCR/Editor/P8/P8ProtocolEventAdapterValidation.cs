@@ -1055,6 +1055,43 @@ namespace VCR.Editor.P8
                     "WebSocket transport must discard a destroyed cached handler and auto-discover its replacement",
                     failures);
 
+                UnityEngine.Object.DestroyImmediate(
+                    webSocketSink);
+
+                var replacementWebSocketSink =
+                    webSocketRoot.AddComponent<
+                        P8FakeEventSink>();
+
+                var directWebSocketJson =
+                    JsonUtility.ToJson(
+                        new WebSocketEventMessage
+                        {
+                            version =
+                                WebSocketEventProtocol
+                                    .CurrentVersion,
+                            op =
+                                WebSocketEventProtocol
+                                    .InjectOperation,
+                            type =
+                                NormalizedEventTypes
+                                    .LocalManual,
+                            text =
+                                "recovered-websocket-sink"
+                        });
+
+                Expect(
+                    replacementHandler.TryHandleText(
+                        directWebSocketJson,
+                        out var directWebSocketError) &&
+                    string.IsNullOrEmpty(
+                        directWebSocketError) &&
+                    replacementWebSocketSink.Events.Count == 1 &&
+                    replacementWebSocketSink.Events[0].Text ==
+                        "recovered-websocket-sink",
+                    "WebSocket injection adapter must discard a destroyed cached sink and auto-discover its replacement: " +
+                    directWebSocketError,
+                    failures);
+
                 oscRoot =
                     new GameObject(
                         "P8 OSC Sink Recovery");
