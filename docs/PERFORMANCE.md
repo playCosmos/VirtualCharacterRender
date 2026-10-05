@@ -131,6 +131,8 @@ For steady-state tracking and UI operation:
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
+- VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; its bundle message list and OSC argument scratch are reused,
+- OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
 A temporary allocation that is necessary for an immutable published frame is evaluated separately from avoidable scratch allocation. Do not trade correctness or frame immutability for unsafe pooling without ownership/lifetime evidence.
@@ -153,7 +155,7 @@ Candidate release soak tests should include:
 
 - 1 hour normal interactive session
 - 8 hour extended session
-- repeated tracker disconnect/reconnect
+- repeated tracker disconnect/reconnect, including stop/restart races while UDP/native callbacks are in flight
 - repeated model/environment reload, including target/component destruction and replacement
 - repeated shader-package load/unload while recording managed/native memory; do not add `Resources.UnloadUnusedAssets` to interactive paths without measured hitch evidence
 - shader failure and fallback
