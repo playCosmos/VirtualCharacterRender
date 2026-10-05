@@ -24,6 +24,7 @@ namespace VCR.Runtime.Events.Unity
         private int maxDispatchPerFrame = 128;
 
         private readonly ConcurrentQueue<NormalizedEvent> _queue = new();
+        private readonly object _queueSync = new();
         private readonly NormalizedEventBus _bus = new();
 
         private int _queuedCount;
@@ -63,19 +64,23 @@ namespace VCR.Runtime.Events.Unity
 
         public void Publish(NormalizedEvent value)
         {
-            _queue.Enqueue(value);
-            var count =
+            lock (_queueSync)
+            {
+                _queue.Enqueue(value);
                 Interlocked.Increment(
                     ref _queuedCount);
 
-            while (count > MaxQueuedEvents &&
-                   _queue.TryDequeue(out _))
-            {
-                Interlocked.Decrement(
-                    ref _queuedCount);
-                Interlocked.Increment(
-                    ref _droppedCount);
-                count--;
+                while (Volatile.Read(
+                           ref _queuedCount) >
+                       MaxQueuedEvents &&
+                       _queue.TryDequeue(
+                           out _))
+                {
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _droppedCount);
+                }
             }
         }
 
@@ -85,12 +90,23 @@ namespace VCR.Runtime.Events.Unity
                 MaxDispatchPerFrame;
 
             for (var i = 0;
-                 i < budget &&
-                 _queue.TryDequeue(out var value);
+                 i < budget;
                  i++)
             {
-                Interlocked.Decrement(
-                    ref _queuedCount);
+                NormalizedEvent value;
+
+                lock (_queueSync)
+                {
+                    if (!_queue.TryDequeue(
+                            out value))
+                    {
+                        break;
+                    }
+
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                }
+
                 _bus.Publish(value);
                 Interlocked.Increment(
                     ref _dispatchedCount);
