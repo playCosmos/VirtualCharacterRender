@@ -87,6 +87,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private long _messagesDropped;
         private long _messagesDispatched;
         private long _handlerRejections;
+        private long _handlerExceptions;
         private long _transportRejections;
 
         private string _backgroundError;
@@ -198,25 +199,39 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 Interlocked.Decrement(
                     ref _queuedCount);
 
-                if (_handler.TryHandleText(
-                        message,
-                        out var handlerError))
+                try
                 {
-                    Interlocked.Increment(
-                        ref _messagesDispatched);
+                    if (_handler.TryHandleText(
+                            message,
+                            out var handlerError))
+                    {
+                        Interlocked.Increment(
+                            ref _messagesDispatched);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(
+                            ref _handlerRejections);
+
+                        if (!string.IsNullOrWhiteSpace(
+                                handlerError))
+                        {
+                            Interlocked.Exchange(
+                                ref _backgroundError,
+                                handlerError);
+                        }
+                    }
                 }
-                else
+                catch (Exception exception)
                 {
                     Interlocked.Increment(
                         ref _handlerRejections);
-
-                    if (!string.IsNullOrWhiteSpace(
-                            handlerError))
-                    {
-                        Interlocked.Exchange(
-                            ref _backgroundError,
-                            handlerError);
-                    }
+                    Interlocked.Increment(
+                        ref _handlerExceptions);
+                    Interlocked.Exchange(
+                        ref _backgroundError,
+                        "WebSocket message handler threw: " +
+                        exception.Message);
                 }
             }
         }
@@ -494,6 +509,13 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     "protocol.websocket.transport.handler_rejected",
                     Interlocked.Read(
                         ref _handlerRejections),
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.handler_exceptions",
+                    Interlocked.Read(
+                        ref _handlerExceptions),
                     "count"));
 
             output.Add(
