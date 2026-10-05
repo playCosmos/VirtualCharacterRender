@@ -36,8 +36,9 @@ namespace VCR.Runtime.Protocols.VmcUnity
         [Header("Diagnostics")]
         [SerializeField] private bool logErrors = true;
 
-        private readonly List<byte[]> _bundleMessages =
-            new(96);
+        private readonly byte[] _packetScratch =
+            new byte[
+                OscPacketReader.MaxPacketBytes];
         private readonly OscArgument[] _argumentScratch =
             new OscArgument[8];
 
@@ -129,10 +130,13 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
             try
             {
-                var packet = BuildBundle(frame, (float)now);
+                var packetLength =
+                    BuildBundle(
+                        frame,
+                        (float)now);
                 _client.Send(
-                    packet,
-                    packet.Length,
+                    _packetScratch,
+                    packetLength,
                     _endpoint);
                 _packetCount++;
             }
@@ -149,24 +153,29 @@ namespace VCR.Runtime.Protocols.VmcUnity
             }
         }
 
-        private byte[] BuildBundle(
+        private int BuildBundle(
             TrackingFrame frame,
             float relativeTime)
         {
-            var messages =
-                _bundleMessages;
-            messages.Clear();
+            if (!OscPacketWriter.TryBeginBundle(
+                    _packetScratch,
+                    out var packetLength))
+            {
+                throw new InvalidOperationException(
+                    "VMC OSC bundle buffer is unavailable.");
+            }
 
-            messages.Add(
-                WriteStatusMessage());
+            AppendStatusMessage(
+                ref packetLength);
+            AppendTimeMessage(
+                relativeTime,
+                ref packetLength);
 
-            messages.Add(
-                WriteTimeMessage(
-                    relativeTime));
+            var pose =
+                frame.HumanoidPose;
 
-            var pose = frame.HumanoidPose;
-
-            if (pose.PoseSpace != HumanoidPoseSpace.OriginalLocal)
+            if (pose.PoseSpace !=
+                HumanoidPoseSpace.OriginalLocal)
             {
                 throw new InvalidOperationException(
                     "VMC sender requires OriginalLocal humanoid bones by default. " +
@@ -175,93 +184,117 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
             if (sendRoot)
             {
-                messages.Add(
-                    WriteTransformMessage(
-                        "/VMC/Ext/Root/Pos",
-                        "root",
-                        pose.RootPosition,
-                        pose.RootRotation));
+                AppendTransformMessage(
+                    "/VMC/Ext/Root/Pos",
+                    "root",
+                    pose.RootPosition,
+                    pose.RootRotation,
+                    ref packetLength);
             }
 
-            for (var i = 0; i < (int)HumanoidBoneId.Count; i++)
+            for (var i = 0;
+                 i <
+                 (int)HumanoidBoneId.Count;
+                 i++)
             {
-                var bone = (HumanoidBoneId)i;
-                if (!pose.TryGet(bone, out var bonePose))
+                var bone =
+                    (HumanoidBoneId)i;
+
+                if (!pose.TryGet(
+                        bone,
+                        out var bonePose))
                 {
                     continue;
                 }
 
-                var name = HumanoidBoneNames.GetCanonical(bone);
-                if (string.IsNullOrEmpty(name))
+                var name =
+                    HumanoidBoneNames
+                        .GetCanonical(
+                            bone);
+
+                if (string.IsNullOrEmpty(
+                        name))
                 {
                     continue;
                 }
 
-                messages.Add(
-                    WriteTransformMessage(
-                        "/VMC/Ext/Bone/Pos",
-                        name,
-                        bonePose.LocalPosition,
-                        bonePose.LocalRotation));
+                AppendTransformMessage(
+                    "/VMC/Ext/Bone/Pos",
+                    name,
+                    bonePose.LocalPosition,
+                    bonePose.LocalRotation,
+                    ref packetLength);
             }
 
             if (sendExpressions &&
                 frame.Expressions != null)
             {
                 AppendExpressions(
-                    messages,
-                    frame.Expressions);
+                    frame.Expressions,
+                    ref packetLength);
 
-                messages.Add(
-                    WriteNoArgumentMessage(
-                        "/VMC/Ext/Blend/Apply"));
+                AppendNoArgumentMessage(
+                    "/VMC/Ext/Blend/Apply",
+                    ref packetLength);
             }
 
-            return OscPacketWriter.WriteBundle(messages);
+            return packetLength;
         }
 
         private void AppendExpressions(
-            List<byte[]> messages,
-            NormalizedExpressionState state)
+            NormalizedExpressionState state,
+            ref int packetLength)
         {
             for (var i = 0;
-                 i < (int)StandardExpression.Count;
+                 i <
+                 (int)StandardExpression.Count;
                  i++)
             {
-                var expression = (StandardExpression)i;
+                var expression =
+                    (StandardExpression)i;
 
-                var name = sendVrm1ExpressionNames
-                    ? StandardExpressionNames.GetVrm1Name(expression)
-                    : StandardExpressionNames.GetVmcVrm0Name(expression);
+                var name =
+                    sendVrm1ExpressionNames
+                        ? StandardExpressionNames
+                            .GetVrm1Name(
+                                expression)
+                        : StandardExpressionNames
+                            .GetVmcVrm0Name(
+                                expression);
 
-                if (string.IsNullOrEmpty(name))
+                if (string.IsNullOrEmpty(
+                        name))
                 {
                     continue;
                 }
 
-                messages.Add(
-                    WriteBlendValueMessage(
-                        name,
-                        Mathf.Clamp01(
-                            state.Get(expression))));
+                AppendBlendValueMessage(
+                    name,
+                    Mathf.Clamp01(
+                        state.Get(
+                            expression)),
+                    ref packetLength);
             }
 
-            foreach (var custom in state.Custom)
+            foreach (var custom in
+                     state.Custom)
             {
-                if (string.IsNullOrEmpty(custom.Name))
+                if (string.IsNullOrEmpty(
+                        custom.Name))
                 {
                     continue;
                 }
 
-                messages.Add(
-                    WriteBlendValueMessage(
-                        custom.Name,
-                        Mathf.Clamp01(
-                            custom.Value)));
+                AppendBlendValueMessage(
+                    custom.Name,
+                    Mathf.Clamp01(
+                        custom.Value),
+                    ref packetLength);
             }
         }
 
-        private byte[] WriteStatusMessage()
+        private void AppendStatusMessage(
+            ref int packetLength)
         {
             _argumentScratch[0] =
                 OscArgument.FromInt(1);
@@ -272,76 +305,108 @@ namespace VCR.Runtime.Protocols.VmcUnity
             _argumentScratch[3] =
                 OscArgument.FromInt(1);
 
-            return OscPacketWriter.WriteMessage(
+            AppendMessage(
                 "/VMC/Ext/OK",
-                _argumentScratch,
-                4);
+                4,
+                ref packetLength);
         }
 
-        private byte[] WriteTimeMessage(
-            float relativeTime)
+        private void AppendTimeMessage(
+            float relativeTime,
+            ref int packetLength)
         {
             _argumentScratch[0] =
                 OscArgument.FromFloat(
                     relativeTime);
 
-            return OscPacketWriter.WriteMessage(
+            AppendMessage(
                 "/VMC/Ext/T",
-                _argumentScratch,
-                1);
+                1,
+                ref packetLength);
         }
 
-        private byte[] WriteNoArgumentMessage(
-            string address)
+        private void AppendNoArgumentMessage(
+            string address,
+            ref int packetLength)
         {
-            return OscPacketWriter.WriteMessage(
+            AppendMessage(
                 address,
-                _argumentScratch,
-                0);
+                0,
+                ref packetLength);
         }
 
-        private byte[] WriteBlendValueMessage(
+        private void AppendBlendValueMessage(
             string name,
-            float value)
+            float value,
+            ref int packetLength)
         {
             _argumentScratch[0] =
-                OscArgument.FromString(name);
+                OscArgument.FromString(
+                    name);
             _argumentScratch[1] =
-                OscArgument.FromFloat(value);
+                OscArgument.FromFloat(
+                    value);
 
-            return OscPacketWriter.WriteMessage(
+            AppendMessage(
                 "/VMC/Ext/Blend/Val",
-                _argumentScratch,
-                2);
+                2,
+                ref packetLength);
         }
 
-        private byte[] WriteTransformMessage(
+        private void AppendTransformMessage(
             string address,
             string name,
             TrackingVector3 position,
-            TrackingQuaternion rotation)
+            TrackingQuaternion rotation,
+            ref int packetLength)
         {
             _argumentScratch[0] =
-                OscArgument.FromString(name);
+                OscArgument.FromString(
+                    name);
             _argumentScratch[1] =
-                OscArgument.FromFloat(position.X);
+                OscArgument.FromFloat(
+                    position.X);
             _argumentScratch[2] =
-                OscArgument.FromFloat(position.Y);
+                OscArgument.FromFloat(
+                    position.Y);
             _argumentScratch[3] =
-                OscArgument.FromFloat(position.Z);
+                OscArgument.FromFloat(
+                    position.Z);
             _argumentScratch[4] =
-                OscArgument.FromFloat(rotation.X);
+                OscArgument.FromFloat(
+                    rotation.X);
             _argumentScratch[5] =
-                OscArgument.FromFloat(rotation.Y);
+                OscArgument.FromFloat(
+                    rotation.Y);
             _argumentScratch[6] =
-                OscArgument.FromFloat(rotation.Z);
+                OscArgument.FromFloat(
+                    rotation.Z);
             _argumentScratch[7] =
-                OscArgument.FromFloat(rotation.W);
+                OscArgument.FromFloat(
+                    rotation.W);
 
-            return OscPacketWriter.WriteMessage(
+            AppendMessage(
                 address,
-                _argumentScratch,
-                8);
+                8,
+                ref packetLength);
+        }
+
+        private void AppendMessage(
+            string address,
+            int argumentCount,
+            ref int packetLength)
+        {
+            if (!OscPacketWriter
+                .TryAppendBundleMessage(
+                    _packetScratch,
+                    ref packetLength,
+                    address,
+                    _argumentScratch,
+                    argumentCount))
+            {
+                throw new InvalidOperationException(
+                    "VMC OSC bundle exceeds the configured packet limit.");
+            }
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)
