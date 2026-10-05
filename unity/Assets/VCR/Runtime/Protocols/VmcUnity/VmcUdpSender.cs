@@ -38,6 +38,8 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private readonly List<byte[]> _bundleMessages =
             new(96);
+        private readonly OscArgument[] _argumentScratch =
+            new OscArgument[8];
 
         private INormalizedMotionSnapshotProvider _snapshotProvider;
         private UdpClient _client;
@@ -156,17 +158,11 @@ namespace VCR.Runtime.Protocols.VmcUnity
             messages.Clear();
 
             messages.Add(
-                OscPacketWriter.WriteMessage(
-                    "/VMC/Ext/OK",
-                    OscArgument.FromInt(1),
-                    OscArgument.FromInt(3),
-                    OscArgument.FromInt(0),
-                    OscArgument.FromInt(1)));
+                WriteStatusMessage());
 
             messages.Add(
-                OscPacketWriter.WriteMessage(
-                    "/VMC/Ext/T",
-                    OscArgument.FromFloat(relativeTime)));
+                WriteTimeMessage(
+                    relativeTime));
 
             var pose = frame.HumanoidPose;
 
@@ -217,7 +213,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     frame.Expressions);
 
                 messages.Add(
-                    OscPacketWriter.WriteMessage(
+                    WriteNoArgumentMessage(
                         "/VMC/Ext/Blend/Apply"));
             }
 
@@ -244,12 +240,10 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 }
 
                 messages.Add(
-                    OscPacketWriter.WriteMessage(
-                        "/VMC/Ext/Blend/Val",
-                        OscArgument.FromString(name),
-                        OscArgument.FromFloat(
-                            Mathf.Clamp01(
-                                state.Get(expression)))));
+                    WriteBlendValueMessage(
+                        name,
+                        Mathf.Clamp01(
+                            state.Get(expression))));
             }
 
             foreach (var custom in state.Custom)
@@ -260,30 +254,94 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 }
 
                 messages.Add(
-                    OscPacketWriter.WriteMessage(
-                        "/VMC/Ext/Blend/Val",
-                        OscArgument.FromString(custom.Name),
-                        OscArgument.FromFloat(
-                            Mathf.Clamp01(custom.Value))));
+                    WriteBlendValueMessage(
+                        custom.Name,
+                        Mathf.Clamp01(
+                            custom.Value)));
             }
         }
 
-        private static byte[] WriteTransformMessage(
+        private byte[] WriteStatusMessage()
+        {
+            _argumentScratch[0] =
+                OscArgument.FromInt(1);
+            _argumentScratch[1] =
+                OscArgument.FromInt(3);
+            _argumentScratch[2] =
+                OscArgument.FromInt(0);
+            _argumentScratch[3] =
+                OscArgument.FromInt(1);
+
+            return OscPacketWriter.WriteMessage(
+                "/VMC/Ext/OK",
+                _argumentScratch,
+                4);
+        }
+
+        private byte[] WriteTimeMessage(
+            float relativeTime)
+        {
+            _argumentScratch[0] =
+                OscArgument.FromFloat(
+                    relativeTime);
+
+            return OscPacketWriter.WriteMessage(
+                "/VMC/Ext/T",
+                _argumentScratch,
+                1);
+        }
+
+        private byte[] WriteNoArgumentMessage(
+            string address)
+        {
+            return OscPacketWriter.WriteMessage(
+                address,
+                _argumentScratch,
+                0);
+        }
+
+        private byte[] WriteBlendValueMessage(
+            string name,
+            float value)
+        {
+            _argumentScratch[0] =
+                OscArgument.FromString(name);
+            _argumentScratch[1] =
+                OscArgument.FromFloat(value);
+
+            return OscPacketWriter.WriteMessage(
+                "/VMC/Ext/Blend/Val",
+                _argumentScratch,
+                2);
+        }
+
+        private byte[] WriteTransformMessage(
             string address,
             string name,
             TrackingVector3 position,
             TrackingQuaternion rotation)
         {
+            _argumentScratch[0] =
+                OscArgument.FromString(name);
+            _argumentScratch[1] =
+                OscArgument.FromFloat(position.X);
+            _argumentScratch[2] =
+                OscArgument.FromFloat(position.Y);
+            _argumentScratch[3] =
+                OscArgument.FromFloat(position.Z);
+            _argumentScratch[4] =
+                OscArgument.FromFloat(rotation.X);
+            _argumentScratch[5] =
+                OscArgument.FromFloat(rotation.Y);
+            _argumentScratch[6] =
+                OscArgument.FromFloat(rotation.Z);
+            _argumentScratch[7] =
+                OscArgument.FromFloat(rotation.W);
+
             return OscPacketWriter.WriteMessage(
                 address,
-                OscArgument.FromString(name),
-                OscArgument.FromFloat(position.X),
-                OscArgument.FromFloat(position.Y),
-                OscArgument.FromFloat(position.Z),
-                OscArgument.FromFloat(rotation.X),
-                OscArgument.FromFloat(rotation.Y),
-                OscArgument.FromFloat(rotation.Z),
-                OscArgument.FromFloat(rotation.W));
+                _argumentScratch,
+                8);
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)
