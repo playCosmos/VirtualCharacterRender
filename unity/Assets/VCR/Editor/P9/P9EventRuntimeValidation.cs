@@ -837,6 +837,30 @@ namespace VCR.Editor.P9
                         futureError),
                     "P9 rule configuration must reject a newer unsupported persisted version",
                     failures);
+
+                using (var stream =
+                       new FileStream(
+                           path,
+                           FileMode.Create,
+                           FileAccess.Write,
+                           FileShare.None))
+                {
+                    stream.SetLength(
+                        16L * 1024L * 1024L +
+                        1L);
+                }
+
+                Expect(
+                    !store.TryLoad(
+                        out var oversizedRules,
+                        out var oversizedMaxCommands,
+                        out var oversizedError) &&
+                    oversizedRules.Length == 0 &&
+                    oversizedMaxCommands == 32 &&
+                    !string.IsNullOrWhiteSpace(
+                        oversizedError),
+                    "P9 rule configuration must reject files larger than the bounded persistence limit before JSON allocation",
+                    failures);
             }
             catch (Exception exception)
             {
