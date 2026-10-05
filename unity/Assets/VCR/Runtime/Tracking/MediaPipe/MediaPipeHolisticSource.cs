@@ -17,6 +17,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     public sealed class MediaPipeHolisticSource : ITrackingSource
     {
         private readonly object _sync = new();
+        private readonly object _nativeCallSync = new();
         private readonly byte[] _modelBytes;
         private readonly MediaPipeHolisticCallbackBridge _bridge;
         private readonly Dictionary<long, long> _submittedAtUs = new();
@@ -68,8 +69,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public void Start()
         {
-            lock (_sync)
+            lock (_nativeCallSync)
             {
+                lock (_sync)
+                {
                 ThrowIfDisposed();
 
                 if (_landmarker != null)
@@ -114,6 +117,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         exception.Message);
                     throw;
                 }
+                }
             }
         }
 
@@ -121,28 +125,36 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             if (image == null)
             {
-                throw new ArgumentNullException(nameof(image));
+                throw new ArgumentNullException(
+                    nameof(image));
             }
 
-            HolisticLandmarker landmarker;
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                ThrowIfDisposed();
-                landmarker = _landmarker ??
-                    throw new InvalidOperationException("Tracking source is not started.");
+                HolisticLandmarker landmarker;
 
-                if (_submittedAtUs.Count > 64)
+                lock (_sync)
                 {
-                    _submittedAtUs.Clear();
+                    ThrowIfDisposed();
+                    landmarker =
+                        _landmarker ??
+                        throw new InvalidOperationException(
+                            "Tracking source is not started.");
+
+                    if (_submittedAtUs.Count > 64)
+                    {
+                        _submittedAtUs.Clear();
+                    }
+
+                    _submittedAtUs[timestampMillisec] =
+                        MonotonicClock
+                            .NowMicroseconds();
                 }
 
-                _submittedAtUs[timestampMillisec] =
-                    MonotonicClock.NowMicroseconds();
+                landmarker.DetectAsync(
+                    image,
+                    timestampMillisec);
             }
-
-            // Do not hold _sync while calling native code: LIVE_STREAM callbacks
-            // may arrive on another thread and also need to update source health.
-            landmarker.DetectAsync(image, timestampMillisec);
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
@@ -152,62 +164,73 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public void Stop()
         {
-            HolisticLandmarker landmarker;
-
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                Volatile.Write(ref _acceptCallbacks, 0);
+                HolisticLandmarker landmarker;
 
-                landmarker = _landmarker;
-                _landmarker = null;
-                _submittedAtUs.Clear();
+                lock (_sync)
+                {
+                    Volatile.Write(
+                        ref _acceptCallbacks,
+                        0);
 
-                _health = new TrackingSourceHealth(
-                    TrackingSourceHealthState.Stopped,
-                    _health.LastUpdateTimestampUs,
-                    _health.Confidence,
-                    null);
-            }
+                    landmarker =
+                        _landmarker;
+                    _landmarker = null;
+                    _submittedAtUs.Clear();
 
-            if (landmarker != null)
-            {
-                ((IDisposable)landmarker).Dispose();
+                    _health =
+                        new TrackingSourceHealth(
+                            TrackingSourceHealthState.Stopped,
+                            _health.LastUpdateTimestampUs,
+                            _health.Confidence,
+                            null);
+                }
+
+                if (landmarker != null)
+                {
+                    ((IDisposable)landmarker)
+                        .Dispose();
+                }
             }
         }
 
         public void Dispose()
         {
-            HolisticLandmarker landmarker;
-
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                if (_disposed)
+                HolisticLandmarker landmarker;
+
+                lock (_sync)
                 {
-                    return;
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    _disposed = true;
+                    Volatile.Write(
+                        ref _acceptCallbacks,
+                        0);
+
+                    landmarker =
+                        _landmarker;
+                    _landmarker = null;
+                    _submittedAtUs.Clear();
+
+                    _health =
+                        new TrackingSourceHealth(
+                            TrackingSourceHealthState.Stopped,
+                            _health.LastUpdateTimestampUs,
+                            _health.Confidence,
+                            null);
                 }
 
-                _disposed = true;
-                Volatile.Write(
-                    ref _acceptCallbacks,
-                    0);
-
-                landmarker =
-                    _landmarker;
-                _landmarker = null;
-                _submittedAtUs.Clear();
-
-                _health =
-                    new TrackingSourceHealth(
-                        TrackingSourceHealthState.Stopped,
-                        _health.LastUpdateTimestampUs,
-                        _health.Confidence,
-                        null);
-            }
-
-            if (landmarker != null)
-            {
-                ((IDisposable)landmarker)
-                    .Dispose();
+                if (landmarker != null)
+                {
+                    ((IDisposable)landmarker)
+                        .Dispose();
+                }
             }
         }
 
