@@ -30,6 +30,17 @@ namespace VCR.Runtime.Events.Unity
 
         private void Update()
         {
+            if (!IsServiceAlive(_presenceProvider))
+            {
+                _presenceProvider = null;
+                _lastPresenceSequence = -1;
+            }
+
+            if (!IsServiceAlive(_sink))
+            {
+                _sink = null;
+            }
+
             if ((_presenceProvider == null ||
                  _sink == null) &&
                 autoFindDependencies &&
@@ -40,8 +51,8 @@ namespace VCR.Runtime.Events.Unity
                 ResolveDependencies();
             }
 
-            if (_presenceProvider == null ||
-                _sink == null)
+            if (!IsServiceAlive(_presenceProvider) ||
+                !IsServiceAlive(_sink))
             {
                 return;
             }
@@ -100,30 +111,69 @@ namespace VCR.Runtime.Events.Unity
         public void SetProvider(
             ITrackingPresenceProvider provider)
         {
-            _presenceProvider = provider;
-            presenceProviderBehaviour =
-                provider as MonoBehaviour;
-            _lastPresenceSequence = -1;
+            AssignProvider(
+                IsServiceAlive(provider)
+                    ? provider
+                    : null,
+                provider as MonoBehaviour);
         }
 
         public void SetSink(
             INormalizedEventSink sink)
         {
-            _sink = sink;
+            _sink =
+                IsServiceAlive(sink)
+                    ? sink
+                    : null;
             eventSinkBehaviour =
-                sink as MonoBehaviour;
+                _sink as MonoBehaviour;
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
+        private void AssignProvider(
+            ITrackingPresenceProvider provider,
+            MonoBehaviour behaviour)
+        {
+            if (!ReferenceEquals(
+                    _presenceProvider,
+                    provider))
+            {
+                _lastPresenceSequence = -1;
+            }
+
+            _presenceProvider = provider;
+            presenceProviderBehaviour =
+                provider != null
+                    ? behaviour
+                    : null;
         }
 
         private void ResolveDependencies()
         {
-            if (presenceProviderBehaviour is
-                ITrackingPresenceProvider provider)
+            if (presenceProviderBehaviour != null &&
+                presenceProviderBehaviour is
+                    ITrackingPresenceProvider provider)
             {
-                _presenceProvider = provider;
+                AssignProvider(
+                    provider,
+                    presenceProviderBehaviour);
             }
 
-            if (eventSinkBehaviour is
-                INormalizedEventSink sink)
+            if (eventSinkBehaviour != null &&
+                eventSinkBehaviour is
+                    INormalizedEventSink sink)
             {
                 _sink = sink;
             }
@@ -133,8 +183,10 @@ namespace VCR.Runtime.Events.Unity
                 return;
             }
 
-            if (_presenceProvider == null)
+            if (!IsServiceAlive(_presenceProvider))
             {
+                _presenceProvider = null;
+
                 var behaviours =
                     FindObjectsByType<MonoBehaviour>(
                         FindObjectsInactive.Exclude,
@@ -145,9 +197,9 @@ namespace VCR.Runtime.Events.Unity
                     if (behaviour is
                         ITrackingRouteProvider route)
                     {
-                        _presenceProvider = route;
-                        presenceProviderBehaviour =
-                            behaviour;
+                        AssignProvider(
+                            route,
+                            behaviour);
                         break;
                     }
 
@@ -155,15 +207,17 @@ namespace VCR.Runtime.Events.Unity
                         behaviour is
                             ITrackingPresenceProvider direct)
                     {
-                        _presenceProvider = direct;
-                        presenceProviderBehaviour =
-                            behaviour;
+                        AssignProvider(
+                            direct,
+                            behaviour);
                     }
                 }
             }
 
-            if (_sink == null)
+            if (!IsServiceAlive(_sink))
             {
+                _sink = null;
+
                 var hub =
                     FindFirstObjectByType<
                         NormalizedEventHub>();
