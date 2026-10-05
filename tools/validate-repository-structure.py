@@ -152,6 +152,11 @@ require_source_contains(
     "IBorrowedNormalizedMotionProvider",
     "VMC sender must prefer combined borrowed motion when available",
 )
+require_source_contains(
+    vmc_sender,
+    "protocol.vmc.send.borrowed_motion_packets",
+    "VMC borrowed-motion usage must remain observable in runtime metrics",
+)
 require_source_order(
     vmc_sender,
     "IBorrowedNormalizedMotionProvider borrowedMotionProvider",
@@ -168,6 +173,23 @@ forbid_source_pattern(
     vmc_sender,
     r"OscPacketWriter\s*\.\s*WriteBundle\s*\(",
     "VMC sender must not rebuild a bundle from per-message byte arrays",
+)
+
+p0_vmc_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0VmcSetupMenu.cs"
+)
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateBorrowedSenderEquivalence",
+    "P0 VMC validation must compare borrowed and immutable sender packet bytes",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "MakeByRefType()",
+    "P0 VMC validation must invoke the borrowed in-parameter serialization overload",
 )
 
 udp_receivers = [
