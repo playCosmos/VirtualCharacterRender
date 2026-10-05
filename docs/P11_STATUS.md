@@ -1,14 +1,16 @@
 # P11 Status
 
-Updated: 2026-10-04
+Updated: 2026-10-05
 
 ## Active branch
 
+Current integrated source of truth:
+
 ```text
-feature/p11-application-ui
+develop
 ```
 
-P11 starts from the preserved P10 source checkpoint:
+The old P11 feature/checkpoint branches are historical phase references only. P11 originally starts from the preserved P10 source checkpoint:
 
 ```text
 checkpoint/p10-source-implementation
@@ -99,7 +101,7 @@ Implemented source contracts:
 - Immediate changes
 - timed transition definitions with exactly one explicit appearance commit step
 - deterministic authored step order; transition step times must be non-decreasing
-- QueueLatest, QueueAll, and IgnoreWhileBusy request policies
+- QueueLatest, QueueAll, and IgnoreWhileBusy request policies; QueueAll is bounded by a configurable 1..256 backlog limit (default 32) with queue-depth/rejection diagnostics
 - Interrupt is accepted only when explicit cancellation cleanup action steps are authored
 - transition status exposes elapsed time, duration, normalized progress, commit state, and cancelability
 - explicit cancel/interrupt executes cleanup actions immediately; pre-commit cancellation keeps the old appearance and post-commit cancellation keeps the committed appearance
@@ -144,7 +146,7 @@ Transition presentation is intentionally handler-driven. A user or later built-i
 
 The generic transition sequencer/bridge, particle/effect action path, audio action path, procedural motion path, and baked AnimationClip motion path are implemented. The default `spin` cue, baked AnimationClip cues, registered confetti/flower-petal/sparkle effects, and logical audio cues can all be referenced through the same transition action system. Runtime playback of baked clips does not sample Animator/AnimationClip every frame.
 
-Timed coroutine execution, queue behavior, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
+Timed coroutine execution, QueueAll saturation/rejection behavior under real event bursts, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
 ## Runtime scene
 
@@ -205,6 +207,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - transition definition requires exactly one appearance commit
 - Event Runtime -> appearance preset/cancel bridge
 - transition action executor -> application action handler bridge
+- destroyed Unity transition executors/action handlers are rejected through Unity-object lifetime checks; auto-find paths rebuild against live replacements
 - recursive appearance.* transition action rejection
 - built-in effect.play/effect.stop root activation/deactivation through transition actions
 - procedural motion cue sampling plus motion.play/motion.release state changes through the transition bridge
@@ -221,6 +224,7 @@ The P11 batch entry runs P0-P10 source-free suites first and then checks:
 - transition cancel UI gating on active/cancelable status
 - transition timeline SerializedObject property contract and authored transition RebuildConfiguration round trip
 - named marker resolution, AnimationClip marker extraction with non-marker filtering/duplicate rejection, baked marker preservation, unknown-marker rejection, blocking timeout validation, completion-probe bridging, StepId uniqueness, All/Any dependency validation, forward-reference rejection, and dependency timeout validation
+- appearance transition queue-limit range validation plus source checks for destroyed executor/handler replacement recovery
 - procedural motion completion state before/after release through the transition bridge
 - transition package JSON v2 marker/blocking/dependency/action/commit/cleanup round trip, v1→v2 migration, and newer-version rejection
 - transition package library add/scan behavior, v1 migration metadata, valid/invalid file indexing, and package/transition search matching
