@@ -73,7 +73,26 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         private long _rejectedSenderCount;
         private string _backgroundError;
 
-        public int LocalPort => localPort;
+        public int LocalPort =>
+            Math.Max(
+                1,
+                Math.Min(
+                    65535,
+                    localPort));
+
+        public int MaxQueuedEvents =>
+            Math.Max(
+                32,
+                Math.Min(
+                    8192,
+                    maxQueuedEvents));
+
+        public int MaxDispatchPerFrame =>
+            Math.Max(
+                1,
+                Math.Min(
+                    2048,
+                    maxDispatchPerFrame));
 
         public int QueuedCount =>
             Math.Max(
@@ -151,9 +170,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             }
 
             var budget =
-                Math.Max(
-                    1,
-                    maxDispatchPerFrame);
+                MaxDispatchPerFrame;
 
             for (var i = 0;
                  i < budget &&
@@ -205,6 +222,17 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             {
                 return;
             }
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.osc.events.queue_limit",
+                    MaxQueuedEvents,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.osc.events.dispatch_limit",
+                    MaxDispatchPerFrame,
+                    "count"));
 
             output.Add(
                 new RuntimeMetric(
@@ -455,9 +483,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     ref _queuedCount);
 
             var limit =
-                Math.Max(
-                    32,
-                    maxQueuedEvents);
+                MaxQueuedEvents;
 
             while (count > limit &&
                    _queue.TryDequeue(
