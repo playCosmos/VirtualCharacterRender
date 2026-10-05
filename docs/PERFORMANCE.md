@@ -133,7 +133,8 @@ For steady-state tracking and UI operation:
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
 - VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; OSC serialization writes directly into one reusable packet buffer plus reusable argument scratch, so the sender must not reintroduce per-message `byte[]` bundle staging,
 - iFacialMocap parsing uses span-based token/numeric parsing and span coefficient lookup so packet parts, coefficient names, and head components do not create transient strings; immutable coefficient/frame output still owns its published arrays,
-- OSC receive parsing must not allocate transient bundle-tag or type-tag strings; OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
+- OSC receive parsing must not allocate transient bundle-tag or type-tag strings; VMC, generic OSC-event, and ARKit UDP receive loops use one reusable datagram buffer per worker instead of `UdpClient.Receive()` packet arrays,
+- OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
 - OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
