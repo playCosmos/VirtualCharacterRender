@@ -55,6 +55,20 @@ namespace VCR.Runtime.Broadcast.SoopUnity
         private long _chatEvents;
         private long _donationEvents;
 
+        public int MaxMessageCharacters =>
+            Math.Max(
+                256,
+                Math.Min(
+                    262144,
+                    maxMessageCharacters));
+
+        public int RememberedEventIdLimit =>
+            Math.Max(
+                32,
+                Math.Min(
+                    8192,
+                    rememberedEventIds));
+
         public long AcceptedCount =>
             Interlocked.Read(
                 ref _accepted);
@@ -100,9 +114,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
             }
 
             if (json.Length >
-                Math.Max(
-                    256,
-                    maxMessageCharacters))
+                MaxMessageCharacters)
             {
                 return Reject(
                     "SOOP bridge message exceeds the configured size limit.",
@@ -276,9 +288,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     eventId);
 
                 var limit =
-                    Math.Max(
-                        32,
-                        rememberedEventIds);
+                    RememberedEventIdLimit;
 
                 while (_recentEventIds.Count >
                        limit)
