@@ -62,6 +62,8 @@ namespace VCR.Runtime.Diagnostics
         private readonly List<RuntimeMetric> _metrics = new(64);
         private bool _csvHeaderWritten;
         private long _snapshotSequence;
+        private long _metricSourceFailureCount;
+        private long _snapshotSubscriberFailureCount;
         private RuntimeDiagnosticsSnapshot _latestSnapshot;
 
         public RuntimeDiagnosticsSnapshot LatestSnapshot =>
@@ -455,7 +457,7 @@ namespace VCR.Runtime.Diagnostics
                     presence,
                     metricSnapshot);
 
-            SnapshotUpdated?.Invoke(
+            NotifySnapshotUpdated(
                 _latestSnapshot);
 
             if (logToConsole)
@@ -571,10 +573,57 @@ namespace VCR.Runtime.Diagnostics
 
             foreach (var behaviour in behaviours)
             {
-                if (behaviour is
+                if (behaviour is not
                     IRuntimeMetricsSource source)
                 {
-                    source.CollectMetrics(output);
+                    continue;
+                }
+
+                try
+                {
+                    source.CollectMetrics(
+                        output);
+                }
+                catch
+                {
+                    _metricSourceFailureCount++;
+                }
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    "diagnostics.metric_source_failures",
+                    _metricSourceFailureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "diagnostics.snapshot_subscriber_failures",
+                    _snapshotSubscriberFailureCount,
+                    "count"));
+        }
+
+        private void NotifySnapshotUpdated(
+            RuntimeDiagnosticsSnapshot snapshot)
+        {
+            var subscribers =
+                SnapshotUpdated;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<RuntimeDiagnosticsSnapshot> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(
+                        snapshot);
+                }
+                catch
+                {
+                    _snapshotSubscriberFailureCount++;
                 }
             }
         }
