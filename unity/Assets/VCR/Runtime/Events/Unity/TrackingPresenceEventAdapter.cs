@@ -34,11 +34,13 @@ namespace VCR.Runtime.Events.Unity
             {
                 _presenceProvider = null;
                 _lastPresenceSequence = -1;
+                _nextSearchTime = 0f;
             }
 
             if (!IsServiceAlive(_sink))
             {
                 _sink = null;
+                _nextSearchTime = 0f;
             }
 
             if ((_presenceProvider == null ||
