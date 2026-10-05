@@ -56,6 +56,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         private readonly ConcurrentQueue<NormalizedEvent>
             _queue = new();
 
+        private readonly object _queueSync =
+            new();
+
         private UdpClient _receiver;
         private Thread _receiveThread;
         private volatile bool _running;
@@ -174,13 +177,22 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 MaxDispatchPerFrame;
 
             for (var i = 0;
-                 i < budget &&
-                 _queue.TryDequeue(
-                     out var value);
+                 i < budget;
                  i++)
             {
-                Interlocked.Decrement(
-                    ref _queuedCount);
+                NormalizedEvent value;
+
+                lock (_queueSync)
+                {
+                    if (!_queue.TryDequeue(
+                            out value))
+                    {
+                        break;
+                    }
+
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                }
 
                 try
                 {
@@ -495,27 +507,27 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 return false;
             }
 
-            _queue.Enqueue(
-                value);
-
-            var count =
-                Interlocked.Increment(
-                    ref _queuedCount);
-
-            var limit =
-                MaxQueuedEvents;
-
-            while (count > limit &&
-                   _queue.TryDequeue(
-                       out _))
+            lock (_queueSync)
             {
-                Interlocked.Decrement(
+                _queue.Enqueue(
+                    value);
+                Interlocked.Increment(
                     ref _queuedCount);
 
-                Interlocked.Increment(
-                    ref _droppedEventCount);
+                var limit =
+                    MaxQueuedEvents;
 
-                count--;
+                while (Volatile.Read(
+                           ref _queuedCount) >
+                       limit &&
+                       _queue.TryDequeue(
+                           out _))
+                {
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _droppedEventCount);
+                }
             }
 
             Interlocked.Increment(
