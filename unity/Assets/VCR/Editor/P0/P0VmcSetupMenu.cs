@@ -204,6 +204,34 @@ namespace VCR.Editor.P0
                     oversized.Length,
                     new List<OscMessage>());
 
+            var excessiveMessages =
+                new List<byte[]>(
+                    OscPacketReader
+                        .MaxMessagesPerPacket +
+                    1);
+
+            for (var i = 0;
+                 i <=
+                 OscPacketReader
+                     .MaxMessagesPerPacket;
+                 i++)
+            {
+                excessiveMessages.Add(
+                    OscPacketWriter.WriteMessage(
+                        "/x"));
+            }
+
+            var excessivePacket =
+                OscPacketWriter.WriteBundle(
+                    excessiveMessages);
+            var excessiveDecoded =
+                new List<OscMessage>();
+            var excessiveAccepted =
+                OscPacketReader.TryReadMessages(
+                    excessivePacket,
+                    excessivePacket.Length,
+                    excessiveDecoded);
+
             var sourceLifecyclePass =
                 false;
             var lifecycleSource =
@@ -275,6 +303,8 @@ namespace VCR.Editor.P0
                         StandardExpression.BlinkLeft),
                     0.8f) &&
                 !oversizedAccepted &&
+                !excessiveAccepted &&
+                excessiveDecoded.Count == 0 &&
                 Mathf.Approximately(
                     hips.LocalPosition.Y,
                     0.9f) &&
