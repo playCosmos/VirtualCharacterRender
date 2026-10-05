@@ -352,7 +352,8 @@ namespace VCR.Runtime.Protocols.Vmc
                 _rootPosition,
                 _rootRotation,
                 bones,
-                hasBone);
+                hasBone,
+                SnapshotArrayOwnership.Transfer);
         }
 
         private NormalizedExpressionState BuildExpressions()
@@ -379,7 +380,8 @@ namespace VCR.Runtime.Protocols.Vmc
 
             return new NormalizedExpressionState(
                 standard,
-                custom);
+                custom,
+                SnapshotArrayOwnership.Transfer);
         }
 
         private static bool TryTransform(
