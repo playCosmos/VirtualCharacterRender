@@ -686,99 +686,128 @@ namespace VCR.Runtime.Materials.Unity
         {
             error = null;
 
-            string[] files;
+            var pendingDirectories =
+                new Stack<string>();
+            pendingDirectories.Push(
+                packageRoot);
+
+            var fileCount = 0;
+            long totalBytes = 0;
 
             try
             {
-                files =
-                    Directory.GetFiles(
-                        packageRoot,
-                        "*",
-                        SearchOption.AllDirectories);
+                while (pendingDirectories.Count >
+                       0)
+                {
+                    var directory =
+                        pendingDirectories.Pop();
+
+                    if (IsReparsePoint(
+                            directory))
+                    {
+                        error =
+                            $"Shader package directory '{directory}' uses a symbolic/reparse point.";
+                        return false;
+                    }
+
+                    foreach (var childDirectory in
+                             Directory.EnumerateDirectories(
+                                 directory))
+                    {
+                        if (IsReparsePoint(
+                                childDirectory))
+                        {
+                            var relativeDirectory =
+                                Path.GetRelativePath(
+                                        packageRoot,
+                                        childDirectory)
+                                    .Replace(
+                                        Path.DirectorySeparatorChar,
+                                        '/')
+                                    .Replace(
+                                        Path.AltDirectorySeparatorChar,
+                                        '/');
+
+                            error =
+                                $"Shader package directory '{relativeDirectory}' uses a symbolic/reparse point.";
+                            return false;
+                        }
+
+                        pendingDirectories.Push(
+                            childDirectory);
+                    }
+
+                    foreach (var file in
+                             Directory.EnumerateFiles(
+                                 directory))
+                    {
+                        fileCount++;
+
+                        if (fileCount >
+                            PackageFileCountLimit)
+                        {
+                            error =
+                                $"Shader package contains more than {PackageFileCountLimit} files.";
+                            return false;
+                        }
+
+                        var relative =
+                            Path.GetRelativePath(
+                                    packageRoot,
+                                    file)
+                                .Replace(
+                                    Path.DirectorySeparatorChar,
+                                    '/')
+                                .Replace(
+                                    Path.AltDirectorySeparatorChar,
+                                    '/');
+
+                        if (!ShaderPackageManifestValidator
+                            .IsSafeRelativeResourcePath(
+                                relative))
+                        {
+                            error =
+                                $"Shader package contains forbidden or unsafe file '{relative}'.";
+                            return false;
+                        }
+
+                        if (IsReparsePoint(
+                                file))
+                        {
+                            error =
+                                $"Shader package file '{relative}' uses a symbolic/reparse point.";
+                            return false;
+                        }
+
+                        var length =
+                            new FileInfo(
+                                file)
+                                .Length;
+
+                        if (length < 0 ||
+                            length >
+                            PackageTotalSizeLimit -
+                            totalBytes)
+                        {
+                            error =
+                                $"Shader package exceeds the {PackageTotalSizeLimit} byte total size limit.";
+                            return false;
+                        }
+
+                        totalBytes +=
+                            length;
+                    }
+                }
+
+                return true;
             }
             catch (Exception exception)
             {
                 error =
-                    "Shader package inventory could not be enumerated: " +
+                    "Shader package inventory could not be enumerated safely: " +
                     exception.Message;
                 return false;
             }
-
-            if (files.Length >
-                PackageFileCountLimit)
-            {
-                error =
-                    $"Shader package contains {files.Length} files; limit is {PackageFileCountLimit}.";
-                return false;
-            }
-
-            long totalBytes = 0;
-
-            foreach (var file in files)
-            {
-                string relative;
-
-                try
-                {
-                    relative =
-                        Path.GetRelativePath(
-                            packageRoot,
-                            file)
-                        .Replace(
-                            Path.DirectorySeparatorChar,
-                            '/')
-                        .Replace(
-                            Path.AltDirectorySeparatorChar,
-                            '/');
-                }
-                catch (Exception exception)
-                {
-                    error =
-                        "Shader package inventory path resolution failed: " +
-                        exception.Message;
-                    return false;
-                }
-
-                if (!ShaderPackageManifestValidator
-                    .IsSafeRelativeResourcePath(
-                        relative))
-                {
-                    error =
-                        $"Shader package contains forbidden or unsafe file '{relative}'.";
-                    return false;
-                }
-
-                try
-                {
-                    if (HasReparsePoint(
-                            packageRoot,
-                            file))
-                    {
-                        error =
-                            $"Shader package file '{relative}' uses a symbolic/reparse-point segment.";
-                        return false;
-                    }
-
-                    totalBytes +=
-                        new FileInfo(file).Length;
-                }
-                catch (Exception exception)
-                {
-                    error =
-                        $"Shader package file '{relative}' could not be inspected: {exception.Message}";
-                    return false;
-                }
-
-                if (totalBytes >
-                    PackageTotalSizeLimit)
-                {
-                    error =
-                        $"Shader package exceeds the {PackageTotalSizeLimit} byte total size limit.";
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         private static bool TryPreflightDeclaredFiles(
@@ -1095,17 +1124,19 @@ namespace VCR.Runtime.Materials.Unity
                     .TrimEnd(
                         Path.DirectorySeparatorChar,
                         Path.AltDirectorySeparatorChar);
-
             var current =
-                Path.GetDirectoryName(
+                Path.GetFullPath(
                     fullPath);
+            var comparison =
+                IsWindowsRuntime()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
 
             while (!string.IsNullOrEmpty(
                        current))
             {
-                if ((File.GetAttributes(
-                         current) &
-                     FileAttributes.ReparsePoint) != 0)
+                if (IsReparsePoint(
+                        current))
                 {
                     return true;
                 }
@@ -1113,11 +1144,9 @@ namespace VCR.Runtime.Materials.Unity
                 if (string.Equals(
                         current,
                         root,
-                        IsWindowsRuntime()
-                            ? StringComparison.OrdinalIgnoreCase
-                            : StringComparison.Ordinal))
+                        comparison))
                 {
-                    break;
+                    return false;
                 }
 
                 current =
@@ -1125,9 +1154,15 @@ namespace VCR.Runtime.Materials.Unity
                         current);
             }
 
+            return false;
+        }
+
+        private static bool IsReparsePoint(
+            string path)
+        {
             return
                 (File.GetAttributes(
-                     fullPath) &
+                     path) &
                  FileAttributes.ReparsePoint) != 0;
         }
 
