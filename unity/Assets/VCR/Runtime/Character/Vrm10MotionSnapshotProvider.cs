@@ -20,6 +20,12 @@ namespace VCR.Runtime.Character
     {
         [SerializeField] private Vrm10Instance target;
 
+        private readonly List<NamedExpressionValue>
+            _customExpressionScratch =
+                new(16);
+
+        private Vrm10Instance _cachedBoneTarget;
+        private Transform[] _boneTransforms;
         private long _sequence;
 
         private void Awake()
@@ -41,26 +47,19 @@ namespace VCR.Runtime.Character
                 return false;
             }
 
+            EnsureBoneCache();
+
             var bones =
                 new NormalizedBonePose[(int)HumanoidBoneId.Count];
             var hasBone =
                 new bool[(int)HumanoidBoneId.Count];
 
-            for (var i = 0; i < (int)HumanoidBoneId.Count; i++)
+            for (var i = 0;
+                 i < _boneTransforms.Length;
+                 i++)
             {
-                var boneId = (HumanoidBoneId)i;
-
-                if (!Enum.TryParse(
-                    boneId.ToString(),
-                    ignoreCase: false,
-                    out HumanBodyBones unityBone) ||
-                    unityBone == HumanBodyBones.LastBone)
-                {
-                    continue;
-                }
-
                 var bone =
-                    target.Humanoid.GetBoneTransform(unityBone);
+                    _boneTransforms[i];
 
                 if (bone == null)
                 {
@@ -119,7 +118,8 @@ namespace VCR.Runtime.Character
             var standard =
                 new float[(int)StandardExpression.Count];
             var custom =
-                new List<NamedExpressionValue>();
+                _customExpressionScratch;
+            custom.Clear();
 
             foreach (var pair in
                 target.Runtime.Expression.GetWeights())
@@ -145,6 +145,55 @@ namespace VCR.Runtime.Character
             return new NormalizedExpressionState(
                 standard,
                 custom.ToArray());
+        }
+
+        private void EnsureBoneCache()
+        {
+            if (ReferenceEquals(
+                    _cachedBoneTarget,
+                    target) &&
+                _boneTransforms != null)
+            {
+                return;
+            }
+
+            _cachedBoneTarget =
+                target;
+            _boneTransforms =
+                new Transform[
+                    (int)HumanoidBoneId.Count];
+
+            if (target == null ||
+                target.Humanoid == null)
+            {
+                return;
+            }
+
+            for (var i = 0;
+                 i < _boneTransforms.Length;
+                 i++)
+            {
+                var canonical =
+                    HumanoidBoneNames.GetCanonical(
+                        (HumanoidBoneId)i);
+
+                if (string.IsNullOrEmpty(
+                        canonical) ||
+                    !Enum.TryParse(
+                        canonical,
+                        ignoreCase: false,
+                        out HumanBodyBones unityBone) ||
+                    unityBone ==
+                        HumanBodyBones.LastBone)
+                {
+                    continue;
+                }
+
+                _boneTransforms[i] =
+                    target.Humanoid
+                        .GetBoneTransform(
+                            unityBone);
+            }
         }
 
         private static long NowUs()
