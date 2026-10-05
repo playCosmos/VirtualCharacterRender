@@ -2092,6 +2092,8 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedActionHandlerRefresh(
                 failures);
+            ValidateDestroyedAppearanceHandlerRuntime(
+                failures);
         }
 
         private static void ValidateDestroyedExecutorRefresh(
@@ -2276,6 +2278,75 @@ namespace VCR.Editor.P11
             {
                 failures.Add(
                     "destroyed transition action handler refresh validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateDestroyedAppearanceHandlerRuntime(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Appearance Handler Runtime Recovery");
+
+                var oldRuntime =
+                    root.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+                var handler =
+                    root.AddComponent<
+                        AppearanceEventActionHandler>();
+
+                handler.SetAppearanceRuntime(
+                    oldRuntime);
+
+                var command =
+                    new EventActionCommand(
+                        "appearance-recovery",
+                        EventActionTypes
+                            .AppearanceRestoreDefault,
+                        null,
+                        null,
+                        null,
+                        0.0,
+                        false,
+                        40);
+
+                Expect(
+                    handler.CanHandle(
+                        command),
+                    "appearance event handler recovery validation must start with the configured runtime",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldRuntime);
+
+                var replacement =
+                    root.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+
+                Expect(
+                    handler.CanHandle(
+                        command) &&
+                    replacement != null,
+                    "appearance event handler must discard a destroyed cached runtime and auto-discover a live replacement",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed appearance handler runtime recovery unexpected exception: " +
                     exception);
             }
             finally
