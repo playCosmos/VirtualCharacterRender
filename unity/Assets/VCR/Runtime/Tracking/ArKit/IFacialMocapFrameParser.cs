@@ -35,10 +35,24 @@ namespace VCR.Runtime.Tracking.ArKit
             string text,
             out IFacialMocapFrame frame)
         {
+            if (text == null)
+            {
+                frame = null;
+                return false;
+            }
+
+            return TryParse(
+                text.AsSpan(),
+                out frame);
+        }
+
+        public static bool TryParse(
+            ReadOnlySpan<char> text,
+            out IFacialMocapFrame frame)
+        {
             frame = null;
 
-            if (string.IsNullOrWhiteSpace(
-                    text) ||
+            if (text.IsEmpty ||
                 text.Length >
                     MaxTextCharacters)
             {
@@ -70,10 +84,15 @@ namespace VCR.Runtime.Tracking.ArKit
                     return false;
                 }
 
+                var relativeSeparator =
+                    text.Slice(
+                            partStart)
+                        .IndexOf('|');
                 var separator =
-                    text.IndexOf(
-                        '|',
-                        partStart);
+                    relativeSeparator >= 0
+                        ? partStart +
+                          relativeSeparator
+                        : -1;
                 var partEnd =
                     separator >= 0
                         ? separator
@@ -90,7 +109,7 @@ namespace VCR.Runtime.Tracking.ArKit
 
                 var part =
                     TrimWhitespace(
-                        text.AsSpan(
+                        text.Slice(
                             partStart,
                             partLength));
 
