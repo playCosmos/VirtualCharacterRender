@@ -54,6 +54,7 @@ required_latest_chain = [
     VCR / "Editor" / "P13" / "P13BatchValidation.cs",
     VCR / "Editor" / "P13" / "VCR.Editor.P13.asmdef",
     VCR / "Runtime" / "Tracking" / "SnapshotArrayOwnership.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "PendingSubmissionTracker.cs",
     ROOT / "tools" / "validate-p12-source-free.sh",
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
@@ -137,6 +138,40 @@ for udp_receiver in udp_receivers:
         udp_receiver,
         r"\b(?:receiver|_receiver)\s*\.\s*Receive\s*\(",
         "UDP receive hot paths must not allocate one byte array per datagram",
+    )
+
+mediapipe_submission_tracker = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "PendingSubmissionTracker.cs"
+)
+require_source_contains(
+    mediapipe_submission_tracker,
+    "_submissionOrder",
+    "MediaPipe submission correlation must retain fixed-ring history",
+)
+require_source_contains(
+    mediapipe_submission_tracker,
+    "_evictionCount",
+    "MediaPipe pending timestamp eviction must remain observable",
+)
+
+mediapipe_submission_sources = [
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeFaceSource.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeHolisticSource.cs",
+]
+for mediapipe_submission_source in mediapipe_submission_sources:
+    require_source_contains(
+        mediapipe_submission_source,
+        "PendingSubmissionTracker",
+        "MediaPipe LIVE_STREAM sources must use bounded submission correlation",
+    )
+    forbid_source_pattern(
+        mediapipe_submission_source,
+        r"_submittedAtUs\s*\.\s*Clear\s*\(",
+        "MediaPipe sources must not drop all in-flight latency correlation at capacity",
     )
 
 snapshot_ownership = (
