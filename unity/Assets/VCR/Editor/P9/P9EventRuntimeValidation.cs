@@ -225,6 +225,23 @@ namespace VCR.Editor.P9
                 "donation below filter threshold must not mutate state or emit actions",
                 failures);
 
+            var nonFiniteFilter =
+                new EventRuleFilter
+                {
+                    RequireAmount =
+                        true,
+                    HasMinimumAmount =
+                        true,
+                    MinimumAmount =
+                        double.NaN
+                };
+
+            Expect(
+                !nonFiniteFilter.Matches(
+                    smallDonation),
+                "non-finite event amount thresholds must fail closed instead of weakening the filter",
+                failures);
+
             var qualifyingDonation =
                 new NormalizedEvent(
                     NormalizedEventTypes
