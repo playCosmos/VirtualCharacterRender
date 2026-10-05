@@ -118,6 +118,41 @@ namespace VCR.Editor.P0
                     out var vrm0Happy) &&
                 vrm0Happy == StandardExpression.Happy;
 
+            var explicitArguments =
+                new OscArgument[2];
+            explicitArguments[0] =
+                OscArgument.FromString("Joy");
+            explicitArguments[1] =
+                OscArgument.FromFloat(0.25f);
+
+            var explicitCountPacket =
+                OscPacketWriter.WriteMessage(
+                    "/VMC/Ext/Blend/Val",
+                    explicitArguments,
+                    2);
+            var explicitCountDecoded =
+                new List<OscMessage>();
+            var explicitCountParsed =
+                OscPacketReader.TryReadMessages(
+                    explicitCountPacket,
+                    explicitCountPacket.Length,
+                    explicitCountDecoded) &&
+                explicitCountDecoded.Count == 1 &&
+                explicitCountDecoded[0]
+                    .Arguments.Length == 2 &&
+                explicitCountDecoded[0]
+                    .Arguments[0]
+                    .TryGetString(
+                        out var explicitName) &&
+                explicitName == "Joy" &&
+                explicitCountDecoded[0]
+                    .Arguments[1]
+                    .TryGetFloat(
+                        out var explicitValue) &&
+                Mathf.Approximately(
+                    explicitValue,
+                    0.25f);
+
             var heartbeatPacket =
                 OscPacketWriter.WriteMessage(
                     "/VMC/Ext/T",
@@ -177,6 +212,7 @@ namespace VCR.Editor.P0
                 malformedRejected &&
                 vrm0Alias &&
                 vrm1Alias &&
+                explicitCountParsed &&
                 heartbeatParsed &&
                 !heartbeatProducedFrame &&
                 expressionParsed &&
