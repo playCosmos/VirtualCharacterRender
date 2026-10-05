@@ -24,6 +24,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
         MonoBehaviour,
         IRuntimeMetricsSource
     {
+        private const int UdpReceiveBufferBytes =
+            65535;
+
         [Header("Receive")]
         [SerializeField, Range(1, 65535)]
         private int localPort = 39540;
@@ -421,10 +424,15 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 return;
             }
 
-            var remote =
+            var socket =
+                receiver.Client;
+            EndPoint remote =
                 new IPEndPoint(
                     IPAddress.Any,
                     0);
+            var packet =
+                new byte[
+                    UdpReceiveBufferBytes];
 
             var messages =
                 new List<OscMessage>(
@@ -434,12 +442,17 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
             {
                 try
                 {
-                    var packet =
-                        receiver.Receive(
+                    var packetLength =
+                        socket.ReceiveFrom(
+                            packet,
+                            0,
+                            packet.Length,
+                            SocketFlags.None,
                             ref remote);
 
-                    if (packet == null ||
-                        packet.Length == 0)
+                    if (packetLength <= 0 ||
+                        remote is not
+                            IPEndPoint remoteIp)
                     {
                         continue;
                     }
@@ -448,7 +461,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                         ref _packetCount);
 
                     if (allowedSender != null &&
-                        !remote.Address.Equals(
+                        !remoteIp.Address.Equals(
                             allowedSender))
                     {
                         Interlocked.Increment(
@@ -459,7 +472,7 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     if (!OscPacketReader
                         .TryReadMessages(
                             packet,
-                            packet.Length,
+                            packetLength,
                             messages))
                     {
                         Interlocked.Increment(
