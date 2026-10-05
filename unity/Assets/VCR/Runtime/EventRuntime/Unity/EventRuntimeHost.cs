@@ -253,8 +253,10 @@ namespace VCR.Runtime.EventRuntime.Unity
                     rules,
                     out var error))
             {
+                rules =
+                    Array.Empty<EventRuntimeRule>();
                 _engine.TrySetRules(
-                    Array.Empty<EventRuntimeRule>(),
+                    rules,
                     out _);
                 _lastError =
                     error;
