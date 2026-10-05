@@ -135,7 +135,10 @@ namespace VCR.Runtime.EventRuntime.Unity
             out string error)
         {
             error = null;
-            _sequences.Clear();
+
+            var staged =
+                new Dictionary<string, SequenceBinding>(
+                    StringComparer.Ordinal);
 
             foreach (var binding in
                      sequences ??
@@ -153,7 +156,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                 var id =
                     binding.SequenceId.Trim();
 
-                if (!_sequences.TryAdd(
+                if (!staged.TryAdd(
                         id,
                         binding))
                 {
@@ -163,6 +166,14 @@ namespace VCR.Runtime.EventRuntime.Unity
                         error;
                     return false;
                 }
+            }
+
+            _sequences.Clear();
+
+            foreach (var item in staged)
+            {
+                _sequences[item.Key] =
+                    item.Value;
             }
 
             _lastError = null;
