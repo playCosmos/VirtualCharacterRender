@@ -8,7 +8,13 @@ namespace VCR.Runtime.Protocols.Osc
     {
         public const int MaxPacketBytes = 16 * 1024;
         public const int MaxMessagesPerPacket = 256;
+        public const int MaxArgumentsPerMessage = 64;
         private const int MaxBundleDepth = 4;
+
+        private static readonly UTF8Encoding StrictUtf8 =
+            new(
+                encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
 
         public static bool TryReadMessages(
             byte[] packet,
@@ -169,8 +175,20 @@ namespace VCR.Runtime.Protocols.Osc
                 return false;
             }
 
+            var argumentCount =
+                Math.Max(
+                    0,
+                    typeTags.Length - 1);
+
+            if (argumentCount >
+                MaxArgumentsPerMessage)
+            {
+                return false;
+            }
+
             var arguments =
-                new OscArgument[Math.Max(0, typeTags.Length - 1)];
+                new OscArgument[
+                    argumentCount];
 
             for (var i = 1; i < typeTags.Length; i++)
             {
@@ -274,7 +292,7 @@ namespace VCR.Runtime.Protocols.Osc
                 return false;
             }
 
-            value = Encoding.UTF8.GetString(
+            value = StrictUtf8.GetString(
                 data,
                 start,
                 cursor - start);
