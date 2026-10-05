@@ -187,7 +187,7 @@ namespace VCR.Runtime.Protocols.Osc
                 switch (data[
                     typeTagStart + i])
                 {
-                    case 'i':
+                    case (byte)'i':
                         if (!TryReadInt32(
                             data,
                             end,
@@ -201,7 +201,7 @@ namespace VCR.Runtime.Protocols.Osc
                             OscArgument.FromInt(intValue);
                         break;
 
-                    case 'f':
+                    case (byte)'f':
                         if (!TryReadFloat32(
                             data,
                             end,
@@ -215,7 +215,7 @@ namespace VCR.Runtime.Protocols.Osc
                             OscArgument.FromFloat(floatValue);
                         break;
 
-                    case 's':
+                    case (byte)'s':
                         if (!TryReadPaddedString(
                             data,
                             end,
