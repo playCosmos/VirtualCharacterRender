@@ -822,16 +822,24 @@ namespace VCR.Editor.P1
                     "application bootstrap must save the current scene configuration",
                     failures);
 
-                Expect(
+                File.Delete(
+                    applicationConfigurationPath);
+                Directory.CreateDirectory(
+                    applicationConfigurationPath);
+
+                var applicationShutdownResult =
                     applicationBootstrap.Shutdown(
-                        saveConfiguration: false,
-                        out var applicationShutdownError) &&
-                    string.IsNullOrEmpty(
+                        saveConfiguration: true,
+                        out var applicationShutdownError);
+
+                Expect(
+                    !applicationShutdownResult &&
+                    !string.IsNullOrWhiteSpace(
                         applicationShutdownError) &&
                     !applicationBootstrap.IsStarted &&
                     applicationScene.State ==
                         SceneRuntimeState.Stopped,
-                    "application bootstrap explicit shutdown must stop the scene runtime",
+                    "application bootstrap must still stop the scene runtime when configuration save fails",
                     failures);
 
                 Expect(
