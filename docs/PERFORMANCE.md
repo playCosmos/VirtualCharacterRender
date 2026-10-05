@@ -117,7 +117,7 @@ Diagnostics must attribute at least:
 - active capabilities/services
 - MediaPipe Face/Holistic GPU→CPU readback count and latest readback wait time when webcam tracking is active
 
-The desktop MediaPipe baseline currently uses separate LIVE_STREAM Face and Holistic submissions. The optional low-light preprocessor already caches its processed texture once per Unity frame, but CPU async readback and MediaPipe `Image` creation remain task-specific. Do not share one `Image` between both native tasks until the pinned plugin's ownership/lifetime contract is proven under concurrent LIVE_STREAM use. Use `tracking.mediapipe.face.readbacks`, `tracking.mediapipe.face.readback_wait`, `tracking.mediapipe.holistic.readbacks`, and `tracking.mediapipe.holistic.readback_wait` to measure this cost before changing the capture topology.
+The desktop MediaPipe baseline currently uses separate LIVE_STREAM Face and Holistic submissions. The optional low-light preprocessor intentionally freezes one processed RenderTexture per Unity frame so Face/Holistic asynchronous readbacks observe the same image; do not re-blit that shared target mid-frame when preprocessing settings change. Missing/unsupported preprocessing shaders are resolved once per preprocessor lifecycle rather than searched every frame, and an existing RenderTexture is recreated if Unity reports that its graphics resource is no longer created. CPU async readback and MediaPipe `Image` creation remain task-specific. Do not share one `Image` between both native tasks until the pinned plugin's ownership/lifetime contract is proven under concurrent LIVE_STREAM use. Use `tracking.mediapipe.face.readbacks`, `tracking.mediapipe.face.readback_wait`, `tracking.mediapipe.holistic.readbacks`, and `tracking.mediapipe.holistic.readback_wait` to measure this cost before changing the capture topology.
 
 ## Managed-allocation gate
 
@@ -127,6 +127,7 @@ For steady-state tracking and UI operation:
 
 - expression custom-channel merge scratch storage must be reused; do not reintroduce per-frame `Dictionary`, `HashSet`, or `List` construction in the mixer hot path,
 - immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
+- expression smoothing must not publish replacement frames when smoothing time does not advance; fully zero pose masks preserve the existing immutable base-pose reference instead of cloning pose arrays,
 - UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
