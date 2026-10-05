@@ -13,6 +13,9 @@ namespace VCR.Runtime.Tracking.ArKit
     public static class IFacialMocapFrameParser
     {
         public const int DefaultPort = 49983;
+        public const int MaxTextCharacters = 16 * 1024;
+        public const int MaxParts = 128;
+        public const int MaxPartCharacters = 256;
 
         public const string StartStreamingV2Command =
             "iFacialMocap_sahuasouryya9218sauhuiayeta91555dy3719|sendDataVersion=v2";
@@ -23,7 +26,9 @@ namespace VCR.Runtime.Tracking.ArKit
         {
             frame = null;
 
-            if (string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(text) ||
+                text.Length >
+                    MaxTextCharacters)
             {
                 return false;
             }
@@ -39,57 +44,93 @@ namespace VCR.Runtime.Tracking.ArKit
             var headPositionY = 0f;
             var headPositionZ = 0f;
 
-            var parts = text.Split('|');
-            foreach (var rawPart in parts)
+            var partStart = 0;
+            var partCount = 0;
+
+            while (partStart <=
+                   text.Length)
             {
-                var part = rawPart.Trim();
-                if (part.Length == 0)
+                if (++partCount >
+                    MaxParts)
                 {
-                    continue;
+                    return false;
                 }
 
-                if (part.StartsWith("=head#", StringComparison.Ordinal))
+                var separator =
+                    text.IndexOf(
+                        '|',
+                        partStart);
+                var partEnd =
+                    separator >= 0
+                        ? separator
+                        : text.Length;
+                var partLength =
+                    partEnd -
+                    partStart;
+
+                if (partLength >
+                    MaxPartCharacters)
                 {
-                    if (TryParseHead(
-                        part,
-                        out headEulerX,
-                        out headEulerY,
-                        out headEulerZ,
-                        out headPositionX,
-                        out headPositionY,
-                        out headPositionZ))
+                    return false;
+                }
+
+                var part =
+                    text.Substring(
+                            partStart,
+                            partLength)
+                        .Trim();
+
+                if (part.Length > 0)
+                {
+                    if (part.StartsWith(
+                            "=head#",
+                            StringComparison.Ordinal))
                     {
-                        hasHead = true;
+                        if (TryParseHead(
+                                part,
+                                out headEulerX,
+                                out headEulerY,
+                                out headEulerZ,
+                                out headPositionX,
+                                out headPositionY,
+                                out headPositionZ))
+                        {
+                            hasHead = true;
+                        }
                     }
-
-                    continue;
+                    else if (!part.StartsWith(
+                                 "rightEye#",
+                                 StringComparison.Ordinal) &&
+                             !part.StartsWith(
+                                 "leftEye#",
+                                 StringComparison.Ordinal) &&
+                             !part.StartsWith(
+                                 "___iFacialMocap",
+                                 StringComparison.Ordinal) &&
+                             TryParseCoefficientPart(
+                                 part,
+                                 out var name,
+                                 out var value) &&
+                             FaceCoefficientNames.TryParse(
+                                 name,
+                                 out var coefficient))
+                    {
+                        coefficients[
+                            (int)coefficient] =
+                                Clamp01(
+                                    value /
+                                    100f);
+                        hasCoefficient = true;
+                    }
                 }
 
-                if (part.StartsWith("rightEye#", StringComparison.Ordinal) ||
-                    part.StartsWith("leftEye#", StringComparison.Ordinal) ||
-                    part.StartsWith("___iFacialMocap", StringComparison.Ordinal))
+                if (separator < 0)
                 {
-                    // Eye Euler channels are intentionally ignored because the
-                    // normalized face contract already carries ARKit eye-look
-                    // coefficients.
-                    continue;
+                    break;
                 }
 
-                if (!TryParseCoefficientPart(
-                    part,
-                    out var name,
-                    out var value))
-                {
-                    continue;
-                }
-
-                if (!FaceCoefficientNames.TryParse(name, out var coefficient))
-                {
-                    continue;
-                }
-
-                coefficients[(int)coefficient] = Clamp01(value / 100f);
-                hasCoefficient = true;
+                partStart =
+                    separator + 1;
             }
 
             if (!hasCoefficient && !hasHead)
@@ -156,7 +197,17 @@ namespace VCR.Runtime.Tracking.ArKit
             positionY = 0f;
             positionZ = 0f;
 
-            var values = part.Substring("=head#".Length).Split(',');
+            if (part.Length >
+                MaxPartCharacters)
+            {
+                return false;
+            }
+
+            var values =
+                part.Substring(
+                        "=head#".Length)
+                    .Split(',');
+
             if (values.Length != 6)
             {
                 return false;
@@ -175,11 +226,18 @@ namespace VCR.Runtime.Tracking.ArKit
             string text,
             out float value)
         {
-            return float.TryParse(
-                text,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out value);
+            if (!float.TryParse(
+                    text,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out value))
+            {
+                return false;
+            }
+
+            return
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
         }
 
         private static float Clamp01(float value)
