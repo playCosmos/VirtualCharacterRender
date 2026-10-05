@@ -1,14 +1,16 @@
 # P6 Status
 
-Updated: 2026-10-03
+Updated: 2026-10-05
 
 ## Active branch
 
+Current integrated source of truth:
+
 ```text
-feature/p6-environment-runtime
+develop
 ```
 
-P6 starts from the preserved P5 source checkpoint:
+The old P6 feature/checkpoint branch is a historical phase reference. P6 originally starts from the preserved P5 source checkpoint:
 
 ```text
 checkpoint/p5-source-implementation
@@ -30,6 +32,7 @@ The P6 source implementation now covers the planned one-character environment ru
 - explicit StateChanged / Scheduled / Manual update dispatch
 - lazy `EnvironmentUpdateDriver` creation only for recurring policies
 - update-target registration/de-duplication/failure isolation
+- cached Unity interface targets use Unity-object lifetime checks, so destroyed update/space/transition/lighting targets are never invoked through stale interface references
 
 Static and EventDriven environments still do not add an `Update()` loop to `BasicEnvironmentRuntime`.
 
@@ -55,7 +58,7 @@ Engine-neutral transition contracts now include:
 `BasicEnvironmentRuntime`:
 
 - performs Cut immediately
-- requires an explicit transition target for non-Cut modes
+- requires at least one live explicit transition target for non-Cut modes
 - keeps previous and next state roots active while a non-Cut transition is running
 - creates/enables `EnvironmentTransitionDriver` only while a transition is active
 - completes to one active state root and disables the driver
@@ -131,6 +134,7 @@ The P6 suite covers:
 - weighted environment Light influence
 - invalid lighting-target atomic rejection and source-Light restoration
 - update/transition dispatch cost metrics
+- destroyed cached target handling: update/space/lighting paths skip dead Unity objects and non-Cut transitions fail closed when no live transition target remains
 
 These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
 
