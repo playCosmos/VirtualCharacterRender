@@ -654,6 +654,40 @@ namespace VCR.Editor.P6
                     "Character space must follow the explicit character anchor",
                     failures);
 
+                var throwingSpaceTarget =
+                    root.AddComponent<
+                        P6ConditionalThrowEnvironmentSpaceTarget>();
+
+                Expect(
+                    runtime.ConfigureSpaceTargets(
+                        new MonoBehaviour[]
+                        {
+                            spaceTarget,
+                            throwingSpaceTarget
+                        },
+                        out var throwingSpaceConfigError) &&
+                    string.IsNullOrEmpty(
+                        throwingSpaceConfigError),
+                    "space target exception validation setup must configure while current Character mode is safe",
+                    failures);
+
+                Expect(
+                    !runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Camera,
+                        out var throwingSpaceError) &&
+                    !string.IsNullOrEmpty(
+                        throwingSpaceError) &&
+                    runtime.SpaceMode ==
+                        EnvironmentSpaceMode.Character &&
+                    ReferenceEquals(
+                        spaceContent.transform.parent,
+                        characterAnchor.transform),
+                    "space target apply exceptions must fail closed and roll previously applied targets back to the prior mode",
+                    failures);
+
+                runtime.SetSpaceTargets(
+                    spaceTarget);
+
                 var dayBinding =
                     new EnvironmentStateBinding();
                 dayBinding.Configure(
@@ -1459,6 +1493,30 @@ namespace VCR.Editor.P6
         {
             ApplyCount++;
             LastContext = context;
+        }
+    }
+
+    internal sealed class P6ConditionalThrowEnvironmentSpaceTarget :
+        MonoBehaviour,
+        IEnvironmentSpaceTarget
+    {
+        public bool ValidateEnvironmentSpace(
+            EnvironmentSpaceMode mode,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public void ApplyEnvironmentSpace(
+            EnvironmentSpaceMode mode)
+        {
+            if (mode ==
+                EnvironmentSpaceMode.Camera)
+            {
+                throw new InvalidOperationException(
+                    "P6 synthetic space target apply failure");
+            }
         }
     }
 
