@@ -184,16 +184,18 @@ namespace VCR.Runtime.Core
                 return false;
             }
 
-            var fullPath =
-                Path.GetFullPath(
-                    path);
-            var temporaryPath =
-                fullPath + ".tmp";
-            var backupPath =
-                fullPath + ".bak";
+            string temporaryPath =
+                null;
 
             try
             {
+                var fullPath =
+                    Path.GetFullPath(
+                        path);
+                temporaryPath =
+                    fullPath + ".tmp";
+                var backupPath =
+                    fullPath + ".bak";
                 var directory =
                     Path.GetDirectoryName(
                         fullPath);
@@ -252,6 +254,12 @@ namespace VCR.Runtime.Core
         private static void TryDelete(
             string path)
         {
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                return;
+            }
+
             try
             {
                 if (File.Exists(
