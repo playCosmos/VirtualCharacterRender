@@ -44,6 +44,32 @@ namespace VCR.Runtime.Protocols.Vmc
         public bool LastSubjectDetected =>
             Volatile.Read(ref _lastSubjectDetected) != 0;
 
+        public int CustomExpressionCount
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return
+                        _accumulator
+                            .CustomExpressionCount;
+                }
+            }
+        }
+
+        public long DroppedCustomExpressionCount
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return
+                        _accumulator
+                            .DroppedCustomExpressionCount;
+                }
+            }
+        }
+
         public TrackingSourceHealth Health
         {
             get
@@ -165,6 +191,10 @@ namespace VCR.Runtime.Protocols.Vmc
                 _latest.TakeLatest();
                 _latestPose.TakeLatest();
                 _latestExpressions.TakeLatest();
+                _accumulator.ResetState();
+                Volatile.Write(
+                    ref _lastSubjectDetected,
+                    0);
                 _health = new TrackingSourceHealth(
                     TrackingSourceHealthState.Stopped,
                     _health.LastUpdateTimestampUs,
@@ -187,6 +217,10 @@ namespace VCR.Runtime.Protocols.Vmc
                 _latest.TakeLatest();
                 _latestPose.TakeLatest();
                 _latestExpressions.TakeLatest();
+                _accumulator.ResetState();
+                Volatile.Write(
+                    ref _lastSubjectDetected,
+                    0);
                 _health =
                     new TrackingSourceHealth(
                         TrackingSourceHealthState.Stopped,
