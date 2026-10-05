@@ -41,13 +41,17 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveSource();
-
-            if (source == null ||
-                !string.Equals(
+            if (!string.Equals(
                     command.ActionType,
                     EventActionTypes.ExpressionSet,
                     StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveSource();
+
+            if (source == null)
             {
                 return false;
             }
@@ -60,7 +64,6 @@ namespace VCR.Runtime.EventRuntime.Unity
                     layerId,
                     StringComparison.Ordinal);
         }
-
         public bool TryExecute(
             EventActionCommand command,
             out string error)
