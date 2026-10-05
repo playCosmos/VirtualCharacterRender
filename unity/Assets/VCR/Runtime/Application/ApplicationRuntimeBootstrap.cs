@@ -307,21 +307,23 @@ namespace VCR.Runtime.Application
 
             _quitting = true;
 
+            var saveSucceeded = true;
+
             if (saveConfiguration &&
                 _started &&
                 !SaveConfiguration(
                     out error))
             {
-                _quitting = false;
-                return false;
+                saveSucceeded = false;
             }
 
             if (sceneRuntime != null)
             {
                 sceneRuntime.Shutdown();
             }
+
             _started = false;
-            return true;
+            return saveSucceeded;
         }
 
         private void OnApplicationQuit()
@@ -336,13 +338,6 @@ namespace VCR.Runtime.Application
                     "VCR configuration save on quit failed: " +
                     error,
                     this);
-
-                if (sceneRuntime != null)
-            {
-                sceneRuntime.Shutdown();
-            }
-                _started = false;
-                _quitting = true;
             }
         }
     }
