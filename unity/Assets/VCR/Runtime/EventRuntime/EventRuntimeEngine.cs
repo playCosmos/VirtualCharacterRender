@@ -32,6 +32,7 @@ namespace VCR.Runtime.EventRuntime
         public long DroppedCommands { get; private set; }
         public long CooldownSuppressedRules { get; private set; }
         public long RateLimitSuppressedRules { get; private set; }
+        public long TraceSubscriberFailureCount { get; private set; }
 
         public int MaxCommandsPerEvent
         {
@@ -298,14 +299,28 @@ namespace VCR.Runtime.EventRuntime
                 return;
             }
 
-            TraceEmitted.Invoke(
+            var entry =
                 new EventRuntimeTraceEntry(
                     rule?.Id,
                     value.Sequence,
                     value.TimestampUs,
                     outcome,
                     emittedCommands,
-                    droppedCommands));
+                    droppedCommands);
+
+            foreach (Action<EventRuntimeTraceEntry> subscriber in
+                     TraceEmitted.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(
+                        entry);
+                }
+                catch
+                {
+                    TraceSubscriberFailureCount++;
+                }
+            }
         }
 
         private bool IsCoolingDown(
