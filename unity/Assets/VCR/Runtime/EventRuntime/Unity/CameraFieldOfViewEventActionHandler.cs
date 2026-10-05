@@ -39,13 +39,17 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveController();
-
-            if (controller == null ||
-                !string.Equals(
+            if (!string.Equals(
                     command.ActionType,
                     EventActionTypes.CameraSetFieldOfView,
                     StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveController();
+
+            if (controller == null)
             {
                 return false;
             }
@@ -58,7 +62,6 @@ namespace VCR.Runtime.EventRuntime.Unity
                     cameraId,
                     StringComparison.Ordinal);
         }
-
         public bool TryExecute(
             EventActionCommand command,
             out string error)
