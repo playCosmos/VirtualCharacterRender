@@ -525,6 +525,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                     "bool"));
             output.Add(
                 new RuntimeMetric(
+                    "events.runtime.trace_subscriber_failures",
+                    _engine.TraceSubscriberFailureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
                     "events.runtime.actions_executed",
                     _executedActions,
                     "count"));
