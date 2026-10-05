@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Materials.Unity
 {
@@ -13,6 +14,11 @@ namespace VCR.Runtime.Materials.Unity
     [DisallowMultipleComponent]
     public sealed class RuntimeShaderBundleLoader : MonoBehaviour
     {
+        private const long MaxBundleBytes =
+            512L * 1024L * 1024L;
+        private const long MaxMetadataBytes =
+            1L * 1024L * 1024L;
+
         private long _sequence;
 
         public int LoadedShaderCount { get; private set; }
@@ -75,6 +81,38 @@ namespace VCR.Runtime.Materials.Unity
                     return Fail(
                         normalizedPath,
                         $"Shader bundle was not found: {normalizedPath}",
+                        Array.Empty<string>(),
+                        metadata,
+                        metadataPath,
+                        out error);
+                }
+
+                try
+                {
+                    var bundleLength =
+                        new FileInfo(
+                            normalizedPath)
+                            .Length;
+
+                    if (bundleLength < 0 ||
+                        bundleLength >
+                        MaxBundleBytes)
+                    {
+                        return Fail(
+                            normalizedPath,
+                            $"Shader bundle exceeds the {MaxBundleBytes} byte limit.",
+                            Array.Empty<string>(),
+                            metadata,
+                            metadataPath,
+                            out error);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    return Fail(
+                        normalizedPath,
+                        "Shader bundle metadata could not be inspected: " +
+                        exception.Message,
                         Array.Empty<string>(),
                         metadata,
                         metadataPath,
@@ -246,11 +284,22 @@ namespace VCR.Runtime.Materials.Unity
 
             try
             {
+                if (!BoundedTextFile.TryReadUtf8(
+                        metadataPath,
+                        MaxMetadataBytes,
+                        out var metadataJson,
+                        out var metadataReadError))
+                {
+                    error =
+                        "Shader bundle metadata load failed: " +
+                        metadataReadError;
+                    return false;
+                }
+
                 metadata =
                     JsonUtility.FromJson<
                         ShaderBundleMetadata>(
-                        File.ReadAllText(
-                            metadataPath));
+                        metadataJson);
 
                 if (metadata == null)
                 {
