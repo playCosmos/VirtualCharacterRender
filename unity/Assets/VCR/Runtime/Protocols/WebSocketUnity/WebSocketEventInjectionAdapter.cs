@@ -27,6 +27,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         [SerializeField]
         private bool autoFindEventSink = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
         [SerializeField]
         private string sourceId =
             "websocket.external";
@@ -36,6 +39,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             65536;
 
         private INormalizedEventSink _sink;
+        private float _nextSinkResolveRealtime;
         private long _accepted;
         private long _rejected;
 
@@ -49,7 +53,8 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
         private void Awake()
         {
-            ResolveSink();
+            ResolveSink(
+                force: true);
         }
 
         public void SetSink(
@@ -61,6 +66,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     : null;
             eventSinkBehaviour =
                 _sink as MonoBehaviour;
+            _nextSinkResolveRealtime = 0f;
         }
 
         public bool TryHandleText(
@@ -89,8 +95,11 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
             if (!IsServiceAlive(_sink))
             {
+                var hadSink =
+                    _sink != null;
                 _sink = null;
-                ResolveSink();
+                ResolveSink(
+                    force: hadSink);
 
                 if (!IsServiceAlive(_sink))
                 {
@@ -174,13 +183,15 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 : true;
         }
 
-        private void ResolveSink()
+        private void ResolveSink(
+            bool force = false)
         {
             if (eventSinkBehaviour != null &&
                 eventSinkBehaviour is
                     INormalizedEventSink configured)
             {
                 _sink = configured;
+                _nextSinkResolveRealtime = 0f;
                 return;
             }
 
@@ -188,6 +199,22 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             {
                 return;
             }
+
+            var now =
+                Time.realtimeSinceStartup;
+
+            if (!force &&
+                now <
+                _nextSinkResolveRealtime)
+            {
+                return;
+            }
+
+            _nextSinkResolveRealtime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
 
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
@@ -210,6 +237,7 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     _sink = sink;
                     eventSinkBehaviour =
                         behaviour;
+                    _nextSinkResolveRealtime = 0f;
                     return;
                 }
             }
