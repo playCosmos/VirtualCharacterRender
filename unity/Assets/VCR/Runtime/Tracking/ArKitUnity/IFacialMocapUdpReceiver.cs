@@ -683,6 +683,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             }
 
             _receiveThread = null;
+            _rawFrames.Clear();
 
             try
             {
