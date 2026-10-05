@@ -277,6 +277,14 @@ namespace VCR.Editor.P0
 
                 lifecycleSource.Stop();
 
+                var stoppedCleared =
+                    !lifecycleSource.TryTakeLatest(
+                        out _) &&
+                    !lifecycleSource.TryTakeLatestPose(
+                        out _) &&
+                    !lifecycleSource.TryTakeLatestExpressions(
+                        out _);
+
                 var stoppedRejected =
                     !lifecycleSource.Process(
                         decoded,
@@ -299,6 +307,7 @@ namespace VCR.Editor.P0
 
                 sourceLifecyclePass =
                     activeAccepted &&
+                    stoppedCleared &&
                     stoppedRejected &&
                     disposedRejected;
             }
