@@ -222,6 +222,41 @@ namespace VCR.Editor.P5
                 0.5f,
                 "optimized custom-expression merge must preserve last-value-wins semantics for duplicate names",
                 failures);
+
+            var duplicateEffectiveTarget =
+                CreateExpressionState(
+                    aa: 0f,
+                    new NamedExpressionValue(
+                        "duplicate",
+                        0.3f));
+
+            Expect(
+                ExpressionMixerMath
+                    .ApproximatelyEqual(
+                        duplicateBase,
+                        duplicateEffectiveTarget,
+                        epsilon: 0.0001f),
+                "custom-expression convergence must use the same last-value-wins semantics as blending",
+                failures);
+
+            var ignoredBlankCustom =
+                CreateExpressionState(
+                    aa: 0f,
+                    new NamedExpressionValue(
+                        " ",
+                        0.9f));
+            var noCustom =
+                CreateExpressionState(
+                    aa: 0f);
+
+            Expect(
+                ExpressionMixerMath
+                    .ApproximatelyEqual(
+                        ignoredBlankCustom,
+                        noCustom,
+                        epsilon: 0.0001f),
+                "blank custom-expression names ignored by blending must also be ignored by convergence checks",
+                failures);
         }
 
         private static void ValidatePoseMath(
