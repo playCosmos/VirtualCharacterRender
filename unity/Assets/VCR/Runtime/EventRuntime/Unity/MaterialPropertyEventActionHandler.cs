@@ -15,15 +15,22 @@ namespace VCR.Runtime.EventRuntime.Unity
         [SerializeField]
         private bool autoFindController = true;
 
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
+        private float _nextResolveTime;
+
         private void Awake()
         {
-            ResolveController();
+            ResolveController(
+                force: true);
         }
 
         public void SetMaterialController(
             MaterialOverrideController value)
         {
             controller = value;
+            _nextResolveTime = 0f;
         }
 
         public bool CanHandle(
@@ -63,6 +70,7 @@ namespace VCR.Runtime.EventRuntime.Unity
             ResolveController();
             return controller != null;
         }
+
         public bool TryExecute(
             EventActionCommand command,
             out string error)
@@ -265,7 +273,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             return true;
         }
 
-        private void ResolveController()
+        private void ResolveController(
+            bool force = false)
         {
             if (controller != null ||
                 !autoFindController)
@@ -273,10 +282,30 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now < _nextResolveTime)
+            {
+                return;
+            }
+
+            _nextResolveTime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
             controller =
                 FindFirstObjectByType<
                     MaterialOverrideController>(
                     FindObjectsInactive.Exclude);
+
+            if (controller != null)
+            {
+                _nextResolveTime = 0f;
+            }
         }
     }
 }
