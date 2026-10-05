@@ -26,9 +26,14 @@ namespace VCR.Runtime.EventRuntime.Unity
             MonoBehaviour runtime)
         {
             environmentRuntimeBehaviour =
-                runtime;
+                runtime != null
+                    ? runtime
+                    : null;
             _runtime =
-                runtime as IEnvironmentRuntime;
+                environmentRuntimeBehaviour != null
+                    ? environmentRuntimeBehaviour as
+                        IEnvironmentRuntime
+                    : null;
         }
 
         public bool CanHandle(
@@ -36,7 +41,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         {
             ResolveRuntime();
 
-            if (_runtime == null ||
+            if (!IsServiceAlive(_runtime) ||
                 !string.Equals(
                     command.ActionType,
                     EventActionTypes.EnvironmentSetState,
@@ -127,15 +132,31 @@ namespace VCR.Runtime.EventRuntime.Unity
                 out error);
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void ResolveRuntime()
         {
-            if (_runtime != null)
+            if (IsServiceAlive(_runtime))
             {
                 return;
             }
 
-            if (environmentRuntimeBehaviour is
-                IEnvironmentRuntime configured)
+            _runtime = null;
+
+            if (environmentRuntimeBehaviour != null &&
+                environmentRuntimeBehaviour is
+                    IEnvironmentRuntime configured)
             {
                 _runtime = configured;
                 return;
