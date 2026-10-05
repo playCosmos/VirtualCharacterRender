@@ -48,15 +48,19 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
+            if (!string.Equals(
+                    command.ActionType,
+                    EventActionTypes.MaterialApplyPreset,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             ResolveDependencies();
 
             return
                 controller != null &&
-                IsServiceAlive(_presetResolver) &&
-                string.Equals(
-                    command.ActionType,
-                    EventActionTypes.MaterialApplyPreset,
-                    StringComparison.Ordinal);
+                IsServiceAlive(_presetResolver);
         }
 
         public bool TryExecute(
