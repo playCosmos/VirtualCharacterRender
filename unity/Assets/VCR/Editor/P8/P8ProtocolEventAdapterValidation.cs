@@ -35,6 +35,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateEventHubBounds(
                 failures);
+            ValidateEventHubDisableIsolation(
+                failures);
             ValidateTrackingPresenceRecovery(
                 failures);
             ValidateWebSocketProtocol(
@@ -410,6 +412,75 @@ namespace VCR.Editor.P8
             {
                 failures.Add(
                     "event hub bounds validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateEventHubDisableIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 Event Hub Disable Isolation");
+
+                var hub =
+                    root.AddComponent<
+                        NormalizedEventHub>();
+                var publishedCount = 0;
+
+                hub.Published += _ =>
+                {
+                    publishedCount++;
+                };
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "hub-disable",
+                        1));
+
+                Expect(
+                    hub.QueuedCount == 1,
+                    "event hub disable isolation must queue an event before disable",
+                    failures);
+
+                InvokeHubDisable(
+                    hub);
+
+                hub.Publish(
+                    new NormalizedEvent(
+                        NormalizedEventTypes
+                            .LocalManual,
+                        "hub-disable",
+                        2));
+
+                InvokeUpdate(
+                    hub);
+
+                Expect(
+                    hub.QueuedCount == 0 &&
+                    publishedCount == 0 &&
+                    hub.DroppedCount >= 2,
+                    "disabled event hub must discard its backlog and reject new ingress instead of replaying stale events after lifecycle stop",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "event hub disable isolation unexpected exception: " +
                     exception);
             }
             finally
@@ -2092,6 +2163,33 @@ namespace VCR.Editor.P8
 
             method.Invoke(
                 adapter,
+                null);
+        }
+
+        private static void InvokeHubDisable(
+            NormalizedEventHub hub)
+        {
+            var method =
+                typeof(
+                    NormalizedEventHub)
+                    .GetMethod(
+                        "OnDisable",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(
+                        NormalizedEventHub)
+                        .FullName,
+                    "OnDisable");
+            }
+
+            method.Invoke(
+                hub,
                 null);
         }
 
