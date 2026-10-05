@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Core;
@@ -113,6 +114,8 @@ namespace VCR.Editor.P3
                     failures);
 
                 ValidateSnapshotOwnership(
+                    failures);
+                ValidatePendingSubmissionTracker(
                     failures);
 
                 var latestBuffer =
@@ -299,7 +302,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(snapshot array ownership/copy isolation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot array ownership/copy isolation, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
@@ -310,6 +313,187 @@ namespace VCR.Editor.P3
                     failures));
 
             return false;
+        }
+
+        private static void ValidatePendingSubmissionTracker(
+            List<string> failures)
+        {
+            try
+            {
+                var trackerType =
+                    typeof(MediaPipeFaceSource)
+                        .Assembly
+                        .GetType(
+                            "VCR.Runtime.Tracking.MediaPipe.PendingSubmissionTracker",
+                            throwOnError: false);
+
+                if (trackerType == null)
+                {
+                    failures.Add(
+                        "MediaPipe pending submission tracker type was not found");
+                    return;
+                }
+
+                var tracker =
+                    Activator.CreateInstance(
+                        trackerType,
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic,
+                        binder: null,
+                        args:
+                            new object[]
+                            {
+                                3
+                            },
+                        culture: null);
+
+                var record =
+                    trackerType.GetMethod(
+                        "Record",
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                var tryComplete =
+                    trackerType.GetMethod(
+                        "TryComplete",
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                var clear =
+                    trackerType.GetMethod(
+                        "Clear",
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                var count =
+                    trackerType.GetProperty(
+                        "Count",
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                var evictions =
+                    trackerType.GetProperty(
+                        "EvictionCount",
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+
+                if (tracker == null ||
+                    record == null ||
+                    tryComplete == null ||
+                    clear == null ||
+                    count == null ||
+                    evictions == null)
+                {
+                    failures.Add(
+                        "MediaPipe pending submission tracker reflection contract is incomplete");
+                    return;
+                }
+
+                record.Invoke(
+                    tracker,
+                    new object[]
+                    {
+                        1L,
+                        10L
+                    });
+                record.Invoke(
+                    tracker,
+                    new object[]
+                    {
+                        2L,
+                        20L
+                    });
+
+                var completedArgs =
+                    new object[]
+                    {
+                        1L,
+                        0L
+                    };
+                var firstCompleted =
+                    (bool)tryComplete.Invoke(
+                        tracker,
+                        completedArgs);
+
+                record.Invoke(
+                    tracker,
+                    new object[]
+                    {
+                        3L,
+                        30L
+                    });
+                record.Invoke(
+                    tracker,
+                    new object[]
+                    {
+                        4L,
+                        40L
+                    });
+                record.Invoke(
+                    tracker,
+                    new object[]
+                    {
+                        5L,
+                        50L
+                    });
+
+                var evictedArgs =
+                    new object[]
+                    {
+                        2L,
+                        0L
+                    };
+                var oldestStillPresent =
+                    (bool)tryComplete.Invoke(
+                        tracker,
+                        evictedArgs);
+
+                var retainedArgs =
+                    new object[]
+                    {
+                        3L,
+                        0L
+                    };
+                var retainedCompleted =
+                    (bool)tryComplete.Invoke(
+                        tracker,
+                        retainedArgs);
+
+                var countBeforeClear =
+                    (int)count.GetValue(
+                        tracker);
+                var evictionCount =
+                    (long)evictions.GetValue(
+                        tracker);
+
+                clear.Invoke(
+                    tracker,
+                    null);
+
+                var countAfterClear =
+                    (int)count.GetValue(
+                        tracker);
+
+                Expect(
+                    firstCompleted &&
+                    (long)completedArgs[1] == 10L &&
+                    !oldestStillPresent &&
+                    retainedCompleted &&
+                    (long)retainedArgs[1] == 30L &&
+                    countBeforeClear == 2 &&
+                    evictionCount == 1L &&
+                    countAfterClear == 0,
+                    "MediaPipe pending timestamp correlation must stay fixed-capacity and evict only the oldest still-pending submission",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "MediaPipe pending submission tracker validation unexpected exception: " +
+                    exception);
+            }
         }
 
         private static void ValidateSnapshotOwnership(
