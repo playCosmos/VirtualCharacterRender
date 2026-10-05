@@ -203,7 +203,56 @@ namespace VCR.Editor.P0
                     oversized.Length,
                     new List<OscMessage>());
 
+            var sourceLifecyclePass =
+                false;
+            var lifecycleSource =
+                new VmcTrackingSource(
+                    "p0-vmc-lifecycle");
+
+            try
+            {
+                lifecycleSource.Start();
+
+                var activeAccepted =
+                    lifecycleSource.Process(
+                        decoded,
+                        arrivalTimestampUs:
+                            3_000_000);
+
+                lifecycleSource.Stop();
+
+                var stoppedRejected =
+                    !lifecycleSource.Process(
+                        decoded,
+                        arrivalTimestampUs:
+                            3_100_000);
+
+                lifecycleSource.Dispose();
+
+                var disposedRejected =
+                    false;
+
+                try
+                {
+                    lifecycleSource.Start();
+                }
+                catch (ObjectDisposedException)
+                {
+                    disposedRejected = true;
+                }
+
+                sourceLifecyclePass =
+                    activeAccepted &&
+                    stoppedRejected &&
+                    disposedRejected;
+            }
+            finally
+            {
+                lifecycleSource.Dispose();
+            }
+
             var pass =
+                sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
                 frame.HumanoidPose.PoseSpace ==
