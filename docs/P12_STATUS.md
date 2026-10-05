@@ -189,6 +189,8 @@ New EventRuntime action types:
 
 The P11/P12 runtime-scene builder adds `PropEventActionHandler` by default. EventRuntime handler discovery continues to use the established `IEventActionHandler` path.
 
+Timed scene sequences use `SceneSequenceEventActionHandler` as a thin sequencer over existing logical action handlers. Handler discovery now rejects destroyed Unity interface references, auto-find rebuilds when cached handlers die, and throwing `CanHandle` probes are isolated and counted instead of aborting sequence preflight. Sequence-registry rebuild is transactional: an invalid or duplicate replacement does not discard the previously valid runtime registry.
+
 New Event Node starter templates include:
 
 - Scene / Manual → Toggle Prop
@@ -249,6 +251,7 @@ The validation source covers:
 - logical Prop set/toggle behavior, immediate completion, mixed-state rejection, and shared-root binding rejection
 - Scene Automation Prop/Effect SerializedProperty contracts and read-only Environment state binding contract
 - Prop/Environment starter-template semantics
+- timed scene-sequence validation, cancellation cleanup timing, transactional duplicate-id rejection that preserves the previous valid registry, destroyed-handler replacement recovery, and capability-probe exception isolation
 
 These checks are implemented as Unity Editor validation code but have not been executed in the current environment because Unity Editor/runtime execution is unavailable here.
 
