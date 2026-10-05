@@ -122,7 +122,32 @@ namespace VCR.Runtime.Protocols.VmcUnity
             var interval = 1.0 / Math.Max(1, sendRateHz);
             _nextSendAt = now + interval;
 
-            if (!_snapshotProvider.TryCaptureMotion(out var frame) ||
+            TrackingFrame frame;
+            bool captured;
+
+            if (_snapshotProvider is
+                ISelectiveNormalizedMotionSnapshotProvider selective)
+            {
+                var request =
+                    new NormalizedMotionSnapshotRequest(
+                        includeHumanoidPose: true,
+                        includeExpressions:
+                            sendExpressions);
+
+                captured =
+                    selective.TryCaptureMotion(
+                        in request,
+                        out frame);
+            }
+            else
+            {
+                captured =
+                    _snapshotProvider
+                        .TryCaptureMotion(
+                            out frame);
+            }
+
+            if (!captured ||
                 frame?.HumanoidPose == null)
             {
                 return;
