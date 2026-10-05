@@ -21,7 +21,8 @@
     "VCR.Runtime.Materials",
     "VCR.Runtime.Materials.Unity",
     "VCR.Runtime.Tracking",
-    "VCR.Runtime.Tracking.Mixing"
+    "VCR.Runtime.Tracking.Mixing",
+    "VCR.Runtime.Environment.Unity"
   ],
   "includePlatforms": [
     "Editor"
