@@ -197,6 +197,24 @@ forbid_source_pattern(
     "iFacialMocap head parsing must not allocate split arrays/strings",
 )
 
+ifacial_receiver = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKitUnity"
+    / "IFacialMocapUdpReceiver.cs"
+)
+require_source_contains(
+    ifacial_receiver,
+    "StrictUtf8.GetChars(",
+    "iFacialMocap UDP decode must reuse a caller-owned character buffer",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"StrictUtf8\.GetString\s*\(",
+    "iFacialMocap UDP receive must not allocate one full packet string per datagram",
+)
+
 if VCR.is_dir():
     for path in VCR.rglob("*"):
         if not path.is_file():
