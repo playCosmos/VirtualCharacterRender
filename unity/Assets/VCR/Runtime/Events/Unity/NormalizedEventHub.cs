@@ -28,6 +28,7 @@ namespace VCR.Runtime.Events.Unity
         private readonly NormalizedEventBus _bus = new();
 
         private int _queuedCount;
+        private int _acceptIngress = 1;
         private long _dispatchedCount;
         private long _droppedCount;
 
@@ -62,10 +63,33 @@ namespace VCR.Runtime.Events.Unity
         public long DroppedCount =>
             Interlocked.Read(ref _droppedCount);
 
+        private void OnEnable()
+        {
+            Volatile.Write(
+                ref _acceptIngress,
+                1);
+        }
+
+        private void OnDisable()
+        {
+            Volatile.Write(
+                ref _acceptIngress,
+                0);
+            DropQueuedEvents();
+        }
+
         public void Publish(NormalizedEvent value)
         {
             lock (_queueSync)
             {
+                if (Volatile.Read(
+                        ref _acceptIngress) == 0)
+                {
+                    Interlocked.Increment(
+                        ref _droppedCount);
+                    return;
+                }
+
                 _queue.Enqueue(value);
                 Interlocked.Increment(
                     ref _queuedCount);
@@ -110,6 +134,25 @@ namespace VCR.Runtime.Events.Unity
                 _bus.Publish(value);
                 Interlocked.Increment(
                     ref _dispatchedCount);
+            }
+        }
+
+        private void DropQueuedEvents()
+        {
+            lock (_queueSync)
+            {
+                while (_queue.TryDequeue(
+                           out _))
+                {
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _droppedCount);
+                }
+
+                Volatile.Write(
+                    ref _queuedCount,
+                    0);
             }
         }
 
