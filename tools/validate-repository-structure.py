@@ -145,7 +145,18 @@ require_source_contains(
 require_source_contains(
     vmc_sender,
     "IBorrowedHumanoidPoseProvider",
-    "VMC sender must prefer synchronous borrowed poses when lifetime-safe",
+    "VMC sender must retain pose-only borrowed compatibility",
+)
+require_source_contains(
+    vmc_sender,
+    "IBorrowedNormalizedMotionProvider",
+    "VMC sender must prefer combined borrowed motion when available",
+)
+require_source_order(
+    vmc_sender,
+    "IBorrowedNormalizedMotionProvider borrowedMotionProvider",
+    "IBorrowedHumanoidPoseProvider;",
+    "VMC sender must evaluate combined borrowed motion before pose-only compatibility",
 )
 require_source_order(
     vmc_sender,
@@ -231,6 +242,21 @@ require_source_contains(
 )
 require_source_contains(
     borrowed_pose_contract,
+    "IBorrowedNormalizedMotionProvider",
+    "combined borrowed motion providers must retain a synchronous zero-copy contract",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "BorrowedExpressionState",
+    "borrowed motion must retain a reusable expression view",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "BorrowedMotionSample",
+    "borrowed motion must retain a combined pose/expression sample",
+)
+require_source_contains(
+    borrowed_pose_contract,
     "The backing arrays remain owned by the provider",
     "borrowed pose lifetime must remain documented next to the type",
 )
@@ -267,6 +293,21 @@ require_source_contains(
     vrm_snapshot_provider,
     "IBorrowedHumanoidPoseProvider",
     "VRM snapshot provider must expose reusable borrowed pose buffers for synchronous consumers",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "IBorrowedNormalizedMotionProvider",
+    "VRM snapshot provider must expose combined borrowed motion sampling",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "SampleBorrowedExpressions(",
+    "VRM borrowed expression sampling must reuse provider-owned buffers",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "Array.Clear(",
+    "VRM borrowed buffers must clear stale presence/expression state before reuse",
 )
 require_source_contains(
     vrm_snapshot_provider,
