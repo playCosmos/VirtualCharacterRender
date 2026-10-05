@@ -1,7 +1,5 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace VCR.Runtime.Protocols.Osc
@@ -31,13 +29,22 @@ namespace VCR.Runtime.Protocols.Osc
                     nameof(argumentCount));
             }
 
-            using var stream =
-                new MemoryStream(256);
+            var size =
+                GetMessageSize(
+                    address,
+                    arguments,
+                    argumentCount);
+            var packet =
+                new byte[size];
+            var cursor = 0;
+
             WritePaddedString(
-                stream,
+                packet,
+                ref cursor,
                 address);
             WriteTypeTags(
-                stream,
+                packet,
+                ref cursor,
                 arguments,
                 argumentCount);
 
@@ -52,19 +59,22 @@ namespace VCR.Runtime.Protocols.Osc
                 {
                     case OscArgumentType.Int32:
                         WriteInt32(
-                            stream,
+                            packet,
+                            ref cursor,
                             argument.IntValue);
                         break;
 
                     case OscArgumentType.Float32:
                         WriteFloat32(
-                            stream,
+                            packet,
+                            ref cursor,
                             argument.FloatValue);
                         break;
 
                     case OscArgumentType.String:
                         WritePaddedString(
-                            stream,
+                            packet,
+                            ref cursor,
                             argument.StringValue ??
                             string.Empty);
                         break;
@@ -75,33 +85,37 @@ namespace VCR.Runtime.Protocols.Osc
                 }
             }
 
-            return stream.ToArray();
+            return packet;
         }
 
         public static byte[] WriteBundle(
             IReadOnlyList<byte[]> messages)
         {
-            using var stream = new MemoryStream(1024);
-            WritePaddedString(stream, "#bundle");
-
-            // OSC immediate timetag = 1.
-            WriteUInt64(stream, 1UL);
+            var size = 16;
 
             if (messages != null)
             {
-                foreach (var message in messages)
+                foreach (var message in
+                         messages)
                 {
                     if (message == null ||
                         message.Length == 0 ||
-                        message.Length > OscPacketReader.MaxPacketBytes)
+                        message.Length >
+                            OscPacketReader
+                                .MaxPacketBytes)
                     {
                         continue;
                     }
 
-                    WriteInt32(stream, message.Length);
-                    stream.Write(message, 0, message.Length);
+                    size =
+                        checked(
+                            size +
+                            4 +
+                            message.Length);
 
-                    if (stream.Length > OscPacketReader.MaxPacketBytes)
+                    if (size >
+                        OscPacketReader
+                            .MaxPacketBytes)
                     {
                         throw new InvalidOperationException(
                             "OSC bundle exceeds P0 packet limit.");
@@ -109,22 +123,126 @@ namespace VCR.Runtime.Protocols.Osc
                 }
             }
 
-            return stream.ToArray();
+            var packet =
+                new byte[size];
+            var cursor = 0;
+
+            WritePaddedString(
+                packet,
+                ref cursor,
+                "#bundle");
+
+            // OSC immediate timetag = 1.
+            WriteUInt64(
+                packet,
+                ref cursor,
+                1UL);
+
+            if (messages != null)
+            {
+                foreach (var message in
+                         messages)
+                {
+                    if (message == null ||
+                        message.Length == 0 ||
+                        message.Length >
+                            OscPacketReader
+                                .MaxPacketBytes)
+                    {
+                        continue;
+                    }
+
+                    WriteInt32(
+                        packet,
+                        ref cursor,
+                        message.Length);
+                    Buffer.BlockCopy(
+                        message,
+                        0,
+                        packet,
+                        cursor,
+                        message.Length);
+                    cursor +=
+                        message.Length;
+                }
+            }
+
+            return packet;
         }
 
-        private static void WriteTypeTags(
-            Stream stream,
+        private static int GetMessageSize(
+            string address,
             OscArgument[] arguments,
             int argumentCount)
         {
-            stream.WriteByte(
-                (byte)',');
+            var size =
+                checked(
+                    GetPaddedStringSize(
+                        address) +
+                    Align4(
+                        argumentCount + 2));
 
             for (var i = 0;
                  i < argumentCount;
                  i++)
             {
-                stream.WriteByte(
+                var argument =
+                    arguments[i];
+
+                size =
+                    argument.Type switch
+                    {
+                        OscArgumentType.Int32 =>
+                            checked(
+                                size + 4),
+                        OscArgumentType.Float32 =>
+                            checked(
+                                size + 4),
+                        OscArgumentType.String =>
+                            checked(
+                                size +
+                                GetPaddedStringSize(
+                                    argument.StringValue ??
+                                    string.Empty)),
+                        _ =>
+                            throw new InvalidOperationException(
+                                "Unsupported OSC argument type.")
+                    };
+            }
+
+            return size;
+        }
+
+        private static int GetPaddedStringSize(
+            string value)
+        {
+            value ??=
+                string.Empty;
+
+            var byteCount =
+                Encoding.UTF8.GetByteCount(
+                    value);
+
+            return
+                Align4(
+                    checked(
+                        byteCount + 1));
+        }
+
+        private static void WriteTypeTags(
+            byte[] packet,
+            ref int cursor,
+            OscArgument[] arguments,
+            int argumentCount)
+        {
+            packet[cursor++] =
+                (byte)',';
+
+            for (var i = 0;
+                 i < argumentCount;
+                 i++)
+            {
+                packet[cursor++] =
                     arguments[i].Type switch
                     {
                         OscArgumentType.Int32 =>
@@ -136,88 +254,103 @@ namespace VCR.Runtime.Protocols.Osc
                         _ =>
                             throw new InvalidOperationException(
                                 "Unsupported OSC argument type.")
-                    });
+                    };
             }
 
-            stream.WriteByte(0);
-
-            while ((stream.Position & 3) != 0)
-            {
-                stream.WriteByte(0);
-            }
+            // The packet was zero-initialized, so the NUL terminator and
+            // alignment padding only require advancing the cursor.
+            cursor++;
+            cursor =
+                Align4(
+                    cursor);
         }
 
         private static void WritePaddedString(
-            Stream stream,
+            byte[] packet,
+            ref int cursor,
             string value)
         {
-            value ??= string.Empty;
+            value ??=
+                string.Empty;
 
-            var byteCount =
-                Encoding.UTF8.GetByteCount(
-                    value);
-
-            if (byteCount > 0)
+            if (value.Length > 0)
             {
-                var buffer =
-                    ArrayPool<byte>
-                        .Shared
-                        .Rent(byteCount);
-
-                try
-                {
-                    var written =
-                        Encoding.UTF8.GetBytes(
-                            value,
-                            0,
-                            value.Length,
-                            buffer,
-                            0);
-                    stream.Write(
-                        buffer,
+                cursor +=
+                    Encoding.UTF8.GetBytes(
+                        value,
                         0,
-                        written);
-                }
-                finally
-                {
-                    ArrayPool<byte>
-                        .Shared
-                        .Return(buffer);
-                }
+                        value.Length,
+                        packet,
+                        cursor);
             }
 
-            stream.WriteByte(0);
-
-            while ((stream.Position & 3) != 0)
-            {
-                stream.WriteByte(0);
-            }
+            // The packet was zero-initialized, so the NUL terminator and
+            // alignment padding only require advancing the cursor.
+            cursor++;
+            cursor =
+                Align4(
+                    cursor);
         }
 
-        private static void WriteInt32(Stream stream, int value)
+        private static void WriteInt32(
+            byte[] packet,
+            ref int cursor,
+            int value)
         {
-            stream.WriteByte((byte)((value >> 24) & 0xff));
-            stream.WriteByte((byte)((value >> 16) & 0xff));
-            stream.WriteByte((byte)((value >> 8) & 0xff));
-            stream.WriteByte((byte)(value & 0xff));
+            packet[cursor++] =
+                (byte)(
+                    (value >> 24) &
+                    0xff);
+            packet[cursor++] =
+                (byte)(
+                    (value >> 16) &
+                    0xff);
+            packet[cursor++] =
+                (byte)(
+                    (value >> 8) &
+                    0xff);
+            packet[cursor++] =
+                (byte)(
+                    value &
+                    0xff);
         }
 
-        private static void WriteUInt64(Stream stream, ulong value)
+        private static void WriteUInt64(
+            byte[] packet,
+            ref int cursor,
+            ulong value)
         {
-            for (var shift = 56; shift >= 0; shift -= 8)
+            for (var shift = 56;
+                 shift >= 0;
+                 shift -= 8)
             {
-                stream.WriteByte((byte)((value >> shift) & 0xff));
+                packet[cursor++] =
+                    (byte)(
+                        (value >> shift) &
+                        0xff);
             }
         }
 
         private static void WriteFloat32(
-            Stream stream,
+            byte[] packet,
+            ref int cursor,
             float value)
         {
             WriteInt32(
-                stream,
-                BitConverter.SingleToInt32Bits(
-                    value));
+                packet,
+                ref cursor,
+                BitConverter
+                    .SingleToInt32Bits(
+                        value));
+        }
+
+        private static int Align4(
+            int value)
+        {
+            return
+                checked(
+                    value + 3) &
+                ~3;
         }
     }
 }
