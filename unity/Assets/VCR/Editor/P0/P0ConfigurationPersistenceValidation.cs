@@ -3,6 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Application;
+using VCR.Runtime.Core;
 using VCR.Runtime.Scene;
 
 namespace VCR.Editor.P0
@@ -31,6 +32,15 @@ namespace VCR.Editor.P0
                 Directory.CreateDirectory(
                     directory);
 
+                var invalidPathRejected =
+                    !BoundedTextFile.TryWriteUtf8Atomic(
+                        "invalid\0path",
+                        "{}",
+                        1024,
+                        out var invalidPathError) &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidPathError);
+
                 var store =
                     new RuntimeConfigurationStore(
                         path);
@@ -55,6 +65,7 @@ namespace VCR.Editor.P0
                         out loadError);
 
                 var pass =
+                    invalidPathRejected &&
                     saved &&
                     string.IsNullOrEmpty(
                         saveError) &&
