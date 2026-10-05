@@ -387,7 +387,7 @@ namespace VCR.Runtime.Environment.Unity
         public void RegisterUpdateTarget(
             IEnvironmentUpdateTarget target)
         {
-            if (target == null)
+            if (!IsServiceAlive(target))
             {
                 return;
             }
@@ -1043,6 +1043,19 @@ namespace VCR.Runtime.Environment.Unity
                 isActiveAndEnabled;
         }
 
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
         private void RebuildLightingTargets()
         {
             _lightingTargets =
@@ -1129,7 +1142,7 @@ namespace VCR.Runtime.Environment.Unity
 
             foreach (var target in targets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
@@ -1163,7 +1176,7 @@ namespace VCR.Runtime.Environment.Unity
             foreach (var target in
                      _lightingTargets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
@@ -1299,13 +1312,17 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
+            var liveTargetCount = 0;
+
             foreach (var target in
                      _transitionTargets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
+
+                liveTargetCount++;
 
                 if (!target
                     .ValidateEnvironmentTransition(
@@ -1316,6 +1333,13 @@ namespace VCR.Runtime.Environment.Unity
                 {
                     return false;
                 }
+            }
+
+            if (liveTargetCount == 0)
+            {
+                error =
+                    $"Environment transition '{transition.Mode}' requires at least one live transition target.";
+                return false;
             }
 
             return true;
@@ -1359,7 +1383,7 @@ namespace VCR.Runtime.Environment.Unity
             foreach (var target in
                      _transitionTargets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
@@ -1673,7 +1697,7 @@ namespace VCR.Runtime.Environment.Unity
 
             foreach (var target in targets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
@@ -1700,7 +1724,12 @@ namespace VCR.Runtime.Environment.Unity
 
             foreach (var target in targets)
             {
-                target?.ApplyEnvironmentSpace(
+                if (!IsServiceAlive(target))
+                {
+                    continue;
+                }
+
+                target.ApplyEnvironmentSpace(
                     mode);
             }
         }
@@ -1929,7 +1958,7 @@ namespace VCR.Runtime.Environment.Unity
             foreach (var target in
                      _updateTargets)
             {
-                if (target == null)
+                if (!IsServiceAlive(target))
                 {
                     continue;
                 }
