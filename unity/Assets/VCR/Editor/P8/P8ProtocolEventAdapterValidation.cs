@@ -6,6 +6,7 @@ using VCR.Runtime.Broadcast.Soop;
 using VCR.Runtime.Broadcast.SoopUnity;
 using VCR.Runtime.Core;
 using VCR.Runtime.Events;
+using VCR.Runtime.Events.Unity;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Protocols.OscEvents;
 using VCR.Runtime.Protocols.OscEventsUnity;
@@ -28,6 +29,8 @@ namespace VCR.Editor.P8
                 new List<string>();
 
             ValidateIngress(
+                failures);
+            ValidateEventHubBounds(
                 failures);
             ValidateWebSocketProtocol(
                 failures);
@@ -126,6 +129,90 @@ namespace VCR.Editor.P8
                     amountError),
                 "external ingress must reject non-finite donation amounts",
                 failures);
+        }
+
+        private static void ValidateEventHubBounds(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 Event Hub Bounds Validation");
+
+                var hub =
+                    root.AddComponent<
+                        NormalizedEventHub>();
+
+                SetPrivateField(
+                    hub,
+                    "maxQueuedEvents",
+                    0);
+                SetPrivateField(
+                    hub,
+                    "maxDispatchPerFrame",
+                    0);
+
+                for (var i = 0; i < 40; i++)
+                {
+                    hub.Publish(
+                        new NormalizedEvent(
+                            NormalizedEventTypes
+                                .LocalManual,
+                            "bounds.validation",
+                            i,
+                            sequence:
+                                i));
+                }
+
+                Expect(
+                    hub.MaxQueuedEvents == 32 &&
+                    hub.MaxDispatchPerFrame == 1 &&
+                    hub.QueuedCount == 32 &&
+                    hub.DroppedCount == 8,
+                    "event hub must enforce minimum queue/dispatch bounds at runtime even when serialized values are invalid",
+                    failures);
+
+                InvokeUpdate(
+                    hub);
+
+                Expect(
+                    hub.DispatchedCount == 1 &&
+                    hub.QueuedCount == 31,
+                    "event hub minimum dispatch budget must remain one event per frame",
+                    failures);
+
+                SetPrivateField(
+                    hub,
+                    "maxQueuedEvents",
+                    int.MaxValue);
+                SetPrivateField(
+                    hub,
+                    "maxDispatchPerFrame",
+                    int.MaxValue);
+
+                Expect(
+                    hub.MaxQueuedEvents == 8192 &&
+                    hub.MaxDispatchPerFrame == 2048,
+                    "event hub must enforce maximum queue/dispatch bounds at runtime",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "event hub bounds validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void ValidateWebSocketProtocol(
@@ -1102,6 +1189,57 @@ namespace VCR.Editor.P8
                         soopRoot);
                 }
             }
+        }
+
+        private static void InvokeUpdate(
+            NormalizedEventHub hub)
+        {
+            var method =
+                typeof(NormalizedEventHub)
+                    .GetMethod(
+                        "Update",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(NormalizedEventHub)
+                        .FullName,
+                    "Update");
+            }
+
+            method.Invoke(
+                hub,
+                null);
+        }
+
+        private static void SetPrivateField<T>(
+            object target,
+            string fieldName,
+            T value)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            field.SetValue(
+                target,
+                value);
         }
 
         private static void InvokeUpdate(
