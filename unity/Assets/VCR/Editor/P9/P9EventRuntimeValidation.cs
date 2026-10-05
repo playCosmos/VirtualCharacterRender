@@ -33,6 +33,7 @@ namespace VCR.Editor.P9
             ValidateRulePersistence(failures);
             ValidateUnityDispatch(failures);
             ValidateEventHubReplacement(failures);
+            ValidateDestroyedHandlerDependencies(failures);
             ValidateMaterialAction(failures);
             P9ExpressionEventValidation.RunChecks(
                 failures);
@@ -1364,6 +1365,150 @@ namespace VCR.Editor.P9
             {
                 failures.Add(
                     "event hub replacement validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateDestroyedHandlerDependencies(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P9 Destroyed Handler Dependency Validation");
+
+                var oldEnvironment =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                oldEnvironment.Configure(
+                    "environment.main",
+                    "default",
+                    EnvironmentUpdatePolicy.Static,
+                    EnvironmentSpaceMode.World);
+
+                var environmentHandler =
+                    root.AddComponent<
+                        EnvironmentStateEventActionHandler>();
+                environmentHandler.SetEnvironmentRuntime(
+                    oldEnvironment);
+
+                var environmentCommand =
+                    new EventActionCommand(
+                        "dependency-recovery",
+                        EventActionTypes
+                            .EnvironmentSetState,
+                        "environment.main",
+                        null,
+                        "replacement",
+                        0.0,
+                        false,
+                        30);
+
+                Expect(
+                    environmentHandler.CanHandle(
+                        environmentCommand),
+                    "environment handler recovery validation must start with the configured runtime",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldEnvironment);
+
+                var replacementEnvironment =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                replacementEnvironment.Configure(
+                    "environment.main",
+                    "default",
+                    EnvironmentUpdatePolicy.Static,
+                    EnvironmentSpaceMode.World);
+
+                Expect(
+                    environmentHandler.CanHandle(
+                        environmentCommand) &&
+                    environmentHandler.TryExecute(
+                        environmentCommand,
+                        out var environmentRecoveryError) &&
+                    replacementEnvironment.Status.StateId ==
+                        "replacement",
+                    "environment action handler must discard a destroyed cached runtime and auto-discover its replacement: " +
+                    environmentRecoveryError,
+                    failures);
+
+                var controller =
+                    root.AddComponent<
+                        MaterialOverrideController>();
+                var oldResolver =
+                    root.AddComponent<
+                        P9FakeMaterialPresetResolver>();
+                var presetHandler =
+                    root.AddComponent<
+                        MaterialPresetEventActionHandler>();
+
+                presetHandler.SetMaterialController(
+                    controller);
+                presetHandler.SetPresetResolver(
+                    oldResolver);
+
+                var presetCommand =
+                    new EventActionCommand(
+                        "dependency-recovery",
+                        EventActionTypes
+                            .MaterialApplyPreset,
+                        "slot.0",
+                        null,
+                        "preset",
+                        0.0,
+                        false,
+                        31);
+
+                Expect(
+                    presetHandler.CanHandle(
+                        presetCommand),
+                    "material preset handler recovery validation must start with live dependencies",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldResolver);
+
+                var replacementResolver =
+                    root.AddComponent<
+                        P9FakeMaterialPresetResolver>();
+
+                Expect(
+                    presetHandler.CanHandle(
+                        presetCommand),
+                    "material preset handler must discard a destroyed cached resolver and auto-discover a live replacement",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    controller);
+
+                var replacementController =
+                    root.AddComponent<
+                        MaterialOverrideController>();
+
+                Expect(
+                    presetHandler.CanHandle(
+                        presetCommand) &&
+                    replacementController != null,
+                    "material preset handler must re-resolve a replacement controller after the previous Unity component is destroyed",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed event-handler dependency recovery unexpected exception: " +
                     exception);
             }
             finally
