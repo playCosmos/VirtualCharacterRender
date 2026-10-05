@@ -219,7 +219,6 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 return true;
             }
 
-            StopReceiver();
             StartReceiver();
 
             if (!enabled ||
@@ -314,7 +313,20 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
         private void StartReceiver()
         {
-            StopReceiver();
+            if (!StopReceiver())
+            {
+                _lastError =
+                    "Previous ARKit receive thread did not stop cleanly.";
+                _state =
+                    ArKitReceiverLifecycleState.Faulted;
+                Debug.LogError(
+                    "VCR ARKit/iFacialMocap: " +
+                    _lastError,
+                    this);
+                enabled = false;
+                return;
+            }
+
             _state =
                 ArKitReceiverLifecycleState.Starting;
             _lastError = null;
@@ -388,13 +400,27 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
         private void ReceiveLoop()
         {
-            var remote = new IPEndPoint(IPAddress.Any, 0);
+            var remote =
+                new IPEndPoint(
+                    IPAddress.Any,
+                    0);
+            var receiver =
+                _receiver;
+            var acceptedAddress =
+                _iosEndpoint?.Address;
+
+            if (receiver == null)
+            {
+                return;
+            }
 
             while (_running)
             {
                 try
                 {
-                    var bytes = _receiver.Receive(ref remote);
+                    var bytes =
+                        receiver.Receive(
+                            ref remote);
                     if (bytes == null || bytes.Length == 0)
                     {
                         continue;
@@ -403,8 +429,9 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     Interlocked.Increment(
                         ref _datagramCount);
 
-                    if (_iosEndpoint != null &&
-                        !remote.Address.Equals(_iosEndpoint.Address))
+                    if (acceptedAddress != null &&
+                        !remote.Address.Equals(
+                            acceptedAddress))
                     {
                         Interlocked.Increment(
                             ref _rejectedSenderCount);
@@ -568,32 +595,56 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 "count"));
         }
 
-        private void StopReceiver()
+        private bool StopReceiver()
         {
             _running = false;
 
+            var receiver =
+                _receiver;
+            _receiver = null;
+
             try
             {
-                _receiver?.Close();
+                receiver?.Close();
             }
             catch
             {
                 // Shutdown path.
             }
 
-            _receiver = null;
+            var thread =
+                _receiveThread;
 
-            if (_receiveThread != null &&
-                _receiveThread.IsAlive)
+            if (thread != null &&
+                thread.IsAlive &&
+                Thread.CurrentThread != thread)
             {
-                _receiveThread.Join(500);
+                thread.Join(750);
+            }
+
+            if (thread != null &&
+                thread.IsAlive)
+            {
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    "ARKit receive thread did not stop within the shutdown deadline.");
+                _state =
+                    ArKitReceiverLifecycleState.Faulted;
+                return false;
             }
 
             _receiveThread = null;
 
-            _source?.Dispose();
-            _source = null;
+            try
+            {
+                _source?.Dispose();
+            }
+            catch
+            {
+                // Shutdown path.
+            }
 
+            _source = null;
             _latestFace = null;
             _iosEndpoint = null;
 
@@ -603,6 +654,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 _state =
                     ArKitReceiverLifecycleState.Stopped;
             }
+
+            return true;
         }
 
         private void OnDisable()
