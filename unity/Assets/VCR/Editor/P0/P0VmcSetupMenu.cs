@@ -145,6 +145,41 @@ namespace VCR.Editor.P0
                 goldenBundle[19] ==
                     goldenMessage.Length;
 
+            var reusableBuffer =
+                new byte[
+                    OscPacketReader.MaxPacketBytes];
+
+            for (var i = 0;
+                 i < reusableBuffer.Length;
+                 i++)
+            {
+                reusableBuffer[i] =
+                    0xff;
+            }
+
+            var reusableArguments =
+                new[]
+                {
+                    OscArgument.FromInt(1),
+                    OscArgument.FromFloat(1f),
+                    OscArgument.FromString("A")
+                };
+
+            var reusableWriterPass =
+                OscPacketWriter.TryBeginBundle(
+                    reusableBuffer,
+                    out var reusableLength) &&
+                OscPacketWriter.TryAppendBundleMessage(
+                    reusableBuffer,
+                    ref reusableLength,
+                    "/x",
+                    reusableArguments,
+                    reusableArguments.Length) &&
+                BytesEqualPrefix(
+                    reusableBuffer,
+                    reusableLength,
+                    goldenBundle);
+
             var malformed = new byte[]
             {
                 (byte)'/', (byte)'x', 0, 0,
@@ -369,6 +404,7 @@ namespace VCR.Editor.P0
 
             var pass =
                 goldenWriterPass &&
+                reusableWriterPass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -411,7 +447,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (golden OSC bytes, codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -507,6 +543,36 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: VMC sender attached. " +
                 "Default destination is 127.0.0.1:39539 at 60 Hz with VRM0 expression names.");
+        }
+
+        private static bool BytesEqualPrefix(
+            byte[] buffer,
+            int length,
+            byte[] expected)
+        {
+            if (buffer == null ||
+                expected == null ||
+                length !=
+                    expected.Length ||
+                length < 0 ||
+                length >
+                    buffer.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0;
+                 i < length;
+                 i++)
+            {
+                if (buffer[i] !=
+                    expected[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static bool BytesEqual(
