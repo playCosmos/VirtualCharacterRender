@@ -162,6 +162,9 @@ namespace VCR.Runtime.Protocols.Vmc
             lock (_sync)
             {
                 _started = false;
+                _latest.TakeLatest();
+                _latestPose.TakeLatest();
+                _latestExpressions.TakeLatest();
                 _health = new TrackingSourceHealth(
                     TrackingSourceHealthState.Stopped,
                     _health.LastUpdateTimestampUs,
