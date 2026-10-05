@@ -47,7 +47,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
             joints[(int)UpperBodyJoint.LeftHip] = Convert(landmarks[LeftHip]);
             joints[(int)UpperBodyJoint.RightHip] = Convert(landmarks[RightHip]);
 
-            return new NormalizedUpperBodyState(joints);
+            return new NormalizedUpperBodyState(
+                joints,
+                SnapshotArrayOwnership.Transfer);
         }
 
         public static NormalizedHandState ConvertLeftHand(
@@ -100,7 +102,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 joints[i] = Convert(landmarks[i]);
             }
 
-            return new NormalizedHandState(isLeft, joints);
+            return new NormalizedHandState(
+                isLeft,
+                joints,
+                SnapshotArrayOwnership.Transfer);
         }
 
         private static TrackingPoint Convert(in Landmark landmark)
