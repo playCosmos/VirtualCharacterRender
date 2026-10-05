@@ -26,6 +26,9 @@ namespace VCR.Runtime.Protocols.VmcUnity
         ITrackingRuntimeControl,
         IRuntimeMetricsSource
     {
+        private const int UdpReceiveBufferBytes =
+            65535;
+
         [Header("Receive")]
         [SerializeField, Range(1, 65535)] private int localPort = 39539;
         [Tooltip("Default is loopback-only. Blank accepts any sender and is not recommended outside a trusted LAN.")]
@@ -340,36 +343,67 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private void ReceiveLoop()
         {
-            var remote = new IPEndPoint(IPAddress.Any, 0);
-            var messages = new List<OscMessage>(64);
+            var receiver =
+                _receiver;
+
+            if (receiver == null)
+            {
+                return;
+            }
+
+            var socket =
+                receiver.Client;
+            EndPoint remote =
+                new IPEndPoint(
+                    IPAddress.Any,
+                    0);
+            var packet =
+                new byte[
+                    UdpReceiveBufferBytes];
+            var messages =
+                new List<OscMessage>(
+                    64);
 
             while (_running)
             {
                 try
                 {
-                    var packet = _receiver.Receive(ref remote);
-                    if (packet == null || packet.Length == 0)
+                    var packetLength =
+                        socket.ReceiveFrom(
+                            packet,
+                            0,
+                            packet.Length,
+                            SocketFlags.None,
+                            ref remote);
+
+                    if (packetLength <= 0 ||
+                        remote is not
+                            IPEndPoint remoteIp)
                     {
                         continue;
                     }
 
                     if (_allowedSender != null &&
-                        !remote.Address.Equals(_allowedSender))
+                        !remoteIp.Address.Equals(
+                            _allowedSender))
                     {
                         continue;
                     }
 
                     var arrivalUs =
-                        MonotonicClock.NowMicroseconds();
+                        MonotonicClock
+                            .NowMicroseconds();
                     Interlocked.Exchange(
                         ref _lastPacketArrivalUs,
                         arrivalUs);
-                    Interlocked.Increment(ref _packetCount);
+                    Interlocked.Increment(
+                        ref _packetCount);
 
-                    if (!OscPacketReader.TryReadMessages(
-                        packet,
-                        packet.Length,
-                        messages))
+                    if (!OscPacketReader
+                        .TryReadMessages(
+                            packet,
+                            packetLength,
+                            messages))
                     {
                         Interlocked.Increment(
                             ref _malformedPacketCount);
