@@ -67,6 +67,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private readonly ConcurrentQueue<string>
             _queue = new();
 
+        private readonly object _queueSync =
+            new();
+
         private readonly object _clientSync =
             new();
 
@@ -191,13 +194,22 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 MaxDispatchPerFrame;
 
             for (var i = 0;
-                 i < budget &&
-                 _queue.TryDequeue(
-                     out var message);
+                 i < budget;
                  i++)
             {
-                Interlocked.Decrement(
-                    ref _queuedCount);
+                string message;
+
+                lock (_queueSync)
+                {
+                    if (!_queue.TryDequeue(
+                            out message))
+                    {
+                        break;
+                    }
+
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                }
 
                 try
                 {
@@ -753,30 +765,30 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private void EnqueueText(
             string message)
         {
-            _queue.Enqueue(
-                message);
-
             Interlocked.Increment(
                 ref _messagesReceived);
 
-            var count =
-                Interlocked.Increment(
-                    ref _queuedCount);
-
-            var limit =
-                MaxQueuedMessages;
-
-            while (count > limit &&
-                   _queue.TryDequeue(
-                       out _))
+            lock (_queueSync)
             {
-                Interlocked.Decrement(
+                _queue.Enqueue(
+                    message);
+                Interlocked.Increment(
                     ref _queuedCount);
 
-                Interlocked.Increment(
-                    ref _messagesDropped);
+                var limit =
+                    MaxQueuedMessages;
 
-                count--;
+                while (Volatile.Read(
+                           ref _queuedCount) >
+                       limit &&
+                       _queue.TryDequeue(
+                           out _))
+                {
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _messagesDropped);
+                }
             }
         }
 
