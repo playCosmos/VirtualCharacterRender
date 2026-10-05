@@ -55,10 +55,12 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     translation.z);
             }
 
-            state = new NormalizedFaceState(
-                headRotation,
-                headPosition,
-                coefficients);
+            state =
+                new NormalizedFaceState(
+                    headRotation,
+                    headPosition,
+                    coefficients,
+                    SnapshotArrayOwnership.Transfer);
 
             return true;
         }
