@@ -30,6 +30,15 @@ namespace VCR.Runtime.Tracking.Mixing
 
             var weight =
                 Clamp01(settings.Weight);
+            var mask =
+                settings.Mask;
+
+            if (basePose != null &&
+                !mask.HasAnyWeight)
+            {
+                return basePose;
+            }
+
             var poseSpace =
                 basePose?.PoseSpace ??
                 layerPose.PoseSpace;
@@ -43,10 +52,10 @@ namespace VCR.Runtime.Tracking.Mixing
 
             var rootPositionWeight =
                 weight *
-                settings.Mask.RootPositionWeight;
+                mask.RootPositionWeight;
             var rootRotationWeight =
                 weight *
-                settings.Mask.RootRotationWeight;
+                mask.RootRotationWeight;
 
             if (rootPositionWeight > 0f)
             {
@@ -107,7 +116,7 @@ namespace VCR.Runtime.Tracking.Mixing
 
                 var boneWeight =
                     weight *
-                    settings.Mask.GetBoneWeight(
+                    mask.GetBoneWeight(
                         bone);
 
                 if (!hasLayer ||
