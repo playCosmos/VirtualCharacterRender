@@ -12,6 +12,7 @@ using VCR.Runtime.Protocols.OscEvents;
 using VCR.Runtime.Protocols.OscEventsUnity;
 using VCR.Runtime.Protocols.WebSocket;
 using VCR.Runtime.Protocols.WebSocketUnity;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Editor.P8
 {
@@ -31,6 +32,8 @@ namespace VCR.Editor.P8
             ValidateIngress(
                 failures);
             ValidateEventHubBounds(
+                failures);
+            ValidateTrackingPresenceRecovery(
                 failures);
             ValidateWebSocketProtocol(
                 failures);
@@ -203,6 +206,170 @@ namespace VCR.Editor.P8
             {
                 failures.Add(
                     "event hub bounds validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateTrackingPresenceRecovery(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 Tracking Presence Recovery");
+
+                var oldProvider =
+                    root.AddComponent<
+                        P8FakePresenceProvider>();
+                var sink =
+                    root.AddComponent<
+                        P8FakeEventSink>();
+                var adapter =
+                    root.AddComponent<
+                        TrackingPresenceEventAdapter>();
+
+                oldProvider.Presence =
+                    new TrackingPresenceSnapshot(
+                        sequence: 42,
+                        timestampUs: 42,
+                        subjectState:
+                            SubjectPresenceState.Lost,
+                        faceSourceAvailable:
+                            false,
+                        bodyHandsSourceAvailable:
+                            false,
+                        fullBodySourceAvailable:
+                            false,
+                        faceSubjectEvidence:
+                            false,
+                        bodyHandsSubjectEvidence:
+                            false,
+                        fullBodySubjectEvidence:
+                            false,
+                        anySourceAvailable:
+                            false,
+                        subjectEvidence:
+                            false,
+                        events:
+                            TrackingPresenceEvents
+                                .SubjectLost);
+
+                adapter.SetProvider(
+                    oldProvider);
+                adapter.SetSink(
+                    sink);
+                InvokeUpdate(
+                    adapter);
+
+                Expect(
+                    sink.Events.Count == 1 &&
+                    sink.Events[0].Type ==
+                        NormalizedEventTypes
+                            .TrackingSubjectLost,
+                    "tracking presence adapter must publish the initial provider event",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    oldProvider);
+
+                var replacementProvider =
+                    root.AddComponent<
+                        P8FakePresenceProvider>();
+                replacementProvider.Presence =
+                    new TrackingPresenceSnapshot(
+                        sequence: 42,
+                        timestampUs: 43,
+                        subjectState:
+                            SubjectPresenceState.Present,
+                        faceSourceAvailable:
+                            true,
+                        bodyHandsSourceAvailable:
+                            false,
+                        fullBodySourceAvailable:
+                            false,
+                        faceSubjectEvidence:
+                            true,
+                        bodyHandsSubjectEvidence:
+                            false,
+                        fullBodySubjectEvidence:
+                            false,
+                        anySourceAvailable:
+                            true,
+                        subjectEvidence:
+                            true,
+                        events:
+                            TrackingPresenceEvents
+                                .SubjectRestored);
+
+                InvokeUpdate(
+                    adapter);
+
+                Expect(
+                    sink.Events.Count == 2 &&
+                    sink.Events[1].Type ==
+                        NormalizedEventTypes
+                            .TrackingSubjectRestored,
+                    "tracking presence adapter must reset sequence state when a destroyed provider is replaced, even when the replacement reuses the same sequence value",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    sink);
+
+                var replacementSink =
+                    root.AddComponent<
+                        P8FakeEventSink>();
+                replacementProvider.Presence =
+                    new TrackingPresenceSnapshot(
+                        sequence: 43,
+                        timestampUs: 44,
+                        subjectState:
+                            SubjectPresenceState.Present,
+                        faceSourceAvailable:
+                            false,
+                        bodyHandsSourceAvailable:
+                            false,
+                        fullBodySourceAvailable:
+                            false,
+                        faceSubjectEvidence:
+                            true,
+                        bodyHandsSubjectEvidence:
+                            false,
+                        fullBodySubjectEvidence:
+                            false,
+                        anySourceAvailable:
+                            false,
+                        subjectEvidence:
+                            true,
+                        events:
+                            TrackingPresenceEvents
+                                .TrackingSourceLost);
+
+                InvokeUpdate(
+                    adapter);
+
+                Expect(
+                    replacementSink.Events.Count == 1 &&
+                    replacementSink.Events[0].Type ==
+                        NormalizedEventTypes
+                            .TrackingSourceLost,
+                    "tracking presence adapter must discard a destroyed cached sink and auto-discover a live replacement",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "tracking presence recovery validation unexpected exception: " +
                     exception);
             }
             finally
@@ -1229,6 +1396,31 @@ namespace VCR.Editor.P8
         }
 
         private static void InvokeUpdate(
+            TrackingPresenceEventAdapter adapter)
+        {
+            var method =
+                typeof(TrackingPresenceEventAdapter)
+                    .GetMethod(
+                        "Update",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(TrackingPresenceEventAdapter)
+                        .FullName,
+                    "Update");
+            }
+
+            method.Invoke(
+                adapter,
+                null);
+        }
+
+        private static void InvokeUpdate(
             NormalizedEventHub hub)
         {
             var method =
@@ -1366,6 +1558,17 @@ namespace VCR.Editor.P8
                 failures.Add(
                     message);
             }
+        }
+    }
+
+    internal sealed class P8FakePresenceProvider :
+        MonoBehaviour,
+        ITrackingPresenceProvider
+    {
+        public TrackingPresenceSnapshot Presence
+        {
+            get;
+            set;
         }
     }
 
