@@ -302,7 +302,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(snapshot ownership/copy isolation, borrowed-pose lifetime semantics, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot ownership/copy isolation, borrowed pose/expression/motion lifetime semantics, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
                 return true;
             }
 
@@ -564,6 +564,61 @@ namespace VCR.Editor.P3
                 !default(BorrowedHumanoidPose)
                     .IsValid,
                 "borrowed humanoid poses must be explicit non-owning views whose backing data may change on provider reuse",
+                failures);
+
+            var borrowedStandard =
+                new float[
+                    (int)StandardExpression.Count];
+            borrowedStandard[
+                (int)StandardExpression.Happy] =
+                    0.25f;
+            var borrowedCustom =
+                new[]
+                {
+                    new NamedExpressionValue(
+                        "borrowed-a",
+                        0.5f),
+                    new NamedExpressionValue(
+                        "stale-hidden",
+                        1f)
+                };
+
+            var borrowedExpressions =
+                new BorrowedExpressionState(
+                    borrowedStandard,
+                    borrowedCustom,
+                    customCount: 1);
+
+            var borrowedMotion =
+                new BorrowedMotionSample(
+                    TrackingRegion.FullBody |
+                    TrackingRegion.Expressions,
+                    borrowedPose,
+                    borrowedExpressions);
+
+            borrowedStandard[
+                (int)StandardExpression.Happy] =
+                    0.75f;
+
+            Expect(
+                borrowedExpressions.IsValid &&
+                borrowedExpressions.Custom.Length == 1 &&
+                string.Equals(
+                    borrowedExpressions.Custom[0].Name,
+                    "borrowed-a",
+                    StringComparison.Ordinal) &&
+                Math.Abs(
+                    borrowedExpressions.Get(
+                        StandardExpression.Happy) -
+                    0.75f) <
+                0.0001f &&
+                borrowedMotion.HasHumanoidPose &&
+                borrowedMotion.HasExpressions &&
+                !default(BorrowedExpressionState)
+                    .IsValid &&
+                !default(BorrowedMotionSample)
+                    .HasExpressions,
+                "borrowed expression/motion views must expose only their active ranges and remain explicitly non-owning",
                 failures);
 
             var poseOnlyRequest =
