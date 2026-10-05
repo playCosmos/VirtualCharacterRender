@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 using VCR.Runtime.Tracking;
@@ -93,6 +94,40 @@ namespace VCR.Editor.P0
                 Mathf.Approximately(frame.HeadEulerYDegrees, -20f) &&
                 Mathf.Approximately(frame.HeadEulerZDegrees, 30f);
 
+            var oversizedText =
+                new string(
+                    'x',
+                    IFacialMocapFrameParser
+                        .MaxTextCharacters +
+                    1);
+
+            var excessiveParts =
+                new StringBuilder();
+
+            for (var i = 0;
+                 i <=
+                 IFacialMocapFrameParser
+                     .MaxParts;
+                 i++)
+            {
+                excessiveParts.Append(
+                    "jawOpen&1|");
+            }
+
+            var parserBoundsPass =
+                !IFacialMocapFrameParser.TryParse(
+                    "jawOpen&NaN|",
+                    out _) &&
+                !IFacialMocapFrameParser.TryParse(
+                    "=head#0,0,Infinity,0,0,0|",
+                    out _) &&
+                !IFacialMocapFrameParser.TryParse(
+                    oversizedText,
+                    out _) &&
+                !IFacialMocapFrameParser.TryParse(
+                    excessiveParts.ToString(),
+                    out _);
+
             var sourceLifecyclePass =
                 false;
             var source =
@@ -171,6 +206,7 @@ namespace VCR.Editor.P0
 
             pass =
                 pass &&
+                parserBoundsPass &&
                 sourceLifecyclePass;
 
             if (pass)
@@ -180,7 +216,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 iFacialMocap parser: FAIL (mapped values mismatch)");
+                    "VCR P0 iFacialMocap parser: FAIL (mapping, bounds, finite-value, or lifecycle mismatch)");
             }
         }
     }
