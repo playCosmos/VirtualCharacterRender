@@ -120,15 +120,14 @@ namespace VCR.Runtime.Protocols.Osc
             }
         }
 
-        private static void WriteFloat32(Stream stream, float value)
+        private static void WriteFloat32(
+            Stream stream,
+            float value)
         {
-            var bytes = BitConverter.GetBytes(value);
-            if (BitConverter.IsLittleEndian)
-            {
-                Array.Reverse(bytes);
-            }
-
-            stream.Write(bytes, 0, 4);
+            WriteInt32(
+                stream,
+                BitConverter.SingleToInt32Bits(
+                    value));
         }
     }
 }
