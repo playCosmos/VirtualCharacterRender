@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Core;
 using VCR.Runtime.Diagnostics;
 
 namespace VCR.Editor.P0
@@ -63,6 +65,42 @@ namespace VCR.Editor.P0
                     diagnostics
                         .FrameWindowFrames ==
                         3600;
+
+                root.AddComponent<
+                    P0ThrowingMetricsSource>();
+
+                var survivingSubscriberCount =
+                    0;
+                diagnostics.SnapshotUpdated += _ =>
+                    throw new System.InvalidOperationException(
+                        "synthetic diagnostics subscriber failure");
+                diagnostics.SnapshotUpdated += _ =>
+                {
+                    survivingSubscriberCount++;
+                };
+
+                InvokeSnapshotNotification(
+                    diagnostics);
+
+                var collectedMetrics =
+                    new List<RuntimeMetric>();
+                InvokeMetricCollection(
+                    diagnostics,
+                    collectedMetrics);
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    survivingSubscriberCount == 1 &&
+                    TryGetMetric(
+                        collectedMetrics,
+                        "diagnostics.metric_source_failures",
+                        out var metricFailures) &&
+                    metricFailures >= 1.0 &&
+                    TryGetMetric(
+                        collectedMetrics,
+                        "diagnostics.snapshot_subscriber_failures",
+                        out var subscriberFailures) &&
+                    subscriberFailures >= 1.0;
             }
             finally
             {
@@ -112,6 +150,81 @@ namespace VCR.Editor.P0
                     "VCR P0 diagnostics math: FAIL " +
                     $"avg={average:F3} p95={p95:F3} p99={p99:F3}");
             }
+        }
+
+        private static void InvokeMetricCollection(
+            RuntimeDiagnostics diagnostics,
+            List<RuntimeMetric> output)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        "CollectSubsystemMetrics",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    "CollectSubsystemMetrics");
+            }
+
+            method.Invoke(
+                diagnostics,
+                new object[]
+                {
+                    output
+                });
+        }
+
+        private static void InvokeSnapshotNotification(
+            RuntimeDiagnostics diagnostics)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        "NotifySnapshotUpdated",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    "NotifySnapshotUpdated");
+            }
+
+            method.Invoke(
+                diagnostics,
+                new object[]
+                {
+                    diagnostics.LatestSnapshot
+                });
+        }
+
+        private static bool TryGetMetric(
+            List<RuntimeMetric> metrics,
+            string name,
+            out double value)
+        {
+            foreach (var metric in metrics)
+            {
+                if (metric.Name == name)
+                {
+                    value = metric.Value;
+                    return true;
+                }
+            }
+
+            value = 0.0;
+            return false;
         }
 
         private static void SetPrivateField<T>(
@@ -185,6 +298,18 @@ namespace VCR.Editor.P0
             method.Invoke(
                 diagnostics,
                 null);
+        }
+    }
+
+    internal sealed class P0ThrowingMetricsSource :
+        MonoBehaviour,
+        IRuntimeMetricsSource
+    {
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
+        {
+            throw new System.InvalidOperationException(
+                "synthetic metrics failure");
         }
     }
 }
