@@ -61,6 +61,7 @@ namespace VCR.Runtime.EventRuntime.Unity
         private long _cancelledCount;
         private long _stepCount;
         private long _failureCount;
+        private long _handlerProbeFailureCount;
 
         public string HandlerId => handlerId;
         public bool Busy => _activeCoroutine != null;
@@ -123,8 +124,10 @@ namespace VCR.Runtime.EventRuntime.Unity
             params MonoBehaviour[] behaviours)
         {
             actionHandlerBehaviours =
-                behaviours ??
-                Array.Empty<MonoBehaviour>();
+                behaviours == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        behaviours.Clone();
             RebuildHandlers();
         }
 
@@ -782,11 +785,38 @@ namespace VCR.Runtime.EventRuntime.Unity
 
         private void EnsureHandlers()
         {
-            if (_handlers.Length == 0 &&
-                autoFindHandlers)
+            if (!autoFindHandlers)
+            {
+                return;
+            }
+
+            if (_handlers.Length == 0)
             {
                 RebuildHandlers();
+                return;
             }
+
+            foreach (var handler in _handlers)
+            {
+                if (!IsServiceAlive(handler))
+                {
+                    RebuildHandlers();
+                    return;
+                }
+            }
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private void RebuildHandlers()
@@ -855,12 +885,32 @@ namespace VCR.Runtime.EventRuntime.Unity
             foreach (var candidate in
                      _handlers)
             {
-                if (candidate == null ||
+                if (!IsServiceAlive(candidate) ||
                     ReferenceEquals(
                         candidate,
-                        this) ||
-                    !candidate.CanHandle(
-                        command))
+                        this))
+                {
+                    continue;
+                }
+
+                bool canHandle;
+
+                try
+                {
+                    canHandle =
+                        candidate.CanHandle(
+                            command);
+                }
+                catch (Exception exception)
+                {
+                    _handlerProbeFailureCount++;
+                    _lastError =
+                        "Scene sequence action handler capability probe failed: " +
+                        exception.Message;
+                    continue;
+                }
+
+                if (!canHandle)
                 {
                     continue;
                 }
@@ -923,6 +973,11 @@ namespace VCR.Runtime.EventRuntime.Unity
                 new RuntimeMetric(
                     "scene.sequence.failures",
                     _failureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "scene.sequence.handler_probe_failures",
+                    _handlerProbeFailureCount,
                     "count"));
         }
     }
