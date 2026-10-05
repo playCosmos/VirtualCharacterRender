@@ -3,6 +3,9 @@ namespace VCR.Runtime.Tracking
     /// <summary>
     /// Source-neutral immutable tracking frame envelope.
     ///
+    /// Nested tracking states are immutable after publication. Array-backed
+    /// states either defensively copy caller storage or take explicit ownership;
+    /// producers using Transfer must never mutate or pool those arrays again.
     /// A source may populate only the domains it owns. Region routing/mixing
     /// combines frames from multiple sources before character application.
     /// </summary>
