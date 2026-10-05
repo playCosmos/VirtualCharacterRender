@@ -185,12 +185,19 @@ namespace VCR.Runtime.Character
         public void SetTrackingProvider(
             ITrackingFrameProvider provider)
         {
+            var liveProvider =
+                IsServiceAlive(provider)
+                    ? provider
+                    : null;
+
             trackingProviderBehaviour =
-                provider as MonoBehaviour;
+                liveProvider as MonoBehaviour;
 
             if (Current != null)
             {
-                BindTracking(Current, provider);
+                BindTracking(
+                    Current,
+                    liveProvider);
             }
         }
 
@@ -236,10 +243,14 @@ namespace VCR.Runtime.Character
             }
 
             var provider =
-                trackingProviderBehaviour as
-                    ITrackingFrameProvider;
+                trackingProviderBehaviour != null
+                    ? trackingProviderBehaviour as
+                        ITrackingFrameProvider
+                    : null;
 
-            BindTracking(instance, provider);
+            BindTracking(
+                instance,
+                provider);
         }
 
         private void BindTracking(
@@ -257,11 +268,15 @@ namespace VCR.Runtime.Character
                 instance.gameObject.AddComponent<
                     Vrm10HumanoidPoseTarget>();
 
-            if (provider != null)
-            {
-                faceTarget.SetTrackingProvider(provider);
-                bodyTarget.SetTrackingProvider(provider);
-            }
+            var liveProvider =
+                IsServiceAlive(provider)
+                    ? provider
+                    : null;
+
+            faceTarget.SetTrackingProvider(
+                liveProvider);
+            bodyTarget.SetTrackingProvider(
+                liveProvider);
 
             if (attachMotionSnapshotProvider &&
                 instance.GetComponent<
@@ -270,6 +285,19 @@ namespace VCR.Runtime.Character
                 instance.gameObject.AddComponent<
                     Vrm10MotionSnapshotProvider>();
             }
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
         }
 
         private static void DestroyLoaded(
