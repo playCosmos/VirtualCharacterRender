@@ -184,7 +184,8 @@ namespace VCR.Runtime.Tracking.ArKit
                     headEulerZ,
                     headPositionX,
                     headPositionY,
-                    headPositionZ);
+                    headPositionZ,
+                    SnapshotArrayOwnership.Transfer);
 
             return true;
         }
