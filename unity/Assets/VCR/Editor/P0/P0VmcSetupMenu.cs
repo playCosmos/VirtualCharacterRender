@@ -94,6 +94,57 @@ namespace VCR.Editor.P0
                     HumanoidBoneId.Hips,
                     out var hips);
 
+            var goldenMessage =
+                OscPacketWriter.WriteMessage(
+                    "/x",
+                    OscArgument.FromInt(1),
+                    OscArgument.FromFloat(1f),
+                    OscArgument.FromString("A"));
+            var goldenExpected =
+                new byte[]
+                {
+                    (byte)'/', (byte)'x', 0, 0,
+                    (byte)',', (byte)'i', (byte)'f', (byte)'s',
+                    0, 0, 0, 0,
+                    0, 0, 0, 1,
+                    0x3f, 0x80, 0, 0,
+                    (byte)'A', 0, 0, 0
+                };
+            var goldenBundle =
+                OscPacketWriter.WriteBundle(
+                    new[]
+                    {
+                        goldenMessage
+                    });
+            var goldenWriterPass =
+                BytesEqual(
+                    goldenMessage,
+                    goldenExpected) &&
+                goldenBundle.Length ==
+                    20 +
+                    goldenMessage.Length &&
+                goldenBundle[0] ==
+                    (byte)'#' &&
+                goldenBundle[1] ==
+                    (byte)'b' &&
+                goldenBundle[2] ==
+                    (byte)'u' &&
+                goldenBundle[3] ==
+                    (byte)'n' &&
+                goldenBundle[4] ==
+                    (byte)'d' &&
+                goldenBundle[5] ==
+                    (byte)'l' &&
+                goldenBundle[6] ==
+                    (byte)'e' &&
+                goldenBundle[7] == 0 &&
+                goldenBundle[15] == 1 &&
+                goldenBundle[16] == 0 &&
+                goldenBundle[17] == 0 &&
+                goldenBundle[18] == 0 &&
+                goldenBundle[19] ==
+                    goldenMessage.Length;
+
             var malformed = new byte[]
             {
                 (byte)'/', (byte)'x', 0, 0,
@@ -317,6 +368,7 @@ namespace VCR.Editor.P0
             }
 
             var pass =
+                goldenWriterPass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -359,7 +411,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden OSC bytes, codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -455,6 +507,39 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: VMC sender attached. " +
                 "Default destination is 127.0.0.1:39539 at 60 Hz with VRM0 expression names.");
+        }
+
+        private static bool BytesEqual(
+            byte[] left,
+            byte[] right)
+        {
+            if (ReferenceEquals(
+                    left,
+                    right))
+            {
+                return true;
+            }
+
+            if (left == null ||
+                right == null ||
+                left.Length !=
+                    right.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0;
+                 i < left.Length;
+                 i++)
+            {
+                if (left[i] !=
+                    right[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static Vrm10Instance FindSelectedVrm()
