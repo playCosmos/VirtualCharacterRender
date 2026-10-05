@@ -2,6 +2,7 @@
   "name": "VCR.Runtime.Application",
   "rootNamespace": "VCR.Runtime.Application",
   "references": [
+    "VCR.Runtime.Core",
     "VCR.Runtime.Scene",
     "VCR.Runtime.Appearance"
   ],
