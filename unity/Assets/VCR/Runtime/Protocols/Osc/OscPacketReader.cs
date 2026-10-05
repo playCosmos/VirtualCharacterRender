@@ -7,6 +7,7 @@ namespace VCR.Runtime.Protocols.Osc
     public static class OscPacketReader
     {
         public const int MaxPacketBytes = 16 * 1024;
+        public const int MaxMessagesPerPacket = 256;
         private const int MaxBundleDepth = 4;
 
         public static bool TryReadMessages(
@@ -27,12 +28,20 @@ namespace VCR.Runtime.Protocols.Osc
 
             try
             {
-                return ReadPacket(
-                    packet,
-                    0,
-                    length,
-                    output,
-                    depth: 0);
+                var success =
+                    ReadPacket(
+                        packet,
+                        0,
+                        length,
+                        output,
+                        depth: 0);
+
+                if (!success)
+                {
+                    output.Clear();
+                }
+
+                return success;
             }
             catch
             {
@@ -129,6 +138,12 @@ namespace VCR.Runtime.Protocols.Osc
             int length,
             List<OscMessage> output)
         {
+            if (output.Count >=
+                MaxMessagesPerPacket)
+            {
+                return false;
+            }
+
             var end = offset + length;
             var cursor = offset;
 
