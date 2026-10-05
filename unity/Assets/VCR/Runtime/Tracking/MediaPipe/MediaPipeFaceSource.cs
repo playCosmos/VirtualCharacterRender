@@ -175,13 +175,38 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public void Dispose()
         {
-            if (_disposed)
+            FaceLandmarker landmarker;
+
+            lock (_sync)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                Volatile.Write(
+                    ref _acceptCallbacks,
+                    0);
+
+                landmarker =
+                    _landmarker;
+                _landmarker = null;
+                _submittedAtUs.Clear();
+
+                _health =
+                    new TrackingSourceHealth(
+                        TrackingSourceHealthState.Stopped,
+                        _health.LastUpdateTimestampUs,
+                        _health.Confidence,
+                        null);
             }
 
-            Stop();
-            _disposed = true;
+            if (landmarker != null)
+            {
+                ((IDisposable)landmarker)
+                    .Dispose();
+            }
         }
 
         private void OnResult(
@@ -189,20 +214,42 @@ namespace VCR.Runtime.Tracking.MediaPipe
             Image image,
             long timestampMillisec)
         {
-            if (Volatile.Read(ref _acceptCallbacks) == 0)
+            if (Volatile.Read(
+                    ref _acceptCallbacks) == 0)
             {
                 return;
             }
 
             long submittedAtUs = 0;
+
             lock (_sync)
             {
-                if (_submittedAtUs.TryGetValue(
-                    timestampMillisec,
-                    out submittedAtUs))
+                if (Volatile.Read(
+                        ref _acceptCallbacks) == 0 ||
+                    _landmarker == null ||
+                    _disposed)
                 {
-                    _submittedAtUs.Remove(timestampMillisec);
+                    return;
                 }
+
+                if (_submittedAtUs.TryGetValue(
+                        timestampMillisec,
+                        out submittedAtUs))
+                {
+                    _submittedAtUs.Remove(
+                        timestampMillisec);
+                }
+
+                _bridge.OnResult(in result, image, timestampMillisec);
+                Interlocked.Increment(
+                    ref _resultCount);
+
+                _health =
+                    new TrackingSourceHealth(
+                        TrackingSourceHealthState.Healthy,
+                        timestampMillisec * 1000L,
+                        float.NaN,
+                        null);
             }
 
             if (submittedAtUs > 0)
@@ -211,23 +258,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     ref _lastProcessingLatencyUs,
                     MonotonicClock.NowMicroseconds() -
                     submittedAtUs);
-            }
-
-            _bridge.OnResult(in result, image, timestampMillisec);
-            Interlocked.Increment(ref _resultCount);
-
-            lock (_sync)
-            {
-                if (_landmarker == null)
-                {
-                    return;
-                }
-
-                _health = new TrackingSourceHealth(
-                    TrackingSourceHealthState.Healthy,
-                    timestampMillisec * 1000L,
-                    float.NaN,
-                    null);
             }
         }
 
