@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -11,45 +12,66 @@ namespace VCR.Runtime.Protocols.Osc
             string address,
             params OscArgument[] arguments)
         {
-            using var stream = new MemoryStream(256);
-            WritePaddedString(stream, address);
+            return WriteMessage(
+                address,
+                arguments,
+                arguments?.Length ?? 0);
+        }
 
-            var tags = new StringBuilder(",");
-            if (arguments != null)
+        public static byte[] WriteMessage(
+            string address,
+            OscArgument[] arguments,
+            int argumentCount)
+        {
+            if (argumentCount < 0 ||
+                argumentCount >
+                    (arguments?.Length ?? 0))
             {
-                foreach (var argument in arguments)
-                {
-                    tags.Append(argument.Type switch
-                    {
-                        OscArgumentType.Int32 => 'i',
-                        OscArgumentType.Float32 => 'f',
-                        OscArgumentType.String => 's',
-                        _ => throw new InvalidOperationException(
-                            "Unsupported OSC argument type.")
-                    });
-                }
+                throw new ArgumentOutOfRangeException(
+                    nameof(argumentCount));
             }
 
-            WritePaddedString(stream, tags.ToString());
+            using var stream =
+                new MemoryStream(256);
+            WritePaddedString(
+                stream,
+                address);
+            WriteTypeTags(
+                stream,
+                arguments,
+                argumentCount);
 
-            if (arguments != null)
+            for (var i = 0;
+                 i < argumentCount;
+                 i++)
             {
-                foreach (var argument in arguments)
+                var argument =
+                    arguments[i];
+
+                switch (argument.Type)
                 {
-                    switch (argument.Type)
-                    {
-                        case OscArgumentType.Int32:
-                            WriteInt32(stream, argument.IntValue);
-                            break;
-                        case OscArgumentType.Float32:
-                            WriteFloat32(stream, argument.FloatValue);
-                            break;
-                        case OscArgumentType.String:
-                            WritePaddedString(
-                                stream,
-                                argument.StringValue ?? string.Empty);
-                            break;
-                    }
+                    case OscArgumentType.Int32:
+                        WriteInt32(
+                            stream,
+                            argument.IntValue);
+                        break;
+
+                    case OscArgumentType.Float32:
+                        WriteFloat32(
+                            stream,
+                            argument.FloatValue);
+                        break;
+
+                    case OscArgumentType.String:
+                        WritePaddedString(
+                            stream,
+                            argument.StringValue ??
+                            string.Empty);
+                        break;
+
+                    default:
+                        throw new InvalidOperationException(
+                            "Unsupported OSC argument type.");
                 }
             }
 
@@ -90,12 +112,80 @@ namespace VCR.Runtime.Protocols.Osc
             return stream.ToArray();
         }
 
+        private static void WriteTypeTags(
+            Stream stream,
+            OscArgument[] arguments,
+            int argumentCount)
+        {
+            stream.WriteByte(
+                (byte)',');
+
+            for (var i = 0;
+                 i < argumentCount;
+                 i++)
+            {
+                stream.WriteByte(
+                    arguments[i].Type switch
+                    {
+                        OscArgumentType.Int32 =>
+                            (byte)'i',
+                        OscArgumentType.Float32 =>
+                            (byte)'f',
+                        OscArgumentType.String =>
+                            (byte)'s',
+                        _ =>
+                            throw new InvalidOperationException(
+                                "Unsupported OSC argument type.")
+                    });
+            }
+
+            stream.WriteByte(0);
+
+            while ((stream.Position & 3) != 0)
+            {
+                stream.WriteByte(0);
+            }
+        }
+
         private static void WritePaddedString(
             Stream stream,
             string value)
         {
-            var bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
-            stream.Write(bytes, 0, bytes.Length);
+            value ??= string.Empty;
+
+            var byteCount =
+                Encoding.UTF8.GetByteCount(
+                    value);
+
+            if (byteCount > 0)
+            {
+                var buffer =
+                    ArrayPool<byte>
+                        .Shared
+                        .Rent(byteCount);
+
+                try
+                {
+                    var written =
+                        Encoding.UTF8.GetBytes(
+                            value,
+                            0,
+                            value.Length,
+                            buffer,
+                            0);
+                    stream.Write(
+                        buffer,
+                        0,
+                        written);
+                }
+                finally
+                {
+                    ArrayPool<byte>
+                        .Shared
+                        .Return(buffer);
+                }
+            }
+
             stream.WriteByte(0);
 
             while ((stream.Position & 3) != 0)
