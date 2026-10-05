@@ -16,6 +16,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
     public sealed class MediaPipeFaceSource : ITrackingSource
     {
         private readonly object _sync = new();
+        private readonly object _nativeCallSync = new();
         private readonly byte[] _modelBytes;
         private readonly MediaPipeFaceCallbackBridge _bridge;
         private readonly Dictionary<long, long> _submittedAtUs = new();
@@ -67,8 +68,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public void Start()
         {
-            lock (_sync)
+            lock (_nativeCallSync)
             {
+                lock (_sync)
+                {
                 ThrowIfDisposed();
 
                 if (_landmarker != null)
@@ -114,6 +117,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         exception.Message);
                     throw;
                 }
+                }
             }
         }
 
@@ -121,26 +125,36 @@ namespace VCR.Runtime.Tracking.MediaPipe
         {
             if (image == null)
             {
-                throw new ArgumentNullException(nameof(image));
+                throw new ArgumentNullException(
+                    nameof(image));
             }
 
-            FaceLandmarker landmarker;
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                ThrowIfDisposed();
-                landmarker = _landmarker ??
-                    throw new InvalidOperationException("Tracking source is not started.");
+                FaceLandmarker landmarker;
 
-                if (_submittedAtUs.Count > 64)
+                lock (_sync)
                 {
-                    _submittedAtUs.Clear();
+                    ThrowIfDisposed();
+                    landmarker =
+                        _landmarker ??
+                        throw new InvalidOperationException(
+                            "Tracking source is not started.");
+
+                    if (_submittedAtUs.Count > 64)
+                    {
+                        _submittedAtUs.Clear();
+                    }
+
+                    _submittedAtUs[timestampMillisec] =
+                        MonotonicClock
+                            .NowMicroseconds();
                 }
 
-                _submittedAtUs[timestampMillisec] =
-                    MonotonicClock.NowMicroseconds();
+                landmarker.DetectAsync(
+                    image,
+                    timestampMillisec);
             }
-
-            landmarker.DetectAsync(image, timestampMillisec);
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
@@ -150,62 +164,73 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         public void Stop()
         {
-            FaceLandmarker landmarker;
-
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                Volatile.Write(ref _acceptCallbacks, 0);
+                FaceLandmarker landmarker;
 
-                landmarker = _landmarker;
-                _landmarker = null;
-                _submittedAtUs.Clear();
+                lock (_sync)
+                {
+                    Volatile.Write(
+                        ref _acceptCallbacks,
+                        0);
 
-                _health = new TrackingSourceHealth(
-                    TrackingSourceHealthState.Stopped,
-                    _health.LastUpdateTimestampUs,
-                    _health.Confidence,
-                    null);
-            }
+                    landmarker =
+                        _landmarker;
+                    _landmarker = null;
+                    _submittedAtUs.Clear();
 
-            if (landmarker != null)
-            {
-                ((IDisposable)landmarker).Dispose();
+                    _health =
+                        new TrackingSourceHealth(
+                            TrackingSourceHealthState.Stopped,
+                            _health.LastUpdateTimestampUs,
+                            _health.Confidence,
+                            null);
+                }
+
+                if (landmarker != null)
+                {
+                    ((IDisposable)landmarker)
+                        .Dispose();
+                }
             }
         }
 
         public void Dispose()
         {
-            FaceLandmarker landmarker;
-
-            lock (_sync)
+            lock (_nativeCallSync)
             {
-                if (_disposed)
+                FaceLandmarker landmarker;
+
+                lock (_sync)
                 {
-                    return;
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    _disposed = true;
+                    Volatile.Write(
+                        ref _acceptCallbacks,
+                        0);
+
+                    landmarker =
+                        _landmarker;
+                    _landmarker = null;
+                    _submittedAtUs.Clear();
+
+                    _health =
+                        new TrackingSourceHealth(
+                            TrackingSourceHealthState.Stopped,
+                            _health.LastUpdateTimestampUs,
+                            _health.Confidence,
+                            null);
                 }
 
-                _disposed = true;
-                Volatile.Write(
-                    ref _acceptCallbacks,
-                    0);
-
-                landmarker =
-                    _landmarker;
-                _landmarker = null;
-                _submittedAtUs.Clear();
-
-                _health =
-                    new TrackingSourceHealth(
-                        TrackingSourceHealthState.Stopped,
-                        _health.LastUpdateTimestampUs,
-                        _health.Confidence,
-                        null);
-            }
-
-            if (landmarker != null)
-            {
-                ((IDisposable)landmarker)
-                    .Dispose();
+                if (landmarker != null)
+                {
+                    ((IDisposable)landmarker)
+                        .Dispose();
+                }
             }
         }
 
