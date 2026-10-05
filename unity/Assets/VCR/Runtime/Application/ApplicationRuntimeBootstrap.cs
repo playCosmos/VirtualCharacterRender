@@ -35,7 +35,9 @@ namespace VCR.Runtime.Application
         private bool _quitting;
 
         public SingleCharacterSceneRuntime SceneRuntime =>
-            sceneRuntime;
+            sceneRuntime != null
+                ? sceneRuntime
+                : null;
 
         public string ConfigurationPath =>
             _configurationStore?.Path;
@@ -181,7 +183,10 @@ namespace VCR.Runtime.Application
                 return;
             }
 
-            sceneRuntime?.Suspend();
+            if (sceneRuntime != null)
+            {
+                sceneRuntime.Suspend();
+            }
         }
 
         public void Resume()
@@ -192,7 +197,10 @@ namespace VCR.Runtime.Application
                 return;
             }
 
-            sceneRuntime?.Resume();
+            if (sceneRuntime != null)
+            {
+                sceneRuntime.Resume();
+            }
         }
 
         private string ResolveConfigurationPath(
@@ -266,7 +274,10 @@ namespace VCR.Runtime.Application
                 return false;
             }
 
-            sceneRuntime?.Shutdown();
+            if (sceneRuntime != null)
+            {
+                sceneRuntime.Shutdown();
+            }
             _started = false;
             return true;
         }
@@ -284,7 +295,10 @@ namespace VCR.Runtime.Application
                     error,
                     this);
 
-                sceneRuntime?.Shutdown();
+                if (sceneRuntime != null)
+            {
+                sceneRuntime.Shutdown();
+            }
                 _started = false;
                 _quitting = true;
             }
