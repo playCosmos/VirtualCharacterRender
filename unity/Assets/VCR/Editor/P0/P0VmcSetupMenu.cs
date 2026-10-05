@@ -345,6 +345,133 @@ namespace VCR.Editor.P0
                     excessiveArgumentPacket.Length,
                     excessiveArgumentDecoded);
 
+            var boundedAccumulator =
+                new VmcFrameAccumulator(
+                    "p0-vmc-custom-bounds");
+            var boundedMessages =
+                new List<OscMessage>(
+                    VmcFrameAccumulator
+                        .MaxCustomExpressions +
+                    2);
+
+            for (var i = 0;
+                 i <=
+                 VmcFrameAccumulator
+                     .MaxCustomExpressions;
+                 i++)
+            {
+                boundedMessages.Add(
+                    new OscMessage(
+                        "/VMC/Ext/Blend/Val",
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                "custom-" + i),
+                            OscArgument.FromFloat(
+                                i /
+                                (float)
+                                VmcFrameAccumulator
+                                    .MaxCustomExpressions)
+                        }));
+            }
+
+            boundedMessages.Add(
+                new OscMessage(
+                    "/VMC/Ext/Blend/Apply",
+                    Array.Empty<
+                        OscArgument>()));
+
+            var boundedProcessed =
+                boundedAccumulator.Process(
+                    boundedMessages,
+                    arrivalTimestampUs:
+                        2_500_000,
+                    out var boundedFrame);
+
+            var dropsAfterCapacity =
+                boundedAccumulator
+                    .DroppedCustomExpressionCount;
+
+            var boundedUpdateMessages =
+                new[]
+                {
+                    new OscMessage(
+                        "/VMC/Ext/Blend/Val",
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                "custom-0"),
+                            OscArgument.FromFloat(
+                                0.75f)
+                        }),
+                    new OscMessage(
+                        "/VMC/Ext/Blend/Apply",
+                        Array.Empty<
+                            OscArgument>())
+                };
+
+            var boundedUpdateProcessed =
+                boundedAccumulator.Process(
+                    boundedUpdateMessages,
+                    arrivalTimestampUs:
+                        2_600_000,
+                    out var boundedUpdateFrame);
+
+            var oversizedCustomName =
+                new string(
+                    'x',
+                    VmcFrameAccumulator
+                        .MaxCustomExpressionNameCharacters +
+                    1);
+
+            var oversizedNameProcessed =
+                boundedAccumulator.Process(
+                    new[]
+                    {
+                        new OscMessage(
+                            "/VMC/Ext/Blend/Val",
+                            new[]
+                            {
+                                OscArgument.FromString(
+                                    oversizedCustomName),
+                                OscArgument.FromFloat(
+                                    1f)
+                            }),
+                        new OscMessage(
+                            "/VMC/Ext/Blend/Apply",
+                            Array.Empty<
+                                OscArgument>())
+                    },
+                    arrivalTimestampUs:
+                        2_700_000,
+                    out _);
+
+            var customBoundsPass =
+                boundedProcessed &&
+                boundedFrame?.Expressions != null &&
+                boundedAccumulator
+                    .CustomExpressionCount ==
+                    VmcFrameAccumulator
+                        .MaxCustomExpressions &&
+                boundedFrame.Expressions
+                    .Custom.Length ==
+                    VmcFrameAccumulator
+                        .MaxCustomExpressions &&
+                dropsAfterCapacity == 1 &&
+                boundedUpdateProcessed &&
+                boundedUpdateFrame?
+                    .Expressions != null &&
+                Mathf.Approximately(
+                    GetCustomExpressionValue(
+                        boundedUpdateFrame
+                            .Expressions,
+                        "custom-0"),
+                    0.75f) &&
+                boundedAccumulator
+                    .DroppedCustomExpressionCount ==
+                    dropsAfterCapacity + 1 &&
+                oversizedNameProcessed;
+
             var sourceLifecyclePass =
                 false;
             var lifecycleSource =
@@ -361,6 +488,31 @@ namespace VCR.Editor.P0
                         arrivalTimestampUs:
                             3_000_000);
 
+                var lifecycleCustomAccepted =
+                    lifecycleSource.Process(
+                        new[]
+                        {
+                            new OscMessage(
+                                "/VMC/Ext/Blend/Val",
+                                new[]
+                                {
+                                    OscArgument.FromString(
+                                        "session-custom"),
+                                    OscArgument.FromFloat(
+                                        0.5f)
+                                }),
+                            new OscMessage(
+                                "/VMC/Ext/Blend/Apply",
+                                Array.Empty<
+                                    OscArgument>())
+                        },
+                        arrivalTimestampUs:
+                            3_050_000);
+
+                var customPresentBeforeStop =
+                    lifecycleSource
+                        .CustomExpressionCount == 1;
+
                 lifecycleSource.Stop();
 
                 var stoppedCleared =
@@ -369,7 +521,11 @@ namespace VCR.Editor.P0
                     !lifecycleSource.TryTakeLatestPose(
                         out _) &&
                     !lifecycleSource.TryTakeLatestExpressions(
-                        out _);
+                        out _) &&
+                    lifecycleSource
+                        .CustomExpressionCount == 0 &&
+                    !lifecycleSource
+                        .LastSubjectDetected;
 
                 var stoppedRejected =
                     !lifecycleSource.Process(
@@ -377,6 +533,62 @@ namespace VCR.Editor.P0
                         arrivalTimestampUs:
                             3_100_000);
 
+                lifecycleSource.Start();
+
+                var rightUpperArmName =
+                    HumanoidBoneNames
+                        .GetCanonical(
+                            HumanoidBoneId
+                                .RightUpperArm);
+
+                var restartAccepted =
+                    lifecycleSource.Process(
+                        new[]
+                        {
+                            new OscMessage(
+                                "/VMC/Ext/Bone/Pos",
+                                new[]
+                                {
+                                    OscArgument.FromString(
+                                        rightUpperArmName),
+                                    OscArgument.FromFloat(
+                                        0.25f),
+                                    OscArgument.FromFloat(
+                                        0f),
+                                    OscArgument.FromFloat(
+                                        0f),
+                                    OscArgument.FromFloat(
+                                        0f),
+                                    OscArgument.FromFloat(
+                                        0f),
+                                    OscArgument.FromFloat(
+                                        0f),
+                                    OscArgument.FromFloat(
+                                        1f)
+                                })
+                        },
+                        arrivalTimestampUs:
+                            3_200_000);
+
+                var restartPoseIsolated =
+                    lifecycleSource
+                        .TryTakeLatestPose(
+                            out var restartPoseFrame) &&
+                    restartPoseFrame?
+                        .HumanoidPose != null &&
+                    restartPoseFrame
+                        .HumanoidPose
+                        .TryGet(
+                            HumanoidBoneId
+                                .RightUpperArm,
+                            out _) &&
+                    !restartPoseFrame
+                        .HumanoidPose
+                        .TryGet(
+                            HumanoidBoneId.Hips,
+                            out _);
+
+                lifecycleSource.Stop();
                 lifecycleSource.Dispose();
 
                 var disposedRejected =
@@ -393,8 +605,12 @@ namespace VCR.Editor.P0
 
                 sourceLifecyclePass =
                     activeAccepted &&
+                    lifecycleCustomAccepted &&
+                    customPresentBeforeStop &&
                     stoppedCleared &&
                     stoppedRejected &&
+                    restartAccepted &&
+                    restartPoseIsolated &&
                     disposedRejected;
             }
             finally
@@ -405,6 +621,7 @@ namespace VCR.Editor.P0
             var pass =
                 goldenWriterPass &&
                 reusableWriterPass &&
+                customBoundsPass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -442,12 +659,12 @@ namespace VCR.Editor.P0
             if (pass)
             {
                 Debug.Log(
-                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; stale-pose/bounds checks passed)");
+                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; stale-pose/custom-expression/bounds checks passed)");
             }
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, codec, pose-space, values, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -543,6 +760,32 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: VMC sender attached. " +
                 "Default destination is 127.0.0.1:39539 at 60 Hz with VRM0 expression names.");
+        }
+
+        private static float GetCustomExpressionValue(
+            NormalizedExpressionState state,
+            string name)
+        {
+            if (state == null ||
+                string.IsNullOrEmpty(
+                    name))
+            {
+                return 0f;
+            }
+
+            foreach (var item in
+                     state.Custom)
+            {
+                if (string.Equals(
+                        item.Name,
+                        name,
+                        StringComparison.Ordinal))
+                {
+                    return item.Value;
+                }
+            }
+
+            return 0f;
         }
 
         private static bool BytesEqualPrefix(
