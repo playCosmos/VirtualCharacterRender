@@ -42,10 +42,36 @@ namespace VCR.Runtime.EventRuntime
 
         public void SetRules(params EventRuntimeRule[] rules)
         {
-            _rules =
+            if (!TrySetRules(
+                    rules,
+                    out var error))
+            {
+                throw new ArgumentException(
+                    error,
+                    nameof(rules));
+            }
+        }
+
+        public bool TrySetRules(
+            EventRuntimeRule[] rules,
+            out string error)
+        {
+            var next =
                 rules == null
                     ? Array.Empty<EventRuntimeRule>()
-                    : (EventRuntimeRule[])rules.Clone();
+                    : (EventRuntimeRule[])
+                        rules.Clone();
+
+            if (!EventRuntimeRuleSetBounds
+                .TryValidate(
+                    next,
+                    out error))
+            {
+                return false;
+            }
+
+            _rules =
+                next;
 
             _lastRuleExecutionUs.Clear();
             _rateWindows.Clear();
@@ -59,6 +85,9 @@ namespace VCR.Runtime.EventRuntime
                         new RuleDiagnosticsCounter();
                 }
             }
+
+            error = null;
+            return true;
         }
 
         public int Process(
