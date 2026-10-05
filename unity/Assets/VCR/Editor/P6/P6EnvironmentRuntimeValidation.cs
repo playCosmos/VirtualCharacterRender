@@ -23,6 +23,7 @@ namespace VCR.Editor.P6
 
             ValidateScheduler(failures);
             ValidateRuntime(failures);
+            ValidateDestroyedTargetLifetime(failures);
 
             if (failures.Count == 0)
             {
@@ -1190,6 +1191,162 @@ namespace VCR.Editor.P6
             }
         }
 
+        private static void ValidateDestroyedTargetLifetime(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P6 Destroyed Target Lifetime");
+
+                var day =
+                    new GameObject(
+                        "Day");
+                var night =
+                    new GameObject(
+                        "Night");
+                day.transform.SetParent(
+                    root.transform,
+                    false);
+                night.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var runtime =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                runtime.Configure(
+                    "environment.p6.lifetime",
+                    "day",
+                    EnvironmentUpdatePolicy.EventDriven,
+                    EnvironmentSpaceMode.World);
+
+                var dayBinding =
+                    new EnvironmentStateBinding();
+                dayBinding.Configure(
+                    "day",
+                    day);
+                var nightBinding =
+                    new EnvironmentStateBinding();
+                nightBinding.Configure(
+                    "night",
+                    night);
+
+                Expect(
+                    runtime.ConfigureStateBindings(
+                        new[]
+                        {
+                            dayBinding,
+                            nightBinding
+                        },
+                        out var bindingError),
+                    "destroyed target lifetime validation must configure state roots: " +
+                    bindingError,
+                    failures);
+
+                var target =
+                    root.AddComponent<
+                        P6LifetimeEnvironmentTarget>();
+
+                runtime.SetUpdateTargets(
+                    target);
+                runtime.SetSpaceTargets(
+                    target);
+                runtime.SetTransitionTargets(
+                    target);
+                runtime.SetLightingTargets(
+                    target);
+
+                var updateFailuresBefore =
+                    runtime.UpdateFailureCount;
+
+                UnityEngine.Object.DestroyImmediate(
+                    target);
+
+                Expect(
+                    runtime.RequestManualUpdate() &&
+                    runtime.UpdateFailureCount ==
+                        updateFailuresBefore,
+                    "destroyed cached environment update targets must be skipped without recurring failure accounting",
+                    failures);
+
+                Expect(
+                    runtime.SetSpaceMode(
+                        EnvironmentSpaceMode.Camera,
+                        out var spaceError) &&
+                    string.IsNullOrEmpty(
+                        spaceError) &&
+                    runtime.SpaceMode ==
+                        EnvironmentSpaceMode.Camera,
+                    "destroyed cached environment space targets must be skipped instead of invoking stale Unity interfaces: " +
+                    spaceError,
+                    failures);
+
+                Expect(
+                    runtime.SetLightingProfile(
+                        new EnvironmentLightingProfile(
+                            0.5f,
+                            0.5f,
+                            0.5f,
+                            1f,
+                            1f),
+                        out var lightingError) &&
+                    string.IsNullOrEmpty(
+                        lightingError),
+                    "destroyed cached environment lighting targets must be skipped instead of invoking stale Unity interfaces: " +
+                    lightingError,
+                    failures);
+
+                var metrics =
+                    new List<RuntimeMetric>();
+                runtime.CollectMetrics(
+                    metrics);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "environment.lighting_failures",
+                        out var lightingFailures) &&
+                    lightingFailures < 0.5,
+                    "destroyed environment lighting targets must not be counted as target execution failures",
+                    failures);
+
+                Expect(
+                    !runtime.SetState(
+                        "night",
+                        new EnvironmentTransitionSpec(
+                            EnvironmentTransitionMode.Crossfade,
+                            0.5f),
+                        out var transitionError) &&
+                    !string.IsNullOrEmpty(
+                        transitionError) &&
+                    transitionError.Contains(
+                        "live transition target",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    day.activeSelf &&
+                    !night.activeSelf,
+                    "non-Cut transitions must fail closed when every cached transition target has been destroyed",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "destroyed environment target lifetime validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static bool TryGetMetric(
             List<RuntimeMetric> metrics,
             string name,
@@ -1220,6 +1377,60 @@ namespace VCR.Editor.P6
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P6LifetimeEnvironmentTarget :
+        MonoBehaviour,
+        IEnvironmentUpdateTarget,
+        IEnvironmentSpaceTarget,
+        IEnvironmentTransitionTarget,
+        IEnvironmentLightingTarget
+    {
+        public void UpdateEnvironment(
+            EnvironmentUpdateContext context)
+        {
+        }
+
+        public bool ValidateEnvironmentSpace(
+            EnvironmentSpaceMode mode,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public void ApplyEnvironmentSpace(
+            EnvironmentSpaceMode mode)
+        {
+        }
+
+        public bool ValidateEnvironmentTransition(
+            EnvironmentTransitionSpec transition,
+            string previousStateId,
+            string nextStateId,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public void ApplyEnvironmentTransition(
+            EnvironmentTransitionContext context)
+        {
+        }
+
+        public bool ValidateEnvironmentLighting(
+            EnvironmentLightingProfile profile,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public void ApplyEnvironmentLighting(
+            EnvironmentLightingProfile profile)
+        {
         }
     }
 
