@@ -50,11 +50,14 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
         private long _packetCount;
         private long _errorCount;
+        private long _borrowedMotionPacketCount;
         private long _borrowedPosePacketCount;
         private long _snapshotPosePacketCount;
 
         public long PacketCount => _packetCount;
         public long ErrorCount => _errorCount;
+        public long BorrowedMotionPacketCount =>
+            _borrowedMotionPacketCount;
         public long BorrowedPosePacketCount =>
             _borrowedPosePacketCount;
         public long SnapshotPosePacketCount =>
@@ -132,94 +135,121 @@ namespace VCR.Runtime.Protocols.VmcUnity
             {
                 int packetLength;
 
-                var selective =
-                    _snapshotProvider as
-                        ISelectiveNormalizedMotionSnapshotProvider;
-                var borrowedProvider =
-                    _snapshotProvider as
-                        IBorrowedHumanoidPoseProvider;
-                var canUseBorrowedPose =
-                    borrowedProvider != null &&
-                    (!sendExpressions ||
-                     selective != null);
-
-                if (canUseBorrowedPose)
+                if (_snapshotProvider is
+                    IBorrowedNormalizedMotionProvider borrowedMotionProvider)
                 {
-                    NormalizedExpressionState expressions =
-                        null;
+                    var request =
+                        new NormalizedMotionSnapshotRequest(
+                            includeHumanoidPose: true,
+                            includeExpressions:
+                                sendExpressions);
 
-                    if (sendExpressions)
+                    if (!borrowedMotionProvider.TryBorrowMotion(
+                            in request,
+                            out var borrowedMotion) ||
+                        !borrowedMotion.HasHumanoidPose ||
+                        (sendExpressions &&
+                         !borrowedMotion.HasExpressions))
                     {
-                        var expressionRequest =
-                            new NormalizedMotionSnapshotRequest(
-                                includeHumanoidPose: false,
-                                includeExpressions: true);
+                        return;
+                    }
 
-                        if (!selective.TryCaptureMotion(
-                                in expressionRequest,
-                                out var expressionFrame))
+                    packetLength =
+                        BuildBundle(
+                            in borrowedMotion,
+                            (float)now);
+                    _borrowedMotionPacketCount++;
+                }
+                else
+                {
+                    var selective =
+                        _snapshotProvider as
+                            ISelectiveNormalizedMotionSnapshotProvider;
+                    var borrowedProvider =
+                        _snapshotProvider as
+                            IBorrowedHumanoidPoseProvider;
+                    var canUseBorrowedPose =
+                        borrowedProvider != null &&
+                        (!sendExpressions ||
+                         selective != null);
+
+                    if (canUseBorrowedPose)
+                    {
+                        NormalizedExpressionState expressions =
+                            null;
+
+                        if (sendExpressions)
+                        {
+                            var expressionRequest =
+                                new NormalizedMotionSnapshotRequest(
+                                    includeHumanoidPose: false,
+                                    includeExpressions: true);
+
+                            if (!selective.TryCaptureMotion(
+                                    in expressionRequest,
+                                    out var expressionFrame))
+                            {
+                                return;
+                            }
+
+                            expressions =
+                                expressionFrame?
+                                    .Expressions;
+                        }
+
+                        // Borrow last. The provider may invalidate a borrowed
+                        // pose on any subsequent borrow/capture call.
+                        if (!borrowedProvider.TryBorrowHumanoidPose(
+                                out var borrowedPose))
                         {
                             return;
                         }
 
-                        expressions =
-                            expressionFrame?
-                                .Expressions;
-                    }
-
-                    // Borrow last. The provider may invalidate a borrowed pose
-                    // on any subsequent borrow/capture call.
-                    if (!borrowedProvider.TryBorrowHumanoidPose(
-                            out var borrowedPose))
-                    {
-                        return;
-                    }
-
-                    packetLength =
-                        BuildBundle(
-                            in borrowedPose,
-                            expressions,
-                            (float)now);
-                    _borrowedPosePacketCount++;
-                }
-                else
-                {
-                    TrackingFrame frame;
-                    bool captured;
-
-                    if (_snapshotProvider is
-                        ISelectiveNormalizedMotionSnapshotProvider selective)
-                    {
-                        var request =
-                            new NormalizedMotionSnapshotRequest(
-                                includeHumanoidPose: true,
-                                includeExpressions:
-                                    sendExpressions);
-
-                        captured =
-                            selective.TryCaptureMotion(
-                                in request,
-                                out frame);
+                        packetLength =
+                            BuildBundle(
+                                in borrowedPose,
+                                expressions,
+                                (float)now);
+                        _borrowedPosePacketCount++;
                     }
                     else
                     {
-                        captured =
-                            _snapshotProvider
-                                .TryCaptureMotion(
+                        TrackingFrame frame;
+                        bool captured;
+
+                        if (selective != null)
+                        {
+                            var request =
+                                new NormalizedMotionSnapshotRequest(
+                                    includeHumanoidPose: true,
+                                    includeExpressions:
+                                        sendExpressions);
+
+                            captured =
+                                selective.TryCaptureMotion(
+                                    in request,
                                     out frame);
-                    }
+                        }
+                        else
+                        {
+                            captured =
+                                _snapshotProvider
+                                    .TryCaptureMotion(
+                                        out frame);
+                        }
 
-                    if (!captured ||
-                        frame?.HumanoidPose == null)
-                    {
-                        return;
-                    }
+                        if (!captured ||
+                            frame?.HumanoidPose == null)
+                        {
+                            return;
+                        }
 
-                    packetLength =
-                        BuildBundle(
-                            frame,
-                            (float)now);
-                    _snapshotPosePacketCount++;
+                        packetLength =
+                            BuildBundle(
+                                frame,
+                                (float)now);
+                        _snapshotPosePacketCount++;
+                    }
                 }
 
                 _client.Send(
@@ -260,6 +290,45 @@ namespace VCR.Runtime.Protocols.VmcUnity
             AppendOptionalExpressions(
                 frame.Expressions,
                 ref packetLength);
+
+            return packetLength;
+        }
+
+        private int BuildBundle(
+            in BorrowedMotionSample sample,
+            float relativeTime)
+        {
+            if (!sample.HasHumanoidPose)
+            {
+                throw new InvalidOperationException(
+                    "VMC sender requires a borrowed humanoid pose.");
+            }
+
+            var packetLength =
+                BeginBundle(
+                    relativeTime);
+
+            var pose =
+                sample.HumanoidPose;
+
+            AppendPose(
+                in pose,
+                ref packetLength);
+
+            if (sendExpressions &&
+                sample.HasExpressions)
+            {
+                var expressions =
+                    sample.Expressions;
+
+                AppendExpressions(
+                    in expressions,
+                    ref packetLength);
+
+                AppendNoArgumentMessage(
+                    "/VMC/Ext/Blend/Apply",
+                    ref packetLength);
+            }
 
             return packetLength;
         }
@@ -496,6 +565,58 @@ namespace VCR.Runtime.Protocols.VmcUnity
             }
         }
 
+        private void AppendExpressions(
+            in BorrowedExpressionState state,
+            ref int packetLength)
+        {
+            for (var i = 0;
+                 i <
+                 (int)StandardExpression.Count;
+                 i++)
+            {
+                var expression =
+                    (StandardExpression)i;
+
+                var name =
+                    sendVrm1ExpressionNames
+                        ? StandardExpressionNames
+                            .GetVrm1Name(
+                                expression)
+                        : StandardExpressionNames
+                            .GetVmcVrm0Name(
+                                expression);
+
+                if (string.IsNullOrEmpty(
+                        name))
+                {
+                    continue;
+                }
+
+                AppendBlendValueMessage(
+                    name,
+                    Mathf.Clamp01(
+                        state.Get(
+                            expression)),
+                    ref packetLength);
+            }
+
+            foreach (var custom in
+                     state.Custom)
+            {
+                if (string.IsNullOrEmpty(
+                        custom.Name))
+                {
+                    continue;
+                }
+
+                AppendBlendValueMessage(
+                    custom.Name,
+                    Mathf.Clamp01(
+                        custom.Value),
+                    ref packetLength);
+            }
+        }
+
         private void AppendStatusMessage(
             ref int packetLength)
         {
@@ -627,6 +748,11 @@ namespace VCR.Runtime.Protocols.VmcUnity
             output.Add(new RuntimeMetric(
                 "protocol.vmc.send.errors",
                 ErrorCount,
+                "count"));
+
+            output.Add(new RuntimeMetric(
+                "protocol.vmc.send.borrowed_motion_packets",
+                BorrowedMotionPacketCount,
                 "count"));
 
             output.Add(new RuntimeMetric(
