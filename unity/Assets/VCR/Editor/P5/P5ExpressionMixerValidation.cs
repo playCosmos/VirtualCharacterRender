@@ -26,12 +26,13 @@ namespace VCR.Editor.P5
             ValidatePoseMath(failures);
             ValidateAvailability(failures);
             ValidateComponent(failures);
+            ValidateIdleSmoothing(failures);
 
             if (failures.Count == 0)
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression convergence/blend modes, weighted ordered pose layers/masks, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, zero-contribution pose fast-path, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -443,6 +444,41 @@ namespace VCR.Editor.P5
                     preserved,
                     basePose),
                 "pose-space mismatch must preserve the base pose instead of mixing incompatible transforms",
+                failures);
+
+            var zeroMask =
+                new HumanoidPoseLayerMask();
+            zeroMask.SetDefaultBoneWeight(
+                0f);
+            zeroMask.SetRootWeights(
+                positionWeight: 0f,
+                rotationWeight: 0f);
+
+            var zeroSettings =
+                new HumanoidPoseLayerSettings();
+            zeroSettings.Configure(
+                layerEnabled: true,
+                layerRole:
+                    MotionLayerRole.Tracking,
+                mode:
+                    HumanoidPoseBlendMode.Override,
+                layerWeight: 1f,
+                layerMask: zeroMask);
+
+            var zeroContribution =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    layerPose,
+                    zeroSettings,
+                    out mismatch);
+
+            Expect(
+                !mismatch &&
+                !zeroMask.HasAnyWeight &&
+                ReferenceEquals(
+                    zeroContribution,
+                    basePose),
+                "fully zero pose masks must preserve the immutable base-pose reference without allocating replacement arrays",
                 failures);
         }
 
@@ -991,6 +1027,88 @@ namespace VCR.Editor.P5
                 failures);
         }
 
+        private static void ValidateIdleSmoothing(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P5 Idle Smoothing Validation");
+
+                var mixer =
+                    root.AddComponent<
+                        MotionExpressionMixer>();
+
+                mixer.ConfigureExpressionLayer(
+                    ExpressionBlendMode.Override,
+                    weight: 1f,
+                    deadzone: 0f,
+                    smoothing: 8f);
+
+                SetPrivateField(
+                    mixer,
+                    "_targetExpressions",
+                    CreateExpressionState(
+                        aa: 1f));
+                SetPrivateField(
+                    mixer,
+                    "_outputDirty",
+                    true);
+
+                InvokeExpressionOutput(
+                    mixer,
+                    deltaSeconds: 0f);
+
+                Expect(
+                    !mixer.TryGetLatestExpressions(
+                        out _),
+                    "zero-delta smoothing must not publish an unchanged placeholder frame before time advances",
+                    failures);
+
+                InvokeExpressionOutput(
+                    mixer,
+                    deltaSeconds: 0.1f);
+
+                Expect(
+                    mixer.TryGetLatestExpressions(
+                        out var progressed) &&
+                    progressed?.Expressions != null,
+                    "positive-delta smoothing must publish a progressed expression frame",
+                    failures);
+
+                InvokeExpressionOutput(
+                    mixer,
+                    deltaSeconds: 0f);
+
+                Expect(
+                    mixer.TryGetLatestExpressions(
+                        out var paused) &&
+                    ReferenceEquals(
+                        progressed,
+                        paused),
+                    "zero-delta smoothing must retain the last published frame instead of allocating an identical replacement frame",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "idle expression smoothing validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
+        }
+
         private static void ValidateDestroyedProviderRecovery(
             List<string> failures)
         {
@@ -1269,6 +1387,57 @@ namespace VCR.Editor.P5
             method.Invoke(
                 mixer,
                 null);
+        }
+
+        private static void InvokeExpressionOutput(
+            MotionExpressionMixer mixer,
+            float deltaSeconds)
+        {
+            var method =
+                typeof(MotionExpressionMixer)
+                    .GetMethod(
+                        "UpdateExpressionOutput",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(MotionExpressionMixer)
+                        .FullName,
+                    "UpdateExpressionOutput");
+            }
+
+            method.Invoke(
+                mixer,
+                new object[]
+                {
+                    deltaSeconds
+                });
+        }
+
+        private static void SetPrivateField<T>(
+            object target,
+            string fieldName,
+            T value)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            field.SetValue(
+                target,
+                value);
         }
 
         private static float GetCustom(
