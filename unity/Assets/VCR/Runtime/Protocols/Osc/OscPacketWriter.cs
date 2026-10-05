@@ -38,54 +38,104 @@ namespace VCR.Runtime.Protocols.Osc
                 new byte[size];
             var cursor = 0;
 
-            WritePaddedString(
+            WriteMessageContent(
                 packet,
                 ref cursor,
-                address);
-            WriteTypeTags(
-                packet,
-                ref cursor,
+                address,
                 arguments,
                 argumentCount);
 
-            for (var i = 0;
-                 i < argumentCount;
-                 i++)
+            return packet;
+        }
+
+        public static bool TryBeginBundle(
+            byte[] destination,
+            out int length)
+        {
+            length = 0;
+
+            if (destination == null ||
+                destination.Length < 16)
             {
-                var argument =
-                    arguments[i];
-
-                switch (argument.Type)
-                {
-                    case OscArgumentType.Int32:
-                        WriteInt32(
-                            packet,
-                            ref cursor,
-                            argument.IntValue);
-                        break;
-
-                    case OscArgumentType.Float32:
-                        WriteFloat32(
-                            packet,
-                            ref cursor,
-                            argument.FloatValue);
-                        break;
-
-                    case OscArgumentType.String:
-                        WritePaddedString(
-                            packet,
-                            ref cursor,
-                            argument.StringValue ??
-                            string.Empty);
-                        break;
-
-                    default:
-                        throw new InvalidOperationException(
-                            "Unsupported OSC argument type.");
-                }
+                return false;
             }
 
-            return packet;
+            var cursor = 0;
+
+            WritePaddedString(
+                destination,
+                ref cursor,
+                "#bundle");
+            WriteUInt64(
+                destination,
+                ref cursor,
+                1UL);
+
+            length = cursor;
+            return true;
+        }
+
+        public static bool TryAppendBundleMessage(
+            byte[] destination,
+            ref int bundleLength,
+            string address,
+            OscArgument[] arguments,
+            int argumentCount)
+        {
+            if (argumentCount < 0 ||
+                argumentCount >
+                    (arguments?.Length ?? 0))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(argumentCount));
+            }
+
+            if (destination == null ||
+                bundleLength < 16 ||
+                bundleLength >
+                    destination.Length ||
+                (bundleLength & 3) != 0)
+            {
+                return false;
+            }
+
+            var messageSize =
+                GetMessageSize(
+                    address,
+                    arguments,
+                    argumentCount);
+            var required =
+                checked(
+                    bundleLength +
+                    4 +
+                    messageSize);
+
+            if (required >
+                    destination.Length ||
+                required >
+                    OscPacketReader
+                        .MaxPacketBytes)
+            {
+                return false;
+            }
+
+            var cursor =
+                bundleLength;
+
+            WriteInt32(
+                destination,
+                ref cursor,
+                messageSize);
+            WriteMessageContent(
+                destination,
+                ref cursor,
+                address,
+                arguments,
+                argumentCount);
+
+            bundleLength =
+                cursor;
+            return true;
         }
 
         public static byte[] WriteBundle(
@@ -168,6 +218,61 @@ namespace VCR.Runtime.Protocols.Osc
             }
 
             return packet;
+        }
+
+        private static void WriteMessageContent(
+            byte[] packet,
+            ref int cursor,
+            string address,
+            OscArgument[] arguments,
+            int argumentCount)
+        {
+            WritePaddedString(
+                packet,
+                ref cursor,
+                address);
+            WriteTypeTags(
+                packet,
+                ref cursor,
+                arguments,
+                argumentCount);
+
+            for (var i = 0;
+                 i < argumentCount;
+                 i++)
+            {
+                var argument =
+                    arguments[i];
+
+                switch (argument.Type)
+                {
+                    case OscArgumentType.Int32:
+                        WriteInt32(
+                            packet,
+                            ref cursor,
+                            argument.IntValue);
+                        break;
+
+                    case OscArgumentType.Float32:
+                        WriteFloat32(
+                            packet,
+                            ref cursor,
+                            argument.FloatValue);
+                        break;
+
+                    case OscArgumentType.String:
+                        WritePaddedString(
+                            packet,
+                            ref cursor,
+                            argument.StringValue ??
+                            string.Empty);
+                        break;
+
+                    default:
+                        throw new InvalidOperationException(
+                            "Unsupported OSC argument type.");
+                }
+            }
         }
 
         private static int GetMessageSize(
@@ -257,12 +362,12 @@ namespace VCR.Runtime.Protocols.Osc
                     };
             }
 
-            // The packet was zero-initialized, so the NUL terminator and
-            // alignment padding only require advancing the cursor.
-            cursor++;
-            cursor =
-                Align4(
-                    cursor);
+            packet[cursor++] = 0;
+
+            while ((cursor & 3) != 0)
+            {
+                packet[cursor++] = 0;
+            }
         }
 
         private static void WritePaddedString(
@@ -284,12 +389,12 @@ namespace VCR.Runtime.Protocols.Osc
                         cursor);
             }
 
-            // The packet was zero-initialized, so the NUL terminator and
-            // alignment padding only require advancing the cursor.
-            cursor++;
-            cursor =
-                Align4(
-                    cursor);
+            packet[cursor++] = 0;
+
+            while ((cursor & 3) != 0)
+            {
+                packet[cursor++] = 0;
+            }
         }
 
         private static void WriteInt32(
