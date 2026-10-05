@@ -78,6 +78,11 @@ namespace VCR.Editor.P0
                     ref currentCheck);
 
                 Run(
+                    "Configuration persistence",
+                    P0ConfigurationPersistenceValidation.Validate,
+                    ref currentCheck);
+
+                Run(
                     "Material override",
                     P0MaterialOverrideMenu.Validate,
                     ref currentCheck);
@@ -112,7 +117,7 @@ namespace VCR.Editor.P0
             {
                 Debug.Log(
                     "VCR P0 source-free validation suite: PASS " +
-                    "(package baseline, presence, ARKit parser, OSC/VMC codec, diagnostics math, material override, normalized events, environment, lazy capabilities)");
+                    "(package baseline, presence, ARKit parser, OSC/VMC codec, diagnostics math, configuration persistence, material override, normalized events, environment, lazy capabilities)");
                 return true;
             }
 
