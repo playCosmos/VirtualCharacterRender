@@ -16,7 +16,8 @@ namespace VCR.Runtime.Character
     [DefaultExecutionOrder(19000)]
     public sealed class Vrm10MotionSnapshotProvider :
         MonoBehaviour,
-        ISelectiveNormalizedMotionSnapshotProvider
+        ISelectiveNormalizedMotionSnapshotProvider,
+        IBorrowedHumanoidPoseProvider
     {
         [SerializeField] private Vrm10Instance target;
 
@@ -26,6 +27,8 @@ namespace VCR.Runtime.Character
 
         private Vrm10Instance _cachedBoneTarget;
         private Transform[] _boneTransforms;
+        private NormalizedBonePose[] _borrowedBones;
+        private bool[] _borrowedHasBone;
         private long _sequence;
 
         private void Awake()
@@ -102,16 +105,25 @@ namespace VCR.Runtime.Character
             return true;
         }
 
-        private HumanoidPoseState CapturePose()
+        public bool TryBorrowHumanoidPose(
+            out BorrowedHumanoidPose pose)
         {
-            EnsureBoneCache();
+            pose = default;
 
-            var bones =
-                new NormalizedBonePose[
-                    (int)HumanoidBoneId.Count];
-            var hasBone =
-                new bool[
-                    (int)HumanoidBoneId.Count];
+            if (target == null ||
+                target.Runtime == null ||
+                target.Humanoid == null)
+            {
+                return false;
+            }
+
+            EnsureBoneCache();
+            EnsureBorrowedPoseBuffers();
+
+            Array.Clear(
+                _borrowedHasBone,
+                0,
+                _borrowedHasBone.Length);
 
             for (var i = 0;
                  i < _boneTransforms.Length;
@@ -130,7 +142,7 @@ namespace VCR.Runtime.Character
                 var q =
                     bone.localRotation;
 
-                bones[i] =
+                _borrowedBones[i] =
                     new NormalizedBonePose(
                         new TrackingVector3(
                             p.x,
@@ -142,7 +154,7 @@ namespace VCR.Runtime.Character
                             q.z,
                             q.w));
 
-                hasBone[i] = true;
+                _borrowedHasBone[i] = true;
             }
 
             var rootPosition =
@@ -150,20 +162,86 @@ namespace VCR.Runtime.Character
             var rootRotation =
                 target.transform.localRotation;
 
+            pose =
+                new BorrowedHumanoidPose(
+                    HumanoidPoseSpace.OriginalLocal,
+                    new TrackingVector3(
+                        rootPosition.x,
+                        rootPosition.y,
+                        rootPosition.z),
+                    new TrackingQuaternion(
+                        rootRotation.x,
+                        rootRotation.y,
+                        rootRotation.z,
+                        rootRotation.w),
+                    _borrowedBones,
+                    _borrowedHasBone);
+
+            return true;
+        }
+
+        private HumanoidPoseState CapturePose()
+        {
+            if (!TryBorrowHumanoidPose(
+                    out var borrowed))
+            {
+                return null;
+            }
+
+            var bones =
+                new NormalizedBonePose[
+                    (int)HumanoidBoneId.Count];
+            var hasBone =
+                new bool[
+                    (int)HumanoidBoneId.Count];
+
+            for (var i = 0;
+                 i < bones.Length;
+                 i++)
+            {
+                var bone =
+                    (HumanoidBoneId)i;
+
+                if (!borrowed.TryGet(
+                        bone,
+                        out var value))
+                {
+                    continue;
+                }
+
+                bones[i] =
+                    value;
+                hasBone[i] =
+                    true;
+            }
+
             return new HumanoidPoseState(
-                HumanoidPoseSpace.OriginalLocal,
-                new TrackingVector3(
-                    rootPosition.x,
-                    rootPosition.y,
-                    rootPosition.z),
-                new TrackingQuaternion(
-                    rootRotation.x,
-                    rootRotation.y,
-                    rootRotation.z,
-                    rootRotation.w),
+                borrowed.PoseSpace,
+                borrowed.RootPosition,
+                borrowed.RootRotation,
                 bones,
                 hasBone,
                 SnapshotArrayOwnership.Transfer);
+        }
+
+        private void EnsureBorrowedPoseBuffers()
+        {
+            var count =
+                (int)HumanoidBoneId.Count;
+
+            if (_borrowedBones == null ||
+                _borrowedBones.Length != count)
+            {
+                _borrowedBones =
+                    new NormalizedBonePose[count];
+            }
+
+            if (_borrowedHasBone == null ||
+                _borrowedHasBone.Length != count)
+            {
+                _borrowedHasBone =
+                    new bool[count];
+            }
         }
 
         private NormalizedExpressionState CaptureExpressions()
