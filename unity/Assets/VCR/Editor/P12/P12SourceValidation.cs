@@ -3818,8 +3818,10 @@ namespace VCR.Editor.P12
                     duplicateError.IndexOf(
                         "duplicate",
                         StringComparison.OrdinalIgnoreCase) >=
-                        0,
-                    "P12 timed scene sequence must reject duplicate sequence ids",
+                        0 &&
+                    handler.CanTrackCompletion(
+                        playCommand),
+                    "P12 timed scene sequence must reject duplicate sequence ids without discarding the previously valid runtime registry",
                     failures);
 
                 handler.ConfigureSequences(
