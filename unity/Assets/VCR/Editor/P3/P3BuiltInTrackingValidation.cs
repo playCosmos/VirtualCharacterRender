@@ -115,7 +115,15 @@ namespace VCR.Editor.P3
                     new LatestValueBuffer<
                         IFacialMocapFrame>();
                 latestBuffer.Publish(
-                    new IFacialMocapFrame());
+                    new IFacialMocapFrame(
+                        coefficients,
+                        hasHead: false,
+                        headEulerXDegrees: 0f,
+                        headEulerYDegrees: 0f,
+                        headEulerZDegrees: 0f,
+                        headPositionX: 0f,
+                        headPositionY: 0f,
+                        headPositionZ: 0f));
                 latestBuffer.Clear();
 
                 Expect(
