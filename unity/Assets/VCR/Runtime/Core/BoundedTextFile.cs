@@ -160,5 +160,112 @@ namespace VCR.Runtime.Core
                 return false;
             }
         }
+        public static bool TryWriteUtf8Atomic(
+            string path,
+            string text,
+            long maxBytes,
+            out string error)
+        {
+            error = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    path))
+            {
+                error =
+                    "Text file path is required.";
+                return false;
+            }
+
+            if (!TryValidateUtf8Size(
+                    text,
+                    maxBytes,
+                    out error))
+            {
+                return false;
+            }
+
+            var fullPath =
+                Path.GetFullPath(
+                    path);
+            var temporaryPath =
+                fullPath + ".tmp";
+            var backupPath =
+                fullPath + ".bak";
+
+            try
+            {
+                var directory =
+                    Path.GetDirectoryName(
+                        fullPath);
+
+                if (!string.IsNullOrWhiteSpace(
+                        directory))
+                {
+                    Directory.CreateDirectory(
+                        directory);
+                }
+
+                File.WriteAllText(
+                    temporaryPath,
+                    text,
+                    Utf8);
+
+                if (File.Exists(
+                        fullPath))
+                {
+                    if (File.Exists(
+                            backupPath))
+                    {
+                        File.Delete(
+                            backupPath);
+                    }
+
+                    File.Replace(
+                        temporaryPath,
+                        fullPath,
+                        backupPath);
+
+                    TryDelete(
+                        backupPath);
+                }
+                else
+                {
+                    File.Move(
+                        temporaryPath,
+                        fullPath);
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                TryDelete(
+                    temporaryPath);
+
+                error =
+                    "Atomic text file save failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        private static void TryDelete(
+            string path)
+        {
+            try
+            {
+                if (File.Exists(
+                        path))
+                {
+                    File.Delete(
+                        path);
+                }
+            }
+            catch
+            {
+                // Cleanup is best effort after the primary operation.
+            }
+        }
+
     }
 }
