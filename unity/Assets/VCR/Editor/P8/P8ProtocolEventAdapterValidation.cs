@@ -43,6 +43,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateWebSocketStopIsolation(
                 failures);
+            ValidateOscStopIsolation(
+                failures);
             ValidateOscMapping(
                 failures);
             ValidateSoopMapping(
@@ -772,6 +774,92 @@ namespace VCR.Editor.P8
             {
                 failures.Add(
                     "WebSocket stop isolation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
+        private static void ValidateOscStopIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 OSC Stop Isolation");
+
+                var sink =
+                    root.AddComponent<
+                        P8ThrowingEventSink>();
+                var receiver =
+                    root.AddComponent<
+                        OscNormalizedEventUdpReceiver>();
+
+                receiver.SetSink(
+                    sink);
+
+                var message =
+                    new OscMessage(
+                        OscNormalizedEventMapper
+                            .EventAddress,
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                NormalizedEventTypes
+                                    .LocalManual),
+                            OscArgument.FromString(
+                                "stop-isolation"),
+                            OscArgument.FromString(
+                                "stale-after-stop")
+                        });
+
+                Expect(
+                    receiver.TryQueueMessage(
+                        message,
+                        out var queueError) &&
+                    receiver.QueuedCount == 1,
+                    "OSC stop isolation must queue a pending event before stop: " +
+                    queueError,
+                    failures);
+
+                Expect(
+                    InvokeStopReceiver(
+                        receiver),
+                    "OSC stop isolation must stop cleanly without a live UDP worker",
+                    failures);
+
+                InvokeUpdate(
+                    receiver);
+
+                var metrics =
+                    new List<RuntimeMetric>();
+                receiver.CollectMetrics(
+                    metrics);
+
+                Expect(
+                    receiver.QueuedCount == 0 &&
+                    sink.InvocationCount == 0 &&
+                    TryGetMetric(
+                        metrics,
+                        "protocol.osc.events.dropped",
+                        out var dropped) &&
+                    dropped >= 1.0,
+                    "stopping OSC event receiver must discard queued events so stale triggers cannot execute after disable/restart",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "OSC stop isolation unexpected exception: " +
                     exception);
             }
             finally
@@ -2083,6 +2171,35 @@ namespace VCR.Editor.P8
             method.Invoke(
                 transport,
                 null);
+        }
+
+        private static bool InvokeStopReceiver(
+            OscNormalizedEventUdpReceiver receiver)
+        {
+            var method =
+                typeof(
+                    OscNormalizedEventUdpReceiver)
+                    .GetMethod(
+                        "StopReceiver",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    typeof(
+                        OscNormalizedEventUdpReceiver)
+                        .FullName,
+                    "StopReceiver");
+            }
+
+            return
+                method.Invoke(
+                    receiver,
+                    null) is bool stopped &&
+                stopped;
         }
 
         private static void InvokeUpdate(
