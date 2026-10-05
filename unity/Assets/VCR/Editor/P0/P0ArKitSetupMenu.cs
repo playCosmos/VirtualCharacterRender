@@ -109,6 +109,22 @@ namespace VCR.Editor.P0
                     "eyeBlink_UNKNOWN".AsSpan(),
                     out _);
 
+            var sampleCharacters =
+                sample.ToCharArray();
+            var spanParserPass =
+                IFacialMocapFrameParser.TryParse(
+                    sampleCharacters.AsSpan(),
+                    out var spanFrame) &&
+                spanFrame != null &&
+                Mathf.Approximately(
+                    spanFrame.Coefficients[
+                        (int)FaceCoefficient.JawOpen],
+                    0.50f) &&
+                spanFrame.HasHead &&
+                Mathf.Approximately(
+                    spanFrame.HeadPositionY,
+                    -0.2f);
+
             const string whitespaceSample =
                 "  eyeBlink_L&25  |  jawOpen&50  |" +
                 "  =head# 10, -20, 30, 0.1, -0.2, -0.3  |";
@@ -246,6 +262,7 @@ namespace VCR.Editor.P0
             pass =
                 pass &&
                 spanLookupPass &&
+                spanParserPass &&
                 whitespacePass &&
                 parserBoundsPass &&
                 sourceLifecyclePass;
@@ -257,7 +274,7 @@ namespace VCR.Editor.P0
             else
             {
                 Debug.LogError(
-                    "VCR P0 iFacialMocap parser: FAIL (mapping/span lookup, whitespace parsing, bounds, finite-value, or lifecycle mismatch)");
+                    "VCR P0 iFacialMocap parser: FAIL (mapping/span lookup/span parser, whitespace parsing, bounds, finite-value, or lifecycle mismatch)");
             }
         }
     }
