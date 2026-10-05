@@ -547,6 +547,33 @@ namespace VCR.Editor.P11
                         " / " +
                         managedProfileLoadError,
                         failures);
+
+                    var profilePath =
+                        store.GetProfilePath(
+                            characterPath);
+
+                    using (var stream =
+                           new FileStream(
+                               profilePath,
+                               FileMode.Create,
+                               FileAccess.Write,
+                               FileShare.None))
+                    {
+                        stream.SetLength(
+                            16L * 1024L * 1024L +
+                            1L);
+                    }
+
+                    Expect(
+                        !store.TryLoad(
+                            characterPath,
+                            out var oversizedUserPresets,
+                            out var oversizedProfileError) &&
+                        oversizedUserPresets.Length == 0 &&
+                        !string.IsNullOrWhiteSpace(
+                            oversizedProfileError),
+                        "appearance profile persistence must reject oversized profile files before JSON allocation",
+                        failures);
                 }
                 finally
                 {
