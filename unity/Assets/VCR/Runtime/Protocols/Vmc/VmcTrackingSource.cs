@@ -181,6 +181,9 @@ namespace VCR.Runtime.Protocols.Vmc
 
                 _started = false;
                 _disposed = true;
+                _latest.TakeLatest();
+                _latestPose.TakeLatest();
+                _latestExpressions.TakeLatest();
                 _health =
                     new TrackingSourceHealth(
                         TrackingSourceHealthState.Stopped,
