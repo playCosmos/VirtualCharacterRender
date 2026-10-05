@@ -32,7 +32,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, zero-contribution pose fast-path, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, duplicate-mask last-value-wins, zero-contribution pose fast-path, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -479,6 +479,40 @@ namespace VCR.Editor.P5
                     zeroContribution,
                     basePose),
                 "fully zero pose masks must preserve the immutable base-pose reference without allocating replacement arrays",
+                failures);
+
+            var duplicateMask =
+                new HumanoidPoseLayerMask();
+
+            SetPrivateField(
+                duplicateMask,
+                "boneOverrides",
+                new[]
+                {
+                    new HumanoidBoneWeight(
+                        HumanoidBoneId.LeftUpperArm,
+                        0.25f),
+                    new HumanoidBoneWeight(
+                        HumanoidBoneId.LeftUpperArm,
+                        0.75f)
+                });
+
+            ExpectClose(
+                duplicateMask.GetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm),
+                0.75f,
+                "duplicate pose-mask overrides must use the last serialized occurrence",
+                failures);
+
+            duplicateMask.SetBoneWeight(
+                HumanoidBoneId.LeftUpperArm,
+                0.4f);
+
+            ExpectClose(
+                duplicateMask.GetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm),
+                0.4f,
+                "pose-mask mutation must update the same last occurrence used by lookup",
                 failures);
         }
 
