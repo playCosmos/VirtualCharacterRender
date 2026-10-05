@@ -138,6 +138,42 @@ for udp_receiver in udp_receivers:
         "UDP receive hot paths must not allocate one byte array per datagram",
     )
 
+vmc_accumulator = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs"
+)
+require_source_contains(
+    vmc_accumulator,
+    "MaxCustomExpressions",
+    "VMC custom expression state must retain a hard entry limit",
+)
+require_source_contains(
+    vmc_accumulator,
+    "MaxCustomExpressionNameCharacters",
+    "VMC custom expression names must retain a hard length limit",
+)
+require_source_contains(
+    vmc_accumulator,
+    "_customExpressionStaging.Count >=",
+    "VMC accumulator must enforce its custom expression entry limit",
+)
+
+vmc_source = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcTrackingSource.cs"
+)
+require_source_contains(
+    vmc_source,
+    "_accumulator.ResetState();",
+    "VMC source stop/dispose paths must clear retained session state",
+)
+
 ifacial_parser = (
     VCR
     / "Runtime"
