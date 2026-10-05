@@ -49,6 +49,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateDestroyedUnityAdapterRecovery(
                 failures);
+            ValidateThrowingConsumerIsolation(
+                failures);
 
             if (failures.Count == 0)
             {
@@ -1591,6 +1593,169 @@ namespace VCR.Editor.P8
             }
         }
 
+        private static void ValidateThrowingConsumerIsolation(
+            List<string> failures)
+        {
+            GameObject webSocketRoot = null;
+            GameObject oscRoot = null;
+
+            try
+            {
+                webSocketRoot =
+                    new GameObject(
+                        "P8 Throwing WebSocket Handler");
+
+                var throwingHandler =
+                    webSocketRoot.AddComponent<
+                        P8ThrowingWebSocketHandler>();
+                var transport =
+                    webSocketRoot.AddComponent<
+                        WebSocketEventClientTransport>();
+
+                transport.SetHandler(
+                    throwingHandler);
+
+                Expect(
+                    transport.TryQueueText(
+                        "one",
+                        out var firstQueueError) &&
+                    transport.TryQueueText(
+                        "two",
+                        out var secondQueueError),
+                    "throwing WebSocket handler validation must queue both messages: " +
+                    firstQueueError +
+                    " / " +
+                    secondQueueError,
+                    failures);
+
+                InvokeUpdate(
+                    transport);
+
+                var webSocketMetrics =
+                    new List<RuntimeMetric>();
+                transport.CollectMetrics(
+                    webSocketMetrics);
+
+                Expect(
+                    throwingHandler.InvocationCount == 2 &&
+                    transport.QueuedCount == 0 &&
+                    TryGetMetric(
+                        webSocketMetrics,
+                        "protocol.websocket.transport.handler_rejected",
+                        out var handlerRejected) &&
+                    Math.Abs(
+                        handlerRejected - 2.0) <
+                        0.001 &&
+                    TryGetMetric(
+                        webSocketMetrics,
+                        "protocol.websocket.transport.handler_exceptions",
+                        out var handlerExceptions) &&
+                    Math.Abs(
+                        handlerExceptions - 2.0) <
+                        0.001,
+                    "WebSocket transport must isolate handler exceptions, continue draining the frame budget, and report them separately",
+                    failures);
+
+                oscRoot =
+                    new GameObject(
+                        "P8 Throwing OSC Sink");
+
+                var throwingSink =
+                    oscRoot.AddComponent<
+                        P8ThrowingEventSink>();
+                var receiver =
+                    oscRoot.AddComponent<
+                        OscNormalizedEventUdpReceiver>();
+
+                receiver.SetSink(
+                    throwingSink);
+
+                var firstOsc =
+                    new OscMessage(
+                        OscNormalizedEventMapper
+                            .EventAddress,
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                NormalizedEventTypes
+                                    .LocalManual),
+                            OscArgument.FromString(
+                                "osc-throw"),
+                            OscArgument.FromString(
+                                "one")
+                        });
+                var secondOsc =
+                    new OscMessage(
+                        OscNormalizedEventMapper
+                            .EventAddress,
+                        new[]
+                        {
+                            OscArgument.FromString(
+                                NormalizedEventTypes
+                                    .LocalManual),
+                            OscArgument.FromString(
+                                "osc-throw"),
+                            OscArgument.FromString(
+                                "two")
+                        });
+
+                Expect(
+                    receiver.TryQueueMessage(
+                        firstOsc,
+                        out var firstOscError) &&
+                    receiver.TryQueueMessage(
+                        secondOsc,
+                        out var secondOscError),
+                    "throwing OSC sink validation must queue both events: " +
+                    firstOscError +
+                    " / " +
+                    secondOscError,
+                    failures);
+
+                InvokeUpdate(
+                    receiver);
+
+                var oscMetrics =
+                    new List<RuntimeMetric>();
+                receiver.CollectMetrics(
+                    oscMetrics);
+
+                Expect(
+                    throwingSink.InvocationCount == 2 &&
+                    receiver.QueuedCount == 0 &&
+                    receiver.DispatchedEventCount == 0 &&
+                    TryGetMetric(
+                        oscMetrics,
+                        "protocol.osc.events.dispatch_failures",
+                        out var dispatchFailures) &&
+                    Math.Abs(
+                        dispatchFailures - 2.0) <
+                        0.001,
+                    "OSC receiver must isolate sink exceptions, continue draining the frame budget, and report dispatch failures separately",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "throwing protocol consumer isolation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (webSocketRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        webSocketRoot);
+                }
+
+                if (oscRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        oscRoot);
+                }
+            }
+        }
+
         private static void InvokeUpdate(
             TrackingPresenceEventAdapter adapter)
         {
@@ -1754,6 +1919,48 @@ namespace VCR.Editor.P8
                 failures.Add(
                     message);
             }
+        }
+    }
+
+    internal sealed class P8ThrowingWebSocketHandler :
+        MonoBehaviour,
+        IWebSocketTextMessageHandler
+    {
+        public int InvocationCount
+        {
+            get;
+            private set;
+        }
+
+        public bool TryHandleText(
+            string message,
+            out string error)
+        {
+            InvocationCount++;
+            error = null;
+
+            throw new InvalidOperationException(
+                "synthetic websocket handler failure");
+        }
+    }
+
+    internal sealed class P8ThrowingEventSink :
+        MonoBehaviour,
+        INormalizedEventSink
+    {
+        public int InvocationCount
+        {
+            get;
+            private set;
+        }
+
+        public void Publish(
+            NormalizedEvent value)
+        {
+            InvocationCount++;
+
+            throw new InvalidOperationException(
+                "synthetic OSC sink failure");
         }
     }
 
