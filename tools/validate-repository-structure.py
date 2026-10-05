@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -59,6 +60,106 @@ required_latest_chain = [
 ]
 for path in required_latest_chain:
     require(path)
+
+
+def require_source_contains(path: Path, token: str, label: str) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    if token not in source:
+        errors.append(
+            f"hot-path source contract missing: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+def forbid_source_pattern(path: Path, pattern: str, label: str) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    if re.search(pattern, source, flags=re.MULTILINE):
+        errors.append(
+            f"hot-path source regression: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
+require_source_contains(
+    osc_writer,
+    "TryAppendBundleMessage",
+    "OSC writer must retain reusable-buffer bundle append support",
+)
+forbid_source_pattern(
+    osc_writer,
+    r"\bMemoryStream\b",
+    "OSC writer must not reintroduce MemoryStream staging",
+)
+forbid_source_pattern(
+    osc_writer,
+    r"\bArrayPool\s*<",
+    "OSC writer must not require transient pooled encoding buffers",
+)
+
+vmc_sender = VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpSender.cs"
+require_source_contains(
+    vmc_sender,
+    "TryAppendBundleMessage",
+    "VMC sender must write directly into its reusable OSC packet buffer",
+)
+forbid_source_pattern(
+    vmc_sender,
+    r"OscPacketWriter\s*\.\s*WriteBundle\s*\(",
+    "VMC sender must not rebuild a bundle from per-message byte arrays",
+)
+
+udp_receivers = [
+    VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKitUnity"
+    / "IFacialMocapUdpReceiver.cs",
+]
+for udp_receiver in udp_receivers:
+    require_source_contains(
+        udp_receiver,
+        "ReceiveFrom(",
+        "UDP receive hot paths must reuse caller-owned datagram buffers",
+    )
+    forbid_source_pattern(
+        udp_receiver,
+        r"\b(?:receiver|_receiver)\s*\.\s*Receive\s*\(",
+        "UDP receive hot paths must not allocate one byte array per datagram",
+    )
+
+ifacial_parser = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKit"
+    / "IFacialMocapFrameParser.cs"
+)
+require_source_contains(
+    ifacial_parser,
+    "ReadOnlySpan<char>",
+    "iFacialMocap parser must retain span-based token parsing",
+)
+forbid_source_pattern(
+    ifacial_parser,
+    r"\.Substring\s*\(",
+    "iFacialMocap packet parsing must not allocate substring tokens",
+)
+forbid_source_pattern(
+    ifacial_parser,
+    r"\.Split\s*\(",
+    "iFacialMocap head parsing must not allocate split arrays/strings",
+)
 
 if VCR.is_dir():
     for path in VCR.rglob("*"):
