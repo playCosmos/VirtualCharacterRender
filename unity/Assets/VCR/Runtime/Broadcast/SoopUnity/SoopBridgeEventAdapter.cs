@@ -182,11 +182,21 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                 return false;
             }
 
+            try
+            {
+                _sink.Publish(
+                    value);
+            }
+            catch (Exception exception)
+            {
+                return Reject(
+                    "Normalized event sink failed: " +
+                    exception.Message,
+                    out error);
+            }
+
             RememberEventId(
                 document.eventId);
-
-            _sink.Publish(
-                value);
 
             Interlocked.Increment(
                 ref _accepted);
