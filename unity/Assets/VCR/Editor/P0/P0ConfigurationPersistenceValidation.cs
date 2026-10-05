@@ -64,6 +64,23 @@ namespace VCR.Editor.P0
                     loaded.EnvironmentStateId ==
                         "bounded-test";
 
+                File.WriteAllText(
+                    path + ".bak",
+                    "stale-backup");
+
+                var staleBackupSaved =
+                    store.TrySave(
+                        configuration,
+                        out var staleBackupError);
+
+                pass =
+                    pass &&
+                    staleBackupSaved &&
+                    string.IsNullOrEmpty(
+                        staleBackupError) &&
+                    !File.Exists(
+                        path + ".bak");
+
                 var original =
                     pass
                         ? File.ReadAllText(
@@ -154,6 +171,7 @@ namespace VCR.Editor.P0
                     Debug.LogError(
                         "VCR P0 configuration persistence: FAIL " +
                         $"save='{saveError}', load='{loadError}', " +
+                        $"stale-backup-save='{staleBackupError}', " +
                         $"oversized-save='{oversizedSaveError}', " +
                         $"oversized-load='{oversizedLoadError}', " +
                         $"invalid-utf8='{invalidUtf8Error}'");
