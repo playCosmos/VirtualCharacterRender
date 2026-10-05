@@ -879,30 +879,51 @@ namespace VCR.Runtime.Tracking.Mixing
 
             if (expressionSmoothing > 0f)
             {
-                var alpha =
+                if (_currentExpressions != null &&
                     ExpressionMixerMath
-                        .SmoothAlpha(
-                            expressionSmoothing,
-                            deltaSeconds);
-
-                _currentExpressions =
-                    ExpressionMixerMath.Blend(
-                        _currentExpressions,
-                        _targetExpressions,
-                        alpha,
-                        0f,
-                        ExpressionBlendMode.Override);
-
-                _expressionSmoothingActive =
-                    !ExpressionMixerMath
                         .ApproximatelyEqual(
                             _currentExpressions,
-                            _targetExpressions);
-
-                if (!_expressionSmoothingActive)
+                            _targetExpressions))
                 {
                     _currentExpressions =
                         _targetExpressions;
+                    _expressionSmoothingActive =
+                        false;
+                }
+                else
+                {
+                    var alpha =
+                        ExpressionMixerMath
+                            .SmoothAlpha(
+                                expressionSmoothing,
+                                deltaSeconds);
+
+                    if (alpha <= 0f)
+                    {
+                        _expressionSmoothingActive =
+                            true;
+                        return;
+                    }
+
+                    _currentExpressions =
+                        ExpressionMixerMath.Blend(
+                            _currentExpressions,
+                            _targetExpressions,
+                            alpha,
+                            0f,
+                            ExpressionBlendMode.Override);
+
+                    _expressionSmoothingActive =
+                        !ExpressionMixerMath
+                            .ApproximatelyEqual(
+                                _currentExpressions,
+                                _targetExpressions);
+
+                    if (!_expressionSmoothingActive)
+                    {
+                        _currentExpressions =
+                            _targetExpressions;
+                    }
                 }
             }
             else
