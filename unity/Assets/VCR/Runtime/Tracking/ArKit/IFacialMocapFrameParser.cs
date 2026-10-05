@@ -13,9 +13,20 @@ namespace VCR.Runtime.Tracking.ArKit
     public static class IFacialMocapFrameParser
     {
         public const int DefaultPort = 49983;
-        public const int MaxTextCharacters = 16 * 1024;
+        public const int MaxTextCharacters =
+            16 * 1024;
         public const int MaxParts = 128;
-        public const int MaxPartCharacters = 256;
+        public const int MaxPartCharacters =
+            256;
+
+        private const string HeadPrefix =
+            "=head#";
+        private const string RightEyePrefix =
+            "rightEye#";
+        private const string LeftEyePrefix =
+            "leftEye#";
+        private const string MetadataPrefix =
+            "___iFacialMocap";
 
         public const string StartStreamingV2Command =
             "iFacialMocap_sahuasouryya9218sauhuiayeta91555dy3719|sendDataVersion=v2";
@@ -26,14 +37,17 @@ namespace VCR.Runtime.Tracking.ArKit
         {
             frame = null;
 
-            if (string.IsNullOrWhiteSpace(text) ||
+            if (string.IsNullOrWhiteSpace(
+                    text) ||
                 text.Length >
                     MaxTextCharacters)
             {
                 return false;
             }
 
-            var coefficients = new float[(int)FaceCoefficient.Count];
+            var coefficients =
+                new float[
+                    (int)FaceCoefficient.Count];
 
             var hasCoefficient = false;
             var hasHead = false;
@@ -75,16 +89,16 @@ namespace VCR.Runtime.Tracking.ArKit
                 }
 
                 var part =
-                    text.Substring(
+                    TrimWhitespace(
+                        text.AsSpan(
                             partStart,
-                            partLength)
-                        .Trim();
+                            partLength));
 
-                if (part.Length > 0)
+                if (!part.IsEmpty)
                 {
-                    if (part.StartsWith(
-                            "=head#",
-                            StringComparison.Ordinal))
+                    if (StartsWithOrdinal(
+                            part,
+                            HeadPrefix))
                     {
                         if (TryParseHead(
                                 part,
@@ -95,32 +109,35 @@ namespace VCR.Runtime.Tracking.ArKit
                                 out headPositionY,
                                 out headPositionZ))
                         {
-                            hasHead = true;
+                            hasHead =
+                                true;
                         }
                     }
-                    else if (!part.StartsWith(
-                                 "rightEye#",
-                                 StringComparison.Ordinal) &&
-                             !part.StartsWith(
-                                 "leftEye#",
-                                 StringComparison.Ordinal) &&
-                             !part.StartsWith(
-                                 "___iFacialMocap",
-                                 StringComparison.Ordinal) &&
+                    else if (!StartsWithOrdinal(
+                                 part,
+                                 RightEyePrefix) &&
+                             !StartsWithOrdinal(
+                                 part,
+                                 LeftEyePrefix) &&
+                             !StartsWithOrdinal(
+                                 part,
+                                 MetadataPrefix) &&
                              TryParseCoefficientPart(
                                  part,
                                  out var name,
                                  out var value) &&
-                             FaceCoefficientNames.TryParse(
-                                 name,
-                                 out var coefficient))
+                             FaceCoefficientNames
+                                 .TryParse(
+                                     name,
+                                     out var coefficient))
                     {
                         coefficients[
                             (int)coefficient] =
                                 Clamp01(
                                     value /
                                     100f);
-                        hasCoefficient = true;
+                        hasCoefficient =
+                            true;
                     }
                 }
 
@@ -133,56 +150,73 @@ namespace VCR.Runtime.Tracking.ArKit
                     separator + 1;
             }
 
-            if (!hasCoefficient && !hasHead)
+            if (!hasCoefficient &&
+                !hasHead)
             {
                 return false;
             }
 
-            frame = new IFacialMocapFrame(
-                coefficients,
-                hasHead,
-                headEulerX,
-                headEulerY,
-                headEulerZ,
-                headPositionX,
-                headPositionY,
-                headPositionZ);
+            frame =
+                new IFacialMocapFrame(
+                    coefficients,
+                    hasHead,
+                    headEulerX,
+                    headEulerY,
+                    headEulerZ,
+                    headPositionX,
+                    headPositionY,
+                    headPositionZ);
 
             return true;
         }
 
-        private static bool TryParseCoefficientPart(
-            string part,
-            out string name,
-            out float value)
+        private static bool
+            TryParseCoefficientPart(
+                ReadOnlySpan<char> part,
+                out ReadOnlySpan<char> name,
+                out float value)
         {
-            var separator = part.IndexOf('&');
+            var separator =
+                part.IndexOf('&');
+
             if (separator > 0)
             {
-                name = part.Substring(0, separator);
+                name =
+                    part.Slice(
+                        0,
+                        separator);
+
                 return TryFloat(
-                    part.Substring(separator + 1),
+                    part.Slice(
+                        separator + 1),
                     out value);
             }
 
             // Legacy v1. Blendshape values are documented as non-negative in
             // iFacialMocap; FaceMotion3D negative values require v2.
-            separator = part.IndexOf('-');
+            separator =
+                part.IndexOf('-');
+
             if (separator > 0)
             {
-                name = part.Substring(0, separator);
+                name =
+                    part.Slice(
+                        0,
+                        separator);
+
                 return TryFloat(
-                    part.Substring(separator + 1),
+                    part.Slice(
+                        separator + 1),
                     out value);
             }
 
-            name = null;
+            name = default;
             value = 0f;
             return false;
         }
 
         private static bool TryParseHead(
-            string part,
+            ReadOnlySpan<char> part,
             out float eulerX,
             out float eulerY,
             out float eulerZ,
@@ -198,32 +232,113 @@ namespace VCR.Runtime.Tracking.ArKit
             positionZ = 0f;
 
             if (part.Length >
-                MaxPartCharacters)
+                    MaxPartCharacters ||
+                !StartsWithOrdinal(
+                    part,
+                    HeadPrefix))
             {
                 return false;
             }
 
             var values =
-                part.Substring(
-                        "=head#".Length)
-                    .Split(',');
+                part.Slice(
+                    HeadPrefix.Length);
+            var cursor = 0;
 
-            if (values.Length != 6)
+            return
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: true,
+                    out eulerX) &&
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: true,
+                    out eulerY) &&
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: true,
+                    out eulerZ) &&
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: true,
+                    out positionX) &&
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: true,
+                    out positionY) &&
+                TryReadFloatComponent(
+                    values,
+                    ref cursor,
+                    requireSeparator: false,
+                    out positionZ) &&
+                cursor ==
+                    values.Length;
+        }
+
+        private static bool
+            TryReadFloatComponent(
+                ReadOnlySpan<char> values,
+                ref int cursor,
+                bool requireSeparator,
+                out float value)
+        {
+            value = 0f;
+
+            if (cursor < 0 ||
+                cursor >=
+                    values.Length)
             {
                 return false;
             }
 
-            return
-                TryFloat(values[0], out eulerX) &&
-                TryFloat(values[1], out eulerY) &&
-                TryFloat(values[2], out eulerZ) &&
-                TryFloat(values[3], out positionX) &&
-                TryFloat(values[4], out positionY) &&
-                TryFloat(values[5], out positionZ);
+            var remaining =
+                values.Slice(
+                    cursor);
+            var separator =
+                remaining.IndexOf(',');
+
+            if (requireSeparator)
+            {
+                if (separator <= 0)
+                {
+                    return false;
+                }
+
+                if (!TryFloat(
+                        remaining.Slice(
+                            0,
+                            separator),
+                        out value))
+                {
+                    return false;
+                }
+
+                cursor +=
+                    separator + 1;
+                return true;
+            }
+
+            if (separator >= 0 ||
+                remaining.IsEmpty ||
+                !TryFloat(
+                    remaining,
+                    out value))
+            {
+                return false;
+            }
+
+            cursor =
+                values.Length;
+            return true;
         }
 
         private static bool TryFloat(
-            string text,
+            ReadOnlySpan<char> text,
             out float value)
         {
             if (!float.TryParse(
@@ -240,10 +355,63 @@ namespace VCR.Runtime.Tracking.ArKit
                 !float.IsInfinity(value);
         }
 
-        private static float Clamp01(float value)
+        private static bool StartsWithOrdinal(
+            ReadOnlySpan<char> value,
+            string prefix)
         {
-            if (value < 0f) return 0f;
-            if (value > 1f) return 1f;
+            return
+                value.Length >=
+                    prefix.Length &&
+                value.Slice(
+                        0,
+                        prefix.Length)
+                    .SequenceEqual(
+                        prefix.AsSpan());
+        }
+
+        private static ReadOnlySpan<char>
+            TrimWhitespace(
+                ReadOnlySpan<char> value)
+        {
+            var start = 0;
+            var end =
+                value.Length - 1;
+
+            while (start <= end &&
+                   char.IsWhiteSpace(
+                       value[start]))
+            {
+                start++;
+            }
+
+            while (end >= start &&
+                   char.IsWhiteSpace(
+                       value[end]))
+            {
+                end--;
+            }
+
+            return
+                start > end
+                    ? ReadOnlySpan<char>.Empty
+                    : value.Slice(
+                        start,
+                        end - start + 1);
+        }
+
+        private static float Clamp01(
+            float value)
+        {
+            if (value < 0f)
+            {
+                return 0f;
+            }
+
+            if (value > 1f)
+            {
+                return 1f;
+            }
+
             return value;
         }
     }
