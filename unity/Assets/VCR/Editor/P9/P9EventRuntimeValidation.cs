@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using VCR.Runtime.Environment;
+using VCR.Runtime.Environment.Unity;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 using VCR.Runtime.Events;
