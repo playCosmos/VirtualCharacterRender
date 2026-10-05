@@ -29,16 +29,23 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanHandle(
             EventActionCommand command)
         {
-            ResolveController();
-
-            return
-                controller != null &&
-                string.Equals(
+            if (!string.Equals(
                     command.ActionType,
                     EventActionTypes.MaterialSetFloat,
-                    StringComparison.Ordinal);
-        }
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
 
+            ResolveController();
+
+            if (controller == null)
+            {
+                return false;
+            }
+            
+            return true;
+        }
         public bool TryExecute(
             EventActionCommand command,
             out string error)
