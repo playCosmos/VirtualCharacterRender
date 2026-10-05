@@ -440,60 +440,60 @@ namespace VCR.Runtime.Diagnostics
             SnapshotUpdated?.Invoke(
                 _latestSnapshot);
 
-            var builder = new StringBuilder(512);
-            builder.Append(
-                "VCR runtime diagnostics: ");
-            builder.AppendFormat(
-                CultureInfo.InvariantCulture,
-                "frame avg={0:F2}ms p95={1:F2}ms p99={2:F2}ms",
-                averageMs,
-                p95Ms,
-                p99Ms);
-
-            builder.AppendFormat(
-                CultureInfo.InvariantCulture,
-                " | Hz face={0:F1} body={1:F1} full={2:F1} expr={3:F1}",
-                faceHz,
-                bodyHz,
-                poseHz,
-                expressionHz);
-
-            builder.AppendFormat(
-                CultureInfo.InvariantCulture,
-                " | age-ms face={0} body={1} full={2} expr={3}",
-                FormatAge(_faceAgeMs),
-                FormatAge(_bodyAgeMs),
-                FormatAge(_poseAgeMs),
-                FormatAge(_expressionAgeMs));
-
-            if (presence.HasValue)
-            {
-                builder.Append(
-                    " | presence=");
-                builder.Append(
-                    presence.Value.SubjectState);
-                builder.Append(
-                    " sources=");
-                builder.Append(
-                    presence.Value.AnySourceAvailable
-                        ? "up"
-                        : "down");
-            }
-
-            foreach (var metric in _metrics)
-            {
-                builder.Append(" | ");
-                builder.Append(metric.Name);
-                builder.Append('=');
-                builder.Append(
-                    metric.Value.ToString(
-                        "F2",
-                        CultureInfo.InvariantCulture));
-                builder.Append(metric.Unit);
-            }
-
             if (logToConsole)
             {
+            var builder = new StringBuilder(512);
+                builder.Append(
+                    "VCR runtime diagnostics: ");
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    "frame avg={0:F2}ms p95={1:F2}ms p99={2:F2}ms",
+                    averageMs,
+                    p95Ms,
+                    p99Ms);
+    
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    " | Hz face={0:F1} body={1:F1} full={2:F1} expr={3:F1}",
+                    faceHz,
+                    bodyHz,
+                    poseHz,
+                    expressionHz);
+    
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    " | age-ms face={0} body={1} full={2} expr={3}",
+                    FormatAge(_faceAgeMs),
+                    FormatAge(_bodyAgeMs),
+                    FormatAge(_poseAgeMs),
+                    FormatAge(_expressionAgeMs));
+    
+                if (presence.HasValue)
+                {
+                    builder.Append(
+                        " | presence=");
+                    builder.Append(
+                        presence.Value.SubjectState);
+                    builder.Append(
+                        " sources=");
+                    builder.Append(
+                        presence.Value.AnySourceAvailable
+                            ? "up"
+                            : "down");
+                }
+    
+                foreach (var metric in _metrics)
+                {
+                    builder.Append(" | ");
+                    builder.Append(metric.Name);
+                    builder.Append('=');
+                    builder.Append(
+                        metric.Value.ToString(
+                            "F2",
+                            CultureInfo.InvariantCulture));
+                    builder.Append(metric.Unit);
+                }
+    
                 if (p95Ms > 16.67f ||
                     p99Ms > 25f)
                 {
@@ -507,6 +507,8 @@ namespace VCR.Runtime.Diagnostics
                         builder.ToString(),
                         this);
                 }
+    
+    
             }
 
             if (writeCsvEvidence)
