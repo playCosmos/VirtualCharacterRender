@@ -2725,6 +2725,29 @@ require_source_contains(
     "procedural motion cue definitions must deep-clone curves and bone cue data",
 )
 
+motion_cue_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "MotionCueEventActionHandler.cs"
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "TryMatches(",
+    "motion cue runtime capability probes must isolate external runtime getter failures",
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "\"Motion cue runtime execution failed: \"",
+    "motion cue runtime execution exceptions must be converted to false/error",
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "\"Motion cue completion probe failed: \"",
+    "motion cue completion status getter failures must be converted to false/error",
+)
+
 motion_cue_sources = [
     VCR
     / "Runtime"
@@ -2770,6 +2793,23 @@ require_source_contains(
     "invalidAssetRejected",
     "P11 external-motion validation must prove failed baked cue rebuild preserves the last known-good set",
 )
+p11_appearance_validation_motion_probe = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation_motion_probe,
+    "P11ThrowingMotionCueRuntime",
+    "P11 validation must cover throwing motion runtime capability/execution/completion probes",
+)
+require_source_contains(
+    p11_appearance_validation_motion_probe,
+    "ConfigureStatusThrowAfter(",
+    "P11 motion validation must distinguish resolution-time and completion-time status failures",
+)
+
 
 humanoid_pose_layer_mask = (
     VCR
