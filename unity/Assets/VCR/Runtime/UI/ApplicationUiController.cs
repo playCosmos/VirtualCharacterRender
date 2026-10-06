@@ -6208,7 +6208,7 @@ namespace VCR.Runtime.UI
             {
                 if (!string.Equals(
                         _characterSummaryPresetIds[i],
-                        registry?.UserPresetIds[i],
+                        registry.UserPresetIds[i],
                         StringComparison.Ordinal))
                 {
                     return false;
@@ -6276,7 +6276,7 @@ namespace VCR.Runtime.UI
                      i++)
                 {
                     _characterSummaryPresetIds[i] =
-                        registry?.UserPresetIds[i];
+                        registry.UserPresetIds[i];
                 }
 
                 for (var i = visibleCount;
