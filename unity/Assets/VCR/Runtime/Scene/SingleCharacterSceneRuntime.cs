@@ -87,19 +87,30 @@ namespace VCR.Runtime.Scene
         {
             get
             {
-                ResolveOverlayOutput();
+                try
+                {
+                    ResolveOverlayOutput();
 
-                if (!IsServiceAlive(_overlayOutput))
+                    if (!IsServiceAlive(_overlayOutput))
+                    {
+                        return new OverlayCaptureReadiness(
+                            false,
+                            OverlayCaptureReadinessFailure.NotActive,
+                            "No overlay output adapter is configured.");
+                    }
+
+                    return OverlayCaptureReadinessEvaluator.Evaluate(
+                        _overlayOutput.Status,
+                        _overlayOutput.Settings);
+                }
+                catch (Exception exception)
                 {
                     return new OverlayCaptureReadiness(
                         false,
-                        OverlayCaptureReadinessFailure.NotActive,
-                        "No overlay output adapter is configured.");
+                        OverlayCaptureReadinessFailure.Faulted,
+                        "Overlay output status/settings read failed: " +
+                        exception.Message);
                 }
-
-                return OverlayCaptureReadinessEvaluator.Evaluate(
-                    _overlayOutput.Status,
-                    _overlayOutput.Settings);
             }
         }
 
@@ -377,7 +388,7 @@ namespace VCR.Runtime.Scene
                         ? lightController.Settings
                         : SceneLightSettings.DefaultDirectional,
                 Overlay =
-                    _overlayConfiguration,
+                    CaptureOverlayConfiguration(),
                 EnvironmentStateId =
                     IsServiceAlive(_environmentRuntime)
                         ? _environmentRuntime.Status.StateId
@@ -600,19 +611,19 @@ namespace VCR.Runtime.Scene
             try
             {
                 EnsureOperational();
+                ResolveOverlayOutput();
+
+                return OverlayOutputRecovery.TryRestart(
+                    _overlayOutput,
+                    out error);
             }
             catch (Exception exception)
             {
                 error =
+                    "Overlay output recovery failed: " +
                     exception.Message;
                 return false;
             }
-
-            ResolveOverlayOutput();
-
-            return OverlayOutputRecovery.TryRestart(
-                _overlayOutput,
-                out error);
         }
 
         public bool TryApplyBroadcastCaptureTarget(
@@ -1109,9 +1120,8 @@ namespace VCR.Runtime.Scene
                     IOverlayOutputAdapter configured)
             {
                 _overlayOutput = configured;
-                _overlayConfiguration =
-                    OverlayOutputConfiguration.FromSettings(
-                        configured.Settings);
+                TrySyncOverlayConfiguration(
+                    configured);
                 _nextOverlayOutputResolveAt = 0d;
                 return;
             }
@@ -1150,15 +1160,51 @@ namespace VCR.Runtime.Scene
                     matchedBehaviour;
                 _overlayOutput =
                     matchedAdapter;
-                _overlayConfiguration =
-                    OverlayOutputConfiguration.FromSettings(
-                        matchedAdapter.Settings);
+                TrySyncOverlayConfiguration(
+                    matchedAdapter);
                 _nextOverlayOutputResolveAt = 0d;
                 return;
             }
 
             overlayOutputBehaviour = null;
             _overlayOutput = null;
+        }
+
+        private OverlayOutputConfiguration
+            CaptureOverlayConfiguration()
+        {
+            if (!IsServiceAlive(_overlayOutput))
+            {
+                return _overlayConfiguration;
+            }
+
+            var configuration =
+                OverlayOutputConfiguration.FromSettings(
+                    _overlayOutput.Settings);
+            _overlayConfiguration =
+                configuration;
+            return configuration;
+        }
+
+        private void TrySyncOverlayConfiguration(
+            IOverlayOutputAdapter adapter)
+        {
+            if (!IsServiceAlive(adapter))
+            {
+                return;
+            }
+
+            try
+            {
+                _overlayConfiguration =
+                    OverlayOutputConfiguration.FromSettings(
+                        adapter.Settings);
+            }
+            catch
+            {
+                // Resolution stays usable; explicit capture/readiness surfaces
+                // the adapter getter failure through their own contracts.
+            }
         }
 
         private static bool CanRetryOptionalServiceDiscovery(
