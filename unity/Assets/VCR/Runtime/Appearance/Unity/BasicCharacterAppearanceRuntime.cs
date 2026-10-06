@@ -774,8 +774,11 @@ namespace VCR.Runtime.Appearance.Unity
 
             if (!string.IsNullOrWhiteSpace(
                     _currentPresetId) &&
-                !_presets.ContainsKey(
-                    _currentPresetId))
+                (!_presets.TryGetValue(
+                     _currentPresetId,
+                     out var currentPreset) ||
+                 !CurrentAppearanceMatchesPreset(
+                     currentPreset)))
             {
                 ClearCurrentPresetAndNotify();
             }
@@ -3690,6 +3693,50 @@ namespace VCR.Runtime.Appearance.Unity
                     _statusSubscriberFailureCount++;
                 }
             }
+        }
+
+        private bool CurrentAppearanceMatchesPreset(
+            AppearancePreset preset)
+        {
+            if (preset == null ||
+                !string.Equals(
+                    preset.OutfitId,
+                    _currentOutfitId,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var selections =
+                preset.Accessories ??
+                Array.Empty<
+                    AppearanceAccessorySelection>();
+
+            if (selections.Length !=
+                _currentAccessories.Count)
+            {
+                return false;
+            }
+
+            foreach (var selection in
+                     selections)
+            {
+                if (selection == null ||
+                    string.IsNullOrWhiteSpace(
+                        selection.SlotId) ||
+                    !_currentAccessories.TryGetValue(
+                        selection.SlotId,
+                        out var accessoryId) ||
+                    !string.Equals(
+                        accessoryId,
+                        selection.AccessoryId,
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private AppearanceAccessorySelection[]
