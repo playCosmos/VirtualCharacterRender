@@ -55,6 +55,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateUnityAdapters(
                 failures);
+            ValidateJsonIngressScratchReset(
+                failures);
             ValidateDestroyedUnityAdapterRecovery(
                 failures);
             ValidateThrowingConsumerIsolation(
@@ -1839,6 +1841,126 @@ namespace VCR.Editor.P8
                     UnityEngine.Object
                         .DestroyImmediate(
                             host);
+                }
+            }
+        }
+
+        private static void ValidateJsonIngressScratchReset(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P8 JSON Ingress Scratch Reset");
+
+                var sink =
+                    root.AddComponent<
+                        P8FakeEventSink>();
+                var webSocket =
+                    root.AddComponent<
+                        WebSocketEventInjectionAdapter>();
+                var soop =
+                    root.AddComponent<
+                        SoopBridgeEventAdapter>();
+
+                webSocket.SetSink(
+                    sink);
+                soop.SetSink(
+                    sink);
+
+                var fullWebSocketJson =
+                    "{\"version\":1,\"op\":\"event.inject\",\"type\":\"local.manual\",\"actorId\":\"operator\",\"actorName\":\"Operator\",\"text\":\"first\",\"amount\":12.5,\"currency\":\"TEST_UNIT\",\"hasAmount\":true}";
+                var sparseWebSocketJson =
+                    "{\"version\":1,\"op\":\"event.inject\",\"type\":\"local.manual\"}";
+
+                Expect(
+                    webSocket.TryHandleText(
+                        fullWebSocketJson,
+                        out var fullWebSocketError) &&
+                    webSocket.TryHandleText(
+                        sparseWebSocketJson,
+                        out var sparseWebSocketError) &&
+                    string.IsNullOrEmpty(
+                        fullWebSocketError) &&
+                    string.IsNullOrEmpty(
+                        sparseWebSocketError) &&
+                    sink.Events.Count == 2 &&
+                    sink.Events[0].ActorId ==
+                        "operator" &&
+                    sink.Events[0].ActorName ==
+                        "Operator" &&
+                    sink.Events[0].Text ==
+                        "first" &&
+                    sink.Events[0].HasAmount &&
+                    Math.Abs(
+                        sink.Events[0].Amount -
+                        12.5) <
+                        0.001 &&
+                    sink.Events[1].ActorId == null &&
+                    sink.Events[1].ActorName == null &&
+                    sink.Events[1].Text == null &&
+                    !sink.Events[1].HasAmount &&
+                    Math.Abs(
+                        sink.Events[1].Amount) <
+                        0.001 &&
+                    sink.Events[1].Currency == null,
+                    "WebSocket JSON scratch reuse must reset every omitted optional field before FromJsonOverwrite: " +
+                    fullWebSocketError +
+                    " / " +
+                    sparseWebSocketError,
+                    failures);
+
+                sink.Events.Clear();
+
+                var fullSoopJson =
+                    "{\"version\":1,\"type\":\"chat\",\"eventId\":\"scratch-soop-1\",\"userId\":\"viewer\",\"nickname\":\"Viewer\",\"text\":\"first\"}";
+                var sparseSoopJson =
+                    "{\"version\":1,\"type\":\"chat\",\"eventId\":\"scratch-soop-2\",\"text\":\"second\"}";
+
+                Expect(
+                    soop.TryHandleText(
+                        fullSoopJson,
+                        out var fullSoopError) &&
+                    soop.TryHandleText(
+                        sparseSoopJson,
+                        out var sparseSoopError) &&
+                    string.IsNullOrEmpty(
+                        fullSoopError) &&
+                    string.IsNullOrEmpty(
+                        sparseSoopError) &&
+                    sink.Events.Count == 2 &&
+                    sink.Events[0].ActorId ==
+                        "viewer" &&
+                    sink.Events[0].ActorName ==
+                        "Viewer" &&
+                    sink.Events[0].Text ==
+                        "first" &&
+                    sink.Events[1].ActorId == null &&
+                    sink.Events[1].ActorName == null &&
+                    sink.Events[1].Text ==
+                        "second",
+                    "SOOP JSON scratch reuse must reset omitted user/nickname fields instead of leaking the previous message: " +
+                    fullSoopError +
+                    " / " +
+                    sparseSoopError,
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "JSON ingress scratch reset validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
                 }
             }
         }
