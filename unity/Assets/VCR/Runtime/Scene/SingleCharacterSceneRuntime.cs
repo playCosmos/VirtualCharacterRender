@@ -420,14 +420,17 @@ namespace VCR.Runtime.Scene
                     configuration.Light);
             }
 
-            _overlayConfiguration =
+            var nextOverlayConfiguration =
                 configuration.Overlay;
 
             if (IsServiceAlive(_overlayOutput))
             {
                 _overlayOutput.Apply(
-                    _overlayConfiguration.ToSettings());
+                    nextOverlayConfiguration.ToSettings());
             }
+
+            _overlayConfiguration =
+                nextOverlayConfiguration;
         }
 
         public bool SetEnvironmentState(
