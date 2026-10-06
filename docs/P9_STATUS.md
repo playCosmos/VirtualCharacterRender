@@ -98,6 +98,8 @@ motion.pose_weight
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. Destroyed Unity handlers cached behind interfaces are ignored rather than invoked. Duplicate references to the same handler instance are deduplicated; genuinely distinct handlers claiming the same command still fail closed and increment the ambiguous-action metric. When auto-find is enabled in a Player build, the host rechecks its event-hub subscription at a bounded 1 Hz cadence so a destroyed/replaced `NormalizedEventHub` can be rebound without a per-frame global search.
 
+`EventRuntimeHost` rule application is non-destructive on validation failure. `TrySetRuleEnabled` rolls back the requested `Enabled` mutation, `TrySetMaxCommandsPerEvent` restores the previous limit, and a failed engine apply leaves the existing engine rules and host rule array intact instead of clearing the host to an empty rule set while returning success.
+
 P11 extends the established P9 action boundary with `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.clear_accessory`, and `appearance.restore_default`. The P11 Appearance Transition Runtime reuses registered application-action handlers directly for presentation cues while owning timing and the single atomic `appearance.commit` boundary. It rejects recursive `appearance.*` transition actions. P11 also adds shared `effect.play` / `effect.stop` and `motion.play` / `motion.release` action handlers; this is a later-phase extension and does not change the preserved P9 checkpoint claim.
 
 ## Source-free validation
