@@ -137,6 +137,7 @@ Implemented source contracts:
 - imported clips can be routed directly to the Cue Baker or Transition Timeline
 - external motion import rolls back newly created assets on parse/marker/import failure
 - baked motion cue assets and runtime sources now enforce ownership boundaries: cue definitions/tracks/markers are deep-cloned, `CueIds`/`CueAssets` are read-only views, runtime `ConfigureCues` input is copied, and `RebuildCues` stages a complete replacement before committing so one invalid asset/cue cannot erase the previous valid live cue set
+- procedural motion cues now follow the same contract: cue definitions and `AnimationCurve` data are deep-cloned, `CueIds` is read-only, `ConfigureCues` owns its inputs, and invalid replacements/rebuilds leave the previous validated live cue set intact
 
 Implemented event action types:
 
