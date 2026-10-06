@@ -71,13 +71,38 @@ namespace VCR.Editor.P0
 
                 var survivingSubscriberCount =
                     0;
-                diagnostics.SnapshotUpdated += _ =>
-                    throw new System.InvalidOperationException(
-                        "synthetic diagnostics subscriber failure");
-                diagnostics.SnapshotUpdated += _ =>
-                {
-                    survivingSubscriberCount++;
-                };
+                System.Action<RuntimeDiagnosticsSnapshot>
+                    throwingSubscriber = _ =>
+                        throw new System.InvalidOperationException(
+                            "synthetic diagnostics subscriber failure");
+                System.Action<RuntimeDiagnosticsSnapshot>
+                    survivingSubscriber = _ =>
+                    {
+                        survivingSubscriberCount++;
+                    };
+
+                diagnostics.SnapshotUpdated +=
+                    throwingSubscriber;
+                diagnostics.SnapshotUpdated +=
+                    survivingSubscriber;
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    GetPrivateArrayLength(
+                        diagnostics,
+                        "_snapshotSubscribers") == 2;
+
+                InvokeSnapshotNotification(
+                    diagnostics);
+
+                diagnostics.SnapshotUpdated -=
+                    survivingSubscriber;
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    GetPrivateArrayLength(
+                        diagnostics,
+                        "_snapshotSubscribers") == 1;
 
                 InvokeSnapshotNotification(
                     diagnostics);
@@ -100,7 +125,7 @@ namespace VCR.Editor.P0
                         collectedMetrics,
                         "diagnostics.snapshot_subscriber_failures",
                         out var subscriberFailures) &&
-                    subscriberFailures >= 1.0;
+                    subscriberFailures >= 2.0;
             }
             finally
             {
