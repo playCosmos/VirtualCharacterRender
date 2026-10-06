@@ -1447,13 +1447,23 @@ namespace VCR.Runtime.Environment.Unity
 
                 liveTargetCount++;
 
-                if (!target
-                    .ValidateEnvironmentTransition(
-                        transition,
-                        previousStateId,
-                        nextStateId,
-                        out error))
+                try
                 {
+                    if (!target
+                        .ValidateEnvironmentTransition(
+                            transition,
+                            previousStateId,
+                            nextStateId,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Environment transition target validation failed: " +
+                        exception.Message;
                     return false;
                 }
             }
