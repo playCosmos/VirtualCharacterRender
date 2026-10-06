@@ -722,6 +722,27 @@ namespace VCR.Editor.P13
                     mappedApplyError,
                     failures);
 
+                var parameterScratchField =
+                    typeof(Character2DRuntime)
+                        .GetField(
+                            "_parameterScratch",
+                            System.Reflection
+                                .BindingFlags.Instance |
+                            System.Reflection
+                                .BindingFlags.NonPublic);
+                var firstParameterScratch =
+                    parameterScratchField
+                        ?.GetValue(
+                            runtime) as
+                        Character2DParameterValue[];
+
+                Expect(
+                    firstParameterScratch != null &&
+                    firstParameterScratch.Length >=
+                        2,
+                    "2D runtime must allocate reusable parameter scratch at mapping capacity",
+                    failures);
+
                 var replacementFaceFrame =
                     new TrackingFrame(
                         12,
@@ -802,8 +823,14 @@ namespace VCR.Editor.P13
                 Expect(
                     runtime.ProcessLatest(
                         out var recoveredMappingError) &&
-                    backend.ParameterApplyCount == 2,
-                    "2D runtime must revalidate and recover the unaccepted frame after the same profile object is repaired: " +
+                    backend.ParameterApplyCount == 2 &&
+                    firstParameterScratch != null &&
+                    ReferenceEquals(
+                        firstParameterScratch,
+                        parameterScratchField
+                            ?.GetValue(
+                                runtime)),
+                    "2D runtime must revalidate, recover the unaccepted frame, and reuse the same parameter scratch when capacity is unchanged: " +
                     recoveredMappingError,
                     failures);
 
