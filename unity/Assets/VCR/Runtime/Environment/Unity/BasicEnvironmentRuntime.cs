@@ -97,6 +97,7 @@ namespace VCR.Runtime.Environment.Unity
         private long _transitionDispatchCount;
         private double _lastTransitionDispatchMs;
         private long _lightingFailureCount;
+        private long _stateSubscriberFailureCount;
         private string _lastError;
 
         public event Action<EnvironmentStateChange> StateChanged;
@@ -615,7 +616,7 @@ namespace VCR.Runtime.Environment.Unity
                     transition.DurationSeconds,
                     0f);
 
-            StateChanged?.Invoke(
+            NotifyStateChanged(
                 new EnvironmentStateChange(
                     previous,
                     stateId));
@@ -1024,6 +1025,36 @@ namespace VCR.Runtime.Environment.Unity
                         _transitionDispatchCount
                     : 0.0,
                 "ms"));
+
+            output.Add(new RuntimeMetric(
+                "environment.state_subscriber_failures",
+                _stateSubscriberFailureCount,
+                "count"));
+        }
+
+        private void NotifyStateChanged(
+            EnvironmentStateChange change)
+        {
+            var subscribers =
+                StateChanged;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<EnvironmentStateChange> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(change);
+                }
+                catch
+                {
+                    _stateSubscriberFailureCount++;
+                }
+            }
         }
 
         private void ConfigureScheduler(
@@ -1593,7 +1624,7 @@ namespace VCR.Runtime.Environment.Unity
             _lastError = null;
             _stateChangeCount++;
 
-            StateChanged?.Invoke(
+            NotifyStateChanged(
                 new EnvironmentStateChange(
                     previousStateId,
                     stateId));
