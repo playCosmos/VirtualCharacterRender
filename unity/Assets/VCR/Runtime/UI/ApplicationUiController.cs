@@ -343,6 +343,8 @@ namespace VCR.Runtime.UI
         private int _diagnosticsNextLabelPage = -1;
         private int _diagnosticsNextLabelPageCount = -1;
         private string _diagnosticsNextLabelCache;
+        private ApplicationUiSection _contextVisibilitySection =
+            ApplicationUiSection.Count;
 
         public ApplicationUiModel Model => _model;
 
@@ -507,6 +509,8 @@ namespace VCR.Runtime.UI
             _appearanceDuplicateUserPresetButton = null;
             _appearanceMoveUserPresetUpButton = null;
             _appearanceMoveUserPresetDownButton = null;
+            _contextVisibilitySection =
+                ApplicationUiSection.Count;
 
             BuildUi();
             RefreshAll();
@@ -4878,9 +4882,15 @@ namespace VCR.Runtime.UI
                 selected ==
                 ApplicationUiSection.Diagnostics;
 
-            if (_appearanceActions != null &&
-                _appearanceActions.gameObject.activeSelf !=
-                    characterSelected)
+            if (_contextVisibilitySection !=
+                selected)
+            {
+                _contextVisibilitySection =
+                    selected;
+
+                if (_appearanceActions != null &&
+                    _appearanceActions.gameObject.activeSelf !=
+                        characterSelected)
             {
                 _appearanceActions.gameObject.SetActive(
                     characterSelected);
@@ -5091,9 +5101,10 @@ namespace VCR.Runtime.UI
             SetActive(
                 _diagnosticsCsvButton,
                 diagnosticsSelected);
-            SetActive(
-                _diagnosticsConsoleButton,
-                diagnosticsSelected);
+                SetActive(
+                    _diagnosticsConsoleButton,
+                    diagnosticsSelected);
+            }
 
             if (motionSelected)
             {
