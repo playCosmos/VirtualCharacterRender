@@ -78,8 +78,11 @@ namespace VCR.Runtime.Appearance.Unity
         private readonly Queue<AppearanceChangeRequest> _pending =
             new();
 
+        private const double TransitionExecutorDiscoveryRetrySeconds = 1.0;
+
         private IAppearanceTransitionStepExecutor[] _executors =
             Array.Empty<IAppearanceTransitionStepExecutor>();
+        private double _nextTransitionExecutorResolveAt;
 
         private AppearanceRuntimeState _state =
             AppearanceRuntimeState.Unconfigured;
@@ -3247,19 +3250,44 @@ namespace VCR.Runtime.Appearance.Unity
                 return;
             }
 
-            if (_executors.Length == 0)
+            var needsRebuild =
+                _executors.Length == 0;
+
+            if (!needsRebuild)
             {
-                RebuildExecutors();
+                foreach (var executor in _executors)
+                {
+                    if (!IsExecutorAlive(executor))
+                    {
+                        needsRebuild = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!needsRebuild)
+            {
+                _nextTransitionExecutorResolveAt = 0d;
                 return;
             }
 
-            foreach (var executor in _executors)
+            var now =
+                Time.realtimeSinceStartupAsDouble;
+
+            if (now <
+                _nextTransitionExecutorResolveAt)
             {
-                if (!IsExecutorAlive(executor))
-                {
-                    RebuildExecutors();
-                    return;
-                }
+                return;
+            }
+
+            _nextTransitionExecutorResolveAt =
+                now +
+                TransitionExecutorDiscoveryRetrySeconds;
+            RebuildExecutors();
+
+            if (_executors.Length > 0)
+            {
+                _nextTransitionExecutorResolveAt = 0d;
             }
         }
 
