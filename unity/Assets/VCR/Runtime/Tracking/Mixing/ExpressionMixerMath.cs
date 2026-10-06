@@ -28,6 +28,16 @@ namespace VCR.Runtime.Tracking.Mixing
                 return baseState;
             }
 
+            if (baseState == null &&
+                layerState != null &&
+                clampedWeight >= 1f &&
+                clampedDeadzone <= 0f &&
+                mode ==
+                    ExpressionBlendMode.Override)
+            {
+                return layerState;
+            }
+
             var standard = new float[(int)StandardExpression.Count];
 
             for (var i = 0; i < standard.Length; i++)
