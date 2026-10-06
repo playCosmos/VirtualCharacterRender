@@ -699,6 +699,16 @@ require_source_occurrences(
     1,
     "tracking router must poll a face provider only through the single candidate-sampling helper",
 )
+require_source_contains(
+    tracking_router,
+    "_selectedFaceFrame",
+    "tracking router duplicate suppression must use immutable frame identity",
+)
+forbid_source_pattern(
+    tracking_router,
+    r"ChildSequence",
+    "tracking router must not regress to source/sequence-only duplicate suppression",
+)
 
 p4_routing_validation = (
     VCR
@@ -710,6 +720,11 @@ require_source_contains(
     p4_routing_validation,
     "sample the selected preferred face once",
     "P4 validation must guard single-sample preferred face routing",
+)
+require_source_contains(
+    p4_routing_validation,
+    "without a loss gap",
+    "P4 validation must cover same-source/same-sequence immutable frame replacement",
 )
 
 vrm_tracking_target = (
