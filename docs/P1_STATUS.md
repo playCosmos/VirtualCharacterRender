@@ -74,7 +74,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - explicit overlay shutdown contract
 - dynamic environment state routed through the existing `IEnvironmentRuntime`
 - environment state included in scene configuration snapshots
-- missing optional overlay/environment service discovery is negative-cached with a 1-second monotonic retry window, preventing repeated `GetComponentsInChildren<MonoBehaviour>(true)` allocations while preserving late runtime discovery
+- missing optional overlay/environment service discovery is negative-cached with a 1-second monotonic retry window and uses one reusable `List<MonoBehaviour>` with Unity's non-alloc `GetComponentsInChildren` overload, preserving late runtime discovery without recurring component-array allocation
 
 ### Capability lifecycle
 
