@@ -28,6 +28,32 @@ namespace VCR.Runtime.Tracking.Mixing
         public float RootRotationWeight =>
             Mathf.Clamp01(rootRotationWeight);
 
+        public bool HasFullWeight
+        {
+            get
+            {
+                if (RootPositionWeight < 1f ||
+                    RootRotationWeight < 1f)
+                {
+                    return false;
+                }
+
+                for (var i = 0;
+                     i < (int)HumanoidBoneId.Count;
+                     i++)
+                {
+                    if (GetBoneWeight(
+                            (HumanoidBoneId)i) <
+                        1f)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
         public bool HasAnyWeight
         {
             get
