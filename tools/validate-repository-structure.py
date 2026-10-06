@@ -1760,6 +1760,26 @@ require_source_contains(
     "public bool TryGetRule(",
     "event runtime host must expose allocation-free id rule lookup",
 )
+require_source_contains(
+    event_runtime_host,
+    "private bool TryApplyRules(",
+    "event runtime host rule application must use a non-destructive Try path",
+)
+require_source_contains(
+    event_runtime_host,
+    "match.Enabled =\n                    previousEnabled;",
+    "failed rule-enable apply must rollback the requested host mutation",
+)
+require_source_contains(
+    event_runtime_host,
+    "maxCommandsPerEvent =\n                    previousValue;",
+    "failed max-command apply must rollback the requested host limit",
+)
+forbid_source_pattern(
+    event_runtime_host,
+    r"rules\s*=\s*Array\.Empty<EventRuntimeRule>\(\);\s*_engine\.TrySetRules",
+    "failed event-host rule apply must not destroy the host rule set",
+)
 
 motion_cue_sources = [
     VCR
