@@ -341,6 +341,63 @@ namespace VCR.Editor.P11
                     "appearance quick-change order must preserve authoring order",
                     failures);
 
+                var presetIdsView =
+                    runtime.PresetIds;
+                var transitionIdsView =
+                    runtime.TransitionIds;
+                var userPresetIdsView =
+                    runtime.UserPresetIds;
+
+                var presetMutationRejected =
+                    false;
+                var transitionMutationRejected =
+                    false;
+                var userPresetMutationRejected =
+                    false;
+
+                try
+                {
+                    ((IList<string>)presetIdsView)
+                        .Add("external-preset");
+                }
+                catch (NotSupportedException)
+                {
+                    presetMutationRejected =
+                        true;
+                }
+
+                try
+                {
+                    ((IList<string>)transitionIdsView)
+                        .Add("external-transition");
+                }
+                catch (NotSupportedException)
+                {
+                    transitionMutationRejected =
+                        true;
+                }
+
+                try
+                {
+                    ((IList<string>)userPresetIdsView)
+                        .Add("external-user-preset");
+                }
+                catch (NotSupportedException)
+                {
+                    userPresetMutationRejected =
+                        true;
+                }
+
+                Expect(
+                    presetMutationRejected &&
+                    transitionMutationRejected &&
+                    userPresetMutationRejected &&
+                    runtime.PresetIds.Count == 2 &&
+                    runtime.TransitionIds.Count == 1 &&
+                    runtime.UserPresetIds.Count == 0,
+                    "appearance id collections must expose stable read-only views rather than mutable internal List instances",
+                    failures);
+
                 runtime.ConfigureBindings(
                     Array.Empty<
                         AppearanceOutfitBinding>(),
