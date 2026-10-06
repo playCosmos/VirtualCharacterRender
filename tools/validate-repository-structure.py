@@ -371,6 +371,24 @@ forbid_source_pattern(
     "event tracing must not allocate a delegate invocation array per trace entry",
 )
 
+audio_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AudioEventActionHandler.cs"
+)
+require_source_contains(
+    audio_event_action_handler,
+    "double.IsNaN(",
+    "audio action volume overrides must reject NaN before reaching AudioSource",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "command.Value >\n                     float.MaxValue",
+    "audio action volume overrides must reject values outside the float range",
+)
+
 p9_event_runtime_validation = (
     VCR
     / "Editor"
@@ -386,6 +404,16 @@ require_source_contains(
     p9_event_runtime_validation,
     "text transform must preserve the original string when no work is configured",
     "P9 event validation must cover text-transform reference passthrough and affix null semantics",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "ValidateAudioActionNumericContainment(",
+    "P9 event validation must cover non-finite audio volume containment",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "double.PositiveInfinity",
+    "P9 audio validation must inject non-finite values explicitly",
 )
 
 vmc_accumulator = (
