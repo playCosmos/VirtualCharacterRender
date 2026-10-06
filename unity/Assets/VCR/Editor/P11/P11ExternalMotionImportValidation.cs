@@ -21,6 +21,9 @@ namespace VCR.Editor.P11
         public static void RunChecks(
             List<string> failures)
         {
+            RunBakedMotionCueOwnershipChecks(
+                failures);
+
             AnimationClip sourceClip = null;
             string sidecarPath = null;
             string bvhPath = null;
@@ -522,6 +525,265 @@ Frame Time: 0.5
 
                 AssetDatabase.Refresh();
             }
+        }
+
+        private static void RunBakedMotionCueOwnershipChecks(
+            List<string> failures)
+        {
+            GameObject root = null;
+            BakedMotionCueAsset asset = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Baked Motion Cue Ownership");
+                var source =
+                    root.AddComponent<
+                        BakedMotionCueSource>();
+
+                asset =
+                    ScriptableObject.CreateInstance<
+                        BakedMotionCueAsset>();
+
+                var callerOwnedCue =
+                    CreateValidationCue(
+                        "owned-asset-cue");
+                asset.SetCue(
+                    callerOwnedCue);
+
+                callerOwnedCue.CueId =
+                    "caller-mutated-asset-cue";
+                callerOwnedCue
+                    .RootPositionOffsets[0] =
+                        new Vector3(
+                            9f,
+                            0f,
+                            0f);
+
+                var exportedCue =
+                    asset.Cue;
+                exportedCue.CueId =
+                    "export-mutated-asset-cue";
+                exportedCue
+                    .RootPositionOffsets[0] =
+                        new Vector3(
+                            7f,
+                            0f,
+                            0f);
+
+                var recapturedCue =
+                    asset.Cue;
+
+                Expect(
+                    recapturedCue.CueId ==
+                        "owned-asset-cue" &&
+                    recapturedCue
+                        .RootPositionOffsets[0] ==
+                        Vector3.zero,
+                    "baked motion cue assets must deep-clone SetCue input and Cue output so caller mutation cannot rewrite serialized cue data",
+                    failures);
+
+                source.ConfigureAssets(
+                    asset);
+
+                var cueIdMutationRejected =
+                    false;
+                var cueAssetMutationRejected =
+                    false;
+
+                try
+                {
+                    ((IList<string>)
+                        source.CueIds)
+                        .Add(
+                            "external-cue-id");
+                }
+                catch (NotSupportedException)
+                {
+                    cueIdMutationRejected =
+                        true;
+                }
+
+                try
+                {
+                    ((IList<BakedMotionCueAsset>)
+                        source.CueAssets)
+                        .Add(
+                            asset);
+                }
+                catch (NotSupportedException)
+                {
+                    cueAssetMutationRejected =
+                        true;
+                }
+
+                Expect(
+                    cueIdMutationRejected &&
+                    cueAssetMutationRejected &&
+                    source.CueIds.Count == 1 &&
+                    source.CueIds[0] ==
+                        "owned-asset-cue",
+                    "baked motion cue source must expose read-only cue id/asset views instead of mutable backing collections",
+                    failures);
+
+                asset.SetCue(
+                    CreateInvalidValidationCue(
+                        "invalid-asset-cue"));
+
+                var invalidAssetRejected =
+                    !source.RebuildCues(
+                        out var invalidAssetError);
+                var previousAssetCueStillSamples =
+                    source.TrySampleCue(
+                        "owned-asset-cue",
+                        0.5f,
+                        out var previousAssetPose,
+                        out var previousAssetSampleError);
+
+                Expect(
+                    invalidAssetRejected &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidAssetError) &&
+                    source.CueIds.Count == 1 &&
+                    source.CueIds[0] ==
+                        "owned-asset-cue" &&
+                    previousAssetCueStillSamples &&
+                    previousAssetPose != null &&
+                    string.IsNullOrWhiteSpace(
+                        previousAssetSampleError),
+                    "failed baked cue asset rebuild must keep the previous validated live cue set intact",
+                    failures);
+
+                var runtimeCue =
+                    CreateValidationCue(
+                        "runtime-owned-cue");
+
+                source.ConfigureCues(
+                    runtimeCue);
+
+                runtimeCue.CueId =
+                    "caller-mutated-runtime-cue";
+                runtimeCue
+                    .RootPositionOffsets[0] =
+                        new Vector3(
+                            5f,
+                            0f,
+                            0f);
+
+                var runtimeCueStillSamples =
+                    source.TrySampleCue(
+                        "runtime-owned-cue",
+                        0.5f,
+                        out var runtimePose,
+                        out var runtimeSampleError);
+
+                Expect(
+                    source.CueIds.Count == 1 &&
+                    source.CueIds[0] ==
+                        "runtime-owned-cue" &&
+                    runtimeCueStillSamples &&
+                    runtimePose != null &&
+                    string.IsNullOrWhiteSpace(
+                        runtimeSampleError),
+                    "ConfigureCues must deep-clone caller-owned cue definitions before installing them into the live runtime",
+                    failures);
+
+                source.ConfigureCues(
+                    CreateInvalidValidationCue(
+                        "invalid-runtime-cue"));
+
+                var configuredRollbackSamples =
+                    source.TrySampleCue(
+                        "runtime-owned-cue",
+                        0.5f,
+                        out var rollbackPose,
+                        out var rollbackSampleError);
+
+                Expect(
+                    source.CueIds.Count == 1 &&
+                    source.CueIds[0] ==
+                        "runtime-owned-cue" &&
+                    configuredRollbackSamples &&
+                    rollbackPose != null &&
+                    string.IsNullOrWhiteSpace(
+                        rollbackSampleError),
+                    "failed ConfigureCues replacement must restore the previous configured/live cue set",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "baked motion cue ownership validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+
+                if (asset != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            asset);
+                }
+            }
+        }
+
+        private static BakedMotionCueDefinition
+            CreateValidationCue(
+                string cueId)
+        {
+            return new BakedMotionCueDefinition
+            {
+                CueId =
+                    cueId,
+                DurationSeconds =
+                    1f,
+                FrameCount =
+                    2,
+                RootPositionOffsets =
+                    new[]
+                    {
+                        Vector3.zero,
+                        new Vector3(
+                            1f,
+                            0f,
+                            0f)
+                    },
+                RootRotationOffsets =
+                    new[]
+                    {
+                        Quaternion.identity,
+                        Quaternion.identity
+                    },
+                Bones =
+                    Array.Empty<
+                        BakedBoneMotionCueTrack>(),
+                Markers =
+                    Array.Empty<
+                        BakedMotionCueMarker>()
+            };
+        }
+
+        private static BakedMotionCueDefinition
+            CreateInvalidValidationCue(
+                string cueId)
+        {
+            var cue =
+                CreateValidationCue(
+                    cueId);
+            cue.RootPositionOffsets =
+                new[]
+                {
+                    Vector3.zero
+                };
+            return cue;
         }
 
         private static string AssetPathToAbsolutePath(
