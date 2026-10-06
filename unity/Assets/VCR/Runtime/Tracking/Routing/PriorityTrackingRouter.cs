@@ -81,6 +81,7 @@ namespace VCR.Runtime.Tracking.Routing
         private long _bodySourceSwitches;
         private long _poseSourceSwitches;
         private long _expressionSourceSwitches;
+        private long _providerFailureCount;
 
         private TrackingRouteStatus _routeStatus;
 
@@ -111,47 +112,90 @@ namespace VCR.Runtime.Tracking.Routing
         {
             ResolveProviders();
 
-            var preferredUsable =
-                TryGetUsableFaceCandidate(
-                    _preferredFaceProvider,
-                    _preferredPresence,
-                    _preferredFaceHealth,
-                    out var preferredFrame);
-            var preferredOutranksFallback =
-                preferredUsable &&
-                PreferredFaceOutranksFallback();
-
-            UpdateFallbackFaceActivation(
-                preferredUsable,
-                preferredOutranksFallback);
-
-            TrackingFrame fallbackFrame = null;
-            var fallbackUsable = false;
-
-            if (!preferredUsable ||
-                !preferredOutranksFallback)
-            {
-                fallbackUsable =
-                    TryGetUsableFaceCandidate(
-                        _fallbackProvider,
-                        _fallbackPresence,
-                        _fallbackHealth,
-                        out fallbackFrame);
-            }
-
             var faceSelection =
-                SelectFaceSource(
+                FaceSourceSelection.None;
+
+            try
+            {
+                var preferredUsable =
+                    TryGetUsableFaceCandidate(
+                        _preferredFaceProvider,
+                        _preferredPresence,
+                        _preferredFaceHealth,
+                        out var preferredFrame);
+                var preferredOutranksFallback =
+                    preferredUsable &&
+                    PreferredFaceOutranksFallback();
+
+                UpdateFallbackFaceActivation(
                     preferredUsable,
-                    fallbackUsable,
                     preferredOutranksFallback);
 
-            UpdateFaceSnapshot(
-                faceSelection,
-                preferredFrame,
-                fallbackFrame);
-            UpdateBodyHandsSnapshot();
-            UpdateExternalPoseSnapshots();
-            UpdatePresence();
+                TrackingFrame fallbackFrame = null;
+                var fallbackUsable = false;
+
+                if (!preferredUsable ||
+                    !preferredOutranksFallback)
+                {
+                    fallbackUsable =
+                        TryGetUsableFaceCandidate(
+                            _fallbackProvider,
+                            _fallbackPresence,
+                            _fallbackHealth,
+                            out fallbackFrame);
+                }
+
+                faceSelection =
+                    SelectFaceSource(
+                        preferredUsable,
+                        fallbackUsable,
+                        preferredOutranksFallback);
+
+                UpdateFaceSnapshot(
+                    faceSelection,
+                    preferredFrame,
+                    fallbackFrame);
+            }
+            catch
+            {
+                _providerFailureCount++;
+                _latestFace = null;
+                ResetFaceSelection();
+            }
+
+            try
+            {
+                UpdateBodyHandsSnapshot();
+            }
+            catch
+            {
+                _providerFailureCount++;
+                _latestBodyHands = null;
+                ResetBodySelection();
+            }
+
+            try
+            {
+                UpdateExternalPoseSnapshots();
+            }
+            catch
+            {
+                _providerFailureCount++;
+                _latestHumanoidPose = null;
+                _latestExpressions = null;
+                ResetHumanoidPoseSelection();
+                ResetExpressionSelection();
+            }
+
+            try
+            {
+                UpdatePresence();
+            }
+            catch
+            {
+                _providerFailureCount++;
+            }
+
             UpdateRouteStatus(
                 faceSelection ==
                 FaceSourceSelection.Preferred);
@@ -513,11 +557,18 @@ namespace VCR.Runtime.Tracking.Routing
                 !preferredUsable ||
                 !preferredOutranksFallback;
 
-            if (_fallbackFaceActivation.FaceTrackingEnabled !=
-                shouldEnableFallback)
+            try
             {
-                _fallbackFaceActivation.SetFaceTrackingEnabled(
-                    shouldEnableFallback);
+                if (_fallbackFaceActivation.FaceTrackingEnabled !=
+                    shouldEnableFallback)
+                {
+                    _fallbackFaceActivation.SetFaceTrackingEnabled(
+                        shouldEnableFallback);
+                }
+            }
+            catch
+            {
+                _providerFailureCount++;
             }
         }
 
@@ -763,13 +814,20 @@ namespace VCR.Runtime.Tracking.Routing
                 !externalUsable ||
                 !externalOutranksFallback;
 
-            if (_expressionFallbackActivation
-                    .ExpressionTrackingEnabled !=
-                shouldEnableFallback)
+            try
             {
-                _expressionFallbackActivation
-                    .SetExpressionTrackingEnabled(
-                        shouldEnableFallback);
+                if (_expressionFallbackActivation
+                        .ExpressionTrackingEnabled !=
+                    shouldEnableFallback)
+                {
+                    _expressionFallbackActivation
+                        .SetExpressionTrackingEnabled(
+                            shouldEnableFallback);
+                }
+            }
+            catch
+            {
+                _providerFailureCount++;
             }
         }
 
@@ -919,12 +977,7 @@ namespace VCR.Runtime.Tracking.Routing
             output.Add(
                 new RuntimeMetric(
                     "tracking.route.fallback_expression_inference_enabled",
-                    IsServiceAlive(
-                        _expressionFallbackProvider) &&
-                    (!IsServiceAlive(
-                         _expressionFallbackActivation) ||
-                     _expressionFallbackActivation
-                         .ExpressionTrackingEnabled)
+                    IsExpressionFallbackInferenceEnabled()
                         ? 1.0
                         : 0.0,
                     "bool"));
@@ -967,6 +1020,12 @@ namespace VCR.Runtime.Tracking.Routing
                     _expressionSourceSwitches,
                     "count"));
 
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.provider_failures",
+                    _providerFailureCount,
+                    "count"));
+
             AddHealthMetric(
                 output,
                 "tracking.route.preferred_face_health",
@@ -1006,9 +1065,7 @@ namespace VCR.Runtime.Tracking.Routing
                 MonotonicClock.NowMicroseconds();
 
             var fallbackFaceInferenceEnabled =
-                IsServiceAlive(_fallbackProvider) &&
-                (!IsServiceAlive(_fallbackFaceActivation) ||
-                 _fallbackFaceActivation.FaceTrackingEnabled);
+                IsFallbackFaceInferenceEnabled();
 
             _routeStatus =
                 new TrackingRouteStatus(
@@ -1080,25 +1137,86 @@ namespace VCR.Runtime.Tracking.Routing
                 snapshot.IsUsable;
         }
 
-        private static void AddHealthMetric(
+        private void AddHealthMetric(
             List<RuntimeMetric> output,
             string name,
             ITrackingSourceHealthProvider provider,
             TrackingRegion region)
         {
-            if (!IsServiceAlive(provider) ||
-                !provider.TryGetSourceHealth(
-                    region,
-                    out var snapshot))
+            if (!IsServiceAlive(provider))
             {
                 return;
             }
 
-            output.Add(
-                new RuntimeMetric(
-                    name,
-                    (int)snapshot.Health.State,
-                    "enum"));
+            try
+            {
+                if (!provider.TryGetSourceHealth(
+                        region,
+                        out var snapshot))
+                {
+                    return;
+                }
+
+                output.Add(
+                    new RuntimeMetric(
+                        name,
+                        (int)snapshot.Health.State,
+                        "enum"));
+            }
+            catch
+            {
+                _providerFailureCount++;
+            }
+        }
+
+        private bool IsFallbackFaceInferenceEnabled()
+        {
+            if (!IsServiceAlive(_fallbackProvider))
+            {
+                return false;
+            }
+
+            if (!IsServiceAlive(_fallbackFaceActivation))
+            {
+                return true;
+            }
+
+            try
+            {
+                return _fallbackFaceActivation
+                    .FaceTrackingEnabled;
+            }
+            catch
+            {
+                _providerFailureCount++;
+                return false;
+            }
+        }
+
+        private bool IsExpressionFallbackInferenceEnabled()
+        {
+            if (!IsServiceAlive(
+                    _expressionFallbackProvider))
+            {
+                return false;
+            }
+
+            if (!IsServiceAlive(
+                    _expressionFallbackActivation))
+            {
+                return true;
+            }
+
+            try
+            {
+                return _expressionFallbackActivation
+                    .ExpressionTrackingEnabled;
+            }
+            catch
+            {
+                _providerFailureCount++;
+                return false;
+            }
         }
 
         private static void AddAgeMetric(
