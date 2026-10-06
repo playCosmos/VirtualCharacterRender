@@ -601,6 +601,10 @@ namespace VCR.Editor.P9
                 default(EventRuntimeTraceEntry);
 
             engine.TraceEmitted +=
+                _ =>
+                    throw new InvalidOperationException(
+                        "synthetic trace subscriber failure");
+            engine.TraceEmitted +=
                 entry =>
                 {
                     traceCount++;
@@ -680,8 +684,10 @@ namespace VCR.Editor.P9
                     "rule-diagnostics" &&
                 lastTrace.Outcome ==
                     EventRuntimeTraceOutcome.Matched &&
-                lastTrace.EmittedCommands == 1,
-                "opt-in tracing must emit a structured rule outcome only after tracing is enabled",
+                lastTrace.EmittedCommands == 1 &&
+                engine.TraceSubscriberFailureCount ==
+                    1,
+                "opt-in tracing must isolate a failing subscriber and still emit a structured rule outcome to later subscribers",
                 failures);
 
             engine.TraceEnabled = false;
