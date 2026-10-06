@@ -242,6 +242,11 @@ require_source_contains(
 )
 require_source_contains(
     p3_tracking_validation,
+    "VRM humanoid pose application must contain non-finite smoothing/expression values",
+    "P3 validation must cover full-body VRM numeric containment",
+)
+require_source_contains(
+    p3_tracking_validation,
     "tracking timestamp math must preserve full-range elapsed time without signed overflow",
     "P3 validation must cover extreme tracking timestamp arithmetic",
 )
@@ -3285,6 +3290,31 @@ require_source_contains(
     humanoid_pose_target,
     "MaxTrackedCustomExpressions",
     "VRM custom-expression application state must remain bounded",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "SanitizeConfiguration();",
+    "VRM humanoid pose target must sanitize serialized smoothing values before runtime use",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "if (!TryToUnity(\n                        sourcePose.LocalRotation,",
+    "VRM humanoid pose target must reject non-finite bone rotations before Transform application",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "var hasSourcePosition =\n                TryToUnity(",
+    "VRM humanoid pose target must validate root position before applying it",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "var hasSourceRotation =\n                TryToUnity(",
+    "VRM humanoid pose target must validate root rotation before applying it",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "private static float Clamp01(",
+    "VRM humanoid expression application must finite-clamp standard and custom weights",
 )
 require_source_contains(
     humanoid_pose_target,
