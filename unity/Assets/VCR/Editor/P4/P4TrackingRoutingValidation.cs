@@ -536,6 +536,78 @@ namespace VCR.Editor.P4
                     bodyProvider.FaceReadCount == 0,
                     "default preferred-face routing must sample the selected preferred face once and skip an outranked fallback face read",
                     failures);
+
+                var replacementFace =
+                    CreateFaceFrame(
+                        faceProvider.SourceId,
+                        sequence: 31,
+                        nowUs + 1);
+                var replacementBody =
+                    CreateBodyFrame(
+                        bodyProvider.SourceId,
+                        sequence: 41,
+                        nowUs + 1);
+                var replacementPose =
+                    CreateHumanoidPoseFrame(
+                        externalProvider.SourceId,
+                        sequence: 51,
+                        nowUs + 1);
+                var replacementExpression =
+                    CreateExpressionFrame(
+                        externalProvider.SourceId,
+                        sequence: 52,
+                        nowUs + 1,
+                        value: 0.7f);
+
+                faceProvider.FaceFrame =
+                    replacementFace;
+                bodyProvider.BodyHandsFrame =
+                    replacementBody;
+                externalProvider.HumanoidPoseFrame =
+                    replacementPose;
+                externalProvider.ExpressionFrame =
+                    replacementExpression;
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.TryGetLatestFace(
+                        out faceFrame) &&
+                    ReferenceEquals(
+                        faceFrame,
+                        replacementFace),
+                    "router must observe a new immutable face frame even when source id and sequence are reused without a loss gap",
+                    failures);
+                Expect(
+                    router.TryGetLatestBodyHands(
+                        out bodyFrame) &&
+                    ReferenceEquals(
+                        bodyFrame,
+                        replacementBody),
+                    "router must observe a new immutable body frame even when source id and sequence are reused without a loss gap",
+                    failures);
+                Expect(
+                    router.TryGetLatestHumanoidPose(
+                        out poseFrame) &&
+                    ReferenceEquals(
+                        poseFrame,
+                        replacementPose),
+                    "router must observe a new immutable pose frame even when source id and sequence are reused without a loss gap",
+                    failures);
+                Expect(
+                    router.TryGetLatestExpressions(
+                        out expressionFrame) &&
+                    ReferenceEquals(
+                        expressionFrame,
+                        replacementExpression),
+                    "router must observe a new immutable expression frame even when source id and sequence are reused without a loss gap",
+                    failures);
+                Expect(
+                    faceProvider.FaceReadCount == 2 &&
+                    bodyProvider.FaceReadCount == 0,
+                    "same-sequence replacement must preserve single-sample preferred routing and skipped fallback face reads",
+                    failures);
             }
             catch (Exception exception)
             {
