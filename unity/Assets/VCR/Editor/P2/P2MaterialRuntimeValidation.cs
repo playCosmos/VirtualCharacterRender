@@ -80,17 +80,29 @@ namespace VCR.Editor.P2
                     controller.GetSlots();
 
                 Expect(
-                    slots.Length == 1,
-                    "validation model must expose exactly one material slot",
+                    slots.Length == 1 &&
+                    controller.SlotCount == 1 &&
+                    controller.TryGetSlotAt(
+                        0,
+                        out var indexedSlot) &&
+                    indexedSlot.Id ==
+                        slots[0].Id &&
+                    !controller.TryGetSlotAt(
+                        -1,
+                        out _) &&
+                    !controller.TryGetSlotAt(
+                        1,
+                        out _),
+                    "validation model must expose one stable material slot through both defensive snapshot and allocation-free indexed lookup",
                     failures);
 
-                if (slots.Length != 1)
+                if (slots.Length != 1 ||
+                    !controller.TryGetSlotAt(
+                        0,
+                        out var slot))
                 {
                     return Finish(failures);
                 }
-
-                var slot =
-                    slots[0];
 
                 var preservePreset =
                     new MaterialOverridePreset
