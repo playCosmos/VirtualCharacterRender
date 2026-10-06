@@ -161,3 +161,5 @@ Lighting configuration now follows the same fail-closed contract. `ConfigureLigh
 Non-Cut transition target validation now follows the same structured failure boundary: exceptions from `IEnvironmentTransitionTarget.ValidateEnvironmentTransition` are returned as `false` plus an error string before state id, root visibility, or transition status is mutated.
 
 `EnvironmentTransitionSpec` now normalizes non-finite durations to `0s` and unsupported enum values to `Cut`; `ConfigureDefaultTransition` uses the same normalized spec before persisting defaults. Invalid serialized/API inputs therefore degrade to a safe immediate transition instead of poisoning later state changes with NaN/Infinity or an unknown mode.
+
+`EnvironmentLightingProfile` now normalizes non-finite RGB channels to neutral `1`, non-finite intensity to `1`, and non-finite weight to `0`; finite values retain the existing clamp semantics. Invalid numeric input therefore cannot propagate NaN/Infinity into lighting targets or renderer state.
