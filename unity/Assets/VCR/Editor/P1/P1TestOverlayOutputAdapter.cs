@@ -11,6 +11,7 @@ namespace VCR.Editor.P1
         public int ApplyCount { get; private set; }
         public int ShutdownCount { get; private set; }
         public bool ThrowOnApply { get; set; }
+        public bool ThrowOnShutdown { get; set; }
         public OverlayOutputSettings LastSettings { get; private set; }
 
         public OverlayOutputSettings Settings =>
@@ -39,6 +40,12 @@ namespace VCR.Editor.P1
 
         public void Shutdown()
         {
+            if (ThrowOnShutdown)
+            {
+                throw new InvalidOperationException(
+                    "P1 overlay shutdown failure");
+            }
+
             ShutdownCount++;
         }
     }
