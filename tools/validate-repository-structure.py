@@ -903,6 +903,16 @@ require_source_contains(
     "_outputSummaryCache",
     "application UI Output refresh must cache unchanged readiness/summary state",
 )
+forbid_source_pattern(
+    application_ui,
+    r""Transparent: "\s*\+|"Topmost: "\s*\+|"Click-through: "\s*\+",
+    "output control refresh must use stable label literals instead of rebuilding unchanged strings",
+)
+require_source_contains(
+    application_ui,
+    "var outputSettings =",
+    "output control refresh must sample overlay settings once per refresh pass",
+)
 require_source_contains(
     application_ui,
     "_materialSummaryCache",
