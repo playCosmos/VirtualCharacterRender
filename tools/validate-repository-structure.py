@@ -1195,6 +1195,23 @@ require_source_contains(
     "overlay recovery getter/apply/shutdown failures must be returned as false/error",
 )
 
+environment_transition_spec = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "EnvironmentTransitionSpec.cs"
+)
+require_source_contains(
+    environment_transition_spec,
+    "IsSupportedMode(mode)",
+    "environment transition specs must sanitize unsupported enum values",
+)
+require_source_contains(
+    environment_transition_spec,
+    "IsFinite(durationSeconds)",
+    "environment transition specs must sanitize non-finite durations",
+)
+
 basic_environment_runtime = (
     VCR
     / "Runtime"
@@ -1246,6 +1263,11 @@ require_source_contains(
     basic_environment_runtime,
     "\"Environment transition target validation failed: \"",
     "environment transition validation exceptions must be converted into structured failures",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "var normalized =\n                new EnvironmentTransitionSpec(",
+    "default environment transition configuration must reuse normalized transition-spec semantics",
 )
 require_source_contains(
     basic_environment_runtime,
@@ -1335,6 +1357,16 @@ require_source_contains(
     p6_environment_validation,
     "failedProfileAccepted",
     "P6 validation must cover lighting profile rollback after partial target execution",
+)
+require_source_contains(
+    p6_environment_validation,
+    "ValidateTransitionSpecSanitization(",
+    "P6 validation must cover environment transition spec sanitization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "(EnvironmentTransitionMode)999",
+    "P6 validation must cover unsupported transition-mode normalization",
 )
 
 p1_renderer_validation = (
