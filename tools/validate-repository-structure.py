@@ -1491,6 +1491,34 @@ require_source_contains(
     "prop.set_active must accept only explicit 0/1 boolean values",
 )
 
+scene_sequence_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "SceneSequenceEventActionHandler.cs"
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "CloneBindings(",
+    "scene sequence configuration must deep-clone caller-owned bindings",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "CloneSteps(",
+    "scene sequence configuration must deep-clone mutable step arrays and step objects",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "TryBuildSequenceMap(",
+    "scene sequence rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "double.IsNaN(",
+    "scene sequence valued steps must reject non-finite numeric values",
+)
+
 p11_appearance_validation = (
     VCR
     / "Editor"
@@ -1551,6 +1579,16 @@ require_source_contains(
     p11_appearance_validation,
     "double.PositiveInfinity",
     "P11 validation must cover non-finite prop boolean rejection",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-sequence\"",
+    "P11 validation must prove scene sequence caller mutation cannot rewrite the live sequence map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-sequence\"",
+    "P11 validation must prove invalid/non-finite scene sequence replacement preserves the previous live map",
 )
 
 p6_environment_validation = (
