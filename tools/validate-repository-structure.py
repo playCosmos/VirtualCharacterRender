@@ -960,6 +960,12 @@ require_source_contains(
     "RestoreStateAfterCancelledCharacterLoad(",
     "scene character loading must restore idle state after an isolated cancellation",
 )
+require_source_order(
+    single_character_scene_runtime,
+    "_overlayOutput.Apply(settings);",
+    "_overlayConfiguration =\n                nextConfiguration;",
+    "scene overlay configuration must commit only after the adapter apply succeeds",
+)
 require_source_contains(
     single_character_scene_runtime,
     "_state !=\n                    SceneRuntimeState.LoadingCharacter",
@@ -1036,6 +1042,11 @@ require_source_contains(
     p1_renderer_validation,
     "cancelled-load recovery must not overwrite a newer Suspend/Unload lifecycle state",
     "P1 validation must guard lifecycle states newer than a cancelled load",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "failed overlay adapter apply must not commit an unapplied configuration snapshot",
+    "P1 validation must cover overlay adapter failure before configuration commit",
 )
 
 require_source_contains(
