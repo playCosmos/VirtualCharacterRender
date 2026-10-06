@@ -292,11 +292,26 @@ namespace VCR.Runtime.Scene
 
         public RenderRuntimeSettings CaptureRenderSettings()
         {
+            TryCaptureRenderSettings(
+                out var settings);
+            return settings;
+        }
+
+        public bool TryCaptureRenderSettings(
+            out RenderRuntimeSettings settings)
+        {
             ResolveDependencies();
 
-            return renderBootstrap != null
-                ? renderBootstrap.CaptureSettings()
-                : RenderRuntimeSettings.Default1080p;
+            if (renderBootstrap == null)
+            {
+                settings =
+                    RenderRuntimeSettings.Default1080p;
+                return false;
+            }
+
+            settings =
+                renderBootstrap.CaptureSettings();
+            return true;
         }
 
         public void ApplyRenderSettings(
