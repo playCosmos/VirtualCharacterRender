@@ -32,7 +32,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, duplicate-mask last-value-wins, zero-contribution pose fast-path, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, duplicate-mask last-value-wins, zero/full-override pose reference fast-paths, pure override expression reference reuse, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -187,6 +187,18 @@ namespace VCR.Editor.P5
                         ExpressionBlendMode.Additive),
                     baseState),
                 "zero-weight expression blend must preserve the immutable base-state reference without allocating a replacement state",
+                failures);
+
+            Expect(
+                ReferenceEquals(
+                    ExpressionMixerMath.Blend(
+                        baseState: null,
+                        layerState,
+                        weight: 1f,
+                        deadzone: 0f,
+                        ExpressionBlendMode.Override),
+                    layerState),
+                "pure full-weight expression override without a base state must preserve the immutable layer-state reference",
                 failures);
 
             var duplicateBase =
@@ -479,6 +491,50 @@ namespace VCR.Editor.P5
                     zeroContribution,
                     basePose),
                 "fully zero pose masks must preserve the immutable base-pose reference without allocating replacement arrays",
+                failures);
+
+            var fullMask =
+                new HumanoidPoseLayerMask();
+            var fullOverrideSettings =
+                new HumanoidPoseLayerSettings();
+            fullOverrideSettings.Configure(
+                layerEnabled: true,
+                layerRole:
+                    MotionLayerRole.Tracking,
+                mode:
+                    HumanoidPoseBlendMode.Override,
+                layerWeight: 1f,
+                layerMask: fullMask);
+
+            var fullOverride =
+                HumanoidPoseMixerMath.Blend(
+                    basePose,
+                    layerPose,
+                    fullOverrideSettings,
+                    out mismatch);
+
+            Expect(
+                !mismatch &&
+                fullMask.HasFullWeight &&
+                ReferenceEquals(
+                    fullOverride,
+                    layerPose),
+                "full-weight pose override that covers the base pose must reuse the immutable layer-pose reference",
+                failures);
+
+            var fullOverrideWithoutBase =
+                HumanoidPoseMixerMath.Blend(
+                    basePose: null,
+                    layerPose,
+                    fullOverrideSettings,
+                    out mismatch);
+
+            Expect(
+                !mismatch &&
+                ReferenceEquals(
+                    fullOverrideWithoutBase,
+                    layerPose),
+                "full-weight pose override without a base pose must reuse the immutable layer-pose reference",
                 failures);
 
             var duplicateMask =
