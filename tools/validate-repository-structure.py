@@ -388,6 +388,21 @@ require_source_contains(
     "command.Value >\n                     float.MaxValue",
     "audio action volume overrides must reject values outside the float range",
 )
+require_source_contains(
+    audio_event_action_handler,
+    "CloneBindings(",
+    "audio binding configuration must deep-clone caller-owned binding objects",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "TryBuildBindingMap(",
+    "audio binding rebuild must stage validation before replacing the live binding map",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "CommitBindingMap(",
+    "audio binding rebuild must commit only a fully validated staged map",
+)
 
 p9_event_runtime_validation = (
     VCR
@@ -414,6 +429,16 @@ require_source_contains(
     p9_event_runtime_validation,
     "double.PositiveInfinity",
     "P9 audio validation must inject non-finite values explicitly",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "\"mutated-external-audio\"",
+    "P9 audio validation must prove caller-owned binding mutation cannot rewrite the live audio map",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "\"invalid\"",
+    "P9 audio validation must prove invalid replacement input preserves the previous live binding map",
 )
 
 vmc_accumulator = (
