@@ -19,7 +19,25 @@ namespace VCR.Runtime.Tracking.Mixing
         public HumanoidPoseBlendMode BlendMode => blendMode;
         public float Weight => Mathf.Clamp01(weight);
         public HumanoidPoseLayerMask Mask =>
+            RuntimeMask.Clone();
+
+        internal HumanoidPoseLayerMask RuntimeMask =>
             mask ??= new HumanoidPoseLayerMask();
+
+        public HumanoidPoseLayerSettings Clone()
+        {
+            var clone =
+                new HumanoidPoseLayerSettings();
+
+            clone.Configure(
+                Enabled,
+                Role,
+                BlendMode,
+                Weight,
+                RuntimeMask);
+
+            return clone;
+        }
 
         public void Configure(
             bool layerEnabled,
@@ -33,7 +51,7 @@ namespace VCR.Runtime.Tracking.Mixing
             blendMode = mode;
             weight = Mathf.Clamp01(layerWeight);
             mask =
-                layerMask ??
+                layerMask?.Clone() ??
                 new HumanoidPoseLayerMask();
         }
     }
