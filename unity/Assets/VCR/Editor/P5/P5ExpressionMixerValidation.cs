@@ -275,6 +275,48 @@ namespace VCR.Editor.P5
         private static void ValidatePoseMath(
             List<string> failures)
         {
+            var nonFiniteMask =
+                new HumanoidPoseLayerMask();
+            nonFiniteMask.SetDefaultBoneWeight(
+                float.NaN);
+            nonFiniteMask.SetRootWeights(
+                float.PositiveInfinity,
+                float.NegativeInfinity);
+            nonFiniteMask.SetBoneWeight(
+                HumanoidBoneId.LeftUpperArm,
+                float.NaN);
+            var nonFiniteBone =
+                new HumanoidBoneWeight(
+                    HumanoidBoneId.RightUpperArm,
+                    float.PositiveInfinity);
+
+            ExpectClose(
+                nonFiniteMask.DefaultBoneWeight,
+                1f,
+                "non-finite default pose mask weight must sanitize to full weight",
+                failures);
+            ExpectClose(
+                nonFiniteMask.RootPositionWeight,
+                1f,
+                "non-finite root-position pose mask weight must sanitize to full weight",
+                failures);
+            ExpectClose(
+                nonFiniteMask.RootRotationWeight,
+                1f,
+                "non-finite root-rotation pose mask weight must sanitize to full weight",
+                failures);
+            ExpectClose(
+                nonFiniteMask.GetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm),
+                1f,
+                "non-finite mask bone override must fall back to the current default bone weight",
+                failures);
+            ExpectClose(
+                nonFiniteBone.Weight,
+                0f,
+                "standalone non-finite humanoid bone weight must sanitize to zero",
+                failures);
+
             var mask =
                 new HumanoidPoseLayerMask();
             mask.SetDefaultBoneWeight(0f);
