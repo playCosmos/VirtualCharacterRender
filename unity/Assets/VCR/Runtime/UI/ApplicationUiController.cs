@@ -4566,11 +4566,10 @@ namespace VCR.Runtime.UI
                         ApplicationUiModel.GetTitle(
                             section);
 
-                    label.text =
-                        available
-                            ? title
-                            : title +
-                              "  — unavailable";
+                    SetSectionLabel(
+                        label,
+                        title,
+                        available);
                 }
             }
 
@@ -6695,6 +6694,59 @@ namespace VCR.Runtime.UI
             return service is UnityEngine.Object unityObject
                 ? unityObject != null
                 : true;
+        }
+
+        private static void SetSectionLabel(
+            Text label,
+            string title,
+            bool available)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            title ??=
+                string.Empty;
+
+            if (available)
+            {
+                if (!string.Equals(
+                        label.text,
+                        title,
+                        StringComparison.Ordinal))
+                {
+                    label.text =
+                        title;
+                }
+
+                return;
+            }
+
+            const string suffix =
+                "  — unavailable";
+            var current =
+                label.text ??
+                string.Empty;
+            var expectedLength =
+                title.Length +
+                suffix.Length;
+
+            if (current.Length ==
+                    expectedLength &&
+                current.StartsWith(
+                    title,
+                    StringComparison.Ordinal) &&
+                current.EndsWith(
+                    suffix,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            label.text =
+                title +
+                suffix;
         }
 
         private void SetButtonLabel(
