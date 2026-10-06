@@ -928,6 +928,31 @@ require_source_contains(
     "GetSettingsCapabilityLabel(",
     "settings capability refresh must cache dynamic enable/disable/retry labels",
 )
+require_source_contains(
+    application_ui,
+    "GetAppearanceTransitionButtonLabel(",
+    "appearance transition control refresh must cache dynamic transition/progress labels",
+)
+require_source_contains(
+    application_ui,
+    "GetEnvironmentTransitionModeLabel(",
+    "environment transition control refresh must use stable enum label literals",
+)
+require_source_contains(
+    application_ui,
+    "GetDiagnosticsNextPageLabel(",
+    "diagnostics paging control refresh must cache dynamic page labels",
+)
+forbid_source_pattern(
+    application_ui,
+    r'"Transition: "\s*\+',
+    "transition control refresh labels must not rebuild unchanged prefix strings",
+)
+forbid_source_pattern(
+    application_ui,
+    r'\$"Next Metrics \(',
+    "diagnostics paging refresh must not interpolate a new label every tick",
+)
 forbid_source_pattern(
     application_ui,
     r'"Trace: "\s*\+|"VSync: "\s*\+|"Background: "\s*\+|"CSV Evidence: "\s*\+|"Console Log: "\s*\+',
