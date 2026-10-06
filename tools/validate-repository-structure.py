@@ -711,6 +711,11 @@ require_source_contains(
 )
 forbid_source_pattern(
     application_ui,
+    r"RuntimeMetric\[\]\)\s*\n?\s*source\.Clone\s*\(",
+    "application UI Diagnostics refresh must not clone already-sorted published metric arrays",
+)
+forbid_source_pattern(
+    application_ui,
     r"new\s+(?:System\.Text\.)?StringBuilder\s*\(",
     "application UI refresh must reuse its shared StringBuilder instead of allocating a new builder",
 )
@@ -1034,6 +1039,16 @@ require_source_contains(
     runtime_diagnostics,
     "_lastFaceFrame",
     "runtime diagnostics update counting must observe immutable frame identity",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_metrics.Sort(",
+    "runtime diagnostics must publish subsystem metrics in deterministic sorted order",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "CompareRuntimeMetrics(",
+    "runtime diagnostics must reuse its report-cadence metric comparator",
 )
 require_source_contains(
     runtime_diagnostics,
