@@ -45,10 +45,10 @@ namespace VCR.Runtime.Diagnostics
         private double _lastReportTime;
         private float _nextProviderSearchTime;
 
-        private long _lastFaceSequence = -1;
-        private long _lastBodySequence = -1;
-        private long _lastPoseSequence = -1;
-        private long _lastExpressionSequence = -1;
+        private TrackingFrame _lastFaceFrame;
+        private TrackingFrame _lastBodyFrame;
+        private TrackingFrame _lastPoseFrame;
+        private TrackingFrame _lastExpressionFrame;
 
         private int _faceUpdates;
         private int _bodyUpdates;
@@ -412,10 +412,10 @@ namespace VCR.Runtime.Diagnostics
             trackingProviderBehaviour =
                 _provider as MonoBehaviour;
 
-            _lastFaceSequence = -1;
-            _lastBodySequence = -1;
-            _lastPoseSequence = -1;
-            _lastExpressionSequence = -1;
+            _lastFaceFrame = null;
+            _lastBodyFrame = null;
+            _lastPoseFrame = null;
+            _lastExpressionFrame = null;
         }
 
         private void SampleFrameTime()
@@ -448,7 +448,7 @@ namespace VCR.Runtime.Diagnostics
             {
                 Observe(
                     face,
-                    ref _lastFaceSequence,
+                    ref _lastFaceFrame,
                     ref _faceUpdates,
                     ref _faceAgeMs,
                     nowUs);
@@ -459,7 +459,7 @@ namespace VCR.Runtime.Diagnostics
             {
                 Observe(
                     body,
-                    ref _lastBodySequence,
+                    ref _lastBodyFrame,
                     ref _bodyUpdates,
                     ref _bodyAgeMs,
                     nowUs);
@@ -470,7 +470,7 @@ namespace VCR.Runtime.Diagnostics
             {
                 Observe(
                     pose,
-                    ref _lastPoseSequence,
+                    ref _lastPoseFrame,
                     ref _poseUpdates,
                     ref _poseAgeMs,
                     nowUs);
@@ -482,7 +482,7 @@ namespace VCR.Runtime.Diagnostics
             {
                 Observe(
                     expressions,
-                    ref _lastExpressionSequence,
+                    ref _lastExpressionFrame,
                     ref _expressionUpdates,
                     ref _expressionAgeMs,
                     nowUs);
@@ -491,14 +491,16 @@ namespace VCR.Runtime.Diagnostics
 
         private static void Observe(
             TrackingFrame frame,
-            ref long lastSequence,
+            ref TrackingFrame lastFrame,
             ref int updates,
             ref double ageMs,
             long nowUs)
         {
-            if (frame.Sequence != lastSequence)
+            if (!ReferenceEquals(
+                    frame,
+                    lastFrame))
             {
-                lastSequence = frame.Sequence;
+                lastFrame = frame;
                 updates++;
             }
 
