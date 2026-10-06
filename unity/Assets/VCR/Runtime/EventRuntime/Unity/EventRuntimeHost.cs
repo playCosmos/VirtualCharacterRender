@@ -73,10 +73,79 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return null;
             }
 
-            return current[index];
+            return EventRuntimeRuleCloner
+                .CloneRule(
+                    current[index]);
         }
 
         public bool TryGetRule(
+            string ruleId,
+            out EventRuntimeRule rule)
+        {
+            rule = null;
+
+            if (!TryFindRule(
+                    ruleId,
+                    out var candidate))
+            {
+                return false;
+            }
+
+            rule =
+                EventRuntimeRuleCloner
+                    .CloneRule(
+                        candidate);
+            return true;
+        }
+
+        public bool TryGetRuleSummaryAt(
+            int index,
+            out EventRuntimeRuleSummary summary)
+        {
+            summary = default;
+
+            var current =
+                rules;
+
+            if (current == null ||
+                index < 0 ||
+                index >= current.Length ||
+                current[index] == null)
+            {
+                return false;
+            }
+
+            var rule =
+                current[index];
+
+            summary =
+                new EventRuntimeRuleSummary(
+                    rule.Id,
+                    rule.Enabled);
+            return true;
+        }
+
+        public bool TryGetRuleSummary(
+            string ruleId,
+            out EventRuntimeRuleSummary summary)
+        {
+            summary = default;
+
+            if (!TryFindRule(
+                    ruleId,
+                    out var rule))
+            {
+                return false;
+            }
+
+            summary =
+                new EventRuntimeRuleSummary(
+                    rule.Id,
+                    rule.Enabled);
+            return true;
+        }
+
+        private bool TryFindRule(
             string ruleId,
             out EventRuntimeRule rule)
         {
