@@ -730,6 +730,46 @@ require_source_contains(
     "ClearCurrentPresetAndNotify(",
     "appearance preset invalidation must publish a snapshot so cached consumers cannot go stale",
 )
+require_source_contains(
+    appearance_runtime,
+    "NotifyAppearanceChanged(",
+    "appearance change notifications must be routed through subscriber isolation",
+)
+require_source_contains(
+    appearance_runtime,
+    "NotifyStatusChanged(",
+    "appearance status notifications must be routed through subscriber isolation",
+)
+require_source_contains(
+    appearance_runtime,
+    "_appearanceSubscriberFailureCount",
+    "appearance subscriber failures must be observable through diagnostics",
+)
+require_source_contains(
+    appearance_runtime,
+    "_statusSubscriberFailureCount",
+    "appearance status subscriber failures must be observable through diagnostics",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.subscriber.appearance_failures",
+    "appearance subscriber failure diagnostics metric must remain exposed",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.subscriber.status_failures",
+    "appearance status subscriber failure diagnostics metric must remain exposed",
+)
+forbid_source_pattern(
+    appearance_runtime,
+    r"AppearanceChanged\?\.Invoke",
+    "appearance runtime must not let one AppearanceChanged subscriber abort committed state transitions",
+)
+forbid_source_pattern(
+    appearance_runtime,
+    r"StatusChanged\?\.Invoke",
+    "appearance runtime must not let one StatusChanged subscriber abort runtime state transitions",
+)
 
 require_source_contains(
     appearance_runtime,
