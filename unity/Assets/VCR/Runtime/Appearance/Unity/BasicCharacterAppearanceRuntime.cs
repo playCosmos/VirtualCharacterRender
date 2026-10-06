@@ -3403,7 +3403,7 @@ namespace VCR.Runtime.Appearance.Unity
             }
 
             _currentPresetId = null;
-            AppearanceChanged?.Invoke(
+            NotifyAppearanceChanged(
                 Current);
         }
 
