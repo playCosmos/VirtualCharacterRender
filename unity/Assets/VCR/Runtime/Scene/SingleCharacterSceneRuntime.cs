@@ -250,8 +250,22 @@ namespace VCR.Runtime.Scene
                 SetState(SceneRuntimeState.CharacterReady);
                 return loaded;
             }
+            catch (OperationCanceledException)
+            {
+                if (generation == _operationGeneration &&
+                    _state ==
+                        SceneRuntimeState.LoadingCharacter)
+                {
+                    _lastError = null;
+                    SetState(
+                        characterLoader.Current != null
+                            ? SceneRuntimeState.CharacterReady
+                            : SceneRuntimeState.Ready);
+                }
+
+                throw;
+            }
             catch (Exception exception)
-                when (exception is not OperationCanceledException)
             {
                 if (generation == _operationGeneration)
                 {
