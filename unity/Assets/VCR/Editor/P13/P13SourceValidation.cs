@@ -722,6 +722,91 @@ namespace VCR.Editor.P13
                     mappedApplyError,
                     failures);
 
+                var replacementFaceFrame =
+                    new TrackingFrame(
+                        12,
+                        12000,
+                        TrackingRegion.Face,
+                        1f,
+                        true,
+                        face:
+                            face,
+                        sourceId:
+                            "p13-mapping");
+                provider.Face =
+                    replacementFaceFrame;
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "Duplicate"
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "Duplicate"
+                    });
+
+                Expect(
+                    !runtime.ProcessLatest(
+                        out var mutatedMappingError) &&
+                    backend.ParameterApplyCount == 1 &&
+                    mutatedMappingError != null &&
+                    mutatedMappingError.IndexOf(
+                        "Duplicate",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "2D runtime must invalidate cached mapping validation when the same profile object mutates",
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamMouthOpen",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .FaceCoefficient,
+                        FaceCoefficient =
+                            FaceCoefficient.JawOpen,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = -1f,
+                        OutputMax = 1f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            false
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamHappy",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 2f,
+                        ClampInput = true,
+                        UseDefaultWhenUnavailable =
+                            true,
+                        DefaultInputValue = 0.25f
+                    });
+
+                Expect(
+                    runtime.ProcessLatest(
+                        out var recoveredMappingError) &&
+                    backend.ParameterApplyCount == 2,
+                    "2D runtime must revalidate and recover the unaccepted frame after the same profile object is repaired: " +
+                    recoveredMappingError,
+                    failures);
+
                 var faceOnlySnapshot =
                     new Character2DInputSnapshot(
                         faceFrame,
