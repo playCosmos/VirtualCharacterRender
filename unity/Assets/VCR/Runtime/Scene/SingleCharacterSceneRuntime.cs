@@ -231,14 +231,57 @@ namespace VCR.Runtime.Scene
             _capabilities ??=
                 new CapabilityRegistry();
 
-            renderBootstrap.Apply();
-            if (cameraController != null)
+            try
             {
-                cameraController.Apply();
+                renderBootstrap.Apply();
+
+                if (cameraController != null)
+                {
+                    cameraController.Apply();
+                }
+
+                if (lightController != null)
+                {
+                    lightController.Apply();
+                }
             }
-            if (lightController != null)
+            catch (Exception exception)
             {
-                lightController.Apply();
+                var rollbackFailures =
+                    new List<string>();
+
+                RunRollbackStep(
+                    "light",
+                    () =>
+                        lightController?.Restore(),
+                    rollbackFailures);
+                RunRollbackStep(
+                    "camera",
+                    () =>
+                        cameraController?.Restore(),
+                    rollbackFailures);
+                RunRollbackStep(
+                    "render",
+                    () =>
+                        renderBootstrap
+                            ?.RestoreRuntimeOverrides(),
+                    rollbackFailures);
+
+                var message =
+                    "Scene initialization failed: " +
+                    exception.Message;
+
+                if (rollbackFailures.Count > 0)
+                {
+                    message +=
+                        " | rollback: " +
+                        string.Join(
+                            " | ",
+                            rollbackFailures);
+                }
+
+                SetFault(message);
+                return false;
             }
 
             _lastError = null;
