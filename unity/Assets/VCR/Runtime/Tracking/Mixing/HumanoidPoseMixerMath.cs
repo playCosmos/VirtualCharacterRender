@@ -31,7 +31,7 @@ namespace VCR.Runtime.Tracking.Mixing
             var weight =
                 Clamp01(settings.Weight);
             var mask =
-                settings.Mask;
+                settings.RuntimeMask;
 
             if (basePose != null &&
                 !mask.HasAnyWeight)
