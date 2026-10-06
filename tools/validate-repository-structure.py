@@ -1102,8 +1102,13 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
-    "sceneRuntime != null &&\n                IsServiceAlive(_environmentRuntime)",
-    "application UI Environment availability must use the cached dependency",
+    "_environmentRuntimeOwner",
+    "application UI cached environment runtime must be bound to its owning scene runtime",
+)
+require_source_contains(
+    application_ui,
+    "GetCachedEnvironmentRuntime()",
+    "application UI Environment availability/control/summary must reject stale cached environment runtimes",
 )
 require_source_contains(
     application_ui,
