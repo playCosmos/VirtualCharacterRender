@@ -267,6 +267,35 @@ for locked_queue in locked_bounded_queues:
         "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
     )
 
+event_runtime_engine = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeEngine.cs"
+)
+require_source_contains(
+    event_runtime_engine,
+    "_traceSubscribers",
+    "event tracing must reuse a copy-on-write subscriber snapshot",
+)
+forbid_source_pattern(
+    event_runtime_engine,
+    r"GetInvocationList\s*\(",
+    "event tracing must not allocate a delegate invocation array per trace entry",
+)
+
+p9_event_runtime_validation = (
+    VCR
+    / "Editor"
+    / "P9"
+    / "P9EventRuntimeValidation.cs"
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "synthetic trace subscriber failure",
+    "P9 event validation must retain trace subscriber failure-isolation coverage",
+)
+
 vmc_accumulator = (
     VCR
     / "Runtime"
