@@ -620,14 +620,10 @@ namespace VCR.Runtime.Protocols.Vmc
                         }
                         else
                         {
-                            var customName =
-                                StrictUtf8.GetString(
-                                    data,
-                                    string0Start,
-                                    string0Length);
-
-                            accumulator.ApplyCustomBlend(
-                                customName,
+                            accumulator.ApplyCustomBlendUtf8(
+                                data,
+                                string0Start,
+                                string0Length,
                                 float1);
                         }
                     }
