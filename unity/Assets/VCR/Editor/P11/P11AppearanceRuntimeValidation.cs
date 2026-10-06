@@ -1600,6 +1600,131 @@ namespace VCR.Editor.P11
                 propRoot.SetActive(
                     false);
 
+                var sequenceHandler =
+                    root.AddComponent<
+                        SceneSequenceEventActionHandler>();
+                var externalSequenceStep =
+                    new SceneSequenceEventActionHandler
+                        .SequenceStep
+                    {
+                        TimeSeconds =
+                            0f,
+                        ActionType =
+                            "custom.transition",
+                        Text =
+                            "sequence-original",
+                        Value =
+                            0.5,
+                        HasValue =
+                            true
+                    };
+                var externalSequenceBinding =
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "validation-sequence",
+                        Steps =
+                            new[]
+                            {
+                                externalSequenceStep
+                            }
+                    };
+
+                sequenceHandler.ConfigureSequences(
+                    externalSequenceBinding);
+
+                externalSequenceBinding.SequenceId =
+                    "mutated-external-sequence";
+                externalSequenceStep.ActionType =
+                    EventActionTypes
+                        .SceneSequencePlay;
+                externalSequenceStep.Text =
+                    "mutated-step";
+                externalSequenceStep.Value =
+                    double.NaN;
+
+                var sequenceMapField =
+                    typeof(
+                        SceneSequenceEventActionHandler)
+                    .GetField(
+                        "_sequences",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var sequenceMap =
+                    sequenceMapField?.GetValue(
+                        sequenceHandler)
+                    as Dictionary<
+                        string,
+                        SceneSequenceEventActionHandler
+                            .SequenceBinding>;
+
+                Expect(
+                    sequenceMap != null &&
+                    sequenceMap.TryGetValue(
+                        "validation-sequence",
+                        out var liveSequence) &&
+                    liveSequence.SequenceId ==
+                        "validation-sequence" &&
+                    liveSequence.Steps.Length == 1 &&
+                    liveSequence.Steps[0]
+                        .ActionType ==
+                        "custom.transition" &&
+                    liveSequence.Steps[0].Text ==
+                        "sequence-original" &&
+                    Math.Abs(
+                        liveSequence.Steps[0].Value -
+                        0.5) <
+                        0.0001,
+                    "scene sequence live bindings/steps must be isolated from caller mutation after configuration",
+                    failures);
+
+                sequenceHandler.ConfigureSequences(
+                    new SceneSequenceEventActionHandler
+                        .SequenceBinding
+                    {
+                        SequenceId =
+                            "invalid-sequence",
+                        Steps =
+                            new[]
+                            {
+                                new SceneSequenceEventActionHandler
+                                    .SequenceStep
+                                {
+                                    TimeSeconds =
+                                        0f,
+                                    ActionType =
+                                        "custom.transition",
+                                    HasValue =
+                                        true,
+                                    Value =
+                                        double.NaN
+                                }
+                            }
+                    });
+
+                sequenceMap =
+                    sequenceMapField?.GetValue(
+                        sequenceHandler)
+                    as Dictionary<
+                        string,
+                        SceneSequenceEventActionHandler
+                            .SequenceBinding>;
+
+                Expect(
+                    !string.IsNullOrWhiteSpace(
+                        sequenceHandler.LastError) &&
+                    sequenceMap != null &&
+                    sequenceMap.Count == 1 &&
+                    sequenceMap.ContainsKey(
+                        "validation-sequence") &&
+                    !sequenceMap.ContainsKey(
+                        "invalid-sequence"),
+                    "invalid/non-finite scene sequence replacement must preserve the previous live sequence map",
+                    failures);
+
                 var transitionExecutor =
                     root.AddComponent<
                         AppearanceTransitionActionExecutor>();
