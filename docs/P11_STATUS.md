@@ -160,6 +160,8 @@ The generic transition sequencer/bridge, particle/effect action path, audio acti
 
 `EffectEventActionHandler` and `PropEventActionHandler` now use the same staged-binding ownership model: mutable binding objects and nested arrays are cloned before entering the live map, and invalid replacement input leaves the previous valid registry intact. `prop.set_active` also requires an explicit finite numeric `0` or `1`; NaN, infinities, fractional thresholds, and other numeric values fail closed before touching prop visibility.
 
+`SceneSequenceEventActionHandler` now follows the same ownership/transaction rule: sequence bindings and nested steps are deep-cloned before entering the live map, invalid replacements leave the previous valid sequence registry intact, and valued steps reject non-finite numbers before a sequence can be staged for execution.
+
 Timed coroutine execution, QueueAll saturation/rejection behavior under real event bursts, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
 Transition dependency discovery is hardened for the optional-handler case: missing `IAppearanceTransitionStepExecutor` instances and missing delegated `IEventActionHandler` instances are negative-cached for one monotonic second, while configured/live handlers remain immediately usable. This prevents repeated full-scene `MonoBehaviour` scans when transition presentation capabilities are intentionally absent.
