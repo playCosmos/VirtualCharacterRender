@@ -267,6 +267,23 @@ for locked_queue in locked_bounded_queues:
         "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
     )
 
+event_text_transform = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventTextTransform.cs"
+)
+require_source_contains(
+    event_text_transform,
+    "string.Concat(",
+    "event text prefix/suffix application must build the final affixed string without an intermediate concatenation",
+)
+forbid_source_pattern(
+    event_text_transform,
+    r"prefix\s*\+",
+    "event text prefix application must not allocate an intermediate prefix result",
+)
+
 event_runtime_engine = (
     VCR
     / "Runtime"
@@ -294,6 +311,11 @@ require_source_contains(
     p9_event_runtime_validation,
     "synthetic trace subscriber failure",
     "P9 event validation must retain trace subscriber failure-isolation coverage",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "text transform must preserve the original string when no work is configured",
+    "P9 event validation must cover text-transform reference passthrough and affix null semantics",
 )
 
 vmc_accumulator = (
