@@ -70,6 +70,8 @@ namespace VCR.Runtime.Diagnostics
             new(32);
         private readonly StringBuilder _reportBuilder =
             new(512);
+        private readonly StringBuilder _csvBuilder =
+            new(1536);
         private float _nextMetricSourceRefreshTime;
         private bool _csvHeaderWritten;
         private long _snapshotSequence;
@@ -981,46 +983,92 @@ namespace VCR.Runtime.Diagnostics
 
                 _csvHeaderWritten = true;
 
-                var metricsText = new StringBuilder();
-                foreach (var metric in _metrics)
-                {
-                    if (metricsText.Length > 0)
-                    {
-                        metricsText.Append(';');
-                    }
+                var builder =
+                    _csvBuilder;
+                builder.Clear();
 
-                    metricsText.Append(metric.Name);
-                    metricsText.Append('=');
-                    metricsText.Append(
-                        metric.Value.ToString(
-                            "F3",
-                            CultureInfo.InvariantCulture));
-                    metricsText.Append(metric.Unit);
-                }
+                builder.Append(
+                    DateTime.UtcNow.ToString("O"));
+                AppendCsvNumber(
+                    builder,
+                    averageMs);
+                AppendCsvNumber(
+                    builder,
+                    p95Ms);
+                AppendCsvNumber(
+                    builder,
+                    p99Ms);
+                AppendCsvNumber(
+                    builder,
+                    faceHz);
+                AppendCsvNumber(
+                    builder,
+                    bodyHz);
+                AppendCsvNumber(
+                    builder,
+                    poseHz);
+                AppendCsvNumber(
+                    builder,
+                    expressionHz);
+                AppendCsvAge(
+                    builder,
+                    _faceAgeMs);
+                AppendCsvAge(
+                    builder,
+                    _bodyAgeMs);
+                AppendCsvAge(
+                    builder,
+                    _poseAgeMs);
+                AppendCsvAge(
+                    builder,
+                    _expressionAgeMs);
 
-                var line = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0},{1:F3},{2:F3},{3:F3},{4:F3},{5:F3},{6:F3},{7:F3},{8},{9},{10},{11},{12},{13},\"{14}\"\n",
-                    DateTime.UtcNow.ToString("O"),
-                    averageMs,
-                    p95Ms,
-                    p99Ms,
-                    faceHz,
-                    bodyHz,
-                    poseHz,
-                    expressionHz,
-                    CsvAge(_faceAgeMs),
-                    CsvAge(_bodyAgeMs),
-                    CsvAge(_poseAgeMs),
-                    CsvAge(_expressionAgeMs),
-                    presence?.SubjectState.ToString() ?? "n/a",
+                builder.Append(',');
+                builder.Append(
+                    presence.HasValue
+                        ? presence.Value
+                            .SubjectState
+                            .ToString()
+                        : "n/a");
+                builder.Append(',');
+                builder.Append(
                     presence.HasValue &&
                     presence.Value.AnySourceAvailable
-                        ? "1"
-                        : "0",
-                    metricsText.ToString().Replace("\"", "'"));
+                        ? '1'
+                        : '0');
+                builder.Append(',');
+                builder.Append('\"');
 
-                File.AppendAllText(path, line);
+                for (var i = 0;
+                     i < _metrics.Count;
+                     i++)
+                {
+                    if (i > 0)
+                    {
+                        builder.Append(';');
+                    }
+
+                    var metric =
+                        _metrics[i];
+                    AppendCsvSanitized(
+                        builder,
+                        metric.Name);
+                    builder.Append('=');
+                    builder.AppendFormat(
+                        CultureInfo.InvariantCulture,
+                        "{0:F3}",
+                        metric.Value);
+                    AppendCsvSanitized(
+                        builder,
+                        metric.Unit);
+                }
+
+                builder.Append('\"');
+                builder.Append('\n');
+
+                File.AppendAllText(
+                    path,
+                    builder.ToString());
             }
             catch (Exception exception)
             {
@@ -1040,13 +1088,54 @@ namespace VCR.Runtime.Diagnostics
                     CultureInfo.InvariantCulture);
         }
 
-        private static string CsvAge(double value)
+        private static void AppendCsvNumber(
+            StringBuilder builder,
+            double value)
         {
-            return double.IsNaN(value)
-                ? string.Empty
-                : value.ToString(
-                    "F3",
-                    CultureInfo.InvariantCulture);
+            builder.Append(',');
+            builder.AppendFormat(
+                CultureInfo.InvariantCulture,
+                "{0:F3}",
+                value);
+        }
+
+        private static void AppendCsvAge(
+            StringBuilder builder,
+            double value)
+        {
+            builder.Append(',');
+
+            if (double.IsNaN(
+                    value))
+            {
+                return;
+            }
+
+            builder.AppendFormat(
+                CultureInfo.InvariantCulture,
+                "{0:F3}",
+                value);
+        }
+
+        private static void AppendCsvSanitized(
+            StringBuilder builder,
+            string value)
+        {
+            if (string.IsNullOrEmpty(
+                    value))
+            {
+                return;
+            }
+
+            for (var i = 0;
+                 i < value.Length;
+                 i++)
+            {
+                builder.Append(
+                    value[i] == '\"'
+                        ? '\''
+                        : value[i]);
+            }
         }
     }
 }
