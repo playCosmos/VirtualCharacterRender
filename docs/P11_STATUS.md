@@ -164,6 +164,8 @@ The generic transition sequencer/bridge, particle/effect action path, audio acti
 
 Action completion/probe boundaries are fail-closed: destroyed `AudioSource` bindings no longer escape from `TryIsComplete`, and `MotionCueEventActionHandler` contains exceptions from external `IMotionCueRuntime` `Status`/`CueIds` getters plus `TryPlayCue`/`TryReleaseCue` execution. Capability checks, execution, and completion all return false/error rather than propagating plugin/runtime exceptions into the transition state machine.
 
+`AppearanceEventActionHandler` follows the same rule for `IAppearanceRuntime`: target-id probing contains throwing `Status` getters, and all delegated appearance mutations are wrapped so plugin/runtime exceptions become `false` plus an error instead of unwinding event or transition dispatch.
+
 Timed coroutine execution, QueueAll saturation/rejection behavior under real event bursts, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
 Transition dependency discovery is hardened for the optional-handler case: missing `IAppearanceTransitionStepExecutor` instances and missing delegated `IEventActionHandler` instances are negative-cached for one monotonic second, while configured/live handlers remain immediately usable. This prevents repeated full-scene `MonoBehaviour` scans when transition presentation capabilities are intentionally absent.
