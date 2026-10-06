@@ -134,12 +134,60 @@ namespace VCR.Runtime.Scene
         private static SceneLightSettings Sanitize(
             SceneLightSettings value)
         {
+            var fallback =
+                SceneLightSettings.DefaultDirectional;
+
+            value.LocalEulerAngles =
+                new Vector3(
+                    FiniteOrDefault(
+                        value.LocalEulerAngles.x,
+                        fallback.LocalEulerAngles.x),
+                    FiniteOrDefault(
+                        value.LocalEulerAngles.y,
+                        fallback.LocalEulerAngles.y),
+                    FiniteOrDefault(
+                        value.LocalEulerAngles.z,
+                        fallback.LocalEulerAngles.z));
+
+            value.Color =
+                new Color(
+                    FiniteOrDefault(
+                        value.Color.r,
+                        fallback.Color.r),
+                    FiniteOrDefault(
+                        value.Color.g,
+                        fallback.Color.g),
+                    FiniteOrDefault(
+                        value.Color.b,
+                        fallback.Color.b),
+                    FiniteOrDefault(
+                        value.Color.a,
+                        fallback.Color.a));
+
             value.Intensity =
                 Mathf.Max(
                     0f,
-                    value.Intensity);
+                    FiniteOrDefault(
+                        value.Intensity,
+                        fallback.Intensity));
+
+            value.Shadows =
+                value.Shadows == LightShadows.None ||
+                value.Shadows == LightShadows.Hard ||
+                value.Shadows == LightShadows.Soft
+                    ? value.Shadows
+                    : fallback.Shadows;
+
             return value;
         }
+
+        private static float FiniteOrDefault(
+            float value,
+            float fallback) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value)
+                    ? value
+                    : fallback;
 
         private void OnDestroy()
         {
