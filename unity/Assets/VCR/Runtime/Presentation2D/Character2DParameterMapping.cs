@@ -45,8 +45,12 @@ namespace VCR.Runtime.Presentation2D
         [SerializeField] private Character2DParameterBinding[] bindings =
             Array.Empty<Character2DParameterBinding>();
 
+        [NonSerialized] private int _revision;
+
         public string BackendId =>
             backendId;
+        public int Revision =>
+            _revision;
         public Character2DParameterBinding[] Bindings =>
             bindings ??
             Array.Empty<Character2DParameterBinding>();
@@ -60,6 +64,18 @@ namespace VCR.Runtime.Presentation2D
             bindings =
                 values ??
                 Array.Empty<Character2DParameterBinding>();
+            unchecked
+            {
+                _revision++;
+            }
+        }
+
+        private void OnValidate()
+        {
+            unchecked
+            {
+                _revision++;
+            }
         }
     }
 
