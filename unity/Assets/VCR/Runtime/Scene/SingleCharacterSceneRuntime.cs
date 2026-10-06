@@ -595,7 +595,19 @@ namespace VCR.Runtime.Scene
         public bool TryRecoverOverlayOutput(
             out string error)
         {
-            EnsureOperational();
+            error = null;
+
+            try
+            {
+                EnsureOperational();
+            }
+            catch (Exception exception)
+            {
+                error =
+                    exception.Message;
+                return false;
+            }
+
             ResolveOverlayOutput();
 
             return OverlayOutputRecovery.TryRestart(
