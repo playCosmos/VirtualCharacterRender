@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
@@ -23,7 +22,9 @@ namespace VCR.Runtime.Events.Unity
         [SerializeField, Range(1, 2048)]
         private int maxDispatchPerFrame = 128;
 
-        private readonly ConcurrentQueue<NormalizedEvent> _queue = new();
+        private readonly Queue<NormalizedEvent> _queue =
+            new(
+                1024);
         private readonly object _queueSync = new();
         private readonly NormalizedEventBus _bus = new();
 
@@ -97,9 +98,9 @@ namespace VCR.Runtime.Events.Unity
                 while (Volatile.Read(
                            ref _queuedCount) >
                        MaxQueuedEvents &&
-                       _queue.TryDequeue(
-                           out _))
+                       _queue.Count > 0)
                 {
+                    _queue.Dequeue();
                     Interlocked.Decrement(
                         ref _queuedCount);
                     Interlocked.Increment(
@@ -121,11 +122,13 @@ namespace VCR.Runtime.Events.Unity
 
                 lock (_queueSync)
                 {
-                    if (!_queue.TryDequeue(
-                            out value))
+                    if (_queue.Count == 0)
                     {
                         break;
                     }
+
+                    value =
+                        _queue.Dequeue();
 
                     Interlocked.Decrement(
                         ref _queuedCount);
@@ -141,9 +144,9 @@ namespace VCR.Runtime.Events.Unity
         {
             lock (_queueSync)
             {
-                while (_queue.TryDequeue(
-                           out _))
+                while (_queue.Count > 0)
                 {
+                    _queue.Dequeue();
                     Interlocked.Decrement(
                         ref _queuedCount);
                     Interlocked.Increment(
