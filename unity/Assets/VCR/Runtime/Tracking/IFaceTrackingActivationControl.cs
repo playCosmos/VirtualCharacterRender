@@ -9,4 +9,14 @@ namespace VCR.Runtime.Tracking
         bool FaceTrackingEnabled { get; }
         void SetFaceTrackingEnabled(bool enabled);
     }
+
+    /// <summary>
+    /// Optional capability used by a router to suspend an expensive expression
+    /// fallback while a higher-priority expression source is healthy.
+    /// </summary>
+    public interface IExpressionTrackingActivationControl
+    {
+        bool ExpressionTrackingEnabled { get; }
+        void SetExpressionTrackingEnabled(bool enabled);
+    }
 }
