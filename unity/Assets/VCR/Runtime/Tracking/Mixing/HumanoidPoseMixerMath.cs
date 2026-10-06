@@ -105,9 +105,7 @@ namespace VCR.Runtime.Tracking.Mixing
             var bones =
                 new NormalizedBonePose[
                     (int)HumanoidBoneId.Count];
-            var hasBone =
-                new bool[
-                    (int)HumanoidBoneId.Count];
+            ulong boneMask = 0;
 
             for (var i = 0;
                  i < bones.Length;
@@ -136,7 +134,9 @@ namespace VCR.Runtime.Tracking.Mixing
                     if (hasBase)
                     {
                         bones[i] = baseBone;
-                        hasBone[i] = true;
+                        boneMask |=
+                            HumanoidPoseState.BoneBit(
+                                bone);
                     }
 
                     continue;
@@ -192,7 +192,9 @@ namespace VCR.Runtime.Tracking.Mixing
                     new NormalizedBonePose(
                         position,
                         rotation);
-                hasBone[i] = true;
+                boneMask |=
+                    HumanoidPoseState.BoneBit(
+                        bone);
             }
 
             return new HumanoidPoseState(
@@ -200,7 +202,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 rootPosition,
                 rootRotation,
                 bones,
-                hasBone,
+                boneMask,
                 SnapshotArrayOwnership.Transfer);
         }
 
