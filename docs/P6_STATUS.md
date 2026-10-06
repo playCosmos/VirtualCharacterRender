@@ -151,3 +151,5 @@ These validation paths are implemented but have not been executed in this enviro
 - tune defaults only from measured evidence
 
 The source architecture is complete enough for a checkpoint, but these evidence items are not marked PASS.
+
+`StateChanged` notification is subscriber-isolated. A throwing UI/plugin observer cannot interrupt the already-committed environment state change, update dispatch, or transition setup; failures are counted as `environment.state_subscriber_failures`.
