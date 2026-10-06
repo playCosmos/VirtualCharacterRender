@@ -678,6 +678,28 @@ forbid_source_pattern(
     "VRM custom-expression neutralization must not allocate one name array per frame",
 )
 
+vrm_motion_snapshot_provider = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs"
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "ExpressionKeys",
+    "VRM motion snapshot capture must enumerate expression keys without boxing an IDictionary enumerator",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "GetWeight(",
+    "VRM motion snapshot capture must read weights through the stable key list",
+)
+forbid_source_pattern(
+    vrm_motion_snapshot_provider,
+    r"GetWeights\s*\(\s*\)",
+    "VRM motion snapshot hot paths must not foreach the IDictionary-returning GetWeights API",
+)
+
 snapshot_ownership = (
     VCR
     / "Runtime"
