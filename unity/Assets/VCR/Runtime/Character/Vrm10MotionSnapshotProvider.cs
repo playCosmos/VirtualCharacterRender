@@ -181,6 +181,7 @@ namespace VCR.Runtime.Character
             SamplePose(
                 _borrowedBones,
                 _borrowedHasBone,
+                out _,
                 out var rootPosition,
                 out var rootRotation);
 
@@ -202,13 +203,11 @@ namespace VCR.Runtime.Character
             var bones =
                 new NormalizedBonePose[
                     (int)HumanoidBoneId.Count];
-            var hasBone =
-                new bool[
-                    (int)HumanoidBoneId.Count];
 
             SamplePose(
                 bones,
-                hasBone,
+                hasBone: null,
+                out var boneMask,
                 out var rootPosition,
                 out var rootRotation);
 
@@ -217,20 +216,26 @@ namespace VCR.Runtime.Character
                 rootPosition,
                 rootRotation,
                 bones,
-                hasBone,
+                boneMask,
                 SnapshotArrayOwnership.Transfer);
         }
 
         private void SamplePose(
             NormalizedBonePose[] bones,
             bool[] hasBone,
+            out ulong boneMask,
             out TrackingVector3 rootPosition,
             out TrackingQuaternion rootRotation)
         {
-            Array.Clear(
-                hasBone,
-                0,
-                hasBone.Length);
+            if (hasBone != null)
+            {
+                Array.Clear(
+                    hasBone,
+                    0,
+                    hasBone.Length);
+            }
+
+            boneMask = 0;
 
             for (var i = 0;
                  i < _boneTransforms.Length;
@@ -261,7 +266,13 @@ namespace VCR.Runtime.Character
                             q.z,
                             q.w));
 
-                hasBone[i] = true;
+                if (hasBone != null)
+                {
+                    hasBone[i] = true;
+                }
+
+                boneMask |=
+                    1UL << i;
             }
 
             var rootP =
