@@ -570,62 +570,11 @@ namespace VCR.Runtime.UI
                         0.5f,
                         dependencyResolveIntervalSeconds);
 
-                if (applicationBootstrap == null)
-                {
-                    applicationBootstrap =
-                        FindFirstObjectByType<
-                            ApplicationRuntimeBootstrap>(
-                            FindObjectsInactive.Exclude);
-                }
+                MonoBehaviour[] activeDependencyBehaviours =
+                    null;
 
-                if (sceneRuntime == null)
-                {
-                    sceneRuntime =
-                        applicationBootstrap?.SceneRuntime ??
-                        FindFirstObjectByType<
-                            SingleCharacterSceneRuntime>(
-                            FindObjectsInactive.Exclude);
-                }
-
-                if (diagnostics == null)
-                {
-                    diagnostics =
-                        FindFirstObjectByType<
-                            RuntimeDiagnostics>(
-                            FindObjectsInactive.Exclude);
-                }
-
-                if (eventRuntime == null)
-                {
-                    eventRuntime =
-                        FindFirstObjectByType<
-                            EventRuntimeHost>(
-                            FindObjectsInactive.Exclude);
-                }
-
-                if (_mixer == null)
-                {
-                    _mixer =
-                        FindFirstObjectByType<
-                            MotionExpressionMixer>(
-                            FindObjectsInactive.Exclude);
-                }
-
-                if (_manualExpressionSource == null)
-                {
-                    _manualExpressionSource =
-                        FindFirstObjectByType<
-                            ManualExpressionLayerSource>(
-                            FindObjectsInactive.Exclude);
-                }
-
-                if (_materialController == null)
-                {
-                    _materialController =
-                        FindFirstObjectByType<
-                            MaterialOverrideController>(
-                            FindObjectsInactive.Exclude);
-                }
+                ResolveConcreteDependencies(
+                    ref activeDependencyBehaviours);
 
                 if (!ReferenceEquals(
                         _environmentRuntimeOwner,
@@ -637,9 +586,6 @@ namespace VCR.Runtime.UI
                     _environmentRuntimeOwner =
                         sceneRuntime;
                 }
-
-                MonoBehaviour[] activeDependencyBehaviours =
-                    null;
 
                 ResolveTrackingControls(
                     force);
@@ -8626,6 +8572,116 @@ namespace VCR.Runtime.UI
                     _appearanceRuntime =
                         runtime;
                     return;
+                }
+            }
+        }
+
+        private void ResolveConcreteDependencies(
+            ref MonoBehaviour[] activeDependencyBehaviours)
+        {
+            if (sceneRuntime == null &&
+                applicationBootstrap != null)
+            {
+                sceneRuntime =
+                    applicationBootstrap.SceneRuntime;
+            }
+
+            var needsScan =
+                applicationBootstrap == null ||
+                sceneRuntime == null ||
+                diagnostics == null ||
+                eventRuntime == null ||
+                _mixer == null ||
+                _manualExpressionSource == null ||
+                _materialController == null;
+
+            if (!needsScan)
+            {
+                return;
+            }
+
+            var behaviours =
+                GetActiveDependencyBehaviours(
+                    ref activeDependencyBehaviours);
+            SingleCharacterSceneRuntime sceneCandidate =
+                null;
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour == null)
+                {
+                    continue;
+                }
+
+                if (applicationBootstrap == null &&
+                    behaviour is
+                        ApplicationRuntimeBootstrap bootstrap)
+                {
+                    applicationBootstrap =
+                        bootstrap;
+                }
+
+                if (sceneRuntime == null &&
+                    sceneCandidate == null &&
+                    behaviour is
+                        SingleCharacterSceneRuntime candidate)
+                {
+                    sceneCandidate =
+                        candidate;
+                }
+
+                if (diagnostics == null &&
+                    behaviour is
+                        RuntimeDiagnostics runtimeDiagnostics)
+                {
+                    diagnostics =
+                        runtimeDiagnostics;
+                }
+
+                if (eventRuntime == null &&
+                    behaviour is
+                        EventRuntimeHost runtimeHost)
+                {
+                    eventRuntime =
+                        runtimeHost;
+                }
+
+                if (_mixer == null &&
+                    behaviour is
+                        MotionExpressionMixer mixer)
+                {
+                    _mixer =
+                        mixer;
+                }
+
+                if (_manualExpressionSource == null &&
+                    behaviour is
+                        ManualExpressionLayerSource
+                            manualExpressionSource)
+                {
+                    _manualExpressionSource =
+                        manualExpressionSource;
+                }
+
+                if (_materialController == null &&
+                    behaviour is
+                        MaterialOverrideController
+                            materialController)
+                {
+                    _materialController =
+                        materialController;
+                }
+            }
+
+            if (sceneRuntime == null)
+            {
+                sceneRuntime =
+                    applicationBootstrap?.SceneRuntime;
+
+                if (sceneRuntime == null)
+                {
+                    sceneRuntime =
+                        sceneCandidate;
                 }
             }
         }
