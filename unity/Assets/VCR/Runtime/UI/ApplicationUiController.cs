@@ -3996,9 +3996,10 @@ namespace VCR.Runtime.UI
             if (_eventRuleInput != null &&
                 !_eventRuleInput.isFocused)
             {
-                _eventRuleInput.text =
+                SetInputTextIfChanged(
+                    _eventRuleInput,
                     selected?.Id ??
-                    string.Empty;
+                    string.Empty);
             }
 
             if (_eventPreviousRuleButton != null)
@@ -4041,12 +4042,20 @@ namespace VCR.Runtime.UI
 
             if (_eventMaxCommandsInput != null &&
                 !_eventMaxCommandsInput.isFocused &&
-                eventRuntime != null)
+                eventRuntime != null &&
+                (!int.TryParse(
+                     _eventMaxCommandsInput.text,
+                     NumberStyles.Integer,
+                     CultureInfo.InvariantCulture,
+                     out var displayedMaxCommands) ||
+                 displayedMaxCommands !=
+                    eventRuntime.MaxCommandsPerEvent))
             {
-                _eventMaxCommandsInput.text =
+                SetInputTextIfChanged(
+                    _eventMaxCommandsInput,
                     eventRuntime.MaxCommandsPerEvent
                         .ToString(
-                            CultureInfo.InvariantCulture);
+                            CultureInfo.InvariantCulture));
             }
 
             if (_eventApplyMaxCommandsButton != null)
@@ -4396,23 +4405,40 @@ namespace VCR.Runtime.UI
 
             if (_settingsRenderScaleInput != null &&
                 !_settingsRenderScaleInput.isFocused &&
-                sceneRuntime != null)
+                sceneRuntime != null &&
+                (!float.TryParse(
+                     _settingsRenderScaleInput.text,
+                     NumberStyles.Float,
+                     CultureInfo.InvariantCulture,
+                     out var displayedRenderScale) ||
+                 !Mathf.Approximately(
+                     displayedRenderScale,
+                     renderSettings.RenderScale)))
             {
-                _settingsRenderScaleInput.text =
+                SetInputTextIfChanged(
+                    _settingsRenderScaleInput,
                     renderSettings.RenderScale
                         .ToString(
                             "0.###",
-                            CultureInfo.InvariantCulture);
+                            CultureInfo.InvariantCulture));
             }
 
             if (_settingsFpsInput != null &&
                 !_settingsFpsInput.isFocused &&
-                sceneRuntime != null)
+                sceneRuntime != null &&
+                (!int.TryParse(
+                     _settingsFpsInput.text,
+                     NumberStyles.Integer,
+                     CultureInfo.InvariantCulture,
+                     out var displayedTargetFps) ||
+                 displayedTargetFps !=
+                    renderSettings.TargetFrameRate))
             {
-                _settingsFpsInput.text =
+                SetInputTextIfChanged(
+                    _settingsFpsInput,
                     renderSettings.TargetFrameRate
                         .ToString(
-                            CultureInfo.InvariantCulture);
+                            CultureInfo.InvariantCulture));
             }
 
             if (_settingsApplyRenderScaleButton != null)
@@ -5625,12 +5651,13 @@ namespace VCR.Runtime.UI
 
             if (_motionPoseWeightLabel != null)
             {
-                _motionPoseWeightLabel.text =
+                SetTextIfChanged(
+                    _motionPoseWeightLabel,
                     poseConfigured
                         ? "Pose Weight " +
                           poseWeight.ToString(
                               "0.00")
-                        : "Pose Weight n/a";
+                        : "Pose Weight n/a");
             }
 
             if (_motionPoseWeightSlider != null)
@@ -6895,6 +6922,23 @@ namespace VCR.Runtime.UI
             label.text =
                 title +
                 suffix;
+        }
+
+        private static void SetInputTextIfChanged(
+            InputField input,
+            string value)
+        {
+            if (input == null ||
+                string.Equals(
+                    input.text,
+                    value,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            input.text =
+                value;
         }
 
         private static void SetTextIfChanged(
