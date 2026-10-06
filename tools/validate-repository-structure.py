@@ -1440,6 +1440,57 @@ forbid_source_pattern(
     "environment runtime must not let one state subscriber abort committed state/update dispatch",
 )
 
+effect_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EffectEventActionHandler.cs"
+)
+require_source_contains(
+    effect_event_action_handler,
+    "CloneBindings(",
+    "effect binding configuration must deep-clone caller-owned binding objects",
+)
+require_source_contains(
+    effect_event_action_handler,
+    "TryBuildBindingMap(",
+    "effect binding rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    effect_event_action_handler,
+    "CommitBindingMap(",
+    "effect binding rebuild must commit only a fully validated staged map",
+)
+
+prop_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "PropEventActionHandler.cs"
+)
+require_source_contains(
+    prop_event_action_handler,
+    "CloneBindings(",
+    "prop binding configuration must deep-clone caller-owned binding objects and root arrays",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "TryBuildBindingMap(",
+    "prop binding rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "double.IsNaN(",
+    "prop.set_active must reject non-finite boolean values",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "command.Value != 0.0",
+    "prop.set_active must accept only explicit 0/1 boolean values",
+)
+
 p11_appearance_validation = (
     VCR
     / "Editor"
@@ -1480,6 +1531,26 @@ require_source_contains(
     p11_appearance_validation,
     "aliasRebuildSucceeded",
     "P11 appearance validation must prove later rebuilds remain isolated from caller mutation",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-effect\"",
+    "P11 validation must prove effect binding caller mutation cannot rewrite the live effect map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-effect\"",
+    "P11 validation must prove invalid effect replacement preserves the previous live binding",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-prop\"",
+    "P11 validation must prove prop binding caller/root-array mutation cannot rewrite the live prop map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "double.PositiveInfinity",
+    "P11 validation must cover non-finite prop boolean rejection",
 )
 
 p6_environment_validation = (
