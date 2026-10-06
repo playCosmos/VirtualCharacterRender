@@ -754,6 +754,27 @@ require_source_contains(
     "missing render bootstrap must preserve the historical default render-settings fallback while reporting unavailable",
 )
 
+require_source_contains(
+    single_character_scene_runtime,
+    "OptionalServiceDiscoveryRetrySeconds = 1.0;",
+    "scene runtime must bound negative optional-service discovery retries",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "ref _nextEnvironmentRuntimeResolveAt",
+    "missing environment runtime discovery must be retry-throttled",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "ref _nextOverlayOutputResolveAt",
+    "missing overlay output discovery must be retry-throttled",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "Time.realtimeSinceStartupAsDouble",
+    "optional-service retry throttling must use monotonic realtime rather than frame time",
+)
+
 p1_renderer_validation = (
     VCR
     / "Editor"
