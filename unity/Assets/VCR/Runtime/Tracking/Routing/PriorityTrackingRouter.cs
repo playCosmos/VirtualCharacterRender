@@ -86,8 +86,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void Awake()
         {
-            routePolicy ??=
-                TrackingRoutePolicy.CreateDefault();
+            EnsureRoutePolicy();
             ResolveProviders();
 
             _presenceResolver = new TrackingPresenceResolver(
@@ -183,8 +182,8 @@ namespace VCR.Runtime.Tracking.Routing
             TrackingRoutePolicy policy)
         {
             routePolicy =
-                policy ??
-                TrackingRoutePolicy.CreateDefault();
+                policy;
+            EnsureRoutePolicy();
             ResetFaceSelection();
         }
 
@@ -449,8 +448,7 @@ namespace VCR.Runtime.Tracking.Routing
         private bool PreferredFaceOutranksFallback()
         {
             var policy =
-                routePolicy ??
-                TrackingRoutePolicy.CreateDefault();
+                EnsureRoutePolicy();
 
             var preferredKind =
                 GetSourceKind(
@@ -479,6 +477,17 @@ namespace VCR.Runtime.Tracking.Routing
             return
                 preferredPriority <=
                 fallbackPriority;
+        }
+
+        private TrackingRoutePolicy EnsureRoutePolicy()
+        {
+            if (routePolicy == null)
+            {
+                routePolicy =
+                    TrackingRoutePolicy.CreateDefault();
+            }
+
+            return routePolicy;
         }
 
         private void UpdateFallbackFaceActivation(
@@ -719,8 +728,7 @@ namespace VCR.Runtime.Tracking.Routing
         private bool ExternalExpressionOutranksFallback()
         {
             var policy =
-                routePolicy ??
-                TrackingRoutePolicy.CreateDefault();
+                EnsureRoutePolicy();
 
             var externalKind =
                 GetSourceKind(
