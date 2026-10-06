@@ -968,6 +968,21 @@ require_source_order(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "var previousConfiguration =\n                CaptureConfiguration();",
+    "scene configuration apply must capture a rollback snapshot before mutating runtime state",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RollbackConfiguration(",
+    "scene configuration apply must rollback earlier mutations after a later apply failure",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RunRollbackStep(",
+    "scene configuration rollback must isolate failures so later restore steps still run",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "_state !=\n                    SceneRuntimeState.LoadingCharacter",
     "cancelled-load recovery must not overwrite newer lifecycle states",
 )
