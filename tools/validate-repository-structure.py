@@ -801,6 +801,26 @@ require_source_contains(
     "appearance.transition.executor_probe_failures",
     "appearance transition executor probe failures must remain visible in diagnostics",
 )
+require_source_contains(
+    appearance_runtime,
+    "CaptureConfigurationSnapshot(",
+    "appearance configuration rebuild must snapshot the current live configuration before destructive validation",
+)
+require_source_contains(
+    appearance_runtime,
+    "RestoreConfigurationSnapshot(",
+    "failed appearance configuration rebuild must restore the previous live configuration",
+)
+require_source_contains(
+    appearance_runtime,
+    "RebuildConfigurationCore(",
+    "appearance configuration rebuild must isolate destructive staging behind a transactional wrapper",
+)
+require_source_contains(
+    appearance_runtime,
+    "previousOutfits =\n                outfits;",
+    "ConfigureBindings must retain previous authoring inputs until the replacement rebuild succeeds",
+)
 forbid_source_pattern(
     appearance_runtime,
     r"AppearanceChanged\?\.Invoke",
@@ -1116,6 +1136,23 @@ forbid_source_pattern(
     basic_environment_runtime,
     r"StateChanged\?\.Invoke",
     "environment runtime must not let one state subscriber abort committed state/update dispatch",
+)
+
+p11_appearance_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"rollback-invalid\"",
+    "P11 appearance validation must inject a failed rebuild over a known-good runtime configuration",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "rollbackRejected",
+    "P11 appearance validation must prove failed rebuilds preserve the previous live cache/state",
 )
 
 p6_environment_validation = (
