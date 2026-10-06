@@ -327,6 +327,10 @@ namespace VCR.Runtime.UI
         private float _motionSummaryLayerWeight;
         private string _motionSummaryExpressionInput;
         private string _motionSummaryCache;
+        private bool _motionPoseWeightLabelStateValid;
+        private bool _motionPoseWeightLabelConfigured;
+        private float _motionPoseWeightLabelValue;
+        private string _motionPoseWeightLabelCache;
 
         private bool _trackingToggleLabelHasControl;
         private string _trackingToggleLabelDisplayName;
@@ -442,6 +446,10 @@ namespace VCR.Runtime.UI
             _outputClickThroughButton = null;
             _motionPoseWeightLabel = null;
             _motionPoseWeightSlider = null;
+            _motionPoseWeightLabelStateValid =
+                false;
+            _motionPoseWeightLabelCache =
+                null;
             _manualExpressionNameInput = null;
             _manualExpressionValueInput = null;
             _manualExpressionApplyButton = null;
@@ -3323,13 +3331,9 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            if (_motionPoseWeightLabel != null)
-            {
-                _motionPoseWeightLabel.text =
-                    "Pose Weight " +
-                    _mixer.PrimaryPoseLayerWeight
-                        .ToString("0.00");
-            }
+            RefreshMotionPoseWeightLabel(
+                configured: true,
+                _mixer.PrimaryPoseLayerWeight);
         }
 
         private void ApplyManualExpression()
@@ -5771,6 +5775,44 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void RefreshMotionPoseWeightLabel(
+            bool configured,
+            float value)
+        {
+            if (_motionPoseWeightLabel == null)
+            {
+                return;
+            }
+
+            if (_motionPoseWeightLabelStateValid &&
+                _motionPoseWeightLabelConfigured ==
+                    configured &&
+                (!configured ||
+                 _motionPoseWeightLabelValue ==
+                    value))
+            {
+                return;
+            }
+
+            _motionPoseWeightLabelConfigured =
+                configured;
+            _motionPoseWeightLabelValue =
+                value;
+            _motionPoseWeightLabelStateValid =
+                true;
+            _motionPoseWeightLabelCache =
+                configured
+                    ? "Pose Weight " +
+                      value.ToString(
+                          "0.00",
+                          CultureInfo.InvariantCulture)
+                    : "Pose Weight n/a";
+
+            SetTextIfChanged(
+                _motionPoseWeightLabel,
+                _motionPoseWeightLabelCache);
+        }
+
         private void RefreshEnvironmentControlState()
         {
             var runtime =
@@ -5840,16 +5882,9 @@ namespace VCR.Runtime.UI
                 _mixer?.PrimaryPoseLayerWeight ??
                 0f;
 
-            if (_motionPoseWeightLabel != null)
-            {
-                SetTextIfChanged(
-                    _motionPoseWeightLabel,
-                    poseConfigured
-                        ? "Pose Weight " +
-                          poseWeight.ToString(
-                              "0.00")
-                        : "Pose Weight n/a");
-            }
+            RefreshMotionPoseWeightLabel(
+                poseConfigured,
+                poseWeight);
 
             if (_motionPoseWeightSlider != null)
             {
