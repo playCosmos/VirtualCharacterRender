@@ -42,6 +42,12 @@ namespace VCR.Runtime.Tracking.AudioUnity
                 return 0f;
             }
 
+            if (!IsFinite(threshold) ||
+                !IsFinite(gain))
+            {
+                return 0f;
+            }
+
             threshold =
                 Math.Max(
                     0f,
@@ -69,21 +75,44 @@ namespace VCR.Runtime.Tracking.AudioUnity
             float attackSeconds,
             float releaseSeconds)
         {
-            var duration =
+            current =
+                IsFinite(current)
+                    ? Math.Max(
+                        0f,
+                        Math.Min(
+                            1f,
+                            current))
+                    : 0f;
+            target =
+                IsFinite(target)
+                    ? Math.Max(
+                        0f,
+                        Math.Min(
+                            1f,
+                            target))
+                    : 0f;
+            deltaSeconds =
+                IsFinite(deltaSeconds)
+                    ? Math.Max(
+                        0f,
+                        deltaSeconds)
+                    : 0f;
+
+            var rawDuration =
                 target > current
+                    ? attackSeconds
+                    : releaseSeconds;
+            var duration =
+                IsFinite(rawDuration)
                     ? Math.Max(
                         0.001f,
-                        attackSeconds)
-                    : Math.Max(
-                        0.001f,
-                        releaseSeconds);
+                        rawDuration)
+                    : 0.001f;
 
             var alpha =
                 1f -
                 (float)Math.Exp(
-                    -Math.Max(
-                        0f,
-                        deltaSeconds) /
+                    -deltaSeconds /
                     duration);
 
             return
@@ -91,5 +120,10 @@ namespace VCR.Runtime.Tracking.AudioUnity
                 (target - current) *
                 alpha;
         }
+
+        private static bool IsFinite(
+            float value) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
     }
 }
