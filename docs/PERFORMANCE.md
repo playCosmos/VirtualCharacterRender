@@ -128,9 +128,9 @@ The 60 FPS baseline is also a managed-GC target, not only a CPU/GPU frame-time t
 For steady-state tracking and UI operation:
 
 - expression custom-channel merge scratch storage must be reused; do not reintroduce per-frame `Dictionary`, `HashSet`, or `List` construction in the mixer hot path,
-- immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
+- immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance; immutable humanoid pose snapshots store bone-presence in a compact `ulong` mask (current humanoid bone count is below 64), so hot VMC/VRM/mixer/baked/procedural pose producers allocate the owned bone-pose array but not a parallel `bool[]` presence array,
 - array-backed snapshots use explicit ownership: freshly allocated hot-path arrays use `SnapshotArrayOwnership.Transfer` with no second clone, while external/reused caller buffers must use `Copy`; a transferred array must never be mutated or returned to a pool after publication,
-- expression smoothing must not publish replacement frames when smoothing time does not advance; fully zero pose masks preserve the existing immutable base-pose reference instead of cloning pose arrays,
+- expression smoothing must not publish replacement frames when smoothing time does not advance; fully zero pose masks preserve the existing immutable base-pose reference, full-weight/full-mask pose overrides reuse the immutable layer pose when it covers the base, and a pure no-base full-weight expression override reuses the immutable layer expression state,
 - UI refresh must reuse cached navigation/button label components, avoid redundant `Text.text` assignments when labels are unchanged, and must not allocate a full section snapshot on every refresh tick; appearance status/current state is sampled once and reused within each refresh pass,
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
@@ -146,6 +146,8 @@ For steady-state tracking and UI operation:
 - OSC send serialization must keep exact-size single-buffer message writes and reusable-buffer bundle append paths free of intermediate `MemoryStream`/per-message staging allocations,
 - OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
 - VMC custom expression staging is bounded to 256 names with 256 characters per custom name; over-limit names are dropped and counted, while existing names remain updatable at capacity,
+- VRM custom-expression application state is also bounded to 256 tracked names; custom `ExpressionKey` values and name scratch storage are reused, names absent from a newer expression frame fade to zero and are pruned, and neutral-return processing must not allocate a per-frame name array,
+- audio-driven mouth fallback keeps source-health sampling current every update but suppresses replacement immutable expression frames while the mouth value remains within the publication epsilon; exact 0/1 boundary changes are still published,
 - VMC Stop/Dispose clears retained bone/expression session state before a later Start so stale transforms or custom names cannot leak across receiver sessions,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
