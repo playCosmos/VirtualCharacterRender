@@ -4034,7 +4034,7 @@ namespace VCR.Runtime.UI
             }
 
             var enabled =
-                !eventRuntime.Engine.TraceEnabled;
+                !eventRuntime.RuleTracingEnabled;
             eventRuntime.SetRuleTracingEnabled(
                 enabled);
 
@@ -4246,7 +4246,7 @@ namespace VCR.Runtime.UI
                     eventRuntime != null;
                 SetButtonLabel(
                     _eventTraceButton,
-                    eventRuntime?.Engine.TraceEnabled ==
+                    eventRuntime?.RuleTracingEnabled ==
                         true
                         ? "Trace: On"
                         : "Trace: Off");
@@ -7421,16 +7421,14 @@ namespace VCR.Runtime.UI
                         0,
                         ruleCount - 1),
                     out selectedRule);
-            var engine =
-                eventRuntime.Engine;
             var traceEnabled =
-                engine.TraceEnabled;
+                eventRuntime.RuleTracingEnabled;
             var maxCommandsPerEvent =
                 eventRuntime.MaxCommandsPerEvent;
             var processedEvents =
-                engine.ProcessedEvents;
+                eventRuntime.ProcessedEvents;
             var matchedRules =
-                engine.MatchedRules;
+                eventRuntime.MatchedRules;
             var executedActions =
                 eventRuntime.ExecutedActions;
             var failedActions =
