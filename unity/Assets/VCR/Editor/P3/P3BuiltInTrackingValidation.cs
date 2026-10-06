@@ -585,6 +585,77 @@ namespace VCR.Editor.P3
                         failures);
                 }
 
+                var mediaPipeRuntimeAssembly =
+                    typeof(MediaPipeWebcamTrackingRunner)
+                        .Assembly;
+                var faceNormalizerType =
+                    mediaPipeRuntimeAssembly.GetType(
+                        "VCR.Runtime.Tracking.MediaPipe.MediaPipeFaceNormalizer",
+                        throwOnError: false);
+                var holisticNormalizerType =
+                    mediaPipeRuntimeAssembly.GetType(
+                        "VCR.Runtime.Tracking.MediaPipe.MediaPipeHolisticNormalizer",
+                        throwOnError: false);
+                var faceClamp =
+                    faceNormalizerType?.GetMethod(
+                        "Clamp01",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var holisticConfidence =
+                    holisticNormalizerType?.GetMethod(
+                        "Confidence",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                if (faceClamp == null ||
+                    holisticConfidence == null)
+                {
+                    failures.Add(
+                        "MediaPipe normalizer numeric sanitizer reflection contract is incomplete");
+                }
+                else
+                {
+                    var invalidBlendshape =
+                        (float)
+                            faceClamp.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN
+                                });
+                    var finiteConfidence =
+                        (float)
+                            holisticConfidence.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    (float?)float.NaN,
+                                    (float?)0.8f
+                                });
+                    var unknownConfidence =
+                        (float)
+                            holisticConfidence.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    (float?)float.NaN,
+                                    (float?)float.PositiveInfinity
+                                });
+
+                    Expect(
+                        Mathf.Approximately(
+                            invalidBlendshape,
+                            0f) &&
+                        Mathf.Approximately(
+                            finiteConfidence,
+                            0.8f) &&
+                        Mathf.Approximately(
+                            unknownConfidence,
+                            -1f),
+                        "MediaPipe normalizers must contain non-finite blendshape/confidence values instead of publishing NaN",
+                        failures);
+                }
+
                 texture =
                     new Texture2D(
                         2,
