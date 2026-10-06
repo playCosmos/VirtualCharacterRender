@@ -76,8 +76,15 @@ namespace VCR.Runtime.Protocols.VmcUnity
             }
         }
 
+        private void OnValidate()
+        {
+            SanitizeConfiguration();
+        }
+
         private void OnEnable()
         {
+            SanitizeConfiguration();
+
             if (!Application.isPlaying)
             {
                 return;
@@ -542,7 +549,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
                 AppendBlendValueMessage(
                     name,
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         state.Get(
                             expression)),
                     ref packetLength);
@@ -559,7 +566,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
                 AppendBlendValueMessage(
                     custom.Name,
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         custom.Value),
                     ref packetLength);
             }
@@ -594,7 +601,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
                 AppendBlendValueMessage(
                     name,
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         state.Get(
                             expression)),
                     ref packetLength);
@@ -611,7 +618,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
                 AppendBlendValueMessage(
                     custom.Name,
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         custom.Value),
                     ref packetLength);
             }
@@ -641,7 +648,8 @@ namespace VCR.Runtime.Protocols.VmcUnity
         {
             _argumentScratch[0] =
                 OscArgument.FromFloat(
-                    relativeTime);
+                    FiniteOrZero(
+                        relativeTime));
 
             AppendMessage(
                 "/VMC/Ext/T",
@@ -669,7 +677,8 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     name);
             _argumentScratch[1] =
                 OscArgument.FromFloat(
-                    value);
+                    Clamp01Finite(
+                        value));
 
             AppendMessage(
                 "/VMC/Ext/Blend/Val",
@@ -684,30 +693,52 @@ namespace VCR.Runtime.Protocols.VmcUnity
             TrackingQuaternion rotation,
             ref int packetLength)
         {
+            var rotationValid =
+                float.IsFinite(rotation.X) &&
+                float.IsFinite(rotation.Y) &&
+                float.IsFinite(rotation.Z) &&
+                float.IsFinite(rotation.W) &&
+                ((double)rotation.X * rotation.X +
+                 (double)rotation.Y * rotation.Y +
+                 (double)rotation.Z * rotation.Z +
+                 (double)rotation.W * rotation.W) >=
+                    1e-8;
+
             _argumentScratch[0] =
                 OscArgument.FromString(
                     name);
             _argumentScratch[1] =
                 OscArgument.FromFloat(
-                    position.X);
+                    FiniteOrZero(
+                        position.X));
             _argumentScratch[2] =
                 OscArgument.FromFloat(
-                    position.Y);
+                    FiniteOrZero(
+                        position.Y));
             _argumentScratch[3] =
                 OscArgument.FromFloat(
-                    position.Z);
+                    FiniteOrZero(
+                        position.Z));
             _argumentScratch[4] =
                 OscArgument.FromFloat(
-                    rotation.X);
+                    rotationValid
+                        ? rotation.X
+                        : 0f);
             _argumentScratch[5] =
                 OscArgument.FromFloat(
-                    rotation.Y);
+                    rotationValid
+                        ? rotation.Y
+                        : 0f);
             _argumentScratch[6] =
                 OscArgument.FromFloat(
-                    rotation.Z);
+                    rotationValid
+                        ? rotation.Z
+                        : 0f);
             _argumentScratch[7] =
                 OscArgument.FromFloat(
-                    rotation.W);
+                    rotationValid
+                        ? rotation.W
+                        : 1f);
 
             AppendMessage(
                 address,
@@ -822,6 +853,47 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     return;
                 }
             }
+        }
+
+        private void SanitizeConfiguration()
+        {
+            if (!float.IsFinite(
+                    providerResolveIntervalSeconds))
+            {
+                providerResolveIntervalSeconds =
+                    1f;
+            }
+
+            providerResolveIntervalSeconds =
+                Mathf.Max(
+                    0.25f,
+                    providerResolveIntervalSeconds);
+            remotePort =
+                Mathf.Clamp(
+                    remotePort,
+                    1,
+                    65535);
+            sendRateHz =
+                Mathf.Clamp(
+                    sendRateHz,
+                    1,
+                    120);
+        }
+
+        private static float FiniteOrZero(
+            float value)
+        {
+            return float.IsFinite(value)
+                ? value
+                : 0f;
+        }
+
+        private static float Clamp01Finite(
+            float value)
+        {
+            return float.IsFinite(value)
+                ? Mathf.Clamp01(value)
+                : 0f;
         }
 
         private void OpenClient()
