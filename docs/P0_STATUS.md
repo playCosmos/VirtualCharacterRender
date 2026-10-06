@@ -103,6 +103,7 @@ Do not accept the remaining evidence-gated ADRs or merge P0 as fully validated s
 - enable=create
 - disable=dispose
 - re-enable creates a new service
+- disposal failure retains the owned capability instance in `Faulted` state so cleanup can be retried; registry-wide dispose also preserves retryable entries until every instance is actually released
 - source-free lifecycle self-test
 
 ### Diagnostics/evidence
