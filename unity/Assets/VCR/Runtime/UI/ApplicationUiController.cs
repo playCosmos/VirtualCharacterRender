@@ -190,6 +190,7 @@ namespace VCR.Runtime.UI
         private float _nextDependencyResolveTime;
         private float _nextTrackingControlResolveTime;
         private string _lastActionMessage;
+        private int _characterUiOperationGeneration;
         private int _trackingControlIndex;
         private int _appearanceTransitionIndex;
         private EnvironmentTransitionMode _environmentTransitionMode =
@@ -2129,13 +2130,15 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var runtime =
+                sceneRuntime;
             var path =
                 _characterPathInput.text?.Trim();
 
             if (!ApplicationUiActionPolicy
                     .CanLoadCharacter(
                         true,
-                        sceneRuntime.State,
+                        runtime.State,
                         path))
             {
                 _lastActionMessage =
@@ -2146,6 +2149,9 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var operationGeneration =
+                ++_characterUiOperationGeneration;
+
             _lastActionMessage =
                 "Loading character...";
             RefreshAll();
@@ -2153,8 +2159,15 @@ namespace VCR.Runtime.UI
             try
             {
                 var loaded =
-                    await sceneRuntime
+                    await runtime
                         .LoadCharacterAsync(path);
+
+                if (!IsCurrentCharacterUiOperation(
+                        operationGeneration,
+                        runtime))
+                {
+                    return;
+                }
 
                 _lastActionMessage =
                     loaded != null
@@ -2163,6 +2176,13 @@ namespace VCR.Runtime.UI
             }
             catch (Exception exception)
             {
+                if (!IsCurrentCharacterUiOperation(
+                        operationGeneration,
+                        runtime))
+                {
+                    return;
+                }
+
                 _lastActionMessage =
                     "Character load failed: " +
                     exception.Message;
@@ -2181,8 +2201,10 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var runtime =
+                sceneRuntime;
             var status =
-                sceneRuntime.Status;
+                runtime.Status;
 
             if (!ApplicationUiActionPolicy
                     .CanReloadCharacter(
@@ -2197,6 +2219,9 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var operationGeneration =
+                ++_characterUiOperationGeneration;
+
             _lastActionMessage =
                 "Reloading character...";
             RefreshAll();
@@ -2204,8 +2229,15 @@ namespace VCR.Runtime.UI
             try
             {
                 var loaded =
-                    await sceneRuntime
+                    await runtime
                         .ReloadCharacterAsync();
+
+                if (!IsCurrentCharacterUiOperation(
+                        operationGeneration,
+                        runtime))
+                {
+                    return;
+                }
 
                 _lastActionMessage =
                     loaded != null
@@ -2214,6 +2246,13 @@ namespace VCR.Runtime.UI
             }
             catch (Exception exception)
             {
+                if (!IsCurrentCharacterUiOperation(
+                        operationGeneration,
+                        runtime))
+                {
+                    return;
+                }
+
                 _lastActionMessage =
                     "Character reload failed: " +
                     exception.Message;
@@ -2247,6 +2286,8 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            _characterUiOperationGeneration++;
+
             try
             {
                 sceneRuntime.UnloadCharacter();
@@ -2261,6 +2302,19 @@ namespace VCR.Runtime.UI
             }
 
             RefreshAll();
+        }
+
+        private bool IsCurrentCharacterUiOperation(
+            int generation,
+            SingleCharacterSceneRuntime runtime)
+        {
+            return
+                this != null &&
+                generation ==
+                    _characterUiOperationGeneration &&
+                ReferenceEquals(
+                    sceneRuntime,
+                    runtime);
         }
 
         private void SelectPreviousTrackingControl()
