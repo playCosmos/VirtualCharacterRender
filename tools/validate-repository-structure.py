@@ -910,6 +910,31 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_characterSummaryCache",
+    "application UI Character refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "CharacterSummaryCacheMatches(",
+    "application UI Character refresh must compare displayed scene/appearance state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_characterSummaryPresetIds",
+    "character summary cache must retain visible user-preset ids without rebuilding order text on cache hits",
+)
+require_source_contains(
+    application_ui,
+    "AppendUserPresetOrder(",
+    "character summary must append preset order directly into the shared summary builder on cache miss",
+)
+forbid_source_pattern(
+    application_ui,
+    r"FormatUserPresetOrder\s*\(",
+    "character summary refresh must not allocate a standalone preset-order string",
+)
+require_source_contains(
+    application_ui,
     "MaterialSummaryCacheMatches(",
     "application UI Materials refresh must compare selected status/descriptor state before rebuilding text",
 )
