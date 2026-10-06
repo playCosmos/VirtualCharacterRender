@@ -81,9 +81,11 @@ In that mode:
 
 1. `Character2DRuntime` validates the configured mapping profile.
 2. Profile `BackendId` must exactly match the active backend.
-3. Changed normalized tracking snapshots are evaluated by `Character2DParameterMapper`.
+3. Changed normalized tracking snapshots are evaluated by `Character2DParameterMapper` into runtime-owned reusable scratch.
 4. Empty mapped results are treated as a no-op.
-5. Final parameter-id/value writes are performed only by the adapter sink.
+5. The emitted parameter range is borrowed by the adapter as `ReadOnlySpan<Character2DParameterValue>` for the duration of the synchronous sink call.
+6. The adapter must consume that span immediately and must not retain the span or its backing storage.
+7. Final parameter-id/value writes are performed only by the adapter sink.
 
 The adapter must not introduce a second webcam/ARKit/VMC tracking pipeline.
 
