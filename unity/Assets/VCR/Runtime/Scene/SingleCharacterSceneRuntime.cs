@@ -99,7 +99,7 @@ namespace VCR.Runtime.Scene
         public BroadcastCaptureReadiness EvaluateBroadcastCaptureTarget(
             BroadcastCaptureTarget target)
         {
-            ResolveDependencies();
+            ResolveRenderBootstrap();
 
             if (renderBootstrap == null)
             {
@@ -304,7 +304,7 @@ namespace VCR.Runtime.Scene
         public bool TryCaptureRenderSettings(
             out RenderRuntimeSettings settings)
         {
-            ResolveDependencies();
+            ResolveRenderBootstrap();
 
             if (renderBootstrap == null)
             {
@@ -806,12 +806,7 @@ namespace VCR.Runtime.Scene
                     FindFirstObjectByType<Vrm10CharacterLoader>();
             }
 
-            if (renderBootstrap == null)
-            {
-                renderBootstrap =
-                    GetComponent<DesktopRenderBootstrap>() ??
-                    FindFirstObjectByType<DesktopRenderBootstrap>();
-            }
+            ResolveRenderBootstrap();
 
             if (cameraController == null)
             {
@@ -829,6 +824,18 @@ namespace VCR.Runtime.Scene
 
             ResolveOverlayOutput();
             ResolveEnvironmentRuntime();
+        }
+
+        private void ResolveRenderBootstrap()
+        {
+            if (renderBootstrap != null)
+            {
+                return;
+            }
+
+            renderBootstrap =
+                GetComponent<DesktopRenderBootstrap>() ??
+                FindFirstObjectByType<DesktopRenderBootstrap>();
         }
 
         private void ResolveEnvironmentRuntime()
