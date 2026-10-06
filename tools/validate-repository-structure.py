@@ -2551,6 +2551,29 @@ require_source_contains(
     "public HumanoidPoseLayerMask Clone()",
     "humanoid pose layer masks must support defensive ownership copies",
 )
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "private static float SanitizeWeight(",
+    "humanoid pose layer masks must normalize non-finite root/default/bone weights",
+)
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "fallback:\n                        DefaultBoneWeight",
+    "non-finite bone overrides must fall back to the current mask default",
+)
+
+humanoid_bone_weight = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidBoneWeight.cs"
+)
+require_source_contains(
+    humanoid_bone_weight,
+    "private static float SanitizeWeight(",
+    "standalone humanoid bone weights must normalize non-finite values",
+)
 
 humanoid_pose_layer_settings = (
     VCR
@@ -2738,6 +2761,44 @@ require_source_contains(
     "non-finite pose-layer weight must sanitize",
     "P5 validation must prove non-finite pose weights are normalized",
 )
+require_source_contains(
+    p5_mixer_validation,
+    "non-finite default pose mask weight must sanitize",
+    "P5 validation must prove non-finite pose mask weights are normalized",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "standalone non-finite humanoid bone weight must sanitize",
+    "P5 validation must prove standalone bone weights cannot retain NaN/Infinity",
+)
+
+tracking_route_policy = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Routing"
+    / "TrackingRoutePolicy.cs"
+)
+require_source_contains(
+    tracking_route_policy,
+    "RuntimeFacePriorityOrder.Clone()",
+    "public face priority access must return a defensive copy",
+)
+require_source_contains(
+    tracking_route_policy,
+    "RuntimeExpressionPriorityOrder.Clone()",
+    "public expression priority access must return a defensive copy",
+)
+require_source_contains(
+    tracking_route_policy,
+    "internal TrackingSourceKind[]\n            RuntimeFacePriorityOrder",
+    "tracking route hot paths must retain a cached internal face-priority array",
+)
+require_source_contains(
+    tracking_route_policy,
+    "var order =\n                RuntimeFacePriorityOrder;",
+    "tracking route priority lookup must avoid allocating the public defensive copy",
+)
 
 tracking_router = (
     VCR
@@ -2911,6 +2972,11 @@ require_source_contains(
     p4_routing_validation,
     "router must store and reuse a recovered default policy",
     "P4 validation must cover recovered route-policy reuse",
+)
+require_source_contains(
+    p4_routing_validation,
+    "public face priority access must return a defensive copy",
+    "P4 validation must prove route priority arrays cannot mutate the internal policy",
 )
 require_source_contains(
     p4_routing_validation,
