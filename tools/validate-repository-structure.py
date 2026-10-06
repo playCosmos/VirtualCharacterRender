@@ -225,6 +225,16 @@ require_source_contains(
     "ARKit receiver configuration must contain non-finite timing/pose values",
     "P3 validation must cover ARKit receiver numeric sanitization and timing saturation",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "webcam preprocessing exposure/gamma sanitization must reject non-finite values",
+    "P3 validation must cover webcam preprocessing numeric sanitization",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "MediaPipe normalizers must contain non-finite blendshape/confidence values",
+    "P3 validation must cover MediaPipe normalizer numeric containment",
+)
 
 p0_vmc_validation = (
     VCR
@@ -3270,6 +3280,70 @@ require_source_contains(
     snapshot_ownership,
     "SnapshotArrayOwnership.Copy",
     "snapshot arrays must retain a defensive-copy ownership mode",
+)
+
+webcam_frame_preprocessor = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "WebcamFramePreprocessor.cs"
+)
+require_source_contains(
+    webcam_frame_preprocessor,
+    "private static float SanitizeBounded(",
+    "webcam preprocessing must finite-normalize exposure/gamma before shader upload",
+)
+require_source_contains(
+    webcam_frame_preprocessor,
+    "if (!float.IsFinite(value))",
+    "webcam preprocessing sanitizer must reject NaN/Infinity",
+)
+
+mediapipe_face_normalizer = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeFaceNormalizer.cs"
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "if (!float.IsFinite(value) ||",
+    "MediaPipe face blendshape normalization must reject non-finite scores",
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "float.IsFinite(rotation.x)",
+    "MediaPipe face normalization must reject non-finite head rotation output",
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "float.IsFinite(translation.x)",
+    "MediaPipe face normalization must reject non-finite head translation output",
+)
+
+mediapipe_holistic_normalizer = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeHolisticNormalizer.cs"
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "!float.IsFinite(landmark.x)",
+    "MediaPipe holistic normalization must reject landmarks with non-finite coordinates",
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "private static float SanitizeConfidence(",
+    "MediaPipe holistic confidence must contain NaN/Infinity",
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "float.IsFinite(confidence)",
+    "MediaPipe upper-body confidence aggregation must ignore non-finite samples",
 )
 
 snapshot_hot_paths = [
