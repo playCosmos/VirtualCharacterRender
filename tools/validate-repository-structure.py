@@ -796,6 +796,38 @@ require_source_contains(
     "_lastFaceFrame",
     "runtime diagnostics update counting must observe immutable frame identity",
 )
+require_source_contains(
+    runtime_diagnostics,
+    "_metricSources",
+    "runtime diagnostics must cache discovered metric sources between reports",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "metricSourceRefreshIntervalSeconds",
+    "runtime diagnostics metric-source discovery must remain lower-frequency than report collection",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_reportBuilder",
+    "runtime diagnostics console reports must reuse StringBuilder scratch storage",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "RefreshMetricSources(",
+    "runtime diagnostics must refresh cached metric sources through the bounded discovery path",
+)
+
+p0_diagnostics_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0DiagnosticsValidation.cs"
+)
+require_source_contains(
+    p0_diagnostics_validation,
+    "P0ThrowingMetricsSource",
+    "P0 diagnostics validation must retain metric-source failure isolation coverage",
+)
 
 humanoid_pose_state = (
     VCR
