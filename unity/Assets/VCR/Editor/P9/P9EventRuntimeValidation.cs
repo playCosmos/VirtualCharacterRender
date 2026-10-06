@@ -1082,6 +1082,24 @@ namespace VCR.Editor.P9
                             }
                     });
 
+                Expect(
+                    host.RuleCount == 1 &&
+                    host.GetRuleAt(0)?.Id ==
+                        "manual-environment" &&
+                    host.GetRuleAt(-1) == null &&
+                    host.GetRuleAt(1) == null &&
+                    host.TryGetRule(
+                        "manual-environment",
+                        out var directRule) &&
+                    ReferenceEquals(
+                        directRule,
+                        host.GetRuleAt(0)) &&
+                    !host.TryGetRule(
+                        "missing-rule",
+                        out _),
+                    "event runtime host must expose allocation-free indexed/id rule lookup without changing defensive CaptureRules semantics",
+                    failures);
+
                 hub.Publish(
                     new NormalizedEvent(
                         NormalizedEventTypes
