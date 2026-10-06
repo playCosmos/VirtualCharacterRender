@@ -41,11 +41,15 @@ namespace VCR.Runtime.Scene
         private bool _applicationQuitting;
         private SceneRuntimeState _stateBeforeSuspend =
             SceneRuntimeState.Ready;
+        private const double OptionalServiceDiscoveryRetrySeconds = 1.0;
+
         private IOverlayOutputAdapter _overlayOutput;
         private IEnvironmentRuntime _environmentRuntime;
         private CapabilityRegistry _capabilities;
         private OverlayOutputConfiguration _overlayConfiguration =
             OverlayOutputConfiguration.Default;
+        private double _nextOverlayOutputResolveAt;
+        private double _nextEnvironmentRuntimeResolveAt;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter =>
@@ -834,6 +838,13 @@ namespace VCR.Runtime.Scene
                     IEnvironmentRuntime configured)
             {
                 _environmentRuntime = configured;
+                _nextEnvironmentRuntimeResolveAt = 0d;
+                return;
+            }
+
+            if (!CanRetryOptionalServiceDiscovery(
+                    ref _nextEnvironmentRuntimeResolveAt))
+            {
                 return;
             }
 
@@ -847,6 +858,7 @@ namespace VCR.Runtime.Scene
                 {
                     environmentRuntimeBehaviour = behaviour;
                     _environmentRuntime = runtime;
+                    _nextEnvironmentRuntimeResolveAt = 0d;
                     return;
                 }
             }
@@ -865,6 +877,13 @@ namespace VCR.Runtime.Scene
                 _overlayConfiguration =
                     OverlayOutputConfiguration.FromSettings(
                         configured.Settings);
+                _nextOverlayOutputResolveAt = 0d;
+                return;
+            }
+
+            if (!CanRetryOptionalServiceDiscovery(
+                    ref _nextOverlayOutputResolveAt))
+            {
                 return;
             }
 
@@ -881,12 +900,29 @@ namespace VCR.Runtime.Scene
                     _overlayConfiguration =
                         OverlayOutputConfiguration.FromSettings(
                             adapter.Settings);
+                    _nextOverlayOutputResolveAt = 0d;
                     return;
                 }
             }
 
             overlayOutputBehaviour = null;
             _overlayOutput = null;
+        }
+
+        private static bool CanRetryOptionalServiceDiscovery(
+            ref double nextRetryAt)
+        {
+            var now =
+                Time.realtimeSinceStartupAsDouble;
+
+            if (now < nextRetryAt)
+            {
+                return false;
+            }
+
+            nextRetryAt =
+                now + OptionalServiceDiscoveryRetrySeconds;
+            return true;
         }
 
         private static bool IsServiceAlive(
