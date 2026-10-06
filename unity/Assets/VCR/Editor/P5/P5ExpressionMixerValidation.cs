@@ -1021,6 +1021,27 @@ namespace VCR.Editor.P5
                     "missing pose overlay must fall back to the routed base pose",
                     failures);
 
+                var sameSequenceReplacementPose =
+                    CreatePoseFrame(
+                        "route-pose",
+                        sequence: 1,
+                        nowUs + 2,
+                        leftX: 0.75f,
+                        rightX: 0.5f);
+                route.PoseFrame =
+                    sameSequenceReplacementPose;
+
+                InvokeUpdate(mixer);
+
+                Expect(
+                    mixer.TryGetLatestHumanoidPose(
+                        out var replacementPoseOutput) &&
+                    ReferenceEquals(
+                        replacementPoseOutput,
+                        sameSequenceReplacementPose),
+                    "a new immutable pose frame must be observed even when source id and sequence are reused",
+                    failures);
+
                 route.PoseFrame = null;
                 InvokeUpdate(mixer);
 
@@ -1062,6 +1083,30 @@ namespace VCR.Editor.P5
                     -1f,
                     0.2f,
                     "missing overlay must preserve routed base expressions exactly",
+                    failures);
+
+                route.ExpressionFrame =
+                    CreateExpressionFrame(
+                        "route-expression",
+                        sequence: 1,
+                        nowUs + 3,
+                        aa: 0.35f);
+
+                InvokeUpdate(mixer);
+
+                Expect(
+                    mixer.TryGetLatestExpressions(
+                        out var sameSequenceExpression) &&
+                    sameSequenceExpression?.Expressions != null,
+                    "a new immutable expression frame must be observed even when source id and sequence are reused",
+                    failures);
+
+                ExpectClose(
+                    sameSequenceExpression?.Expressions?.Get(
+                        StandardExpression.Aa) ??
+                    -1f,
+                    0.35f,
+                    "same-sequence replacement expression must refresh mixer output by frame identity",
                     failures);
 
                 route.ExpressionFrame = null;
