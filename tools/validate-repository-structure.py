@@ -1216,6 +1216,17 @@ require_source_contains(
 )
 require_source_contains(
     application_runtime_bootstrap,
+    "var startupConfigurationStore =\n                new RuntimeConfigurationStore(",
+    "application startup must stage its configuration store without committing a failed attempt path",
+)
+require_source_order(
+    application_runtime_bootstrap,
+    "_configurationStore =\n                    startupConfigurationStore;",
+    "_started = true;",
+    "application startup must commit its configuration store only immediately before marking startup successful",
+)
+require_source_contains(
+    application_runtime_bootstrap,
     "TryRestoreStartupBaseline(",
     "failed application startup attempts must restore their pre-attempt scene configuration",
 )
