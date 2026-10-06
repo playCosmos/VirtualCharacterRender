@@ -52,6 +52,8 @@ The source-switch counters only increment after an already-selected source chang
 
 Routed outputs now preserve the selected provider's immutable `TrackingFrame` object directly for face, body/hands, full-body, and expressions. The router no longer allocates a second envelope frame merely to restamp sequence metadata. Route selection still tracks child source/sequence internally for duplicate suppression and switch metrics, while downstream consumers use immutable frame reference identity so a replacement provider that reuses an old source ID/sequence is still observable.
 
+Face routing also samples each needed candidate at most once per router update. A healthy preferred source that outranks the fallback is sampled once and then reused for activation, selection, and output; the fallback face provider is not polled in that case. If policy or health makes fallback competitive, it is enabled first and then sampled once.
+
 ## Source-free validation
 
 Interactive:
@@ -82,6 +84,7 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 - preferred source rejection when common health reports `SourceLost` even if cached presence/frame state remains
 - direct routed-frame reference reuse for face, body/hands, full-body, and expressions without wrapper allocation
 - loss/recovery and provider replacement when a source reuses a previous source ID/sequence
+- single-sample preferred-face routing and skipped fallback face reads when the preferred source already wins
 
 ## Still deferred to real devices / players
 
