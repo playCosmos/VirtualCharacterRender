@@ -510,6 +510,85 @@ namespace VCR.Editor.P3
                     "ARKit receiver configuration must contain non-finite timing/pose values and saturate oversized presence timing conversion",
                     failures);
 
+                var timestampMathType =
+                    typeof(TrackingSourceHealthSnapshot)
+                        .Assembly
+                        .GetType(
+                            "VCR.Runtime.Tracking.TrackingTimestampMath",
+                            throwOnError: false);
+                var tryElapsedMicroseconds =
+                    timestampMathType?.GetMethod(
+                        "TryElapsedMicroseconds",
+                        BindingFlags.Static |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                var ageMillisecondsOrNaN =
+                    timestampMathType?.GetMethod(
+                        "AgeMillisecondsOrNaN",
+                        BindingFlags.Static |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic);
+
+                if (tryElapsedMicroseconds == null ||
+                    ageMillisecondsOrNaN == null)
+                {
+                    failures.Add(
+                        "tracking timestamp overflow-safe helper reflection contract is incomplete");
+                }
+                else
+                {
+                    var elapsedArgs =
+                        new object[]
+                        {
+                            long.MaxValue,
+                            long.MinValue,
+                            0UL
+                        };
+                    var elapsedAccepted =
+                        (bool)
+                            tryElapsedMicroseconds
+                                .Invoke(
+                                    null,
+                                    elapsedArgs);
+                    var elapsedExtreme =
+                        (ulong)
+                            elapsedArgs[2];
+                    var backwardsArgs =
+                        new object[]
+                        {
+                            0L,
+                            1L,
+                            0UL
+                        };
+                    var backwardsAccepted =
+                        (bool)
+                            tryElapsedMicroseconds
+                                .Invoke(
+                                    null,
+                                    backwardsArgs);
+                    var futureAge =
+                        (double)
+                            ageMillisecondsOrNaN
+                                .Invoke(
+                                    null,
+                                    new object[]
+                                    {
+                                        0L,
+                                        1L
+                                    });
+
+                    Expect(
+                        elapsedAccepted &&
+                        elapsedExtreme ==
+                            ulong.MaxValue &&
+                        !backwardsAccepted &&
+                        Math.Abs(
+                            futureAge) <
+                            0.0001,
+                        "tracking timestamp math must preserve full-range elapsed time without signed overflow and clamp future age to zero",
+                        failures);
+                }
+
                 var sanitizePreprocessValue =
                     typeof(WebcamFramePreprocessor)
                     .GetMethod(
