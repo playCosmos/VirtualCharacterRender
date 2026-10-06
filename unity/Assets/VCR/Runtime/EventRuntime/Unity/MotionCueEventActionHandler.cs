@@ -90,7 +90,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             return TryResolveRuntime(
                 command,
                 out _,
-                out var count) &&
+                out var count,
+                out _) &&
                 count > 0;
         }
 
@@ -125,14 +126,16 @@ namespace VCR.Runtime.EventRuntime.Unity
             if (!TryResolveRuntime(
                     command,
                     out var runtime,
-                    out var count) ||
+                    out var count,
+                    out var resolveError) ||
                 count == 0)
             {
                 error =
-                    string.IsNullOrWhiteSpace(
+                    resolveError ??
+                    (string.IsNullOrWhiteSpace(
                         command.TargetId)
                         ? $"No motion cue runtime owns cue '{command.Text ?? "<none>"}'."
-                        : $"Motion cue runtime '{command.TargetId}' is unavailable.";
+                        : $"Motion cue runtime '{command.TargetId}' is unavailable.");
                 return false;
             }
 
@@ -146,17 +149,27 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            if (command.ActionType ==
-                EventActionTypes.MotionPlay)
+            try
             {
-                return runtime.TryPlayCue(
+                if (command.ActionType ==
+                    EventActionTypes.MotionPlay)
+                {
+                    return runtime.TryPlayCue(
+                        command.Text,
+                        out error);
+                }
+
+                return runtime.TryReleaseCue(
                     command.Text,
                     out error);
             }
-
-            return runtime.TryReleaseCue(
-                command.Text,
-                out error);
+            catch (Exception exception)
+            {
+                error =
+                    "Motion cue runtime execution failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         public bool CanTrackCompletion(
@@ -175,7 +188,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             return TryResolveRuntime(
                 command,
                 out _,
-                out var count) &&
+                out var count,
+                out _) &&
                 count == 1;
         }
 
@@ -187,18 +201,30 @@ namespace VCR.Runtime.EventRuntime.Unity
             complete = false;
             error = null;
 
-            if (!CanTrackCompletion(
-                    command))
+            if (command.ActionType !=
+                    EventActionTypes.MotionPlay &&
+                command.ActionType !=
+                    EventActionTypes.MotionRelease)
             {
                 error =
-                    "Motion action completion cannot be tracked because its runtime is unavailable or ambiguous.";
+                    "Motion action completion cannot be tracked for this action type.";
                 return false;
             }
 
-            TryResolveRuntime(
-                command,
-                out var runtime,
-                out _);
+            ResolveRuntimes();
+
+            if (!TryResolveRuntime(
+                    command,
+                    out var runtime,
+                    out var count,
+                    out var resolveError) ||
+                count != 1)
+            {
+                error =
+                    resolveError ??
+                    "Motion action completion cannot be tracked because its runtime is unavailable or ambiguous.";
+                return false;
+            }
 
             if (command.ActionType ==
                 EventActionTypes.MotionRelease)
@@ -207,13 +233,26 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return true;
             }
 
-            complete =
-                !runtime.Status.Playing ||
-                !string.Equals(
-                    runtime.Status.CueId,
-                    command.Text,
-                    StringComparison.Ordinal);
-            return true;
+            try
+            {
+                var status =
+                    runtime.Status;
+
+                complete =
+                    !status.Playing ||
+                    !string.Equals(
+                        status.CueId,
+                        command.Text,
+                        StringComparison.Ordinal);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Motion cue completion probe failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         private void ResolveRuntimes()
@@ -319,17 +358,28 @@ namespace VCR.Runtime.EventRuntime.Unity
         private bool TryResolveRuntime(
             EventActionCommand command,
             out IMotionCueRuntime runtime,
-            out int count)
+            out int count,
+            out string error)
         {
             runtime = null;
             count = 0;
+            error = null;
 
             foreach (var candidate in
                      _runtimes)
             {
-                if (!Matches(
+                if (!TryMatches(
                         candidate,
-                        command))
+                        command,
+                        out var matches,
+                        out var candidateError))
+                {
+                    error ??=
+                        candidateError;
+                    continue;
+                }
+
+                if (!matches)
                 {
                     continue;
                 }
@@ -346,48 +396,74 @@ namespace VCR.Runtime.EventRuntime.Unity
             return count > 0;
         }
 
-        private bool Matches(
+        private static bool TryMatches(
             IMotionCueRuntime runtime,
-            EventActionCommand command)
+            EventActionCommand command,
+            out bool matches,
+            out string error)
         {
+            matches = false;
+            error = null;
+
             if (runtime == null ||
                 runtime is UnityEngine.Object unityObject &&
                 unityObject == null)
             {
-                return false;
+                return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(
-                    command.TargetId))
+            try
             {
-                return string.Equals(
-                    command.TargetId,
-                    runtime.Status.RuntimeId,
-                    StringComparison.Ordinal);
-            }
-
-            if (!string.IsNullOrWhiteSpace(
-                    command.Text))
-            {
-                foreach (var cueId in
-                         runtime.CueIds)
+                if (!string.IsNullOrWhiteSpace(
+                        command.TargetId))
                 {
-                    if (string.Equals(
-                            cueId,
-                            command.Text,
-                            StringComparison.Ordinal))
+                    matches =
+                        string.Equals(
+                            command.TargetId,
+                            runtime.Status.RuntimeId,
+                            StringComparison.Ordinal);
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        command.Text))
+                {
+                    var cueIds =
+                        runtime.CueIds;
+
+                    if (cueIds == null)
                     {
                         return true;
                     }
+
+                    foreach (var cueId in cueIds)
+                    {
+                        if (string.Equals(
+                                cueId,
+                                command.Text,
+                                StringComparison.Ordinal))
+                        {
+                            matches = true;
+                            return true;
+                        }
+                    }
+
+                    return true;
                 }
 
+                matches =
+                    command.ActionType ==
+                        EventActionTypes.MotionRelease &&
+                    runtime.Status.Playing;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Motion cue runtime capability probe failed: " +
+                    exception.Message;
                 return false;
             }
-
-            return
-                command.ActionType ==
-                    EventActionTypes.MotionRelease &&
-                runtime.Status.Playing;
         }
     }
 }
