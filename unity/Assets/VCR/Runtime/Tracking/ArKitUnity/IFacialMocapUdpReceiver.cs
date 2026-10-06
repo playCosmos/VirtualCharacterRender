@@ -37,6 +37,11 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 encoderShouldEmitUTF8Identifier: false,
                 throwOnInvalidBytes: true);
 
+        private static readonly byte[] StartStreamingV2Bytes =
+            Encoding.UTF8.GetBytes(
+                IFacialMocapFrameParser
+                    .StartStreamingV2Command);
+
         [Header("iOS sender")]
         [SerializeField] private string iosIPv4Address = "";
         [SerializeField, Range(1, 65535)] private int remotePort =
@@ -67,6 +72,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         private TrackingPresenceSnapshot _presence;
 
         private UdpClient _receiver;
+        private UdpClient _handshakeSender;
         private Thread _receiveThread;
         private volatile bool _running;
         private IPEndPoint _iosEndpoint;
@@ -308,10 +314,14 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
             try
             {
-                using var sender = new UdpClient(AddressFamily.InterNetwork);
-                var bytes = Encoding.UTF8.GetBytes(
-                    IFacialMocapFrameParser.StartStreamingV2Command);
-                sender.Send(bytes, bytes.Length, _iosEndpoint);
+                _handshakeSender ??=
+                    new UdpClient(
+                        AddressFamily.InterNetwork);
+
+                _handshakeSender.Send(
+                    StartStreamingV2Bytes,
+                    StartStreamingV2Bytes.Length,
+                    _iosEndpoint);
                 Interlocked.Increment(
                     ref _handshakeCount);
             }
@@ -687,10 +697,22 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             var receiver =
                 _receiver;
             _receiver = null;
+            var handshakeSender =
+                _handshakeSender;
+            _handshakeSender = null;
 
             try
             {
                 receiver?.Close();
+            }
+            catch
+            {
+                // Shutdown path.
+            }
+
+            try
+            {
+                handshakeSender?.Close();
             }
             catch
             {
