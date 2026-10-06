@@ -731,6 +731,45 @@ require_source_contains(
     "appearance preset invalidation must publish a snapshot so cached consumers cannot go stale",
 )
 
+require_source_contains(
+    appearance_runtime,
+    "TransitionExecutorDiscoveryRetrySeconds = 1.0;",
+    "missing appearance transition executors must use bounded discovery retry",
+)
+require_source_contains(
+    appearance_runtime,
+    "_nextTransitionExecutorResolveAt",
+    "appearance transition executor discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    appearance_runtime,
+    "Time.realtimeSinceStartupAsDouble",
+    "appearance transition executor retry must use monotonic realtime",
+)
+
+appearance_transition_action_executor = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AppearanceTransitionActionExecutor.cs"
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "HandlerDiscoveryRetrySeconds = 1.0;",
+    "missing transition event handlers must use bounded discovery retry",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "_nextHandlerResolveAt",
+    "transition event-handler discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "Time.realtimeSinceStartupAsDouble",
+    "transition event-handler retry must use monotonic realtime",
+)
+
 application_ui = (
     VCR
     / "Runtime"
