@@ -139,56 +139,14 @@ namespace VCR.Runtime.Protocols.Vmc
                 }
             }
 
-            if (expressionApply)
-            {
-                _committedExpressions = BuildExpressions();
-            }
+            frame =
+                CompletePacket(
+                    stateChanged,
+                    poseChanged,
+                    expressionApply,
+                    arrivalTimestampUs);
 
-            if (!stateChanged &&
-                !poseChanged &&
-                !expressionApply)
-            {
-                return false;
-            }
-
-            // Do not refresh an old pose merely because a heartbeat or
-            // expression packet arrived. Pose freshness is a separate domain.
-            var pose =
-                poseChanged && _hasAnyBone
-                    ? BuildPose()
-                    : null;
-
-            var expressions =
-                expressionApply
-                    ? _committedExpressions
-                    : null;
-
-            var subjectDetected =
-                _trackingKnown
-                    ? _trackingOk
-                    : (_loadedKnown ? _loaded : _hasAnyBone);
-
-            var regions = pose != null
-                ? TrackingRegion.FullBody
-                : TrackingRegion.None;
-
-            var sourceTimestampUs =
-                _senderTimestampUs > 0
-                    ? _senderTimestampUs
-                    : arrivalTimestampUs;
-
-            frame = new TrackingFrame(
-                ++_sequence,
-                sourceTimestampUs,
-                regions,
-                subjectDetected ? 1f : 0f,
-                subjectDetected,
-                humanoidPose: pose,
-                expressions: expressions,
-                sourceId: _sourceId,
-                runtimeTimestampUs: MonotonicClock.NowMicroseconds());
-
-            return true;
+            return frame != null;
         }
 
         private bool ProcessAvailable(OscMessage message)
@@ -200,26 +158,15 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
-            var previousLoadedKnown = _loadedKnown;
-            var previousLoaded = _loaded;
-            var previousTrackingKnown = _trackingKnown;
-            var previousTracking = _trackingOk;
+            var hasTracking =
+                args.Length >= 4 &&
+                args[3].TryGetInt(
+                    out var tracking);
 
-            _loadedKnown = true;
-            _loaded = loaded != 0;
-
-            if (args.Length >= 4 &&
-                args[3].TryGetInt(out var tracking))
-            {
-                _trackingKnown = true;
-                _trackingOk = tracking != 0;
-            }
-
-            return
-                !previousLoadedKnown ||
-                previousLoaded != _loaded ||
-                previousTrackingKnown != _trackingKnown ||
-                previousTracking != _trackingOk;
+            return ApplyAvailable(
+                loaded,
+                hasTracking,
+                tracking);
         }
 
         private void ProcessTime(OscMessage message)
@@ -231,8 +178,8 @@ namespace VCR.Runtime.Protocols.Vmc
                 !float.IsNaN(seconds) &&
                 !float.IsInfinity(seconds))
             {
-                _senderTimestampUs =
-                    (long)(seconds * 1_000_000.0);
+                ApplyTime(
+                    seconds);
             }
         }
 
@@ -254,9 +201,9 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
-            _rootPosition = position;
-            _rootRotation = rotation;
-            return true;
+            return ApplyRoot(
+                position,
+                rotation);
         }
 
         private bool ProcessBone(OscMessage message)
@@ -276,13 +223,10 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
-            var index = (int)bone;
-            _bones[index] = new NormalizedBonePose(
+            return ApplyBone(
+                bone,
                 position,
                 rotation);
-            _hasBone[index] = true;
-            _hasAnyBone = true;
-            return true;
         }
 
         private void ProcessBlendValue(OscMessage message)
@@ -295,46 +239,286 @@ namespace VCR.Runtime.Protocols.Vmc
                 return;
             }
 
-            value = Clamp01(value);
-
             if (StandardExpressionNames.TryParse(
-                name,
-                out var expression))
-            {
-                _expressionStaging[(int)expression] = value;
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(
-                        name) ||
-                    name.Length >
-                        MaxCustomExpressionNameCharacters)
-                {
-                    _droppedCustomExpressionCount++;
-                    return;
-                }
-
-                if (_customExpressionStaging
-                    .ContainsKey(
-                        name))
-                {
-                    _customExpressionStaging[
-                        name] =
-                        value;
-                    return;
-                }
-
-                if (_customExpressionStaging.Count >=
-                    MaxCustomExpressions)
-                {
-                    _droppedCustomExpressionCount++;
-                    return;
-                }
-
-                _customExpressionStaging.Add(
                     name,
+                    out var expression))
+            {
+                ApplyStandardBlend(
+                    expression,
                     value);
+                return;
             }
+
+            ApplyCustomBlend(
+                name,
+                value);
+        }
+
+        internal bool ApplyAvailable(
+            int loaded,
+            bool hasTracking,
+            int tracking)
+        {
+            var previousLoadedKnown =
+                _loadedKnown;
+            var previousLoaded =
+                _loaded;
+            var previousTrackingKnown =
+                _trackingKnown;
+            var previousTracking =
+                _trackingOk;
+
+            _loadedKnown = true;
+            _loaded =
+                loaded != 0;
+
+            if (hasTracking)
+            {
+                _trackingKnown = true;
+                _trackingOk =
+                    tracking != 0;
+            }
+
+            return
+                !previousLoadedKnown ||
+                previousLoaded != _loaded ||
+                previousTrackingKnown !=
+                    _trackingKnown ||
+                previousTracking !=
+                    _trackingOk;
+        }
+
+        internal void ApplyTime(
+            float seconds)
+        {
+            if (seconds < 0f ||
+                float.IsNaN(seconds) ||
+                float.IsInfinity(seconds))
+            {
+                return;
+            }
+
+            _senderTimestampUs =
+                (long)(
+                    seconds *
+                    1_000_000.0);
+        }
+
+        internal bool ApplyRoot(
+            float px,
+            float py,
+            float pz,
+            float qx,
+            float qy,
+            float qz,
+            float qw)
+        {
+            if (!TryCreateTransform(
+                    px,
+                    py,
+                    pz,
+                    qx,
+                    qy,
+                    qz,
+                    qw,
+                    out var position,
+                    out var rotation))
+            {
+                return false;
+            }
+
+            return ApplyRoot(
+                position,
+                rotation);
+        }
+
+        internal bool ApplyRoot(
+            TrackingVector3 position,
+            TrackingQuaternion rotation)
+        {
+            _rootPosition =
+                position;
+            _rootRotation =
+                rotation;
+            return true;
+        }
+
+        internal bool ApplyBone(
+            HumanoidBoneId bone,
+            float px,
+            float py,
+            float pz,
+            float qx,
+            float qy,
+            float qz,
+            float qw)
+        {
+            if (!TryCreateTransform(
+                    px,
+                    py,
+                    pz,
+                    qx,
+                    qy,
+                    qz,
+                    qw,
+                    out var position,
+                    out var rotation))
+            {
+                return false;
+            }
+
+            return ApplyBone(
+                bone,
+                position,
+                rotation);
+        }
+
+        internal bool ApplyBone(
+            HumanoidBoneId bone,
+            TrackingVector3 position,
+            TrackingQuaternion rotation)
+        {
+            var index =
+                (int)bone;
+
+            if (index < 0 ||
+                index >= _bones.Length)
+            {
+                return false;
+            }
+
+            _bones[index] =
+                new NormalizedBonePose(
+                    position,
+                    rotation);
+            _hasBone[index] =
+                true;
+            _hasAnyBone =
+                true;
+            return true;
+        }
+
+        internal void ApplyStandardBlend(
+            StandardExpression expression,
+            float value)
+        {
+            var index =
+                (int)expression;
+
+            if (index < 0 ||
+                index >=
+                    _expressionStaging.Length)
+            {
+                return;
+            }
+
+            _expressionStaging[index] =
+                Clamp01(
+                    value);
+        }
+
+        internal void ApplyCustomBlend(
+            string name,
+            float value)
+        {
+            value =
+                Clamp01(
+                    value);
+
+            if (string.IsNullOrWhiteSpace(
+                    name) ||
+                name.Length >
+                    MaxCustomExpressionNameCharacters)
+            {
+                _droppedCustomExpressionCount++;
+                return;
+            }
+
+            if (_customExpressionStaging
+                .ContainsKey(
+                    name))
+            {
+                _customExpressionStaging[
+                    name] =
+                    value;
+                return;
+            }
+
+            if (_customExpressionStaging.Count >=
+                MaxCustomExpressions)
+            {
+                _droppedCustomExpressionCount++;
+                return;
+            }
+
+            _customExpressionStaging.Add(
+                name,
+                value);
+        }
+
+        internal TrackingFrame CompletePacket(
+            bool stateChanged,
+            bool poseChanged,
+            bool expressionApply,
+            long arrivalTimestampUs)
+        {
+            if (expressionApply)
+            {
+                _committedExpressions =
+                    BuildExpressions();
+            }
+
+            if (!stateChanged &&
+                !poseChanged &&
+                !expressionApply)
+            {
+                return null;
+            }
+
+            // Do not refresh an old pose merely because a heartbeat or
+            // expression packet arrived. Pose freshness is a separate domain.
+            var pose =
+                poseChanged &&
+                _hasAnyBone
+                    ? BuildPose()
+                    : null;
+
+            var expressions =
+                expressionApply
+                    ? _committedExpressions
+                    : null;
+
+            var subjectDetected =
+                _trackingKnown
+                    ? _trackingOk
+                    : (_loadedKnown
+                        ? _loaded
+                        : _hasAnyBone);
+
+            var regions =
+                pose != null
+                    ? TrackingRegion.FullBody
+                    : TrackingRegion.None;
+
+            var sourceTimestampUs =
+                _senderTimestampUs > 0
+                    ? _senderTimestampUs
+                    : arrivalTimestampUs;
+
+            return new TrackingFrame(
+                ++_sequence,
+                sourceTimestampUs,
+                regions,
+                subjectDetected
+                    ? 1f
+                    : 0f,
+                subjectDetected,
+                humanoidPose: pose,
+                expressions: expressions,
+                sourceId: _sourceId,
+                runtimeTimestampUs:
+                    MonotonicClock
+                        .NowMicroseconds());
         }
 
         private HumanoidPoseState BuildPose()
@@ -405,6 +589,34 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
+            return TryCreateTransform(
+                px,
+                py,
+                pz,
+                qx,
+                qy,
+                qz,
+                qw,
+                out position,
+                out rotation);
+        }
+
+        private static bool TryCreateTransform(
+            float px,
+            float py,
+            float pz,
+            float qx,
+            float qy,
+            float qz,
+            float qw,
+            out TrackingVector3 position,
+            out TrackingQuaternion rotation)
+        {
+            position =
+                TrackingVector3.Zero;
+            rotation =
+                TrackingQuaternion.Identity;
+
             if (!IsFinite(px) ||
                 !IsFinite(py) ||
                 !IsFinite(pz) ||
@@ -416,8 +628,17 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
-            position = new TrackingVector3(px, py, pz);
-            rotation = NormalizeQuaternion(qx, qy, qz, qw);
+            position =
+                new TrackingVector3(
+                    px,
+                    py,
+                    pz);
+            rotation =
+                NormalizeQuaternion(
+                    qx,
+                    qy,
+                    qz,
+                    qw);
             return true;
         }
 
