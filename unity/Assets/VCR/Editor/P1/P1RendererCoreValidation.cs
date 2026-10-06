@@ -690,6 +690,59 @@ namespace VCR.Editor.P1
                     "failed overlay adapter apply must not commit an unapplied configuration snapshot",
                     failures);
 
+                outputAdapter.ThrowOnSettingsRead =
+                    true;
+
+                IOverlayOutputAdapter resolvedOverlay =
+                    null;
+                var overlayResolutionThrew =
+                    false;
+
+                try
+                {
+                    resolvedOverlay =
+                        scene.OverlayOutput;
+                }
+                catch
+                {
+                    overlayResolutionThrew =
+                        true;
+                }
+
+                var settingsFailureReadiness =
+                    scene.OverlayCaptureReadiness;
+                var settingsFailureRecovery =
+                    scene.TryRecoverOverlayOutput(
+                        out var settingsFailureRecoveryError);
+
+                outputAdapter.ThrowOnSettingsRead =
+                    false;
+                outputAdapter.ThrowOnStatusRead =
+                    true;
+
+                var statusFailureReadiness =
+                    scene.OverlayCaptureReadiness;
+
+                outputAdapter.ThrowOnStatusRead =
+                    false;
+
+                Expect(
+                    !overlayResolutionThrew &&
+                    ReferenceEquals(
+                        resolvedOverlay,
+                        outputAdapter) &&
+                    !settingsFailureReadiness.Ready &&
+                    settingsFailureReadiness.Failure ==
+                        OverlayCaptureReadinessFailure.Faulted &&
+                    !settingsFailureRecovery &&
+                    !string.IsNullOrWhiteSpace(
+                        settingsFailureRecoveryError) &&
+                    !statusFailureReadiness.Ready &&
+                    statusFailureReadiness.Failure ==
+                        OverlayCaptureReadinessFailure.Faulted,
+                    "overlay adapter Settings/Status getter exceptions must be isolated from adapter resolution and converted into readiness/recovery failures",
+                    failures);
+
                 var beforeTransactionalFailure =
                     scene.CaptureConfiguration();
                 var failingConfiguration =
