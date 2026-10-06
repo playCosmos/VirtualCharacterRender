@@ -978,6 +978,16 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "\"Scene suspend failed: \"",
+    "scene Suspend must contain external adapter shutdown exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Scene resume failed: \"",
+    "scene Resume must contain external presentation restore exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "RunRollbackStep(",
     "scene configuration rollback must isolate failures so later restore steps still run",
 )
