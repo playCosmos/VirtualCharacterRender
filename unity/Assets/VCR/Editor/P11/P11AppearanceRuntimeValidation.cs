@@ -3280,6 +3280,8 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedMotionRuntimeRefresh(
                 failures);
+            ValidateThrowingMotionRuntimeProbeIsolation(
+                failures);
         }
 
         private static void ValidateExecutorProbeIsolation(
@@ -3818,6 +3820,140 @@ namespace VCR.Editor.P11
             }
         }
 
+        private static void ValidateThrowingMotionRuntimeProbeIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Throwing Motion Runtime Probe Validation");
+
+                var runtime =
+                    root.AddComponent<
+                        P11ThrowingMotionCueRuntime>();
+                var handler =
+                    root.AddComponent<
+                        MotionCueEventActionHandler>();
+
+                handler.SetMotionRuntime(
+                    runtime);
+
+                var targetedPlay =
+                    new EventActionCommand(
+                        "motion-probe",
+                        EventActionTypes
+                            .MotionPlay,
+                        "motion.throwing",
+                        null,
+                        "boom",
+                        0.0,
+                        false,
+                        51);
+
+                runtime.ConfigureStatusThrowAfter(
+                    0);
+
+                Expect(
+                    !handler.CanHandle(
+                        targetedPlay) &&
+                    !handler.TryExecute(
+                        targetedPlay,
+                        out var statusResolveError) &&
+                    !string.IsNullOrWhiteSpace(
+                        statusResolveError) &&
+                    !handler.CanTrackCompletion(
+                        targetedPlay) &&
+                    !handler.TryIsComplete(
+                        targetedPlay,
+                        out _,
+                        out var statusCompletionResolveError) &&
+                    !string.IsNullOrWhiteSpace(
+                        statusCompletionResolveError),
+                    "throwing motion runtime status probes must fail closed across capability, execute, and completion resolution",
+                    failures);
+
+                runtime.ConfigureStatusThrowAfter(
+                    -1);
+                runtime.ThrowOnPlay =
+                    true;
+
+                Expect(
+                    !handler.TryExecute(
+                        targetedPlay,
+                        out var playError) &&
+                    !string.IsNullOrWhiteSpace(
+                        playError) &&
+                    playError.Contains(
+                        "execution failed",
+                        StringComparison.OrdinalIgnoreCase),
+                    "throwing motion runtime execution must be contained as false/error",
+                    failures);
+
+                runtime.ThrowOnPlay =
+                    false;
+                runtime.ThrowCueIds =
+                    true;
+
+                var untargetedPlay =
+                    new EventActionCommand(
+                        "motion-probe",
+                        EventActionTypes
+                            .MotionPlay,
+                        null,
+                        null,
+                        "boom",
+                        0.0,
+                        false,
+                        52);
+
+                Expect(
+                    !handler.CanHandle(
+                        untargetedPlay) &&
+                    !handler.TryExecute(
+                        untargetedPlay,
+                        out var cueProbeError) &&
+                    !string.IsNullOrWhiteSpace(
+                        cueProbeError),
+                    "throwing motion cue-id enumeration must fail closed without escaping capability/execute probes",
+                    failures);
+
+                runtime.ThrowCueIds =
+                    false;
+                runtime.ConfigureStatusThrowAfter(
+                    1);
+
+                Expect(
+                    !handler.TryIsComplete(
+                        targetedPlay,
+                        out _,
+                        out var lateStatusError) &&
+                    !string.IsNullOrWhiteSpace(
+                        lateStatusError) &&
+                    lateStatusError.Contains(
+                        "completion probe failed",
+                        StringComparison.OrdinalIgnoreCase),
+                    "motion completion must contain a Status getter failure that occurs after successful runtime resolution",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "throwing motion runtime probe isolation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static void ValidateDestroyedMotionRuntimeRefresh(
             List<string> failures)
         {
@@ -3896,6 +4032,109 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11ThrowingMotionCueRuntime :
+        MonoBehaviour,
+        IMotionCueRuntime
+    {
+        private static readonly IReadOnlyList<string>
+            CueList =
+                new[]
+                {
+                    "boom"
+                };
+
+        private int _statusReads;
+        private int _throwStatusAfterReads = -1;
+
+        public bool ThrowCueIds { get; set; }
+        public bool ThrowOnPlay { get; set; }
+        public bool ThrowOnRelease { get; set; }
+
+        public void ConfigureStatusThrowAfter(
+            int successfulReads)
+        {
+            _statusReads = 0;
+            _throwStatusAfterReads =
+                successfulReads;
+        }
+
+        public MotionCueStatus Status
+        {
+            get
+            {
+                _statusReads++;
+
+                if (_throwStatusAfterReads >= 0 &&
+                    _statusReads >
+                        _throwStatusAfterReads)
+                {
+                    throw new InvalidOperationException(
+                        "synthetic motion status failure");
+                }
+
+                return new MotionCueStatus(
+                    "motion.throwing",
+                    true,
+                    "boom",
+                    null);
+            }
+        }
+
+        public IReadOnlyList<string> CueIds
+        {
+            get
+            {
+                if (ThrowCueIds)
+                {
+                    throw new InvalidOperationException(
+                        "synthetic motion cue-id failure");
+                }
+
+                return CueList;
+            }
+        }
+
+        public bool TryPlayCue(
+            string cueId,
+            out string error)
+        {
+            if (ThrowOnPlay)
+            {
+                throw new InvalidOperationException(
+                    "synthetic motion play failure");
+            }
+
+            error = null;
+            return true;
+        }
+
+        public bool TryReleaseCue(
+            string cueId,
+            out string error)
+        {
+            if (ThrowOnRelease)
+            {
+                throw new InvalidOperationException(
+                    "synthetic motion release failure");
+            }
+
+            error = null;
+            return true;
+        }
+
+        public bool TrySampleCue(
+            string cueId,
+            float normalizedTime,
+            out VCR.Runtime.Tracking.HumanoidPoseState pose,
+            out string error)
+        {
+            pose = default;
+            error =
+                "sampling is not used by this validation runtime";
+            return false;
         }
     }
 
