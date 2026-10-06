@@ -165,6 +165,7 @@ namespace VCR.Runtime.UI
         private ITrackingPresenceProvider _trackingPresence;
         private ICharacterFileSelectionAdapter _characterFileSelectionAdapter;
         private IAppearanceRuntime _appearanceRuntime;
+        private IEnvironmentRuntime _environmentRuntime;
         private AppearanceUserPresetStore _appearancePresetStore;
         private EventRuntimeConfigurationStore _eventRuleStore;
         private string _eventRuleStorePath;
@@ -622,6 +623,12 @@ namespace VCR.Runtime.UI
                             FindObjectsInactive.Exclude);
                 }
 
+                if (!IsServiceAlive(_environmentRuntime))
+                {
+                    _environmentRuntime =
+                        sceneRuntime?.EnvironmentRuntime;
+                }
+
                 MonoBehaviour[] activeDependencyBehaviours =
                     null;
 
@@ -692,7 +699,8 @@ namespace VCR.Runtime.UI
 
             _model.SetAvailability(
                 ApplicationUiSection.Environment,
-                sceneRuntime?.EnvironmentRuntime != null,
+                sceneRuntime != null &&
+                IsServiceAlive(_environmentRuntime),
                 "Environment runtime is unavailable.");
 
             _model.SetAvailability(
@@ -5915,7 +5923,9 @@ namespace VCR.Runtime.UI
         private void RefreshEnvironmentControlState()
         {
             var runtime =
-                sceneRuntime?.EnvironmentRuntime;
+                IsServiceAlive(_environmentRuntime)
+                    ? _environmentRuntime
+                    : null;
             var status =
                 runtime?.Status;
 
@@ -6983,7 +6993,9 @@ namespace VCR.Runtime.UI
         private string EnvironmentSummary()
         {
             var runtime =
-                sceneRuntime?.EnvironmentRuntime;
+                IsServiceAlive(_environmentRuntime)
+                    ? _environmentRuntime
+                    : null;
 
             if (runtime == null)
             {
