@@ -689,6 +689,29 @@ require_source_contains(
     "TryGetStatusAt(",
     "application UI Settings refresh must use allocation-free indexed capability status lookup",
 )
+forbid_source_pattern(
+    application_ui,
+    r"_materialController\.GetSlots\s*\(",
+    "application UI Materials refresh must not clone material slot descriptors",
+)
+require_source_contains(
+    application_ui,
+    "_materialController.TryGetSlotAt(",
+    "application UI Materials refresh must use allocation-free indexed material slot lookup",
+)
+
+material_override_controller = (
+    VCR
+    / "Runtime"
+    / "Materials"
+    / "Unity"
+    / "MaterialOverrideController.cs"
+)
+require_source_contains(
+    material_override_controller,
+    "public bool TryGetSlotAt(",
+    "material override controller must expose allocation-free indexed slot lookup",
+)
 
 capability_registry = (
     VCR
