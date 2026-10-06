@@ -75,6 +75,8 @@ Behavior:
 
 Runtime metrics include the same capture state plus MediaPipe result counts and processing latency.
 
+MediaPipe presence timing inputs are finite-normalized immediately before resolver construction. Non-finite lost/restore/stale durations fall back to their shipped defaults, and seconds-to-microseconds conversion rejects non-finite values and saturates oversized finite values at `long.MaxValue` instead of relying on undefined/implementation-specific numeric casts.
+
 ### Optional low-light preprocessing
 
 A one-pass GPU preprocessing path was added:
