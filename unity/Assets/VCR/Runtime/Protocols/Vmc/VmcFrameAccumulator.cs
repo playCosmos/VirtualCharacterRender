@@ -158,10 +158,11 @@ namespace VCR.Runtime.Protocols.Vmc
                 return false;
             }
 
+            var tracking = 0;
             var hasTracking =
                 args.Length >= 4 &&
                 args[3].TryGetInt(
-                    out var tracking);
+                    out tracking);
 
             return ApplyAvailable(
                 loaded,
