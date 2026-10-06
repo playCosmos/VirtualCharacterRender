@@ -47,28 +47,19 @@ namespace VCR.Runtime.Tracking.Mixing
         private ITrackingFrameProvider _expressionLayerProvider;
 
         private TrackingFrame _latestPoseFrame;
-        private long _lastBasePoseSequence = -1;
-        private long _lastLayerPoseSequence = -1;
-        private string _lastBasePoseSourceId;
-        private string _lastLayerPoseSourceId;
+        private TrackingFrame _lastBasePoseFrame;
+        private TrackingFrame _lastLayerPoseFrame;
         private long _poseSequence;
         private bool _poseDirty = true;
         private bool _poseSpaceMismatch;
-        private long[] _additionalPoseLayerSequences =
-            Array.Empty<long>();
-        private string[] _additionalPoseLayerSourceIds =
-            Array.Empty<string>();
         private TrackingFrame[] _additionalPoseLayerFrames =
             Array.Empty<TrackingFrame>();
 
         private NormalizedExpressionState _targetExpressions;
         private NormalizedExpressionState _currentExpressions;
         private TrackingFrame _latestExpressionFrame;
-
-        private long _lastBaseSequence = -1;
-        private long _lastLayerSequence = -1;
-        private string _lastBaseSourceId;
-        private string _lastLayerSourceId;
+        private TrackingFrame _lastBaseExpressionFrame;
+        private TrackingFrame _lastLayerExpressionFrame;
         private long _expressionSequence;
 
         private bool _targetDirty = true;
@@ -586,22 +577,23 @@ namespace VCR.Runtime.Tracking.Mixing
             var baseChanged =
                 FrameChanged(
                     baseFrame,
-                    ref _lastBasePoseSequence,
-                    ref _lastBasePoseSourceId);
+                    ref _lastBasePoseFrame);
             var primaryChanged =
                 FrameChanged(
                     primaryLayerFrame,
-                    ref _lastLayerPoseSequence,
-                    ref _lastLayerPoseSourceId);
+                    ref _lastLayerPoseFrame);
 
             EnsureAdditionalPoseRuntimeState();
 
             var additionalChanged = false;
 
             for (var i = 0;
-                 i < _additionalPoseLayerSequences.Length;
+                 i < _additionalPoseLayerFrames.Length;
                  i++)
             {
+                var previousFrame =
+                    _additionalPoseLayerFrames[i];
+
                 TryGetAdditionalPoseLayerFrame(
                     i,
                     out var frame);
@@ -609,10 +601,9 @@ namespace VCR.Runtime.Tracking.Mixing
                 _additionalPoseLayerFrames[i] =
                     frame;
 
-                if (FrameChanged(
+                if (!ReferenceEquals(
                         frame,
-                        ref _additionalPoseLayerSequences[i],
-                        ref _additionalPoseLayerSourceIds[i]))
+                        previousFrame))
                 {
                     additionalChanged = true;
                 }
@@ -757,29 +748,14 @@ namespace VCR.Runtime.Tracking.Mixing
             var count =
                 additionalPoseLayers?.Length ?? 0;
 
-            if (_additionalPoseLayerSequences.Length ==
-                    count &&
-                _additionalPoseLayerSourceIds.Length ==
-                    count &&
-                _additionalPoseLayerFrames.Length ==
+            if (_additionalPoseLayerFrames.Length ==
                     count)
             {
                 return;
             }
 
-            _additionalPoseLayerSequences =
-                new long[count];
-            _additionalPoseLayerSourceIds =
-                new string[count];
             _additionalPoseLayerFrames =
                 new TrackingFrame[count];
-
-            for (var i = 0;
-                 i < count;
-                 i++)
-            {
-                _additionalPoseLayerSequences[i] = -1;
-            }
         }
 
         private bool TryGetAdditionalPoseLayerFrame(
@@ -836,14 +812,12 @@ namespace VCR.Runtime.Tracking.Mixing
             var baseChanged =
                 FrameChanged(
                     baseFrame,
-                    ref _lastBaseSequence,
-                    ref _lastBaseSourceId);
+                    ref _lastBaseExpressionFrame);
 
             var layerChanged =
                 FrameChanged(
                     layerFrame,
-                    ref _lastLayerSequence,
-                    ref _lastLayerSourceId);
+                    ref _lastLayerExpressionFrame);
 
             if (!baseChanged &&
                 !layerChanged &&
@@ -973,51 +947,34 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private static bool FrameChanged(
             TrackingFrame frame,
-            ref long lastSequence,
-            ref string lastSourceId)
+            ref TrackingFrame lastFrame)
         {
-            var sequence =
-                frame?.Sequence ?? -1;
-            var sourceId =
-                frame?.SourceId;
-
-            if (sequence == lastSequence &&
-                string.Equals(
-                    sourceId,
-                    lastSourceId,
-                    StringComparison.Ordinal))
+            if (ReferenceEquals(
+                    frame,
+                    lastFrame))
             {
                 return false;
             }
 
-            lastSequence = sequence;
-            lastSourceId = sourceId;
+            lastFrame = frame;
             return true;
         }
 
         private void ResetPoseState()
         {
-            _lastBasePoseSequence = -1;
-            _lastLayerPoseSequence = -1;
-            _lastBasePoseSourceId = null;
-            _lastLayerPoseSourceId = null;
+            _lastBasePoseFrame = null;
+            _lastLayerPoseFrame = null;
             _latestPoseFrame = null;
             _poseDirty = true;
             _poseSpaceMismatch = false;
-            _additionalPoseLayerSequences =
-                Array.Empty<long>();
-            _additionalPoseLayerSourceIds =
-                Array.Empty<string>();
             _additionalPoseLayerFrames =
                 Array.Empty<TrackingFrame>();
         }
 
         private void ResetExpressionState()
         {
-            _lastBaseSequence = -1;
-            _lastLayerSequence = -1;
-            _lastBaseSourceId = null;
-            _lastLayerSourceId = null;
+            _lastBaseExpressionFrame = null;
+            _lastLayerExpressionFrame = null;
             _targetExpressions = null;
             _currentExpressions = null;
             _latestExpressionFrame = null;
