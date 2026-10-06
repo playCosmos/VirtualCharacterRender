@@ -162,6 +162,8 @@ Appearance runtime notifications are now subscriber-isolated: a throwing `Appear
 
 Renaming the currently selected user preset is atomic at the notification boundary: the runtime stages the replacement current id before registry replacement, restores the old id if replacement fails, and emits one final appearance snapshot without a transient `PresetId=null` state or redundant status notification.
 
+Replacing user-preset definitions also validates the active identity against the actual current outfit/accessory state. If the same preset id is reloaded with different appearance content, the runtime preserves the visible appearance but clears the now-stale current preset id and publishes one invalidation snapshot.
+
 Transition executor capability probes are also isolated. Exceptions from custom `CanExecute` or completion `CanTrackCompletion` implementations now fail closed with explicit errors instead of escaping validation/coroutine execution; probe failures are counted as `appearance.transition.executor_probe_failures`.
 
 The delegated Event Runtime action bridge applies the same rule to `IEventActionHandler.CanHandle` and `IEventActionCompletionProbe.CanTrackCompletion`. Throwing handler probes no longer escape `AppearanceTransitionActionExecutor`; `TryExecute`/`TryIsComplete` return explicit errors and diagnostics expose separate handler/completion probe failure counters.
