@@ -131,7 +131,7 @@ For steady-state tracking and UI operation:
 - immutable output snapshots may allocate when a genuinely new tracking state is published, but temporary merge containers are not part of that allowance,
 - array-backed snapshots use explicit ownership: freshly allocated hot-path arrays use `SnapshotArrayOwnership.Transfer` with no second clone, while external/reused caller buffers must use `Copy`; a transferred array must never be mutated or returned to a pool after publication,
 - expression smoothing must not publish replacement frames when smoothing time does not advance; fully zero pose masks preserve the existing immutable base-pose reference instead of cloning pose arrays,
-- UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
+- UI refresh must reuse cached navigation/button label components, avoid redundant `Text.text` assignments when labels are unchanged, and must not allocate a full section snapshot on every refresh tick; appearance status/current state is sampled once and reused within each refresh pass,
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - normalized event hub, OSC-event ingress, and WebSocket ingress use lock-protected reusable `Queue<T>` storage; do not layer `ConcurrentQueue<T>` underneath the same lock because its segment-management overhead adds no concurrency benefit,
