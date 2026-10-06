@@ -14,6 +14,7 @@ using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Environment;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
+using VCR.Runtime.Materials;
 using VCR.Runtime.Materials.Unity;
 using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
@@ -276,6 +277,21 @@ namespace VCR.Runtime.UI
         private int _outputSummaryTargetFrameRate;
         private bool _outputSummaryRunInBackground;
         private string _outputSummaryCache;
+
+        private bool _materialSummaryStateValid;
+        private int _materialSummarySlotCount;
+        private string _materialSummaryRequestedSlotId;
+        private bool _materialSummaryHasStatus;
+        private string _materialSummarySlotId;
+        private MaterialOverrideHealth _materialSummaryHealth;
+        private string _materialSummaryShaderId;
+        private string _materialSummaryPresetId;
+        private string _materialSummaryError;
+        private bool _materialSummaryHasDescriptor;
+        private string _materialSummarySourceMaterialName;
+        private string _materialSummarySourceShaderName;
+        private int _materialSummaryErrorCount;
+        private string _materialSummaryCache;
 
         public ApplicationUiModel Model => _model;
 
@@ -6466,35 +6482,204 @@ namespace VCR.Runtime.UI
                 _materialSlotInput
                     ?.text
                     ?.Trim();
-            var slotSummary =
-                "<none>";
-
-            if (!string.IsNullOrWhiteSpace(
+            var hasStatus =
+                !string.IsNullOrWhiteSpace(
                     slotId) &&
                 _materialController.TryGetStatus(
                     slotId,
-                    out var status))
+                    out var status);
+            var hasDescriptor =
+                !hasStatus &&
+                slotCount > 0 &&
+                _materialController.TryGetSlotAt(
+                    Mathf.Clamp(
+                        _materialSlotIndex,
+                        0,
+                        slotCount - 1),
+                    out var slot);
+            var errorCount =
+                _materialController.ErrorCount;
+
+            if (MaterialSummaryCacheMatches(
+                    slotCount,
+                    slotId,
+                    hasStatus,
+                    status,
+                    hasDescriptor,
+                    slot,
+                    errorCount))
             {
-                slotSummary =
-                    $"{status.SlotId}: {status.Health}, shader={status.ShaderId ?? "<none>"}, preset={status.PresetId ?? "<none>"}, error={status.Error ?? "<none>"}";
-            }
-            else if (slotCount > 0 &&
-                     _materialController.TryGetSlotAt(
-                         Mathf.Clamp(
-                             _materialSlotIndex,
-                             0,
-                             slotCount - 1),
-                         out var slot))
-            {
-                slotSummary =
-                    $"{slot.Id}: source={slot.SourceMaterialName}, shader={slot.SourceShaderName}";
+                return _materialSummaryCache;
             }
 
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Material slots: ");
+            builder.Append(slotCount);
+            builder.Append("\nSelected slot: ");
+
+            if (hasStatus)
+            {
+                builder.Append(status.SlotId);
+                builder.Append(": ");
+                builder.Append(status.Health);
+                builder.Append(", shader=");
+                builder.Append(
+                    status.ShaderId ??
+                    "<none>");
+                builder.Append(", preset=");
+                builder.Append(
+                    status.PresetId ??
+                    "<none>");
+                builder.Append(", error=");
+                builder.Append(
+                    status.Error ??
+                    "<none>");
+            }
+            else if (hasDescriptor)
+            {
+                builder.Append(slot.Id);
+                builder.Append(": source=");
+                builder.Append(
+                    slot.SourceMaterialName);
+                builder.Append(", shader=");
+                builder.Append(
+                    slot.SourceShaderName);
+            }
+            else
+            {
+                builder.Append("<none>");
+            }
+
+            builder.Append(
+                "\nOverride errors: ");
+            builder.Append(errorCount);
+            builder.Append(
+                "\nControls: cycle slot, apply registered shader ID, set a float property, clear override, or refresh discovered slots.");
+
+            CaptureMaterialSummaryState(
+                slotCount,
+                slotId,
+                hasStatus,
+                status,
+                hasDescriptor,
+                slot,
+                errorCount);
+            _materialSummaryCache =
+                builder.ToString();
+            return _materialSummaryCache;
+        }
+
+        private bool MaterialSummaryCacheMatches(
+            int slotCount,
+            string requestedSlotId,
+            bool hasStatus,
+            MaterialOverrideStatus status,
+            bool hasDescriptor,
+            MaterialSlotDescriptor descriptor,
+            int errorCount)
+        {
             return
-                $"Material slots: {_materialController.SlotCount}\n" +
-                $"Selected slot: {slotSummary}\n" +
-                $"Override errors: {_materialController.ErrorCount}\n" +
-                "Controls: cycle slot, apply registered shader ID, set a float property, clear override, or refresh discovered slots.";
+                _materialSummaryStateValid &&
+                _materialSummaryCache != null &&
+                _materialSummarySlotCount ==
+                    slotCount &&
+                string.Equals(
+                    _materialSummaryRequestedSlotId,
+                    requestedSlotId,
+                    StringComparison.Ordinal) &&
+                _materialSummaryHasStatus ==
+                    hasStatus &&
+                (!hasStatus ||
+                 (string.Equals(
+                      _materialSummarySlotId,
+                      status.SlotId,
+                      StringComparison.Ordinal) &&
+                  _materialSummaryHealth ==
+                      status.Health &&
+                  string.Equals(
+                      _materialSummaryShaderId,
+                      status.ShaderId,
+                      StringComparison.Ordinal) &&
+                  string.Equals(
+                      _materialSummaryPresetId,
+                      status.PresetId,
+                      StringComparison.Ordinal) &&
+                  string.Equals(
+                      _materialSummaryError,
+                      status.Error,
+                      StringComparison.Ordinal))) &&
+                _materialSummaryHasDescriptor ==
+                    hasDescriptor &&
+                (!hasDescriptor ||
+                 (string.Equals(
+                      _materialSummarySlotId,
+                      descriptor.Id,
+                      StringComparison.Ordinal) &&
+                  string.Equals(
+                      _materialSummarySourceMaterialName,
+                      descriptor.SourceMaterialName,
+                      StringComparison.Ordinal) &&
+                  string.Equals(
+                      _materialSummarySourceShaderName,
+                      descriptor.SourceShaderName,
+                      StringComparison.Ordinal))) &&
+                _materialSummaryErrorCount ==
+                    errorCount;
+        }
+
+        private void CaptureMaterialSummaryState(
+            int slotCount,
+            string requestedSlotId,
+            bool hasStatus,
+            MaterialOverrideStatus status,
+            bool hasDescriptor,
+            MaterialSlotDescriptor descriptor,
+            int errorCount)
+        {
+            _materialSummarySlotCount =
+                slotCount;
+            _materialSummaryRequestedSlotId =
+                requestedSlotId;
+            _materialSummaryHasStatus =
+                hasStatus;
+            _materialSummaryHasDescriptor =
+                hasDescriptor;
+            _materialSummarySlotId =
+                hasStatus
+                    ? status.SlotId
+                    : hasDescriptor
+                        ? descriptor.Id
+                        : null;
+            _materialSummaryHealth =
+                hasStatus
+                    ? status.Health
+                    : default;
+            _materialSummaryShaderId =
+                hasStatus
+                    ? status.ShaderId
+                    : null;
+            _materialSummaryPresetId =
+                hasStatus
+                    ? status.PresetId
+                    : null;
+            _materialSummaryError =
+                hasStatus
+                    ? status.Error
+                    : null;
+            _materialSummarySourceMaterialName =
+                hasDescriptor
+                    ? descriptor.SourceMaterialName
+                    : null;
+            _materialSummarySourceShaderName =
+                hasDescriptor
+                    ? descriptor.SourceShaderName
+                    : null;
+            _materialSummaryErrorCount =
+                errorCount;
+            _materialSummaryStateValid =
+                true;
         }
 
         private string EventsSummary()
