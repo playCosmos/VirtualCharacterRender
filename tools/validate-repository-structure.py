@@ -476,6 +476,11 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "SetSectionLabel(",
+    "application UI section labels must avoid unchanged text assignments",
+)
+require_source_contains(
+    application_ui,
     "currentAppearance",
     "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
 )
