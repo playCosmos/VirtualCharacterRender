@@ -1193,6 +1193,64 @@ namespace VCR.Editor.P9
                     "event runtime host validation must restore the valid rule set after failure injection",
                     failures);
 
+                var capturedRuleIsolation =
+                    host.CaptureRules();
+                capturedRuleIsolation[0].Id =
+                    "mutated-capture";
+                capturedRuleIsolation[0]
+                    .Filter.Type =
+                        "mutated.filter";
+                capturedRuleIsolation[0]
+                    .Actions[0]
+                    .ActionType =
+                        "mutated.action";
+
+                Expect(
+                    host.GetRuleAt(0)?.Id ==
+                        "manual-environment" &&
+                    host.GetRuleAt(0)?
+                        .Filter.Type ==
+                        NormalizedEventTypes
+                            .LocalManual &&
+                    host.GetRuleAt(0)?
+                        .Actions[0]
+                        .ActionType ==
+                        EventActionTypes
+                            .EnvironmentSetState,
+                    "CaptureRules must deep-clone nested rule objects so persistence/UI edits cannot mutate the live host rule graph",
+                    failures);
+
+                var externalRuleInput =
+                    host.CaptureRules();
+
+                host.SetRules(
+                    externalRuleInput);
+
+                externalRuleInput[0].Id =
+                    "mutated-input";
+                externalRuleInput[0]
+                    .Filter.Type =
+                        "mutated.input.filter";
+                externalRuleInput[0]
+                    .Actions[0]
+                    .ActionType =
+                        "mutated.input.action";
+
+                Expect(
+                    host.GetRuleAt(0)?.Id ==
+                        "manual-environment" &&
+                    host.GetRuleAt(0)?
+                        .Filter.Type ==
+                        NormalizedEventTypes
+                            .LocalManual &&
+                    host.GetRuleAt(0)?
+                        .Actions[0]
+                        .ActionType ==
+                        EventActionTypes
+                            .EnvironmentSetState,
+                    "SetRules must deep-clone nested caller-owned rule objects before installing them into the live host/engine",
+                    failures);
+
                 hub.Publish(
                     new NormalizedEvent(
                         NormalizedEventTypes
