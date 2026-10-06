@@ -1359,8 +1359,8 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
-    "if (_state == SceneRuntimeState.Stopped &&\n                _capabilities == null)",
-    "scene shutdown must remain retryable while failed capability cleanup is still owned",
+    "if (_state == SceneRuntimeState.Stopped &&\n                _capabilities == null &&\n                string.IsNullOrWhiteSpace(\n                    _lastError))",
+    "scene shutdown must only fast-return after all cleanup has succeeded",
 )
 require_source_order(
     single_character_scene_runtime,
