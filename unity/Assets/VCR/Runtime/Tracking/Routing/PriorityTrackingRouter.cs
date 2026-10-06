@@ -33,6 +33,7 @@ namespace VCR.Runtime.Tracking.Routing
         [SerializeField] private TrackingRoutePolicy routePolicy =
             TrackingRoutePolicy.CreateDefault();
         [SerializeField] private bool disableFallbackFaceWhenPreferred = true;
+        [SerializeField] private bool disableExpressionFallbackWhenExternal = true;
 
         [Header("Presence - provisional P0 defaults")]
         [SerializeField, Min(0f)] private float subjectLostGraceSeconds = 0.5f;
@@ -53,6 +54,8 @@ namespace VCR.Runtime.Tracking.Routing
 
         private ITrackingFrameProvider _expressionFallbackProvider;
         private ITrackingSourceHealthProvider _expressionFallbackHealth;
+        private IExpressionTrackingActivationControl
+            _expressionFallbackActivation;
 
         private TrackingPresenceResolver _presenceResolver;
         private TrackingPresenceSnapshot _presence;
@@ -357,10 +360,16 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
+            RestoreExpressionFallback();
+
             _expressionFallbackProvider = next;
             _expressionFallbackHealth =
                 behaviour != null
                     ? behaviour as ITrackingSourceHealthProvider
+                    : null;
+            _expressionFallbackActivation =
+                behaviour != null
+                    ? behaviour as IExpressionTrackingActivationControl
                     : null;
             ResetExpressionSelection();
         }
@@ -651,12 +660,26 @@ namespace VCR.Runtime.Tracking.Routing
                     _externalPoseProvider,
                     _externalPoseHealth,
                     out var externalFrame);
+            var externalOutranksFallback =
+                externalUsable &&
+                ExternalExpressionOutranksFallback();
 
-            var fallbackUsable =
-                TryGetUsableExpression(
-                    _expressionFallbackProvider,
-                    _expressionFallbackHealth,
-                    out var fallbackFrame);
+            UpdateExpressionFallbackActivation(
+                externalUsable,
+                externalOutranksFallback);
+
+            TrackingFrame fallbackFrame = null;
+            var fallbackUsable = false;
+
+            if (!externalUsable ||
+                !externalOutranksFallback)
+            {
+                fallbackUsable =
+                    TryGetUsableExpression(
+                        _expressionFallbackProvider,
+                        _expressionFallbackHealth,
+                        out fallbackFrame);
+            }
 
             TrackingFrame selected = null;
 
@@ -664,7 +687,7 @@ namespace VCR.Runtime.Tracking.Routing
                 fallbackUsable)
             {
                 selected =
-                    ExternalExpressionOutranksFallback()
+                    externalOutranksFallback
                         ? externalFrame
                         : fallbackFrame;
             }
@@ -723,6 +746,31 @@ namespace VCR.Runtime.Tracking.Routing
                 provider.TryGetLatestExpressions(
                     out frame) &&
                 frame?.Expressions != null;
+        }
+
+        private void UpdateExpressionFallbackActivation(
+            bool externalUsable,
+            bool externalOutranksFallback)
+        {
+            if (!disableExpressionFallbackWhenExternal ||
+                !IsServiceAlive(
+                    _expressionFallbackActivation))
+            {
+                return;
+            }
+
+            var shouldEnableFallback =
+                !externalUsable ||
+                !externalOutranksFallback;
+
+            if (_expressionFallbackActivation
+                    .ExpressionTrackingEnabled !=
+                shouldEnableFallback)
+            {
+                _expressionFallbackActivation
+                    .SetExpressionTrackingEnabled(
+                        shouldEnableFallback);
+            }
         }
 
         private bool ExternalExpressionOutranksFallback()
@@ -866,6 +914,19 @@ namespace VCR.Runtime.Tracking.Routing
                 new RuntimeMetric(
                     "tracking.route.fallback_face_inference_enabled",
                     status.FallbackFaceInferenceEnabled ? 1.0 : 0.0,
+                    "bool"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.route.fallback_expression_inference_enabled",
+                    IsServiceAlive(
+                        _expressionFallbackProvider) &&
+                    (!IsServiceAlive(
+                         _expressionFallbackActivation) ||
+                     _expressionFallbackActivation
+                         .ExpressionTrackingEnabled)
+                        ? 1.0
+                        : 0.0,
                     "bool"));
 
             AddAgeMetric(
@@ -1122,14 +1183,29 @@ namespace VCR.Runtime.Tracking.Routing
             }
         }
 
+        private void RestoreExpressionFallback()
+        {
+            if (IsServiceAlive(
+                    _expressionFallbackActivation) &&
+                !_expressionFallbackActivation
+                    .ExpressionTrackingEnabled)
+            {
+                _expressionFallbackActivation
+                    .SetExpressionTrackingEnabled(
+                        true);
+            }
+        }
+
         private void OnDisable()
         {
             RestoreFallbackFace();
+            RestoreExpressionFallback();
         }
 
         private void OnDestroy()
         {
             RestoreFallbackFace();
+            RestoreExpressionFallback();
         }
 
         private static long NowUs()
