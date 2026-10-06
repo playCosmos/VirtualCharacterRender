@@ -855,6 +855,33 @@ require_source_contains(
     "delegated completion probe failures must remain visible in diagnostics",
 )
 
+application_runtime_bootstrap = (
+    VCR
+    / "Runtime"
+    / "Application"
+    / "ApplicationRuntimeBootstrap.cs"
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "public bool Suspend()",
+    "application bootstrap must expose scene suspend success/failure",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "return sceneRuntime.Suspend();",
+    "application bootstrap suspend must propagate the scene lifecycle result",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "public bool Resume()",
+    "application bootstrap must expose scene resume success/failure",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "return sceneRuntime.Resume();",
+    "application bootstrap resume must propagate the scene lifecycle result",
+)
+
 application_ui = (
     VCR
     / "Runtime"
