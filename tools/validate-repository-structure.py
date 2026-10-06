@@ -410,7 +410,7 @@ require_source_contains(
 )
 require_source_contains(
     audio_event_action_handler,
-    "\" completion probe failed: \"",
+    "completion probe failed: {exception.Message}",
     "audio completion property failures must be converted to false/error",
 )
 
