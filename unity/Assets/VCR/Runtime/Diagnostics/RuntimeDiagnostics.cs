@@ -61,6 +61,10 @@ namespace VCR.Runtime.Diagnostics
         private double _poseAgeMs = double.NaN;
         private double _expressionAgeMs = double.NaN;
 
+        private static readonly Comparison<RuntimeMetric>
+            RuntimeMetricComparison =
+                CompareRuntimeMetrics;
+
         private readonly List<RuntimeMetric> _metrics = new(64);
         private readonly List<IRuntimeMetricsSource> _metricSources =
             new(32);
@@ -548,7 +552,7 @@ namespace VCR.Runtime.Diagnostics
             _metrics.Clear();
             CollectSubsystemMetrics(_metrics);
             _metrics.Sort(
-                CompareRuntimeMetrics);
+                RuntimeMetricComparison);
 
             TrackingPresenceSnapshot? presence =
                 IsServiceAlive(_presenceProvider)
