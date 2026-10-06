@@ -403,6 +403,16 @@ require_source_contains(
     "CommitBindingMap(",
     "audio binding rebuild must commit only a fully validated staged map",
 )
+require_source_contains(
+    audio_event_action_handler,
+    "binding?.Source != null",
+    "audio completion capability probes must reject destroyed AudioSource bindings",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "\" completion probe failed: \"",
+    "audio completion property failures must be converted to false/error",
+)
 
 p9_event_runtime_validation = (
     VCR
@@ -439,6 +449,11 @@ require_source_contains(
     p9_event_runtime_validation,
     "\"invalid\"",
     "P9 audio validation must prove invalid replacement input preserves the previous live binding map",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "destroyedProbeEscaped",
+    "P9 audio validation must prove destroyed AudioSource completion probes fail closed",
 )
 
 vmc_accumulator = (
