@@ -1215,8 +1215,7 @@ namespace VCR.Editor.P9
                     host.RuleCount ==
                         invalidHostRules.Length &&
                     invalidHostRule.Enabled &&
-                    host.Engine
-                        .GetRuleDiagnostics()
+                    host.GetRuleDiagnostics()
                         .Length == 1,
                     "failed host rule apply must preserve the previous engine rules, keep the host rule set intact, and rollback the requested enabled mutation",
                     failures);
