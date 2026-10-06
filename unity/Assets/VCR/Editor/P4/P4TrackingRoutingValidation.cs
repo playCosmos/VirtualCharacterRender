@@ -20,6 +20,8 @@ namespace VCR.Editor.P4
         public static bool RunChecks()
         {
             var failures = new List<string>();
+            ValidatePolicyDefaultRecovery(
+                failures);
             GameObject root = null;
 
             try
@@ -321,6 +323,81 @@ namespace VCR.Editor.P4
                     failures));
 
             return false;
+        }
+
+        private static void ValidatePolicyDefaultRecovery(
+            List<string> failures)
+        {
+            var policy =
+                TrackingRoutePolicy.CreateDefault();
+            var flags =
+                BindingFlags.Instance |
+                BindingFlags.NonPublic;
+            var policyType =
+                typeof(TrackingRoutePolicy);
+            var faceField =
+                policyType.GetField(
+                    "facePriorityOrder",
+                    flags);
+            var expressionField =
+                policyType.GetField(
+                    "expressionPriorityOrder",
+                    flags);
+
+            Expect(
+                faceField != null &&
+                expressionField != null,
+                "routing policy validation must resolve serialized priority fields",
+                failures);
+
+            if (faceField == null ||
+                expressionField == null)
+            {
+                return;
+            }
+
+            faceField.SetValue(
+                policy,
+                Array.Empty<TrackingSourceKind>());
+            expressionField.SetValue(
+                policy,
+                null);
+
+            var faceFirst =
+                policy.FacePriorityOrder;
+            var faceSecond =
+                policy.FacePriorityOrder;
+            var expressionFirst =
+                policy.ExpressionPriorityOrder;
+            var expressionSecond =
+                policy.ExpressionPriorityOrder;
+
+            Expect(
+                ReferenceEquals(
+                    faceFirst,
+                    faceSecond),
+                "empty face priority recovery must cache the repaired default array",
+                failures);
+            Expect(
+                ReferenceEquals(
+                    expressionFirst,
+                    expressionSecond),
+                "null expression priority recovery must cache the repaired default array",
+                failures);
+            Expect(
+                policy.GetFacePriority(
+                    TrackingSourceKind.ArKitFace) <
+                policy.GetFacePriority(
+                    TrackingSourceKind.MediaPipeFaceWebcam),
+                "repaired face priority must preserve ARKit before MediaPipe defaults",
+                failures);
+            Expect(
+                policy.GetExpressionPriority(
+                    TrackingSourceKind.Vmc) <
+                policy.GetExpressionPriority(
+                    TrackingSourceKind.AudioFallback),
+                "repaired expression priority must preserve VMC before audio fallback defaults",
+                failures);
         }
 
         private static void ValidateDestroyedProviderRecovery(
