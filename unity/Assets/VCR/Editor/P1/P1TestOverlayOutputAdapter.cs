@@ -13,6 +13,7 @@ namespace VCR.Editor.P1
         public bool ThrowOnApply { get; set; }
         public bool ThrowOnShutdown { get; set; }
         public bool ThrowOnSettingsRead { get; set; }
+        public bool ThrowOnStatusRead { get; set; }
         public OverlayOutputSettings LastSettings { get; private set; }
 
         public OverlayOutputSettings Settings
@@ -29,14 +30,25 @@ namespace VCR.Editor.P1
             }
         }
 
-        public OverlayOutputStatus Status =>
-            new(
-                supported: true,
-                active: ApplyCount > ShutdownCount,
-                adapterId: "p1-test",
-                lastError: null,
-                clientWidth: 0,
-                clientHeight: 0);
+        public OverlayOutputStatus Status
+        {
+            get
+            {
+                if (ThrowOnStatusRead)
+                {
+                    throw new InvalidOperationException(
+                        "P1 overlay status read failure");
+                }
+
+                return new OverlayOutputStatus(
+                    supported: true,
+                    active: ApplyCount > ShutdownCount,
+                    adapterId: "p1-test",
+                    lastError: null,
+                    clientWidth: 0,
+                    clientHeight: 0);
+            }
+        }
 
         public void Apply(OverlayOutputSettings settings)
         {
