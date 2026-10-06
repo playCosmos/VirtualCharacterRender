@@ -102,35 +102,45 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            if (!_presetResolver.TryResolvePreset(
-                    command.Text,
-                    out var preset) ||
-                preset == null)
+            try
+            {
+                if (!_presetResolver.TryResolvePreset(
+                        command.Text,
+                        out var preset) ||
+                    preset == null)
+                {
+                    error =
+                        $"Material preset '{command.Text}' could not be resolved.";
+                    return false;
+                }
+
+                if (!controller.TryApplyPreset(
+                        command.TargetId,
+                        preset,
+                        out var report,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!report.Compatible)
+                {
+                    error =
+                        report.Issues.Length > 0
+                            ? report.Issues[0].Message
+                            : "Material preset is incompatible.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception exception)
             {
                 error =
-                    $"Material preset '{command.Text}' could not be resolved.";
+                    "Material preset action dependency failed: " +
+                    exception.Message;
                 return false;
             }
-
-            if (!controller.TryApplyPreset(
-                    command.TargetId,
-                    preset,
-                    out var report,
-                    out error))
-            {
-                return false;
-            }
-
-            if (!report.Compatible)
-            {
-                error =
-                    report.Issues.Length > 0
-                        ? report.Issues[0].Message
-                        : "Material preset is incompatible.";
-                return false;
-            }
-
-            return true;
         }
 
         private static bool IsServiceAlive(
