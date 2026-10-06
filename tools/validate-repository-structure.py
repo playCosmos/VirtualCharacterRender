@@ -56,6 +56,7 @@ required_latest_chain = [
     VCR / "Runtime" / "Tracking" / "SnapshotArrayOwnership.cs",
     VCR / "Runtime" / "Tracking" / "BorrowedHumanoidPose.cs",
     VCR / "Runtime" / "Tracking" / "MediaPipe" / "PendingSubmissionTracker.cs",
+    VCR / "Runtime" / "Protocols" / "Vmc" / "VmcPacketReader.cs",
     ROOT / "tools" / "validate-p12-source-free.sh",
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
@@ -191,6 +192,11 @@ require_source_contains(
     "MakeByRefType()",
     "P0 VMC validation must invoke the borrowed in-parameter serialization overload",
 )
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateDirectVmcPacketPath",
+    "P0 VMC validation must cover direct packet parity and malformed-packet atomicity",
+)
 
 locked_bounded_queues = [
     VCR
@@ -225,6 +231,82 @@ for locked_queue in locked_bounded_queues:
         r"\bConcurrentQueue\s*<",
         "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
     )
+
+vmc_direct_reader = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcPacketReader.cs"
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ValidatePacket(",
+    "direct VMC parsing must validate a complete packet before state mutation",
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ApplyPacket(",
+    "direct VMC parsing must retain a separate post-validation apply pass",
+)
+require_source_order(
+    vmc_direct_reader,
+    "if (!ValidatePacket(",
+    "if (!ApplyPacket(",
+    "direct VMC parsing must complete validation before applying packet state",
+)
+forbid_source_pattern(
+    vmc_direct_reader,
+    r"new\s+OscMessage\b",
+    "direct VMC packet parsing must not allocate transient OscMessage objects",
+)
+forbid_source_pattern(
+    vmc_direct_reader,
+    r"new\s+OscArgument\s*\[",
+    "direct VMC packet parsing must not allocate transient OSC argument arrays",
+)
+
+vmc_udp_receiver = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "VmcUnity"
+    / "VmcUdpReceiver.cs"
+)
+require_source_contains(
+    vmc_udp_receiver,
+    "TryProcessPacket(",
+    "VMC UDP receiver must parse directly from its reusable datagram buffer",
+)
+forbid_source_pattern(
+    vmc_udp_receiver,
+    r"OscPacketReader\s*\.\s*TryReadMessages",
+    "VMC UDP receiver must not rebuild generic OSC message objects per datagram",
+)
+
+humanoid_names = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "HumanoidBoneNames.cs"
+)
+require_source_contains(
+    humanoid_names,
+    "TryParseAscii(",
+    "VMC humanoid bone names must support allocation-free byte-span lookup",
+)
+
+standard_expression_names = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "StandardExpressionNames.cs"
+)
+require_source_contains(
+    standard_expression_names,
+    "TryParseAscii(",
+    "VMC standard expression names must support allocation-free byte-span lookup",
+)
 
 udp_receivers = [
     VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs",
