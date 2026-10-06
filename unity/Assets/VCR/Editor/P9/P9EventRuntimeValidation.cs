@@ -2100,6 +2100,8 @@ namespace VCR.Editor.P9
                     failures);
 
                 source.Stop();
+                source.clip =
+                    null;
 
                 handler.ConfigureBindings(
                     new AudioEventActionHandler
