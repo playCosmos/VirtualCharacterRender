@@ -47,6 +47,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
 
         private void Awake()
         {
+            SanitizeConfiguration();
             EnsureBuffer();
         }
 
@@ -287,6 +288,76 @@ namespace VCR.Runtime.Tracking.AudioUnity
                         "audio-mouth-fallback",
                     runtimeTimestampUs:
                         nowUs);
+        }
+
+        private void SanitizeConfiguration()
+        {
+            noiseThreshold =
+                SanitizeRange(
+                    noiseThreshold,
+                    fallback:
+                        0.01f,
+                    min:
+                        0f,
+                    max:
+                        0.25f);
+            gain =
+                SanitizeRange(
+                    gain,
+                    fallback:
+                        18f,
+                    min:
+                        0f,
+                    max:
+                        100f);
+            attackSeconds =
+                SanitizeMinimum(
+                    attackSeconds,
+                    fallback:
+                        0.035f,
+                    minimum:
+                        0.001f);
+            releaseSeconds =
+                SanitizeMinimum(
+                    releaseSeconds,
+                    fallback:
+                        0.12f,
+                    minimum:
+                        0.001f);
+        }
+
+        private static float SanitizeRange(
+            float value,
+            float fallback,
+            float min,
+            float max)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Clamp(
+                value,
+                min,
+                max);
+        }
+
+        private static float SanitizeMinimum(
+            float value,
+            float fallback,
+            float minimum)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Max(
+                minimum,
+                value);
         }
 
         private void EnsureBuffer()
