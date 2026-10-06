@@ -45,16 +45,55 @@ namespace VCR.Runtime.Tracking
         public double FrameAgeMs(
             long nowRuntimeTimestampUs)
         {
-            if (LastFrameRuntimeTimestampUs <= 0)
+            return TrackingTimestampMath
+                .AgeMillisecondsOrNaN(
+                    nowRuntimeTimestampUs,
+                    LastFrameRuntimeTimestampUs);
+        }
+    }
+
+    internal static class TrackingTimestampMath
+    {
+        public static bool TryElapsedMicroseconds(
+            long nowUs,
+            long sinceUs,
+            out ulong elapsedUs)
+        {
+            elapsedUs = 0UL;
+
+            if (nowUs < sinceUs)
+            {
+                return false;
+            }
+
+            elapsedUs =
+                unchecked(
+                    (ulong)(
+                        nowUs -
+                        sinceUs));
+            return true;
+        }
+
+        public static double AgeMillisecondsOrNaN(
+            long nowUs,
+            long timestampUs)
+        {
+            if (timestampUs <= 0)
             {
                 return double.NaN;
             }
 
-            return Math.Max(
-                0.0,
-                (nowRuntimeTimestampUs -
-                 LastFrameRuntimeTimestampUs) /
-                1000.0);
+            if (!TryElapsedMicroseconds(
+                    nowUs,
+                    timestampUs,
+                    out var elapsedUs))
+            {
+                return 0.0;
+            }
+
+            return
+                elapsedUs /
+                1000.0;
         }
     }
 }
