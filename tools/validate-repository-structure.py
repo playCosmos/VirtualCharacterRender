@@ -975,6 +975,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_contextVisibilitySection",
+    "application UI context-control visibility must be cached by selected section",
+)
+require_source_contains(
+    application_ui,
+    "RefreshContextActionVisibility(",
+    "application UI context-control visibility work must be isolated from per-refresh state updates",
+)
+require_source_contains(
+    application_ui,
+    "_sectionAvailabilityCache",
+    "application UI section availability/labels must only update when availability changes",
+)
+require_source_contains(
+    application_ui,
+    "Array.Clear(\n                _sectionAvailabilityCache",
+    "application UI rebuild must invalidate cached section availability",
+)
+require_source_contains(
+    application_ui,
     "_motionSummaryManualSequence",
     "motion summary cache must use manual expression source sequence to skip unchanged expression formatting",
 )
