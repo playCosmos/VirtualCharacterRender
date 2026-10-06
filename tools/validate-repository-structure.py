@@ -2244,6 +2244,57 @@ forbid_source_pattern(
     "failed event-host rule apply must not destroy the host rule set",
 )
 
+baked_motion_cue_asset = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueAsset.cs"
+)
+require_source_contains(
+    baked_motion_cue_asset,
+    "public BakedMotionCueDefinition Clone()",
+    "baked motion cue definitions must support deep ownership copies",
+)
+require_source_contains(
+    baked_motion_cue_asset,
+    "cue?.Clone()",
+    "baked motion cue assets must return/set defensive cue copies",
+)
+
+baked_motion_cue_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs"
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "_cueIds.AsReadOnly()",
+    "baked motion cue ids must expose a read-only view",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "Array.AsReadOnly(",
+    "baked motion cue assets must expose a read-only array view",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "CloneCueDefinitions(",
+    "runtime-configured baked cue definitions must be deep-cloned",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "var stagedCues =",
+    "baked cue rebuild must stage a replacement set before committing live state",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "_cues.Clear();",
+    "baked cue rebuild must commit only after all staged cues validate",
+)
+
 motion_cue_sources = [
     VCR
     / "Runtime"
@@ -2267,6 +2318,28 @@ for motion_cue_source in motion_cue_sources:
         "GetSourceId(",
         "active motion cue publication must reuse its cached source id",
     )
+
+p11_external_motion_import_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11ExternalMotionImportValidation.cs"
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "RunBakedMotionCueOwnershipChecks(",
+    "P11 external-motion validation must exercise baked cue ownership and rollback",
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "\"caller-mutated-runtime-cue\"",
+    "P11 external-motion validation must prove ConfigureCues caller mutation is isolated",
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "invalidAssetRejected",
+    "P11 external-motion validation must prove failed baked cue rebuild preserves the last known-good set",
+)
 
 mixer_runtime = (
     VCR
