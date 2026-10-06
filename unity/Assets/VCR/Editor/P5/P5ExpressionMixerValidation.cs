@@ -32,7 +32,7 @@ namespace VCR.Editor.P5
             {
                 Debug.Log(
                     "VCR P5 expression mixer validation: PASS " +
-                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, duplicate-mask last-value-wins, zero/full-override pose reference fast-paths, pure override expression reference reuse, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
+                    "(expression convergence/blend modes, zero-delta smoothing stability, weighted ordered pose layers/masks, duplicate-mask last-value-wins, pose-presence bitmask compatibility, zero/full-override pose reference fast-paths, pure override expression reference reuse, pose-space guard, deterministic base/neutral fallback, pose/expression availability separation, presence isolation)");
                 return true;
             }
 
@@ -307,6 +307,20 @@ namespace VCR.Editor.P5
                     HumanoidPoseSpace.NormalizedLocal,
                     leftX: 2f,
                     rightX: 4f);
+
+            var expectedTwoBoneMask =
+                HumanoidPoseState.BoneBit(
+                    HumanoidBoneId.LeftUpperArm) |
+                HumanoidPoseState.BoneBit(
+                    HumanoidBoneId.RightUpperArm);
+
+            Expect(
+                basePose.BoneMask ==
+                    expectedTwoBoneMask &&
+                layerPose.BoneMask ==
+                    expectedTwoBoneMask,
+                "legacy bool-array pose construction must preserve bone presence in the immutable bitmask representation",
+                failures);
 
             var mixed =
                 HumanoidPoseMixerMath.Blend(
