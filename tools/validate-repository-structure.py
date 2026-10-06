@@ -570,6 +570,21 @@ require_source_contains(
     "currentAppearance",
     "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
 )
+require_source_contains(
+    application_ui,
+    "_summaryBuilder",
+    "application UI summary rendering must reuse one StringBuilder scratch buffer",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+List<string>\s*\(\s*_trackingControls\.Count\s*\)",
+    "tracking summary refresh must not allocate a temporary line list",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+string\s*\[\s*visibleCount\s*\]",
+    "appearance preset-order summary must not allocate a temporary string array",
+)
 
 motion_cue_sources = [
     VCR
