@@ -1528,6 +1528,10 @@ namespace VCR.Runtime.Appearance.Unity
             var executedActions =
                 new Dictionary<string, AppearanceTransitionStep>(
                     StringComparer.Ordinal);
+            Dictionary<
+                AppearanceTransitionStep,
+                IAppearanceTransitionStepCompletionProbe>
+                completionProbes = null;
 
             foreach (var step in steps)
             {
@@ -1561,6 +1565,7 @@ namespace VCR.Runtime.Appearance.Unity
                         if (!TryEvaluateDependencies(
                                 step,
                                 executedActions,
+                                ref completionProbes,
                                 out var dependenciesSatisfied,
                                 out var dependencyError))
                         {
@@ -1667,6 +1672,7 @@ namespace VCR.Runtime.Appearance.Unity
                 {
                     if (!TryIsStepComplete(
                             step,
+                            ref completionProbes,
                             out var complete,
                             out var completionError))
                     {
@@ -2998,6 +3004,10 @@ namespace VCR.Runtime.Appearance.Unity
             AppearanceTransitionStep waitingStep,
             IReadOnlyDictionary<string, AppearanceTransitionStep>
                 executedActions,
+            ref Dictionary<
+                AppearanceTransitionStep,
+                IAppearanceTransitionStepCompletionProbe>
+                completionProbes,
             out bool satisfied,
             out string error)
         {
@@ -3031,6 +3041,7 @@ namespace VCR.Runtime.Appearance.Unity
 
                 if (!TryIsStepComplete(
                         dependencyStep,
+                        ref completionProbes,
                         out var complete,
                         out var completionError))
                 {
@@ -3068,11 +3079,36 @@ namespace VCR.Runtime.Appearance.Unity
 
         private bool TryIsStepComplete(
             AppearanceTransitionStep step,
+            ref Dictionary<
+                AppearanceTransitionStep,
+                IAppearanceTransitionStepCompletionProbe>
+                completionProbes,
             out bool complete,
             out string error)
         {
             complete = false;
             error = null;
+
+            if (completionProbes != null &&
+                completionProbes.TryGetValue(
+                    step,
+                    out var cachedProbe))
+            {
+                if (IsCompletionProbeUsable(
+                        step,
+                        cachedProbe))
+                {
+                    return TryPollCompletionProbe(
+                        cachedProbe,
+                        step,
+                        out complete,
+                        out error);
+                }
+
+                completionProbes.Remove(
+                    step);
+            }
+
             IAppearanceTransitionStepCompletionProbe
                 selected = null;
             var count = 0;
@@ -3111,9 +3147,45 @@ namespace VCR.Runtime.Appearance.Unity
                 return false;
             }
 
+            completionProbes ??=
+                new Dictionary<
+                    AppearanceTransitionStep,
+                    IAppearanceTransitionStepCompletionProbe>();
+            completionProbes[
+                step] =
+                    selected;
+
+            return TryPollCompletionProbe(
+                selected,
+                step,
+                out complete,
+                out error);
+        }
+
+        private static bool IsCompletionProbeUsable(
+            AppearanceTransitionStep step,
+            IAppearanceTransitionStepCompletionProbe probe)
+        {
+            return
+                probe is
+                    IAppearanceTransitionStepExecutor executor &&
+                IsExecutorAlive(executor) &&
+                executor.CanExecute(step) &&
+                probe.CanTrackCompletion(step);
+        }
+
+        private static bool TryPollCompletionProbe(
+            IAppearanceTransitionStepCompletionProbe probe,
+            AppearanceTransitionStep step,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+
             try
             {
-                return selected.TryIsComplete(
+                return probe.TryIsComplete(
                     step,
                     out complete,
                     out error);
