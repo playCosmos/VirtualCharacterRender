@@ -2544,6 +2544,11 @@ require_source_contains(
     "layerMask?.Clone()",
     "humanoid pose layer settings must clone caller-owned masks on Configure",
 )
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "SanitizeWeight(",
+    "humanoid pose layer settings must normalize non-finite weights before they reach mixer hot paths",
+)
 
 humanoid_pose_layer_slot = (
     VCR
@@ -2629,6 +2634,21 @@ require_source_contains(
     "? baseFrame",
     "mixer must reuse the routed base expression frame when no expression transform is active",
 )
+require_source_contains(
+    mixer_runtime,
+    "SanitizeExpressionLayerConfiguration();",
+    "mixer Awake must normalize serialized expression-layer numeric state",
+)
+require_source_contains(
+    mixer_runtime,
+    "SanitizeUnitInterval(",
+    "expression mixer weight/deadzone configuration must reject non-finite values",
+)
+require_source_contains(
+    mixer_runtime,
+    "SanitizeNonNegative(",
+    "expression mixer smoothing configuration must reject non-finite values",
+)
 
 p11_appearance_validation = (
     VCR
@@ -2677,6 +2697,16 @@ require_source_contains(
     p5_mixer_validation,
     "caller-owned masks/settings/slots are mutated",
     "P5 validation must prove mixer-owned pose-layer configuration survives caller mutation",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "float.PositiveInfinity",
+    "P5 validation must inject non-finite expression-layer configuration",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "non-finite pose-layer weight must sanitize",
+    "P5 validation must prove non-finite pose weights are normalized",
 )
 
 tracking_router = (
