@@ -5194,6 +5194,10 @@ namespace VCR.Runtime.UI
                             true,
                             status.State,
                             output != null);
+                var outputSettings =
+                    output != null
+                        ? output.Settings
+                        : default;
 
                 if (_outputTransparentButton != null)
                 {
@@ -5201,12 +5205,11 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputTransparentButton,
-                        output != null
-                            ? "Transparent: " +
-                              (output.Settings.Transparent
-                                  ? "On"
-                                  : "Off")
-                            : "Transparent: n/a");
+                        output == null
+                            ? "Transparent: n/a"
+                            : outputSettings.Transparent
+                                ? "Transparent: On"
+                                : "Transparent: Off");
                 }
 
                 if (_outputTopmostButton != null)
@@ -5215,12 +5218,11 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputTopmostButton,
-                        output != null
-                            ? "Topmost: " +
-                              (output.Settings.Topmost
-                                  ? "On"
-                                  : "Off")
-                            : "Topmost: n/a");
+                        output == null
+                            ? "Topmost: n/a"
+                            : outputSettings.Topmost
+                                ? "Topmost: On"
+                                : "Topmost: Off");
                 }
 
                 if (_outputClickThroughButton != null)
@@ -5229,12 +5231,11 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputClickThroughButton,
-                        output != null
-                            ? "Click-through: " +
-                              (output.Settings.ClickThrough
-                                  ? "On"
-                                  : "Off")
-                            : "Click-through: n/a");
+                        output == null
+                            ? "Click-through: n/a"
+                            : outputSettings.ClickThrough
+                                ? "Click-through: On"
+                                : "Click-through: Off");
                 }
             }
 
