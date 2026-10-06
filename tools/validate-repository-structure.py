@@ -1343,6 +1343,17 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "if (_state == SceneRuntimeState.Stopped &&\n                _capabilities == null)",
+    "scene shutdown must remain retryable while failed capability cleanup is still owned",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "capabilities.Dispose();",
+    "_capabilities = null;",
+    "scene shutdown must release the capability registry reference only after disposal succeeds",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "renderBootstrap\n                            ?.RestoreRuntimeOverrides()",
     "failed scene initialization must rollback captured render overrides",
 )
@@ -1899,6 +1910,11 @@ require_source_contains(
     p1_renderer_validation,
     "captureFailureSaveResult",
     "P1 validation must prove configuration capture failure returns false/error without stopping the scene",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "capabilityThrowingDisposeCount == 2",
+    "P1 validation must prove retained scene capability cleanup is retried before registry release",
 )
 require_source_contains(
     p1_renderer_validation,
