@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using VCR.Runtime.Core;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Tracking;
@@ -14,6 +15,24 @@ namespace VCR.Runtime.Protocols.Vmc
     /// </summary>
     public sealed class VmcFrameAccumulator
     {
+        private readonly struct CustomExpressionWireName
+        {
+            public CustomExpressionWireName(
+                byte[] utf8,
+                string name)
+            {
+                Utf8 = utf8;
+                Name = name;
+            }
+
+            public byte[] Utf8 { get; }
+            public string Name { get; }
+        }
+
+        private static readonly UTF8Encoding StrictUtf8 =
+            new(
+                encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
         public const int MaxCustomExpressions =
             256;
         public const int MaxCustomExpressionNameCharacters =
@@ -28,6 +47,9 @@ namespace VCR.Runtime.Protocols.Vmc
             new float[(int)StandardExpression.Count];
         private readonly Dictionary<string, float> _customExpressionStaging =
             new(StringComparer.Ordinal);
+        private readonly Dictionary<uint, CustomExpressionWireName>
+            _customExpressionWireNames =
+                new();
 
         private TrackingVector3 _rootPosition = TrackingVector3.Zero;
         private TrackingQuaternion _rootRotation = TrackingQuaternion.Identity;
@@ -71,6 +93,7 @@ namespace VCR.Runtime.Protocols.Vmc
                 0,
                 _expressionStaging.Length);
             _customExpressionStaging.Clear();
+            _customExpressionWireNames.Clear();
 
             _rootPosition =
                 TrackingVector3.Zero;
@@ -452,6 +475,118 @@ namespace VCR.Runtime.Protocols.Vmc
             _customExpressionStaging.Add(
                 name,
                 value);
+        }
+
+        internal void ApplyCustomBlendUtf8(
+            byte[] data,
+            int start,
+            int length,
+            float value)
+        {
+            if (data == null ||
+                start < 0 ||
+                length <= 0 ||
+                start + length >
+                    data.Length)
+            {
+                _droppedCustomExpressionCount++;
+                return;
+            }
+
+            var characterCount =
+                StrictUtf8.GetCharCount(
+                    data,
+                    start,
+                    length);
+
+            if (characterCount <= 0 ||
+                characterCount >
+                    MaxCustomExpressionNameCharacters)
+            {
+                _droppedCustomExpressionCount++;
+                return;
+            }
+
+            var bytes =
+                data.AsSpan(
+                    start,
+                    length);
+            var hash =
+                ComputeUtf8Hash(
+                    bytes);
+
+            if (_customExpressionWireNames
+                .TryGetValue(
+                    hash,
+                    out var cached) &&
+                bytes.SequenceEqual(
+                    cached.Utf8))
+            {
+                ApplyCustomBlend(
+                    cached.Name,
+                    value);
+                return;
+            }
+
+            var name =
+                StrictUtf8.GetString(
+                    data,
+                    start,
+                    length);
+
+            ApplyCustomBlend(
+                name,
+                value);
+
+            if (!_customExpressionStaging
+                    .ContainsKey(
+                        name) ||
+                _customExpressionWireNames
+                    .ContainsKey(
+                        hash))
+            {
+                // The name was rejected, or this hash already belongs to a
+                // different valid UTF-8 spelling. Hash collisions fall back to
+                // decoding rather than risking aliasing two custom channels.
+                return;
+            }
+
+            var ownedBytes =
+                new byte[length];
+            Buffer.BlockCopy(
+                data,
+                start,
+                ownedBytes,
+                0,
+                length);
+
+            _customExpressionWireNames.Add(
+                hash,
+                new CustomExpressionWireName(
+                    ownedBytes,
+                    name));
+        }
+
+        private static uint ComputeUtf8Hash(
+            ReadOnlySpan<byte> value)
+        {
+            unchecked
+            {
+                var hash =
+                    2166136261u;
+
+                for (var i = 0;
+                     i < value.Length;
+                     i++)
+                {
+                    hash ^=
+                        value[i];
+                    hash *=
+                        16777619u;
+                }
+
+                return hash;
+            }
         }
 
         internal TrackingFrame CompletePacket(
