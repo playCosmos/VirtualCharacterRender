@@ -28,6 +28,8 @@ namespace VCR.Editor.P4
                 failures);
             ValidateExpressionFallbackActivation(
                 failures);
+            ValidatePresenceTimingSanitization(
+                failures);
             GameObject root = null;
 
             try
@@ -412,6 +414,55 @@ namespace VCR.Editor.P4
                         .DestroyImmediate(
                             root);
                 }
+            }
+        }
+
+        private static void ValidatePresenceTimingSanitization(
+            List<string> failures)
+        {
+            try
+            {
+                var method =
+                    typeof(PriorityTrackingRouter)
+                        .GetMethod(
+                            "SecondsToMicroseconds",
+                            BindingFlags.Static |
+                            BindingFlags.NonPublic);
+
+                if (method == null)
+                {
+                    failures.Add(
+                        "tracking router presence timing conversion helper was not found");
+                    return;
+                }
+
+                var invalidTimingUs =
+                    (long)method.Invoke(
+                        null,
+                        new object[]
+                        {
+                            float.PositiveInfinity
+                        });
+                var saturatedTimingUs =
+                    (long)method.Invoke(
+                        null,
+                        new object[]
+                        {
+                            float.MaxValue
+                        });
+
+                Expect(
+                    invalidTimingUs == 0L &&
+                    saturatedTimingUs ==
+                        long.MaxValue,
+                    "tracking router presence timing conversion must reject non-finite seconds and saturate oversized finite values",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "tracking router presence timing sanitization validation unexpected exception: " +
+                    exception);
             }
         }
 
