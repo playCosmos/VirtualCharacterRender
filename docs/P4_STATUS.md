@@ -50,7 +50,7 @@ P4 also exposes a route-status contract through `ITrackingRouteStatusProvider` /
 
 The source-switch counters only increment after an already-selected source changes; initial source acquisition is not counted as a switch.
 
-Routed outputs now preserve the selected provider's immutable `TrackingFrame` object directly for face, body/hands, full-body, and expressions. The router no longer allocates a second envelope frame merely to restamp sequence metadata. Route selection still tracks child source/sequence internally for duplicate suppression and switch metrics, while downstream consumers use immutable frame reference identity so a replacement provider that reuses an old source ID/sequence is still observable.
+Routed outputs now preserve the selected provider's immutable `TrackingFrame` object directly for face, body/hands, full-body, and expressions. The router no longer allocates a second envelope frame merely to restamp sequence metadata. Duplicate suppression uses immutable frame reference identity while source IDs remain only for switch metrics, so a replacement snapshot that reuses an old source ID/sequence is still observable without requiring a loss gap.
 
 Face routing also samples each needed candidate at most once per router update. A healthy preferred source that outranks the fallback is sampled once and then reused for activation, selection, and output; the fallback face provider is not polled in that case. If policy or health makes fallback competitive, it is enabled first and then sampled once.
 
