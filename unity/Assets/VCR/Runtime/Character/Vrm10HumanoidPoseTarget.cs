@@ -57,8 +57,8 @@ namespace VCR.Runtime.Character
         private HumanoidPoseState _latestPose;
         private NormalizedExpressionState _latestExpressions;
 
-        private long _lastPoseSequence = -1;
-        private long _lastExpressionSequence = -1;
+        private TrackingFrame _lastPoseFrame;
+        private TrackingFrame _lastExpressionFrame;
         private string _lastPoseSourceId;
         private string _lastExpressionSourceId;
 
@@ -158,7 +158,9 @@ namespace VCR.Runtime.Character
                 !availability.ExpressionsAvailable);
 
             if (availability.PoseAvailable &&
-                poseFrame.Sequence != _lastPoseSequence)
+                !ReferenceEquals(
+                    poseFrame,
+                    _lastPoseFrame))
             {
                 if (!string.Equals(
                     _lastPoseSourceId,
@@ -170,15 +172,16 @@ namespace VCR.Runtime.Character
                         poseFrame.SourceId;
                 }
 
-                _lastPoseSequence =
-                    poseFrame.Sequence;
+                _lastPoseFrame =
+                    poseFrame;
                 _latestPose =
                     poseFrame.HumanoidPose;
             }
 
             if (availability.ExpressionsAvailable &&
-                expressionFrame.Sequence !=
-                    _lastExpressionSequence)
+                !ReferenceEquals(
+                    expressionFrame,
+                    _lastExpressionFrame))
             {
                 if (!string.Equals(
                     _lastExpressionSourceId,
@@ -197,8 +200,8 @@ namespace VCR.Runtime.Character
                         expressionFrame.SourceId;
                 }
 
-                _lastExpressionSequence =
-                    expressionFrame.Sequence;
+                _lastExpressionFrame =
+                    expressionFrame;
                 _latestExpressions =
                     expressionFrame.Expressions;
             }
@@ -257,8 +260,8 @@ namespace VCR.Runtime.Character
                     : null;
             trackingProviderBehaviour =
                 _provider as MonoBehaviour;
-            _lastPoseSequence = -1;
-            _lastExpressionSequence = -1;
+            _lastPoseFrame = null;
+            _lastExpressionFrame = null;
             _lastPoseSourceId = null;
             _lastExpressionSourceId = null;
             _latestPose = null;
@@ -299,7 +302,7 @@ namespace VCR.Runtime.Character
             }
 
             ResetPoseCalibration();
-            _lastPoseSequence = -1;
+            _lastPoseFrame = null;
         }
 
         private void SetExpressionsUnavailable(
@@ -317,11 +320,11 @@ namespace VCR.Runtime.Character
             if (unavailable)
             {
                 _latestExpressions = null;
-                _lastExpressionSequence = -1;
+                _lastExpressionFrame = null;
                 return;
             }
 
-            _lastExpressionSequence = -1;
+            _lastExpressionFrame = null;
         }
 
         private static bool IsServiceAlive(
