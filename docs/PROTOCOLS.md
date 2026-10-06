@@ -108,6 +108,8 @@ Version 1 message:
 
 `WebSocketEventClientTransport` is an outbound bridge client built on `ClientWebSocket`. It connects to `ws://127.0.0.1:39541/vcr/events` by default. Plain `ws://` is restricted to loopback; remote endpoints require `wss://`. Complete text messages are queued and delivered to `IWebSocketTextMessageHandler` on the Unity main thread.
 
+`WebSocketEventInjectionAdapter` reuses one internal JSON DTO wrapper under a parse lock. The wrapper is reset to the same defaults as a fresh `WebSocketEventMessage` before every `FromJsonOverwrite`, so omitted optional fields never inherit actor/text/amount/currency state from an earlier message. The normalized event is detached from the mutable wrapper before subscriber dispatch.
+
 The broader application-control API remains unfrozen. Future operations such as character loading, runtime parameter control, expressions/motion, environment/material control, diagnostics, and event subscriptions require a separate versioned surface rather than being silently added to `event.inject`.
 
 ## Broadcast integrations
@@ -115,6 +117,8 @@ The broader application-control API remains unfrozen. Future operations such as 
 Streaming-service chat, donation/support, and other interaction APIs are not core protocols.
 
 P8's first service adapter is SOOP. The VCR runtime consumes a small bridge schema containing event id, user id, nickname, text, and donation count. SOOP credentials, login/session state, reconnect behavior, and raw service packets stay outside the normalized runtime. Chat maps to `broadcast.chat.message`; star-balloon support maps to `broadcast.donation` with unit `SOOP_STAR_BALLOON`. Replayed event ids are suppressed by the Unity bridge adapter.
+
+The SOOP Unity bridge adapter likewise reuses one lock-protected `SoopBridgeMessage` JSON wrapper and resets every field before overwrite. Duplicate-id behavior is evaluated before remapping the remaining payload, preserving the existing idempotency contract; omitted `userId`/`nickname`/text/count fields cannot leak from a prior message.
 
 Each service uses an adapter:
 
