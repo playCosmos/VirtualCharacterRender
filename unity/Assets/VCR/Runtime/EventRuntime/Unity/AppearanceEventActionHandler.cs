@@ -72,13 +72,23 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            return
-                string.IsNullOrWhiteSpace(
-                    command.TargetId) ||
-                string.Equals(
+            if (string.IsNullOrWhiteSpace(
+                    command.TargetId))
+            {
+                return true;
+            }
+
+            try
+            {
+                return string.Equals(
                     command.TargetId,
                     _runtime.Status.RuntimeId,
                     StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public bool TryExecute(
@@ -95,8 +105,10 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            switch (command.ActionType)
+            try
             {
+                switch (command.ActionType)
+                {
                 case EventActionTypes.AppearanceSetPreset:
                     if (string.IsNullOrWhiteSpace(
                             command.Text))
@@ -165,10 +177,18 @@ namespace VCR.Runtime.EventRuntime.Unity
                     return _runtime.CancelTransition(
                         out error);
 
-                default:
-                    error =
-                        $"Unsupported appearance action '{command.ActionType}'.";
-                    return false;
+                    default:
+                        error =
+                            $"Unsupported appearance action '{command.ActionType}'.";
+                        return false;
+                }
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Appearance runtime action failed: " +
+                    exception.Message;
+                return false;
             }
         }
 
