@@ -271,6 +271,18 @@ namespace VCR.Editor.P1
                     "empty initialized scene must be Ready",
                     failures);
 
+                Expect(
+                    scene.TryCaptureRenderSettings(
+                        out var capturedRenderSettings) &&
+                    capturedRenderSettings.Width ==
+                        render.RequestedWidth &&
+                    capturedRenderSettings.Height ==
+                        render.RequestedHeight &&
+                    capturedRenderSettings.TargetFrameRate ==
+                        render.TargetFrameRate,
+                    "scene runtime must expose render-bootstrap availability together with the current render settings",
+                    failures);
+
                 var capabilityCreateCount = 0;
                 var capabilityDisposeCount = 0;
                 var capabilityThrowingDisposeCount = 0;
