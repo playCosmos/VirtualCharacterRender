@@ -32,6 +32,8 @@ P4 now exposes a common region-addressable source-health contract through `ITrac
 
 Face and expression source priority are now explicit policy data through `TrackingRoutePolicy`. The default face order remains ARKit face first and MediaPipe FaceLandmarker second. The default expression order is VMC first and optional audio mouth fallback second. Existing serialized provider fields remain scene wiring for compatibility; changing priority no longer requires rewiring those references. Providers without source-kind health metadata retain the historical preferred-then-fallback behavior.
 
+`TrackingRoutePolicy` now separates public ownership from router hot-path access: public face/expression priority arrays are defensive copies, while internal priority lookup reuses the cached serialized arrays. External tooling can inspect/mutate its copy without silently rewriting live routing order or adding per-frame clone allocations.
+
 Router presence grace/stability timings are normalized before `TrackingPresenceResolver` construction. Non-finite serialized timings restore the default 0.5s loss grace / 0.15s restore stability values, while seconds-to-microseconds conversion is explicitly non-finite-safe and saturates extreme finite values rather than overflowing the resolver timestamps.
 
 P4 also exposes a route-status contract through `ITrackingRouteStatusProvider` / `TrackingRouteStatus`:
