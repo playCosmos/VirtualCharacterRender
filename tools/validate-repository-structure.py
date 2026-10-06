@@ -1810,6 +1810,21 @@ require_source_contains(
 )
 require_source_contains(
     event_runtime_host,
+    "var staged =\n                CloneRules(\n                    nextRules);",
+    "event runtime host must deep-clone caller-owned rules before installation",
+)
+require_source_contains(
+    event_runtime_host,
+    "return CloneRules(\n                rules);",
+    "event runtime host CaptureRules must deep-clone the live nested rule graph",
+)
+require_source_contains(
+    event_runtime_host,
+    "private static EventActionTemplate[]\n            CloneActions(",
+    "event runtime host deep clone must include nested action templates",
+)
+require_source_contains(
+    event_runtime_host,
     "match.Enabled =\n                    previousEnabled;",
     "failed rule-enable apply must rollback the requested host mutation",
 )
