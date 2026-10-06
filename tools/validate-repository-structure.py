@@ -240,6 +240,11 @@ require_source_contains(
     "VRM tracking application must contain non-finite configuration/smoothing/expression values",
     "P3 validation must cover final VRM tracking numeric containment",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "tracking timestamp math must preserve full-range elapsed time without signed overflow",
+    "P3 validation must cover extreme tracking timestamp arithmetic",
+)
 
 p0_vmc_validation = (
     VCR
