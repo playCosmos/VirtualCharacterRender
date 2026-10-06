@@ -41,6 +41,37 @@ namespace VCR.Editor.P0
                             () => disposed++);
                     });
 
+            var secondaryRegistered =
+                registry.Register(
+                    CapabilityIds.Environment3D,
+                    () =>
+                        new ProbeService(
+                            () => { }));
+
+            var sortedStatusIndex =
+                secondaryRegistered &&
+                registry.StatusCount == 2 &&
+                registry.TryGetStatusAt(
+                    0,
+                    out var firstStatus) &&
+                firstStatus.Id ==
+                    CapabilityIds.Environment3D &&
+                firstStatus.State ==
+                    CapabilityState.Disabled &&
+                registry.TryGetStatusAt(
+                    1,
+                    out var secondStatus) &&
+                secondStatus.Id ==
+                    CapabilityIds.ProtocolVmc &&
+                secondStatus.State ==
+                    CapabilityState.Disabled &&
+                !registry.TryGetStatusAt(
+                    -1,
+                    out _) &&
+                !registry.TryGetStatusAt(
+                    2,
+                    out _);
+
             var lazyBeforeEnable =
                 registered &&
                 created == 0 &&
@@ -59,7 +90,14 @@ namespace VCR.Editor.P0
                 disposed == 0 &&
                 registry.IsInstantiated(
                     CapabilityIds.ProtocolVmc) &&
-                registry.EnabledCount == 1;
+                registry.EnabledCount == 1 &&
+                registry.TryGetStatusAt(
+                    1,
+                    out var enabledStatus) &&
+                enabledStatus.Id ==
+                    CapabilityIds.ProtocolVmc &&
+                enabledStatus.State ==
+                    CapabilityState.Enabled;
 
             var disabled =
                 registry.Disable(
@@ -82,6 +120,7 @@ namespace VCR.Editor.P0
                 CapabilityIds.ProtocolVmc);
 
             var pass =
+                sortedStatusIndex &&
                 lazyBeforeEnable &&
                 firstEnabled &&
                 disabled &&
