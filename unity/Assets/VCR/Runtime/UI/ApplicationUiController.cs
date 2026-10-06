@@ -5454,9 +5454,9 @@ namespace VCR.Runtime.UI
                 selected ==
                 ApplicationUiSection.Diagnostics;
 
-                if (_appearanceActions != null &&
-                    _appearanceActions.gameObject.activeSelf !=
-                        characterSelected)
+            if (_appearanceActions != null &&
+                _appearanceActions.gameObject.activeSelf !=
+                    characterSelected)
             {
                 _appearanceActions.gameObject.SetActive(
                     characterSelected);
