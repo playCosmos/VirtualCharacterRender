@@ -373,6 +373,104 @@ namespace VCR.Runtime.Presentation2D
             return true;
         }
 
+        internal static bool TryEvaluateValidatedInto(
+            Character2DParameterMappingProfile profile,
+            string backendId,
+            Character2DInputSnapshot snapshot,
+            Span<Character2DParameterValue> destination,
+            out int valueCount,
+            out string error)
+        {
+            valueCount = 0;
+            error = null;
+
+            if (profile == null)
+            {
+                error =
+                    "2D parameter mapping profile is required.";
+                return false;
+            }
+
+            if (!string.Equals(
+                    profile.BackendId,
+                    backendId,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    $"2D parameter profile backend '{profile.BackendId}' does not match active backend '{backendId ?? "<null>"}'.";
+                return false;
+            }
+
+            var bindings =
+                profile.Bindings;
+
+            if (destination.Length <
+                bindings.Length)
+            {
+                error =
+                    "2D parameter mapping destination is smaller than the profile binding count.";
+                return false;
+            }
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                var binding =
+                    bindings[i];
+
+                if (!TryReadSource(
+                        binding,
+                        snapshot,
+                        out var sourceValue))
+                {
+                    if (!binding
+                        .UseDefaultWhenUnavailable)
+                    {
+                        continue;
+                    }
+
+                    sourceValue =
+                        binding.DefaultInputValue;
+                }
+
+                var normalized =
+                    (sourceValue -
+                     binding.InputMin) /
+                    (binding.InputMax -
+                     binding.InputMin);
+
+                if (binding.ClampInput)
+                {
+                    normalized =
+                        Mathf.Clamp01(
+                            normalized);
+                }
+
+                var output =
+                    Mathf.LerpUnclamped(
+                        binding.OutputMin,
+                        binding.OutputMax,
+                        normalized);
+
+                if (!IsFinite(
+                        output))
+                {
+                    error =
+                        $"2D parameter '{binding.TargetParameterId}' evaluated to a non-finite value.";
+                    valueCount = 0;
+                    return false;
+                }
+
+                destination[valueCount++] =
+                    new Character2DParameterValue(
+                        binding.TargetParameterId,
+                        output);
+            }
+
+            return true;
+        }
+
         private static bool TryReadSource(
             Character2DParameterBinding binding,
             Character2DInputSnapshot snapshot,
