@@ -33,6 +33,33 @@ namespace VCR.Runtime.Presentation2D
         public bool ClampInput = true;
         public bool UseDefaultWhenUnavailable = true;
         public float DefaultInputValue = 0f;
+
+        public Character2DParameterBinding Clone() =>
+            new()
+            {
+                TargetParameterId =
+                    TargetParameterId,
+                SourceKind =
+                    SourceKind,
+                FaceCoefficient =
+                    FaceCoefficient,
+                StandardExpression =
+                    StandardExpression,
+                InputMin =
+                    InputMin,
+                InputMax =
+                    InputMax,
+                OutputMin =
+                    OutputMin,
+                OutputMax =
+                    OutputMax,
+                ClampInput =
+                    ClampInput,
+                UseDefaultWhenUnavailable =
+                    UseDefaultWhenUnavailable,
+                DefaultInputValue =
+                    DefaultInputValue
+            };
     }
 
     [CreateAssetMenu(
@@ -51,9 +78,26 @@ namespace VCR.Runtime.Presentation2D
             backendId;
         public int Revision =>
             _revision;
+        public int BindingCount =>
+            bindings?.Length ?? 0;
         public Character2DParameterBinding[] Bindings =>
-            bindings ??
-            Array.Empty<Character2DParameterBinding>();
+            CloneBindings(
+                bindings);
+
+        internal Character2DParameterBinding
+            GetBindingAt(
+                int index)
+        {
+            var current =
+                bindings;
+
+            return
+                current != null &&
+                index >= 0 &&
+                index < current.Length
+                    ? current[index]
+                    : null;
+        }
 
         public void Configure(
             string targetBackendId,
@@ -62,12 +106,38 @@ namespace VCR.Runtime.Presentation2D
             backendId =
                 targetBackendId;
             bindings =
-                values ??
-                Array.Empty<Character2DParameterBinding>();
+                CloneBindings(
+                    values);
             unchecked
             {
                 _revision++;
             }
+        }
+
+        private static Character2DParameterBinding[]
+            CloneBindings(
+                Character2DParameterBinding[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    Character2DParameterBinding>();
+            }
+
+            var result =
+                new Character2DParameterBinding[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                result[i] =
+                    source[i]?.Clone();
+            }
+
+            return result;
         }
 
         private void OnValidate()
@@ -116,15 +186,16 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            var bindings =
-                profile.Bindings;
+            var bindingCount =
+                profile.BindingCount;
 
             for (var i = 0;
-                 i < bindings.Length;
+                 i < bindingCount;
                  i++)
             {
                 var binding =
-                    bindings[i];
+                    profile.GetBindingAt(
+                        i);
 
                 if (binding == null ||
                     string.IsNullOrWhiteSpace(
@@ -140,7 +211,8 @@ namespace VCR.Runtime.Presentation2D
                      j++)
                 {
                     var previous =
-                        bindings[j];
+                        profile.GetBindingAt(
+                            j);
 
                     if (previous != null &&
                         string.Equals(
@@ -275,16 +347,17 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            var bindings =
-                profile.Bindings;
+            var bindingCount =
+                profile.BindingCount;
             var valueCount = 0;
 
             for (var i = 0;
-                 i < bindings.Length;
+                 i < bindingCount;
                  i++)
             {
                 var binding =
-                    bindings[i];
+                    profile.GetBindingAt(
+                        i);
 
                 if (TryReadSource(
                         binding,
@@ -311,11 +384,12 @@ namespace VCR.Runtime.Presentation2D
             var resultIndex = 0;
 
             for (var i = 0;
-                 i < bindings.Length;
+                 i < bindingCount;
                  i++)
             {
                 var binding =
-                    bindings[i];
+                    profile.GetBindingAt(
+                        i);
 
                 if (!TryReadSource(
                         binding,
@@ -401,11 +475,11 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            var bindings =
-                profile.Bindings;
+            var bindingCount =
+                profile.BindingCount;
 
             if (destination.Length <
-                bindings.Length)
+                bindingCount)
             {
                 error =
                     "2D parameter mapping destination is smaller than the profile binding count.";
