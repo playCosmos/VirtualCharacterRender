@@ -1100,11 +1100,10 @@ namespace VCR.Runtime.Tracking.Routing
                 return double.NaN;
             }
 
-            return Math.Max(
-                0.0,
-                (nowUs -
-                 frame.RuntimeTimestampUs) /
-                1000.0);
+            return TrackingTimestampMath
+                .AgeMillisecondsOrNaN(
+                    nowUs,
+                    frame.RuntimeTimestampUs);
         }
 
         private static TrackingSourceKind GetSourceKind(
