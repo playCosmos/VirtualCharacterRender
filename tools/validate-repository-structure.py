@@ -430,6 +430,29 @@ for mediapipe_submission_source in mediapipe_submission_sources:
         "MediaPipe sources must not drop all in-flight latency correlation at capacity",
     )
 
+mediapipe_webcam_runner = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeWebcamTrackingRunner.cs"
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "ShouldSubmitTask(",
+    "MediaPipe webcam task loops must use direct task gating instead of delegate dispatch",
+)
+forbid_source_pattern(
+    mediapipe_webcam_runner,
+    r"new\s+WaitUntil\s*\(",
+    "MediaPipe webcam readback wait must not allocate a WaitUntil closure per task lifecycle",
+)
+forbid_source_pattern(
+    mediapipe_webcam_runner,
+    r"Func<bool>\s+shouldSubmit|Action<Image,\s*long>\s+submit",
+    "MediaPipe webcam task loops must not retain delegate-based hot-path submission dispatch",
+)
+
 borrowed_pose_contract = (
     VCR
     / "Runtime"
