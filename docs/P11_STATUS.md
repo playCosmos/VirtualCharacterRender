@@ -156,6 +156,8 @@ Transition presentation is intentionally handler-driven. A user or later built-i
 
 The generic transition sequencer/bridge, particle/effect action path, audio action path, procedural motion path, and baked AnimationClip motion path are implemented. The default `spin` cue, baked AnimationClip cues, registered confetti/flower-petal/sparkle effects, and logical audio cues can all be referenced through the same transition action system. Runtime playback of baked clips does not sample Animator/AnimationClip every frame.
 
+`AudioEventActionHandler` now rejects non-finite and out-of-float-range volume overrides before touching `AudioSource`, while preserving finite clamp-to-0..1 behavior. Audio bindings are deep-cloned across the configuration boundary, validated into a staged map, and committed only after the entire replacement succeeds, so caller mutation or one invalid replacement cannot silently rewrite or clear the previous live audio configuration.
+
 Timed coroutine execution, QueueAll saturation/rejection behavior under real event bursts, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
 Transition dependency discovery is hardened for the optional-handler case: missing `IAppearanceTransitionStepExecutor` instances and missing delegated `IEventActionHandler` instances are negative-cached for one monotonic second, while configured/live handlers remain immediately usable. This prevents repeated full-scene `MonoBehaviour` scans when transition presentation capabilities are intentionally absent.
