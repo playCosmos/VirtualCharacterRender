@@ -22,6 +22,8 @@ namespace VCR.Editor.P4
             var failures = new List<string>();
             ValidatePolicyDefaultRecovery(
                 failures);
+            ValidateRouterPolicyRecovery(
+                failures);
             ValidateDirectFrameReuse(
                 failures);
             GameObject root = null;
@@ -325,6 +327,90 @@ namespace VCR.Editor.P4
                     failures));
 
             return false;
+        }
+
+        private static void ValidateRouterPolicyRecovery(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P4 Router Policy Recovery");
+                var router =
+                    root.AddComponent<
+                        PriorityTrackingRouter>();
+
+                var flags =
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic;
+                var routePolicyField =
+                    typeof(PriorityTrackingRouter)
+                        .GetField(
+                            "routePolicy",
+                            flags);
+                var ensureMethod =
+                    typeof(PriorityTrackingRouter)
+                        .GetMethod(
+                            "EnsureRoutePolicy",
+                            flags);
+
+                Expect(
+                    routePolicyField != null &&
+                    ensureMethod != null,
+                    "router policy recovery validation must resolve private route policy state",
+                    failures);
+
+                if (routePolicyField == null ||
+                    ensureMethod == null)
+                {
+                    return;
+                }
+
+                routePolicyField.SetValue(
+                    router,
+                    null);
+
+                var first =
+                    ensureMethod.Invoke(
+                        router,
+                        null) as
+                        TrackingRoutePolicy;
+                var second =
+                    ensureMethod.Invoke(
+                        router,
+                        null) as
+                        TrackingRoutePolicy;
+
+                Expect(
+                    first != null &&
+                    ReferenceEquals(
+                        first,
+                        second) &&
+                    ReferenceEquals(
+                        first,
+                        routePolicyField.GetValue(
+                            router)),
+                    "router must store and reuse a recovered default policy instead of allocating one per priority comparison",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "router policy recovery validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
         }
 
         private static void ValidatePolicyDefaultRecovery(
