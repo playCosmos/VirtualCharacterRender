@@ -151,6 +151,22 @@ namespace VCR.Runtime.EventRuntime.Unity
                     error);
             }
 
+            if (command.HasValue &&
+                (double.IsNaN(
+                     command.Value) ||
+                 double.IsInfinity(
+                     command.Value) ||
+                 command.Value >
+                     float.MaxValue ||
+                 command.Value <
+                     -float.MaxValue))
+            {
+                error =
+                    "audio.play volume override requires a finite float-range value.";
+                return Fail(
+                    error);
+            }
+
             try
             {
                 if (command.ActionType ==
