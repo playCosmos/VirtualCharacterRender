@@ -1396,6 +1396,31 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_characterUiOperationGeneration",
+    "application UI character async actions must version requests so stale completions cannot overwrite newer state",
+)
+require_source_contains(
+    application_ui,
+    "IsCurrentCharacterUiOperation(",
+    "application UI character async completions must verify request generation and scene-runtime identity",
+)
+require_source_contains(
+    application_ui,
+    "operationGeneration =\n                ++_characterUiOperationGeneration;",
+    "character load/reload requests must advance the UI operation generation before awaiting",
+)
+require_source_contains(
+    application_ui,
+    "_characterUiOperationGeneration++;\n\n            try\n            {\n                sceneRuntime.UnloadCharacter();",
+    "character unload must invalidate outstanding async load/reload UI completions",
+)
+require_source_contains(
+    application_ui,
+    "ReferenceEquals(\n                    sceneRuntime,\n                    runtime);",
+    "stale character UI completion checks must reject results from a replaced scene runtime",
+)
+require_source_contains(
+    application_ui,
     "_motionSummaryCache",
     "application UI Motion refresh must cache unchanged rendered summary text",
 )
