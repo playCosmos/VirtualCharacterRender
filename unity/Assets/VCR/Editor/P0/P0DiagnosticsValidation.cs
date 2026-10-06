@@ -139,7 +139,7 @@ namespace VCR.Editor.P0
                     true;
 
                 for (var i = 1;
-                     i < publishedMetrics.Length;
+                     i < publishedMetrics.Count;
                      i++)
                 {
                     if (string.CompareOrdinal(
@@ -155,9 +155,32 @@ namespace VCR.Editor.P0
                     }
                 }
 
+                var metricMutationRejected =
+                    false;
+
+                try
+                {
+                    ((IList<RuntimeMetric>)
+                        publishedMetrics)
+                        .Add(
+                            new RuntimeMetric(
+                                "external.mutation",
+                                1.0,
+                                "count"));
+                }
+                catch (System.NotSupportedException)
+                {
+                    metricMutationRejected =
+                        true;
+                }
+
                 runtimeBounds =
                     runtimeBounds &&
-                    publishedMetricsSorted;
+                    publishedMetricsSorted &&
+                    metricMutationRejected &&
+                    diagnostics.LatestSnapshot
+                        .Metrics.Count ==
+                    publishedMetrics.Count;
 
                 var csvProbe =
                     new System.Text.StringBuilder();
