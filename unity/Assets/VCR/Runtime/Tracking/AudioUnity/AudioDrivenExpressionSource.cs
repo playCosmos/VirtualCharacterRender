@@ -28,8 +28,14 @@ namespace VCR.Runtime.Tracking.AudioUnity
         private float[] _samples;
         private TrackingFrame _latest;
         private long _sequence;
+        private const float PublishEpsilon =
+            0.0005f;
+
         private float _value;
         private float _rms;
+        private float _lastPublishedValue =
+            float.NaN;
+        private long _lastSampleTimestampUs;
 
         public float CurrentValue => _value;
         public float CurrentRms => _rms;
@@ -97,7 +103,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
                     TrackingRegion.Expressions,
                     new TrackingSourceHealth(
                         state,
-                        _latest?.SourceTimestampUs ?? 0,
+                        _lastSampleTimestampUs,
                         _value,
                         null),
                     _latest?.RuntimeTimestampUs ?? 0);
@@ -156,7 +162,11 @@ namespace VCR.Runtime.Tracking.AudioUnity
         private void UpdateValue(
             float target)
         {
-            _value =
+            target =
+                Mathf.Clamp01(
+                    target);
+
+            var next =
                 AudioDrivenExpressionMath
                     .Smooth(
                         _value,
@@ -164,6 +174,46 @@ namespace VCR.Runtime.Tracking.AudioUnity
                         Time.unscaledDeltaTime,
                         attackSeconds,
                         releaseSeconds);
+
+            if (Mathf.Abs(
+                    next -
+                    target) <=
+                PublishEpsilon)
+            {
+                next =
+                    target;
+            }
+
+            _value =
+                Mathf.Clamp01(
+                    next);
+
+            var nowUs =
+                MonotonicClock
+                    .NowMicroseconds();
+            _lastSampleTimestampUs =
+                nowUs;
+
+            var boundaryChanged =
+                (_value <= 0f ||
+                 _value >= 1f) &&
+                _lastPublishedValue !=
+                    _value;
+
+            if (_latest != null &&
+                !boundaryChanged &&
+                !float.IsNaN(
+                    _lastPublishedValue) &&
+                Mathf.Abs(
+                    _value -
+                    _lastPublishedValue) <
+                    PublishEpsilon)
+            {
+                return;
+            }
+
+            _lastPublishedValue =
+                _value;
 
             var standard =
                 new float[
@@ -177,8 +227,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
                 new TrackingFrame(
                     ++_sequence,
                     sourceTimestampUs:
-                        MonotonicClock
-                            .NowMicroseconds(),
+                        nowUs,
                     validRegions:
                         TrackingRegion.Expressions,
                     confidence:
@@ -191,8 +240,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
                     sourceId:
                         "audio-mouth-fallback",
                     runtimeTimestampUs:
-                        MonotonicClock
-                            .NowMicroseconds());
+                        nowUs);
         }
 
         private void EnsureBuffer()
