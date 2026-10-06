@@ -336,6 +336,13 @@ namespace VCR.Runtime.UI
         private string _settingsCapabilityLabelId;
         private CapabilityState _settingsCapabilityLabelState;
         private string _settingsCapabilityLabelCache;
+        private bool _appearanceTransitionLabelBusy;
+        private string _appearanceTransitionLabelId;
+        private int _appearanceTransitionLabelPercent = -1;
+        private string _appearanceTransitionLabelCache;
+        private int _diagnosticsNextLabelPage = -1;
+        private int _diagnosticsNextLabelPageCount = -1;
+        private string _diagnosticsNextLabelCache;
 
         public ApplicationUiModel Model => _model;
 
@@ -5320,23 +5327,10 @@ namespace VCR.Runtime.UI
                         appearanceAvailable &&
                         !appearanceStatus.Busy;
 
-                    var transitionLabel =
-                        appearanceStatus.Busy &&
-                        !string.IsNullOrWhiteSpace(
-                            appearanceStatus.ActiveTransitionId)
-                            ? appearanceStatus.ActiveTransitionId +
-                              " " +
-                              Math.Round(
-                                  appearanceStatus
-                                      .TransitionProgress01 *
-                                  100.0) +
-                              "%"
-                            : GetSelectedAppearanceTransitionId();
-
                     SetButtonLabel(
                         _appearanceTransitionButton,
-                        "Transition: " +
-                        transitionLabel);
+                        GetAppearanceTransitionButtonLabel(
+                            appearanceStatus));
                 }
 
                 if (_appearanceCancelButton != null)
@@ -5736,8 +5730,8 @@ namespace VCR.Runtime.UI
             {
                 SetButtonLabel(
                     _environmentTransitionModeButton,
-                    "Transition: " +
-                    _environmentTransitionMode);
+                    GetEnvironmentTransitionModeLabel(
+                        _environmentTransitionMode));
                 _environmentTransitionModeButton.interactable =
                     runtime != null &&
                     status.HasValue &&
@@ -8170,9 +8164,9 @@ namespace VCR.Runtime.UI
                     canPage;
                 SetButtonLabel(
                     _diagnosticsNextPageButton,
-                    pageCount > 1
-                        ? $"Next Metrics ({_diagnosticsMetricPage + 1}/{pageCount})"
-                        : "Next Metrics");
+                    GetDiagnosticsNextPageLabel(
+                        _diagnosticsMetricPage,
+                        pageCount));
             }
 
             var available =
@@ -8475,6 +8469,128 @@ namespace VCR.Runtime.UI
             label.text =
                 title +
                 suffix;
+        }
+
+        private string GetAppearanceTransitionButtonLabel(
+            AppearanceRuntimeStatus status)
+        {
+            var busy =
+                status.Busy &&
+                !string.IsNullOrWhiteSpace(
+                    status.ActiveTransitionId);
+            var id =
+                busy
+                    ? status.ActiveTransitionId
+                    : GetSelectedAppearanceTransitionId();
+            var percent =
+                busy
+                    ? (int)Math.Round(
+                        status.TransitionProgress01 *
+                        100.0)
+                    : -1;
+
+            if (_appearanceTransitionLabelCache != null &&
+                _appearanceTransitionLabelBusy ==
+                    busy &&
+                _appearanceTransitionLabelPercent ==
+                    percent &&
+                string.Equals(
+                    _appearanceTransitionLabelId,
+                    id,
+                    StringComparison.Ordinal))
+            {
+                return _appearanceTransitionLabelCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append(
+                "Transition: ");
+            builder.Append(
+                id ??
+                "<none>");
+
+            if (busy)
+            {
+                builder.Append(' ');
+                builder.Append(
+                    percent);
+                builder.Append('%');
+            }
+
+            _appearanceTransitionLabelBusy =
+                busy;
+            _appearanceTransitionLabelId =
+                id;
+            _appearanceTransitionLabelPercent =
+                percent;
+            _appearanceTransitionLabelCache =
+                builder.ToString();
+            return _appearanceTransitionLabelCache;
+        }
+
+        private static string GetEnvironmentTransitionModeLabel(
+            EnvironmentTransitionMode mode)
+        {
+            return mode switch
+            {
+                EnvironmentTransitionMode.Cut =>
+                    "Transition: Cut",
+                EnvironmentTransitionMode.Fade =>
+                    "Transition: Fade",
+                EnvironmentTransitionMode.Crossfade =>
+                    "Transition: Crossfade",
+                EnvironmentTransitionMode.Dissolve =>
+                    "Transition: Dissolve",
+                _ =>
+                    "Transition: Unknown"
+            };
+        }
+
+        private string GetDiagnosticsNextPageLabel(
+            int page,
+            int pageCount)
+        {
+            if (pageCount <= 1)
+            {
+                _diagnosticsNextLabelPage =
+                    page;
+                _diagnosticsNextLabelPageCount =
+                    pageCount;
+                _diagnosticsNextLabelCache =
+                    "Next Metrics";
+                return _diagnosticsNextLabelCache;
+            }
+
+            if (_diagnosticsNextLabelCache != null &&
+                _diagnosticsNextLabelPage ==
+                    page &&
+                _diagnosticsNextLabelPageCount ==
+                    pageCount)
+            {
+                return _diagnosticsNextLabelCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append(
+                "Next Metrics (");
+            builder.Append(
+                page + 1);
+            builder.Append('/');
+            builder.Append(
+                pageCount);
+            builder.Append(')');
+
+            _diagnosticsNextLabelPage =
+                page;
+            _diagnosticsNextLabelPageCount =
+                pageCount;
+            _diagnosticsNextLabelCache =
+                builder.ToString();
+            return _diagnosticsNextLabelCache;
         }
 
         private string GetTrackingToggleLabel(
