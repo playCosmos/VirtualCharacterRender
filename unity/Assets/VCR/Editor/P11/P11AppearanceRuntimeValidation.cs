@@ -1713,7 +1713,7 @@ namespace VCR.Editor.P11
                     root.AddComponent<
                         ProceduralMotionCueSource>();
 
-                motionSource.ConfigureCues(
+                var callerOwnedProceduralCue =
                     new ProceduralMotionCueDefinition
                     {
                         CueId =
@@ -1731,7 +1731,44 @@ namespace VCR.Editor.P11
                                 0f,
                                 1f,
                                 1f)
-                    });
+                    };
+
+                motionSource.ConfigureCues(
+                    callerOwnedProceduralCue);
+
+                callerOwnedProceduralCue.CueId =
+                    "caller-mutated-spin";
+                callerOwnedProceduralCue.RootEulerDegrees =
+                    Vector3.zero;
+                callerOwnedProceduralCue.ProgressCurve =
+                    AnimationCurve.Constant(
+                        0f,
+                        1f,
+                        0f);
+
+                var proceduralCueIdMutationRejected =
+                    false;
+
+                try
+                {
+                    ((IList<string>)
+                        motionSource.CueIds)
+                        .Add(
+                            "external-procedural-cue");
+                }
+                catch (NotSupportedException)
+                {
+                    proceduralCueIdMutationRejected =
+                        true;
+                }
+
+                Expect(
+                    proceduralCueIdMutationRejected &&
+                    motionSource.CueIds.Count == 1 &&
+                    motionSource.CueIds[0] ==
+                        "spin",
+                    "procedural motion cue source must expose a read-only cue-id view and isolate caller-owned ConfigureCues definitions",
+                    failures);
 
                 Expect(
                     motionSource.TrySampleCue(
@@ -1760,6 +1797,30 @@ namespace VCR.Editor.P11
                         0.7071f) <
                     0.02f,
                     "halfway through a 180-degree root spin cue must sample approximately 90 degrees",
+                    failures);
+
+                motionSource.ConfigureCues(
+                    new ProceduralMotionCueDefinition
+                    {
+                        CueId =
+                            "invalid-procedural",
+                        DurationSeconds =
+                            0f
+                    });
+
+                Expect(
+                    motionSource.CueIds.Count == 1 &&
+                    motionSource.CueIds[0] ==
+                        "spin" &&
+                    motionSource.TrySampleCue(
+                        "spin",
+                        0.5f,
+                        out var rollbackProceduralPose,
+                        out var rollbackProceduralError) &&
+                    rollbackProceduralPose != null &&
+                    string.IsNullOrWhiteSpace(
+                        rollbackProceduralError),
+                    "failed procedural ConfigureCues replacement must preserve the previous validated live cue set",
                     failures);
 
                 var clipRig =
