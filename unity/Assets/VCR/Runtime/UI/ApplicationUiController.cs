@@ -293,6 +293,30 @@ namespace VCR.Runtime.UI
         private int _materialSummaryErrorCount;
         private string _materialSummaryCache;
 
+        private const int CharacterSummaryPresetVisibleLimit =
+            8;
+        private bool _characterSummaryStateValid;
+        private SceneRuntimeState _characterSummaryRuntimeState;
+        private bool _characterSummaryHasCharacter;
+        private string _characterSummaryModelPath;
+        private string _characterSummaryRuntimeError;
+        private bool _characterSummaryAppearanceAvailable;
+        private AppearanceRuntimeState _characterSummaryAppearanceState;
+        private string _characterSummaryPresetId;
+        private string _characterSummaryOutfitId;
+        private int _characterSummaryUserPresetCount;
+        private readonly string[] _characterSummaryPresetIds =
+            new string[CharacterSummaryPresetVisibleLimit];
+        private string _characterSummaryTransitionId;
+        private bool _characterSummaryAppearanceBusy;
+        private int _characterSummaryTransitionPercent;
+        private long _characterSummaryElapsedCentiseconds;
+        private long _characterSummaryDurationCentiseconds;
+        private bool _characterSummaryTransitionCommitted;
+        private bool _characterSummaryCanCancelTransition;
+        private string _characterSummaryAppearanceError;
+        private string _characterSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -5928,57 +5952,385 @@ namespace VCR.Runtime.UI
 
             var status =
                 sceneRuntime.Status;
-
-            var text =
-                $"Runtime state: {status.State}\n" +
-                $"Character loaded: {status.HasCharacter}\n" +
-                $"Model path: {status.CurrentCharacterPath ?? "<none>"}\n" +
-                $"Last runtime error: {status.LastError ?? "<none>"}";
-
-            if (!IsServiceAlive(_appearanceRuntime))
-            {
-                return text +
-                    "\nAppearance: runtime unavailable";
-            }
-
+            var appearanceAvailable =
+                IsServiceAlive(
+                    _appearanceRuntime);
             var appearance =
-                _appearanceRuntime.Status;
-
+                appearanceAvailable
+                    ? _appearanceRuntime.Status
+                    : default;
             var userPresetRegistry =
-                _appearanceRuntime as
-                    IAppearanceUserPresetRegistry;
+                appearanceAvailable
+                    ? _appearanceRuntime as
+                        IAppearanceUserPresetRegistry
+                    : null;
             var userPresetCount =
                 userPresetRegistry?.UserPresetIds.Count ??
                 0;
-            var userPresetOrder =
-                FormatUserPresetOrder(
-                    userPresetRegistry);
-
-            var transitionProgress =
+            var transitionPercent =
+                appearanceAvailable &&
                 appearance.Busy
-                    ? Math.Round(
+                    ? (int)Math.Round(
                         appearance.TransitionProgress01 *
-                        100.0) +
-                      "% (" +
-                      appearance.TransitionElapsedSeconds
-                          .ToString("0.00") +
-                      "s / " +
-                      appearance.TransitionDurationSeconds
-                          .ToString("0.00") +
-                      "s)"
-                    : "<idle>";
+                        100.0)
+                    : 0;
+            var elapsedCentiseconds =
+                appearanceAvailable &&
+                appearance.Busy
+                    ? (long)Math.Round(
+                        appearance.TransitionElapsedSeconds *
+                        100.0)
+                    : 0L;
+            var durationCentiseconds =
+                appearanceAvailable &&
+                appearance.Busy
+                    ? (long)Math.Round(
+                        appearance.TransitionDurationSeconds *
+                        100.0)
+                    : 0L;
 
-            return text +
-                $"\nAppearance state: {appearance.State}" +
-                $"\nAppearance preset: {appearance.CurrentPresetId ?? "<none>"}" +
-                $"\nOutfit: {appearance.CurrentOutfitId ?? "<none>"}" +
-                $"\nUser presets: {userPresetCount}" +
-                $"\nUser preset order: {userPresetOrder}" +
-                $"\nTransition: {appearance.ActiveTransitionId ?? "<none>"}" +
-                $"\nTransition progress: {transitionProgress}" +
-                $"\nTransition committed: {appearance.TransitionCommitted}" +
-                $"\nTransition cancelable: {appearance.CanCancelTransition}" +
-                $"\nAppearance error: {appearance.LastError ?? "<none>"}";
+            if (CharacterSummaryCacheMatches(
+                    status,
+                    appearanceAvailable,
+                    appearance,
+                    userPresetRegistry,
+                    userPresetCount,
+                    transitionPercent,
+                    elapsedCentiseconds,
+                    durationCentiseconds))
+            {
+                return _characterSummaryCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Runtime state: ");
+            builder.Append(status.State);
+            builder.Append(
+                "\nCharacter loaded: ");
+            builder.Append(
+                status.HasCharacter);
+            builder.Append("\nModel path: ");
+            builder.Append(
+                status.CurrentCharacterPath ??
+                "<none>");
+            builder.Append(
+                "\nLast runtime error: ");
+            builder.Append(
+                status.LastError ??
+                "<none>");
+
+            if (!appearanceAvailable)
+            {
+                builder.Append(
+                    "\nAppearance: runtime unavailable");
+            }
+            else
+            {
+                builder.Append(
+                    "\nAppearance state: ");
+                builder.Append(
+                    appearance.State);
+                builder.Append(
+                    "\nAppearance preset: ");
+                builder.Append(
+                    appearance.CurrentPresetId ??
+                    "<none>");
+                builder.Append("\nOutfit: ");
+                builder.Append(
+                    appearance.CurrentOutfitId ??
+                    "<none>");
+                builder.Append(
+                    "\nUser presets: ");
+                builder.Append(
+                    userPresetCount);
+                builder.Append(
+                    "\nUser preset order: ");
+                AppendUserPresetOrder(
+                    builder,
+                    userPresetRegistry);
+                builder.Append(
+                    "\nTransition: ");
+                builder.Append(
+                    appearance.ActiveTransitionId ??
+                    "<none>");
+                builder.Append(
+                    "\nTransition progress: ");
+
+                if (appearance.Busy)
+                {
+                    builder.Append(
+                        transitionPercent);
+                    builder.Append("% (");
+                    builder.Append(
+                        appearance
+                            .TransitionElapsedSeconds
+                            .ToString(
+                                "0.00",
+                                CultureInfo.InvariantCulture));
+                    builder.Append("s / ");
+                    builder.Append(
+                        appearance
+                            .TransitionDurationSeconds
+                            .ToString(
+                                "0.00",
+                                CultureInfo.InvariantCulture));
+                    builder.Append("s)");
+                }
+                else
+                {
+                    builder.Append(
+                        "<idle>");
+                }
+
+                builder.Append(
+                    "\nTransition committed: ");
+                builder.Append(
+                    appearance
+                        .TransitionCommitted);
+                builder.Append(
+                    "\nTransition cancelable: ");
+                builder.Append(
+                    appearance
+                        .CanCancelTransition);
+                builder.Append(
+                    "\nAppearance error: ");
+                builder.Append(
+                    appearance.LastError ??
+                    "<none>");
+            }
+
+            CaptureCharacterSummaryState(
+                status,
+                appearanceAvailable,
+                appearance,
+                userPresetRegistry,
+                userPresetCount,
+                transitionPercent,
+                elapsedCentiseconds,
+                durationCentiseconds);
+            _characterSummaryCache =
+                builder.ToString();
+            return _characterSummaryCache;
+        }
+
+        private bool CharacterSummaryCacheMatches(
+            SceneRuntimeStatus status,
+            bool appearanceAvailable,
+            AppearanceRuntimeStatus appearance,
+            IAppearanceUserPresetRegistry registry,
+            int userPresetCount,
+            int transitionPercent,
+            long elapsedCentiseconds,
+            long durationCentiseconds)
+        {
+            if (!_characterSummaryStateValid ||
+                _characterSummaryCache == null ||
+                _characterSummaryRuntimeState !=
+                    status.State ||
+                _characterSummaryHasCharacter !=
+                    status.HasCharacter ||
+                !string.Equals(
+                    _characterSummaryModelPath,
+                    status.CurrentCharacterPath,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _characterSummaryRuntimeError,
+                    status.LastError,
+                    StringComparison.Ordinal) ||
+                _characterSummaryAppearanceAvailable !=
+                    appearanceAvailable)
+            {
+                return false;
+            }
+
+            if (!appearanceAvailable)
+            {
+                return true;
+            }
+
+            if (_characterSummaryAppearanceState !=
+                    appearance.State ||
+                !string.Equals(
+                    _characterSummaryPresetId,
+                    appearance.CurrentPresetId,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _characterSummaryOutfitId,
+                    appearance.CurrentOutfitId,
+                    StringComparison.Ordinal) ||
+                _characterSummaryUserPresetCount !=
+                    userPresetCount ||
+                !string.Equals(
+                    _characterSummaryTransitionId,
+                    appearance.ActiveTransitionId,
+                    StringComparison.Ordinal) ||
+                _characterSummaryAppearanceBusy !=
+                    appearance.Busy ||
+                _characterSummaryTransitionPercent !=
+                    transitionPercent ||
+                _characterSummaryElapsedCentiseconds !=
+                    elapsedCentiseconds ||
+                _characterSummaryDurationCentiseconds !=
+                    durationCentiseconds ||
+                _characterSummaryTransitionCommitted !=
+                    appearance.TransitionCommitted ||
+                _characterSummaryCanCancelTransition !=
+                    appearance.CanCancelTransition ||
+                !string.Equals(
+                    _characterSummaryAppearanceError,
+                    appearance.LastError,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var visibleCount =
+                Math.Min(
+                    CharacterSummaryPresetVisibleLimit,
+                    userPresetCount);
+
+            for (var i = 0;
+                 i < visibleCount;
+                 i++)
+            {
+                if (!string.Equals(
+                        _characterSummaryPresetIds[i],
+                        registry?.UserPresetIds[i],
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void CaptureCharacterSummaryState(
+            SceneRuntimeStatus status,
+            bool appearanceAvailable,
+            AppearanceRuntimeStatus appearance,
+            IAppearanceUserPresetRegistry registry,
+            int userPresetCount,
+            int transitionPercent,
+            long elapsedCentiseconds,
+            long durationCentiseconds)
+        {
+            _characterSummaryRuntimeState =
+                status.State;
+            _characterSummaryHasCharacter =
+                status.HasCharacter;
+            _characterSummaryModelPath =
+                status.CurrentCharacterPath;
+            _characterSummaryRuntimeError =
+                status.LastError;
+            _characterSummaryAppearanceAvailable =
+                appearanceAvailable;
+
+            if (appearanceAvailable)
+            {
+                _characterSummaryAppearanceState =
+                    appearance.State;
+                _characterSummaryPresetId =
+                    appearance.CurrentPresetId;
+                _characterSummaryOutfitId =
+                    appearance.CurrentOutfitId;
+                _characterSummaryUserPresetCount =
+                    userPresetCount;
+                _characterSummaryTransitionId =
+                    appearance.ActiveTransitionId;
+                _characterSummaryAppearanceBusy =
+                    appearance.Busy;
+                _characterSummaryTransitionPercent =
+                    transitionPercent;
+                _characterSummaryElapsedCentiseconds =
+                    elapsedCentiseconds;
+                _characterSummaryDurationCentiseconds =
+                    durationCentiseconds;
+                _characterSummaryTransitionCommitted =
+                    appearance.TransitionCommitted;
+                _characterSummaryCanCancelTransition =
+                    appearance.CanCancelTransition;
+                _characterSummaryAppearanceError =
+                    appearance.LastError;
+
+                var visibleCount =
+                    Math.Min(
+                        CharacterSummaryPresetVisibleLimit,
+                        userPresetCount);
+
+                for (var i = 0;
+                     i < visibleCount;
+                     i++)
+                {
+                    _characterSummaryPresetIds[i] =
+                        registry?.UserPresetIds[i];
+                }
+
+                for (var i = visibleCount;
+                     i <
+                     CharacterSummaryPresetVisibleLimit;
+                     i++)
+                {
+                    _characterSummaryPresetIds[i] =
+                        null;
+                }
+            }
+            else
+            {
+                _characterSummaryUserPresetCount =
+                    0;
+                Array.Clear(
+                    _characterSummaryPresetIds,
+                    0,
+                    _characterSummaryPresetIds.Length);
+            }
+
+            _characterSummaryStateValid =
+                true;
+        }
+
+        private static void AppendUserPresetOrder(
+            StringBuilder builder,
+            IAppearanceUserPresetRegistry registry)
+        {
+            if (registry == null ||
+                registry.UserPresetIds.Count == 0)
+            {
+                builder.Append(
+                    "<none>");
+                return;
+            }
+
+            var visibleCount =
+                Math.Min(
+                    CharacterSummaryPresetVisibleLimit,
+                    registry.UserPresetIds.Count);
+
+            for (var i = 0;
+                 i < visibleCount;
+                 i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(
+                        " > ");
+                }
+
+                builder.Append(
+                    registry.UserPresetIds[i]);
+            }
+
+            if (registry.UserPresetIds.Count >
+                CharacterSummaryPresetVisibleLimit)
+            {
+                builder.Append(
+                    " > +");
+                builder.Append(
+                    registry.UserPresetIds.Count -
+                    CharacterSummaryPresetVisibleLimit);
+            }
         }
 
         private static bool IsUserPresetId(
@@ -6007,51 +6359,6 @@ namespace VCR.Runtime.UI
             }
 
             return false;
-        }
-
-        private string FormatUserPresetOrder(
-            IAppearanceUserPresetRegistry registry)
-        {
-            if (registry == null ||
-                registry.UserPresetIds.Count == 0)
-            {
-                return "<none>";
-            }
-
-            const int visibleLimit = 8;
-            var visibleCount =
-                Math.Min(
-                    visibleLimit,
-                    registry.UserPresetIds.Count);
-            var builder =
-                _summaryBuilder;
-            builder.Clear();
-
-            for (var i = 0;
-                 i < visibleCount;
-                 i++)
-            {
-                if (i > 0)
-                {
-                    builder.Append(
-                        " > ");
-                }
-
-                builder.Append(
-                    registry.UserPresetIds[i]);
-            }
-
-            if (registry.UserPresetIds.Count >
-                visibleLimit)
-            {
-                builder.Append(
-                    " > +");
-                builder.Append(
-                    registry.UserPresetIds.Count -
-                    visibleLimit);
-            }
-
-            return builder.ToString();
         }
 
         private string TrackingSummary()
