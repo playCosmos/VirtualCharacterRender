@@ -83,8 +83,15 @@ namespace VCR.Runtime.Character
             new(
                 MaxTrackedCustomExpressions);
 
+        private void OnValidate()
+        {
+            SanitizeConfiguration();
+        }
+
         private void Awake()
         {
+            SanitizeConfiguration();
+
             if (target == null)
             {
                 target = GetComponent<Vrm10Instance>();
@@ -459,8 +466,12 @@ namespace VCR.Runtime.Character
                     continue;
                 }
 
-                var sourceRotation =
-                    ToUnity(sourcePose.LocalRotation);
+                if (!TryToUnity(
+                        sourcePose.LocalRotation,
+                        out var sourceRotation))
+                {
+                    continue;
+                }
 
                 var desired =
                     pose.PoseSpace == HumanoidPoseSpace.NormalizedLocal
@@ -470,6 +481,12 @@ namespace VCR.Runtime.Character
                                 boneId,
                                 sourceRotation)
                             : sourceRotation);
+
+                if (!IsFinite(
+                        desired))
+                {
+                    continue;
+                }
 
                 bone.localRotation =
                     Quaternion.Slerp(
@@ -489,10 +506,22 @@ namespace VCR.Runtime.Character
                 return;
             }
 
-            var sourcePosition =
-                ToUnity(pose.RootPosition);
-            var sourceRotation =
-                ToUnity(pose.RootRotation);
+            var hasSourcePosition =
+                TryToUnity(
+                    pose.RootPosition,
+                    out var sourcePosition);
+            var hasSourceRotation =
+                TryToUnity(
+                    pose.RootRotation,
+                    out var sourceRotation);
+
+            if ((applyRootPosition &&
+                 !hasSourcePosition) ||
+                (applyRootRotation &&
+                 !hasSourceRotation))
+            {
+                return;
+            }
 
             if (!_rootReferenceInitialized)
             {
@@ -638,13 +667,19 @@ namespace VCR.Runtime.Character
 
             for (var i = 0; i < (int)StandardExpression.Count; i++)
             {
-                var expression = (StandardExpression)i;
-                var value = Mathf.Clamp01(
-                    state.Get(expression));
+                var expression =
+                    (StandardExpression)i;
+                var value =
+                    Clamp01(
+                        state.Get(
+                            expression));
+                var current =
+                    Clamp01(
+                        _smoothedExpressions[i]);
 
                 _smoothedExpressions[i] =
                     Mathf.Lerp(
-                        _smoothedExpressions[i],
+                        current,
                         value,
                         alpha);
 
@@ -688,11 +723,12 @@ namespace VCR.Runtime.Character
                     name);
 
                 var targetValue =
-                    Mathf.Clamp01(
+                    Clamp01(
                         custom.Value);
                 var smoothed =
                     Mathf.Lerp(
-                        currentValue,
+                        Clamp01(
+                            currentValue),
                         targetValue,
                         alpha);
 
@@ -873,37 +909,136 @@ namespace VCR.Runtime.Character
                 unityBone != HumanBodyBones.LastBone;
         }
 
-        private static Vector3 ToUnity(TrackingVector3 value)
+        private void SanitizeConfiguration()
         {
-            return new Vector3(
-                value.X,
-                value.Y,
-                value.Z);
+            poseSmoothing =
+                SanitizeNonNegative(
+                    poseSmoothing,
+                    fallback: 20f);
+            expressionSmoothing =
+                SanitizeNonNegative(
+                    expressionSmoothing,
+                    fallback: 22f);
+            neutralReturnSmoothing =
+                SanitizeNonNegative(
+                    neutralReturnSmoothing,
+                    fallback: 8f);
         }
 
-        private static Quaternion ToUnity(
-            TrackingQuaternion value)
+        private static float SanitizeNonNegative(
+            float value,
+            float fallback)
         {
-            return new Quaternion(
-                value.X,
-                value.Y,
-                value.Z,
-                value.W);
+            if (!float.IsFinite(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Max(
+                0f,
+                value);
+        }
+
+        private static bool TryToUnity(
+            TrackingVector3 value,
+            out Vector3 position)
+        {
+            position = Vector3.zero;
+
+            if (!float.IsFinite(value.X) ||
+                !float.IsFinite(value.Y) ||
+                !float.IsFinite(value.Z))
+            {
+                return false;
+            }
+
+            position =
+                new Vector3(
+                    value.X,
+                    value.Y,
+                    value.Z);
+            return true;
+        }
+
+        private static bool TryToUnity(
+            TrackingQuaternion value,
+            out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+
+            if (!float.IsFinite(value.X) ||
+                !float.IsFinite(value.Y) ||
+                !float.IsFinite(value.Z) ||
+                !float.IsFinite(value.W))
+            {
+                return false;
+            }
+
+            var candidate =
+                new Quaternion(
+                    value.X,
+                    value.Y,
+                    value.Z,
+                    value.W);
+
+            if (!IsFinite(candidate) ||
+                candidate.sqrMagnitude <
+                    1e-8f)
+            {
+                return false;
+            }
+
+            rotation = candidate;
+            return true;
+        }
+
+        private static bool IsFinite(
+            Quaternion value)
+        {
+            return
+                float.IsFinite(value.x) &&
+                float.IsFinite(value.y) &&
+                float.IsFinite(value.z) &&
+                float.IsFinite(value.w);
+        }
+
+        private static float Clamp01(
+            float value)
+        {
+            return float.IsFinite(value)
+                ? Mathf.Clamp01(value)
+                : 0f;
         }
 
         private static float SmoothAlpha(
             float speed,
             float deltaTime)
         {
+            if (!float.IsFinite(speed))
+            {
+                return 1f;
+            }
+
             if (speed <= 0f)
             {
                 return 1f;
             }
 
-            return 1f -
+            if (!float.IsFinite(deltaTime) ||
+                deltaTime <= 0f)
+            {
+                return 0f;
+            }
+
+            var alpha =
+                1f -
                 Mathf.Exp(
                     -speed *
-                    Mathf.Max(0f, deltaTime));
+                    deltaTime);
+
+            return float.IsFinite(alpha)
+                ? Mathf.Clamp01(alpha)
+                : 1f;
         }
     }
 }
