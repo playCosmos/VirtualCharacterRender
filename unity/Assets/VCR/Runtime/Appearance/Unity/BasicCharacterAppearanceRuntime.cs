@@ -927,17 +927,27 @@ namespace VCR.Runtime.Appearance.Unity
                     sourceId,
                     StringComparison.Ordinal);
 
+            if (wasCurrent)
+            {
+                _currentPresetId =
+                    targetId;
+            }
+
             if (!ReplaceUserPresets(
                     next,
                     out error))
             {
+                if (wasCurrent)
+                {
+                    _currentPresetId =
+                        sourceId;
+                }
+
                 return false;
             }
 
             if (wasCurrent)
             {
-                _currentPresetId =
-                    targetId;
                 NotifyAppearanceChanged(
                     Current);
             }
@@ -946,9 +956,6 @@ namespace VCR.Runtime.Appearance.Unity
                 ClonePreset(
                     _userPresets[
                         targetId]);
-            SetState(
-                _state,
-                _lastError);
             return true;
         }
 
