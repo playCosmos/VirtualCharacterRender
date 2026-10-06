@@ -209,6 +209,11 @@ require_source_contains(
     "ValidateDirectVmcPacketPath",
     "P0 VMC validation must cover direct packet parity and malformed-packet atomicity",
 )
+require_source_contains(
+    p0_vmc_validation,
+    "_customExpressionWireNames",
+    "P0 VMC validation must cover repeated direct custom-name cache reuse",
+)
 
 locked_bounded_queues = [
     VCR
@@ -244,6 +249,29 @@ for locked_queue in locked_bounded_queues:
         "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
     )
 
+vmc_accumulator = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs"
+)
+require_source_contains(
+    vmc_accumulator,
+    "_customExpressionWireNames",
+    "VMC custom expression wire names must retain a bounded repeat-name cache",
+)
+require_source_contains(
+    vmc_accumulator,
+    "ApplyCustomBlendUtf8(",
+    "VMC custom expression wire-name cache must be applied before string materialization",
+)
+require_source_contains(
+    vmc_accumulator,
+    "Array.Empty<",
+    "VMC expression snapshots must reuse the shared empty custom-expression array when no custom channels exist",
+)
+
 vmc_direct_reader = (
     VCR
     / "Runtime"
@@ -260,6 +288,11 @@ require_source_contains(
     vmc_direct_reader,
     "ApplyPacket(",
     "direct VMC parsing must retain a separate post-validation apply pass",
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ApplyCustomBlendUtf8(",
+    "direct VMC parsing must route repeated custom names through the bounded wire-name cache",
 )
 require_source_order(
     vmc_direct_reader,
@@ -496,6 +529,30 @@ require_source_contains(
     "currentAppearance",
     "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
 )
+
+motion_cue_sources = [
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs",
+]
+for motion_cue_source in motion_cue_sources:
+    require_source_contains(
+        motion_cue_source,
+        "_cachedSourceId",
+        "active motion cues must cache their stable TrackingFrame source id",
+    )
+    require_source_contains(
+        motion_cue_source,
+        "GetSourceId(",
+        "active motion cue publication must reuse its cached source id",
+    )
 
 mixer_runtime = (
     VCR
