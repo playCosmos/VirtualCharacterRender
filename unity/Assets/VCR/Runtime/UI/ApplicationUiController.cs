@@ -370,7 +370,11 @@ namespace VCR.Runtime.UI
 
         private bool _uiRefreshPassActive;
         private bool _refreshOverlayOutputSampled;
-        private IOverlayOutputAdapter _refreshOverlayOutput;
+        private bool _refreshOverlayOutputPresent;
+        private bool _refreshOverlayOutputReadable;
+        private OverlayOutputStatus _refreshOverlayOutputStatus;
+        private OverlayOutputSettings _refreshOverlayOutputSettings;
+        private string _refreshOverlayOutputError;
         private bool _refreshRenderSettingsSampled;
         private bool _refreshRenderSettingsAvailable;
         private RenderRuntimeSettings _refreshRenderSettings;
@@ -4933,31 +4937,87 @@ namespace VCR.Runtime.UI
                     false;
                 _refreshOverlayOutputSampled =
                     false;
-                _refreshOverlayOutput =
+                _refreshOverlayOutputPresent =
+                    false;
+                _refreshOverlayOutputReadable =
+                    false;
+                _refreshOverlayOutputStatus =
+                    default;
+                _refreshOverlayOutputSettings =
+                    default;
+                _refreshOverlayOutputError =
                     null;
                 _refreshRenderSettingsSampled =
                     false;
             }
         }
 
-        private IOverlayOutputAdapter
-            GetOverlayOutputForUiRefresh()
+        private bool TryGetOverlayOutputForUiRefresh(
+            out bool present,
+            out OverlayOutputStatus status,
+            out OverlayOutputSettings settings,
+            out string error)
         {
             if (!_uiRefreshPassActive)
             {
-                return
-                    sceneRuntime?.OverlayOutput;
+                present =
+                    sceneRuntime?.HasOverlayOutput ==
+                    true;
+
+                if (!present)
+                {
+                    status = default;
+                    settings = default;
+                    error =
+                        "No overlay output adapter is configured.";
+                    return false;
+                }
+
+                return sceneRuntime.TryCaptureOverlayOutput(
+                    out status,
+                    out settings,
+                    out error);
             }
 
             if (!_refreshOverlayOutputSampled)
             {
-                _refreshOverlayOutput =
-                    sceneRuntime?.OverlayOutput;
+                _refreshOverlayOutputPresent =
+                    sceneRuntime?.HasOverlayOutput ==
+                    true;
+
+                if (_refreshOverlayOutputPresent)
+                {
+                    _refreshOverlayOutputReadable =
+                        sceneRuntime.TryCaptureOverlayOutput(
+                            out _refreshOverlayOutputStatus,
+                            out _refreshOverlayOutputSettings,
+                            out _refreshOverlayOutputError);
+                }
+                else
+                {
+                    _refreshOverlayOutputReadable =
+                        false;
+                    _refreshOverlayOutputStatus =
+                        default;
+                    _refreshOverlayOutputSettings =
+                        default;
+                    _refreshOverlayOutputError =
+                        "No overlay output adapter is configured.";
+                }
+
                 _refreshOverlayOutputSampled =
                     true;
             }
 
-            return _refreshOverlayOutput;
+            present =
+                _refreshOverlayOutputPresent;
+            status =
+                _refreshOverlayOutputStatus;
+            settings =
+                _refreshOverlayOutputSettings;
+            error =
+                _refreshOverlayOutputError;
+            return _refreshOverlayOutputReadable;
         }
 
         private bool TryGetRenderSettingsForUiRefresh(
