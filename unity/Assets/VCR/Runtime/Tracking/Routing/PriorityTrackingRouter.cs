@@ -109,10 +109,44 @@ namespace VCR.Runtime.Tracking.Routing
         {
             ResolveProviders();
 
-            UpdateFallbackFaceActivation();
+            var preferredUsable =
+                TryGetUsableFaceCandidate(
+                    _preferredFaceProvider,
+                    _preferredPresence,
+                    _preferredFaceHealth,
+                    out var preferredFrame);
+            var preferredOutranksFallback =
+                preferredUsable &&
+                PreferredFaceOutranksFallback();
+
+            UpdateFallbackFaceActivation(
+                preferredUsable,
+                preferredOutranksFallback);
+
+            TrackingFrame fallbackFrame = null;
+            var fallbackUsable = false;
+
+            if (!preferredUsable ||
+                !preferredOutranksFallback)
+            {
+                fallbackUsable =
+                    TryGetUsableFaceCandidate(
+                        _fallbackProvider,
+                        _fallbackPresence,
+                        _fallbackHealth,
+                        out fallbackFrame);
+            }
+
             var faceSelection =
-                SelectFaceSource();
-            UpdateFaceSnapshot(faceSelection);
+                SelectFaceSource(
+                    preferredUsable,
+                    fallbackUsable,
+                    preferredOutranksFallback);
+
+            UpdateFaceSnapshot(
+                faceSelection,
+                preferredFrame,
+                fallbackFrame);
             UpdateBodyHandsSnapshot();
             UpdateExternalPoseSnapshots();
             UpdatePresence();
@@ -352,25 +386,16 @@ namespace VCR.Runtime.Tracking.Routing
                     : null);
         }
 
-        private FaceSourceSelection SelectFaceSource()
+        private static FaceSourceSelection SelectFaceSource(
+            bool preferredUsable,
+            bool fallbackUsable,
+            bool preferredOutranksFallback)
         {
-            var preferredUsable =
-                IsFaceCandidateUsable(
-                    _preferredFaceProvider,
-                    _preferredPresence,
-                    _preferredFaceHealth);
-
-            var fallbackUsable =
-                IsFaceCandidateUsable(
-                    _fallbackProvider,
-                    _fallbackPresence,
-                    _fallbackHealth);
-
             if (preferredUsable &&
                 fallbackUsable)
             {
                 return
-                    PreferredFaceOutranksFallback()
+                    preferredOutranksFallback
                         ? FaceSourceSelection.Preferred
                         : FaceSourceSelection.Fallback;
             }
@@ -386,11 +411,14 @@ namespace VCR.Runtime.Tracking.Routing
                     : FaceSourceSelection.None;
         }
 
-        private bool IsFaceCandidateUsable(
+        private static bool TryGetUsableFaceCandidate(
             ITrackingFrameProvider provider,
             ITrackingPresenceProvider presenceProvider,
-            ITrackingSourceHealthProvider healthProvider)
+            ITrackingSourceHealthProvider healthProvider,
+            out TrackingFrame frame)
         {
+            frame = null;
+
             if (!IsServiceAlive(provider) ||
                 !IsSourceHealthUsable(
                     healthProvider,
@@ -413,7 +441,7 @@ namespace VCR.Runtime.Tracking.Routing
 
             return
                 provider.TryGetLatestFace(
-                    out var frame) &&
+                    out frame) &&
                 frame?.Face != null &&
                 frame.SubjectDetected;
         }
@@ -453,7 +481,9 @@ namespace VCR.Runtime.Tracking.Routing
                 fallbackPriority;
         }
 
-        private void UpdateFallbackFaceActivation()
+        private void UpdateFallbackFaceActivation(
+            bool preferredUsable,
+            bool preferredOutranksFallback)
         {
             if (!disableFallbackFaceWhenPreferred ||
                 !IsServiceAlive(_fallbackFaceActivation))
@@ -461,15 +491,9 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            var preferredUsable =
-                IsFaceCandidateUsable(
-                    _preferredFaceProvider,
-                    _preferredPresence,
-                    _preferredFaceHealth);
-
             var shouldEnableFallback =
                 !preferredUsable ||
-                !PreferredFaceOutranksFallback();
+                !preferredOutranksFallback;
 
             if (_fallbackFaceActivation.FaceTrackingEnabled !=
                 shouldEnableFallback)
@@ -480,21 +504,20 @@ namespace VCR.Runtime.Tracking.Routing
         }
 
         private void UpdateFaceSnapshot(
-            FaceSourceSelection selection)
+            FaceSourceSelection selection,
+            TrackingFrame preferredFrame,
+            TrackingFrame fallbackFrame)
         {
-            ITrackingFrameProvider selectedProvider =
+            var selected =
                 selection ==
                     FaceSourceSelection.Preferred
-                    ? _preferredFaceProvider
+                    ? preferredFrame
                     : selection ==
                         FaceSourceSelection.Fallback
-                        ? _fallbackProvider
+                        ? fallbackFrame
                         : null;
 
-            if (!IsServiceAlive(selectedProvider) ||
-                !selectedProvider.TryGetLatestFace(
-                    out var selected) ||
-                selected?.Face == null)
+            if (selected?.Face == null)
             {
                 _latestFace = null;
                 ResetFaceSelection();
