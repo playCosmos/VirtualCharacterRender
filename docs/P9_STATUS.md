@@ -98,6 +98,8 @@ motion.pose_weight
 
 Unknown actions, target mismatches, and handler exceptions are contained and reported through host diagnostics. Destroyed Unity handlers cached behind interfaces are ignored rather than invoked. Duplicate references to the same handler instance are deduplicated; genuinely distinct handlers claiming the same command still fail closed and increment the ambiguous-action metric. When auto-find is enabled in a Player build, the host rechecks its event-hub subscription at a bounded 1 Hz cadence so a destroyed/replaced `NormalizedEventHub` can be rebound without a per-frame global search.
 
+Interface-backed action dependencies are also fail-closed at the handler boundary. `EnvironmentStateEventActionHandler` contains `IEnvironmentRuntime.Status`/`SetState` exceptions and `MaterialPresetEventActionHandler` contains `IMaterialPresetResolver`/material-apply dependency exceptions, returning `false` plus a structured error instead of allowing plugin/runtime failures to escape `CanHandle` or `TryExecute`.
+
 `EventRuntimeHost` rule application is non-destructive on validation failure. `TrySetRuleEnabled` rolls back the requested `Enabled` mutation, `TrySetMaxCommandsPerEvent` restores the previous limit, and a failed engine apply leaves the existing engine rules and host rule array intact instead of clearing the host to an empty rule set while returning success.
 
 Rule lookup ownership is now explicit: compatibility `GetRuleAt` / `TryGetRule` return deep-cloned mutable rules, while hot UI/navigation paths use allocation-free `EventRuntimeRuleSummary` lookups containing only `Id` and `Enabled`. External callers can no longer mutate the live host rule graph through a read API.
