@@ -1581,6 +1581,7 @@ namespace VCR.Editor.P1
         {
             GameObject suspendRoot = null;
             GameObject resumeRoot = null;
+            GameObject shutdownRetryRoot = null;
 
             try
             {
@@ -1658,6 +1659,54 @@ namespace VCR.Editor.P1
                         StringComparison.Ordinal),
                     "overlay apply exceptions must be contained by Resume and leave the scene explicitly Faulted",
                     failures);
+
+                shutdownRetryRoot =
+                    new GameObject(
+                        "P1 Shutdown Failure Retry");
+                shutdownRetryRoot.AddComponent<
+                    Vrm10CharacterLoader>();
+                shutdownRetryRoot.AddComponent<
+                    DesktopRenderBootstrap>();
+                var shutdownRetryOverlay =
+                    shutdownRetryRoot.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+                var shutdownRetryScene =
+                    shutdownRetryRoot.AddComponent<
+                        SingleCharacterSceneRuntime>();
+
+                Expect(
+                    shutdownRetryScene.Initialize(),
+                    "shutdown retry containment scene must initialize",
+                    failures);
+
+                shutdownRetryOverlay.ThrowOnShutdown =
+                    true;
+                shutdownRetryScene.Shutdown();
+
+                Expect(
+                    shutdownRetryScene.State ==
+                        SceneRuntimeState.Stopped &&
+                    shutdownRetryScene.Capabilities == null &&
+                    !string.IsNullOrWhiteSpace(
+                        shutdownRetryScene.Status.LastError) &&
+                    shutdownRetryScene.Status.LastError.Contains(
+                        "overlay output shutdown",
+                        StringComparison.Ordinal),
+                    "scene shutdown must retain non-capability cleanup failure state after finishing the remaining cleanup steps",
+                    failures);
+
+                shutdownRetryOverlay.ThrowOnShutdown =
+                    false;
+                shutdownRetryScene.Shutdown();
+
+                Expect(
+                    shutdownRetryScene.State ==
+                        SceneRuntimeState.Stopped &&
+                    shutdownRetryScene.Capabilities == null &&
+                    string.IsNullOrWhiteSpace(
+                        shutdownRetryScene.Status.LastError),
+                    "repeated scene shutdown must retry non-capability cleanup failures even after the capability registry was released",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -1677,6 +1726,12 @@ namespace VCR.Editor.P1
                 {
                     UnityEngine.Object.DestroyImmediate(
                         resumeRoot);
+                }
+
+                if (shutdownRetryRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        shutdownRetryRoot);
                 }
             }
         }
