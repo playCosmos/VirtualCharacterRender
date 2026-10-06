@@ -850,6 +850,77 @@ namespace VCR.Editor.P5
                 mixer.SetAdditionalPoseLayers(
                     overrideSlot,
                     additiveSlot);
+
+                var exportedPrimaryMask =
+                    poseSettings.Mask;
+                exportedPrimaryMask.SetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm,
+                    0f);
+
+                var exportedOverrideSettings =
+                    overrideSlot.Settings;
+                exportedOverrideSettings.Configure(
+                    layerEnabled: false,
+                    layerRole:
+                        MotionLayerRole.Tracking,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight: 0f,
+                    layerMask:
+                        rightMask);
+
+                ExpectClose(
+                    poseSettings.Mask.GetBoneWeight(
+                        HumanoidBoneId.LeftUpperArm),
+                    0.5f,
+                    "public pose-layer mask access must return a defensive copy",
+                    failures);
+                ExpectClose(
+                    overrideSlot.Settings.Weight,
+                    1f,
+                    "public pose-layer slot settings access must return a defensive copy",
+                    failures);
+
+                poseMask.SetBoneWeight(
+                    HumanoidBoneId.LeftUpperArm,
+                    0f);
+                poseSettings.Configure(
+                    layerEnabled: false,
+                    layerRole:
+                        MotionLayerRole.Additive,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight: 0f,
+                    layerMask:
+                        poseMask);
+                rightMask.SetBoneWeight(
+                    HumanoidBoneId.RightUpperArm,
+                    0f);
+                overrideSettings.Configure(
+                    layerEnabled: false,
+                    layerRole:
+                        MotionLayerRole.Tracking,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight: 0f,
+                    layerMask:
+                        rightMask);
+                additiveSettings.Configure(
+                    layerEnabled: false,
+                    layerRole:
+                        MotionLayerRole.Procedural,
+                    mode:
+                        HumanoidPoseBlendMode.Additive,
+                    layerWeight: 0f,
+                    layerMask:
+                        rightMask);
+                overrideSlot.Configure(
+                    null,
+                    overrideSettings);
+                additiveSlot.Configure(
+                    null,
+                    additiveSettings);
+
                 mixer.SetExpressionLayerProvider(
                     layer);
                 mixer.ConfigureExpressionLayer(
@@ -933,6 +1004,12 @@ namespace VCR.Editor.P5
                         "ordered pose layers must apply override before additive in array order",
                         failures);
                 }
+
+                Expect(
+                    poseOverrideLayer.PoseReadCount == 1 &&
+                    poseAdditiveLayer.PoseReadCount == 1,
+                    "mixer-owned pose-layer settings and slots must remain stable after caller-owned masks/settings/slots are mutated",
+                    failures);
 
                 var orderedMetrics =
                     new List<RuntimeMetric>();
