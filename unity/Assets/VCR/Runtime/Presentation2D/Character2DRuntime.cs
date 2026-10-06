@@ -31,6 +31,15 @@ namespace VCR.Runtime.Presentation2D
         private TrackingFrame _lastHumanoidPose;
         private TrackingFrame _lastExpressions;
 
+        private Character2DParameterMappingProfile
+            _validatedMappingProfile;
+        private ICharacter2DBackend
+            _validatedMappingBackend;
+        private string _validatedMappingBackendId;
+        private bool _mappingValidationCurrent;
+        private bool _mappingValidationValid;
+        private string _mappingValidationError;
+
         private long _applyCount;
         private long _applyFailureCount;
         private long _loadCount;
@@ -156,6 +165,7 @@ namespace VCR.Runtime.Presentation2D
         {
             parameterMappingProfile =
                 profile;
+            InvalidateMappingValidation();
             ResetFrameCache();
         }
 
@@ -226,7 +236,7 @@ namespace VCR.Runtime.Presentation2D
                     error);
             }
 
-            if (!TryValidateConfiguredMapping(
+            if (!EnsureConfiguredMappingValidated(
                     out error))
             {
                 return FailLoad(
@@ -387,8 +397,16 @@ namespace VCR.Runtime.Presentation2D
                             "The active 2D backend does not implement the mapped-parameter sink required by the configured mapping profile.");
                     }
 
+                    if (!EnsureConfiguredMappingValidated(
+                            out error))
+                    {
+                        return FailApply(
+                            error ??
+                            "2D parameter mapping validation failed.");
+                    }
+
                     if (!Character2DParameterMapper
-                        .TryEvaluate(
+                        .TryEvaluateValidated(
                             parameterMappingProfile,
                             _backend.BackendId,
                             snapshot,
@@ -444,6 +462,58 @@ namespace VCR.Runtime.Presentation2D
             return true;
         }
 
+        private bool EnsureConfiguredMappingValidated(
+            out string error)
+        {
+            var backendId =
+                IsServiceAlive(_backend)
+                    ? _backend.BackendId
+                    : null;
+
+            if (_mappingValidationCurrent &&
+                ReferenceEquals(
+                    _validatedMappingProfile,
+                    parameterMappingProfile) &&
+                ReferenceEquals(
+                    _validatedMappingBackend,
+                    _backend) &&
+                string.Equals(
+                    _validatedMappingBackendId,
+                    backendId,
+                    StringComparison.Ordinal))
+            {
+                error =
+                    _mappingValidationError;
+                return _mappingValidationValid;
+            }
+
+            _validatedMappingProfile =
+                parameterMappingProfile;
+            _validatedMappingBackend =
+                _backend;
+            _validatedMappingBackendId =
+                backendId;
+            _mappingValidationCurrent =
+                true;
+            _mappingValidationValid =
+                TryValidateConfiguredMapping(
+                    out _mappingValidationError);
+
+            error =
+                _mappingValidationError;
+            return _mappingValidationValid;
+        }
+
+        private void InvalidateMappingValidation()
+        {
+            _validatedMappingProfile = null;
+            _validatedMappingBackend = null;
+            _validatedMappingBackendId = null;
+            _mappingValidationCurrent = false;
+            _mappingValidationValid = false;
+            _mappingValidationError = null;
+        }
+
         private bool TryValidateConfiguredMapping(
             out string error)
         {
@@ -492,11 +562,21 @@ namespace VCR.Runtime.Presentation2D
 
         private void ResolveDependencies()
         {
-            _backend =
+            var nextBackend =
                 backendBehaviour != null
                     ? backendBehaviour as
                         ICharacter2DBackend
                     : null;
+
+            if (!ReferenceEquals(
+                    _backend,
+                    nextBackend))
+            {
+                _backend =
+                    nextBackend;
+                InvalidateMappingValidation();
+            }
+
             _trackingProvider =
                 trackingProviderBehaviour != null
                     ? trackingProviderBehaviour as
