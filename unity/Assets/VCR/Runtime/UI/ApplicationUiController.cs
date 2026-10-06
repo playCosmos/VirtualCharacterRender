@@ -5647,8 +5647,9 @@ namespace VCR.Runtime.UI
                     : "  |  " +
                       _lastActionMessage;
 
-            _statusText.text =
-                $"VCR  |  {sceneText}  |  {characterText}  |  {outputText}{suffix}";
+            SetTextIfChanged(
+                _statusText,
+                $"VCR  |  {sceneText}  |  {characterText}  |  {outputText}{suffix}");
         }
 
         private void RefreshContent()
@@ -5662,21 +5663,23 @@ namespace VCR.Runtime.UI
             var selected =
                 _model.SelectedSection;
 
-            _sectionTitle.text =
+            SetTextIfChanged(
+                _sectionTitle,
                 ApplicationUiModel
-                    .GetTitle(selected);
+                    .GetTitle(selected));
 
             if (!_model.IsAvailable(
                     selected))
             {
-                _contentText.text =
+                SetTextIfChanged(
+                    _contentText,
                     _model.GetUnavailableReason(
                         selected) ??
-                    "Section unavailable.";
+                    "Section unavailable.");
                 return;
             }
 
-            _contentText.text =
+            var content =
                 selected switch
                 {
                     ApplicationUiSection.Character =>
@@ -5700,6 +5703,10 @@ namespace VCR.Runtime.UI
                     _ =>
                         "No section content."
                 };
+
+            SetTextIfChanged(
+                _contentText,
+                content);
         }
 
         private string CharacterSummary()
@@ -6768,6 +6775,23 @@ namespace VCR.Runtime.UI
             label.text =
                 title +
                 suffix;
+        }
+
+        private static void SetTextIfChanged(
+            Text text,
+            string value)
+        {
+            if (text == null ||
+                string.Equals(
+                    text.text,
+                    value,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            text.text =
+                value;
         }
 
         private void SetButtonLabel(
