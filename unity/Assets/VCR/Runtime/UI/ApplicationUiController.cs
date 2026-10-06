@@ -183,8 +183,11 @@ namespace VCR.Runtime.UI
         private AppearanceStateSnapshot _currentAppearanceSnapshot;
         private bool _hasCurrentAppearanceSnapshot;
 
+        private const float MissingTrackingControlDiscoveryRetrySeconds = 5f;
+
         private float _nextRefreshTime;
         private float _nextDependencyResolveTime;
+        private float _nextTrackingControlResolveTime;
         private string _lastActionMessage;
         private int _trackingControlIndex;
         private int _appearanceTransitionIndex;
@@ -632,7 +635,8 @@ namespace VCR.Runtime.UI
                 MonoBehaviour[] activeDependencyBehaviours =
                     null;
 
-                ResolveTrackingControls();
+                ResolveTrackingControls(
+                    force);
                 ResolveCharacterFileSelectionAdapter(
                     ref activeDependencyBehaviours);
                 ResolveAppearanceRuntime(
@@ -4367,6 +4371,9 @@ namespace VCR.Runtime.UI
 
                 _lastActionMessage =
                     $"Capability '{selected.Id}' disabled.";
+                ResolveTrackingControls(
+                    force: true);
+                RefreshAvailability();
                 RefreshAll();
                 return;
             }
@@ -4384,6 +4391,9 @@ namespace VCR.Runtime.UI
 
             _lastActionMessage =
                 $"Capability '{selected.Id}' enabled.";
+            ResolveTrackingControls(
+                force: true);
+            RefreshAvailability();
             RefreshAll();
         }
 
@@ -8630,10 +8640,13 @@ namespace VCR.Runtime.UI
             return behaviours;
         }
 
-        private void ResolveTrackingControls()
+        private void ResolveTrackingControls(
+            bool force = false)
         {
-            var rebuild =
+            var missingOnly =
                 _trackingControls.Count == 0;
+            var rebuild =
+                missingOnly;
 
             if (!rebuild)
             {
@@ -8651,6 +8664,18 @@ namespace VCR.Runtime.UI
             }
 
             if (!rebuild)
+            {
+                _nextTrackingControlResolveTime = 0f;
+                return;
+            }
+
+            var now =
+                Time.unscaledTime;
+
+            if (missingOnly &&
+                !force &&
+                now <
+                    _nextTrackingControlResolveTime)
             {
                 return;
             }
@@ -8685,6 +8710,12 @@ namespace VCR.Runtime.UI
                     Mathf.Max(
                         0,
                         _trackingControls.Count - 1));
+
+            _nextTrackingControlResolveTime =
+                _trackingControls.Count == 0
+                    ? now +
+                      MissingTrackingControlDiscoveryRetrySeconds
+                    : 0f;
         }
 
         private ITrackingRuntimeControl
