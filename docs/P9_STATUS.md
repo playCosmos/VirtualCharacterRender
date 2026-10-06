@@ -102,6 +102,8 @@ Unknown actions, target mismatches, and handler exceptions are contained and rep
 
 Rule lookup ownership is now explicit: compatibility `GetRuleAt` / `TryGetRule` return deep-cloned mutable rules, while hot UI/navigation paths use allocation-free `EventRuntimeRuleSummary` lookups containing only `Id` and `Enabled`. External callers can no longer mutate the live host rule graph through a read API.
 
+`EventRuntimeHost` no longer exposes its mutable `EventRuntimeEngine` instance. Trace state and engine counters needed by UI/diagnostics are surfaced as read-only host properties, while rule/state mutation remains behind host validation/persistence/rollback APIs.
+
 `EventRuntimeRuleCloner` centralizes deep cloning of the mutable rule graph, including filter, conditions, state mutations, and action templates. `EventRuntimeHost.SetRules` / `CaptureRules` and the core `EventRuntimeEngine.TrySetRules` all use that boundary, so caller-owned inputs and persistence/UI snapshots can be edited without silently mutating live rules through shared nested references.
 
 P11 extends the established P9 action boundary with `appearance.set_preset`, `appearance.set_outfit`, `appearance.set_accessory`, `appearance.clear_accessory`, and `appearance.restore_default`. The P11 Appearance Transition Runtime reuses registered application-action handlers directly for presentation cues while owning timing and the single atomic `appearance.commit` boundary. It rejects recursive `appearance.*` transition actions. P11 also adds shared `effect.play` / `effect.stop` and `motion.play` / `motion.release` action handlers; this is a later-phase extension and does not change the preserved P9 checkpoint claim.
