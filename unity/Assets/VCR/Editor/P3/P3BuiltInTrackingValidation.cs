@@ -26,6 +26,7 @@ namespace VCR.Editor.P3
                 new List<string>();
 
             Texture2D texture = null;
+            GameObject arKitReceiverRoot = null;
             ArKitFaceSource source = null;
 
             try
@@ -332,6 +333,182 @@ namespace VCR.Editor.P3
                         failures);
                 }
 
+                var arKitType =
+                    typeof(IFacialMocapUdpReceiver);
+                var arKitSecondsToMicroseconds =
+                    arKitType.GetMethod(
+                        "SecondsToMicroseconds",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var sanitizeArKitConfiguration =
+                    arKitType.GetMethod(
+                        "SanitizeReceiverConfiguration",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                arKitReceiverRoot =
+                    new GameObject(
+                        "VCR P3 ARKit numeric validation");
+                var arKitReceiver =
+                    arKitReceiverRoot.AddComponent<
+                        IFacialMocapUdpReceiver>();
+
+                arKitType.GetField(
+                        "handshakeRetrySeconds",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        float.NaN);
+                arKitType.GetField(
+                        "sourceStaleSeconds",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        float.PositiveInfinity);
+                arKitType.GetField(
+                        "restoreStabilitySeconds",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        float.NegativeInfinity);
+                arKitType.GetField(
+                        "headPositionScale",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        float.NaN);
+                arKitType.GetField(
+                        "headEulerSigns",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        new Vector3(
+                            float.NaN,
+                            float.PositiveInfinity,
+                            1f));
+                arKitType.GetField(
+                        "headPositionSigns",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        arKitReceiver,
+                        new Vector3(
+                            1f,
+                            float.NegativeInfinity,
+                            float.NaN));
+
+                sanitizeArKitConfiguration?.Invoke(
+                    arKitReceiver,
+                    null);
+
+                var sanitizedHandshake =
+                    (float)
+                        arKitType.GetField(
+                                "handshakeRetrySeconds",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+                var sanitizedStale =
+                    (float)
+                        arKitType.GetField(
+                                "sourceStaleSeconds",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+                var sanitizedRestore =
+                    (float)
+                        arKitType.GetField(
+                                "restoreStabilitySeconds",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+                var sanitizedScale =
+                    (float)
+                        arKitType.GetField(
+                                "headPositionScale",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+                var sanitizedEulerSigns =
+                    (Vector3)
+                        arKitType.GetField(
+                                "headEulerSigns",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+                var sanitizedPositionSigns =
+                    (Vector3)
+                        arKitType.GetField(
+                                "headPositionSigns",
+                                BindingFlags.Instance |
+                                BindingFlags.NonPublic)
+                            ?.GetValue(
+                                arKitReceiver);
+
+                var invalidArKitTimingUs =
+                    arKitSecondsToMicroseconds == null
+                        ? -1L
+                        : (long)
+                            arKitSecondsToMicroseconds
+                                .Invoke(
+                                    null,
+                                    new object[]
+                                    {
+                                        float.NaN
+                                    });
+                var saturatedArKitTimingUs =
+                    arKitSecondsToMicroseconds == null
+                        ? -1L
+                        : (long)
+                            arKitSecondsToMicroseconds
+                                .Invoke(
+                                    null,
+                                    new object[]
+                                    {
+                                        float.MaxValue
+                                    });
+
+                Expect(
+                    sanitizeArKitConfiguration != null &&
+                    arKitSecondsToMicroseconds != null &&
+                    Mathf.Approximately(
+                        sanitizedHandshake,
+                        2f) &&
+                    Mathf.Approximately(
+                        sanitizedStale,
+                        1f) &&
+                    Mathf.Approximately(
+                        sanitizedRestore,
+                        0.15f) &&
+                    Mathf.Approximately(
+                        sanitizedScale,
+                        1f) &&
+                    sanitizedEulerSigns ==
+                        new Vector3(
+                            -1f,
+                            -1f,
+                            1f) &&
+                    sanitizedPositionSigns ==
+                        new Vector3(
+                            1f,
+                            1f,
+                            -1f) &&
+                    invalidArKitTimingUs == 0L &&
+                    saturatedArKitTimingUs ==
+                        long.MaxValue,
+                    "ARKit receiver configuration must contain non-finite timing/pose values and saturate oversized presence timing conversion",
+                    failures);
+
                 texture =
                     new Texture2D(
                         2,
@@ -376,6 +553,13 @@ namespace VCR.Editor.P3
                     UnityEngine.Object
                         .DestroyImmediate(
                             texture);
+                }
+
+                if (arKitReceiverRoot != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            arKitReceiverRoot);
                 }
             }
 
