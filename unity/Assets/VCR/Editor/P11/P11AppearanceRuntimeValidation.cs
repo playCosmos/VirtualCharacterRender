@@ -3278,6 +3278,8 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedAppearanceHandlerRuntime(
                 failures);
+            ValidateThrowingAppearanceRuntimeHandlerIsolation(
+                failures);
             ValidateDestroyedMotionRuntimeRefresh(
                 failures);
             ValidateThrowingMotionRuntimeProbeIsolation(
@@ -3954,6 +3956,117 @@ namespace VCR.Editor.P11
             }
         }
 
+        private static void ValidateThrowingAppearanceRuntimeHandlerIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Throwing Appearance Runtime Handler Validation");
+
+                var runtime =
+                    root.AddComponent<
+                        P11ThrowingAppearanceRuntime>();
+                var handler =
+                    root.AddComponent<
+                        AppearanceEventActionHandler>();
+
+                handler.SetAppearanceRuntime(
+                    runtime);
+
+                var command =
+                    new EventActionCommand(
+                        "appearance-runtime-boundary",
+                        EventActionTypes
+                            .AppearanceSetPreset,
+                        "appearance.throwing",
+                        null,
+                        "preset",
+                        0.0,
+                        false,
+                        61);
+
+                runtime.ThrowStatus =
+                    true;
+
+                var statusProbeEscaped =
+                    false;
+                var canHandle =
+                    false;
+
+                try
+                {
+                    canHandle =
+                        handler.CanHandle(
+                            command);
+                }
+                catch
+                {
+                    statusProbeEscaped =
+                        true;
+                }
+
+                Expect(
+                    !statusProbeEscaped &&
+                    !canHandle,
+                    "appearance event handler must contain IAppearanceRuntime.Status getter exceptions during CanHandle",
+                    failures);
+
+                runtime.ThrowStatus =
+                    false;
+                runtime.ThrowAction =
+                    true;
+
+                var actionEscaped =
+                    false;
+                var actionResult =
+                    false;
+                string actionError =
+                    null;
+
+                try
+                {
+                    actionResult =
+                        handler.TryExecute(
+                            command,
+                            out actionError);
+                }
+                catch
+                {
+                    actionEscaped =
+                        true;
+                }
+
+                Expect(
+                    !actionEscaped &&
+                    !actionResult &&
+                    !string.IsNullOrWhiteSpace(
+                        actionError) &&
+                    actionError.Contains(
+                        "Appearance runtime action failed",
+                        StringComparison.Ordinal),
+                    "appearance event handler must contain delegated runtime exceptions as false/error",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "throwing appearance runtime handler isolation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
+        }
+
         private static void ValidateDestroyedMotionRuntimeRefresh(
             List<string> failures)
         {
@@ -4032,6 +4145,107 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11ThrowingAppearanceRuntime :
+        MonoBehaviour,
+        IAppearanceRuntime
+    {
+        private static readonly IReadOnlyList<string>
+            EmptyIds =
+                Array.Empty<string>();
+
+        public bool ThrowStatus { get; set; }
+        public bool ThrowAction { get; set; }
+
+        public AppearanceRuntimeStatus Status
+        {
+            get
+            {
+                if (ThrowStatus)
+                {
+                    throw new InvalidOperationException(
+                        "synthetic appearance status failure");
+                }
+
+                return new AppearanceRuntimeStatus(
+                    "appearance.throwing",
+                    AppearanceRuntimeState.Ready,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null);
+            }
+        }
+
+        public AppearanceStateSnapshot Current =>
+            default;
+
+        public IReadOnlyList<string> PresetIds =>
+            EmptyIds;
+
+        public IReadOnlyList<string> TransitionIds =>
+            EmptyIds;
+
+        public event Action<AppearanceRuntimeStatus>
+            StatusChanged;
+
+        public event Action<AppearanceStateSnapshot>
+            AppearanceChanged;
+
+        public bool SetPreset(
+            string presetId,
+            string transitionId,
+            out string error) =>
+                Execute(
+                    out error);
+
+        public bool SetOutfit(
+            string outfitId,
+            string transitionId,
+            out string error) =>
+                Execute(
+                    out error);
+
+        public bool SetAccessory(
+            string slotId,
+            string accessoryId,
+            string transitionId,
+            out string error) =>
+                Execute(
+                    out error);
+
+        public bool ClearAccessory(
+            string slotId,
+            string transitionId,
+            out string error) =>
+                Execute(
+                    out error);
+
+        public bool RestoreDefault(
+            string transitionId,
+            out string error) =>
+                Execute(
+                    out error);
+
+        public bool CancelTransition(
+            out string error) =>
+                Execute(
+                    out error);
+
+        private bool Execute(
+            out string error)
+        {
+            if (ThrowAction)
+            {
+                throw new InvalidOperationException(
+                    "synthetic appearance action failure");
+            }
+
+            error = null;
+            return true;
         }
     }
 
