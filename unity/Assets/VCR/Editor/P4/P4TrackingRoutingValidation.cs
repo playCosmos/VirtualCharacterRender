@@ -22,6 +22,8 @@ namespace VCR.Editor.P4
             var failures = new List<string>();
             ValidatePolicyDefaultRecovery(
                 failures);
+            ValidateDirectFrameReuse(
+                failures);
             GameObject root = null;
 
             try
@@ -398,6 +400,152 @@ namespace VCR.Editor.P4
                     TrackingSourceKind.AudioFallback),
                 "repaired expression priority must preserve VMC before audio fallback defaults",
                 failures);
+        }
+
+        private static void ValidateDirectFrameReuse(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P4 Direct Routed Frame Reuse");
+
+                var faceProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var bodyProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var externalProvider =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var router =
+                    root.AddComponent<
+                        PriorityTrackingRouter>();
+
+                var nowUs =
+                    MonotonicClock.NowMicroseconds();
+
+                faceProvider.SourceId =
+                    "direct-face";
+                faceProvider.Kind =
+                    TrackingSourceKind.ArKitFace;
+                faceProvider.Regions =
+                    TrackingRegion.Face |
+                    TrackingRegion.Head;
+                faceProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                faceProvider.FaceFrame =
+                    CreateFaceFrame(
+                        faceProvider.SourceId,
+                        sequence: 31,
+                        nowUs);
+                faceProvider.Presence =
+                    CreatePresence(
+                        nowUs,
+                        faceAvailable: true,
+                        faceEvidence: true);
+
+                bodyProvider.SourceId =
+                    "direct-body";
+                bodyProvider.Kind =
+                    TrackingSourceKind.MediaPipeHolisticWebcam;
+                bodyProvider.Regions =
+                    TrackingRegion.UpperBody;
+                bodyProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                bodyProvider.BodyHandsFrame =
+                    CreateBodyFrame(
+                        bodyProvider.SourceId,
+                        sequence: 41,
+                        nowUs);
+
+                externalProvider.SourceId =
+                    "direct-vmc";
+                externalProvider.Kind =
+                    TrackingSourceKind.Vmc;
+                externalProvider.Regions =
+                    TrackingRegion.FullBody |
+                    TrackingRegion.Expressions;
+                externalProvider.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                externalProvider.HumanoidPoseFrame =
+                    CreateHumanoidPoseFrame(
+                        externalProvider.SourceId,
+                        sequence: 51,
+                        nowUs);
+                externalProvider.ExpressionFrame =
+                    CreateExpressionFrame(
+                        externalProvider.SourceId,
+                        sequence: 52,
+                        nowUs,
+                        value: 0.6f);
+                externalProvider.Presence =
+                    CreateFullBodyPresence(
+                        nowUs,
+                        available: true,
+                        evidence: true);
+
+                router.SetPreferredFaceProvider(
+                    faceProvider);
+                router.SetFallbackProvider(
+                    bodyProvider);
+                router.SetExternalPoseProvider(
+                    externalProvider);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.TryGetLatestFace(
+                        out var faceFrame) &&
+                    ReferenceEquals(
+                        faceFrame,
+                        faceProvider.FaceFrame),
+                    "router face output must reuse the selected immutable child frame instead of allocating an envelope",
+                    failures);
+                Expect(
+                    router.TryGetLatestBodyHands(
+                        out var bodyFrame) &&
+                    ReferenceEquals(
+                        bodyFrame,
+                        bodyProvider.BodyHandsFrame),
+                    "router body/hands output must reuse the selected immutable child frame instead of allocating an envelope",
+                    failures);
+                Expect(
+                    router.TryGetLatestHumanoidPose(
+                        out var poseFrame) &&
+                    ReferenceEquals(
+                        poseFrame,
+                        externalProvider.HumanoidPoseFrame),
+                    "router humanoid-pose output must reuse the selected immutable child frame instead of allocating an envelope",
+                    failures);
+                Expect(
+                    router.TryGetLatestExpressions(
+                        out var expressionFrame) &&
+                    ReferenceEquals(
+                        expressionFrame,
+                        externalProvider.ExpressionFrame),
+                    "router expression output must reuse the selected immutable child frame instead of allocating an envelope",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "direct routed frame reuse unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void ValidateDestroyedProviderRecovery(
