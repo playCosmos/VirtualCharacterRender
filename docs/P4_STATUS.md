@@ -50,6 +50,8 @@ P4 also exposes a route-status contract through `ITrackingRouteStatusProvider` /
 
 The source-switch counters only increment after an already-selected source changes; initial source acquisition is not counted as a switch.
 
+Routed outputs now preserve the selected provider's immutable `TrackingFrame` object directly for face, body/hands, full-body, and expressions. The router no longer allocates a second envelope frame merely to restamp sequence metadata. Route selection still tracks child source/sequence internally for duplicate suppression and switch metrics, while downstream consumers use immutable frame reference identity so a replacement provider that reuses an old source ID/sequence is still observable.
+
 ## Source-free validation
 
 Interactive:
@@ -78,6 +80,8 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 - expression source-switch diagnostics
 - route diagnostics emission
 - preferred source rejection when common health reports `SourceLost` even if cached presence/frame state remains
+- direct routed-frame reference reuse for face, body/hands, full-body, and expressions without wrapper allocation
+- loss/recovery and provider replacement when a source reuses a previous source ID/sequence
 
 ## Still deferred to real devices / players
 
