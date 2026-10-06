@@ -921,8 +921,60 @@ namespace VCR.Editor.P5
                     null,
                     additiveSettings);
 
+                var nonFinitePoseSettings =
+                    new HumanoidPoseLayerSettings();
+                nonFinitePoseSettings.Configure(
+                    layerEnabled: true,
+                    layerRole:
+                        MotionLayerRole.Tracking,
+                    mode:
+                        HumanoidPoseBlendMode.Override,
+                    layerWeight:
+                        float.NaN,
+                    layerMask:
+                        poseMask);
+
+                ExpectClose(
+                    nonFinitePoseSettings.Weight,
+                    1f,
+                    "non-finite pose-layer weight must sanitize to the default full weight",
+                    failures);
+
                 mixer.SetExpressionLayerProvider(
                     layer);
+                mixer.ConfigureExpressionLayer(
+                    ExpressionBlendMode.Additive,
+                    weight:
+                        float.NaN,
+                    deadzone:
+                        float.PositiveInfinity,
+                    smoothing:
+                        float.NegativeInfinity);
+
+                ExpectClose(
+                    mixer.ExpressionLayerWeight,
+                    1f,
+                    "non-finite expression layer weight must sanitize to the default full weight",
+                    failures);
+                ExpectClose(
+                    GetPrivateField<float>(
+                        mixer,
+                        "expressionDeadzone"),
+                    0f,
+                    "non-finite expression deadzone must sanitize to zero",
+                    failures);
+                ExpectClose(
+                    GetPrivateField<float>(
+                        mixer,
+                        "expressionSmoothing"),
+                    0f,
+                    "non-finite expression smoothing must sanitize to zero",
+                    failures);
+                Expect(
+                    !mixer.ExpressionsPreSmoothed,
+                    "sanitized non-finite expression smoothing must not claim smoothing ownership",
+                    failures);
+
                 mixer.ConfigureExpressionLayer(
                     ExpressionBlendMode.Additive,
                     weight: 0.5f,
@@ -1658,6 +1710,28 @@ namespace VCR.Editor.P5
                 {
                     deltaSeconds
                 });
+        }
+
+        private static T GetPrivateField<T>(
+            object target,
+            string fieldName)
+        {
+            var field =
+                target.GetType()
+                    .GetField(
+                        fieldName,
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+            if (field == null)
+            {
+                throw new MissingFieldException(
+                    target.GetType().FullName,
+                    fieldName);
+            }
+
+            return (T)field.GetValue(
+                target);
         }
 
         private static void SetPrivateField<T>(
