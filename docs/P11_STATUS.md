@@ -158,6 +158,8 @@ The generic transition sequencer/bridge, particle/effect action path, audio acti
 
 `AudioEventActionHandler` now rejects non-finite and out-of-float-range volume overrides before touching `AudioSource`, while preserving finite clamp-to-0..1 behavior. Audio bindings are deep-cloned across the configuration boundary, validated into a staged map, and committed only after the entire replacement succeeds, so caller mutation or one invalid replacement cannot silently rewrite or clear the previous live audio configuration.
 
+`EffectEventActionHandler` and `PropEventActionHandler` now use the same staged-binding ownership model: mutable binding objects and nested arrays are cloned before entering the live map, and invalid replacement input leaves the previous valid registry intact. `prop.set_active` also requires an explicit finite numeric `0` or `1`; NaN, infinities, fractional thresholds, and other numeric values fail closed before touching prop visibility.
+
 Timed coroutine execution, QueueAll saturation/rejection behavior under real event bursts, visual commit timing, actual cleanup execution, baked-clip behavior on a real VRM, and real VRM appearance roots still require Unity runtime evidence and are not marked PASS.
 
 Transition dependency discovery is hardened for the optional-handler case: missing `IAppearanceTransitionStepExecutor` instances and missing delegated `IEventActionHandler` instances are negative-cached for one monotonic second, while configured/live handlers remain immediately usable. This prevents repeated full-scene `MonoBehaviour` scans when transition presentation capabilities are intentionally absent.
