@@ -12,10 +12,22 @@ namespace VCR.Editor.P1
         public int ShutdownCount { get; private set; }
         public bool ThrowOnApply { get; set; }
         public bool ThrowOnShutdown { get; set; }
+        public bool ThrowOnSettingsRead { get; set; }
         public OverlayOutputSettings LastSettings { get; private set; }
 
-        public OverlayOutputSettings Settings =>
-            LastSettings;
+        public OverlayOutputSettings Settings
+        {
+            get
+            {
+                if (ThrowOnSettingsRead)
+                {
+                    throw new InvalidOperationException(
+                        "P1 overlay settings read failure");
+                }
+
+                return LastSettings;
+            }
+        }
 
         public OverlayOutputStatus Status =>
             new(
