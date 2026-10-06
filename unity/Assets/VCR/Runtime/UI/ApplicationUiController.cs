@@ -202,6 +202,19 @@ namespace VCR.Runtime.UI
         private string _diagnosticsSummaryEvidenceDirectory;
         private string _diagnosticsSummaryCache;
 
+        private bool _trackingSummaryStateValid;
+        private SubjectPresenceState _trackingSummarySubjectState;
+        private bool _trackingSummaryAnySourceAvailable;
+        private bool _trackingSummaryFaceSourceAvailable;
+        private bool _trackingSummaryBodyHandsSourceAvailable;
+        private bool _trackingSummaryFullBodySourceAvailable;
+        private TrackingPresenceEvents _trackingSummaryEvents;
+        private int _trackingSummarySelectedControlIndex = -1;
+        private TrackingSummaryControlState[]
+            _trackingSummaryControlStates =
+                Array.Empty<TrackingSummaryControlState>();
+        private string _trackingSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -5972,6 +5985,13 @@ namespace VCR.Runtime.UI
 
             var presence =
                 _trackingPresence.Presence;
+
+            if (TrackingSummaryCacheMatches(
+                    presence))
+            {
+                return _trackingSummaryCache;
+            }
+
             var builder =
                 _summaryBuilder;
             builder.Clear();
@@ -5992,41 +6012,168 @@ namespace VCR.Runtime.UI
             {
                 builder.Append(
                     "\nSource controls: <none>");
-                return builder.ToString();
+            }
+            else
+            {
+                builder.Append(
+                    "\nSource controls:\n");
+
+                for (var i = 0;
+                     i < _trackingControls.Count;
+                     i++)
+                {
+                    if (i > 0)
+                    {
+                        builder.Append('\n');
+                    }
+
+                    var control =
+                        _trackingControls[i];
+
+                    builder.Append(
+                        i == _trackingControlIndex
+                            ? '>'
+                            : ' ');
+                    builder.Append(' ');
+                    builder.Append(control.DisplayName);
+                    builder.Append(": enabled=");
+                    builder.Append(control.ControlEnabled);
+                    builder.Append(", health=");
+                    builder.Append(control.ControlHealthState);
+                    builder.Append(", error=");
+                    builder.Append(
+                        control.ControlError ??
+                        "<none>");
+                }
             }
 
-            builder.Append(
-                "\nSource controls:\n");
+            CaptureTrackingSummaryState(
+                presence);
+            _trackingSummaryCache =
+                builder.ToString();
+            return _trackingSummaryCache;
+        }
+
+        private bool TrackingSummaryCacheMatches(
+            TrackingPresenceSnapshot presence)
+        {
+            if (!_trackingSummaryStateValid ||
+                _trackingSummaryCache == null ||
+                _trackingSummarySubjectState !=
+                    presence.SubjectState ||
+                _trackingSummaryAnySourceAvailable !=
+                    presence.AnySourceAvailable ||
+                _trackingSummaryFaceSourceAvailable !=
+                    presence.FaceSourceAvailable ||
+                _trackingSummaryBodyHandsSourceAvailable !=
+                    presence.BodyHandsSourceAvailable ||
+                _trackingSummaryFullBodySourceAvailable !=
+                    presence.FullBodySourceAvailable ||
+                _trackingSummaryEvents !=
+                    presence.Events ||
+                _trackingSummarySelectedControlIndex !=
+                    _trackingControlIndex ||
+                _trackingSummaryControlStates.Length !=
+                    _trackingControls.Count)
+            {
+                return false;
+            }
 
             for (var i = 0;
                  i < _trackingControls.Count;
                  i++)
             {
-                if (i > 0)
-                {
-                    builder.Append('\n');
-                }
+                var control =
+                    _trackingControls[i];
+                var cached =
+                    _trackingSummaryControlStates[i];
 
+                if (!string.Equals(
+                        cached.DisplayName,
+                        control.DisplayName,
+                        StringComparison.Ordinal) ||
+                    cached.Enabled !=
+                        control.ControlEnabled ||
+                    cached.Health !=
+                        control.ControlHealthState ||
+                    !string.Equals(
+                        cached.Error,
+                        control.ControlError,
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void CaptureTrackingSummaryState(
+            TrackingPresenceSnapshot presence)
+        {
+            _trackingSummarySubjectState =
+                presence.SubjectState;
+            _trackingSummaryAnySourceAvailable =
+                presence.AnySourceAvailable;
+            _trackingSummaryFaceSourceAvailable =
+                presence.FaceSourceAvailable;
+            _trackingSummaryBodyHandsSourceAvailable =
+                presence.BodyHandsSourceAvailable;
+            _trackingSummaryFullBodySourceAvailable =
+                presence.FullBodySourceAvailable;
+            _trackingSummaryEvents =
+                presence.Events;
+            _trackingSummarySelectedControlIndex =
+                _trackingControlIndex;
+
+            if (_trackingSummaryControlStates.Length !=
+                _trackingControls.Count)
+            {
+                _trackingSummaryControlStates =
+                    _trackingControls.Count == 0
+                        ? Array.Empty<
+                            TrackingSummaryControlState>()
+                        : new TrackingSummaryControlState[
+                            _trackingControls.Count];
+            }
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
                 var control =
                     _trackingControls[i];
 
-                builder.Append(
-                    i == _trackingControlIndex
-                        ? '>'
-                        : ' ');
-                builder.Append(' ');
-                builder.Append(control.DisplayName);
-                builder.Append(": enabled=");
-                builder.Append(control.ControlEnabled);
-                builder.Append(", health=");
-                builder.Append(control.ControlHealthState);
-                builder.Append(", error=");
-                builder.Append(
-                    control.ControlError ??
-                    "<none>");
+                _trackingSummaryControlStates[i] =
+                    new TrackingSummaryControlState(
+                        control.DisplayName,
+                        control.ControlEnabled,
+                        control.ControlHealthState,
+                        control.ControlError);
             }
 
-            return builder.ToString();
+            _trackingSummaryStateValid =
+                true;
+        }
+
+        private readonly struct TrackingSummaryControlState
+        {
+            public TrackingSummaryControlState(
+                string displayName,
+                bool enabled,
+                TrackingSourceHealthState health,
+                string error)
+            {
+                DisplayName = displayName;
+                Enabled = enabled;
+                Health = health;
+                Error = error;
+            }
+
+            public string DisplayName { get; }
+            public bool Enabled { get; }
+            public TrackingSourceHealthState Health { get; }
+            public string Error { get; }
         }
 
         private string MotionSummary()
