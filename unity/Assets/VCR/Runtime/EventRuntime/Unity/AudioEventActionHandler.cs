@@ -300,8 +300,10 @@ namespace VCR.Runtime.EventRuntime.Unity
                     command) &&
                 !string.IsNullOrWhiteSpace(
                     command.Text) &&
-                _audio.ContainsKey(
-                    command.Text);
+                _audio.TryGetValue(
+                    command.Text,
+                    out var binding) &&
+                binding?.Source != null;
         }
 
         public bool TryIsComplete(
@@ -327,12 +329,21 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return true;
             }
 
-            complete =
-                !_audio[
-                    command.Text]
-                    .Source
-                    .isPlaying;
-            return true;
+            try
+            {
+                complete =
+                    !_audio[
+                        command.Text]
+                        .Source
+                        .isPlaying;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    $"Audio '{command.Text}' completion probe failed: {exception.Message}";
+                return false;
+            }
         }
 
         private static void Play(
