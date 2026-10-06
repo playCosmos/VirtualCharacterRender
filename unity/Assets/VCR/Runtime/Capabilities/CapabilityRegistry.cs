@@ -255,8 +255,6 @@ namespace VCR.Runtime.Capabilities
             var instance =
                 entry.Instance;
 
-            entry.Instance = null;
-
             if (instance == null)
             {
                 return null;
@@ -265,6 +263,7 @@ namespace VCR.Runtime.Capabilities
             try
             {
                 instance.Dispose();
+                entry.Instance = null;
                 return null;
             }
             catch (Exception exception)
@@ -283,15 +282,16 @@ namespace VCR.Runtime.Capabilities
                 var cleanupError =
                     TryDisposeInstance(entry);
 
-                entry.State =
-                    CapabilityState.Disabled;
-
                 if (cleanupError == null)
                 {
+                    entry.State =
+                        CapabilityState.Disabled;
                     entry.Error = null;
                     continue;
                 }
 
+                entry.State =
+                    CapabilityState.Faulted;
                 entry.Error =
                     "Capability cleanup failed while disposing: " +
                     cleanupError.Message;
@@ -305,15 +305,15 @@ namespace VCR.Runtime.Capabilities
                         cleanupError));
             }
 
-            _entries.Clear();
-            _sortedIds.Clear();
-
             if (failures != null)
             {
                 throw new AggregateException(
                     "One or more capabilities failed to dispose.",
                     failures);
             }
+
+            _entries.Clear();
+            _sortedIds.Clear();
         }
     }
 }
