@@ -915,6 +915,21 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_motionSummaryCache",
+    "application UI Motion refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_motionSummaryManualSequence",
+    "motion summary cache must use manual expression source sequence to skip unchanged expression formatting",
+)
+require_source_contains(
+    application_ui,
+    "_motionSummaryExpressionInput",
+    "motion summary cache must include the selected expression input text",
+)
+require_source_contains(
+    application_ui,
     "CharacterSummaryCacheMatches(",
     "application UI Character refresh must compare displayed scene/appearance state before rebuilding text",
 )
