@@ -217,32 +217,28 @@ namespace VCR.Runtime.Application
                 out error);
         }
 
-        public void Suspend()
+        public bool Suspend()
         {
             if (!_started ||
-                _quitting)
+                _quitting ||
+                sceneRuntime == null)
             {
-                return;
+                return false;
             }
 
-            if (sceneRuntime != null)
-            {
-                sceneRuntime.Suspend();
-            }
+            return sceneRuntime.Suspend();
         }
 
-        public void Resume()
+        public bool Resume()
         {
             if (!_started ||
-                _quitting)
+                _quitting ||
+                sceneRuntime == null)
             {
-                return;
+                return false;
             }
 
-            if (sceneRuntime != null)
-            {
-                sceneRuntime.Resume();
-            }
+            return sceneRuntime.Resume();
         }
 
         private string ResolveConfigurationPath(
