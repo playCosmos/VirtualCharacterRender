@@ -80,8 +80,15 @@ namespace VCR.Runtime.Character
         private float _ee;
         private float _oh;
 
+        private void OnValidate()
+        {
+            SanitizeConfiguration();
+        }
+
         private void Awake()
         {
+            SanitizeConfiguration();
+
             if (target == null)
             {
                 target = GetComponent<Vrm10Instance>();
@@ -580,20 +587,39 @@ namespace VCR.Runtime.Character
 
         private void ApplyFace(NormalizedFaceState face, float deltaTime)
         {
-            var sourceHead = ToUnity(face.HeadRotation);
+            var hasValidHead =
+                TryToUnity(
+                    face.HeadRotation,
+                    out var sourceHead);
 
-            if (!_faceCalibrated)
+            if (hasValidHead)
             {
-                _headSourceReference = sourceHead;
-                _faceCalibrated = true;
-            }
+                if (!_faceCalibrated)
+                {
+                    _headSourceReference = sourceHead;
+                    _faceCalibrated = true;
+                }
 
-            if (applyHead && _head != null)
-            {
-                var delta = sourceHead * Quaternion.Inverse(_headSourceReference);
-                var desired = _headNeutralLocal * delta;
-                var alpha = SmoothAlpha(headSmoothing, deltaTime) * headWeight;
-                _head.localRotation = Quaternion.Slerp(_head.localRotation, desired, alpha);
+                if (applyHead && _head != null)
+                {
+                    var delta =
+                        sourceHead *
+                        Quaternion.Inverse(
+                            _headSourceReference);
+                    var desired =
+                        _headNeutralLocal *
+                        delta;
+                    var alpha =
+                        SmoothAlpha(
+                            headSmoothing,
+                            deltaTime) *
+                        headWeight;
+                    _head.localRotation =
+                        Quaternion.Slerp(
+                            _head.localRotation,
+                            desired,
+                            alpha);
+                }
             }
 
             if (!applyExpressions)
@@ -867,8 +893,21 @@ namespace VCR.Runtime.Character
 
         private bool IsUsable(TrackingPoint point)
         {
+            if (!float.IsFinite(
+                    point.Position.X) ||
+                !float.IsFinite(
+                    point.Position.Y) ||
+                !float.IsFinite(
+                    point.Position.Z) ||
+                !float.IsFinite(
+                    point.Confidence))
+            {
+                return false;
+            }
+
             return point.Confidence < 0f ||
-                   point.Confidence >= minimumJointConfidence;
+                   point.Confidence >=
+                       minimumJointConfidence;
         }
 
         private static Vector3 ToUnity(TrackingVector3 value)
@@ -876,29 +915,164 @@ namespace VCR.Runtime.Character
             return new Vector3(value.X, value.Y, value.Z);
         }
 
-        private static Quaternion ToUnity(TrackingQuaternion value)
+        private static bool TryToUnity(
+            TrackingQuaternion value,
+            out Quaternion rotation)
         {
-            return new Quaternion(value.X, value.Y, value.Z, value.W);
+            rotation = Quaternion.identity;
+
+            if (!float.IsFinite(value.X) ||
+                !float.IsFinite(value.Y) ||
+                !float.IsFinite(value.Z) ||
+                !float.IsFinite(value.W))
+            {
+                return false;
+            }
+
+            var candidate =
+                new Quaternion(
+                    value.X,
+                    value.Y,
+                    value.Z,
+                    value.W);
+
+            if (!float.IsFinite(
+                    candidate.sqrMagnitude) ||
+                candidate.sqrMagnitude <
+                    1e-8f)
+            {
+                return false;
+            }
+
+            rotation = candidate;
+            return true;
+        }
+
+        private void SanitizeConfiguration()
+        {
+            headWeight =
+                SanitizeBounded(
+                    headWeight,
+                    fallback: 1f,
+                    minimum: 0f,
+                    maximum: 1f);
+            headSmoothing =
+                SanitizeNonNegative(
+                    headSmoothing,
+                    fallback: 18f);
+            expressionSmoothing =
+                SanitizeNonNegative(
+                    expressionSmoothing,
+                    fallback: 22f);
+            torsoWeight =
+                SanitizeBounded(
+                    torsoWeight,
+                    fallback: 0.65f,
+                    minimum: 0f,
+                    maximum: 1f);
+            armWeight =
+                SanitizeBounded(
+                    armWeight,
+                    fallback: 0.9f,
+                    minimum: 0f,
+                    maximum: 1f);
+            bodySmoothing =
+                SanitizeNonNegative(
+                    bodySmoothing,
+                    fallback: 14f);
+            minimumJointConfidence =
+                SanitizeBounded(
+                    minimumJointConfidence,
+                    fallback: 0.35f,
+                    minimum: 0f,
+                    maximum: 1f);
+            neutralReturnSmoothing =
+                SanitizeNonNegative(
+                    neutralReturnSmoothing,
+                    fallback: 8f);
+        }
+
+        private static float SanitizeBounded(
+            float value,
+            float fallback,
+            float minimum,
+            float maximum)
+        {
+            if (!float.IsFinite(value))
+            {
+                value =
+                    fallback;
+            }
+
+            return Mathf.Clamp(
+                value,
+                minimum,
+                maximum);
+        }
+
+        private static float SanitizeNonNegative(
+            float value,
+            float fallback)
+        {
+            if (!float.IsFinite(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Max(
+                0f,
+                value);
         }
 
         private static float SmoothAlpha(float speed, float deltaTime)
         {
+            if (!float.IsFinite(speed))
+            {
+                return 1f;
+            }
+
             if (speed <= 0f)
             {
                 return 1f;
             }
 
-            return 1f - Mathf.Exp(-speed * Mathf.Max(0f, deltaTime));
+            if (!float.IsFinite(deltaTime) ||
+                deltaTime <= 0f)
+            {
+                return 0f;
+            }
+
+            var alpha =
+                1f -
+                Mathf.Exp(
+                    -speed *
+                    deltaTime);
+
+            return float.IsFinite(alpha)
+                ? Mathf.Clamp01(alpha)
+                : 1f;
         }
 
         private static float Average(float a, float b)
         {
+            if (!float.IsFinite(a))
+            {
+                a = 0f;
+            }
+
+            if (!float.IsFinite(b))
+            {
+                b = 0f;
+            }
+
             return Clamp01((a + b) * 0.5f);
         }
 
         private static float Clamp01(float value)
         {
-            return Mathf.Clamp01(value);
+            return float.IsFinite(value)
+                ? Mathf.Clamp01(value)
+                : 0f;
         }
 
         private struct BodyReference
