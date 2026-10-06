@@ -27,6 +27,7 @@ The first P5 slice introduces `ITrackingMixProvider` as the final one-performer 
 - keeps the original primary humanoid-pose slot and supports additional ordered pose layers
 - each pose layer carries Base/Tracking/Additive/Procedural role metadata, Override/Additive mode, global weight, root weights, and per-bone weights
 - tracks immutable input snapshots by `TrackingFrame` reference identity rather than relying on source ID/sequence uniqueness; additional pose layers reuse one sampled frame array instead of parallel sequence/source tracking arrays
+- passes the routed base expression frame through unchanged when no expression overlay contributes and smoothing is disabled; mixer-owned frames are reserved for actual blend/smoothing output
 - accepts one optional expression-only overlay
 - blends standard and named/custom expressions
 - supports Override, Additive, and Maximum modes
