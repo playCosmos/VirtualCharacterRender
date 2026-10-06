@@ -26,6 +26,8 @@ namespace VCR.Editor.P4
                 failures);
             ValidateDirectFrameReuse(
                 failures);
+            ValidateExpressionFallbackActivation(
+                failures);
             GameObject root = null;
 
             try
@@ -486,6 +488,154 @@ namespace VCR.Editor.P4
                     TrackingSourceKind.AudioFallback),
                 "repaired expression priority must preserve VMC before audio fallback defaults",
                 failures);
+        }
+
+        private static void ValidateExpressionFallbackActivation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P4 Expression Fallback Activation");
+
+                var external =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var audio =
+                    root.AddComponent<
+                        P4FakeTrackingProvider>();
+                var router =
+                    root.AddComponent<
+                        PriorityTrackingRouter>();
+
+                var nowUs =
+                    MonotonicClock.NowMicroseconds();
+
+                external.SourceId =
+                    "expression-vmc";
+                external.Kind =
+                    TrackingSourceKind.Vmc;
+                external.Regions =
+                    TrackingRegion.Expressions;
+                external.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                external.ExpressionFrame =
+                    CreateExpressionFrame(
+                        external.SourceId,
+                        sequence: 1,
+                        nowUs,
+                        value: 0.8f);
+
+                audio.SourceId =
+                    "expression-audio";
+                audio.Kind =
+                    TrackingSourceKind.AudioFallback;
+                audio.Regions =
+                    TrackingRegion.Expressions;
+                audio.HealthState =
+                    TrackingSourceHealthState.Healthy;
+                audio.ExpressionFrame =
+                    CreateExpressionFrame(
+                        audio.SourceId,
+                        sequence: 1,
+                        nowUs,
+                        value: 0.4f);
+
+                router.SetExternalPoseProvider(
+                    external);
+                router.SetExpressionFallbackProvider(
+                    audio);
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.ExpressionSourceId ==
+                        external.SourceId &&
+                    !audio.ExpressionTrackingEnabled &&
+                    audio.ExpressionReadCount == 0,
+                    "healthy higher-priority VMC expressions must suspend audio fallback sampling before the fallback provider is polled",
+                    failures);
+
+                external.HealthState =
+                    TrackingSourceHealthState.SourceLost;
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.ExpressionSourceId ==
+                        audio.SourceId &&
+                    audio.ExpressionTrackingEnabled &&
+                    audio.ExpressionReadCount == 1,
+                    "audio expression fallback must be re-enabled and sampled when the external expression source is lost",
+                    failures);
+
+                external.HealthState =
+                    TrackingSourceHealthState.Healthy;
+
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.ExpressionSourceId ==
+                        external.SourceId &&
+                    !audio.ExpressionTrackingEnabled &&
+                    audio.ExpressionReadCount == 1,
+                    "restored higher-priority VMC expressions must suspend audio fallback again without polling it",
+                    failures);
+
+                var audioFirst =
+                    TrackingRoutePolicy.CreateDefault();
+                audioFirst.SetExpressionPriorityOrder(
+                    TrackingSourceKind.AudioFallback,
+                    TrackingSourceKind.Vmc);
+
+                router.SetRoutePolicy(
+                    audioFirst);
+                InvokeUpdate(
+                    router);
+
+                Expect(
+                    router.RouteStatus.ExpressionSourceId ==
+                        audio.SourceId &&
+                    audio.ExpressionTrackingEnabled &&
+                    audio.ExpressionReadCount == 2,
+                    "an explicit audio-first expression policy must re-enable and select the audio fallback even while VMC is healthy",
+                    failures);
+
+                var metrics =
+                    new List<RuntimeMetric>();
+                router.CollectMetrics(
+                    metrics);
+
+                Expect(
+                    TryGetMetric(
+                        metrics,
+                        "tracking.route.fallback_expression_inference_enabled",
+                        out var fallbackExpressionEnabled) &&
+                    fallbackExpressionEnabled >
+                        0.5,
+                    "routing metrics must report audio expression fallback activation state",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "expression fallback activation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void ValidateDirectFrameReuse(
@@ -1315,7 +1465,8 @@ namespace VCR.Editor.P4
         ITrackingFrameProvider,
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
-        IFaceTrackingActivationControl
+        IFaceTrackingActivationControl,
+        IExpressionTrackingActivationControl
     {
         public string SourceId { get; set; }
         public TrackingSourceKind Kind { get; set; }
@@ -1326,6 +1477,7 @@ namespace VCR.Editor.P4
         public TrackingFrame HumanoidPoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
         public int FaceReadCount { get; private set; }
+        public int ExpressionReadCount { get; private set; }
 
         public TrackingPresenceSnapshot Presence
         {
@@ -1334,6 +1486,12 @@ namespace VCR.Editor.P4
         }
 
         public bool FaceTrackingEnabled
+        {
+            get;
+            private set;
+        } = true;
+
+        public bool ExpressionTrackingEnabled
         {
             get;
             private set;
@@ -1375,13 +1533,20 @@ namespace VCR.Editor.P4
                     FaceFrame;
             }
 
+            var effectiveHealthState =
+                (region &
+                 TrackingRegion.Expressions) != 0 &&
+                !ExpressionTrackingEnabled
+                    ? TrackingSourceHealthState.Stopped
+                    : HealthState;
+
             snapshot =
                 new TrackingSourceHealthSnapshot(
                     SourceId,
                     Kind,
                     Regions,
                     new TrackingSourceHealth(
-                        HealthState,
+                        effectiveHealthState,
                         latest?.SourceTimestampUs ?? 0,
                         latest?.Confidence ?? float.NaN,
                         null),
@@ -1393,6 +1558,13 @@ namespace VCR.Editor.P4
             bool enabled)
         {
             FaceTrackingEnabled = enabled;
+        }
+
+        public void SetExpressionTrackingEnabled(
+            bool enabled)
+        {
+            ExpressionTrackingEnabled =
+                enabled;
         }
 
         public bool TryGetLatestFace(
@@ -1427,7 +1599,12 @@ namespace VCR.Editor.P4
         public bool TryGetLatestExpressions(
             out TrackingFrame frame)
         {
-            frame = ExpressionFrame;
+            ExpressionReadCount++;
+
+            frame =
+                ExpressionTrackingEnabled
+                    ? ExpressionFrame
+                    : null;
             return frame != null;
         }
     }
