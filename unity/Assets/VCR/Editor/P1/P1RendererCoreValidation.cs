@@ -1351,6 +1351,56 @@ namespace VCR.Editor.P1
                     "application bootstrap validation config must be seeded",
                     failures);
 
+                var applicationBaseline =
+                    applicationScene.CaptureConfiguration();
+
+                var failedApplicationOptions =
+                    ApplicationLaunchOptions.Parse(
+                        new[]
+                        {
+                            "--vcr-config=" +
+                            applicationConfigurationPath,
+                            "--vcr-vrm=" +
+                            Path.Combine(
+                                configurationTestDirectory,
+                                "missing-startup-avatar.vrm")
+                        });
+
+                Exception applicationStartupFailure =
+                    null;
+
+                try
+                {
+                    applicationBootstrap
+                        .StartRuntimeAsync(
+                            failedApplicationOptions)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                catch (Exception exception)
+                {
+                    applicationStartupFailure =
+                        exception;
+                }
+
+                var applicationAfterFailedStartup =
+                    applicationScene.CaptureConfiguration();
+
+                Expect(
+                    applicationStartupFailure is
+                        FileNotFoundException &&
+                    !applicationBootstrap.IsStarted &&
+                    applicationScene.State ==
+                        SceneRuntimeState.Ready &&
+                    applicationAfterFailedStartup
+                        .Rendering.Width ==
+                        applicationBaseline.Rendering.Width &&
+                    applicationAfterFailedStartup
+                        .Rendering.Height ==
+                        applicationBaseline.Rendering.Height,
+                    "failed application startup must restore the pre-attempt scene configuration and remain retryable",
+                    failures);
+
                 var applicationOptions =
                     ApplicationLaunchOptions.Parse(
                         new[]
