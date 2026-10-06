@@ -699,6 +699,21 @@ require_source_contains(
     "_materialController.TryGetSlotAt(",
     "application UI Materials refresh must use allocation-free indexed material slot lookup",
 )
+require_source_contains(
+    application_ui,
+    "_diagnosticsMetricSource",
+    "application UI Diagnostics refresh must cache the source metric snapshot identity",
+)
+require_source_contains(
+    application_ui,
+    "GetSortedDiagnosticMetrics(",
+    "application UI Diagnostics refresh must reuse one sorted metric snapshot per diagnostics report",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+(?:System\.Text\.)?StringBuilder\s*\(",
+    "application UI refresh must reuse its shared StringBuilder instead of allocating a new builder",
+)
 
 material_override_controller = (
     VCR
