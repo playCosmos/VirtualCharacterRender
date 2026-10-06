@@ -46,6 +46,11 @@ namespace VCR.Runtime.Broadcast.SoopUnity
         private readonly object _dedupeSync =
             new();
 
+        private readonly object _parseSync =
+            new();
+        private readonly SoopBridgeMessage _documentScratch =
+            new();
+
         private INormalizedEventSink _sink;
         private float _nextSinkResolveRealtime;
 
@@ -137,59 +142,64 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                 }
             }
 
-            SoopBridgeMessage document;
+            NormalizedEvent value;
+            string eventId;
 
-            try
+            lock (_parseSync)
             {
-                document =
-                    JsonUtility.FromJson<
-                        SoopBridgeMessage>(
-                        json);
-            }
-            catch (Exception exception)
-            {
-                return Reject(
-                    "SOOP bridge JSON is invalid: " +
-                    exception.Message,
-                    out error);
-            }
+                ResetDocument(
+                    _documentScratch);
 
-            if (document == null)
-            {
-                return Reject(
-                    "SOOP bridge JSON produced no message.",
-                    out error);
-            }
+                try
+                {
+                    JsonUtility.FromJsonOverwrite(
+                        json,
+                        _documentScratch);
+                }
+                catch (Exception exception)
+                {
+                    return Reject(
+                        "SOOP bridge JSON is invalid: " +
+                        exception.Message,
+                        out error);
+                }
 
-            if (!SoopBridgeEventMapper
-                .TryValidateEventId(
-                    document.eventId,
-                    out var eventIdError))
-            {
-                return Reject(
-                    eventIdError,
-                    out error);
-            }
+                eventId =
+                    _documentScratch.eventId;
 
-            if (IsDuplicate(
-                    document.eventId))
-            {
-                Interlocked.Increment(
-                    ref _duplicates);
-                return true;
-            }
+                if (!SoopBridgeEventMapper
+                    .TryValidateEventId(
+                        eventId,
+                        out var eventIdError))
+                {
+                    return Reject(
+                        eventIdError,
+                        out error);
+                }
 
-            if (!SoopBridgeEventMapper
-                .TryCreateEvent(
-                    document,
-                    MonotonicClock
-                        .NowMicroseconds(),
-                    out var value,
-                    out error))
-            {
-                Interlocked.Increment(
-                    ref _rejected);
-                return false;
+                // Preserve the existing duplicate contract: a previously
+                // delivered event id is accepted as a duplicate before the
+                // remaining payload is remapped.
+                if (IsDuplicate(
+                        eventId))
+                {
+                    Interlocked.Increment(
+                        ref _duplicates);
+                    return true;
+                }
+
+                if (!SoopBridgeEventMapper
+                    .TryCreateEvent(
+                        _documentScratch,
+                        MonotonicClock
+                            .NowMicroseconds(),
+                        out value,
+                        out error))
+                {
+                    Interlocked.Increment(
+                        ref _rejected);
+                    return false;
+                }
             }
 
             try
@@ -206,7 +216,7 @@ namespace VCR.Runtime.Broadcast.SoopUnity
             }
 
             RememberEventId(
-                document.eventId);
+                eventId);
 
             Interlocked.Increment(
                 ref _accepted);
@@ -320,6 +330,21 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                         removed);
                 }
             }
+        }
+
+        private static void ResetDocument(
+            SoopBridgeMessage document)
+        {
+            // Match a freshly constructed wire DTO so fields omitted by
+            // FromJsonOverwrite cannot inherit values from an earlier message.
+            document.version =
+                SoopBridgeEventMapper.CurrentVersion;
+            document.type = null;
+            document.eventId = null;
+            document.userId = null;
+            document.nickname = null;
+            document.text = null;
+            document.count = 0;
         }
 
         private static bool IsServiceAlive(
