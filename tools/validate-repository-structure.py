@@ -585,6 +585,16 @@ forbid_source_pattern(
     r"new\s+string\s*\[\s*visibleCount\s*\]",
     "appearance preset-order summary must not allocate a temporary string array",
 )
+require_source_contains(
+    application_ui,
+    "SetTextIfChanged(",
+    "application UI status/title/content refresh must skip unchanged Text.text assignments",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_(?:statusText|sectionTitle|contentText)\.text\s*=",
+    "application UI primary text fields must route assignments through SetTextIfChanged",
+)
 
 motion_cue_sources = [
     VCR
