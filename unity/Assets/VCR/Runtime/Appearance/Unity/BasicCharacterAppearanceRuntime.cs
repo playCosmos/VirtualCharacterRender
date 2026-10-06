@@ -772,6 +772,8 @@ namespace VCR.Runtime.Appearance.Unity
                     _currentPresetId))
             {
                 _currentPresetId = null;
+                AppearanceChanged?.Invoke(
+                    Current);
             }
 
             SetState(
