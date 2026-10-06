@@ -48,27 +48,112 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void ConfigureBindings(
             params AudioBinding[] bindings)
         {
-            audio =
-                bindings ??
-                Array.Empty<AudioBinding>();
+            var stagedAuthoring =
+                CloneBindings(
+                    bindings);
 
-            if (!RebuildBindings(
+            if (!TryBuildBindingMap(
+                    stagedAuthoring,
+                    out var stagedResolved,
                     out var error))
             {
                 _lastError = error;
+                return;
             }
+
+            audio =
+                stagedAuthoring;
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
         }
 
         public bool RebuildBindings(
             out string error)
         {
-            error = null;
-            _audio.Clear();
+            if (!TryBuildBindingMap(
+                    audio,
+                    out var stagedResolved,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
 
-            foreach (var binding in
-                     audio ??
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
+            return true;
+        }
+
+        private static AudioBinding[]
+            CloneBindings(
+                AudioBinding[] bindings)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return Array.Empty<AudioBinding>();
+            }
+
+            var clones =
+                new AudioBinding[
+                    bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                clones[i] =
+                    CloneBinding(
+                        bindings[i]);
+            }
+
+            return clones;
+        }
+
+        private static AudioBinding
+            CloneBinding(
+                AudioBinding binding)
+        {
+            if (binding == null)
+            {
+                return null;
+            }
+
+            return new AudioBinding
+            {
+                AudioId =
+                    binding.AudioId,
+                Source =
+                    binding.Source,
+                Clip =
+                    binding.Clip,
+                RestartOnPlay =
+                    binding.RestartOnPlay,
+                Loop =
+                    binding.Loop
+            };
+        }
+
+        private static bool TryBuildBindingMap(
+            AudioBinding[] bindings,
+            out Dictionary<string, AudioBinding> resolved,
+            out string error)
+        {
+            error = null;
+            resolved =
+                new Dictionary<string, AudioBinding>(
+                    StringComparer.Ordinal);
+
+            foreach (var authoringBinding in
+                     bindings ??
                      Array.Empty<AudioBinding>())
             {
+                var binding =
+                    CloneBinding(
+                        authoringBinding);
+
                 if (binding == null ||
                     string.IsNullOrWhiteSpace(
                         binding.AudioId) ||
@@ -87,7 +172,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     return false;
                 }
 
-                if (!_audio.TryAdd(
+                if (!resolved.TryAdd(
                         binding.AudioId,
                         binding))
                 {
@@ -97,8 +182,20 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            _lastError = null;
             return true;
+        }
+
+        private void CommitBindingMap(
+            Dictionary<string, AudioBinding> resolved)
+        {
+            _audio.Clear();
+
+            foreach (var pair in resolved)
+            {
+                _audio.Add(
+                    pair.Key,
+                    pair.Value);
+            }
         }
 
         public bool CanHandle(
