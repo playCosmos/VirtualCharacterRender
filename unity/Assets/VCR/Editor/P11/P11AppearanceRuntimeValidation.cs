@@ -569,12 +569,14 @@ namespace VCR.Editor.P11
                         userRegistry.ReplaceUserPresets(
                             beforeCurrentInvalidation,
                             out var currentRestoreError);
+                    string currentReapplyError =
+                        null;
                     var reappliedAfterInvalidation =
                         restoredAfterInvalidation &&
                         runtime.SetPreset(
                             "user-final",
                             "Immediate",
-                            out var currentReapplyError);
+                            out currentReapplyError);
 
                     if (!restoredAfterInvalidation)
                     {
