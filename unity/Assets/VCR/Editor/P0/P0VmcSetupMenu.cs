@@ -475,6 +475,11 @@ namespace VCR.Editor.P0
 
             var borrowedSenderEquivalencePass =
                 ValidateBorrowedSenderEquivalence();
+            var directPacketPathPass =
+                ValidateDirectVmcPacketPath(
+                    packet,
+                    malformed,
+                    oversized);
 
             var sourceLifecyclePass =
                 false;
@@ -627,6 +632,7 @@ namespace VCR.Editor.P0
                 reusableWriterPass &&
                 customBoundsPass &&
                 borrowedSenderEquivalencePass &&
+                directPacketPathPass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
                 frame.SubjectDetected &&
@@ -664,12 +670,12 @@ namespace VCR.Editor.P0
             if (pass)
             {
                 Debug.Log(
-                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; borrowed/snapshot sender equivalence and stale-pose/custom-expression/bounds checks passed)");
+                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; borrowed/snapshot sender equivalence, direct VMC packet atomicity, and stale-pose/custom-expression/bounds checks passed)");
             }
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, borrowed/snapshot sender equivalence, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, borrowed/snapshot sender equivalence, direct VMC packet atomicity, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -765,6 +771,148 @@ namespace VCR.Editor.P0
             Debug.Log(
                 "VCR P0: VMC sender attached. " +
                 "Default destination is 127.0.0.1:39539 at 60 Hz with VRM0 expression names.");
+        }
+
+        private static bool ValidateDirectVmcPacketPath(
+            byte[] packet,
+            byte[] malformedMessage,
+            byte[] oversizedPacket)
+        {
+            var source =
+                new VmcTrackingSource(
+                    "p0-vmc-direct-packet");
+
+            try
+            {
+                source.Start();
+
+                var initialAccepted =
+                    source.TryProcessPacket(
+                        packet,
+                        packet.Length,
+                        arrivalTimestampUs:
+                            1_300_000,
+                        out var initialProduced) &&
+                    initialProduced &&
+                    source.TryTakeLatest(
+                        out var initialFrame) &&
+                    initialFrame?
+                        .HumanoidPose != null &&
+                    initialFrame.Expressions != null &&
+                    initialFrame.SubjectDetected &&
+                    initialFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.Hips,
+                        out var directHips) &&
+                    Mathf.Approximately(
+                        directHips.LocalPosition.Y,
+                        0.9f) &&
+                    Mathf.Approximately(
+                        initialFrame.Expressions.Get(
+                            StandardExpression.Happy),
+                        0.6f);
+
+                var malformedAtomicPacket =
+                    OscPacketWriter.WriteBundle(
+                        new[]
+                        {
+                            OscPacketWriter.WriteMessage(
+                                "/VMC/Ext/Bone/Pos",
+                                OscArgument.FromString(
+                                    "RightUpperArm"),
+                                OscArgument.FromFloat(
+                                    0.75f),
+                                OscArgument.FromFloat(
+                                    0f),
+                                OscArgument.FromFloat(
+                                    0f),
+                                OscArgument.FromFloat(
+                                    0f),
+                                OscArgument.FromFloat(
+                                    0f),
+                                OscArgument.FromFloat(
+                                    0f),
+                                OscArgument.FromFloat(
+                                    1f)),
+                            malformedMessage
+                        });
+
+                var malformedRejected =
+                    !source.TryProcessPacket(
+                        malformedAtomicPacket,
+                        malformedAtomicPacket.Length,
+                        arrivalTimestampUs:
+                            1_400_000,
+                        out var malformedProduced) &&
+                    !malformedProduced;
+
+                var leftOnlyPacket =
+                    OscPacketWriter.WriteMessage(
+                        "/VMC/Ext/Bone/Pos",
+                        OscArgument.FromString(
+                            "LeftUpperArm"),
+                        OscArgument.FromFloat(
+                            -0.25f),
+                        OscArgument.FromFloat(
+                            0f),
+                        OscArgument.FromFloat(
+                            0f),
+                        OscArgument.FromFloat(
+                            0f),
+                        OscArgument.FromFloat(
+                            0f),
+                        OscArgument.FromFloat(
+                            0f),
+                        OscArgument.FromFloat(
+                            1f));
+
+                var followupAccepted =
+                    source.TryProcessPacket(
+                        leftOnlyPacket,
+                        leftOnlyPacket.Length,
+                        arrivalTimestampUs:
+                            1_500_000,
+                        out var followupProduced) &&
+                    followupProduced &&
+                    source.TryTakeLatestPose(
+                        out var followupFrame) &&
+                    followupFrame?
+                        .HumanoidPose != null &&
+                    followupFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.Hips,
+                        out _) &&
+                    followupFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.LeftUpperArm,
+                        out _) &&
+                    !followupFrame.HumanoidPose.TryGet(
+                        HumanoidBoneId.RightUpperArm,
+                        out _);
+
+                var oversizedRejected =
+                    !source.TryProcessPacket(
+                        oversizedPacket,
+                        oversizedPacket.Length,
+                        arrivalTimestampUs:
+                            1_600_000,
+                        out var oversizedProduced) &&
+                    !oversizedProduced;
+
+                return
+                    initialAccepted &&
+                    malformedRejected &&
+                    followupAccepted &&
+                    oversizedRejected;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "VCR P0 direct VMC packet validation exception: " +
+                    exception);
+                return false;
+            }
+            finally
+            {
+                source.Dispose();
+            }
         }
 
         private static bool ValidateBorrowedSenderEquivalence()
