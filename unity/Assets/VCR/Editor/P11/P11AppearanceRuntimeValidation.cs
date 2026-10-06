@@ -636,6 +636,88 @@ namespace VCR.Editor.P11
                         moveUserDownError,
                         failures);
 
+                    var beforeDefinitionReplacement =
+                        userRegistry.CaptureUserPresets();
+                    var mismatchedDefinitions =
+                        userRegistry.CaptureUserPresets();
+                    var mismatchedDefinitionIndex =
+                        Array.FindIndex(
+                            mismatchedDefinitions,
+                            candidate =>
+                                candidate != null &&
+                                candidate.Id ==
+                                    "user-final");
+                    var appearanceBeforeDefinitionReplacement =
+                        runtime.Current;
+
+                    if (mismatchedDefinitionIndex >= 0)
+                    {
+                        mismatchedDefinitions[
+                            mismatchedDefinitionIndex]
+                            .OutfitId =
+                                appearanceBeforeDefinitionReplacement
+                                    .OutfitId ==
+                                "formal"
+                                    ? "casual"
+                                    : "formal";
+                    }
+
+                    var definitionReplacementNotifications =
+                        0;
+                    Action<AppearanceStateSnapshot>
+                        definitionReplacementHandler =
+                            _ =>
+                                definitionReplacementNotifications++;
+
+                    runtime.AppearanceChanged +=
+                        definitionReplacementHandler;
+
+                    var definitionReplacementSucceeded =
+                        mismatchedDefinitionIndex >= 0 &&
+                        userRegistry.ReplaceUserPresets(
+                            mismatchedDefinitions,
+                            out var definitionReplacementError);
+
+                    runtime.AppearanceChanged -=
+                        definitionReplacementHandler;
+
+                    Expect(
+                        definitionReplacementSucceeded &&
+                        runtime.Current.PresetId ==
+                            null &&
+                        runtime.Current.OutfitId ==
+                            appearanceBeforeDefinitionReplacement
+                                .OutfitId &&
+                        definitionReplacementNotifications ==
+                            1,
+                        "replacing the active user preset definition with different appearance content must invalidate only the stale preset identity while preserving the actual appearance: " +
+                        definitionReplacementError,
+                        failures);
+
+                    var restoredDefinitionReplacement =
+                        userRegistry.ReplaceUserPresets(
+                            beforeDefinitionReplacement,
+                            out var restoreDefinitionError);
+                    string reapplyDefinitionError =
+                        null;
+                    var reappliedDefinitionPreset =
+                        restoredDefinitionReplacement &&
+                        runtime.SetPreset(
+                            "user-final",
+                            "Immediate",
+                            out reapplyDefinitionError);
+
+                    Expect(
+                        restoredDefinitionReplacement &&
+                        reappliedDefinitionPreset &&
+                        runtime.Current.PresetId ==
+                            "user-final",
+                        "appearance definition-mismatch validation must restore and reapply the original current user preset: " +
+                        restoreDefinitionError +
+                        " / " +
+                        reapplyDefinitionError,
+                        failures);
+
                     var beforeCurrentInvalidation =
                         userRegistry.CaptureUserPresets();
                     var currentInvalidationNotifications =
