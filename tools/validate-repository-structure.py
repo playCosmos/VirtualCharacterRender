@@ -414,6 +414,42 @@ require_source_contains(
     "audio completion property failures must be converted to false/error",
 )
 
+environment_state_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EnvironmentStateEventActionHandler.cs"
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "\"Environment runtime action failed: \"",
+    "environment action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "\"Environment runtime transition action failed: \"",
+    "environment transition action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "catch\n            {\n                return false;",
+    "environment action capability probes must fail closed when Status getters throw",
+)
+
+material_preset_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "MaterialPresetEventActionHandler.cs"
+)
+require_source_contains(
+    material_preset_event_action_handler,
+    "\"Material preset action dependency failed: \"",
+    "material preset handler must contain resolver/controller dependency exceptions",
+)
+
 p9_event_runtime_validation = (
     VCR
     / "Editor"
@@ -454,6 +490,26 @@ require_source_contains(
     p9_event_runtime_validation,
     "destroyedProbeEscaped",
     "P9 audio validation must prove destroyed AudioSource completion probes fail closed",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "environmentStatusEscaped",
+    "P9 validation must prove environment Status getter exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "environmentExecuteEscaped",
+    "P9 validation must prove environment SetState exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "resolverFailureEscaped",
+    "P9 validation must prove material preset resolver exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "ThrowOnResolve",
+    "P9 material preset resolver fake must expose deterministic exception injection",
 )
 
 vmc_accumulator = (
@@ -1549,6 +1605,24 @@ require_source_contains(
     "scene sequence delegated-handler retry must use monotonic realtime",
 )
 
+appearance_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AppearanceEventActionHandler.cs"
+)
+require_source_contains(
+    appearance_event_action_handler,
+    "\"Appearance runtime action failed: \"",
+    "appearance action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    appearance_event_action_handler,
+    "catch\n            {\n                return false;",
+    "appearance action capability probes must fail closed when Status getters throw",
+)
+
 p11_appearance_validation = (
     VCR
     / "Editor"
@@ -1619,6 +1693,21 @@ require_source_contains(
     p11_appearance_validation,
     "\"invalid-sequence\"",
     "P11 validation must prove invalid/non-finite scene sequence replacement preserves the previous live map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "P11ThrowingAppearanceRuntime",
+    "P11 validation must cover throwing appearance runtime Status/action boundaries",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "statusProbeEscaped",
+    "P11 validation must prove appearance Status getter exceptions do not escape CanHandle",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "actionEscaped",
+    "P11 validation must prove delegated appearance action exceptions do not escape TryExecute",
 )
 
 p6_environment_validation = (
