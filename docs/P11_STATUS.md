@@ -158,6 +158,8 @@ Environment availability/control/summary refresh now uses an `IEnvironmentRuntim
 
 Appearance runtime notifications are now subscriber-isolated: a throwing `AppearanceChanged` or `StatusChanged` observer cannot turn an already committed wardrobe/accessory change into a failed/stuck transition or prevent healthy subscribers from receiving the same notification. Failure counters are exposed through appearance diagnostics metrics.
 
+Transition executor capability probes are also isolated. Exceptions from custom `CanExecute` or completion `CanTrackCompletion` implementations now fail closed with explicit errors instead of escaping validation/coroutine execution; probe failures are counted as `appearance.transition.executor_probe_failures`.
+
 ## Runtime scene
 
 Interactive scene generation:
