@@ -376,6 +376,28 @@ require_source_contains(
     "VRM snapshot provider must skip pose capture when not requested",
 )
 
+application_ui = (
+    VCR
+    / "Runtime"
+    / "UI"
+    / "ApplicationUiController.cs"
+)
+require_source_contains(
+    application_ui,
+    "_buttonLabels",
+    "application UI must cache button label components across refreshes",
+)
+require_source_contains(
+    application_ui,
+    "_buttonLabels.TryGetValue",
+    "application UI button label refresh must use the component cache",
+)
+require_source_contains(
+    application_ui,
+    "currentAppearance",
+    "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
+)
+
 mixer_runtime = (
     VCR
     / "Runtime"
