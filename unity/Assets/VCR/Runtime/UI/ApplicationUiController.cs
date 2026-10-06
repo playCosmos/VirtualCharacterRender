@@ -215,6 +215,21 @@ namespace VCR.Runtime.UI
                 Array.Empty<TrackingSummaryControlState>();
         private string _trackingSummaryCache;
 
+        private bool _environmentSummaryStateValid;
+        private string _environmentSummaryEnvironmentId;
+        private string _environmentSummaryStateId;
+        private EnvironmentSpaceMode _environmentSummarySpaceMode;
+        private bool _environmentSummaryActive;
+        private bool _environmentSummaryTransitionActive;
+        private EnvironmentTransitionMode _environmentSummaryTransitionMode;
+        private int _environmentSummaryTransitionPercent;
+        private string _environmentSummaryPreviousStateId;
+        private string _environmentSummaryTransitionStateId;
+        private float _environmentSummaryTransitionDuration;
+        private EnvironmentTransitionMode _environmentSummarySelectedMode;
+        private string _environmentSummaryError;
+        private string _environmentSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -6231,31 +6246,164 @@ namespace VCR.Runtime.UI
                 runtime.Status;
             var transition =
                 runtime.TransitionStatus;
-            var transitionText =
+            var spaceMode =
+                runtime.SpaceMode;
+            var transitionPercent =
                 transition.Active
-                    ? transition.Mode +
-                      " " +
-                      Math.Round(
-                          transition.Progress *
-                          100f) +
-                      "% (" +
-                      transition.PreviousStateId +
-                      " → " +
-                      transition.StateId +
-                      ", " +
-                      transition.DurationSeconds
-                          .ToString("0.###") +
-                      "s)"
-                    : "<idle>";
+                    ? (int)Math.Round(
+                        transition.Progress *
+                        100f)
+                    : 0;
 
+            if (EnvironmentSummaryCacheMatches(
+                    status,
+                    transition,
+                    spaceMode,
+                    transitionPercent))
+            {
+                return _environmentSummaryCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Environment: ");
+            builder.Append(
+                status.EnvironmentId ??
+                "<none>");
+            builder.Append("\nState: ");
+            builder.Append(
+                status.StateId ??
+                "<none>");
+            builder.Append("\nSpace: ");
+            builder.Append(spaceMode);
+            builder.Append("\nActive: ");
+            builder.Append(status.Active);
+            builder.Append("\nTransition: ");
+
+            if (transition.Active)
+            {
+                builder.Append(
+                    transition.Mode);
+                builder.Append(' ');
+                builder.Append(
+                    transitionPercent);
+                builder.Append("% (");
+                builder.Append(
+                    transition.PreviousStateId);
+                builder.Append(" → ");
+                builder.Append(
+                    transition.StateId);
+                builder.Append(", ");
+                builder.Append(
+                    transition.DurationSeconds
+                        .ToString(
+                            "0.###",
+                            CultureInfo.InvariantCulture));
+                builder.Append("s)");
+            }
+            else
+            {
+                builder.Append(
+                    "<idle>");
+            }
+
+            builder.Append(
+                "\nSelected transition mode: ");
+            builder.Append(
+                _environmentTransitionMode);
+            builder.Append("\nError: ");
+            builder.Append(
+                status.Error ??
+                "<none>");
+
+            CaptureEnvironmentSummaryState(
+                status,
+                transition,
+                spaceMode,
+                transitionPercent);
+            _environmentSummaryCache =
+                builder.ToString();
+            return _environmentSummaryCache;
+        }
+
+        private bool EnvironmentSummaryCacheMatches(
+            EnvironmentRuntimeStatus status,
+            EnvironmentTransitionStatus transition,
+            EnvironmentSpaceMode spaceMode,
+            int transitionPercent)
+        {
             return
-                $"Environment: {status.EnvironmentId ?? "<none>"}\n" +
-                $"State: {status.StateId ?? "<none>"}\n" +
-                $"Space: {runtime.SpaceMode}\n" +
-                $"Active: {status.Active}\n" +
-                $"Transition: {transitionText}\n" +
-                $"Selected transition mode: {_environmentTransitionMode}\n" +
-                $"Error: {status.Error ?? "<none>"}";
+                _environmentSummaryStateValid &&
+                _environmentSummaryCache != null &&
+                string.Equals(
+                    _environmentSummaryEnvironmentId,
+                    status.EnvironmentId,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    _environmentSummaryStateId,
+                    status.StateId,
+                    StringComparison.Ordinal) &&
+                _environmentSummarySpaceMode ==
+                    spaceMode &&
+                _environmentSummaryActive ==
+                    status.Active &&
+                _environmentSummaryTransitionActive ==
+                    transition.Active &&
+                _environmentSummaryTransitionMode ==
+                    transition.Mode &&
+                _environmentSummaryTransitionPercent ==
+                    transitionPercent &&
+                string.Equals(
+                    _environmentSummaryPreviousStateId,
+                    transition.PreviousStateId,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    _environmentSummaryTransitionStateId,
+                    transition.StateId,
+                    StringComparison.Ordinal) &&
+                _environmentSummaryTransitionDuration ==
+                    transition.DurationSeconds &&
+                _environmentSummarySelectedMode ==
+                    _environmentTransitionMode &&
+                string.Equals(
+                    _environmentSummaryError,
+                    status.Error,
+                    StringComparison.Ordinal);
+        }
+
+        private void CaptureEnvironmentSummaryState(
+            EnvironmentRuntimeStatus status,
+            EnvironmentTransitionStatus transition,
+            EnvironmentSpaceMode spaceMode,
+            int transitionPercent)
+        {
+            _environmentSummaryEnvironmentId =
+                status.EnvironmentId;
+            _environmentSummaryStateId =
+                status.StateId;
+            _environmentSummarySpaceMode =
+                spaceMode;
+            _environmentSummaryActive =
+                status.Active;
+            _environmentSummaryTransitionActive =
+                transition.Active;
+            _environmentSummaryTransitionMode =
+                transition.Mode;
+            _environmentSummaryTransitionPercent =
+                transitionPercent;
+            _environmentSummaryPreviousStateId =
+                transition.PreviousStateId;
+            _environmentSummaryTransitionStateId =
+                transition.StateId;
+            _environmentSummaryTransitionDuration =
+                transition.DurationSeconds;
+            _environmentSummarySelectedMode =
+                _environmentTransitionMode;
+            _environmentSummaryError =
+                status.Error;
+            _environmentSummaryStateValid =
+                true;
         }
 
         private string MaterialSummary()
