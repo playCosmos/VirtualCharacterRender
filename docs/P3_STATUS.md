@@ -117,6 +117,7 @@ New `VCR.Runtime.Tracking.AudioUnity` assembly:
 - emits normalized `Aa` expression state only
 - does not implement `ITrackingPresenceProvider`
 - audio activity therefore cannot become visual performer-presence evidence
+- audio fallback numeric inputs are finite-normalized before runtime use: non-finite serialized threshold/gain/attack/release values restore safe defaults, and `AudioDrivenExpressionMath` itself returns finite fallback output for non-finite level/smoothing inputs so NaN cannot propagate into expression frames
 
 The source is intentionally not wired into priority routing during P3. Routing/mixing policy belongs to P4/P5.
 
