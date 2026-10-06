@@ -136,6 +136,7 @@ Implemented source contracts:
 - optional versioned `.vcrmarkers.json` sidecars support wildcard/exact clip selectors and seconds/normalized marker time
 - imported clips can be routed directly to the Cue Baker or Transition Timeline
 - external motion import rolls back newly created assets on parse/marker/import failure
+- baked motion cue assets and runtime sources now enforce ownership boundaries: cue definitions/tracks/markers are deep-cloned, `CueIds`/`CueAssets` are read-only views, runtime `ConfigureCues` input is copied, and `RebuildCues` stages a complete replacement before committing so one invalid asset/cue cannot erase the previous valid live cue set
 
 Implemented event action types:
 
