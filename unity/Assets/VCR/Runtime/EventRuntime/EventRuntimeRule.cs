@@ -2,6 +2,20 @@ using System;
 
 namespace VCR.Runtime.EventRuntime
 {
+    public readonly struct EventRuntimeRuleSummary
+    {
+        public EventRuntimeRuleSummary(
+            string id,
+            bool enabled)
+        {
+            Id = id;
+            Enabled = enabled;
+        }
+
+        public string Id { get; }
+        public bool Enabled { get; }
+    }
+
     [Serializable]
     public sealed class EventRuntimeRule
     {
