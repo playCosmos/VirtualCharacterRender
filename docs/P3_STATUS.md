@@ -76,6 +76,7 @@ Behavior:
 Runtime metrics include the same capture state plus MediaPipe result counts and processing latency.
 
 MediaPipe presence timing inputs are finite-normalized immediately before resolver construction. Non-finite lost/restore/stale durations fall back to their shipped defaults, and seconds-to-microseconds conversion rejects non-finite values and saturates oversized finite values at `long.MaxValue` instead of relying on undefined/implementation-specific numeric casts.
+ARKit/iFacialMocap receiver configuration now follows the same finite-numeric contract: non-finite handshake/stale/restore durations restore safe defaults/minima, non-finite head position scale and axis-sign components restore their shipped values, and seconds-to-microseconds conversion rejects non-finite values while saturating oversized finite input at `long.MaxValue`. The UDP text parser already rejects non-finite payload numbers before frame construction.
 
 ### Optional low-light preprocessing
 
