@@ -1073,8 +1073,11 @@ namespace VCR.Editor.P5
                 Expect(
                     mixer.TryGetLatestExpressions(
                         out var baseOnly) &&
-                    baseOnly?.Expressions != null,
-                    "base expressions must remain available when no overlay is configured",
+                    baseOnly?.Expressions != null &&
+                    ReferenceEquals(
+                        baseOnly,
+                        route.ExpressionFrame),
+                    "unmodified base expression frame must pass through without a mixer envelope when no overlay or smoothing is active",
                     failures);
 
                 ExpectClose(
@@ -1097,8 +1100,11 @@ namespace VCR.Editor.P5
                 Expect(
                     mixer.TryGetLatestExpressions(
                         out var sameSequenceExpression) &&
-                    sameSequenceExpression?.Expressions != null,
-                    "a new immutable expression frame must be observed even when source id and sequence are reused",
+                    sameSequenceExpression?.Expressions != null &&
+                    ReferenceEquals(
+                        sameSequenceExpression,
+                        route.ExpressionFrame),
+                    "a new immutable expression frame must be observed and passed through even when source id and sequence are reused",
                     failures);
 
                 ExpectClose(
