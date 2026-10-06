@@ -2341,6 +2341,78 @@ require_source_contains(
     "P11 external-motion validation must prove failed baked cue rebuild preserves the last known-good set",
 )
 
+humanoid_pose_layer_mask = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerMask.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "public HumanoidPoseLayerMask Clone()",
+    "humanoid pose layer masks must support defensive ownership copies",
+)
+
+humanoid_pose_layer_settings = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerSettings.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "RuntimeMask.Clone()",
+    "public humanoid pose layer mask access must return a defensive copy",
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "internal HumanoidPoseLayerMask RuntimeMask =>",
+    "humanoid pose mixer hot paths must retain allocation-free internal mask access",
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "layerMask?.Clone()",
+    "humanoid pose layer settings must clone caller-owned masks on Configure",
+)
+
+humanoid_pose_layer_slot = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerSlot.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "RuntimeSettings.Clone()",
+    "public pose-layer slot settings access must return a defensive copy",
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "internal HumanoidPoseLayerSettings RuntimeSettings =>",
+    "mixer hot paths must retain allocation-free internal slot settings access",
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "layerSettings?.Clone()",
+    "pose-layer slots must clone caller-owned settings on Configure",
+)
+
+humanoid_pose_mixer_math = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseMixerMath.cs"
+)
+require_source_contains(
+    humanoid_pose_mixer_math,
+    "settings.RuntimeMask",
+    "humanoid pose blend hot path must use the internal mask without defensive-copy allocation",
+)
+
 mixer_runtime = (
     VCR
     / "Runtime"
@@ -2352,6 +2424,21 @@ require_source_contains(
     mixer_runtime,
     "_additionalPoseLayerFrames",
     "mixer must reuse one additional-layer provider sample for change detection and blending",
+)
+require_source_contains(
+    mixer_runtime,
+    "settings?.Clone()",
+    "primary pose-layer configuration must clone caller-owned settings",
+)
+require_source_contains(
+    mixer_runtime,
+    "layers[i]?.Clone()",
+    "additional pose-layer configuration must deep-clone caller-owned slots",
+)
+require_source_contains(
+    mixer_runtime,
+    "additionalPoseLayers[i]?.RuntimeSettings",
+    "mixer pose hot path must use allocation-free internal slot settings",
 )
 require_source_contains(
     mixer_runtime,
@@ -2402,6 +2489,16 @@ require_source_contains(
     p5_mixer_validation,
     "unmodified base expression frame must pass through",
     "P5 validation must guard allocation-free base expression frame passthrough",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "public pose-layer mask access must return a defensive copy",
+    "P5 validation must prove public mask access cannot mutate live settings",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "caller-owned masks/settings/slots are mutated",
+    "P5 validation must prove mixer-owned pose-layer configuration survives caller mutation",
 )
 
 tracking_router = (
