@@ -531,6 +531,11 @@ namespace VCR.Editor.P4
                         externalProvider.ExpressionFrame),
                     "router expression output must reuse the selected immutable child frame instead of allocating an envelope",
                     failures);
+                Expect(
+                    faceProvider.FaceReadCount == 1 &&
+                    bodyProvider.FaceReadCount == 0,
+                    "default preferred-face routing must sample the selected preferred face once and skip an outranked fallback face read",
+                    failures);
             }
             catch (Exception exception)
             {
@@ -1162,6 +1167,7 @@ namespace VCR.Editor.P4
         public TrackingFrame BodyHandsFrame { get; set; }
         public TrackingFrame HumanoidPoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
+        public int FaceReadCount { get; private set; }
 
         public TrackingPresenceSnapshot Presence
         {
@@ -1234,6 +1240,8 @@ namespace VCR.Editor.P4
         public bool TryGetLatestFace(
             out TrackingFrame frame)
         {
+            FaceReadCount++;
+
             frame =
                 FaceTrackingEnabled
                     ? FaceFrame
