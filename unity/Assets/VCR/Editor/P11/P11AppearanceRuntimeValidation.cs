@@ -214,6 +214,79 @@ namespace VCR.Editor.P11
                     "appearance quick-change order must preserve authoring order",
                     failures);
 
+                var transitionsField =
+                    typeof(
+                        BasicCharacterAppearanceRuntime)
+                    .GetField(
+                        "transitions",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var validTransitions =
+                    (AppearanceTransitionBinding[])
+                        transitionsField?.GetValue(
+                            runtime);
+
+                transitionsField?.SetValue(
+                    runtime,
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "rollback-invalid",
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "effect.play"
+                                    }
+                                }
+                        }
+                    });
+
+                var rollbackRejected =
+                    !runtime.RebuildConfiguration(
+                        out var rollbackError);
+
+                Expect(
+                    rollbackRejected &&
+                    !string.IsNullOrWhiteSpace(
+                        rollbackError) &&
+                    runtime.Status.State ==
+                        AppearanceRuntimeState.Ready &&
+                    runtime.PresetIds.Count == 2 &&
+                    runtime.PresetIds[0] ==
+                        "casual-hat" &&
+                    runtime.PresetIds[1] ==
+                        "formal-crown" &&
+                    runtime.TransitionIds.Count == 1 &&
+                    runtime.TransitionIds[0] ==
+                        "spin-confetti",
+                    "failed appearance configuration rebuild must restore the previous live preset/transition caches and runtime state",
+                    failures);
+
+                transitionsField?.SetValue(
+                    runtime,
+                    validTransitions);
+
+                Expect(
+                    runtime.RebuildConfiguration(
+                        out var rollbackRestoreError) &&
+                    string.IsNullOrWhiteSpace(
+                        rollbackRestoreError) &&
+                    runtime.TransitionIds.Count == 1 &&
+                    runtime.TransitionIds[0] ==
+                        "spin-confetti",
+                    "appearance configuration rollback validation must restore the original authoring transition input and rebuild cleanly",
+                    failures);
+
                 Expect(
                     runtime.SetPreset(
                         "casual-hat",
