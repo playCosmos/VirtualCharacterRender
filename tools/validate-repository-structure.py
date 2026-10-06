@@ -544,6 +544,19 @@ require_source_contains(
     "VRM snapshot provider must skip pose capture when not requested",
 )
 
+appearance_runtime = (
+    VCR
+    / "Runtime"
+    / "Appearance"
+    / "Unity"
+    / "BasicCharacterAppearanceRuntime.cs"
+)
+require_source_contains(
+    appearance_runtime,
+    "ClearCurrentPresetAndNotify(",
+    "appearance preset invalidation must publish a snapshot so cached consumers cannot go stale",
+)
+
 application_ui = (
     VCR
     / "Runtime"
@@ -594,6 +607,27 @@ forbid_source_pattern(
     application_ui,
     r"_(?:statusText|sectionTitle|contentText)\.text\s*=",
     "application UI primary text fields must route assignments through SetTextIfChanged",
+)
+require_source_contains(
+    application_ui,
+    "_subscribedAppearanceRuntime",
+    "application UI must subscribe to appearance snapshots instead of polling defensive Current copies every refresh",
+)
+require_source_contains(
+    application_ui,
+    "OnAppearanceChanged(",
+    "application UI must cache AppearanceChanged snapshots",
+)
+require_source_occurrences(
+    application_ui,
+    "_appearanceRuntime.Current",
+    1,
+    "application UI may read the defensive appearance Current snapshot only in its cache fallback",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_appearanceRuntime\.Current\.PresetId",
+    "application UI preset-id-only paths must use allocation-free appearance status",
 )
 
 motion_cue_sources = [
@@ -652,6 +686,18 @@ require_source_contains(
     mixer_runtime,
     "? baseFrame",
     "mixer must reuse the routed base expression frame when no expression transform is active",
+)
+
+p11_appearance_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation,
+    "currentInvalidationNotifications",
+    "P11 appearance validation must cover current-preset invalidation notifications",
 )
 
 p5_mixer_validation = (
