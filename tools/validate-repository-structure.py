@@ -854,6 +854,21 @@ require_source_contains(
     "GetSortedDiagnosticMetrics(",
     "application UI Diagnostics refresh must reuse one sorted metric snapshot per diagnostics report",
 )
+require_source_contains(
+    application_ui,
+    "_diagnosticsSummaryCache",
+    "application UI Diagnostics refresh must reuse completed summary text while the snapshot/page/settings key is unchanged",
+)
+require_source_contains(
+    application_ui,
+    "InvalidateDiagnosticsSummaryCache()",
+    "application UI Diagnostics summary cache must be invalidated when diagnostics binding lifecycle changes",
+)
+require_source_contains(
+    application_ui,
+    "_diagnosticsSummarySequence ==",
+    "application UI Diagnostics summary cache must key reuse to the published snapshot sequence",
+)
 forbid_source_pattern(
     application_ui,
     r"RuntimeMetric\[\]\)\s*\n?\s*source\.Clone\s*\(",
