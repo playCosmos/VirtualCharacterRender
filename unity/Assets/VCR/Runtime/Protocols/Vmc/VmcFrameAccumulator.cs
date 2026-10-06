@@ -633,6 +633,12 @@ namespace VCR.Runtime.Protocols.Vmc
                     ? TrackingRegion.FullBody
                     : TrackingRegion.None;
 
+            if (expressions != null)
+            {
+                regions |=
+                    TrackingRegion.Expressions;
+            }
+
             var sourceTimestampUs =
                 _senderTimestampUs > 0
                     ? _senderTimestampUs
