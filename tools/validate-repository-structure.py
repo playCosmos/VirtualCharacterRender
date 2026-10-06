@@ -985,6 +985,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_uiRefreshPassActive",
+    "application UI must scope runtime sample reuse to one RefreshAll pass",
+)
+require_source_contains(
+    application_ui,
+    "GetOverlayOutputForUiRefresh()",
+    "application UI must share one overlay-output lookup within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "TryGetRenderSettingsForUiRefresh(",
+    "application UI must share one render-settings sample within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "finally\n            {\n                _uiRefreshPassActive",
+    "application UI refresh-pass cache must be invalidated even if refresh throws",
+)
+require_source_contains(
+    application_ui,
     "_statusBarOutputState",
     "status-bar cache must include overlay output state",
 )
