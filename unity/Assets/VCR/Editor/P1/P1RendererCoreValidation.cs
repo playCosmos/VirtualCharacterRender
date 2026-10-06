@@ -1687,6 +1687,7 @@ namespace VCR.Editor.P1
                     shutdownRetryScene.State ==
                         SceneRuntimeState.Stopped &&
                     shutdownRetryScene.Capabilities == null &&
+                    shutdownRetryOverlay.ShutdownCount == 0 &&
                     !string.IsNullOrWhiteSpace(
                         shutdownRetryScene.Status.LastError) &&
                     shutdownRetryScene.Status.LastError.Contains(
@@ -1703,6 +1704,7 @@ namespace VCR.Editor.P1
                     shutdownRetryScene.State ==
                         SceneRuntimeState.Stopped &&
                     shutdownRetryScene.Capabilities == null &&
+                    shutdownRetryOverlay.ShutdownCount == 1 &&
                     string.IsNullOrWhiteSpace(
                         shutdownRetryScene.Status.LastError),
                     "repeated scene shutdown must retry non-capability cleanup failures even after the capability registry was released",
