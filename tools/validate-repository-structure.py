@@ -1209,6 +1209,22 @@ require_source_contains(
     "\"Runtime configuration capture/save failed: \"",
     "application configuration save must contain scene snapshot/adapter getter exceptions",
 )
+require_source_contains(
+    application_runtime_bootstrap,
+    "var firstShutdown =\n                !_quitting;",
+    "application shutdown must distinguish the first call from later cleanup retries without blocking retries",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "sceneRuntime.Shutdown();",
+    "application shutdown retries must continue delegating cleanup to the scene runtime",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "var sceneError =\n                    sceneRuntime.Status.LastError;",
+    "application shutdown must propagate scene cleanup failures through its bool/error contract",
+)
+
 
 application_ui = (
     VCR
