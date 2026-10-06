@@ -1996,6 +1996,26 @@ require_source_contains(
 )
 require_source_contains(
     character_2d_parameter_mapping,
+    "public int BindingCount =>",
+    "2D parameter mapping profiles must expose allocation-free binding counts to runtime hot paths",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal Character2DParameterBinding\n            GetBindingAt(",
+    "2D parameter mapping runtime evaluators must use allocation-free internal indexed binding access",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "CloneBindings(",
+    "2D parameter mapping profiles must deep-clone caller-owned binding inputs and public snapshots",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"profile\.Bindings",
+    "2D parameter mapping hot paths must not use the defensive public binding snapshot",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
     "internal static bool TryEvaluateValidated(",
     "2D parameter mapping must retain its exact-size validated snapshot evaluator",
 )
@@ -2020,6 +2040,11 @@ require_source_contains(
     character_2d_runtime,
     "EnsureConfiguredMappingValidated(",
     "2D runtime must cache mapping validation across unchanged tracking updates",
+)
+require_source_contains(
+    character_2d_runtime,
+    ".BindingCount);",
+    "2D runtime parameter scratch sizing must avoid cloning the public binding snapshot",
 )
 require_source_contains(
     character_2d_runtime,
@@ -2069,6 +2094,16 @@ require_source_contains(
     p13_source_validation,
     "same profile object mutates",
     "P13 validation must cover mapping-cache invalidation for in-place profile mutation",
+)
+require_source_contains(
+    p13_source_validation,
+    "\"ExternalCallerMutation\"",
+    "P13 validation must prove Configure input bindings are isolated from later caller mutation",
+)
+require_source_contains(
+    p13_source_validation,
+    "\"ExternalExportMutation\"",
+    "P13 validation must prove public binding snapshots cannot mutate the live mapping profile",
 )
 require_source_contains(
     p13_source_validation,
