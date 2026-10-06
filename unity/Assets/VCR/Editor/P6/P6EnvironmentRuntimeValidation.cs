@@ -726,15 +726,38 @@ namespace VCR.Editor.P6
                     failures);
 
                 var stateEvents = 0;
+                Action<EnvironmentStateChange>
+                    throwingStateSubscriber =
+                        _ =>
+                            throw new InvalidOperationException(
+                                "environment state subscriber failure");
+
+                runtime.StateChanged +=
+                    throwingStateSubscriber;
                 runtime.StateChanged += _ =>
                 {
                     stateEvents++;
                 };
 
-                var changed =
-                    runtime.SetState(
-                        "night",
-                        out var stateError);
+                var changed = false;
+                string stateError = null;
+
+                try
+                {
+                    changed =
+                        runtime.SetState(
+                            "night",
+                            out stateError);
+                }
+                catch (Exception exception)
+                {
+                    stateError =
+                        "subscriber isolation failure: " +
+                        exception.Message;
+                }
+
+                runtime.StateChanged -=
+                    throwingStateSubscriber;
 
                 Expect(
                     changed &&
