@@ -836,6 +836,74 @@ namespace VCR.Editor.P3
                         failures);
                 }
 
+                var humanoidTargetType =
+                    typeof(Vrm10HumanoidPoseTarget);
+                var sanitizeHumanoidNonNegative =
+                    humanoidTargetType.GetMethod(
+                        "SanitizeNonNegative",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var humanoidSmoothAlpha =
+                    humanoidTargetType.GetMethod(
+                        "SmoothAlpha",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var humanoidClamp01 =
+                    humanoidTargetType.GetMethod(
+                        "Clamp01",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                if (sanitizeHumanoidNonNegative == null ||
+                    humanoidSmoothAlpha == null ||
+                    humanoidClamp01 == null)
+                {
+                    failures.Add(
+                        "VRM humanoid pose numeric sanitizer reflection contract is incomplete");
+                }
+                else
+                {
+                    var sanitizedPoseSmoothing =
+                        (float)
+                            sanitizeHumanoidNonNegative.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN,
+                                    20f
+                                });
+                    var invalidHumanoidAlpha =
+                        (float)
+                            humanoidSmoothAlpha.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.PositiveInfinity,
+                                    1f / 60f
+                                });
+                    var invalidHumanoidExpression =
+                        (float)
+                            humanoidClamp01.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NegativeInfinity
+                                });
+
+                    Expect(
+                        Mathf.Approximately(
+                            sanitizedPoseSmoothing,
+                            20f) &&
+                        Mathf.Approximately(
+                            invalidHumanoidAlpha,
+                            1f) &&
+                        Mathf.Approximately(
+                            invalidHumanoidExpression,
+                            0f),
+                        "VRM humanoid pose application must contain non-finite smoothing/expression values",
+                        failures);
+                }
+
                 texture =
                     new Texture2D(
                         2,
