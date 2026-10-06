@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Text;
@@ -64,8 +63,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 encoderShouldEmitUTF8Identifier: false,
                 throwOnInvalidBytes: true);
 
-        private readonly ConcurrentQueue<string>
-            _queue = new();
+        private readonly Queue<string>
+            _queue = new(
+                1024);
 
         private readonly object _queueSync =
             new();
@@ -205,11 +205,13 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
 
                 lock (_queueSync)
                 {
-                    if (!_queue.TryDequeue(
-                            out message))
+                    if (_queue.Count == 0)
                     {
                         break;
                     }
+
+                    message =
+                        _queue.Dequeue();
 
                     Interlocked.Decrement(
                         ref _queuedCount);
@@ -942,9 +944,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
             while (Volatile.Read(
                        ref _queuedCount) >
                    limit &&
-                   _queue.TryDequeue(
-                       out _))
+                   _queue.Count > 0)
             {
+                _queue.Dequeue();
                 Interlocked.Decrement(
                     ref _queuedCount);
                 Interlocked.Increment(
@@ -956,9 +958,9 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         {
             lock (_queueSync)
             {
-                while (_queue.TryDequeue(
-                           out _))
+                while (_queue.Count > 0)
                 {
+                    _queue.Dequeue();
                     Interlocked.Decrement(
                         ref _queuedCount);
                     Interlocked.Increment(
