@@ -4323,11 +4323,13 @@ namespace VCR.Runtime.UI
                         statusCount - 1)
                     : 0;
 
+            CapabilityStatusSnapshot selected =
+                default;
             var hasSelected =
                 hasCapabilities &&
                 registry.TryGetStatusAt(
                     _settingsCapabilityIndex,
-                    out var selected);
+                    out selected);
             var canMutate =
                 sceneRuntime != null &&
                 ApplicationUiActionPolicy
@@ -4352,11 +4354,11 @@ namespace VCR.Runtime.UI
             if (_settingsToggleCapabilityButton != null)
             {
                 _settingsToggleCapabilityButton.interactable =
-                    hasCapabilities &&
+                    hasSelected &&
                     canMutate;
                 SetButtonLabel(
                     _settingsToggleCapabilityButton,
-                    hasCapabilities
+                    hasSelected
                         ? (selected.State ==
                             CapabilityState.Enabled
                             ? "Disable "
@@ -6185,6 +6187,8 @@ namespace VCR.Runtime.UI
             var statusCount =
                 capabilities?.StatusCount ??
                 0;
+            CapabilityStatusSnapshot selectedCapability =
+                default;
             var hasSelectedCapability =
                 statusCount > 0 &&
                 capabilities.TryGetStatusAt(
@@ -6192,7 +6196,7 @@ namespace VCR.Runtime.UI
                         _settingsCapabilityIndex,
                         0,
                         statusCount - 1),
-                    out var selectedCapability);
+                    out selectedCapability);
             var render =
                 sceneRuntime != null
                     ? sceneRuntime.CaptureRenderSettings()
