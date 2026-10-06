@@ -1381,6 +1381,35 @@ namespace VCR.Editor.P1
                     "application bootstrap must load persisted configuration before normal runtime use",
                     failures);
 
+                var applicationCapabilityDisposeCount =
+                    0;
+                var applicationCapabilities =
+                    applicationScene.Capabilities;
+
+                Expect(
+                    applicationCapabilities != null &&
+                    applicationCapabilities.Register(
+                        "p1.application.dispose-retry",
+                        () =>
+                            new ProbeDisposable(
+                                () =>
+                                {
+                                    applicationCapabilityDisposeCount++;
+
+                                    if (applicationCapabilityDisposeCount == 1)
+                                    {
+                                        throw new InvalidOperationException(
+                                            "expected application capability dispose failure");
+                                    }
+                                })) &&
+                    applicationCapabilities.Enable(
+                        "p1.application.dispose-retry",
+                        out var applicationCapabilityError) &&
+                    string.IsNullOrEmpty(
+                        applicationCapabilityError),
+                    "application shutdown retry validation capability must enable successfully",
+                    failures);
+
                 var applicationSuspended =
                     applicationBootstrap.Suspend();
 
@@ -1446,10 +1475,34 @@ namespace VCR.Editor.P1
                     !applicationShutdownResult &&
                     !string.IsNullOrWhiteSpace(
                         applicationShutdownError) &&
+                    applicationShutdownError.Contains(
+                        "capability disposal",
+                        StringComparison.Ordinal) &&
                     !applicationBootstrap.IsStarted &&
                     applicationScene.State ==
+                        SceneRuntimeState.Stopped &&
+                    applicationCapabilityDisposeCount == 1 &&
+                    applicationScene.Capabilities != null &&
+                    ReferenceEquals(
+                        applicationScene.Capabilities,
+                        applicationCapabilities),
+                    "application bootstrap must report scene cleanup failure while still stopping the scene and retaining retryable capability ownership",
+                    failures);
+
+                var applicationShutdownRetry =
+                    applicationBootstrap.Shutdown(
+                        saveConfiguration: false,
+                        out var applicationShutdownRetryError);
+
+                Expect(
+                    applicationShutdownRetry &&
+                    string.IsNullOrWhiteSpace(
+                        applicationShutdownRetryError) &&
+                    applicationCapabilityDisposeCount == 2 &&
+                    applicationScene.Capabilities == null &&
+                    applicationScene.State ==
                         SceneRuntimeState.Stopped,
-                    "application bootstrap must still stop the scene runtime when configuration save fails",
+                    "repeated application shutdown must retry retained scene cleanup and succeed once capability disposal completes",
                     failures);
 
                 Expect(
