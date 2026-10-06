@@ -577,6 +577,29 @@ forbid_source_pattern(
     "mixer additional-layer change detection must not retain redundant sequence/source arrays",
 )
 
+require_source_contains(
+    mixer_runtime,
+    "_targetExpressions != null",
+    "mixer must retain zero-transform base-expression passthrough gating",
+)
+require_source_contains(
+    mixer_runtime,
+    "? baseFrame",
+    "mixer must reuse the routed base expression frame when no expression transform is active",
+)
+
+p5_mixer_validation = (
+    VCR
+    / "Editor"
+    / "P5"
+    / "P5ExpressionMixerValidation.cs"
+)
+require_source_contains(
+    p5_mixer_validation,
+    "unmodified base expression frame must pass through",
+    "P5 validation must guard allocation-free base expression frame passthrough",
+)
+
 tracking_router = (
     VCR
     / "Runtime"
