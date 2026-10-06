@@ -1012,6 +1012,10 @@ namespace VCR.Editor.P1
                 applicationRoot.AddComponent<
                     DesktopRenderBootstrap>();
 
+                var applicationOverlay =
+                    applicationRoot.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+
                 var applicationScene =
                     applicationRoot.AddComponent<
                         SingleCharacterSceneRuntime>();
@@ -1101,6 +1105,29 @@ namespace VCR.Editor.P1
                     string.IsNullOrEmpty(
                         applicationSaveError),
                     "application bootstrap must save the current scene configuration",
+                    failures);
+
+                applicationOverlay.ThrowOnSettingsRead =
+                    true;
+
+                var captureFailureSaveResult =
+                    applicationBootstrap.SaveConfiguration(
+                        out var captureFailureSaveError);
+
+                applicationOverlay.ThrowOnSettingsRead =
+                    false;
+
+                Expect(
+                    !captureFailureSaveResult &&
+                    !string.IsNullOrWhiteSpace(
+                        captureFailureSaveError) &&
+                    captureFailureSaveError.Contains(
+                        "Runtime configuration capture/save failed",
+                        StringComparison.Ordinal) &&
+                    applicationBootstrap.IsStarted &&
+                    applicationScene.State ==
+                        SceneRuntimeState.Ready,
+                    "application configuration capture exceptions must be returned through false/error without aborting the running scene",
                     failures);
 
                 File.Delete(
