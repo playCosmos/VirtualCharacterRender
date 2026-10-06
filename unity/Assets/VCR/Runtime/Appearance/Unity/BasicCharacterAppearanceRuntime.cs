@@ -575,6 +575,110 @@ namespace VCR.Runtime.Appearance.Unity
             return true;
         }
 
+        private static AppearanceOutfitBinding[]
+            CloneOutfitBindings(
+                AppearanceOutfitBinding[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    AppearanceOutfitBinding>();
+            }
+
+            var clones =
+                new AppearanceOutfitBinding[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                clones[i] =
+                    source[i]?.Clone();
+            }
+
+            return clones;
+        }
+
+        private static AppearanceAccessoryBinding[]
+            CloneAccessoryBindings(
+                AppearanceAccessoryBinding[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    AppearanceAccessoryBinding>();
+            }
+
+            var clones =
+                new AppearanceAccessoryBinding[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                clones[i] =
+                    source[i]?.Clone();
+            }
+
+            return clones;
+        }
+
+        private static AppearancePresetBinding[]
+            ClonePresetBindings(
+                AppearancePresetBinding[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    AppearancePresetBinding>();
+            }
+
+            var clones =
+                new AppearancePresetBinding[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                clones[i] =
+                    source[i]?.Clone();
+            }
+
+            return clones;
+        }
+
+        private static AppearanceTransitionBinding[]
+            CloneTransitionBindings(
+                AppearanceTransitionBinding[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    AppearanceTransitionBinding>();
+            }
+
+            var clones =
+                new AppearanceTransitionBinding[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                clones[i] =
+                    source[i]?.Clone();
+            }
+
+            return clones;
+        }
+
         private AppearanceConfigurationSnapshot
             CaptureConfigurationSnapshot()
         {
@@ -800,25 +904,17 @@ namespace VCR.Runtime.Appearance.Unity
                 defaultPresetId;
 
             outfits =
-                nextOutfits == null
-                    ? Array.Empty<AppearanceOutfitBinding>()
-                    : (AppearanceOutfitBinding[])
-                        nextOutfits.Clone();
+                CloneOutfitBindings(
+                    nextOutfits);
             accessories =
-                nextAccessories == null
-                    ? Array.Empty<AppearanceAccessoryBinding>()
-                    : (AppearanceAccessoryBinding[])
-                        nextAccessories.Clone();
+                CloneAccessoryBindings(
+                    nextAccessories);
             presets =
-                nextPresets == null
-                    ? Array.Empty<AppearancePresetBinding>()
-                    : (AppearancePresetBinding[])
-                        nextPresets.Clone();
+                ClonePresetBindings(
+                    nextPresets);
             transitions =
-                nextTransitions == null
-                    ? Array.Empty<AppearanceTransitionBinding>()
-                    : (AppearanceTransitionBinding[])
-                        nextTransitions.Clone();
+                CloneTransitionBindings(
+                    nextTransitions);
             transitionExecutorBehaviours =
                 executors == null
                     ? Array.Empty<MonoBehaviour>()
