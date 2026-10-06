@@ -498,6 +498,88 @@ require_source_contains(
     "mixer must reuse one additional-layer provider sample for change detection and blending",
 )
 
+humanoid_pose_state = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "HumanoidPoseState.cs"
+)
+require_source_contains(
+    humanoid_pose_state,
+    "_boneMask",
+    "immutable humanoid pose snapshots must store bone presence as a bitmask",
+)
+require_source_contains(
+    humanoid_pose_state,
+    "BoneBit(",
+    "humanoid pose bitmask helpers must remain available to hot producers",
+)
+
+pose_bitmask_producers = [
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs",
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseMixerMath.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs",
+]
+for pose_bitmask_producer in pose_bitmask_producers:
+    require_source_contains(
+        pose_bitmask_producer,
+        "boneMask",
+        "hot immutable pose producers must build a compact bone-presence bitmask",
+    )
+    forbid_source_pattern(
+        pose_bitmask_producer,
+        r"new\s+bool\s*\[\s*\(int\)HumanoidBoneId\.Count\s*\]",
+        "hot immutable pose producers must not allocate a second bool[] presence snapshot",
+    )
+
+humanoid_pose_target = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10HumanoidPoseTarget.cs"
+)
+require_source_contains(
+    humanoid_pose_target,
+    "MaxTrackedCustomExpressions",
+    "VRM custom-expression application state must remain bounded",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "_customExpressionNameScratch",
+    "VRM custom-expression neutralization must reuse scratch storage",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "FadeCustomExpressionsToNeutral(",
+    "missing custom expressions must fade to neutral instead of remaining latched",
+)
+forbid_source_pattern(
+    humanoid_pose_target,
+    r"new\s+string\s*\[\s*_smoothedCustomExpressions\.Count\s*\]",
+    "VRM custom-expression neutralization must not allocate one name array per frame",
+)
+
 snapshot_ownership = (
     VCR
     / "Runtime"
