@@ -21,6 +21,8 @@ namespace VCR.Editor.P6
         {
             var failures = new List<string>();
 
+            ValidateTransitionSpecSanitization(
+                failures);
             ValidateScheduler(failures);
             ValidateRuntime(failures);
             ValidateDestroyedTargetLifetime(failures);
@@ -37,6 +39,42 @@ namespace VCR.Editor.P6
                 "VCR P6 environment runtime validation: FAIL\n" +
                 string.Join("\n", failures));
             return false;
+        }
+
+        private static void ValidateTransitionSpecSanitization(
+            List<string> failures)
+        {
+            var nanDuration =
+                new EnvironmentTransitionSpec(
+                    EnvironmentTransitionMode.Fade,
+                    float.NaN);
+            var infiniteDuration =
+                new EnvironmentTransitionSpec(
+                    EnvironmentTransitionMode.Crossfade,
+                    float.PositiveInfinity);
+            var invalidMode =
+                new EnvironmentTransitionSpec(
+                    (EnvironmentTransitionMode)999,
+                    1f);
+
+            Expect(
+                nanDuration.Mode ==
+                    EnvironmentTransitionMode.Fade &&
+                Math.Abs(
+                    nanDuration.DurationSeconds) <
+                    0.0001f &&
+                nanDuration.IsImmediate &&
+                infiniteDuration.Mode ==
+                    EnvironmentTransitionMode.Crossfade &&
+                Math.Abs(
+                    infiniteDuration.DurationSeconds) <
+                    0.0001f &&
+                infiniteDuration.IsImmediate &&
+                invalidMode.Mode ==
+                    EnvironmentTransitionMode.Cut &&
+                invalidMode.IsImmediate,
+                "environment transition specs must sanitize non-finite durations and unsupported modes into safe immediate transitions",
+                failures);
         }
 
         private static void ValidateScheduler(
