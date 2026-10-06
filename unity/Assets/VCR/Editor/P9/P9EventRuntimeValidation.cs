@@ -37,6 +37,8 @@ namespace VCR.Editor.P9
             ValidateEventHubReplacement(failures);
             ValidateDestroyedHandlerDependencies(failures);
             ValidateThrowingHandlerProbeIsolation(failures);
+            ValidateAudioActionNumericContainment(
+                failures);
             ValidateMaterialAction(failures);
             P9ExpressionEventValidation.RunChecks(
                 failures);
@@ -1963,6 +1965,149 @@ namespace VCR.Editor.P9
                 {
                     UnityEngine.Object.DestroyImmediate(
                         root);
+                }
+            }
+        }
+
+        private static void ValidateAudioActionNumericContainment(
+            List<string> failures)
+        {
+            GameObject root = null;
+            AudioClip clip = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P9 Audio Numeric Validation");
+
+                var source =
+                    root.AddComponent<
+                        AudioSource>();
+                source.volume =
+                    0.42f;
+
+                clip =
+                    AudioClip.Create(
+                        "P9 Audio Numeric Validation Clip",
+                        64,
+                        1,
+                        8000,
+                        false);
+                source.clip =
+                    clip;
+
+                var handler =
+                    root.AddComponent<
+                        AudioEventActionHandler>();
+                handler.ConfigureBindings(
+                    new AudioEventActionHandler
+                        .AudioBinding
+                    {
+                        AudioId =
+                            "numeric",
+                        Source =
+                            source,
+                        Clip =
+                            clip,
+                        RestartOnPlay =
+                            false
+                    });
+
+                var nonFiniteValues =
+                    new[]
+                    {
+                        double.NaN,
+                        double.PositiveInfinity,
+                        double.NegativeInfinity,
+                        (double)float.MaxValue *
+                            2.0,
+                        -(double)float.MaxValue *
+                            2.0
+                    };
+
+                foreach (var invalidValue in
+                         nonFiniteValues)
+                {
+                    source.volume =
+                        0.42f;
+                    source.Stop();
+
+                    var command =
+                        new EventActionCommand(
+                            "audio-numeric",
+                            EventActionTypes
+                                .AudioPlay,
+                            handler.HandlerId,
+                            null,
+                            "numeric",
+                            invalidValue,
+                            true,
+                            1);
+
+                    var accepted =
+                        handler.TryExecute(
+                            command,
+                            out var error);
+
+                    Expect(
+                        !accepted &&
+                        !string.IsNullOrWhiteSpace(
+                            error) &&
+                        Mathf.Abs(
+                            source.volume -
+                            0.42f) <
+                            0.0001f &&
+                        !source.isPlaying,
+                        "audio.play must reject non-finite/out-of-float-range volume overrides before mutating AudioSource state",
+                        failures);
+                }
+
+                var finiteCommand =
+                    new EventActionCommand(
+                        "audio-numeric",
+                        EventActionTypes
+                            .AudioPlay,
+                        handler.HandlerId,
+                        null,
+                        "numeric",
+                        2.0,
+                        true,
+                        2);
+
+                Expect(
+                    handler.TryExecute(
+                        finiteCommand,
+                        out var finiteError) &&
+                    string.IsNullOrWhiteSpace(
+                        finiteError) &&
+                    Mathf.Abs(
+                        source.volume -
+                        1f) <
+                        0.0001f,
+                    "audio.play must continue clamping finite volume overrides into the AudioSource 0..1 range",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "audio numeric containment unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+
+                if (clip != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            clip);
                 }
             }
         }
