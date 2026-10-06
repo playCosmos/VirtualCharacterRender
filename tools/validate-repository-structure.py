@@ -856,6 +856,21 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_environmentSummaryCache",
+    "application UI Environment refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "EnvironmentSummaryCacheMatches(",
+    "application UI Environment refresh must compare displayed state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_environmentSummaryTransitionPercent",
+    "environment summary cache must key active transitions by displayed progress percentage",
+)
+require_source_contains(
+    application_ui,
     "TrackingSummaryCacheMatches(",
     "application UI Tracking refresh must compare displayed presence/control state before rebuilding text",
 )
