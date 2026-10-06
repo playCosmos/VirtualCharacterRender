@@ -252,17 +252,8 @@ namespace VCR.Runtime.Scene
             }
             catch (OperationCanceledException)
             {
-                if (generation == _operationGeneration &&
-                    _state ==
-                        SceneRuntimeState.LoadingCharacter)
-                {
-                    _lastError = null;
-                    SetState(
-                        characterLoader.Current != null
-                            ? SceneRuntimeState.CharacterReady
-                            : SceneRuntimeState.Ready);
-                }
-
+                RestoreStateAfterCancelledCharacterLoad(
+                    generation);
                 throw;
             }
             catch (Exception exception)
@@ -771,6 +762,25 @@ namespace VCR.Runtime.Scene
                 "scene.status_subscriber_failures",
                 _statusSubscriberFailureCount,
                 "count"));
+        }
+
+        private void RestoreStateAfterCancelledCharacterLoad(
+            int generation)
+        {
+            if (generation !=
+                    _operationGeneration ||
+                _state !=
+                    SceneRuntimeState.LoadingCharacter)
+            {
+                return;
+            }
+
+            _lastError = null;
+            SetState(
+                characterLoader != null &&
+                characterLoader.Current != null
+                    ? SceneRuntimeState.CharacterReady
+                    : SceneRuntimeState.Ready);
         }
 
         private int BeginOperation(
