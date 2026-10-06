@@ -70,6 +70,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - `StatusChanged` notification is subscriber-isolated: one throwing observer cannot abort scene lifecycle transitions such as suspend/resume; failures are counted as `scene.status_subscriber_failures`
 - character-load cancellation now has an explicit recovery boundary: an isolated cancellation restores `Ready`/`CharacterReady` only while the same generation is still in `LoadingCharacter`, so stale cancellation completions cannot overwrite a newer operation, Suspend, or Unload state
 - direct overlay setting changes now commit `_overlayConfiguration` only after the adapter `Apply` succeeds; a throwing adapter no longer leaves the persisted/captured scene configuration claiming settings that were never applied
+- full `ApplyConfiguration` now captures the previous scene configuration and performs reverse-order best-effort rollback if a later subsystem apply fails, preventing overlay failures from leaving earlier environment/render/camera/light changes partially committed; rollback-step failures are isolated and reported without skipping the remaining restore steps
 - missing `DesktopRenderBootstrap` lookup is negative-cached for one monotonic second, preserving late discovery while preventing repeated global lookup during temporary/partial scene configuration
 - serializable camera/light/output scene configuration
 - capture and reapply without storing Unity object references
