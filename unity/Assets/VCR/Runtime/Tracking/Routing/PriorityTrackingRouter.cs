@@ -64,19 +64,15 @@ namespace VCR.Runtime.Tracking.Routing
 
         private string _selectedFaceSourceId;
         private long _selectedFaceChildSequence = -1;
-        private long _faceSequence;
 
         private string _selectedBodySourceId;
         private long _selectedBodyChildSequence = -1;
-        private long _bodySequence;
 
         private string _selectedPoseSourceId;
         private long _selectedPoseChildSequence = -1;
-        private long _poseSequence;
 
         private string _selectedExpressionSourceId;
         private long _selectedExpressionChildSequence = -1;
-        private long _expressionSequence;
 
         private long _faceSourceSwitches;
         private long _bodySourceSwitches;
@@ -522,15 +518,7 @@ namespace VCR.Runtime.Tracking.Routing
             _selectedFaceChildSequence = selected.Sequence;
             _selectedFaceSourceId = selected.SourceId;
 
-            _latestFace = new TrackingFrame(
-                ++_faceSequence,
-                selected.SourceTimestampUs,
-                selected.ValidRegions,
-                selected.Confidence,
-                selected.SubjectDetected,
-                face: selected.Face,
-                sourceId: selected.SourceId,
-                runtimeTimestampUs: selected.RuntimeTimestampUs);
+            _latestFace = selected;
         }
 
         private void UpdateBodyHandsSnapshot()
@@ -564,17 +552,7 @@ namespace VCR.Runtime.Tracking.Routing
             _selectedBodyChildSequence = selected.Sequence;
             _selectedBodySourceId = selected.SourceId;
 
-            _latestBodyHands = new TrackingFrame(
-                ++_bodySequence,
-                selected.SourceTimestampUs,
-                selected.ValidRegions,
-                selected.Confidence,
-                selected.SubjectDetected,
-                upperBody: selected.UpperBody,
-                leftHand: selected.LeftHand,
-                rightHand: selected.RightHand,
-                sourceId: selected.SourceId,
-                runtimeTimestampUs: selected.RuntimeTimestampUs);
+            _latestBodyHands = selected;
         }
 
         private void UpdateExternalPoseSnapshots()
@@ -637,18 +615,7 @@ namespace VCR.Runtime.Tracking.Routing
                 poseFrame.SourceId;
 
             _latestHumanoidPose =
-                new TrackingFrame(
-                    ++_poseSequence,
-                    poseFrame.SourceTimestampUs,
-                    poseFrame.ValidRegions,
-                    poseFrame.Confidence,
-                    poseFrame.SubjectDetected,
-                    humanoidPose:
-                        poseFrame.HumanoidPose,
-                    sourceId:
-                        poseFrame.SourceId,
-                    runtimeTimestampUs:
-                        poseFrame.RuntimeTimestampUs);
+                poseFrame;
         }
 
         private void UpdateExpressionSnapshot()
@@ -711,19 +678,7 @@ namespace VCR.Runtime.Tracking.Routing
                 selected.SourceId;
 
             _latestExpressions =
-                new TrackingFrame(
-                    ++_expressionSequence,
-                    selected.SourceTimestampUs,
-                    selected.ValidRegions |
-                        TrackingRegion.Expressions,
-                    selected.Confidence,
-                    selected.SubjectDetected,
-                    expressions:
-                        selected.Expressions,
-                    sourceId:
-                        selected.SourceId,
-                    runtimeTimestampUs:
-                        selected.RuntimeTimestampUs);
+                selected;
         }
 
         private static bool TryGetUsableExpression(
