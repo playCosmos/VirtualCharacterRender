@@ -1786,6 +1786,34 @@ forbid_source_pattern(
     "capability status capture must reuse the maintained sorted id index instead of sorting every snapshot",
 )
 
+event_runtime_rule = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeRule.cs"
+)
+event_runtime_engine = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeEngine.cs"
+)
+require_source_contains(
+    event_runtime_rule,
+    "public static class EventRuntimeRuleCloner",
+    "event runtime deep-clone policy must be centralized in the core rule model",
+)
+require_source_contains(
+    event_runtime_rule,
+    "private static EventActionTemplate[]\n            CloneActions(",
+    "event runtime deep cloner must include nested action templates",
+)
+require_source_contains(
+    event_runtime_engine,
+    "EventRuntimeRuleCloner\n                    .CloneRules(",
+    "event runtime engine must deep-clone caller-owned rules before installation",
+)
+
 event_runtime_host = (
     VCR
     / "Runtime"
@@ -1810,18 +1838,13 @@ require_source_contains(
 )
 require_source_contains(
     event_runtime_host,
-    "var staged =\n                CloneRules(\n                    nextRules);",
+    "EventRuntimeRuleCloner\n                    .CloneRules(\n                        nextRules);",
     "event runtime host must deep-clone caller-owned rules before installation",
 )
 require_source_contains(
     event_runtime_host,
-    "return CloneRules(\n                rules);",
+    "return EventRuntimeRuleCloner\n                .CloneRules(\n                    rules);",
     "event runtime host CaptureRules must deep-clone the live nested rule graph",
-)
-require_source_contains(
-    event_runtime_host,
-    "private static EventActionTemplate[]\n            CloneActions(",
-    "event runtime host deep clone must include nested action templates",
 )
 require_source_contains(
     event_runtime_host,
