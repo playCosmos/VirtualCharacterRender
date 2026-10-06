@@ -861,6 +861,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_settingsSummaryCache",
+    "application UI Settings refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "SettingsSummaryCacheMatches(",
+    "application UI Settings refresh must compare displayed runtime/capability/render state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_settingsSummaryCapabilityId",
+    "settings summary cache must include the selected capability identity",
+)
+require_source_contains(
+    application_ui,
+    "_settingsSummaryRenderScale",
+    "settings summary cache must include displayed render settings",
+)
+require_source_contains(
+    application_ui,
     "EnvironmentSummaryCacheMatches(",
     "application UI Environment refresh must compare displayed state before rebuilding text",
 )
