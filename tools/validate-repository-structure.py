@@ -2295,6 +2295,39 @@ require_source_contains(
     "baked cue rebuild must commit only after all staged cues validate",
 )
 
+procedural_motion_cue_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs"
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "_cueIds.AsReadOnly()",
+    "procedural motion cue ids must expose a read-only view",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "CloneCueDefinitions(",
+    "procedural motion cue ConfigureCues input must be deep-cloned",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "sourceCue?.Clone()",
+    "procedural motion cue rebuild must isolate live cues from serialized authoring objects",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "var stagedCues =",
+    "procedural motion cue rebuild must stage a replacement set before committing",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "public ProceduralMotionCueDefinition Clone()",
+    "procedural motion cue definitions must deep-clone curves and bone cue data",
+)
+
 motion_cue_sources = [
     VCR
     / "Runtime"
@@ -2477,6 +2510,16 @@ require_source_contains(
     p11_appearance_validation,
     "currentInvalidationNotifications",
     "P11 appearance validation must cover current-preset invalidation notifications",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"caller-mutated-spin\"",
+    "P11 appearance validation must prove procedural ConfigureCues caller mutation is isolated",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-procedural\"",
+    "P11 appearance validation must prove invalid procedural replacement preserves the prior live cue set",
 )
 
 p5_mixer_validation = (
