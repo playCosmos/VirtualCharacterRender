@@ -231,6 +231,74 @@ namespace VCR.Editor.P11
                     "immediate preset must atomically select the configured outfit and accessory",
                     failures);
 
+                var healthyAppearanceNotifications = 0;
+                var healthyStatusNotifications = 0;
+                Action<AppearanceStateSnapshot>
+                    throwingAppearanceSubscriber =
+                        _ =>
+                            throw new InvalidOperationException(
+                                "appearance subscriber failure");
+                Action<AppearanceStateSnapshot>
+                    healthyAppearanceSubscriber =
+                        _ =>
+                            healthyAppearanceNotifications++;
+                Action<AppearanceRuntimeStatus>
+                    throwingStatusSubscriber =
+                        _ =>
+                            throw new InvalidOperationException(
+                                "status subscriber failure");
+                Action<AppearanceRuntimeStatus>
+                    healthyStatusSubscriber =
+                        _ =>
+                            healthyStatusNotifications++;
+
+                runtime.AppearanceChanged +=
+                    throwingAppearanceSubscriber;
+                runtime.AppearanceChanged +=
+                    healthyAppearanceSubscriber;
+                runtime.StatusChanged +=
+                    throwingStatusSubscriber;
+                runtime.StatusChanged +=
+                    healthyStatusSubscriber;
+
+                var subscriberIsolated =
+                    runtime.SetPreset(
+                        "formal-crown",
+                        "Immediate",
+                        out var subscriberIsolationError);
+
+                runtime.AppearanceChanged -=
+                    throwingAppearanceSubscriber;
+                runtime.AppearanceChanged -=
+                    healthyAppearanceSubscriber;
+                runtime.StatusChanged -=
+                    throwingStatusSubscriber;
+                runtime.StatusChanged -=
+                    healthyStatusSubscriber;
+
+                Expect(
+                    subscriberIsolated &&
+                    string.IsNullOrEmpty(
+                        subscriberIsolationError) &&
+                    runtime.Status.State ==
+                        AppearanceRuntimeState.Ready &&
+                    runtime.Current.PresetId ==
+                        "formal-crown" &&
+                    healthyAppearanceNotifications > 0 &&
+                    healthyStatusNotifications > 0,
+                    "appearance/status subscriber exceptions must not abort an already-committed appearance change or block healthy subscribers: " +
+                    subscriberIsolationError,
+                    failures);
+
+                Expect(
+                    runtime.SetPreset(
+                        "casual-hat",
+                        "Immediate",
+                        out var subscriberRestoreError),
+                    "appearance subscriber isolation validation must restore the baseline preset: " +
+                    subscriberRestoreError,
+                    failures);
+
                 Expect(
                     runtime.SetPreset(
                         "formal-crown",
