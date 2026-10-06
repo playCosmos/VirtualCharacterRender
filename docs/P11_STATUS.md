@@ -156,6 +156,8 @@ The application UI dependency refresh also reuses one active-`MonoBehaviour` dis
 
 Environment availability/control/summary refresh now uses an `IEnvironmentRuntime` cached by that same bounded dependency pass rather than polling `SingleCharacterSceneRuntime.EnvironmentRuntime` every 0.5 seconds. The cached environment interface is tied to the scene-runtime instance that produced it, so a replaced/destroyed scene cannot leave the UI reading an orphaned environment runtime. An intentionally control-less tracking configuration also negative-caches its expensive `FindObjectsInactive.Include` control scan for five seconds; explicit capability enable/disable forces an immediate rescan so user-driven capability changes do not inherit that delay.
 
+Appearance runtime notifications are now subscriber-isolated: a throwing `AppearanceChanged` or `StatusChanged` observer cannot turn an already committed wardrobe/accessory change into a failed/stuck transition or prevent healthy subscribers from receiving the same notification. Failure counters are exposed through appearance diagnostics metrics.
+
 ## Runtime scene
 
 Interactive scene generation:
