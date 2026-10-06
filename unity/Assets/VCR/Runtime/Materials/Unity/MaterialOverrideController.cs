@@ -129,6 +129,22 @@ namespace VCR.Runtime.Materials.Unity
             }
         }
 
+        public bool TryGetSlotAt(
+            int index,
+            out MaterialSlotDescriptor descriptor)
+        {
+            if (index < 0 ||
+                index >= _descriptors.Count)
+            {
+                descriptor = default;
+                return false;
+            }
+
+            descriptor =
+                _descriptors[index];
+            return true;
+        }
+
         public MaterialSlotDescriptor[] GetSlots()
         {
             return _descriptors.ToArray();
