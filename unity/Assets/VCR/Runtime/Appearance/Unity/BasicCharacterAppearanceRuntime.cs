@@ -106,6 +106,7 @@ namespace VCR.Runtime.Appearance.Unity
         private long _transitionCancelledCount;
         private long _appearanceSubscriberFailureCount;
         private long _statusSubscriberFailureCount;
+        private long _executorProbeFailureCount;
 
         public AppearanceRuntimeStatus Status
         {
@@ -2687,9 +2688,17 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var step in
                      transition.CancellationSteps)
             {
-                if (step == null ||
-                    (step.Required &&
-                     CountExecutors(step) != 1))
+                if (step == null)
+                {
+                    return false;
+                }
+
+                if (step.Required &&
+                    (!TryCountExecutors(
+                         step,
+                         out var executorCount,
+                         out _) ||
+                     executorCount != 1))
                 {
                     return false;
                 }
@@ -2857,8 +2866,15 @@ namespace VCR.Runtime.Appearance.Unity
                     continue;
                 }
 
-                var count =
-                    CountExecutors(step);
+                if (!TryCountExecutors(
+                        step,
+                        out var count,
+                        out var executorProbeError))
+                {
+                    error =
+                        executorProbeError;
+                    return false;
+                }
 
                 if (count != 1)
                 {
@@ -2869,13 +2885,24 @@ namespace VCR.Runtime.Appearance.Unity
                     return false;
                 }
 
-                if (step.Blocking &&
-                    CountCompletionProbes(
-                        step) != 1)
+                if (step.Blocking)
                 {
-                    error =
-                        $"Blocking transition action '{step.ActionType}' requires exactly one completion probe.";
-                    return false;
+                    if (!TryCountCompletionProbes(
+                            step,
+                            out var completionCount,
+                            out var completionProbeError))
+                    {
+                        error =
+                            completionProbeError;
+                        return false;
+                    }
+
+                    if (completionCount != 1)
+                    {
+                        error =
+                            $"Blocking transition action '{step.ActionType}' requires exactly one completion probe.";
+                        return false;
+                    }
                 }
             }
 
@@ -2904,12 +2931,25 @@ namespace VCR.Runtime.Appearance.Unity
                         return false;
                     }
 
-                    var executorCount =
-                        CountExecutors(
-                            dependencyStep);
-                    var completionCount =
-                        CountCompletionProbes(
-                            dependencyStep);
+                    if (!TryCountExecutors(
+                            dependencyStep,
+                            out var executorCount,
+                            out var dependencyExecutorError))
+                    {
+                        error =
+                            dependencyExecutorError;
+                        return false;
+                    }
+
+                    if (!TryCountCompletionProbes(
+                            dependencyStep,
+                            out var completionCount,
+                            out var dependencyCompletionError))
+                    {
+                        error =
+                            dependencyCompletionError;
+                        return false;
+                    }
 
                     if (executorCount != 1 ||
                         completionCount != 1)
@@ -2938,9 +2978,15 @@ namespace VCR.Runtime.Appearance.Unity
                     continue;
                 }
 
-                var count =
-                    CountExecutors(
-                        step);
+                if (!TryCountExecutors(
+                        step,
+                        out var count,
+                        out var cancellationProbeError))
+                {
+                    error =
+                        cancellationProbeError;
+                    return false;
+                }
 
                 if (count != 1)
                 {
@@ -2967,8 +3013,21 @@ namespace VCR.Runtime.Appearance.Unity
             foreach (var executor in
                      _executors)
             {
-                if (!IsExecutorAlive(executor) ||
-                    !executor.CanExecute(step))
+                if (!IsExecutorAlive(executor))
+                {
+                    continue;
+                }
+
+                if (!TryCanExecute(
+                        executor,
+                        step,
+                        out var canExecute,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!canExecute)
                 {
                     continue;
                 }
@@ -3099,9 +3158,16 @@ namespace VCR.Runtime.Appearance.Unity
                     step,
                     out var cachedProbe))
             {
-                if (IsCompletionProbeUsable(
+                if (!TryIsCompletionProbeUsable(
                         step,
-                        cachedProbe))
+                        cachedProbe,
+                        out var usable,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (usable)
                 {
                     return TryPollCompletionProbe(
                         cachedProbe,
@@ -3124,11 +3190,35 @@ namespace VCR.Runtime.Appearance.Unity
                 if (!IsExecutorAlive(executor) ||
                     executor is not
                         IAppearanceTransitionStepCompletionProbe
-                            probe ||
-                    !executor.CanExecute(
-                        step) ||
-                    !probe.CanTrackCompletion(
-                        step))
+                            probe)
+                {
+                    continue;
+                }
+
+                if (!TryCanExecute(
+                        executor,
+                        step,
+                        out var canExecute,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!canExecute)
+                {
+                    continue;
+                }
+
+                if (!TryCanTrackCompletion(
+                        probe,
+                        step,
+                        out var canTrack,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!canTrack)
                 {
                     continue;
                 }
@@ -3167,16 +3257,48 @@ namespace VCR.Runtime.Appearance.Unity
                 out error);
         }
 
-        private static bool IsCompletionProbeUsable(
+        private bool TryIsCompletionProbeUsable(
             AppearanceTransitionStep step,
-            IAppearanceTransitionStepCompletionProbe probe)
+            IAppearanceTransitionStepCompletionProbe probe,
+            out bool usable,
+            out string error)
         {
-            return
-                probe is
-                    IAppearanceTransitionStepExecutor executor &&
-                IsExecutorAlive(executor) &&
-                executor.CanExecute(step) &&
-                probe.CanTrackCompletion(step);
+            usable = false;
+            error = null;
+
+            if (probe is not
+                    IAppearanceTransitionStepExecutor executor ||
+                !IsExecutorAlive(executor))
+            {
+                return true;
+            }
+
+            if (!TryCanExecute(
+                    executor,
+                    step,
+                    out var canExecute,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!canExecute)
+            {
+                return true;
+            }
+
+            if (!TryCanTrackCompletion(
+                    probe,
+                    step,
+                    out var canTrack,
+                    out error))
+            {
+                return false;
+            }
+
+            usable =
+                canTrack;
+            return true;
         }
 
         private static bool TryPollCompletionProbe(
@@ -3203,46 +3325,141 @@ namespace VCR.Runtime.Appearance.Unity
             }
         }
 
-        private int CountCompletionProbes(
-            AppearanceTransitionStep step)
+        private bool TryCountCompletionProbes(
+            AppearanceTransitionStep step,
+            out int count,
+            out string error)
         {
-            var count = 0;
+            count = 0;
+            error = null;
 
             foreach (var executor in
                      _executors)
             {
-                if (IsExecutorAlive(executor) &&
-                    executor is
+                if (!IsExecutorAlive(executor) ||
+                    executor is not
                         IAppearanceTransitionStepCompletionProbe
-                            probe &&
-                    executor.CanExecute(
-                        step) &&
-                    probe.CanTrackCompletion(
-                        step))
+                            probe)
+                {
+                    continue;
+                }
+
+                if (!TryCanExecute(
+                        executor,
+                        step,
+                        out var canExecute,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!canExecute)
+                {
+                    continue;
+                }
+
+                if (!TryCanTrackCompletion(
+                        probe,
+                        step,
+                        out var canTrack,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (canTrack)
                 {
                     count++;
                 }
             }
 
-            return count;
+            return true;
         }
 
-        private int CountExecutors(
-            AppearanceTransitionStep step)
+        private bool TryCountExecutors(
+            AppearanceTransitionStep step,
+            out int count,
+            out string error)
         {
-            var count = 0;
+            count = 0;
+            error = null;
 
             foreach (var executor in
                      _executors)
             {
-                if (IsExecutorAlive(executor) &&
-                    executor.CanExecute(step))
+                if (!IsExecutorAlive(executor))
+                {
+                    continue;
+                }
+
+                if (!TryCanExecute(
+                        executor,
+                        step,
+                        out var canExecute,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (canExecute)
                 {
                     count++;
                 }
             }
 
-            return count;
+            return true;
+        }
+
+        private bool TryCanExecute(
+            IAppearanceTransitionStepExecutor executor,
+            AppearanceTransitionStep step,
+            out bool canExecute,
+            out string error)
+        {
+            canExecute = false;
+            error = null;
+
+            try
+            {
+                canExecute =
+                    executor.CanExecute(
+                        step);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                _executorProbeFailureCount++;
+                error =
+                    "Transition executor CanExecute failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        private bool TryCanTrackCompletion(
+            IAppearanceTransitionStepCompletionProbe probe,
+            AppearanceTransitionStep step,
+            out bool canTrack,
+            out string error)
+        {
+            canTrack = false;
+            error = null;
+
+            try
+            {
+                canTrack =
+                    probe.CanTrackCompletion(
+                        step);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                _executorProbeFailureCount++;
+                error =
+                    "Transition completion probe CanTrackCompletion failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         private void RefreshExecutorsIfNeeded()
@@ -3632,6 +3849,11 @@ namespace VCR.Runtime.Appearance.Unity
                 new RuntimeMetric(
                     "appearance.subscriber.status_failures",
                     _statusSubscriberFailureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.executor_probe_failures",
+                    _executorProbeFailureCount,
                     "count"));
             output.Add(
                 new RuntimeMetric(
