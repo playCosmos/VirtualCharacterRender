@@ -760,6 +760,31 @@ require_source_contains(
     "appearance.subscriber.status_failures",
     "appearance status subscriber failure diagnostics metric must remain exposed",
 )
+require_source_contains(
+    appearance_runtime,
+    "TryCanExecute(",
+    "appearance transition executor capability probes must be exception-contained",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCanTrackCompletion(",
+    "appearance transition completion capability probes must be exception-contained",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCountExecutors(",
+    "appearance transition required-executor validation must use the contained probe path",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCountCompletionProbes(",
+    "appearance transition completion validation must use the contained probe path",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.transition.executor_probe_failures",
+    "appearance transition executor probe failures must remain visible in diagnostics",
+)
 forbid_source_pattern(
     appearance_runtime,
     r"AppearanceChanged\?\.Invoke",
@@ -1692,6 +1717,11 @@ p11_appearance_validation = (
     / "Editor"
     / "P11"
     / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation,
+    "P11ThrowingProbeExecutor",
+    "P11 validation must cover throwing transition executor capability probes",
 )
 require_source_contains(
     p11_appearance_validation,
