@@ -71,6 +71,17 @@ namespace VCR.Runtime.Scene
             lightController != null
                 ? lightController
                 : null;
+
+        public bool HasOverlayOutput
+        {
+            get
+            {
+                ResolveOverlayOutput();
+                return IsServiceAlive(
+                    _overlayOutput);
+            }
+        }
+
         public bool TryCaptureOverlayOutput(
             out OverlayOutputStatus status,
             out OverlayOutputSettings settings,
