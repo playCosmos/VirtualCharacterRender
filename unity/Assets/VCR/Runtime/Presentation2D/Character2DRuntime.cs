@@ -31,6 +31,9 @@ namespace VCR.Runtime.Presentation2D
         private TrackingFrame _lastHumanoidPose;
         private TrackingFrame _lastExpressions;
 
+        private Character2DParameterValue[] _parameterScratch =
+            Array.Empty<Character2DParameterValue>();
+
         private Character2DParameterMappingProfile
             _validatedMappingProfile;
         private ICharacter2DBackend
@@ -406,12 +409,18 @@ namespace VCR.Runtime.Presentation2D
                             "2D parameter mapping validation failed.");
                     }
 
+                    EnsureParameterScratchCapacity(
+                        parameterMappingProfile
+                            .Bindings
+                            .Length);
+
                     if (!Character2DParameterMapper
-                        .TryEvaluateValidated(
+                        .TryEvaluateValidatedInto(
                             parameterMappingProfile,
                             _backend.BackendId,
                             snapshot,
-                            out var values,
+                            _parameterScratch,
+                            out var valueCount,
                             out error))
                     {
                         return FailApply(
@@ -419,7 +428,7 @@ namespace VCR.Runtime.Presentation2D
                             "2D parameter mapping evaluation failed.");
                     }
 
-                    if (values.Length == 0)
+                    if (valueCount == 0)
                     {
                         Remember(
                             snapshot,
@@ -429,7 +438,9 @@ namespace VCR.Runtime.Presentation2D
                     }
 
                     if (!sink.TryApplyParameters(
-                            values,
+                            _parameterScratch.AsSpan(
+                                0,
+                                valueCount),
                             out error))
                     {
                         return FailApply(
@@ -461,6 +472,25 @@ namespace VCR.Runtime.Presentation2D
             _applyCount++;
             _lastError = null;
             return true;
+        }
+
+        private void EnsureParameterScratchCapacity(
+            int required)
+        {
+            required =
+                Math.Max(
+                    0,
+                    required);
+
+            if (_parameterScratch.Length >=
+                required)
+            {
+                return;
+            }
+
+            _parameterScratch =
+                new Character2DParameterValue[
+                    required];
         }
 
         private bool EnsureConfiguredMappingValidated(
