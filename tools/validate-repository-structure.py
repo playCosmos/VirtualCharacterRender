@@ -905,6 +905,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_materialSummaryCache",
+    "application UI Materials refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "MaterialSummaryCacheMatches(",
+    "application UI Materials refresh must compare selected status/descriptor state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_materialSummaryRequestedSlotId",
+    "material summary cache must include the displayed/requested slot id",
+)
+require_source_contains(
+    application_ui,
+    "_materialSummaryErrorCount",
+    "material summary cache must include controller error count",
+)
+require_source_contains(
+    application_ui,
     "TryCaptureRenderSettings(",
     "application UI Output refresh must sample render-bootstrap availability once for its cache key",
 )
