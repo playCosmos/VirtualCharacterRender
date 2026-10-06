@@ -100,14 +100,16 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            var ids =
-                new System.Collections.Generic
-                    .HashSet<string>(
-                        StringComparer.Ordinal);
+            var bindings =
+                profile.Bindings;
 
-            foreach (var binding in
-                     profile.Bindings)
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
             {
+                var binding =
+                    bindings[i];
+
                 if (binding == null ||
                     string.IsNullOrWhiteSpace(
                         binding.TargetParameterId))
@@ -117,12 +119,23 @@ namespace VCR.Runtime.Presentation2D
                     return false;
                 }
 
-                if (!ids.Add(
-                        binding.TargetParameterId))
+                for (var j = 0;
+                     j < i;
+                     j++)
                 {
-                    error =
-                        $"Duplicate 2D target parameter id '{binding.TargetParameterId}'.";
-                    return false;
+                    var previous =
+                        bindings[j];
+
+                    if (previous != null &&
+                        string.Equals(
+                            previous.TargetParameterId,
+                            binding.TargetParameterId,
+                            StringComparison.Ordinal))
+                    {
+                        error =
+                            $"Duplicate 2D target parameter id '{binding.TargetParameterId}'.";
+                        return false;
+                    }
                 }
 
                 if (!IsFinite(
@@ -151,10 +164,10 @@ namespace VCR.Runtime.Presentation2D
                     return false;
                 }
 
-                if (!Enum.IsDefined(
-                        typeof(
-                            Character2DParameterSourceKind),
-                        binding.SourceKind))
+                if ((int)binding.SourceKind < 0 ||
+                    (int)binding.SourceKind >
+                        (int)Character2DParameterSourceKind
+                            .HeadRollDegrees)
                 {
                     error =
                         $"2D parameter '{binding.TargetParameterId}' uses unsupported source kind '{binding.SourceKind}'.";
@@ -164,9 +177,9 @@ namespace VCR.Runtime.Presentation2D
                 if (binding.SourceKind ==
                         Character2DParameterSourceKind
                             .FaceCoefficient &&
-                    !Enum.IsDefined(
-                        typeof(FaceCoefficient),
-                        binding.FaceCoefficient))
+                    ((int)binding.FaceCoefficient < 0 ||
+                     (int)binding.FaceCoefficient >=
+                        (int)FaceCoefficient.Count))
                 {
                     error =
                         $"2D parameter '{binding.TargetParameterId}' uses an invalid face coefficient.";
@@ -219,14 +232,48 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
-            var result =
-                new System.Collections.Generic
-                    .List<Character2DParameterValue>(
-                        profile.Bindings.Length);
+            var bindings =
+                profile.Bindings;
+            var valueCount = 0;
 
-            foreach (var binding in
-                     profile.Bindings)
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
             {
+                var binding =
+                    bindings[i];
+
+                if (TryReadSource(
+                        binding,
+                        snapshot,
+                        out _) ||
+                    binding
+                        .UseDefaultWhenUnavailable)
+                {
+                    valueCount++;
+                }
+            }
+
+            if (valueCount == 0)
+            {
+                values =
+                    Array.Empty<
+                        Character2DParameterValue>();
+                return true;
+            }
+
+            var result =
+                new Character2DParameterValue[
+                    valueCount];
+            var resultIndex = 0;
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                var binding =
+                    bindings[i];
+
                 if (!TryReadSource(
                         binding,
                         snapshot,
@@ -266,17 +313,20 @@ namespace VCR.Runtime.Presentation2D
                 {
                     error =
                         $"2D parameter '{binding.TargetParameterId}' evaluated to a non-finite value.";
+                    values =
+                        Array.Empty<
+                            Character2DParameterValue>();
                     return false;
                 }
 
-                result.Add(
+                result[resultIndex++] =
                     new Character2DParameterValue(
                         binding.TargetParameterId,
-                        output));
+                        output);
             }
 
             values =
-                result.ToArray();
+                result;
             return true;
         }
 
