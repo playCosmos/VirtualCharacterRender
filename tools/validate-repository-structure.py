@@ -851,6 +851,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_trackingSummaryCache",
+    "application UI Tracking refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "TrackingSummaryCacheMatches(",
+    "application UI Tracking refresh must compare displayed presence/control state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_trackingSummaryEvents",
+    "tracking summary cache must include transient presence-event flags in its cache key",
+)
+require_source_contains(
+    application_ui,
+    "TrackingSummaryControlState[]",
+    "tracking summary cache must reuse control-state storage instead of allocating per refresh",
+)
+require_source_contains(
+    application_ui,
     "GetSortedDiagnosticMetrics(",
     "application UI Diagnostics refresh must reuse one sorted metric snapshot per diagnostics report",
 )
