@@ -1061,6 +1061,27 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "MonoBehaviour[] activeDependencyBehaviours",
+    "application UI dependency refresh must share one active-behaviour discovery snapshot",
+)
+require_source_contains(
+    application_ui,
+    "GetActiveDependencyBehaviours(",
+    "application UI optional dependency resolvers must reuse the shared active-behaviour snapshot",
+)
+require_source_contains(
+    application_ui,
+    "ResolveCharacterFileSelectionAdapter(\n                    ref activeDependencyBehaviours);",
+    "application UI file-selection discovery must participate in shared dependency scanning",
+)
+require_source_contains(
+    application_ui,
+    "ResolveAppearanceRuntime(\n                    ref activeDependencyBehaviours);",
+    "application UI appearance discovery must participate in shared dependency scanning",
+)
+
+require_source_contains(
+    application_ui,
     "_uiRefreshPassActive",
     "application UI must scope runtime sample reuse to one RefreshAll pass",
 )
