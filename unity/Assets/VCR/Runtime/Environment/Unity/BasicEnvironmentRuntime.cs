@@ -661,16 +661,54 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            ApplyLightingProfileToTargets(
-                EnvironmentLightingProfile.Neutral);
+            var previousBehaviours =
+                lightingTargetBehaviours;
+            var previousTargets =
+                _lightingTargets;
+            var previousProfile =
+                _lightingProfile;
+
+            if (!TryApplyLightingProfileToTargets(
+                    previousTargets,
+                    EnvironmentLightingProfile.Neutral,
+                    out error))
+            {
+                TryApplyLightingProfileToTargets(
+                    previousTargets,
+                    previousProfile,
+                    out _);
+                _lastError = error;
+                return false;
+            }
 
             lightingTargetBehaviours =
                 nextBehaviours;
             _lightingTargets =
                 nextTargets;
 
-            ApplyLightingProfileToTargets(
-                _lightingProfile);
+            if (!TryApplyLightingProfileToTargets(
+                    nextTargets,
+                    previousProfile,
+                    out error))
+            {
+                TryApplyLightingProfileToTargets(
+                    nextTargets,
+                    EnvironmentLightingProfile.Neutral,
+                    out _);
+
+                lightingTargetBehaviours =
+                    previousBehaviours;
+                _lightingTargets =
+                    previousTargets;
+
+                TryApplyLightingProfileToTargets(
+                    previousTargets,
+                    previousProfile,
+                    out _);
+
+                _lastError = error;
+                return false;
+            }
 
             _lastError = null;
             return true;
@@ -699,12 +737,24 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
+            var previousProfile =
+                _lightingProfile;
+
+            if (!TryApplyLightingProfileToTargets(
+                    _lightingTargets,
+                    profile,
+                    out error))
+            {
+                TryApplyLightingProfileToTargets(
+                    _lightingTargets,
+                    previousProfile,
+                    out _);
+                _lastError = error;
+                return false;
+            }
+
             _lightingProfile =
                 profile;
-
-            ApplyLightingProfileToTargets(
-                _lightingProfile);
-
             _lastError = null;
             return true;
         }
@@ -1197,10 +1247,20 @@ namespace VCR.Runtime.Environment.Unity
                     continue;
                 }
 
-                if (!target.ValidateEnvironmentLighting(
-                        profile,
-                        out error))
+                try
                 {
+                    if (!target.ValidateEnvironmentLighting(
+                            profile,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Environment lighting target validation failed: " +
+                        exception.Message;
                     return false;
                 }
             }
@@ -1210,21 +1270,30 @@ namespace VCR.Runtime.Environment.Unity
 
         private void ApplyCurrentLighting()
         {
-            ApplyLightingProfileToTargets(
-                _lightingProfile);
+            if (!TryApplyLightingProfileToTargets(
+                    _lightingTargets,
+                    _lightingProfile,
+                    out var error))
+            {
+                _lastError = error;
+            }
         }
 
-        private void ApplyLightingProfileToTargets(
-            EnvironmentLightingProfile profile)
+        private bool TryApplyLightingProfileToTargets(
+            IEnvironmentLightingTarget[] targets,
+            EnvironmentLightingProfile profile,
+            out string error)
         {
-            if (_lightingTargets == null ||
-                _lightingTargets.Length == 0)
+            error = null;
+
+            if (targets == null ||
+                targets.Length == 0)
             {
-                return;
+                return true;
             }
 
             foreach (var target in
-                     _lightingTargets)
+                     targets)
             {
                 if (!IsServiceAlive(target))
                 {
@@ -1239,15 +1308,19 @@ namespace VCR.Runtime.Environment.Unity
                 catch (Exception exception)
                 {
                     _lightingFailureCount++;
-                    _lastError =
+                    error ??=
                         "Environment lighting target failed: " +
                         exception.Message;
 
                     Debug.LogWarning(
-                        _lastError,
+                        "Environment lighting target failed: " +
+                        exception.Message,
                         this);
                 }
             }
+
+            return string.IsNullOrWhiteSpace(
+                error);
         }
 
         private void EnsureTransitionDriver()
