@@ -1250,6 +1250,11 @@ require_source_contains(
     "var sceneError =\n                    sceneRuntime.Status.LastError;",
     "application shutdown must propagate scene cleanup failures through its bool/error contract",
 )
+require_source_contains(
+    application_runtime_bootstrap,
+    "\"VCR application shutdown completed with errors: \"",
+    "application quit logging must describe aggregate shutdown failures instead of mislabeling every failure as a configuration-save error",
+)
 
 
 application_ui = (
