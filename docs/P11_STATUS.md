@@ -162,6 +162,8 @@ Appearance runtime notifications are now subscriber-isolated: a throwing `Appear
 
 Transition executor capability probes are also isolated. Exceptions from custom `CanExecute` or completion `CanTrackCompletion` implementations now fail closed with explicit errors instead of escaping validation/coroutine execution; probe failures are counted as `appearance.transition.executor_probe_failures`.
 
+The delegated Event Runtime action bridge applies the same rule to `IEventActionHandler.CanHandle` and `IEventActionCompletionProbe.CanTrackCompletion`. Throwing handler probes no longer escape `AppearanceTransitionActionExecutor`; `TryExecute`/`TryIsComplete` return explicit errors and diagnostics expose separate handler/completion probe failure counters.
+
 ## Runtime scene
 
 Interactive scene generation:
