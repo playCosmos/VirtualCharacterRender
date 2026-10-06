@@ -1401,6 +1401,62 @@ require_source_contains(
     "P6 validation must preserve finite lighting clamp semantics",
 )
 
+primary_camera_controller = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "PrimaryCameraController.cs"
+)
+require_source_contains(
+    primary_camera_controller,
+    "FiniteOrDefault(",
+    "primary camera settings must sanitize non-finite transform/projection values",
+)
+require_source_contains(
+    primary_camera_controller,
+    "SceneCameraSettings.Default",
+    "primary camera non-finite settings must fall back to known finite defaults",
+)
+
+primary_light_controller = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "PrimaryLightController.cs"
+)
+require_source_contains(
+    primary_light_controller,
+    "FiniteOrDefault(",
+    "primary light settings must sanitize non-finite numeric/color values",
+)
+require_source_contains(
+    primary_light_controller,
+    "value.Shadows == LightShadows.None",
+    "primary light settings must reject unsupported shadow enum values",
+)
+
+desktop_render_bootstrap = (
+    VCR
+    / "Runtime"
+    / "Rendering"
+    / "DesktopRenderBootstrap.cs"
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeConfiguration();",
+    "desktop render Apply must sanitize serialized runtime settings before touching global state",
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeRenderScale(",
+    "desktop render scale must reject NaN/Infinity before URP assignment",
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeResolutionPreset(",
+    "desktop render settings must normalize unsupported resolution preset values",
+)
+
 p1_renderer_validation = (
     VCR
     / "Editor"
@@ -1441,6 +1497,21 @@ require_source_contains(
     p1_renderer_validation,
     "captureFailureSaveResult",
     "P1 validation must prove configuration capture failure returns false/error without stopping the scene",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "nonFiniteCameraSettings",
+    "P1 validation must cover camera NaN/Infinity fallback",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "nonFiniteLightSettings",
+    "P1 validation must cover light NaN/Infinity fallback",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "(RenderResolutionPreset)999",
+    "P1 validation must cover unsupported render preset normalization",
 )
 require_source_contains(
     p1_renderer_validation,
