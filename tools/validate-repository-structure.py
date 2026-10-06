@@ -862,6 +862,24 @@ require_source_contains(
     "VMC accumulator must enforce its custom expression entry limit",
 )
 
+require_source_contains(
+    vmc_accumulator,
+    "regions |=\n                    TrackingRegion.Expressions;",
+    "VMC expression payloads must advertise TrackingRegion.Expressions at the producer boundary",
+)
+
+p0_vmc_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0VmcSetupMenu.cs"
+)
+require_source_contains(
+    p0_vmc_validation,
+    "expressionFrame.ValidRegions",
+    "P0 VMC validation must cover expression region flags",
+)
+
 vmc_source = (
     VCR
     / "Runtime"
