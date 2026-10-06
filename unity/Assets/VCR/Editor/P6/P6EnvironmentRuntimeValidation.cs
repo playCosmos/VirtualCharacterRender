@@ -725,6 +725,13 @@ namespace VCR.Editor.P6
                     "configuring bindings must apply the current state root immediately",
                     failures);
 
+                dayBinding.Configure(
+                    "external-day",
+                    night);
+                nightBinding.Configure(
+                    "external-night",
+                    day);
+
                 var stateEvents = 0;
                 Action<EnvironmentStateChange>
                     throwingStateSubscriber =
@@ -759,13 +766,20 @@ namespace VCR.Editor.P6
                 runtime.StateChanged -=
                     throwingStateSubscriber;
 
+                dayBinding.Configure(
+                    "day",
+                    day);
+                nightBinding.Configure(
+                    "night",
+                    night);
+
                 Expect(
                     changed &&
                     string.IsNullOrEmpty(
                         stateError) &&
                     !day.activeSelf &&
                     night.activeSelf,
-                    "SetState must atomically switch bound roots",
+                    "SetState must atomically switch bound roots and remain isolated from external mutation of the original binding objects",
                     failures);
 
                 Expect(
