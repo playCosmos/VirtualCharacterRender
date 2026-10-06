@@ -3407,10 +3407,10 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var slots =
-                _materialController.GetSlots();
+            var slotCount =
+                _materialController.SlotCount;
 
-            if (slots.Length == 0)
+            if (slotCount == 0)
             {
                 _lastActionMessage =
                     "No material slots are available.";
@@ -3421,14 +3421,16 @@ namespace VCR.Runtime.UI
             _materialSlotIndex =
                 (_materialSlotIndex +
                  offset +
-                 slots.Length) %
-                slots.Length;
+                 slotCount) %
+                slotCount;
 
-            if (_materialSlotInput != null)
+            if (_materialSlotInput != null &&
+                _materialController.TryGetSlotAt(
+                    _materialSlotIndex,
+                    out var selectedSlot))
             {
                 _materialSlotInput.text =
-                    slots[
-                        _materialSlotIndex].Id;
+                    selectedSlot.Id;
             }
 
             RefreshAll();
@@ -3577,19 +3579,21 @@ namespace VCR.Runtime.UI
             _materialController.RefreshSlots();
             _materialSlotIndex = 0;
 
-            var slots =
-                _materialController.GetSlots();
+            var slotCount =
+                _materialController.SlotCount;
 
             if (_materialSlotInput != null)
             {
                 _materialSlotInput.text =
-                    slots.Length > 0
-                        ? slots[0].Id
+                    _materialController.TryGetSlotAt(
+                        0,
+                        out var firstSlot)
+                        ? firstSlot.Id
                         : string.Empty;
             }
 
             _lastActionMessage =
-                $"Material slots refreshed: {slots.Length}.";
+                $"Material slots refreshed: {slotCount}.";
             RefreshAll();
         }
 
@@ -5443,12 +5447,9 @@ namespace VCR.Runtime.UI
 
         private void RefreshMaterialControlState()
         {
-            var slots =
-                _materialController != null
-                    ? _materialController.GetSlots()
-                    : Array.Empty<
-                        VCR.Runtime.Materials
-                            .MaterialSlotDescriptor>();
+            var slotCount =
+                _materialController?.SlotCount ??
+                0;
 
             _materialSlotIndex =
                 Mathf.Clamp(
@@ -5456,17 +5457,19 @@ namespace VCR.Runtime.UI
                     0,
                     Mathf.Max(
                         0,
-                        slots.Length - 1));
+                        slotCount - 1));
 
             if (_materialSlotInput != null &&
                 !_materialSlotInput.isFocused &&
                 string.IsNullOrWhiteSpace(
                     _materialSlotInput.text) &&
-                slots.Length > 0)
+                _materialController != null &&
+                _materialController.TryGetSlotAt(
+                    _materialSlotIndex,
+                    out var selectedSlot))
             {
                 _materialSlotInput.text =
-                    slots[
-                        _materialSlotIndex].Id;
+                    selectedSlot.Id;
             }
 
             var slotId =
@@ -6066,8 +6069,8 @@ namespace VCR.Runtime.UI
                 return "Material controller unavailable.";
             }
 
-            var slots =
-                _materialController.GetSlots();
+            var slotCount =
+                _materialController.SlotCount;
             var slotId =
                 _materialSlotInput
                     ?.text
@@ -6084,14 +6087,14 @@ namespace VCR.Runtime.UI
                 slotSummary =
                     $"{status.SlotId}: {status.Health}, shader={status.ShaderId ?? "<none>"}, preset={status.PresetId ?? "<none>"}, error={status.Error ?? "<none>"}";
             }
-            else if (slots.Length > 0)
+            else if (slotCount > 0 &&
+                     _materialController.TryGetSlotAt(
+                         Mathf.Clamp(
+                             _materialSlotIndex,
+                             0,
+                             slotCount - 1),
+                         out var slot))
             {
-                var slot =
-                    slots[
-                        Mathf.Clamp(
-                            _materialSlotIndex,
-                            0,
-                            slots.Length - 1)];
                 slotSummary =
                     $"{slot.Id}: source={slot.SourceMaterialName}, shader={slot.SourceShaderName}";
             }
