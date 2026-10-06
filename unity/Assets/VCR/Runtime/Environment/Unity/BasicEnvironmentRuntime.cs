@@ -801,11 +801,15 @@ namespace VCR.Runtime.Environment.Unity
             EnvironmentTransitionMode mode,
             float durationSeconds)
         {
-            defaultTransitionMode = mode;
-            defaultTransitionDuration =
-                Math.Max(
-                    0f,
+            var normalized =
+                new EnvironmentTransitionSpec(
+                    mode,
                     durationSeconds);
+
+            defaultTransitionMode =
+                normalized.Mode;
+            defaultTransitionDuration =
+                normalized.DurationSeconds;
         }
 
         public bool TickTransition(
