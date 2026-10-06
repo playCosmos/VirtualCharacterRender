@@ -220,6 +220,11 @@ require_source_contains(
     "MediaPipe presence timing conversion must reject non-finite seconds",
     "P3 validation must cover MediaPipe timing conversion sanitization and saturation",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "ARKit receiver configuration must contain non-finite timing/pose values",
+    "P3 validation must cover ARKit receiver numeric sanitization and timing saturation",
+)
 
 p0_vmc_validation = (
     VCR
@@ -3402,6 +3407,26 @@ require_source_contains(
     ifacial_receiver,
     "StartStreamingV2Bytes",
     "iFacialMocap handshake payload bytes must be cached instead of encoded on every retry",
+)
+require_source_contains(
+    ifacial_receiver,
+    "SanitizeReceiverConfiguration();",
+    "ARKit receiver startup must sanitize serialized timing and pose conversion values",
+)
+require_source_contains(
+    ifacial_receiver,
+    "private static float SanitizeSeconds(",
+    "ARKit receiver timing values must contain NaN/Infinity before scheduling",
+)
+require_source_contains(
+    ifacial_receiver,
+    "private static Vector3 SanitizeVector3(",
+    "ARKit receiver axis conversion vectors must contain non-finite components",
+)
+require_source_contains(
+    ifacial_receiver,
+    "microseconds >=\n                long.MaxValue",
+    "ARKit presence timing conversion must saturate oversized finite values",
 )
 require_source_contains(
     ifacial_receiver,
