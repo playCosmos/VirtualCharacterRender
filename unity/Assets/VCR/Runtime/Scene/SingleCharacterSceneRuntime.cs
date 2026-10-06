@@ -71,15 +71,38 @@ namespace VCR.Runtime.Scene
             lightController != null
                 ? lightController
                 : null;
-        public IOverlayOutputAdapter OverlayOutput
+        public bool TryCaptureOverlayOutput(
+            out OverlayOutputStatus status,
+            out OverlayOutputSettings settings,
+            out string error)
         {
-            get
-            {
-                ResolveOverlayOutput();
+            status = default;
+            settings = default;
+            error = null;
 
-                return IsServiceAlive(_overlayOutput)
-                    ? _overlayOutput
-                    : null;
+            ResolveOverlayOutput();
+
+            if (!IsServiceAlive(_overlayOutput))
+            {
+                error =
+                    "No overlay output adapter is configured.";
+                return false;
+            }
+
+            try
+            {
+                status =
+                    _overlayOutput.Status;
+                settings =
+                    _overlayOutput.Settings;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Overlay output status/settings read failed: " +
+                    exception.Message;
+                return false;
             }
         }
 
@@ -87,30 +110,22 @@ namespace VCR.Runtime.Scene
         {
             get
             {
-                try
+                if (TryCaptureOverlayOutput(
+                        out var status,
+                        out var settings,
+                        out var error))
                 {
-                    ResolveOverlayOutput();
-
-                    if (!IsServiceAlive(_overlayOutput))
-                    {
-                        return new OverlayCaptureReadiness(
-                            false,
-                            OverlayCaptureReadinessFailure.NotActive,
-                            "No overlay output adapter is configured.");
-                    }
-
                     return OverlayCaptureReadinessEvaluator.Evaluate(
-                        _overlayOutput.Status,
-                        _overlayOutput.Settings);
+                        status,
+                        settings);
                 }
-                catch (Exception exception)
-                {
-                    return new OverlayCaptureReadiness(
-                        false,
-                        OverlayCaptureReadinessFailure.Faulted,
-                        "Overlay output status/settings read failed: " +
-                        exception.Message);
-                }
+
+                return new OverlayCaptureReadiness(
+                    false,
+                    IsServiceAlive(_overlayOutput)
+                        ? OverlayCaptureReadinessFailure.Faulted
+                        : OverlayCaptureReadinessFailure.NotActive,
+                    error);
             }
         }
 
