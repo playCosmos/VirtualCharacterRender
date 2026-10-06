@@ -908,7 +908,9 @@ namespace VCR.Runtime.Scene
             }
 
             if (_state == SceneRuntimeState.Stopped &&
-                _capabilities == null)
+                _capabilities == null &&
+                string.IsNullOrWhiteSpace(
+                    _lastError))
             {
                 return;
             }
