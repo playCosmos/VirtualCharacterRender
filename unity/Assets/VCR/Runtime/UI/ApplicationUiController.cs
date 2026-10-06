@@ -63,8 +63,8 @@ namespace VCR.Runtime.UI
         private readonly StringBuilder _summaryBuilder =
             new(768);
 
-        private RuntimeMetric[] _diagnosticsMetricSource;
-        private RuntimeMetric[] _diagnosticsSortedMetrics =
+        private IReadOnlyList<RuntimeMetric> _diagnosticsMetricSource;
+        private IReadOnlyList<RuntimeMetric> _diagnosticsSortedMetrics =
             Array.Empty<RuntimeMetric>();
 
         private Canvas _canvas;
@@ -8071,7 +8071,7 @@ namespace VCR.Runtime.UI
                 true;
         }
 
-        private RuntimeMetric[]
+        private IReadOnlyList<RuntimeMetric>
             GetSortedDiagnosticMetrics(
                 RuntimeDiagnosticsSnapshot snapshot)
         {
@@ -8115,7 +8115,7 @@ namespace VCR.Runtime.UI
             var pageCount =
                 Math.Max(
                     1,
-                    (metrics.Length +
+                    (metrics.Count +
                      pageSize -
                      1) /
                     pageSize);
@@ -8129,7 +8129,7 @@ namespace VCR.Runtime.UI
                 pageSize;
             var end =
                 Math.Min(
-                    metrics.Length,
+                    metrics.Count,
                     start +
                     pageSize);
 
@@ -8191,9 +8191,9 @@ namespace VCR.Runtime.UI
                 $"Evidence directory: {evidenceDirectory}");
             builder.AppendLine();
             builder.AppendLine(
-                $"Subsystem metrics: {metrics.Length} | page {_diagnosticsMetricPage + 1}/{pageCount}");
+                $"Subsystem metrics: {metrics.Count} | page {_diagnosticsMetricPage + 1}/{pageCount}");
 
-            if (metrics.Length == 0)
+            if (metrics.Count == 0)
             {
                 builder.Append(
                     "<no subsystem metrics>");
@@ -8405,7 +8405,7 @@ namespace VCR.Runtime.UI
             var pageCount =
                 Math.Max(
                     1,
-                    (metrics.Length +
+                    (metrics.Count +
                      pageSize -
                      1) /
                     pageSize);
@@ -8427,7 +8427,7 @@ namespace VCR.Runtime.UI
             var pageCount =
                 Math.Max(
                     1,
-                    (metrics.Length +
+                    (metrics.Count +
                      pageSize -
                      1) /
                     pageSize);
