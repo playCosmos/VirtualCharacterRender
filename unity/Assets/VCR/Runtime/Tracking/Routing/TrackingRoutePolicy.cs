@@ -35,7 +35,8 @@ namespace VCR.Runtime.Tracking.Routing
                 if (facePriorityOrder == null ||
                     facePriorityOrder.Length == 0)
                 {
-                    return DefaultFacePriority();
+                    facePriorityOrder =
+                        DefaultFacePriority();
                 }
 
                 return facePriorityOrder;
@@ -49,7 +50,8 @@ namespace VCR.Runtime.Tracking.Routing
                 if (expressionPriorityOrder == null ||
                     expressionPriorityOrder.Length == 0)
                 {
-                    return DefaultExpressionPriority();
+                    expressionPriorityOrder =
+                        DefaultExpressionPriority();
                 }
 
                 return expressionPriorityOrder;
