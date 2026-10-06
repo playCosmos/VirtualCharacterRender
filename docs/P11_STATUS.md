@@ -154,6 +154,8 @@ Transition dependency discovery is hardened for the optional-handler case: missi
 
 The application UI dependency refresh also reuses one active-`MonoBehaviour` discovery snapshot across the optional character-file selector, appearance runtime, and tracking-presence resolvers. Their standalone/manual resolver paths still perform a live scan when explicitly invoked, while the periodic 2-second dependency pass no longer allocates duplicate scene-wide arrays for the same snapshot.
 
+Environment availability/control/summary refresh now uses an `IEnvironmentRuntime` cached by that same bounded dependency pass rather than polling `SingleCharacterSceneRuntime.EnvironmentRuntime` every 0.5 seconds. An intentionally control-less tracking configuration also negative-caches its expensive `FindObjectsInactive.Include` control scan for five seconds; explicit capability enable/disable forces an immediate rescan so user-driven capability changes do not inherit that delay.
+
 ## Runtime scene
 
 Interactive scene generation:
