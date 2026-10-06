@@ -122,6 +122,27 @@ namespace VCR.Runtime.Tracking.Mixing
                 Mathf.Clamp01(rotationWeight);
         }
 
+        public HumanoidPoseLayerMask Clone()
+        {
+            var clone =
+                new HumanoidPoseLayerMask
+                {
+                    defaultBoneWeight =
+                        defaultBoneWeight,
+                    rootPositionWeight =
+                        rootPositionWeight,
+                    rootRotationWeight =
+                        rootRotationWeight,
+                    boneOverrides =
+                        boneOverrides == null
+                            ? Array.Empty<HumanoidBoneWeight>()
+                            : (HumanoidBoneWeight[])
+                                boneOverrides.Clone()
+                };
+
+            return clone;
+        }
+
         public void SetBoneWeight(
             HumanoidBoneId bone,
             float weight)
