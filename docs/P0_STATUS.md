@@ -253,3 +253,5 @@ Neither should trigger speculative implementation during P0.
 12. record PASS/FAIL evidence
 13. resolve ADR-0003 / ADR-0006 / ADR-0007 from evidence
 14. only then decide P0 branch merge
+
+- published diagnostics snapshots now expose subsystem metrics through a cached read-only collection wrapper; consumers can retain allocation-free indexed reads, but cannot cast the snapshot back to a mutable metric array/list and alter the cached evidence later used by UI/JSON/CSV reporting
