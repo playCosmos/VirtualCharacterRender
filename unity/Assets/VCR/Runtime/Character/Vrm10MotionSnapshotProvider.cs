@@ -249,22 +249,18 @@ namespace VCR.Runtime.Character
                     continue;
                 }
 
-                var p =
-                    bone.localPosition;
-                var q =
-                    bone.localRotation;
+                if (!TryCaptureTransform(
+                        bone,
+                        out var position,
+                        out var rotation))
+                {
+                    continue;
+                }
 
                 bones[i] =
                     new NormalizedBonePose(
-                        new TrackingVector3(
-                            p.x,
-                            p.y,
-                            p.z),
-                        new TrackingQuaternion(
-                            q.x,
-                            q.y,
-                            q.z,
-                            q.w));
+                        position,
+                        rotation);
 
                 if (hasBone != null)
                 {
@@ -275,22 +271,16 @@ namespace VCR.Runtime.Character
                     1UL << i;
             }
 
-            var rootP =
-                target.transform.localPosition;
-            var rootQ =
-                target.transform.localRotation;
-
-            rootPosition =
-                new TrackingVector3(
-                    rootP.x,
-                    rootP.y,
-                    rootP.z);
-            rootRotation =
-                new TrackingQuaternion(
-                    rootQ.x,
-                    rootQ.y,
-                    rootQ.z,
-                    rootQ.w);
+            if (!TryCaptureTransform(
+                    target.transform,
+                    out rootPosition,
+                    out rootRotation))
+            {
+                rootPosition =
+                    TrackingVector3.Zero;
+                rootRotation =
+                    TrackingQuaternion.Identity;
+            }
         }
 
         private void EnsureBorrowedPoseBuffers()
@@ -337,7 +327,7 @@ namespace VCR.Runtime.Character
                 var key =
                     expressionKeys[i];
                 var value =
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         expressionRuntime.GetWeight(
                             key));
 
@@ -387,6 +377,61 @@ namespace VCR.Runtime.Character
                     customCount);
         }
 
+        private static bool TryCaptureTransform(
+            Transform transform,
+            out TrackingVector3 position,
+            out TrackingQuaternion rotation)
+        {
+            position =
+                TrackingVector3.Zero;
+            rotation =
+                TrackingQuaternion.Identity;
+
+            if (transform == null)
+            {
+                return false;
+            }
+
+            var p =
+                transform.localPosition;
+            var q =
+                transform.localRotation;
+
+            if (!float.IsFinite(p.x) ||
+                !float.IsFinite(p.y) ||
+                !float.IsFinite(p.z) ||
+                !float.IsFinite(q.x) ||
+                !float.IsFinite(q.y) ||
+                !float.IsFinite(q.z) ||
+                !float.IsFinite(q.w) ||
+                !float.IsFinite(q.sqrMagnitude) ||
+                q.sqrMagnitude < 1e-8f)
+            {
+                return false;
+            }
+
+            position =
+                new TrackingVector3(
+                    p.x,
+                    p.y,
+                    p.z);
+            rotation =
+                new TrackingQuaternion(
+                    q.x,
+                    q.y,
+                    q.z,
+                    q.w);
+            return true;
+        }
+
+        private static float Clamp01Finite(
+            float value)
+        {
+            return float.IsFinite(value)
+                ? Mathf.Clamp01(value)
+                : 0f;
+        }
+
         private void EnsureBorrowedCustomExpressionCapacity(
             int required)
         {
@@ -427,7 +472,7 @@ namespace VCR.Runtime.Character
                 var key =
                     expressionKeys[i];
                 var value =
-                    Mathf.Clamp01(
+                    Clamp01Finite(
                         expressionRuntime.GetWeight(
                             key));
 
