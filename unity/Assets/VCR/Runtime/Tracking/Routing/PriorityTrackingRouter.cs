@@ -62,17 +62,17 @@ namespace VCR.Runtime.Tracking.Routing
         private TrackingFrame _latestHumanoidPose;
         private TrackingFrame _latestExpressions;
 
+        private TrackingFrame _selectedFaceFrame;
         private string _selectedFaceSourceId;
-        private long _selectedFaceChildSequence = -1;
 
+        private TrackingFrame _selectedBodyFrame;
         private string _selectedBodySourceId;
-        private long _selectedBodyChildSequence = -1;
 
+        private TrackingFrame _selectedPoseFrame;
         private string _selectedPoseSourceId;
-        private long _selectedPoseChildSequence = -1;
 
+        private TrackingFrame _selectedExpressionFrame;
         private string _selectedExpressionSourceId;
-        private long _selectedExpressionChildSequence = -1;
 
         private long _faceSourceSwitches;
         private long _bodySourceSwitches;
@@ -524,11 +524,9 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            if (selected.Sequence == _selectedFaceChildSequence &&
-                string.Equals(
-                    selected.SourceId,
-                    _selectedFaceSourceId,
-                    StringComparison.Ordinal))
+            if (ReferenceEquals(
+                    selected,
+                    _selectedFaceFrame))
             {
                 return;
             }
@@ -538,7 +536,7 @@ namespace VCR.Runtime.Tracking.Routing
                 selected.SourceId,
                 ref _faceSourceSwitches);
 
-            _selectedFaceChildSequence = selected.Sequence;
+            _selectedFaceFrame = selected;
             _selectedFaceSourceId = selected.SourceId;
 
             _latestFace = selected;
@@ -558,11 +556,9 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            if (selected.Sequence == _selectedBodyChildSequence &&
-                string.Equals(
-                    selected.SourceId,
-                    _selectedBodySourceId,
-                    StringComparison.Ordinal))
+            if (ReferenceEquals(
+                    selected,
+                    _selectedBodyFrame))
             {
                 return;
             }
@@ -572,7 +568,7 @@ namespace VCR.Runtime.Tracking.Routing
                 selected.SourceId,
                 ref _bodySourceSwitches);
 
-            _selectedBodyChildSequence = selected.Sequence;
+            _selectedBodyFrame = selected;
             _selectedBodySourceId = selected.SourceId;
 
             _latestBodyHands = selected;
@@ -618,11 +614,9 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            if (poseFrame.Sequence == _selectedPoseChildSequence &&
-                string.Equals(
-                    poseFrame.SourceId,
-                    _selectedPoseSourceId,
-                    StringComparison.Ordinal))
+            if (ReferenceEquals(
+                    poseFrame,
+                    _selectedPoseFrame))
             {
                 return;
             }
@@ -632,8 +626,8 @@ namespace VCR.Runtime.Tracking.Routing
                 poseFrame.SourceId,
                 ref _poseSourceSwitches);
 
-            _selectedPoseChildSequence =
-                poseFrame.Sequence;
+            _selectedPoseFrame =
+                poseFrame;
             _selectedPoseSourceId =
                 poseFrame.SourceId;
 
@@ -680,12 +674,9 @@ namespace VCR.Runtime.Tracking.Routing
                 return;
             }
 
-            if (selected.Sequence ==
-                    _selectedExpressionChildSequence &&
-                string.Equals(
-                    selected.SourceId,
-                    _selectedExpressionSourceId,
-                    StringComparison.Ordinal))
+            if (ReferenceEquals(
+                    selected,
+                    _selectedExpressionFrame))
             {
                 return;
             }
@@ -695,8 +686,8 @@ namespace VCR.Runtime.Tracking.Routing
                 selected.SourceId,
                 ref _expressionSourceSwitches);
 
-            _selectedExpressionChildSequence =
-                selected.Sequence;
+            _selectedExpressionFrame =
+                selected;
             _selectedExpressionSourceId =
                 selected.SourceId;
 
@@ -1084,14 +1075,14 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void ResetFaceSelection()
         {
+            _selectedFaceFrame = null;
             _selectedFaceSourceId = null;
-            _selectedFaceChildSequence = -1;
         }
 
         private void ResetBodySelection()
         {
+            _selectedBodyFrame = null;
             _selectedBodySourceId = null;
-            _selectedBodyChildSequence = -1;
         }
 
         private void ResetPoseSelection()
@@ -1102,15 +1093,15 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void ResetHumanoidPoseSelection()
         {
+            _selectedPoseFrame = null;
             _selectedPoseSourceId = null;
-            _selectedPoseChildSequence = -1;
             _latestHumanoidPose = null;
         }
 
         private void ResetExpressionSelection()
         {
+            _selectedExpressionFrame = null;
             _selectedExpressionSourceId = null;
-            _selectedExpressionChildSequence = -1;
             _latestExpressions = null;
         }
 
