@@ -47,7 +47,23 @@ namespace VCR.Runtime.EventRuntime.Unity
         private long _handlerProbeFailureCount;
         private string _lastError;
 
-        public EventRuntimeEngine Engine => _engine;
+        public bool RuleTracingEnabled =>
+            _engine.TraceEnabled;
+        public long ProcessedEvents =>
+            _engine.ProcessedEvents;
+        public long MatchedRules =>
+            _engine.MatchedRules;
+        public long EmittedCommands =>
+            _engine.EmittedCommands;
+        public long DroppedCommands =>
+            _engine.DroppedCommands;
+        public long CooldownSuppressedRules =>
+            _engine.CooldownSuppressedRules;
+        public long RateLimitSuppressedRules =>
+            _engine.RateLimitSuppressedRules;
+        public long TraceSubscriberFailureCount =>
+            _engine.TraceSubscriberFailureCount;
+
         public long ExecutedActions => _executedActions;
         public long FailedActions => _failedActions;
         public long UnhandledActions => _unhandledActions;
