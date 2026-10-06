@@ -566,6 +566,63 @@ require_source_contains(
     "_additionalPoseLayerFrames",
     "mixer must reuse one additional-layer provider sample for change detection and blending",
 )
+require_source_contains(
+    mixer_runtime,
+    "_lastBasePoseFrame",
+    "mixer must track immutable input snapshots by frame identity rather than sequence alone",
+)
+forbid_source_pattern(
+    mixer_runtime,
+    r"_additionalPoseLayerSequences|_additionalPoseLayerSourceIds",
+    "mixer additional-layer change detection must not retain redundant sequence/source arrays",
+)
+
+tracking_router = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Routing"
+    / "PriorityTrackingRouter.cs"
+)
+forbid_source_pattern(
+    tracking_router,
+    r"new\s+TrackingFrame\s*\(",
+    "tracking router must reuse selected immutable child frames instead of allocating route envelopes",
+)
+require_source_contains(
+    tracking_router,
+    "_latestFace = selected;",
+    "tracking router face output must preserve child-frame identity",
+)
+require_source_contains(
+    tracking_router,
+    "_latestBodyHands = selected;",
+    "tracking router body/hands output must preserve child-frame identity",
+)
+
+vrm_tracking_target = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10TrackingTarget.cs"
+)
+require_source_contains(
+    vrm_tracking_target,
+    "_lastFaceFrame",
+    "VRM face/body target must detect routed snapshot changes by immutable frame identity",
+)
+
+runtime_diagnostics = (
+    VCR
+    / "Runtime"
+    / "Diagnostics"
+    / "RuntimeDiagnostics.cs"
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_lastFaceFrame",
+    "runtime diagnostics update counting must observe immutable frame identity",
+)
 
 humanoid_pose_state = (
     VCR
@@ -661,6 +718,11 @@ require_source_contains(
     humanoid_pose_target,
     "MaxTrackedCustomExpressions",
     "VRM custom-expression application state must remain bounded",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "_lastPoseFrame",
+    "VRM full-body target must detect immutable snapshot replacement by frame identity",
 )
 require_source_contains(
     humanoid_pose_target,
