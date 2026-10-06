@@ -22,8 +22,7 @@ namespace VCR.Runtime.Protocols.Vmc
         private readonly HumanoidPoseSpace _poseSpace;
         private readonly NormalizedBonePose[] _bones =
             new NormalizedBonePose[(int)HumanoidBoneId.Count];
-        private readonly bool[] _hasBone =
-            new bool[(int)HumanoidBoneId.Count];
+        private ulong _boneMask;
 
         private readonly float[] _expressionStaging =
             new float[(int)StandardExpression.Count];
@@ -66,10 +65,7 @@ namespace VCR.Runtime.Protocols.Vmc
                 _bones,
                 0,
                 _bones.Length);
-            Array.Clear(
-                _hasBone,
-                0,
-                _hasBone.Length);
+            _boneMask = 0;
             Array.Clear(
                 _expressionStaging,
                 0,
@@ -392,8 +388,9 @@ namespace VCR.Runtime.Protocols.Vmc
                 new NormalizedBonePose(
                     position,
                     rotation);
-            _hasBone[index] =
-                true;
+            _boneMask |=
+                HumanoidPoseState.BoneBit(
+                    bone);
             _hasAnyBone =
                 true;
             return true;
@@ -537,8 +534,7 @@ namespace VCR.Runtime.Protocols.Vmc
                 _rootPosition,
                 _rootRotation,
                 bones,
-                HumanoidPoseState.CreateBoneMask(
-                    _hasBone),
+                _boneMask,
                 SnapshotArrayOwnership.Transfer);
         }
 
