@@ -988,6 +988,16 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "public bool TryRecoverOverlayOutput(\n            out string error)\n        {\n            error = null;",
+    "overlay recovery must initialize and return structured errors through its Try contract",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "catch (Exception exception)\n            {\n                error =\n                    exception.Message;\n                return false;",
+    "overlay recovery must convert lifecycle rejection exceptions into false/error",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "RunRollbackStep(",
     "scene configuration rollback must isolate failures so later restore steps still run",
 )
