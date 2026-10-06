@@ -980,6 +980,21 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_statusBarCache",
+    "application UI status bar must cache unchanged rendered text",
+)
+require_source_contains(
+    application_ui,
+    "_statusBarOutputState",
+    "status-bar cache must include overlay output state",
+)
+require_source_contains(
+    application_ui,
+    "_statusBarActionMessage",
+    "status-bar cache must include the last action message",
+)
+require_source_contains(
+    application_ui,
     "RefreshContextActionVisibility(",
     "application UI context-control visibility work must be isolated from per-refresh state updates",
 )
