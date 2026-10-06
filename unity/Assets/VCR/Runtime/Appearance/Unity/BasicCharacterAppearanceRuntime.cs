@@ -75,6 +75,9 @@ namespace VCR.Runtime.Appearance.Unity
                 new(StringComparer.Ordinal);
         private readonly List<string> _presetIds = new();
         private readonly List<string> _transitionIds = new();
+        private IReadOnlyList<string> _presetIdsView;
+        private IReadOnlyList<string> _transitionIdsView;
+        private IReadOnlyList<string> _userPresetIdsView;
         private readonly Queue<AppearanceChangeRequest> _pending =
             new();
 
@@ -158,10 +161,12 @@ namespace VCR.Runtime.Appearance.Unity
                 CaptureCurrentAccessories());
 
         public IReadOnlyList<string> PresetIds =>
-            _presetIds;
+            _presetIdsView ??=
+                _presetIds.AsReadOnly();
 
         public IReadOnlyList<string> TransitionIds =>
-            _transitionIds;
+            _transitionIdsView ??=
+                _transitionIds.AsReadOnly();
 
         public int MaxQueuedTransitions =>
             Mathf.Clamp(
@@ -173,7 +178,8 @@ namespace VCR.Runtime.Appearance.Unity
             _pending.Count;
 
         public IReadOnlyList<string> UserPresetIds =>
-            _userPresetIds;
+            _userPresetIdsView ??=
+                _userPresetIds.AsReadOnly();
 
         public event Action<AppearanceRuntimeStatus>
             StatusChanged;
