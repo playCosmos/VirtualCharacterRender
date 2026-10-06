@@ -866,6 +866,26 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_eventsSummaryCache",
+    "application UI Events refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "EventsSummaryCacheMatches(",
+    "application UI Events refresh must compare rule/runtime counters before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_eventsSummaryProcessedEvents",
+    "events summary cache must include processed-event counters",
+)
+require_source_contains(
+    application_ui,
+    "_eventsSummaryRuleStorePath",
+    "events summary cache must include the displayed persisted-rule path",
+)
+require_source_contains(
+    application_ui,
     "SettingsSummaryCacheMatches(",
     "application UI Settings refresh must compare displayed runtime/capability/render state before rebuilding text",
 )
