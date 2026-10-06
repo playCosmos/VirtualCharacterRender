@@ -68,6 +68,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - render settings availability probe through `TryCaptureRenderSettings`: returns the live bootstrap settings when available and preserves the historical default-settings fallback while explicitly reporting unavailable when the bootstrap is missing
 - render-settings capture and broadcast-target evaluation resolve only `DesktopRenderBootstrap`; they no longer invoke full character/camera/light/overlay/environment dependency discovery for a render-only read
 - `StatusChanged` notification is subscriber-isolated: one throwing observer cannot abort scene lifecycle transitions such as suspend/resume; failures are counted as `scene.status_subscriber_failures`
+- character-load cancellation now has an explicit recovery boundary: an isolated cancellation restores `Ready`/`CharacterReady` only while the same generation is still in `LoadingCharacter`, so stale cancellation completions cannot overwrite a newer operation, Suspend, or Unload state
 - missing `DesktopRenderBootstrap` lookup is negative-cached for one monotonic second, preserving late discovery while preventing repeated global lookup during temporary/partial scene configuration
 - serializable camera/light/output scene configuration
 - capture and reapply without storing Unity object references
