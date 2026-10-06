@@ -233,6 +233,32 @@ namespace VCR.Runtime.Appearance.Unity
         public bool RebuildConfiguration(
             out string error)
         {
+            var snapshot =
+                CaptureConfigurationSnapshot();
+
+            try
+            {
+                if (RebuildConfigurationCore(
+                        out error))
+                {
+                    return true;
+                }
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Appearance configuration rebuild failed: " +
+                    exception.Message;
+            }
+
+            RestoreConfigurationSnapshot(
+                snapshot);
+            return false;
+        }
+
+        private bool RebuildConfigurationCore(
+            out string error)
+        {
             error = null;
 
             if (autoDiscoverHierarchy &&
@@ -549,6 +575,192 @@ namespace VCR.Runtime.Appearance.Unity
             return true;
         }
 
+        private AppearanceConfigurationSnapshot
+            CaptureConfigurationSnapshot()
+        {
+            return new AppearanceConfigurationSnapshot
+            {
+                Outfits =
+                    outfits,
+                Accessories =
+                    accessories,
+                Presets =
+                    presets,
+                Transitions =
+                    transitions,
+                TransitionExecutorBehaviours =
+                    transitionExecutorBehaviours,
+                DefaultPresetId =
+                    defaultPresetId,
+                ResolvedOutfits =
+                    new Dictionary<string, AppearanceOutfitBinding>(
+                        _outfits,
+                        StringComparer.Ordinal),
+                ResolvedAccessories =
+                    new Dictionary<string, AppearanceAccessoryBinding>(
+                        _accessories,
+                        StringComparer.Ordinal),
+                ResolvedAccessoriesBySlot =
+                    CloneAccessorySlotMap(
+                        _accessoriesBySlot),
+                ResolvedAccessoryAnchors =
+                    new Dictionary<string, Transform>(
+                        _resolvedAccessoryAnchors,
+                        StringComparer.Ordinal),
+                AccessoryOriginalTransforms =
+                    new Dictionary<GameObject, AccessoryTransformState>(
+                        _accessoryOriginalTransforms),
+                ResolvedPresets =
+                    new Dictionary<string, AppearancePreset>(
+                        _presets,
+                        StringComparer.Ordinal),
+                AuthoredPresetIds =
+                    new HashSet<string>(
+                        _authoredPresetIds,
+                        StringComparer.Ordinal),
+                ResolvedTransitions =
+                    new Dictionary<string, AppearanceTransitionPreset>(
+                        _transitions,
+                        StringComparer.Ordinal),
+                PresetIds =
+                    new List<string>(
+                        _presetIds),
+                TransitionIds =
+                    new List<string>(
+                        _transitionIds),
+                Executors =
+                    _executors == null
+                        ? Array.Empty<IAppearanceTransitionStepExecutor>()
+                        : (IAppearanceTransitionStepExecutor[])
+                            _executors.Clone(),
+                NextTransitionExecutorResolveAt =
+                    _nextTransitionExecutorResolveAt,
+                State =
+                    _state,
+                LastError =
+                    _lastError
+            };
+        }
+
+        private void RestoreConfigurationSnapshot(
+            AppearanceConfigurationSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            outfits =
+                snapshot.Outfits;
+            accessories =
+                snapshot.Accessories;
+            presets =
+                snapshot.Presets;
+            transitions =
+                snapshot.Transitions;
+            transitionExecutorBehaviours =
+                snapshot.TransitionExecutorBehaviours;
+            defaultPresetId =
+                snapshot.DefaultPresetId;
+
+            RestoreDictionary(
+                _outfits,
+                snapshot.ResolvedOutfits);
+            RestoreDictionary(
+                _accessories,
+                snapshot.ResolvedAccessories);
+            RestoreAccessorySlotMap(
+                snapshot.ResolvedAccessoriesBySlot);
+            RestoreDictionary(
+                _resolvedAccessoryAnchors,
+                snapshot.ResolvedAccessoryAnchors);
+            RestoreDictionary(
+                _accessoryOriginalTransforms,
+                snapshot.AccessoryOriginalTransforms);
+            RestoreDictionary(
+                _presets,
+                snapshot.ResolvedPresets);
+
+            _authoredPresetIds.Clear();
+            _authoredPresetIds.UnionWith(
+                snapshot.AuthoredPresetIds);
+
+            RestoreDictionary(
+                _transitions,
+                snapshot.ResolvedTransitions);
+
+            _presetIds.Clear();
+            _presetIds.AddRange(
+                snapshot.PresetIds);
+            _transitionIds.Clear();
+            _transitionIds.AddRange(
+                snapshot.TransitionIds);
+
+            _executors =
+                snapshot.Executors;
+            _nextTransitionExecutorResolveAt =
+                snapshot.NextTransitionExecutorResolveAt;
+            _state =
+                snapshot.State;
+            _lastError =
+                snapshot.LastError;
+        }
+
+        private static Dictionary<
+            string,
+            List<AppearanceAccessoryBinding>>
+            CloneAccessorySlotMap(
+                Dictionary<
+                    string,
+                    List<AppearanceAccessoryBinding>>
+                    source)
+        {
+            var clone =
+                new Dictionary<
+                    string,
+                    List<AppearanceAccessoryBinding>>(
+                        StringComparer.Ordinal);
+
+            foreach (var pair in source)
+            {
+                clone[pair.Key] =
+                    new List<AppearanceAccessoryBinding>(
+                        pair.Value);
+            }
+
+            return clone;
+        }
+
+        private void RestoreAccessorySlotMap(
+            Dictionary<
+                string,
+                List<AppearanceAccessoryBinding>>
+                snapshot)
+        {
+            _accessoriesBySlot.Clear();
+
+            foreach (var pair in snapshot)
+            {
+                _accessoriesBySlot[pair.Key] =
+                    new List<AppearanceAccessoryBinding>(
+                        pair.Value);
+            }
+        }
+
+        private static void RestoreDictionary<TKey, TValue>(
+            Dictionary<TKey, TValue> target,
+            Dictionary<TKey, TValue> snapshot)
+        {
+            target.Clear();
+
+            foreach (var pair in snapshot)
+            {
+                target.Add(
+                    pair.Key,
+                    pair.Value);
+            }
+        }
+
         public bool TrySetMaxQueuedTransitions(
             int value,
             out string error)
@@ -574,21 +786,44 @@ namespace VCR.Runtime.Appearance.Unity
             MonoBehaviour[] executors,
             string nextDefaultPresetId = null)
         {
+            var previousOutfits =
+                outfits;
+            var previousAccessories =
+                accessories;
+            var previousPresets =
+                presets;
+            var previousTransitions =
+                transitions;
+            var previousExecutors =
+                transitionExecutorBehaviours;
+            var previousDefaultPresetId =
+                defaultPresetId;
+
             outfits =
-                nextOutfits ??
-                Array.Empty<AppearanceOutfitBinding>();
+                nextOutfits == null
+                    ? Array.Empty<AppearanceOutfitBinding>()
+                    : (AppearanceOutfitBinding[])
+                        nextOutfits.Clone();
             accessories =
-                nextAccessories ??
-                Array.Empty<AppearanceAccessoryBinding>();
+                nextAccessories == null
+                    ? Array.Empty<AppearanceAccessoryBinding>()
+                    : (AppearanceAccessoryBinding[])
+                        nextAccessories.Clone();
             presets =
-                nextPresets ??
-                Array.Empty<AppearancePresetBinding>();
+                nextPresets == null
+                    ? Array.Empty<AppearancePresetBinding>()
+                    : (AppearancePresetBinding[])
+                        nextPresets.Clone();
             transitions =
-                nextTransitions ??
-                Array.Empty<AppearanceTransitionBinding>();
+                nextTransitions == null
+                    ? Array.Empty<AppearanceTransitionBinding>()
+                    : (AppearanceTransitionBinding[])
+                        nextTransitions.Clone();
             transitionExecutorBehaviours =
-                executors ??
-                Array.Empty<MonoBehaviour>();
+                executors == null
+                    ? Array.Empty<MonoBehaviour>()
+                    : (MonoBehaviour[])
+                        executors.Clone();
 
             if (nextDefaultPresetId != null)
             {
@@ -599,6 +834,19 @@ namespace VCR.Runtime.Appearance.Unity
             if (!RebuildConfiguration(
                     out var error))
             {
+                outfits =
+                    previousOutfits;
+                accessories =
+                    previousAccessories;
+                presets =
+                    previousPresets;
+                transitions =
+                    previousTransitions;
+                transitionExecutorBehaviours =
+                    previousExecutors;
+                defaultPresetId =
+                    previousDefaultPresetId;
+
                 SetFault(error);
             }
         }
@@ -3914,6 +4162,43 @@ namespace VCR.Runtime.Appearance.Unity
                     "appearance.transition.progress",
                     Status.TransitionProgress01,
                     "ratio"));
+        }
+
+        private sealed class AppearanceConfigurationSnapshot
+        {
+            public AppearanceOutfitBinding[] Outfits;
+            public AppearanceAccessoryBinding[] Accessories;
+            public AppearancePresetBinding[] Presets;
+            public AppearanceTransitionBinding[] Transitions;
+            public MonoBehaviour[] TransitionExecutorBehaviours;
+            public string DefaultPresetId;
+            public Dictionary<string, AppearanceOutfitBinding>
+                ResolvedOutfits;
+            public Dictionary<string, AppearanceAccessoryBinding>
+                ResolvedAccessories;
+            public Dictionary<
+                string,
+                List<AppearanceAccessoryBinding>>
+                ResolvedAccessoriesBySlot;
+            public Dictionary<string, Transform>
+                ResolvedAccessoryAnchors;
+            public Dictionary<GameObject, AccessoryTransformState>
+                AccessoryOriginalTransforms;
+            public Dictionary<string, AppearancePreset>
+                ResolvedPresets;
+            public HashSet<string>
+                AuthoredPresetIds;
+            public Dictionary<string, AppearanceTransitionPreset>
+                ResolvedTransitions;
+            public List<string>
+                PresetIds;
+            public List<string>
+                TransitionIds;
+            public IAppearanceTransitionStepExecutor[]
+                Executors;
+            public double NextTransitionExecutorResolveAt;
+            public AppearanceRuntimeState State;
+            public string LastError;
         }
 
         private readonly struct AccessoryTransformState
