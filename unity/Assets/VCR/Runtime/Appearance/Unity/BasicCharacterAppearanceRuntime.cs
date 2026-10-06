@@ -943,7 +943,9 @@ namespace VCR.Runtime.Appearance.Unity
                 defaultPresetId =
                     previousDefaultPresetId;
 
-                SetFault(error);
+                SetState(
+                    _state,
+                    error);
             }
         }
 
