@@ -82,7 +82,7 @@ P8 adds generic normalized-event injection on UDP 39540 by default:
 /vcr/event type [actorId] [text] [amount] [currency] [actorName]
 ```
 
-`OscNormalizedEventUdpReceiver` is loopback-only by default, parses off the main thread, queues valid events in a bounded buffer, and publishes them to `INormalizedEventSink` on the main thread. VMC remains on its separate default UDP 39539 path.
+`OscNormalizedEventUdpReceiver` is loopback-only by default, parses off the main thread, queues valid events in a bounded buffer, and publishes them to `INormalizedEventSink` on the main thread. Its UDP hot path uses a specialized two-pass `/vcr/event` packet reader: the complete OSC message/bundle is syntax/UTF-8 validated before any event is exposed, then valid event fields are mapped directly from the reusable datagram buffer without constructing transient `OscMessage`, address strings, or argument arrays. Syntactically valid unrelated/invalid event messages are counted as event rejects without invalidating other messages in the same bundle. VMC remains on its separate default UDP 39539 path.
 
 External OSC cannot inject `tracking.*` event types.
 
