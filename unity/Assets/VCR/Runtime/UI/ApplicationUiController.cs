@@ -362,6 +362,13 @@ namespace VCR.Runtime.UI
         private readonly byte[] _sectionAvailabilityCache =
             new byte[(int)ApplicationUiSection.Count];
 
+        private bool _uiRefreshPassActive;
+        private bool _refreshOverlayOutputSampled;
+        private IOverlayOutputAdapter _refreshOverlayOutput;
+        private bool _refreshRenderSettingsSampled;
+        private bool _refreshRenderSettingsAvailable;
+        private RenderRuntimeSettings _refreshRenderSettings;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -4563,14 +4570,8 @@ namespace VCR.Runtime.UI
                         selected));
             }
 
-            RenderRuntimeSettings renderSettings =
-                default;
-
-            if (sceneRuntime != null)
-            {
-                renderSettings =
-                    sceneRuntime.CaptureRenderSettings();
-            }
+            TryGetRenderSettingsForUiRefresh(
+                out var renderSettings);
 
             if (_settingsRenderScaleInput != null &&
                 !_settingsRenderScaleInput.isFocused &&
@@ -4814,7 +4815,16 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            for (var i = 0;
+            _uiRefreshPassActive =
+                true;
+            _refreshOverlayOutputSampled =
+                false;
+            _refreshRenderSettingsSampled =
+                false;
+
+            try
+            {
+                for (var i = 0;
                  i < (int)ApplicationUiSection.Count;
                  i++)
             {
@@ -4873,13 +4883,88 @@ namespace VCR.Runtime.UI
             if (_recoverOutputButton != null)
             {
                 _recoverOutputButton.interactable =
-                    sceneRuntime?.OverlayOutput != null;
+                    GetOverlayOutputForUiRefresh() !=
+                    null;
             }
 
-            RefreshContextActions();
+                RefreshContextActions();
 
-            RefreshStatus();
-            RefreshContent();
+                RefreshStatus();
+                RefreshContent();
+            }
+            finally
+            {
+                _uiRefreshPassActive =
+                    false;
+                _refreshOverlayOutputSampled =
+                    false;
+                _refreshOverlayOutput =
+                    null;
+                _refreshRenderSettingsSampled =
+                    false;
+            }
+        }
+
+        private IOverlayOutputAdapter
+            GetOverlayOutputForUiRefresh()
+        {
+            if (!_uiRefreshPassActive)
+            {
+                return
+                    sceneRuntime?.OverlayOutput;
+            }
+
+            if (!_refreshOverlayOutputSampled)
+            {
+                _refreshOverlayOutput =
+                    sceneRuntime?.OverlayOutput;
+                _refreshOverlayOutputSampled =
+                    true;
+            }
+
+            return _refreshOverlayOutput;
+        }
+
+        private bool TryGetRenderSettingsForUiRefresh(
+            out RenderRuntimeSettings settings)
+        {
+            if (!_uiRefreshPassActive)
+            {
+                if (sceneRuntime == null)
+                {
+                    settings =
+                        RenderRuntimeSettings
+                            .Default1080p;
+                    return false;
+                }
+
+                return
+                    sceneRuntime.TryCaptureRenderSettings(
+                        out settings);
+            }
+
+            if (!_refreshRenderSettingsSampled)
+            {
+                _refreshRenderSettingsAvailable =
+                    sceneRuntime != null &&
+                    sceneRuntime.TryCaptureRenderSettings(
+                        out _refreshRenderSettings);
+
+                if (sceneRuntime == null)
+                {
+                    _refreshRenderSettings =
+                        RenderRuntimeSettings
+                            .Default1080p;
+                }
+
+                _refreshRenderSettingsSampled =
+                    true;
+            }
+
+            settings =
+                _refreshRenderSettings;
+            return
+                _refreshRenderSettingsAvailable;
         }
 
         private void RefreshContextActions()
@@ -5021,7 +5106,7 @@ namespace VCR.Runtime.UI
                 var status =
                     sceneRuntime.Status;
                 var output =
-                    sceneRuntime.OverlayOutput;
+                    GetOverlayOutputForUiRefresh();
                 var canApplyOverlay =
                     ApplicationUiActionPolicy
                         .CanApplyOverlaySetting(
@@ -5970,7 +6055,7 @@ namespace VCR.Runtime.UI
                     : default;
             var output =
                 sceneAvailable
-                    ? sceneRuntime.OverlayOutput
+                    ? GetOverlayOutputForUiRefresh()
                     : null;
             var outputAvailable =
                 output != null;
@@ -7508,7 +7593,7 @@ namespace VCR.Runtime.UI
             }
 
             var output =
-                sceneRuntime.OverlayOutput;
+                GetOverlayOutputForUiRefresh();
             var hasAdapter =
                 output != null;
             var status =
@@ -7520,7 +7605,7 @@ namespace VCR.Runtime.UI
                     ? output.Settings
                     : default;
             var renderAvailable =
-                sceneRuntime.TryCaptureRenderSettings(
+                TryGetRenderSettingsForUiRefresh(
                     out var render);
 
             if (OutputSummaryCacheMatches(
@@ -7767,10 +7852,8 @@ namespace VCR.Runtime.UI
                         0,
                         statusCount - 1),
                     out selectedCapability);
-            var render =
-                sceneRuntime != null
-                    ? sceneRuntime.CaptureRenderSettings()
-                    : RenderRuntimeSettings.Default1080p;
+            TryGetRenderSettingsForUiRefresh(
+                out var render);
             var runtimeStarted =
                 applicationBootstrap.IsStarted;
             var configurationPath =
