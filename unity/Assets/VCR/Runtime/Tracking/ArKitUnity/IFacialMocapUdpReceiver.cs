@@ -327,9 +327,27 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             }
             catch (Exception exception)
             {
+                CloseHandshakeSender();
+
                 Debug.LogWarning(
                     $"VCR: failed to send iFacialMocap handshake: {exception.Message}",
                     this);
+            }
+        }
+
+        private void CloseHandshakeSender()
+        {
+            var sender =
+                _handshakeSender;
+            _handshakeSender = null;
+
+            try
+            {
+                sender?.Close();
+            }
+            catch
+            {
+                // Shutdown/recovery path.
             }
         }
 
@@ -697,9 +715,6 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             var receiver =
                 _receiver;
             _receiver = null;
-            var handshakeSender =
-                _handshakeSender;
-            _handshakeSender = null;
 
             try
             {
@@ -710,14 +725,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 // Shutdown path.
             }
 
-            try
-            {
-                handshakeSender?.Close();
-            }
-            catch
-            {
-                // Shutdown path.
-            }
+            CloseHandshakeSender();
 
             var thread =
                 _receiveThread;
