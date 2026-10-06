@@ -2295,6 +2295,8 @@ namespace VCR.Editor.P11
 
             ValidateCompletionProbeCache(
                 failures);
+            ValidateExecutorProbeIsolation(
+                failures);
             ValidateDestroyedExecutorRefresh(
                 failures);
             ValidateDestroyedActionHandlerRefresh(
@@ -2303,6 +2305,142 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedMotionRuntimeRefresh(
                 failures);
+        }
+
+        private static void ValidateExecutorProbeIsolation(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Executor Probe Isolation Validation");
+
+                var runtime =
+                    root.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+                var throwing =
+                    root.AddComponent<
+                        P11ThrowingProbeExecutor>();
+
+                var runtimeType =
+                    typeof(
+                        BasicCharacterAppearanceRuntime);
+                var executorsField =
+                    runtimeType.GetField(
+                        "_executors",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var countExecutorsMethod =
+                    runtimeType.GetMethod(
+                        "TryCountExecutors",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var countCompletionMethod =
+                    runtimeType.GetMethod(
+                        "TryCountCompletionProbes",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+                if (executorsField == null ||
+                    countExecutorsMethod == null ||
+                    countCompletionMethod == null)
+                {
+                    failures.Add(
+                        "appearance executor-probe isolation validation could not resolve runtime internals");
+                    return;
+                }
+
+                executorsField.SetValue(
+                    runtime,
+                    new IAppearanceTransitionStepExecutor[]
+                    {
+                        throwing
+                    });
+
+                var step =
+                    new AppearanceTransitionStep
+                    {
+                        ActionType =
+                            P11ThrowingProbeExecutor
+                                .ActionType,
+                        Blocking =
+                            true
+                    };
+
+                throwing.ThrowCanExecute = true;
+                var executorArguments =
+                    new object[]
+                    {
+                        step,
+                        0,
+                        null
+                    };
+                var executorResult =
+                    countExecutorsMethod.Invoke(
+                        runtime,
+                        executorArguments) is bool
+                        executorSucceeded &&
+                    executorSucceeded;
+
+                Expect(
+                    !executorResult &&
+                    executorArguments[2] is string
+                        executorError &&
+                    executorError.Contains(
+                        "CanExecute",
+                        StringComparison.Ordinal),
+                    "throwing transition CanExecute probes must fail closed with an explicit error instead of escaping the runtime",
+                    failures);
+
+                throwing.ThrowCanExecute = false;
+                throwing.ThrowCanTrackCompletion = true;
+                var completionArguments =
+                    new object[]
+                    {
+                        step,
+                        0,
+                        null
+                    };
+                var completionResult =
+                    countCompletionMethod.Invoke(
+                        runtime,
+                        completionArguments) is bool
+                        completionSucceeded &&
+                    completionSucceeded;
+
+                Expect(
+                    !completionResult &&
+                    completionArguments[2] is string
+                        completionError &&
+                    completionError.Contains(
+                        "CanTrackCompletion",
+                        StringComparison.Ordinal),
+                    "throwing completion CanTrackCompletion probes must fail closed with an explicit error instead of escaping the runtime",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "appearance executor-probe isolation validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
+                }
+            }
         }
 
         private static void ValidateCompletionProbeCache(
@@ -2783,6 +2921,65 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11ThrowingProbeExecutor :
+        MonoBehaviour,
+        IAppearanceTransitionStepExecutor,
+        IAppearanceTransitionStepCompletionProbe
+    {
+        public const string ActionType =
+            "probe.throwing";
+
+        public bool ThrowCanExecute { get; set; }
+        public bool ThrowCanTrackCompletion { get; set; }
+
+        public bool CanExecute(
+            AppearanceTransitionStep step)
+        {
+            if (ThrowCanExecute)
+            {
+                throw new InvalidOperationException(
+                    "CanExecute validation failure");
+            }
+
+            return step != null &&
+                string.Equals(
+                    step.ActionType,
+                    ActionType,
+                    StringComparison.Ordinal);
+        }
+
+        public bool TryExecute(
+            AppearanceTransitionStep step,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public bool CanTrackCompletion(
+            AppearanceTransitionStep step)
+        {
+            if (ThrowCanTrackCompletion)
+            {
+                throw new InvalidOperationException(
+                    "CanTrackCompletion validation failure");
+            }
+
+            return CanExecute(
+                step);
+        }
+
+        public bool TryIsComplete(
+            AppearanceTransitionStep step,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+            return true;
         }
     }
 
