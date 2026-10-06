@@ -84,7 +84,12 @@ namespace VCR.Editor.P0
                 out var frame) ||
                 frame == null ||
                 frame.HumanoidPose == null ||
-                frame.Expressions == null)
+                frame.Expressions == null ||
+                (frame.ValidRegions &
+                 (TrackingRegion.FullBody |
+                  TrackingRegion.Expressions)) !=
+                    (TrackingRegion.FullBody |
+                     TrackingRegion.Expressions))
             {
                 Debug.LogError("VCR P0 OSC/VMC codec: FAIL (VMC pose/expression decode)");
                 return;
@@ -650,6 +655,8 @@ namespace VCR.Editor.P0
                 expressionFrame != null &&
                 expressionFrame.HumanoidPose == null &&
                 expressionFrame.Expressions != null &&
+                (expressionFrame.ValidRegions &
+                 TrackingRegion.Expressions) != 0 &&
                 Mathf.Approximately(
                     expressionFrame.Expressions.Get(
                         StandardExpression.BlinkLeft),
@@ -799,6 +806,11 @@ namespace VCR.Editor.P0
                     initialFrame?
                         .HumanoidPose != null &&
                     initialFrame.Expressions != null &&
+                    (initialFrame.ValidRegions &
+                     (TrackingRegion.FullBody |
+                      TrackingRegion.Expressions)) ==
+                        (TrackingRegion.FullBody |
+                         TrackingRegion.Expressions) &&
                     initialFrame.SubjectDetected &&
                     initialFrame.HumanoidPose.TryGet(
                         HumanoidBoneId.Hips,
@@ -851,6 +863,8 @@ namespace VCR.Editor.P0
                         out var firstCustomFrame) &&
                     firstCustomFrame?
                         .Expressions != null &&
+                    (firstCustomFrame.ValidRegions &
+                     TrackingRegion.Expressions) != 0 &&
                     Mathf.Approximately(
                         GetCustomExpressionValue(
                             firstCustomFrame.Expressions,
