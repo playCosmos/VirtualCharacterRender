@@ -816,6 +816,16 @@ require_source_contains(
 
 require_source_contains(
     single_character_scene_runtime,
+    "RenderBootstrapDiscoveryRetrySeconds = 1.0;",
+    "missing render bootstrap discovery must use bounded retry",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_nextRenderBootstrapResolveAt",
+    "render bootstrap discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "private void ResolveRenderBootstrap()",
     "scene runtime must isolate render-bootstrap discovery from full scene dependency discovery",
 )
