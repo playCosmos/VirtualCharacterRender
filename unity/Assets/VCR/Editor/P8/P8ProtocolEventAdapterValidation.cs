@@ -49,6 +49,8 @@ namespace VCR.Editor.P8
                 failures);
             ValidateOscMapping(
                 failures);
+            ValidateOscDirectPacketPath(
+                failures);
             ValidateSoopMapping(
                 failures);
             ValidateUnityAdapters(
@@ -1151,6 +1153,159 @@ namespace VCR.Editor.P8
                     addressError),
                 "OSC event mapper must reject unrelated OSC addresses",
                 failures);
+        }
+
+        private static void ValidateOscDirectPacketPath(
+            List<string> failures)
+        {
+            var chat =
+                OscPacketWriter.WriteMessage(
+                    OscNormalizedEventMapper.EventAddress,
+                    OscArgument.FromString(
+                        NormalizedEventTypes.BroadcastChatMessage),
+                    OscArgument.FromString(
+                        "viewer-1"),
+                    OscArgument.FromString(
+                        "hello"));
+
+            var unrelated =
+                OscPacketWriter.WriteMessage(
+                    "/not-vcr-event",
+                    OscArgument.FromString(
+                        "ignored"));
+
+            var forged =
+                OscPacketWriter.WriteMessage(
+                    OscNormalizedEventMapper.EventAddress,
+                    OscArgument.FromString(
+                        NormalizedEventTypes.TrackingSourceLost));
+
+            var donation =
+                OscPacketWriter.WriteMessage(
+                    OscNormalizedEventMapper.EventAddress,
+                    OscArgument.FromString(
+                        NormalizedEventTypes.BroadcastDonation),
+                    OscArgument.FromString(
+                        "viewer-2"),
+                    OscArgument.FromString(
+                        "support"),
+                    OscArgument.FromInt(
+                        25),
+                    OscArgument.FromString(
+                        "TEST_UNIT"),
+                    OscArgument.FromString(
+                        "Supporter"));
+
+            var packet =
+                OscPacketWriter.WriteBundle(
+                    new[]
+                    {
+                        chat,
+                        unrelated,
+                        forged,
+                        donation
+                    });
+            var events =
+                new List<NormalizedEvent>();
+
+            Expect(
+                InvokeDirectOscPacketReader(
+                    packet,
+                    packet.Length,
+                    "osc.direct.validation",
+                    1600,
+                    events,
+                    out var rejected) &&
+                rejected == 2 &&
+                events.Count == 2 &&
+                events[0].Type ==
+                    NormalizedEventTypes.BroadcastChatMessage &&
+                events[0].ActorId ==
+                    "viewer-1" &&
+                events[0].Text ==
+                    "hello" &&
+                events[1].Type ==
+                    NormalizedEventTypes.BroadcastDonation &&
+                events[1].ActorId ==
+                    "viewer-2" &&
+                events[1].HasAmount &&
+                Math.Abs(
+                    events[1].Amount -
+                    25.0) <
+                    0.001 &&
+                events[1].Currency ==
+                    "TEST_UNIT" &&
+                events[1].ActorName ==
+                    "Supporter",
+                "direct OSC event packet reader must preserve bundle order, map valid events, and count unrelated/forged messages as semantic rejects",
+                failures);
+
+            Expect(
+                !InvokeDirectOscPacketReader(
+                    packet,
+                    packet.Length - 1,
+                    "osc.direct.validation",
+                    1601,
+                    events,
+                    out var malformedRejected) &&
+                malformedRejected == 0 &&
+                events.Count == 0,
+                "direct OSC event packet reader must validate the complete packet before exposing any event from a malformed/truncated bundle",
+                failures);
+        }
+
+        private static bool InvokeDirectOscPacketReader(
+            byte[] packet,
+            int length,
+            string sourceId,
+            long timestampUs,
+            List<NormalizedEvent> output,
+            out int rejected)
+        {
+            var readerType =
+                typeof(OscNormalizedEventMapper)
+                    .Assembly
+                    .GetType(
+                        "VCR.Runtime.Protocols.OscEvents.OscNormalizedEventPacketReader");
+
+            var method =
+                readerType?.GetMethod(
+                    "TryReadEvents",
+                    System.Reflection.BindingFlags.Static |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    "OscNormalizedEventPacketReader",
+                    "TryReadEvents");
+            }
+
+            var arguments =
+                new object[]
+                {
+                    packet,
+                    length,
+                    sourceId,
+                    timestampUs,
+                    output,
+                    0
+                };
+
+            var result =
+                method.Invoke(
+                    null,
+                    arguments);
+
+            rejected =
+                arguments[5] is int value
+                    ? value
+                    : 0;
+
+            return
+                result is bool success &&
+                success;
         }
 
         private static void ValidateSoopMapping(
