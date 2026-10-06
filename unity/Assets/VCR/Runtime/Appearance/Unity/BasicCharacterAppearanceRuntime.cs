@@ -285,9 +285,12 @@ namespace VCR.Runtime.Appearance.Unity
                      outfits ??
                      Array.Empty<AppearanceOutfitBinding>())
             {
-                if (binding == null ||
+                var resolvedBinding =
+                    binding?.Clone();
+
+                if (resolvedBinding == null ||
                     string.IsNullOrWhiteSpace(
-                        binding.OutfitId))
+                        resolvedBinding.OutfitId))
                 {
                     error =
                         "Every outfit binding requires a non-empty id.";
@@ -295,22 +298,22 @@ namespace VCR.Runtime.Appearance.Unity
                 }
 
                 if (!_outfits.TryAdd(
-                        binding.OutfitId,
-                        binding))
+                        resolvedBinding.OutfitId,
+                        resolvedBinding))
                 {
                     error =
-                        $"Duplicate outfit id '{binding.OutfitId}'.";
+                        $"Duplicate outfit id '{resolvedBinding.OutfitId}'.";
                     return false;
                 }
 
                 foreach (var root in
-                         binding.Roots ??
+                         resolvedBinding.Roots ??
                          Array.Empty<GameObject>())
                 {
                     if (root == null)
                     {
                         error =
-                            $"Outfit '{binding.OutfitId}' contains a null root.";
+                            $"Outfit '{resolvedBinding.OutfitId}' contains a null root.";
                         return false;
                     }
 
@@ -319,13 +322,13 @@ namespace VCR.Runtime.Appearance.Unity
                             out var owner))
                     {
                         error =
-                            $"Appearance root '{root.name}' is shared by '{owner}' and outfit '{binding.OutfitId}'.";
+                            $"Appearance root '{root.name}' is shared by '{owner}' and outfit '{resolvedBinding.OutfitId}'.";
                         return false;
                     }
 
                     rootOwners[root] =
                         "outfit:" +
-                        binding.OutfitId;
+                        resolvedBinding.OutfitId;
                 }
             }
 
@@ -333,12 +336,15 @@ namespace VCR.Runtime.Appearance.Unity
                      accessories ??
                      Array.Empty<AppearanceAccessoryBinding>())
             {
-                if (binding == null ||
+                var resolvedBinding =
+                    binding?.Clone();
+
+                if (resolvedBinding == null ||
                     string.IsNullOrWhiteSpace(
-                        binding.SlotId) ||
+                        resolvedBinding.SlotId) ||
                     string.IsNullOrWhiteSpace(
-                        binding.AccessoryId) ||
-                    binding.Root == null)
+                        resolvedBinding.AccessoryId) ||
+                    resolvedBinding.Root == null)
                 {
                     error =
                         "Every accessory binding requires slot id, accessory id, and root.";
@@ -347,71 +353,73 @@ namespace VCR.Runtime.Appearance.Unity
 
                 var key =
                     AccessoryKey(
-                        binding.SlotId,
-                        binding.AccessoryId);
+                        resolvedBinding.SlotId,
+                        resolvedBinding.AccessoryId);
 
                 if (!_accessories.TryAdd(
                         key,
-                        binding))
+                        resolvedBinding))
                 {
                     error =
-                        $"Duplicate accessory '{binding.SlotId}/{binding.AccessoryId}'.";
+                        $"Duplicate accessory '{resolvedBinding.SlotId}/{resolvedBinding.AccessoryId}'.";
                     return false;
                 }
 
                 if (!_accessoriesBySlot.TryGetValue(
-                        binding.SlotId,
+                        resolvedBinding.SlotId,
                         out var slot))
                 {
                     slot =
                         new List<AppearanceAccessoryBinding>();
                     _accessoriesBySlot[
-                        binding.SlotId] =
+                        resolvedBinding.SlotId] =
                             slot;
                 }
 
-                slot.Add(binding);
+                slot.Add(
+                    resolvedBinding);
 
                 if (rootOwners.TryGetValue(
-                        binding.Root,
+                        resolvedBinding.Root,
                         out var owner))
                 {
                     error =
-                        $"Appearance root '{binding.Root.name}' is shared by '{owner}' and accessory '{binding.SlotId}/{binding.AccessoryId}'.";
+                        $"Appearance root '{resolvedBinding.Root.name}' is shared by '{owner}' and accessory '{resolvedBinding.SlotId}/{resolvedBinding.AccessoryId}'.";
                     return false;
                 }
 
-                rootOwners[binding.Root] =
-                    "accessory:" +
-                    binding.SlotId +
-                    "/" +
-                    binding.AccessoryId;
+                rootOwners[
+                    resolvedBinding.Root] =
+                        "accessory:" +
+                        resolvedBinding.SlotId +
+                        "/" +
+                        resolvedBinding.AccessoryId;
 
                 if (!ValidateAccessoryAnchorPose(
-                        binding,
+                        resolvedBinding,
                         out error))
                 {
                     error =
-                        $"Accessory '{binding.SlotId}/{binding.AccessoryId}' anchor pose is invalid: {error}";
+                        $"Accessory '{resolvedBinding.SlotId}/{resolvedBinding.AccessoryId}' anchor pose is invalid: {error}";
                     return false;
                 }
 
                 if (!_accessoryOriginalTransforms.ContainsKey(
-                        binding.Root))
+                        resolvedBinding.Root))
                 {
                     _accessoryOriginalTransforms[
-                        binding.Root] =
+                        resolvedBinding.Root] =
                             AccessoryTransformState.Capture(
-                                binding.Root.transform);
+                                resolvedBinding.Root.transform);
                 }
 
                 if (!TryResolveAccessoryAnchor(
-                        binding,
+                        resolvedBinding,
                         out var anchor,
                         out error))
                 {
                     error =
-                        $"Accessory '{binding.SlotId}/{binding.AccessoryId}' anchor is invalid: {error}";
+                        $"Accessory '{resolvedBinding.SlotId}/{resolvedBinding.AccessoryId}' anchor is invalid: {error}";
                     return false;
                 }
 
@@ -2658,9 +2666,7 @@ namespace VCR.Runtime.Appearance.Unity
                 new HashSet<GameObject>();
 
             foreach (var binding in
-                     accessories ??
-                     Array.Empty<
-                         AppearanceAccessoryBinding>())
+                     _accessories.Values)
             {
                 if (binding?.Root != null)
                 {
