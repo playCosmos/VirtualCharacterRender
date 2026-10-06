@@ -9,6 +9,17 @@ namespace VCR.Runtime.Appearance.Unity
         public string OutfitId;
         public GameObject[] Roots =
             Array.Empty<GameObject>();
+
+        public AppearanceOutfitBinding Clone() =>
+            new()
+            {
+                OutfitId = OutfitId,
+                Roots =
+                    Roots == null
+                        ? Array.Empty<GameObject>()
+                        : (GameObject[])
+                            Roots.Clone()
+            };
     }
 
     public enum AppearanceAccessoryAnchorMode
@@ -41,6 +52,25 @@ namespace VCR.Runtime.Appearance.Unity
             Vector3.one;
         public bool RestoreOriginalTransformWhenInactive =
             true;
+
+        public AppearanceAccessoryBinding Clone() =>
+            new()
+            {
+                SlotId = SlotId,
+                AccessoryId = AccessoryId,
+                Root = Root,
+                AnchorMode = AnchorMode,
+                AnchorTransform = AnchorTransform,
+                AnchorAnimator = AnchorAnimator,
+                AnchorBone = AnchorBone,
+                LocalPosition = LocalPosition,
+                LocalEulerAngles = LocalEulerAngles,
+                OverrideLocalScale =
+                    OverrideLocalScale,
+                LocalScale = LocalScale,
+                RestoreOriginalTransformWhenInactive =
+                    RestoreOriginalTransformWhenInactive
+            };
     }
 
     [Serializable]
@@ -50,6 +80,13 @@ namespace VCR.Runtime.Appearance.Unity
         public string AccessoryId;
 
         public AppearanceAccessorySelection ToSelection() =>
+            new()
+            {
+                SlotId = SlotId,
+                AccessoryId = AccessoryId
+            };
+
+        public AppearanceAccessorySelectionBinding Clone() =>
             new()
             {
                 SlotId = SlotId,
@@ -65,6 +102,31 @@ namespace VCR.Runtime.Appearance.Unity
         public string PreferredTransitionId;
         public AppearanceAccessorySelectionBinding[] Accessories =
             Array.Empty<AppearanceAccessorySelectionBinding>();
+
+        public AppearancePresetBinding Clone()
+        {
+            var clonedAccessories =
+                new AppearanceAccessorySelectionBinding[
+                    Accessories?.Length ?? 0];
+
+            for (var i = 0;
+                 i < clonedAccessories.Length;
+                 i++)
+            {
+                clonedAccessories[i] =
+                    Accessories[i]?.Clone();
+            }
+
+            return new AppearancePresetBinding
+            {
+                PresetId = PresetId,
+                OutfitId = OutfitId,
+                PreferredTransitionId =
+                    PreferredTransitionId,
+                Accessories =
+                    clonedAccessories
+            };
+        }
 
         public AppearancePreset ToPreset()
         {
@@ -102,6 +164,13 @@ namespace VCR.Runtime.Appearance.Unity
                 Name = Name,
                 TimeSeconds = TimeSeconds
             };
+
+        public AppearanceTransitionMarkerBinding Clone() =>
+            new()
+            {
+                Name = Name,
+                TimeSeconds = TimeSeconds
+            };
     }
 
     [Serializable]
@@ -131,6 +200,37 @@ namespace VCR.Runtime.Appearance.Unity
         public bool Required = true;
         public bool Blocking = false;
         [Min(0.01f)] public float CompletionTimeoutSeconds = 5f;
+
+        public AppearanceTransitionStepBinding Clone() =>
+            new()
+            {
+                TimeSeconds = TimeSeconds,
+                TimingMode = TimingMode,
+                MarkerName = MarkerName,
+                MarkerOffsetSeconds = MarkerOffsetSeconds,
+                StepId = StepId,
+                AuthoringLabel = AuthoringLabel,
+                AuthoringGroup = AuthoringGroup,
+                DependencyMode = DependencyMode,
+                DependsOnStepIds =
+                    DependsOnStepIds == null
+                        ? Array.Empty<string>()
+                        : (string[])
+                            DependsOnStepIds.Clone(),
+                DependencyTimeoutSeconds =
+                    DependencyTimeoutSeconds,
+                Kind = Kind,
+                ActionType = ActionType,
+                TargetId = TargetId,
+                Name = Name,
+                Text = Text,
+                Value = Value,
+                HasValue = HasValue,
+                Required = Required,
+                Blocking = Blocking,
+                CompletionTimeoutSeconds =
+                    CompletionTimeoutSeconds
+            };
 
         public AppearanceTransitionStep ToStep() =>
             new()
@@ -178,6 +278,55 @@ namespace VCR.Runtime.Appearance.Unity
             Array.Empty<AppearanceTransitionStepBinding>();
         public AppearanceTransitionStepBinding[] CancellationSteps =
             Array.Empty<AppearanceTransitionStepBinding>();
+
+        public AppearanceTransitionBinding Clone()
+        {
+            var clonedMarkers =
+                new AppearanceTransitionMarkerBinding[
+                    Markers?.Length ?? 0];
+            var clonedSteps =
+                new AppearanceTransitionStepBinding[
+                    Steps?.Length ?? 0];
+            var clonedCancellationSteps =
+                new AppearanceTransitionStepBinding[
+                    CancellationSteps?.Length ?? 0];
+
+            for (var i = 0;
+                 i < clonedMarkers.Length;
+                 i++)
+            {
+                clonedMarkers[i] =
+                    Markers[i]?.Clone();
+            }
+
+            for (var i = 0;
+                 i < clonedSteps.Length;
+                 i++)
+            {
+                clonedSteps[i] =
+                    Steps[i]?.Clone();
+            }
+
+            for (var i = 0;
+                 i < clonedCancellationSteps.Length;
+                 i++)
+            {
+                clonedCancellationSteps[i] =
+                    CancellationSteps[i]?.Clone();
+            }
+
+            return new AppearanceTransitionBinding
+            {
+                TransitionId = TransitionId,
+                DurationSeconds = DurationSeconds,
+                QueuePolicy = QueuePolicy,
+                FallbackPolicy = FallbackPolicy,
+                Markers = clonedMarkers,
+                Steps = clonedSteps,
+                CancellationSteps =
+                    clonedCancellationSteps
+            };
+        }
 
         public AppearanceTransitionPreset ToPreset()
         {
