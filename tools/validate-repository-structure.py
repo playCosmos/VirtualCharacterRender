@@ -1212,6 +1212,17 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "ResolveConcreteDependencies(",
+    "application UI concrete runtime dependencies must resolve through the shared discovery snapshot",
+)
+require_source_occurrences(
+    application_ui,
+    "FindFirstObjectByType<",
+    1,
+    "application UI must not perform separate global FindFirstObjectByType scans for each optional runtime dependency",
+)
+require_source_contains(
+    application_ui,
     "GetActiveDependencyBehaviours(",
     "application UI optional dependency resolvers must reuse the shared active-behaviour snapshot",
 )
