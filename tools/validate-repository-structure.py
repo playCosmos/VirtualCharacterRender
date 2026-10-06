@@ -1109,6 +1109,21 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "TrySyncOverlayConfiguration(",
+    "overlay adapter discovery must not fail solely because its Settings getter throws",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "CaptureOverlayConfiguration()",
+    "explicit scene configuration capture must sample live overlay settings rather than silently persisting a stale cache",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Overlay output status/settings read failed: \"",
+    "overlay readiness must convert adapter getter exceptions into a Faulted readiness result",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "catch (Exception exception)\n            {\n                error =\n                    exception.Message;\n                return false;",
     "overlay recovery must convert lifecycle rejection exceptions into false/error",
 )
@@ -1126,6 +1141,28 @@ forbid_source_pattern(
     single_character_scene_runtime,
     r"StatusChanged\?\.Invoke",
     "scene runtime must not let one status subscriber abort lifecycle transitions",
+)
+
+overlay_output_recovery = (
+    VCR
+    / "Runtime"
+    / "Output"
+    / "OverlayOutputRecovery.cs"
+)
+require_source_contains(
+    overlay_output_recovery,
+    "var settings =\n                    adapter.Settings;",
+    "overlay recovery must sample adapter settings inside its contained restart path",
+)
+require_source_contains(
+    overlay_output_recovery,
+    "status =\n                    adapter.Status;",
+    "overlay recovery must sample adapter status inside the same contained restart path",
+)
+require_source_contains(
+    overlay_output_recovery,
+    "\"Overlay output restart failed: \"",
+    "overlay recovery getter/apply/shutdown failures must be returned as false/error",
 )
 
 basic_environment_runtime = (
@@ -1280,6 +1317,16 @@ require_source_contains(
     p1_renderer_validation,
     "ThrowOnSettingsRead",
     "P1 validation must inject configuration-capture failure through the overlay settings getter",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "ThrowOnStatusRead",
+    "P1 validation must inject overlay status getter failure",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "settingsFailureReadiness",
+    "P1 validation must prove overlay getter failures become readiness/recovery failures",
 )
 require_source_contains(
     p1_renderer_validation,
