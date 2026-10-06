@@ -43,16 +43,27 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 var rotation = matrix.rotation;
                 var translation = matrix.GetColumn(3);
 
-                headRotation = new TrackingQuaternion(
-                    rotation.x,
-                    rotation.y,
-                    rotation.z,
-                    rotation.w);
+                if (float.IsFinite(rotation.x) &&
+                    float.IsFinite(rotation.y) &&
+                    float.IsFinite(rotation.z) &&
+                    float.IsFinite(rotation.w))
+                {
+                    headRotation = new TrackingQuaternion(
+                        rotation.x,
+                        rotation.y,
+                        rotation.z,
+                        rotation.w);
+                }
 
-                headPosition = new TrackingVector3(
-                    translation.x,
-                    translation.y,
-                    translation.z);
+                if (float.IsFinite(translation.x) &&
+                    float.IsFinite(translation.y) &&
+                    float.IsFinite(translation.z))
+                {
+                    headPosition = new TrackingVector3(
+                        translation.x,
+                        translation.y,
+                        translation.z);
+                }
             }
 
             state =
@@ -67,8 +78,17 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private static float Clamp01(float value)
         {
-            if (value < 0f) return 0f;
-            if (value > 1f) return 1f;
+            if (!float.IsFinite(value) ||
+                value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value >= 1f)
+            {
+                return 1f;
+            }
+
             return value;
         }
 
