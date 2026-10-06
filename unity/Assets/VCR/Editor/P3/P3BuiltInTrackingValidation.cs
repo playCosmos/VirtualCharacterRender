@@ -290,6 +290,48 @@ namespace VCR.Editor.P3
                 ValidateAudioSnapshotSuppression(
                     failures);
 
+                var mediaPipeSecondsToMicroseconds =
+                    typeof(
+                        MediaPipeWebcamTrackingRunner)
+                    .GetMethod(
+                        "SecondsToMicroseconds",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                if (mediaPipeSecondsToMicroseconds == null)
+                {
+                    failures.Add(
+                        "MediaPipe presence timing conversion helper was not found");
+                }
+                else
+                {
+                    var invalidTimingUs =
+                        (long)
+                            mediaPipeSecondsToMicroseconds
+                                .Invoke(
+                                    null,
+                                    new object[]
+                                    {
+                                        float.NaN
+                                    });
+                    var saturatedTimingUs =
+                        (long)
+                            mediaPipeSecondsToMicroseconds
+                                .Invoke(
+                                    null,
+                                    new object[]
+                                    {
+                                        float.MaxValue
+                                    });
+
+                    Expect(
+                        invalidTimingUs == 0L &&
+                        saturatedTimingUs ==
+                            long.MaxValue,
+                        "MediaPipe presence timing conversion must reject non-finite seconds and saturate oversized finite values",
+                        failures);
+                }
+
                 texture =
                     new Texture2D(
                         2,
