@@ -775,6 +775,22 @@ require_source_contains(
     "optional-service retry throttling must use monotonic realtime rather than frame time",
 )
 
+require_source_contains(
+    single_character_scene_runtime,
+    "private void ResolveRenderBootstrap()",
+    "scene runtime must isolate render-bootstrap discovery from full scene dependency discovery",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool TryCaptureRenderSettings(\n            out RenderRuntimeSettings settings)\n        {\n            ResolveRenderBootstrap();",
+    "render-settings capture must not resolve unrelated scene dependencies",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public BroadcastCaptureReadiness EvaluateBroadcastCaptureTarget(\n            BroadcastCaptureTarget target)\n        {\n            ResolveRenderBootstrap();",
+    "broadcast target evaluation must not resolve unrelated scene dependencies before render sampling",
+)
+
 p1_renderer_validation = (
     VCR
     / "Editor"
