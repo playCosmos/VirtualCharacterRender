@@ -670,12 +670,12 @@ namespace VCR.Editor.P0
             if (pass)
             {
                 Debug.Log(
-                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; borrowed/snapshot sender equivalence, direct VMC packet atomicity, and stale-pose/custom-expression/bounds checks passed)");
+                    $"VCR P0 OSC/VMC codec: PASS ({packet.Length} bytes, {decoded.Count} messages; borrowed/snapshot sender equivalence, direct VMC packet atomicity/custom-name reuse, and stale-pose/custom-expression/bounds checks passed)");
             }
             else
             {
                 Debug.LogError(
-                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, borrowed/snapshot sender equivalence, direct VMC packet atomicity, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
+                    "VCR P0 OSC/VMC codec: FAIL (golden/reusable OSC bytes, borrowed/snapshot sender equivalence, direct VMC packet atomicity/custom-name reuse, codec, pose-space, values, restart isolation, custom-expression bounds, stale-pose, or packet-bounds mismatch)");
             }
         }
 
@@ -811,6 +811,101 @@ namespace VCR.Editor.P0
                             StandardExpression.Happy),
                         0.6f);
 
+                var customPacketA =
+                    OscPacketWriter.WriteBundle(
+                        new[]
+                        {
+                            OscPacketWriter.WriteMessage(
+                                "/VMC/Ext/Blend/Val",
+                                OscArgument.FromString(
+                                    "custom-direct"),
+                                OscArgument.FromFloat(
+                                    0.2f)),
+                            OscPacketWriter.WriteMessage(
+                                "/VMC/Ext/Blend/Apply")
+                        });
+
+                var customPacketB =
+                    OscPacketWriter.WriteBundle(
+                        new[]
+                        {
+                            OscPacketWriter.WriteMessage(
+                                "/VMC/Ext/Blend/Val",
+                                OscArgument.FromString(
+                                    "custom-direct"),
+                                OscArgument.FromFloat(
+                                    0.7f)),
+                            OscPacketWriter.WriteMessage(
+                                "/VMC/Ext/Blend/Apply")
+                        });
+
+                var firstCustomAccepted =
+                    source.TryProcessPacket(
+                        customPacketA,
+                        customPacketA.Length,
+                        arrivalTimestampUs:
+                            1_325_000,
+                        out var firstCustomProduced) &&
+                    firstCustomProduced &&
+                    source.TryTakeLatestExpressions(
+                        out var firstCustomFrame) &&
+                    firstCustomFrame?
+                        .Expressions != null &&
+                    Mathf.Approximately(
+                        GetCustomExpressionValue(
+                            firstCustomFrame.Expressions,
+                            "custom-direct"),
+                        0.2f);
+
+                var secondCustomAccepted =
+                    source.TryProcessPacket(
+                        customPacketB,
+                        customPacketB.Length,
+                        arrivalTimestampUs:
+                            1_350_000,
+                        out var secondCustomProduced) &&
+                    secondCustomProduced &&
+                    source.TryTakeLatestExpressions(
+                        out var secondCustomFrame) &&
+                    secondCustomFrame?
+                        .Expressions != null &&
+                    source.CustomExpressionCount == 1 &&
+                    Mathf.Approximately(
+                        GetCustomExpressionValue(
+                            secondCustomFrame.Expressions,
+                            "custom-direct"),
+                        0.7f);
+
+                var accumulatorField =
+                    typeof(VmcTrackingSource)
+                        .GetField(
+                            "_accumulator",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
+                var accumulator =
+                    accumulatorField?.GetValue(
+                        source);
+                var wireCacheField =
+                    typeof(VmcFrameAccumulator)
+                        .GetField(
+                            "_customExpressionWireNames",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
+                var wireCache =
+                    wireCacheField?.GetValue(
+                        accumulator);
+                var wireCacheCount =
+                    wireCache?
+                        .GetType()
+                        .GetProperty(
+                            "Count")
+                        ?.GetValue(
+                            wireCache);
+
+                var customWireCachePass =
+                    wireCacheCount is int cachedCount &&
+                    cachedCount == 1;
+
                 var malformedAtomicPacket =
                     OscPacketWriter.WriteBundle(
                         new[]
@@ -898,6 +993,9 @@ namespace VCR.Editor.P0
 
                 return
                     initialAccepted &&
+                    firstCustomAccepted &&
+                    secondCustomAccepted &&
+                    customWireCachePass &&
                     malformedRejected &&
                     followupAccepted &&
                     oversizedRejected;
