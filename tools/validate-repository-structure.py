@@ -1072,6 +1072,21 @@ require_source_contains(
     "environment.state_subscriber_failures",
     "environment state subscriber failures must remain visible in diagnostics",
 )
+require_source_contains(
+    basic_environment_runtime,
+    "CloneStateBindings(",
+    "environment state bindings must be deep-cloned at the runtime boundary",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "TryRestoreStateBindings(",
+    "failed environment state-binding apply must preserve the previous active binding state",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "TryApplyStateBinding(\n                    next,\n                    stateId,",
+    "environment state-binding configuration must apply staged bindings before committing them",
+)
 forbid_source_pattern(
     basic_environment_runtime,
     r"StateChanged\?\.Invoke",
@@ -1088,6 +1103,11 @@ require_source_contains(
     p6_environment_validation,
     "throwingStateSubscriber",
     "P6 validation must prove environment state subscriber failures are isolated",
+)
+require_source_contains(
+    p6_environment_validation,
+    "\"external-day\"",
+    "P6 validation must prove configured state bindings are isolated from later caller mutation",
 )
 
 p1_renderer_validation = (
