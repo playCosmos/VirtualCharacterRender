@@ -196,6 +196,15 @@ namespace VCR.Editor.P9
                 unlockedChatRule,
                 missingNumericRule);
 
+            donationRule.Id =
+                "mutated-source-rule";
+            donationRule.Filter.MinimumAmount =
+                0.0;
+            donationRule.Actions[0].ActionType =
+                "mutated.source.action";
+            donationRule.StateMutations[0].Key =
+                "mutated.source.state";
+
             var output =
                 new List<EventActionCommand>();
 
@@ -222,7 +231,7 @@ namespace VCR.Editor.P9
                 output.Count == 0 &&
                 !engine.State.Contains(
                     "donation.total"),
-                "donation below filter threshold must not mutate state or emit actions",
+                "event engine must deep-clone caller-owned rules: mutating the original rule/filter/action/state graph after SetRules must not weaken the installed donation threshold or change live behavior",
                 failures);
 
             var nonFiniteFilter =
