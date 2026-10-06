@@ -2628,6 +2628,39 @@ require_source_contains(
     "public bool TryGetStatusAt(",
     "capability registry must expose allocation-free indexed status lookup",
 )
+require_source_contains(
+    capability_registry,
+    "instance.Dispose();\n                entry.Instance = null;",
+    "capability instances must remain owned until disposal actually succeeds",
+)
+require_source_contains(
+    capability_registry,
+    "entry.State =\n                    CapabilityState.Faulted;",
+    "failed registry disposal must preserve a faulted retryable entry state",
+)
+require_source_order(
+    capability_registry,
+    "if (failures != null)",
+    "_entries.Clear();",
+    "capability registry must not clear retryable entries before reporting disposal failures",
+)
+
+p0_capability_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0CapabilityMenu.cs"
+)
+require_source_contains(
+    p0_capability_validation,
+    "TransientFailingDisposeService",
+    "P0 capability validation must cover transient disposal failures",
+)
+require_source_contains(
+    p0_capability_validation,
+    "registryRetainedAfterFailure",
+    "P0 capability validation must prove failed registry disposal retains retry ownership",
+)
 forbid_source_pattern(
     capability_registry,
     r"Array\.Sort\s*\(",
