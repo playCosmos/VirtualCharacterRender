@@ -834,6 +834,20 @@ namespace VCR.Runtime.Tracking.Mixing
             {
                 _targetExpressions =
                     baseFrame?.Expressions;
+
+                if (expressionSmoothing <= 0f)
+                {
+                    _currentExpressions =
+                        _targetExpressions;
+                    _latestExpressionFrame =
+                        _targetExpressions != null
+                            ? baseFrame
+                            : null;
+                    _outputDirty = false;
+                    _expressionSmoothingActive =
+                        false;
+                }
+
                 return;
             }
 
