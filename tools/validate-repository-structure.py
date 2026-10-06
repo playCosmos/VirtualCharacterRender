@@ -1571,8 +1571,8 @@ require_source_contains(
 )
 require_source_contains(
     ifacial_receiver,
-    "handshakeSender?.Close();",
-    "iFacialMocap receiver shutdown must release the reusable handshake sender",
+    "CloseHandshakeSender();",
+    "iFacialMocap receiver shutdown/recovery must release a reusable or faulted handshake sender",
 )
 forbid_source_pattern(
     ifacial_receiver,
