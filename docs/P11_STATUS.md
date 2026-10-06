@@ -124,6 +124,7 @@ Implemented source contracts:
 - transition package schema is v2 for dependency metadata; v1 packages migrate to v2 defaults automatically, while unsupported newer versions fail closed
 - `VCR/P11/Open Transition Package Library` indexes `Assets/VCR/TransitionPackages`, supports package/transition search, source/effective version and migration status, invalid-package diagnostics, external JSON add, asset ping/path copy, and pending-package handoff to the Timeline
 - package-library handoff reuses the Timeline collision prompt plus transactional `RebuildConfiguration` rollback rather than implementing a second import path
+- `BasicCharacterAppearanceRuntime.RebuildConfiguration` now snapshots the live resolved outfit/accessory/preset/transition/executor caches and restores them on validation failure or exception; `ConfigureBindings` also preserves the previous authoring arrays/default id until the replacement rebuild succeeds, so one invalid authored edit cannot destroy the last known-good runtime configuration
 - import confirms ID replacement and rolls the complete transition array back if runtime validation fails
 - spin+confetti and Interrupt-cleanup starter templates are provided
 - `VCR/P11/Open External Motion Importer` imports Unity-native `.fbx`, `.dae`, and `.anim` motion sources into project assets
