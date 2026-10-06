@@ -799,6 +799,59 @@ namespace VCR.Editor.P13
                     skippedError,
                     failures);
 
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "SkippedExpression",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .StandardExpression,
+                        StandardExpression =
+                            StandardExpression.Happy,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = 0f,
+                        OutputMax = 1f,
+                        UseDefaultWhenUnavailable =
+                            false
+                    },
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "ParamMouthOpen",
+                        SourceKind =
+                            Character2DParameterSourceKind
+                                .FaceCoefficient,
+                        FaceCoefficient =
+                            FaceCoefficient.JawOpen,
+                        InputMin = 0f,
+                        InputMax = 1f,
+                        OutputMin = -1f,
+                        OutputMax = 1f,
+                        UseDefaultWhenUnavailable =
+                            false
+                    });
+
+                Expect(
+                    Character2DParameterMapper
+                        .TryEvaluate(
+                            profile,
+                            "p13.fake",
+                            faceOnlySnapshot,
+                            out var compactedValues,
+                            out var compactedError) &&
+                    compactedValues.Length == 1 &&
+                    compactedValues[0].ParameterId ==
+                        "ParamMouthOpen" &&
+                    Mathf.Approximately(
+                        compactedValues[0].Value,
+                        0.5f),
+                    "2D parameter mapper must allocate exactly the emitted value count when some bindings are skipped: " +
+                    compactedError,
+                    failures);
+
                 Expect(
                     !Character2DParameterMapper
                         .TryEvaluate(
@@ -865,6 +918,29 @@ namespace VCR.Editor.P13
                         StringComparison.OrdinalIgnoreCase) >=
                         0,
                     "2D parameter mapping validation must reject out-of-range standard-expression enum values",
+                    failures);
+
+                profile.Configure(
+                    "p13.fake",
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "InvalidSourceKind",
+                        SourceKind =
+                            (Character2DParameterSourceKind)999
+                    });
+
+                Expect(
+                    !Character2DParameterMapper
+                        .TryValidate(
+                            profile,
+                            out var sourceKindError) &&
+                    sourceKindError != null &&
+                    sourceKindError.IndexOf(
+                        "unsupported source kind",
+                        StringComparison.OrdinalIgnoreCase) >=
+                        0,
+                    "2D parameter mapping validation must reject out-of-range source-kind enum values without Enum.IsDefined boxing",
                     failures);
             }
             catch (Exception exception)
