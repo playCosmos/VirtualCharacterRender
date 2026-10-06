@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using VCR.Runtime.Core;
 using VCR.Runtime.Tracking;
 
@@ -36,7 +38,10 @@ namespace VCR.Runtime.Diagnostics
             FullBodyAgeMs = fullBodyAgeMs;
             ExpressionAgeMs = expressionAgeMs;
             Presence = presence;
-            Metrics = metrics ?? System.Array.Empty<RuntimeMetric>();
+            Metrics =
+                Array.AsReadOnly(
+                    metrics ??
+                    Array.Empty<RuntimeMetric>());
         }
 
         public long Sequence { get; }
@@ -57,6 +62,6 @@ namespace VCR.Runtime.Diagnostics
         public double ExpressionAgeMs { get; }
 
         public TrackingPresenceSnapshot? Presence { get; }
-        public RuntimeMetric[] Metrics { get; }
+        public IReadOnlyList<RuntimeMetric> Metrics { get; }
     }
 }
