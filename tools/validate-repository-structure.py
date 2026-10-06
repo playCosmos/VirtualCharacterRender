@@ -1115,6 +1115,11 @@ require_source_contains(
 )
 require_source_contains(
     runtime_diagnostics,
+    "RuntimeMetricComparison",
+    "runtime diagnostics metric sorting must reuse a cached comparison delegate",
+)
+require_source_contains(
+    runtime_diagnostics,
     "_metricSources",
     "runtime diagnostics must cache discovered metric sources between reports",
 )
