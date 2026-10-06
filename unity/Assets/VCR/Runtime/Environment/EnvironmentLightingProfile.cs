@@ -12,14 +12,33 @@ namespace VCR.Runtime.Environment
             float intensityMultiplier,
             float weight)
         {
-            Red = Clamp01(red);
-            Green = Clamp01(green);
-            Blue = Clamp01(blue);
+            Red =
+                Clamp01(
+                    red,
+                    fallback:
+                        1f);
+            Green =
+                Clamp01(
+                    green,
+                    fallback:
+                        1f);
+            Blue =
+                Clamp01(
+                    blue,
+                    fallback:
+                        1f);
             IntensityMultiplier =
-                Math.Max(
-                    0f,
-                    intensityMultiplier);
-            Weight = Clamp01(weight);
+                IsFinite(
+                    intensityMultiplier)
+                    ? Math.Max(
+                        0f,
+                        intensityMultiplier)
+                    : 1f;
+            Weight =
+                Clamp01(
+                    weight,
+                    fallback:
+                        0f);
         }
 
         public float Red { get; }
@@ -37,13 +56,24 @@ namespace VCR.Runtime.Environment
                 0f);
 
         private static float Clamp01(
-            float value)
+            float value,
+            float fallback)
         {
+            if (!IsFinite(value))
+            {
+                return fallback;
+            }
+
             return Math.Max(
                 0f,
                 Math.Min(
                     1f,
                     value));
         }
+
+        private static bool IsFinite(
+            float value) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value);
     }
 }
