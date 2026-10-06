@@ -1518,6 +1518,21 @@ require_source_contains(
     "double.IsNaN(",
     "scene sequence valued steps must reject non-finite numeric values",
 )
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "HandlerDiscoveryRetrySeconds",
+    "missing scene sequence delegated handlers must use bounded discovery retry",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "_nextHandlerResolveAt",
+    "scene sequence delegated-handler discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "Time.realtimeSinceStartupAsDouble",
+    "scene sequence delegated-handler retry must use monotonic realtime",
+)
 
 p11_appearance_validation = (
     VCR
