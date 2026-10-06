@@ -325,14 +325,21 @@ namespace VCR.Runtime.Character
                 _borrowedCustomExpressionCount;
             var customCount = 0;
 
-            foreach (var pair in
-                target.Runtime.Expression.GetWeights())
+            var expressionRuntime =
+                target.Runtime.Expression;
+            var expressionKeys =
+                expressionRuntime.ExpressionKeys;
+
+            for (var i = 0;
+                 i < expressionKeys.Count;
+                 i++)
             {
                 var key =
-                    pair.Key;
+                    expressionKeys[i];
                 var value =
                     Mathf.Clamp01(
-                        pair.Value);
+                        expressionRuntime.GetWeight(
+                            key));
 
                 if (StandardExpressionNames.TryParse(
                         key.Name,
@@ -408,11 +415,21 @@ namespace VCR.Runtime.Character
                 _customExpressionScratch;
             custom.Clear();
 
-            foreach (var pair in
-                target.Runtime.Expression.GetWeights())
+            var expressionRuntime =
+                target.Runtime.Expression;
+            var expressionKeys =
+                expressionRuntime.ExpressionKeys;
+
+            for (var i = 0;
+                 i < expressionKeys.Count;
+                 i++)
             {
-                var key = pair.Key;
-                var value = Mathf.Clamp01(pair.Value);
+                var key =
+                    expressionKeys[i];
+                var value =
+                    Mathf.Clamp01(
+                        expressionRuntime.GetWeight(
+                            key));
 
                 if (StandardExpressionNames.TryParse(
                     key.Name,
