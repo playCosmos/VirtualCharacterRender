@@ -813,6 +813,21 @@ require_source_contains(
     "Time.realtimeSinceStartupAsDouble",
     "optional-service retry throttling must use monotonic realtime rather than frame time",
 )
+require_source_contains(
+    single_character_scene_runtime,
+    "_optionalServiceBehaviourScratch",
+    "scene runtime optional-service discovery must reuse one MonoBehaviour scratch list",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "GetComponentsInChildren<MonoBehaviour>(\n                true,\n                _optionalServiceBehaviourScratch);",
+    "scene runtime optional-service discovery must use the non-alloc List overload",
+)
+forbid_source_pattern(
+    single_character_scene_runtime,
+    r"GetComponentsInChildren<MonoBehaviour>\(true\)",
+    "scene runtime optional-service discovery must not allocate a MonoBehaviour array",
+)
 
 require_source_contains(
     single_character_scene_runtime,
