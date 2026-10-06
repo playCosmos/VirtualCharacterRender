@@ -49,27 +49,115 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void ConfigureBindings(
             params EffectBinding[] bindings)
         {
-            effects =
-                bindings ??
-                Array.Empty<EffectBinding>();
+            var stagedAuthoring =
+                CloneBindings(
+                    bindings);
 
-            if (!RebuildBindings(
+            if (!TryBuildBindingMap(
+                    stagedAuthoring,
+                    out var stagedResolved,
                     out var error))
             {
                 _lastError = error;
+                return;
             }
+
+            effects =
+                stagedAuthoring;
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
         }
 
         public bool RebuildBindings(
             out string error)
         {
-            error = null;
-            _effects.Clear();
+            if (!TryBuildBindingMap(
+                    effects,
+                    out var stagedResolved,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
 
-            foreach (var binding in
-                     effects ??
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
+            return true;
+        }
+
+        private static EffectBinding[]
+            CloneBindings(
+                EffectBinding[] bindings)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return Array.Empty<EffectBinding>();
+            }
+
+            var clones =
+                new EffectBinding[
+                    bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                clones[i] =
+                    CloneBinding(
+                        bindings[i]);
+            }
+
+            return clones;
+        }
+
+        private static EffectBinding
+            CloneBinding(
+                EffectBinding binding)
+        {
+            if (binding == null)
+            {
+                return null;
+            }
+
+            return new EffectBinding
+            {
+                EffectId =
+                    binding.EffectId,
+                Root =
+                    binding.Root,
+                ParticleSystems =
+                    binding.ParticleSystems == null
+                        ? Array.Empty<ParticleSystem>()
+                        : (ParticleSystem[])
+                            binding.ParticleSystems.Clone(),
+                RestartOnPlay =
+                    binding.RestartOnPlay,
+                DeactivateOnStop =
+                    binding.DeactivateOnStop
+            };
+        }
+
+        private static bool TryBuildBindingMap(
+            EffectBinding[] bindings,
+            out Dictionary<string, EffectBinding> resolved,
+            out string error)
+        {
+            error = null;
+            resolved =
+                new Dictionary<string, EffectBinding>(
+                    StringComparer.Ordinal);
+
+            foreach (var authoringBinding in
+                     bindings ??
                      Array.Empty<EffectBinding>())
             {
+                var binding =
+                    CloneBinding(
+                        authoringBinding);
+
                 if (binding == null ||
                     string.IsNullOrWhiteSpace(
                         binding.EffectId))
@@ -80,15 +168,14 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
 
                 if (binding.Root == null &&
-                    (binding.ParticleSystems == null ||
-                     binding.ParticleSystems.Length == 0))
+                    binding.ParticleSystems.Length == 0)
                 {
                     error =
                         $"Effect '{binding.EffectId}' requires a root or at least one ParticleSystem.";
                     return false;
                 }
 
-                if (!_effects.TryAdd(
+                if (!resolved.TryAdd(
                         binding.EffectId,
                         binding))
                 {
@@ -98,8 +185,20 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            _lastError = null;
             return true;
+        }
+
+        private void CommitBindingMap(
+            Dictionary<string, EffectBinding> resolved)
+        {
+            _effects.Clear();
+
+            foreach (var pair in resolved)
+            {
+                _effects.Add(
+                    pair.Key,
+                    pair.Value);
+            }
         }
 
         public bool CanHandle(
