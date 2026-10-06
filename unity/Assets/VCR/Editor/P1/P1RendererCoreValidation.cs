@@ -661,8 +661,12 @@ namespace VCR.Editor.P1
                                     () =>
                                     {
                                         capabilityThrowingDisposeCount++;
-                                        throw new InvalidOperationException(
-                                            "expected validation dispose failure");
+
+                                        if (capabilityThrowingDisposeCount == 1)
+                                        {
+                                            throw new InvalidOperationException(
+                                                "expected validation dispose failure");
+                                        }
                                     })) &&
                         capabilities.Register(
                             "p1.validation.after-throw",
@@ -1184,10 +1188,35 @@ namespace VCR.Editor.P1
                     capabilityDisposeCount == 1 &&
                     capabilityThrowingDisposeCount == 1 &&
                     capabilityAfterThrowDisposeCount == 1 &&
+                    scene.Capabilities != null &&
+                    ReferenceEquals(
+                        scene.Capabilities,
+                        capabilities) &&
+                    capabilities != null &&
+                    capabilities.RegisteredCount == 3 &&
+                    capabilities.IsInstantiated(
+                        "p1.validation.throwing-dispose") &&
+                    scene.Status.LastError != null &&
+                    scene.Status.LastError.Contains(
+                        "capability disposal",
+                        StringComparison.Ordinal),
+                    "first scene shutdown must isolate capability disposal failure, finish other cleanup, and retain the retryable registry instance",
+                    failures);
+
+                scene.Shutdown();
+
+                Expect(
+                    scene.State ==
+                        SceneRuntimeState.Stopped &&
+                    capabilityDisposeCount == 1 &&
+                    capabilityThrowingDisposeCount == 2 &&
+                    capabilityAfterThrowDisposeCount == 1 &&
                     scene.Capabilities == null &&
-                    (capabilities == null ||
-                     capabilities.RegisteredCount == 0),
-                    "scene shutdown must isolate capability disposal failures, dispose remaining capabilities, and release the registry",
+                    capabilities != null &&
+                    capabilities.RegisteredCount == 0 &&
+                    string.IsNullOrEmpty(
+                        scene.Status.LastError),
+                    "second scene shutdown must retry retained capability cleanup and release the registry only after disposal succeeds",
                     failures);
 
                 Expect(
