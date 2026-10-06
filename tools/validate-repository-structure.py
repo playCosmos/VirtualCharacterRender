@@ -1195,6 +1195,28 @@ require_source_contains(
     "overlay recovery getter/apply/shutdown failures must be returned as false/error",
 )
 
+environment_lighting_profile = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "EnvironmentLightingProfile.cs"
+)
+require_source_contains(
+    environment_lighting_profile,
+    "IsFinite(",
+    "environment lighting profiles must reject non-finite numeric propagation",
+)
+require_source_contains(
+    environment_lighting_profile,
+    "fallback:\n                        1f",
+    "environment lighting RGB components must use neutral fallbacks for non-finite input",
+)
+require_source_contains(
+    environment_lighting_profile,
+    "fallback:\n                        0f",
+    "environment lighting weight must use no-influence fallback for non-finite input",
+)
+
 environment_transition_spec = (
     VCR
     / "Runtime"
@@ -1367,6 +1389,16 @@ require_source_contains(
     p6_environment_validation,
     "(EnvironmentTransitionMode)999",
     "P6 validation must cover unsupported transition-mode normalization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "nonFiniteLighting",
+    "P6 validation must cover non-finite environment lighting profile sanitization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "clampedLighting",
+    "P6 validation must preserve finite lighting clamp semantics",
 )
 
 p1_renderer_validation = (
