@@ -44,6 +44,10 @@ namespace VCR.Runtime.Scene
         private const double OptionalServiceDiscoveryRetrySeconds = 1.0;
         private const double RenderBootstrapDiscoveryRetrySeconds = 1.0;
 
+        private readonly List<MonoBehaviour>
+            _optionalServiceBehaviourScratch =
+                new();
+
         private IOverlayOutputAdapter _overlayOutput;
         private IEnvironmentRuntime _environmentRuntime;
         private CapabilityRegistry _capabilities;
@@ -876,19 +880,36 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
-            var localBehaviours =
-                GetComponentsInChildren<MonoBehaviour>(true);
+            _optionalServiceBehaviourScratch.Clear();
+            GetComponentsInChildren<MonoBehaviour>(
+                true,
+                _optionalServiceBehaviourScratch);
 
-            foreach (var behaviour in localBehaviours)
+            MonoBehaviour matchedBehaviour = null;
+            IEnvironmentRuntime matchedRuntime = null;
+
+            foreach (var behaviour in
+                     _optionalServiceBehaviourScratch)
             {
                 if (behaviour is
                     IEnvironmentRuntime runtime)
                 {
-                    environmentRuntimeBehaviour = behaviour;
-                    _environmentRuntime = runtime;
-                    _nextEnvironmentRuntimeResolveAt = 0d;
-                    return;
+                    matchedBehaviour = behaviour;
+                    matchedRuntime = runtime;
+                    break;
                 }
+            }
+
+            _optionalServiceBehaviourScratch.Clear();
+
+            if (matchedRuntime != null)
+            {
+                environmentRuntimeBehaviour =
+                    matchedBehaviour;
+                _environmentRuntime =
+                    matchedRuntime;
+                _nextEnvironmentRuntimeResolveAt = 0d;
+                return;
             }
 
             environmentRuntimeBehaviour = null;
@@ -915,22 +936,39 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
-            var localBehaviours =
-                GetComponentsInChildren<MonoBehaviour>(true);
+            _optionalServiceBehaviourScratch.Clear();
+            GetComponentsInChildren<MonoBehaviour>(
+                true,
+                _optionalServiceBehaviourScratch);
 
-            foreach (var behaviour in localBehaviours)
+            MonoBehaviour matchedBehaviour = null;
+            IOverlayOutputAdapter matchedAdapter = null;
+
+            foreach (var behaviour in
+                     _optionalServiceBehaviourScratch)
             {
                 if (behaviour is
                     IOverlayOutputAdapter adapter)
                 {
-                    overlayOutputBehaviour = behaviour;
-                    _overlayOutput = adapter;
-                    _overlayConfiguration =
-                        OverlayOutputConfiguration.FromSettings(
-                            adapter.Settings);
-                    _nextOverlayOutputResolveAt = 0d;
-                    return;
+                    matchedBehaviour = behaviour;
+                    matchedAdapter = adapter;
+                    break;
                 }
+            }
+
+            _optionalServiceBehaviourScratch.Clear();
+
+            if (matchedAdapter != null)
+            {
+                overlayOutputBehaviour =
+                    matchedBehaviour;
+                _overlayOutput =
+                    matchedAdapter;
+                _overlayConfiguration =
+                    OverlayOutputConfiguration.FromSettings(
+                        matchedAdapter.Settings);
+                _nextOverlayOutputResolveAt = 0d;
+                return;
             }
 
             overlayOutputBehaviour = null;
