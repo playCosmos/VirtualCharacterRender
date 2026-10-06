@@ -22,6 +22,8 @@ namespace VCR.Editor.P0
                 var diagnostics =
                     root.AddComponent<
                         RuntimeDiagnostics>();
+                root.AddComponent<
+                    P0ThrowingMetricsSource>();
 
                 SetPrivateField(
                     diagnostics,
@@ -65,9 +67,6 @@ namespace VCR.Editor.P0
                     diagnostics
                         .FrameWindowFrames ==
                         3600;
-
-                root.AddComponent<
-                    P0ThrowingMetricsSource>();
 
                 var survivingSubscriberCount =
                     0;
