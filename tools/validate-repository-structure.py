@@ -753,6 +753,11 @@ require_source_contains(
 )
 require_source_contains(
     appearance_runtime,
+    "CurrentAppearanceMatchesPreset(",
+    "user-preset registry replacement must invalidate a current preset identity whose definition no longer matches the actual appearance",
+)
+require_source_contains(
+    appearance_runtime,
     "_appearanceSubscriberFailureCount",
     "appearance subscriber failures must be observable through diagnostics",
 )
