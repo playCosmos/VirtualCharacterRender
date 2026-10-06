@@ -17,13 +17,18 @@ namespace VCR.Runtime.Output
                 return false;
             }
 
-            var settings =
-                adapter.Settings;
+            OverlayOutputStatus status;
 
             try
             {
+                var settings =
+                    adapter.Settings;
+
                 adapter.Shutdown();
                 adapter.Apply(settings);
+
+                status =
+                    adapter.Status;
             }
             catch (Exception exception)
             {
@@ -32,9 +37,6 @@ namespace VCR.Runtime.Output
                     exception.Message;
                 return false;
             }
-
-            var status =
-                adapter.Status;
 
             if (!status.Supported)
             {
