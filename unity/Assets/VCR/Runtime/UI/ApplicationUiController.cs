@@ -4170,11 +4170,10 @@ namespace VCR.Runtime.UI
                     eventRuntime != null;
                 SetButtonLabel(
                     _eventTraceButton,
-                    "Trace: " +
-                    (eventRuntime?.Engine.TraceEnabled ==
+                    eventRuntime?.Engine.TraceEnabled ==
                         true
-                        ? "On"
-                        : "Off"));
+                        ? "Trace: On"
+                        : "Trace: Off");
             }
 
             if (_eventMaxCommandsInput != null &&
@@ -4596,12 +4595,11 @@ namespace VCR.Runtime.UI
                     canMutate;
                 SetButtonLabel(
                     _settingsVsyncButton,
-                    sceneRuntime != null
-                        ? "VSync: " +
-                          (renderSettings.UseVSync
-                              ? "On"
-                              : "Off")
-                        : "VSync: n/a");
+                    sceneRuntime == null
+                        ? "VSync: n/a"
+                        : renderSettings.UseVSync
+                            ? "VSync: On"
+                            : "VSync: Off");
             }
 
             if (_settingsRunInBackgroundButton != null)
@@ -4610,12 +4608,11 @@ namespace VCR.Runtime.UI
                     canMutate;
                 SetButtonLabel(
                     _settingsRunInBackgroundButton,
-                    sceneRuntime != null
-                        ? "Background: " +
-                          (renderSettings.RunInBackground
-                              ? "On"
-                              : "Off")
-                        : "Background: n/a");
+                    sceneRuntime == null
+                        ? "Background: n/a"
+                        : renderSettings.RunInBackground
+                            ? "Background: On"
+                            : "Background: Off");
             }
         }
 
@@ -8201,12 +8198,11 @@ namespace VCR.Runtime.UI
                     available;
                 SetButtonLabel(
                     _diagnosticsCsvButton,
-                    available
-                        ? "CSV Evidence: " +
-                          (diagnostics.CsvEvidenceEnabled
-                              ? "On"
-                              : "Off")
-                        : "CSV Evidence: n/a");
+                    !available
+                        ? "CSV Evidence: n/a"
+                        : diagnostics.CsvEvidenceEnabled
+                            ? "CSV Evidence: On"
+                            : "CSV Evidence: Off");
             }
 
             if (_diagnosticsConsoleButton != null)
@@ -8215,12 +8211,11 @@ namespace VCR.Runtime.UI
                     available;
                 SetButtonLabel(
                     _diagnosticsConsoleButton,
-                    available
-                        ? "Console Log: " +
-                          (diagnostics.ConsoleLoggingEnabled
-                              ? "On"
-                              : "Off")
-                        : "Console Log: n/a");
+                    !available
+                        ? "Console Log: n/a"
+                        : diagnostics.ConsoleLoggingEnabled
+                            ? "Console Log: On"
+                            : "Console Log: Off");
             }
         }
 
