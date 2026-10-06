@@ -170,7 +170,7 @@ For steady-state tracking and UI operation:
 - OSC float serialization/type-tag/string encoding must not reintroduce per-float or per-type-tag temporary allocations; network parser fanout remains bounded,
 - VMC custom expression staging is bounded to 256 names with 256 characters per custom name; over-limit names are dropped and counted, while existing names remain updatable at capacity,
 - VRM custom-expression application state is also bounded to 256 tracked names; custom `ExpressionKey` values and name scratch storage are reused, names absent from a newer expression frame fade to zero and are pruned, and neutral-return processing must not allocate a per-frame name array,
-- audio-driven mouth fallback keeps source-health sampling current every update but suppresses replacement immutable expression frames while the mouth value remains within the publication epsilon; exact 0/1 boundary changes are still published,
+- audio-driven mouth fallback keeps source-health sampling current while active and suppresses replacement immutable expression frames while the mouth value remains within the publication epsilon; exact 0/1 boundary changes are still published. `PriorityTrackingRouter` suspends the fallback's `AudioSource.GetOutputData`/RMS work entirely while a healthy higher-priority external expression source wins, re-enables it when fallback becomes necessary, and discards stale audio frames on suspension,
 - VMC Stop/Dispose clears retained bone/expression session state before a later Start so stale transforms or custom names cannot leak across receiver sessions,
 - Profiler evidence for 720p60 and 1080p60 must record GC.Alloc/frame and GC spikes alongside frame time before release claims are accepted.
 
