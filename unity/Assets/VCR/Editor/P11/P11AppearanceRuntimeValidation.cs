@@ -526,6 +526,73 @@ namespace VCR.Editor.P11
                         moveUserDownError,
                         failures);
 
+                    var beforeCurrentInvalidation =
+                        userRegistry.CaptureUserPresets();
+                    var currentInvalidationNotifications =
+                        0;
+                    var invalidatedSnapshot =
+                        default(AppearanceStateSnapshot);
+                    Action<AppearanceStateSnapshot>
+                        currentInvalidationHandler =
+                            snapshot =>
+                            {
+                                currentInvalidationNotifications++;
+                                invalidatedSnapshot =
+                                    snapshot;
+                            };
+
+                    runtime.AppearanceChanged +=
+                        currentInvalidationHandler;
+
+                    var invalidatedCurrentPreset =
+                        userRegistry.ReplaceUserPresets(
+                            Array.Empty<
+                                AppearancePreset>(),
+                            out var currentInvalidationError);
+
+                    runtime.AppearanceChanged -=
+                        currentInvalidationHandler;
+
+                    Expect(
+                        invalidatedCurrentPreset &&
+                        runtime.Status.CurrentPresetId ==
+                            null &&
+                        invalidatedSnapshot.PresetId ==
+                            null &&
+                        currentInvalidationNotifications ==
+                            1,
+                        "replacing the user-preset registry must publish one appearance snapshot when it invalidates the current preset id: " +
+                        currentInvalidationError,
+                        failures);
+
+                    var restoredAfterInvalidation =
+                        userRegistry.ReplaceUserPresets(
+                            beforeCurrentInvalidation,
+                            out var currentRestoreError);
+                    var reappliedAfterInvalidation =
+                        restoredAfterInvalidation &&
+                        runtime.SetPreset(
+                            "user-final",
+                            "Immediate",
+                            out var currentReapplyError);
+
+                    if (!restoredAfterInvalidation)
+                    {
+                        currentReapplyError =
+                            "preset restore failed before reapply";
+                    }
+
+                    Expect(
+                        restoredAfterInvalidation &&
+                        reappliedAfterInvalidation &&
+                        runtime.Status.CurrentPresetId ==
+                            "user-final",
+                        "current-preset invalidation validation must restore the prior user presets and active preset: " +
+                        currentRestoreError +
+                        " / " +
+                        currentReapplyError,
+                        failures);
+
                     Expect(
                         store.TrySave(
                             characterPath,
