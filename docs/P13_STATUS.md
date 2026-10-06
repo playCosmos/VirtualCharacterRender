@@ -108,7 +108,7 @@ Supported mapping sources are:
 
 Each binding defines a target parameter id, input/output ranges, optional input clamping, and optional fallback input when the source domain is unavailable. Validation rejects blank/duplicate target ids, non-finite values, zero-width input ranges, unsupported source kinds, invalid face coefficients, and out-of-range standard expressions.
 
-`Character2DParameterMapper.TryEvaluate` requires the profile backend id to match the active adapter id and produces backend-agnostic target-id/value pairs. Mapping validation uses allocation-free duplicate/enum range checks, and evaluation pre-counts bindings that will emit values so it creates one exact-size `Character2DParameterValue[]` for non-empty output instead of `List<T>` plus `ToArray()` scratch; zero-output evaluation returns the shared empty array. Backends may implement optional `ICharacter2DParameterSink`; when a profile is configured, `Character2DRuntime` validates the backend/profile match before model activation, evaluates changed tracking snapshots, and routes the mapped values to that sink instead of the raw-snapshot apply path. Empty mapped results are treated as a no-op and cached without incrementing apply count. The final SDK parameter write remains inside the backend adapter.
+`Character2DParameterMapper.TryEvaluate` requires the profile backend id to match the active adapter id and produces backend-agnostic target-id/value pairs. Mapping validation uses allocation-free duplicate/enum range checks, and evaluation pre-counts bindings that will emit values so it creates one exact-size `Character2DParameterValue[]` for non-empty output instead of `List<T>` plus `ToArray()` scratch; zero-output evaluation returns the shared empty array. `Character2DRuntime` caches the validated backend/profile/revision tuple and uses `TryEvaluateValidated` for the per-frame path; profile `Configure`/Inspector validation increments a non-serialized revision so mutating the same profile object forces revalidation before the next mapped frame. Backends may implement optional `ICharacter2DParameterSink`; when a profile is configured, `Character2DRuntime` validates the backend/profile match before model activation, evaluates changed tracking snapshots, and routes the mapped values to that sink instead of the raw-snapshot apply path. Empty mapped results are treated as a no-op and cached without incrementing apply count. The final SDK parameter write remains inside the backend adapter.
 
 Editor menu:
 
@@ -149,6 +149,7 @@ The first validator uses fake backend/provider MonoBehaviours and covers:
 - skip behavior when unavailable inputs have no fallback
 - compact mixed-result behavior when only a subset of bindings emit values
 - out-of-range source-kind rejection through allocation-free range validation
+- cached validation invalidation/recovery when the same mapping profile object is mutated after model load
 - mapping-profile backend mismatch rejection
 - duplicate target-parameter rejection
 - out-of-range standard-expression rejection
