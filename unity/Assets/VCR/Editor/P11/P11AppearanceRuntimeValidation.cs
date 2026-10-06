@@ -459,6 +459,56 @@ namespace VCR.Editor.P11
                     "appearance configuration rollback validation must restore the original authoring transition input and rebuild cleanly",
                     failures);
 
+                var authoredOutfitsField =
+                    typeof(
+                        BasicCharacterAppearanceRuntime)
+                    .GetField(
+                        "outfits",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var authoredAccessoriesField =
+                    typeof(
+                        BasicCharacterAppearanceRuntime)
+                    .GetField(
+                        "accessories",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+                var authoredOutfits =
+                    (AppearanceOutfitBinding[])
+                        authoredOutfitsField?.GetValue(
+                            runtime);
+                var authoredAccessories =
+                    (AppearanceAccessoryBinding[])
+                        authoredAccessoriesField?.GetValue(
+                            runtime);
+
+                var originalAuthoredOutfitId =
+                    authoredOutfits?[0]
+                        ?.OutfitId;
+                var originalAuthoredAccessoryId =
+                    authoredAccessories?[0]
+                        ?.AccessoryId;
+
+                if (authoredOutfits != null &&
+                    authoredOutfits.Length > 0 &&
+                    authoredOutfits[0] != null)
+                {
+                    authoredOutfits[0].OutfitId =
+                        "mutated-authoring-outfit";
+                }
+
+                if (authoredAccessories != null &&
+                    authoredAccessories.Length > 0 &&
+                    authoredAccessories[0] != null)
+                {
+                    authoredAccessories[0].AccessoryId =
+                        "mutated-authoring-accessory";
+                }
+
                 Expect(
                     runtime.SetPreset(
                         "casual-hat",
@@ -467,6 +517,30 @@ namespace VCR.Editor.P11
                     "immediate default appearance must apply: " +
                     applyError,
                     failures);
+
+                Expect(
+                    casual.activeSelf &&
+                    !formal.activeSelf &&
+                    hat.activeSelf &&
+                    !crown.activeSelf,
+                    "live appearance resolution must remain isolated from in-place mutation of serialized authoring binding objects until rebuild",
+                    failures);
+
+                if (authoredOutfits != null &&
+                    authoredOutfits.Length > 0 &&
+                    authoredOutfits[0] != null)
+                {
+                    authoredOutfits[0].OutfitId =
+                        originalAuthoredOutfitId;
+                }
+
+                if (authoredAccessories != null &&
+                    authoredAccessories.Length > 0 &&
+                    authoredAccessories[0] != null)
+                {
+                    authoredAccessories[0].AccessoryId =
+                        originalAuthoredAccessoryId;
+                }
 
                 Expect(
                     casual.activeSelf &&
