@@ -347,6 +347,16 @@ namespace VCR.Runtime.UI
         private int _diagnosticsNextLabelPage = -1;
         private int _diagnosticsNextLabelPageCount = -1;
         private string _diagnosticsNextLabelCache;
+
+        private bool _statusBarStateValid;
+        private bool _statusBarSceneAvailable;
+        private SceneRuntimeState _statusBarSceneState;
+        private bool _statusBarHasCharacter;
+        private bool _statusBarOutputAvailable;
+        private OverlayOutputState _statusBarOutputState;
+        private string _statusBarActionMessage;
+        private string _statusBarCache;
+
         private ApplicationUiSection _contextVisibilitySection =
             ApplicationUiSection.Count;
         private readonly byte[] _sectionAvailabilityCache =
@@ -5952,38 +5962,112 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            var sceneAvailable =
+                sceneRuntime != null;
             var sceneStatus =
-                sceneRuntime?.Status;
+                sceneAvailable
+                    ? sceneRuntime.Status
+                    : default;
+            var output =
+                sceneAvailable
+                    ? sceneRuntime.OverlayOutput
+                    : null;
+            var outputAvailable =
+                output != null;
+            var outputState =
+                outputAvailable
+                    ? output.Status.State
+                    : default;
 
-            var sceneText =
-                sceneStatus.HasValue
-                    ? sceneStatus.Value.State
-                        .ToString()
-                    : "No Scene Runtime";
+            if (_statusBarStateValid &&
+                _statusBarCache != null &&
+                _statusBarSceneAvailable ==
+                    sceneAvailable &&
+                (!sceneAvailable ||
+                 (_statusBarSceneState ==
+                      sceneStatus.State &&
+                  _statusBarHasCharacter ==
+                      sceneStatus.HasCharacter)) &&
+                _statusBarOutputAvailable ==
+                    outputAvailable &&
+                (!outputAvailable ||
+                 _statusBarOutputState ==
+                    outputState) &&
+                string.Equals(
+                    _statusBarActionMessage,
+                    _lastActionMessage,
+                    StringComparison.Ordinal))
+            {
+                SetTextIfChanged(
+                    _statusText,
+                    _statusBarCache);
+                return;
+            }
 
-            var characterText =
-                sceneStatus.HasValue &&
-                sceneStatus.Value.HasCharacter
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("VCR  |  ");
+
+            if (sceneAvailable)
+            {
+                builder.Append(
+                    sceneStatus.State);
+            }
+            else
+            {
+                builder.Append(
+                    "No Scene Runtime");
+            }
+
+            builder.Append("  |  ");
+            builder.Append(
+                sceneAvailable &&
+                sceneStatus.HasCharacter
                     ? "Character: loaded"
-                    : "Character: none";
+                    : "Character: none");
+            builder.Append("  |  ");
 
-            var outputText =
-                sceneRuntime?.OverlayOutput != null
-                    ? "Output: " +
-                      sceneRuntime.OverlayOutput
-                          .Status.State
-                    : "Output: none";
+            if (outputAvailable)
+            {
+                builder.Append("Output: ");
+                builder.Append(
+                    outputState);
+            }
+            else
+            {
+                builder.Append(
+                    "Output: none");
+            }
 
-            var suffix =
-                string.IsNullOrWhiteSpace(
-                    _lastActionMessage)
-                    ? string.Empty
-                    : "  |  " +
-                      _lastActionMessage;
+            if (!string.IsNullOrWhiteSpace(
+                    _lastActionMessage))
+            {
+                builder.Append("  |  ");
+                builder.Append(
+                    _lastActionMessage);
+            }
+
+            _statusBarSceneAvailable =
+                sceneAvailable;
+            _statusBarSceneState =
+                sceneStatus.State;
+            _statusBarHasCharacter =
+                sceneStatus.HasCharacter;
+            _statusBarOutputAvailable =
+                outputAvailable;
+            _statusBarOutputState =
+                outputState;
+            _statusBarActionMessage =
+                _lastActionMessage;
+            _statusBarStateValid =
+                true;
+            _statusBarCache =
+                builder.ToString();
 
             SetTextIfChanged(
                 _statusText,
-                $"VCR  |  {sceneText}  |  {characterText}  |  {outputText}{suffix}");
+                _statusBarCache);
         }
 
         private void RefreshContent()
