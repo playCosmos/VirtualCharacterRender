@@ -215,6 +215,11 @@ require_source_contains(
     "audio fallback math must contain non-finite configuration/input values",
     "P3 validation must prove audio fallback math never publishes NaN from invalid numeric input",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "MediaPipe presence timing conversion must reject non-finite seconds",
+    "P3 validation must cover MediaPipe timing conversion sanitization and saturation",
+)
 
 p0_vmc_validation = (
     VCR
@@ -635,6 +640,21 @@ forbid_source_pattern(
     mediapipe_webcam_runner,
     r"Func<bool>\s+shouldSubmit|Action<Image,\s*long>\s+submit",
     "MediaPipe webcam task loops must not retain delegate-based hot-path submission dispatch",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "SanitizePresenceTimingConfiguration();",
+    "MediaPipe startup must normalize serialized presence timing before constructing the resolver",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "microseconds >=\n                long.MaxValue",
+    "MediaPipe seconds-to-microseconds conversion must saturate oversized finite values",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "float.IsNaN(seconds) ||",
+    "MediaPipe seconds-to-microseconds conversion must reject non-finite values",
 )
 
 borrowed_pose_contract = (
@@ -2759,6 +2779,21 @@ require_source_contains(
 )
 require_source_contains(
     tracking_router,
+    "SanitizePresenceTimingConfiguration();",
+    "tracking router Awake must normalize serialized presence timing before constructing the resolver",
+)
+require_source_contains(
+    tracking_router,
+    "microseconds >=\n                long.MaxValue",
+    "tracking router seconds-to-microseconds conversion must saturate oversized finite values",
+)
+require_source_contains(
+    tracking_router,
+    "float.IsNaN(seconds) ||",
+    "tracking router seconds-to-microseconds conversion must reject non-finite values",
+)
+require_source_contains(
+    tracking_router,
     "_expressionFallbackActivation",
     "tracking router must support suspending an expensive expression fallback",
 )
@@ -2886,6 +2921,11 @@ require_source_contains(
     p4_routing_validation,
     "must suspend audio fallback sampling",
     "P4 validation must cover expression fallback activation and skipped polling",
+)
+require_source_contains(
+    p4_routing_validation,
+    "tracking router presence timing conversion must reject non-finite seconds",
+    "P4 validation must cover router timing conversion sanitization and saturation",
 )
 
 vrm_tracking_target = (
