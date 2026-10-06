@@ -60,7 +60,11 @@ namespace VCR.Runtime.UI
                 new();
 
         private readonly StringBuilder _summaryBuilder =
-            new(512);
+            new(768);
+
+        private RuntimeMetric[] _diagnosticsMetricSource;
+        private RuntimeMetric[] _diagnosticsSortedMetrics =
+            Array.Empty<RuntimeMetric>();
 
         private Canvas _canvas;
         private RectTransform _root;
@@ -566,6 +570,10 @@ namespace VCR.Runtime.UI
 
                 _subscribedDiagnostics =
                     diagnostics;
+                _diagnosticsMetricSource = null;
+                _diagnosticsSortedMetrics =
+                    Array.Empty<RuntimeMetric>();
+                _diagnosticsMetricPage = 0;
 
                 if (_subscribedDiagnostics != null)
                 {
@@ -629,6 +637,9 @@ namespace VCR.Runtime.UI
             _subscribedSceneRuntime = null;
             _subscribedDiagnostics = null;
             _subscribedAppearanceRuntime = null;
+            _diagnosticsMetricSource = null;
+            _diagnosticsSortedMetrics =
+                Array.Empty<RuntimeMetric>();
             _hasCurrentAppearanceSnapshot = false;
         }
 
@@ -6219,6 +6230,54 @@ namespace VCR.Runtime.UI
                 $"Run in background: {render.RunInBackground}";
         }
 
+        private RuntimeMetric[]
+            GetSortedDiagnosticMetrics(
+                RuntimeDiagnosticsSnapshot snapshot)
+        {
+            var source =
+                snapshot.Metrics ??
+                Array.Empty<RuntimeMetric>();
+
+            if (ReferenceEquals(
+                    source,
+                    _diagnosticsMetricSource))
+            {
+                return _diagnosticsSortedMetrics;
+            }
+
+            _diagnosticsMetricSource =
+                source;
+
+            if (source.Length == 0)
+            {
+                _diagnosticsSortedMetrics =
+                    Array.Empty<RuntimeMetric>();
+                return _diagnosticsSortedMetrics;
+            }
+
+            var sorted =
+                (RuntimeMetric[])
+                    source.Clone();
+
+            Array.Sort(
+                sorted,
+                CompareRuntimeMetrics);
+
+            _diagnosticsSortedMetrics =
+                sorted;
+            return sorted;
+        }
+
+        private static int CompareRuntimeMetrics(
+            RuntimeMetric left,
+            RuntimeMetric right)
+        {
+            return string.Compare(
+                left.Name,
+                right.Name,
+                StringComparison.Ordinal);
+        }
+
         private string DiagnosticsSummary()
         {
             if (diagnostics == null)
@@ -6235,18 +6294,8 @@ namespace VCR.Runtime.UI
             }
 
             var metrics =
-                snapshot.Metrics != null
-                    ? (RuntimeMetric[])
-                        snapshot.Metrics.Clone()
-                    : Array.Empty<RuntimeMetric>();
-
-            Array.Sort(
-                metrics,
-                (left, right) =>
-                    string.Compare(
-                        left.Name,
-                        right.Name,
-                        StringComparison.Ordinal));
+                GetSortedDiagnosticMetrics(
+                    snapshot);
 
             const int pageSize = 12;
             var pageCount =
@@ -6271,8 +6320,8 @@ namespace VCR.Runtime.UI
                     pageSize);
 
             var builder =
-                new System.Text.StringBuilder(
-                    768);
+                _summaryBuilder;
+            builder.Clear();
             builder.AppendLine(
                 $"Snapshot: {snapshot.Sequence} @ {snapshot.RealtimeSeconds:0.00}s");
             builder.AppendLine(
