@@ -271,6 +271,48 @@ namespace VCR.Editor.P1
                     "empty initialized scene must be Ready",
                     failures);
 
+                var healthySceneStatusNotifications = 0;
+                Action<SceneRuntimeStatus>
+                    throwingSceneStatusSubscriber =
+                        _ =>
+                            throw new InvalidOperationException(
+                                "scene status subscriber failure");
+                Action<SceneRuntimeStatus>
+                    healthySceneStatusSubscriber =
+                        _ =>
+                            healthySceneStatusNotifications++;
+
+                scene.StatusChanged +=
+                    throwingSceneStatusSubscriber;
+                scene.StatusChanged +=
+                    healthySceneStatusSubscriber;
+
+                var sceneSubscriberIsolated = false;
+
+                try
+                {
+                    sceneSubscriberIsolated =
+                        scene.Suspend() &&
+                        scene.Resume();
+                }
+                catch
+                {
+                    sceneSubscriberIsolated = false;
+                }
+
+                scene.StatusChanged -=
+                    throwingSceneStatusSubscriber;
+                scene.StatusChanged -=
+                    healthySceneStatusSubscriber;
+
+                Expect(
+                    sceneSubscriberIsolated &&
+                    scene.State ==
+                        SceneRuntimeState.Ready &&
+                    healthySceneStatusNotifications >= 2,
+                    "scene status subscriber exceptions must not abort suspend/resume state transitions or block healthy subscribers",
+                    failures);
+
                 Expect(
                     scene.TryCaptureRenderSettings(
                         out var capturedRenderSettings) &&
