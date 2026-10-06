@@ -446,9 +446,15 @@ namespace VCR.Runtime.Character
                 }
             }
 
+            var customSnapshot =
+                custom.Count == 0
+                    ? Array.Empty<
+                        NamedExpressionValue>()
+                    : custom.ToArray();
+
             return new NormalizedExpressionState(
                 standard,
-                custom.ToArray(),
+                customSnapshot,
                 SnapshotArrayOwnership.Transfer);
         }
 
