@@ -178,7 +178,7 @@ namespace VCR.Runtime.Tracking.Mixing
             HumanoidPoseLayerSettings settings)
         {
             poseLayerSettings =
-                settings ??
+                settings?.Clone() ??
                 new HumanoidPoseLayerSettings();
             _poseDirty = true;
         }
@@ -214,7 +214,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 poseLayerSettings.Role,
                 poseLayerSettings.BlendMode,
                 weight,
-                poseLayerSettings.Mask);
+                poseLayerSettings.RuntimeMask);
 
             _poseDirty = true;
             return true;
@@ -283,12 +283,30 @@ namespace VCR.Runtime.Tracking.Mixing
         public void SetAdditionalPoseLayers(
             params HumanoidPoseLayerSlot[] layers)
         {
-            additionalPoseLayers =
-                layers == null
-                    ? Array.Empty<
-                        HumanoidPoseLayerSlot>()
-                    : (HumanoidPoseLayerSlot[])
-                        layers.Clone();
+            if (layers == null ||
+                layers.Length == 0)
+            {
+                additionalPoseLayers =
+                    Array.Empty<
+                        HumanoidPoseLayerSlot>();
+            }
+            else
+            {
+                var clones =
+                    new HumanoidPoseLayerSlot[
+                        layers.Length];
+
+                for (var i = 0;
+                     i < layers.Length;
+                     i++)
+                {
+                    clones[i] =
+                        layers[i]?.Clone();
+                }
+
+                additionalPoseLayers =
+                    clones;
+            }
 
             ResetPoseState();
         }
@@ -652,7 +670,7 @@ namespace VCR.Runtime.Tracking.Mixing
 
                     ApplyPoseLayer(
                         frame,
-                        additionalPoseLayers[i]?.Settings,
+                        additionalPoseLayers[i]?.RuntimeSettings,
                         ref mixedPose,
                         ref hasMixedLayer,
                         ref confidence);
