@@ -1075,20 +1075,24 @@ namespace VCR.Editor.P1
                     "application bootstrap must load persisted configuration before normal runtime use",
                     failures);
 
-                applicationBootstrap.Suspend();
+                var applicationSuspended =
+                    applicationBootstrap.Suspend();
 
                 Expect(
+                    applicationSuspended &&
                     applicationScene.State ==
-                    SceneRuntimeState.Suspended,
-                    "application bootstrap suspend must suspend the scene runtime",
+                        SceneRuntimeState.Suspended,
+                    "application bootstrap suspend must propagate scene suspend success and state",
                     failures);
 
-                applicationBootstrap.Resume();
+                var applicationResumed =
+                    applicationBootstrap.Resume();
 
                 Expect(
+                    applicationResumed &&
                     applicationScene.State ==
-                    SceneRuntimeState.Ready,
-                    "application bootstrap resume must restore the scene runtime",
+                        SceneRuntimeState.Ready,
+                    "application bootstrap resume must propagate scene resume success and state",
                     failures);
 
                 Expect(
