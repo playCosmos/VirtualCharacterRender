@@ -1493,6 +1493,11 @@ forbid_source_pattern(
 )
 forbid_source_pattern(
     application_ui,
+    r"eventRuntime\.Engine\b",
+    "application UI must read event counters/trace state through the host readonly facade",
+)
+forbid_source_pattern(
+    application_ui,
     r"CaptureStatuses\s*\(",
     "application UI Settings refresh must not clone capability status arrays",
 )
@@ -2147,6 +2152,26 @@ require_source_contains(
     event_runtime_host,
     "public bool TryGetRuleSummary(",
     "event runtime host must expose allocation-free readonly id rule summaries",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool RuleTracingEnabled =>",
+    "event runtime host must expose trace state without publishing the mutable engine",
+)
+require_source_contains(
+    event_runtime_host,
+    "public long ProcessedEvents =>",
+    "event runtime host must expose processed-event counters through a readonly facade",
+)
+require_source_contains(
+    event_runtime_host,
+    "public long MatchedRules =>",
+    "event runtime host must expose matched-rule counters through a readonly facade",
+)
+forbid_source_pattern(
+    event_runtime_host,
+    r"public\s+EventRuntimeEngine\s+Engine",
+    "event runtime host must not expose its mutable EventRuntimeEngine instance",
 )
 require_source_contains(
     event_runtime_host,
