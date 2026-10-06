@@ -17,6 +17,10 @@ namespace VCR.Runtime.Character
     [DefaultExecutionOrder(9000)]
     public sealed class Vrm10HumanoidPoseTarget : MonoBehaviour
     {
+        private const int MaxTrackedCustomExpressions =
+            256;
+        private const float CustomExpressionPruneThreshold =
+            0.0001f;
         [Header("Target")]
         [SerializeField] private Vrm10Instance target;
         [SerializeField] private MonoBehaviour trackingProviderBehaviour;
@@ -71,6 +75,13 @@ namespace VCR.Runtime.Character
 
         private readonly Dictionary<string, float> _smoothedCustomExpressions =
             new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ExpressionKey> _customExpressionKeys =
+            new(StringComparer.Ordinal);
+        private readonly HashSet<string> _currentCustomExpressionNames =
+            new(StringComparer.Ordinal);
+        private readonly List<string> _customExpressionNameScratch =
+            new(
+                MaxTrackedCustomExpressions);
 
         private void Awake()
         {
@@ -179,6 +190,9 @@ namespace VCR.Runtime.Character
                         0,
                         _smoothedExpressions.Length);
                     _smoothedCustomExpressions.Clear();
+                    _customExpressionKeys.Clear();
+                    _currentCustomExpressionNames.Clear();
+                    _customExpressionNameScratch.Clear();
                     _lastExpressionSourceId =
                         expressionFrame.SourceId;
                 }
@@ -256,6 +270,9 @@ namespace VCR.Runtime.Character
                 0,
                 _smoothedExpressions.Length);
             _smoothedCustomExpressions.Clear();
+            _customExpressionKeys.Clear();
+            _currentCustomExpressionNames.Clear();
+            _customExpressionNameScratch.Clear();
             ResetPoseCalibration();
         }
 
@@ -596,34 +613,10 @@ namespace VCR.Runtime.Character
                 }
             }
 
-            if (_smoothedCustomExpressions.Count == 0)
-            {
-                return;
-            }
-
-            var names =
-                new string[
-                    _smoothedCustomExpressions.Count];
-
-            _smoothedCustomExpressions.Keys.CopyTo(
-                names,
-                0);
-
-            foreach (var name in names)
-            {
-                var value =
-                    Mathf.Lerp(
-                        _smoothedCustomExpressions[name],
-                        0f,
-                        alpha);
-
-                _smoothedCustomExpressions[name] =
-                    value;
-
-                runtime.SetWeight(
-                    ExpressionKey.CreateCustom(name),
-                    value);
-            }
+            FadeCustomExpressionsToNeutral(
+                runtime,
+                alpha,
+                onlyMissingFromCurrentFrame: false);
         }
 
         private void ApplyExpressionState(
@@ -663,20 +656,38 @@ namespace VCR.Runtime.Character
                 }
             }
 
+            _currentCustomExpressionNames.Clear();
+
             foreach (var custom in state.Custom)
             {
-                if (string.IsNullOrEmpty(custom.Name))
+                var name =
+                    custom.Name;
+
+                if (string.IsNullOrEmpty(
+                        name))
                 {
                     continue;
                 }
 
+                var tracked =
+                    _smoothedCustomExpressions
+                        .TryGetValue(
+                            name,
+                            out var currentValue);
+
+                if (!tracked &&
+                    _smoothedCustomExpressions.Count >=
+                        MaxTrackedCustomExpressions)
+                {
+                    continue;
+                }
+
+                _currentCustomExpressionNames.Add(
+                    name);
+
                 var targetValue =
-                    Mathf.Clamp01(custom.Value);
-
-                _smoothedCustomExpressions.TryGetValue(
-                    custom.Name,
-                    out var currentValue);
-
+                    Mathf.Clamp01(
+                        custom.Value);
                 var smoothed =
                     Mathf.Lerp(
                         currentValue,
@@ -684,14 +695,104 @@ namespace VCR.Runtime.Character
                         alpha);
 
                 _smoothedCustomExpressions[
-                    custom.Name] =
+                    name] =
                     smoothed;
 
                 runtime.SetWeight(
-                    ExpressionKey.CreateCustom(
-                        custom.Name),
+                    GetCustomExpressionKey(
+                        name),
                     smoothed);
             }
+
+            FadeCustomExpressionsToNeutral(
+                runtime,
+                alpha,
+                onlyMissingFromCurrentFrame: true);
+        }
+
+        private void FadeCustomExpressionsToNeutral(
+            Vrm10RuntimeExpression runtime,
+            float alpha,
+            bool onlyMissingFromCurrentFrame)
+        {
+            if (runtime == null ||
+                _smoothedCustomExpressions.Count == 0)
+            {
+                return;
+            }
+
+            _customExpressionNameScratch.Clear();
+
+            foreach (var pair in
+                     _smoothedCustomExpressions)
+            {
+                if (!onlyMissingFromCurrentFrame ||
+                    !_currentCustomExpressionNames
+                        .Contains(
+                            pair.Key))
+                {
+                    _customExpressionNameScratch.Add(
+                        pair.Key);
+                }
+            }
+
+            for (var i = 0;
+                 i <
+                 _customExpressionNameScratch.Count;
+                 i++)
+            {
+                var name =
+                    _customExpressionNameScratch[i];
+                var value =
+                    Mathf.Lerp(
+                        _smoothedCustomExpressions[name],
+                        0f,
+                        alpha);
+
+                if (value <=
+                    CustomExpressionPruneThreshold)
+                {
+                    value = 0f;
+                }
+
+                runtime.SetWeight(
+                    GetCustomExpressionKey(
+                        name),
+                    value);
+
+                if (value <= 0f)
+                {
+                    _smoothedCustomExpressions.Remove(
+                        name);
+                    _customExpressionKeys.Remove(
+                        name);
+                }
+                else
+                {
+                    _smoothedCustomExpressions[
+                        name] =
+                        value;
+                }
+            }
+        }
+
+        private ExpressionKey GetCustomExpressionKey(
+            string name)
+        {
+            if (_customExpressionKeys.TryGetValue(
+                    name,
+                    out var key))
+            {
+                return key;
+            }
+
+            key =
+                ExpressionKey.CreateCustom(
+                    name);
+            _customExpressionKeys[
+                name] =
+                    key;
+            return key;
         }
 
         private static bool TryExpressionKey(
