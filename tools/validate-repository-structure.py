@@ -718,6 +718,34 @@ require_source_contains(
     "VRM snapshot provider must skip pose capture when not requested",
 )
 
+appearance_bindings = (
+    VCR
+    / "Runtime"
+    / "Appearance"
+    / "Unity"
+    / "AppearanceBindings.cs"
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceOutfitBinding Clone()",
+    "appearance outfit bindings must own a clone boundary",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearancePresetBinding Clone()",
+    "appearance preset bindings must deep-clone nested accessory selections",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceTransitionStepBinding Clone()",
+    "appearance transition steps must clone dependency-id arrays",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceTransitionBinding Clone()",
+    "appearance transition bindings must deep-clone markers/steps/cancellation steps",
+)
+
 appearance_runtime = (
     VCR
     / "Runtime"
@@ -820,6 +848,26 @@ require_source_contains(
     appearance_runtime,
     "previousOutfits =\n                outfits;",
     "ConfigureBindings must retain previous authoring inputs until the replacement rebuild succeeds",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneOutfitBindings(",
+    "ConfigureBindings must deep-clone mutable outfit binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneAccessoryBindings(",
+    "ConfigureBindings must deep-clone mutable accessory binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "ClonePresetBindings(",
+    "ConfigureBindings must deep-clone mutable preset binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneTransitionBindings(",
+    "ConfigureBindings must deep-clone mutable transition binding inputs",
 )
 forbid_source_pattern(
     appearance_runtime,
@@ -1153,6 +1201,16 @@ require_source_contains(
     p11_appearance_validation,
     "rollbackRejected",
     "P11 appearance validation must prove failed rebuilds preserve the previous live cache/state",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"external-outfit\"",
+    "P11 appearance validation must mutate caller-owned bindings after ConfigureBindings",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "aliasRebuildSucceeded",
+    "P11 appearance validation must prove later rebuilds remain isolated from caller mutation",
 )
 
 p6_environment_validation = (
