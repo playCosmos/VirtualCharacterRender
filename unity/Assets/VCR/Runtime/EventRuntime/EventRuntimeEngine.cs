@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using VCR.Runtime.Events;
 
 namespace VCR.Runtime.EventRuntime
@@ -19,12 +20,119 @@ namespace VCR.Runtime.EventRuntime
         private readonly Dictionary<EventRuntimeRule, RuleDiagnosticsCounter>
             _ruleDiagnostics = new();
 
+        private readonly object _traceSubscriptionSync =
+            new();
+        private Action<EventRuntimeTraceEntry>[] _traceSubscribers =
+            Array.Empty<Action<EventRuntimeTraceEntry>>();
+
         public EventRuntimeStateStore State { get; } = new();
 
         public bool TraceEnabled { get; set; }
 
         public event Action<EventRuntimeTraceEntry>
-            TraceEmitted;
+            TraceEmitted
+        {
+            add
+            {
+                if (value == null)
+                {
+                    return;
+                }
+
+                lock (_traceSubscriptionSync)
+                {
+                    var current =
+                        _traceSubscribers;
+                    var next =
+                        new Action<EventRuntimeTraceEntry>[
+                            current.Length + 1];
+
+                    Array.Copy(
+                        current,
+                        next,
+                        current.Length);
+                    next[current.Length] =
+                        value;
+
+                    Volatile.Write(
+                        ref _traceSubscribers,
+                        next);
+                }
+            }
+            remove
+            {
+                if (value == null)
+                {
+                    return;
+                }
+
+                lock (_traceSubscriptionSync)
+                {
+                    var current =
+                        _traceSubscribers;
+                    var index = -1;
+
+                    for (var i =
+                             current.Length - 1;
+                         i >= 0;
+                         i--)
+                    {
+                        if (Equals(
+                                current[i],
+                                value))
+                        {
+                            index = i;
+                            break;
+                        }
+                    }
+
+                    if (index < 0)
+                    {
+                        return;
+                    }
+
+                    if (current.Length == 1)
+                    {
+                        Volatile.Write(
+                            ref _traceSubscribers,
+                            Array.Empty<
+                                Action<EventRuntimeTraceEntry>>());
+                        return;
+                    }
+
+                    var next =
+                        new Action<EventRuntimeTraceEntry>[
+                            current.Length - 1];
+
+                    if (index > 0)
+                    {
+                        Array.Copy(
+                            current,
+                            0,
+                            next,
+                            0,
+                            index);
+                    }
+
+                    if (index <
+                        current.Length - 1)
+                    {
+                        Array.Copy(
+                            current,
+                            index + 1,
+                            next,
+                            index,
+                            current.Length -
+                            index -
+                            1);
+                    }
+
+                    Volatile.Write(
+                        ref _traceSubscribers,
+                        next);
+                }
+            }
+        }
 
         public long ProcessedEvents { get; private set; }
         public long MatchedRules { get; private set; }
@@ -293,8 +401,16 @@ namespace VCR.Runtime.EventRuntime
             int emittedCommands,
             long droppedCommands)
         {
-            if (!TraceEnabled ||
-                TraceEmitted == null)
+            if (!TraceEnabled)
+            {
+                return;
+            }
+
+            var subscribers =
+                Volatile.Read(
+                    ref _traceSubscribers);
+
+            if (subscribers.Length == 0)
             {
                 return;
             }
@@ -308,8 +424,8 @@ namespace VCR.Runtime.EventRuntime
                     emittedCommands,
                     droppedCommands);
 
-            foreach (Action<EventRuntimeTraceEntry> subscriber in
-                     TraceEmitted.GetInvocationList())
+            foreach (var subscriber in
+                     subscribers)
             {
                 try
                 {
