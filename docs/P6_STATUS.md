@@ -159,3 +159,5 @@ Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime bound
 Lighting configuration now follows the same fail-closed contract. `ConfigureLightingTargets(..., out error)` and `SetLightingProfile(..., out error)` convert validation/apply exceptions into structured failures, continue isolating individual target exceptions for diagnostics, and restore the previous target set/profile when a staged apply fails after another target has already changed.
 
 Non-Cut transition target validation now follows the same structured failure boundary: exceptions from `IEnvironmentTransitionTarget.ValidateEnvironmentTransition` are returned as `false` plus an error string before state id, root visibility, or transition status is mutated.
+
+`EnvironmentTransitionSpec` now normalizes non-finite durations to `0s` and unsupported enum values to `Cut`; `ConfigureDefaultTransition` uses the same normalized spec before persisting defaults. Invalid serialized/API inputs therefore degrade to a safe immediate transition instead of poisoning later state changes with NaN/Infinity or an unknown mode.
