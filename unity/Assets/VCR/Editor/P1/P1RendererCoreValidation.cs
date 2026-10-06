@@ -843,6 +843,19 @@ namespace VCR.Editor.P1
                     "suspend must stop overlay output without disposing active capabilities",
                     failures);
 
+                var suspendedRecoveryReturned =
+                    scene.TryRecoverOverlayOutput(
+                        out var suspendedRecoveryError);
+
+                Expect(
+                    !suspendedRecoveryReturned &&
+                    !string.IsNullOrWhiteSpace(
+                        suspendedRecoveryError) &&
+                    scene.State ==
+                        SceneRuntimeState.Suspended,
+                    "TryRecoverOverlayOutput must report suspended-state rejection through false/error instead of throwing or mutating lifecycle state",
+                    failures);
+
                 Expect(
                     scene.Resume() &&
                     scene.State ==
