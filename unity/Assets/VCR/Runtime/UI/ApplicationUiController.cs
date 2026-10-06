@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -57,6 +58,9 @@ namespace VCR.Runtime.UI
         private readonly List<ITrackingRuntimeControl>
             _trackingControls =
                 new();
+
+        private readonly StringBuilder _summaryBuilder =
+            new(512);
 
         private Canvas _canvas;
         private RectTransform _root;
@@ -5788,7 +5792,7 @@ namespace VCR.Runtime.UI
             return false;
         }
 
-        private static string FormatUserPresetOrder(
+        private string FormatUserPresetOrder(
             IAppearanceUserPresetRegistry registry)
         {
             if (registry == null ||
@@ -5802,31 +5806,35 @@ namespace VCR.Runtime.UI
                 Math.Min(
                     visibleLimit,
                     registry.UserPresetIds.Count);
-            var values =
-                new string[
-                    visibleCount];
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
 
             for (var i = 0;
                  i < visibleCount;
                  i++)
             {
-                values[i] =
-                    registry.UserPresetIds[i];
-            }
+                if (i > 0)
+                {
+                    builder.Append(
+                        " > ");
+                }
 
-            var result =
-                string.Join(
-                    " > ",
-                    values);
+                builder.Append(
+                    registry.UserPresetIds[i]);
+            }
 
             if (registry.UserPresetIds.Count >
                 visibleLimit)
             {
-                result +=
-                    $" > +{registry.UserPresetIds.Count - visibleLimit}";
+                builder.Append(
+                    " > +");
+                builder.Append(
+                    registry.UserPresetIds.Count -
+                    visibleLimit);
             }
 
-            return result;
+            return builder.ToString();
         }
 
         private string TrackingSummary()
@@ -5838,48 +5846,61 @@ namespace VCR.Runtime.UI
 
             var presence =
                 _trackingPresence.Presence;
-
-            var summary =
-                $"Subject: {presence.SubjectState}\n" +
-                $"Any source available: {presence.AnySourceAvailable}\n" +
-                $"Face source: {presence.FaceSourceAvailable}\n" +
-                $"Body/hands source: {presence.BodyHandsSourceAvailable}\n" +
-                $"Full-body source: {presence.FullBodySourceAvailable}\n" +
-                $"Events: {presence.Events}";
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Subject: ");
+            builder.Append(presence.SubjectState);
+            builder.Append("\nAny source available: ");
+            builder.Append(presence.AnySourceAvailable);
+            builder.Append("\nFace source: ");
+            builder.Append(presence.FaceSourceAvailable);
+            builder.Append("\nBody/hands source: ");
+            builder.Append(presence.BodyHandsSourceAvailable);
+            builder.Append("\nFull-body source: ");
+            builder.Append(presence.FullBodySourceAvailable);
+            builder.Append("\nEvents: ");
+            builder.Append(presence.Events);
 
             if (_trackingControls.Count == 0)
             {
-                return summary +
-                    "\nSource controls: <none>";
+                builder.Append(
+                    "\nSource controls: <none>");
+                return builder.ToString();
             }
 
-            var lines =
-                new List<string>(
-                    _trackingControls.Count);
+            builder.Append(
+                "\nSource controls:\n");
 
             for (var i = 0;
                  i < _trackingControls.Count;
                  i++)
             {
+                if (i > 0)
+                {
+                    builder.Append('\n');
+                }
+
                 var control =
                     _trackingControls[i];
-                var selected =
-                    i == _trackingControlIndex
-                        ? ">"
-                        : " ";
 
-                lines.Add(
-                    $"{selected} {control.DisplayName}: " +
-                    $"enabled={control.ControlEnabled}, " +
-                    $"health={control.ControlHealthState}, " +
-                    $"error={control.ControlError ?? "<none>"}");
+                builder.Append(
+                    i == _trackingControlIndex
+                        ? '>'
+                        : ' ');
+                builder.Append(' ');
+                builder.Append(control.DisplayName);
+                builder.Append(": enabled=");
+                builder.Append(control.ControlEnabled);
+                builder.Append(", health=");
+                builder.Append(control.ControlHealthState);
+                builder.Append(", error=");
+                builder.Append(
+                    control.ControlError ??
+                    "<none>");
             }
 
-            return summary +
-                "\nSource controls:\n" +
-                string.Join(
-                    "\n",
-                    lines);
+            return builder.ToString();
         }
 
         private string MotionSummary()
