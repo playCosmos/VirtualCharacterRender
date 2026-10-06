@@ -160,6 +160,8 @@ Environment availability/control/summary refresh now uses an `IEnvironmentRuntim
 
 Appearance runtime notifications are now subscriber-isolated: a throwing `AppearanceChanged` or `StatusChanged` observer cannot turn an already committed wardrobe/accessory change into a failed/stuck transition or prevent healthy subscribers from receiving the same notification. Failure counters are exposed through appearance diagnostics metrics.
 
+Renaming the currently selected user preset is atomic at the notification boundary: the runtime stages the replacement current id before registry replacement, restores the old id if replacement fails, and emits one final appearance snapshot without a transient `PresetId=null` state or redundant status notification.
+
 Transition executor capability probes are also isolated. Exceptions from custom `CanExecute` or completion `CanTrackCompletion` implementations now fail closed with explicit errors instead of escaping validation/coroutine execution; probe failures are counted as `appearance.transition.executor_probe_failures`.
 
 The delegated Event Runtime action bridge applies the same rule to `IEventActionHandler.CanHandle` and `IEventActionCompletionProbe.CanTrackCompletion`. Throwing handler probes no longer escape `AppearanceTransitionActionExecutor`; `TryExecute`/`TryIsComplete` return explicit errors and diagnostics expose separate handler/completion probe failure counters.
