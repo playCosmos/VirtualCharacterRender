@@ -658,6 +658,40 @@ forbid_source_pattern(
     r"_appearanceRuntime\.Current\.PresetId",
     "application UI preset-id-only paths must use allocation-free appearance status",
 )
+require_source_occurrences(
+    application_ui,
+    "eventRuntime.CaptureRules()",
+    1,
+    "application UI may defensively clone event rules only for persistence, not refresh/navigation",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.RuleCount",
+    "application UI event controls must use allocation-free event rule count lookup",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.GetRuleAt(",
+    "application UI event controls must use allocation-free indexed event rule lookup",
+)
+
+event_runtime_host = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EventRuntimeHost.cs"
+)
+require_source_contains(
+    event_runtime_host,
+    "public EventRuntimeRule GetRuleAt(",
+    "event runtime host must expose allocation-free indexed rule lookup",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRule(",
+    "event runtime host must expose allocation-free id rule lookup",
+)
 
 motion_cue_sources = [
     VCR
