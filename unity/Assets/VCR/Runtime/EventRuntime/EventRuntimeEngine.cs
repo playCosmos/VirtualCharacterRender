@@ -166,10 +166,9 @@ namespace VCR.Runtime.EventRuntime
             out string error)
         {
             var next =
-                rules == null
-                    ? Array.Empty<EventRuntimeRule>()
-                    : (EventRuntimeRule[])
-                        rules.Clone();
+                EventRuntimeRuleCloner
+                    .CloneRules(
+                        rules);
 
             if (!EventRuntimeRuleSetBounds
                 .TryValidate(
