@@ -737,6 +737,35 @@ application_ui = (
     / "UI"
     / "ApplicationUiController.cs"
 )
+single_character_scene_runtime = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "SingleCharacterSceneRuntime.cs"
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool TryCaptureRenderSettings(",
+    "scene runtime must expose render-bootstrap availability without guessing from fallback settings",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "settings =\n                    RenderRuntimeSettings.Default1080p;",
+    "missing render bootstrap must preserve the historical default render-settings fallback while reporting unavailable",
+)
+
+p1_renderer_validation = (
+    VCR
+    / "Editor"
+    / "P1"
+    / "P1RendererCoreValidation.cs"
+)
+require_source_contains(
+    p1_renderer_validation,
+    "scene.TryCaptureRenderSettings(",
+    "P1 validation must cover render-bootstrap availability with current settings",
+)
+
 require_source_contains(
     application_ui,
     "_buttonLabels",
@@ -868,6 +897,21 @@ require_source_contains(
     application_ui,
     "_eventsSummaryCache",
     "application UI Events refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_outputSummaryCache",
+    "application UI Output refresh must cache unchanged readiness/summary state",
+)
+require_source_contains(
+    application_ui,
+    "TryCaptureRenderSettings(",
+    "application UI Output refresh must sample render-bootstrap availability once for its cache key",
+)
+forbid_source_pattern(
+    application_ui,
+    r"EvaluateBroadcastCaptureTarget\s*\(",
+    "application UI Output refresh must not re-enter scene broadcast readiness evaluation every 2 Hz tick",
 )
 require_source_contains(
     application_ui,
