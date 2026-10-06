@@ -391,46 +391,165 @@ namespace VCR.Runtime.Scene
             EnsureOperational();
             ResolveDependencies();
 
-            if (IsServiceAlive(_environmentRuntime) &&
-                !string.IsNullOrWhiteSpace(
-                    configuration.EnvironmentStateId) &&
-                !_environmentRuntime.SetState(
-                    configuration.EnvironmentStateId,
-                    out var environmentError))
-            {
-                throw new InvalidOperationException(
-                    "Environment state apply failed: " +
-                    environmentError);
-            }
-
-            renderBootstrap.Apply(
-                configuration.Rendering);
-
-            if (cameraController != null)
-            {
-                cameraController.Configure(
-                    cameraController.TargetCamera,
-                    configuration.Camera);
-            }
-
-            if (lightController != null)
-            {
-                lightController.Configure(
-                    lightController.TargetLight,
-                    configuration.Light);
-            }
-
+            var previousConfiguration =
+                CaptureConfiguration();
             var nextOverlayConfiguration =
                 configuration.Overlay;
 
-            if (IsServiceAlive(_overlayOutput))
+            try
             {
-                _overlayOutput.Apply(
-                    nextOverlayConfiguration.ToSettings());
+                if (IsServiceAlive(_environmentRuntime) &&
+                    !string.IsNullOrWhiteSpace(
+                        configuration.EnvironmentStateId) &&
+                    !_environmentRuntime.SetState(
+                        configuration.EnvironmentStateId,
+                        out var environmentError))
+                {
+                    throw new InvalidOperationException(
+                        "Environment state apply failed: " +
+                        environmentError);
+                }
+
+                renderBootstrap.Apply(
+                    configuration.Rendering);
+
+                if (cameraController != null)
+                {
+                    cameraController.Configure(
+                        cameraController.TargetCamera,
+                        configuration.Camera);
+                }
+
+                if (lightController != null)
+                {
+                    lightController.Configure(
+                        lightController.TargetLight,
+                        configuration.Light);
+                }
+
+                if (IsServiceAlive(_overlayOutput))
+                {
+                    _overlayOutput.Apply(
+                        nextOverlayConfiguration.ToSettings());
+                }
+
+                _overlayConfiguration =
+                    nextOverlayConfiguration;
+            }
+            catch (Exception exception)
+            {
+                var rollbackFailures =
+                    new List<string>();
+
+                RollbackConfiguration(
+                    previousConfiguration,
+                    rollbackFailures);
+
+                if (rollbackFailures.Count == 0)
+                {
+                    throw;
+                }
+
+                throw new InvalidOperationException(
+                    "Scene configuration apply failed and rollback was incomplete: " +
+                    string.Join(
+                        " | ",
+                        rollbackFailures),
+                    exception);
+            }
+        }
+
+        private void RollbackConfiguration(
+            SceneRuntimeConfiguration configuration,
+            List<string> failures)
+        {
+            RunRollbackStep(
+                "overlay",
+                () =>
+                {
+                    if (IsServiceAlive(_overlayOutput))
+                    {
+                        _overlayOutput.Apply(
+                            configuration.Overlay.ToSettings());
+                    }
+
+                    _overlayConfiguration =
+                        configuration.Overlay;
+                },
+                failures);
+
+            RunRollbackStep(
+                "light",
+                () =>
+                {
+                    if (lightController != null)
+                    {
+                        lightController.Configure(
+                            lightController.TargetLight,
+                            configuration.Light);
+                    }
+                },
+                failures);
+
+            RunRollbackStep(
+                "camera",
+                () =>
+                {
+                    if (cameraController != null)
+                    {
+                        cameraController.Configure(
+                            cameraController.TargetCamera,
+                            configuration.Camera);
+                    }
+                },
+                failures);
+
+            RunRollbackStep(
+                "render",
+                () =>
+                    renderBootstrap?.Apply(
+                        configuration.Rendering),
+                failures);
+
+            RunRollbackStep(
+                "environment",
+                () =>
+                {
+                    if (IsServiceAlive(_environmentRuntime) &&
+                        !string.IsNullOrWhiteSpace(
+                            configuration.EnvironmentStateId) &&
+                        !_environmentRuntime.SetState(
+                            configuration.EnvironmentStateId,
+                            out var environmentError))
+                    {
+                        throw new InvalidOperationException(
+                            environmentError ??
+                            "environment rollback failed");
+                    }
+                },
+                failures);
+        }
+
+        private static void RunRollbackStep(
+            string label,
+            Action action,
+            List<string> failures)
+        {
+            if (action == null)
+            {
+                return;
             }
 
-            _overlayConfiguration =
-                nextOverlayConfiguration;
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                failures?.Add(
+                    label + ": " +
+                    exception.Message);
+            }
         }
 
         public bool SetEnvironmentState(
