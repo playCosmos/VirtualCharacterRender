@@ -656,6 +656,40 @@ namespace VCR.Editor.P1
                     "individual overlay changes must update both adapter and configuration snapshot",
                     failures);
 
+                outputAdapter.ThrowOnApply =
+                    true;
+                var overlayApplyFailed = false;
+
+                try
+                {
+                    scene.ApplyOverlayOutput(
+                        new OverlayOutputSettings(
+                            transparent: false,
+                            topmost: true,
+                            clickThrough: false));
+                }
+                catch (InvalidOperationException)
+                {
+                    overlayApplyFailed = true;
+                }
+                finally
+                {
+                    outputAdapter.ThrowOnApply =
+                        false;
+                }
+
+                var overlayAfterFailedApply =
+                    scene.CaptureConfiguration().Overlay;
+
+                Expect(
+                    overlayApplyFailed &&
+                    outputAdapter.ApplyCount == 2 &&
+                    overlayAfterFailedApply.Transparent &&
+                    !overlayAfterFailedApply.Topmost &&
+                    overlayAfterFailedApply.ClickThrough,
+                    "failed overlay adapter apply must not commit an unapplied configuration snapshot",
+                    failures);
+
                 configurationTestDirectory =
                     Path.Combine(
                         Path.GetTempPath(),
