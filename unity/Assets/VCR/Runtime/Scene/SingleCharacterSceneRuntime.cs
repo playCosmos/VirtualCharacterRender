@@ -461,11 +461,13 @@ namespace VCR.Runtime.Scene
                     "No overlay output adapter is configured.");
             }
 
-            _overlayConfiguration =
+            var nextConfiguration =
                 OverlayOutputConfiguration
                     .FromSettings(settings);
 
             _overlayOutput.Apply(settings);
+            _overlayConfiguration =
+                nextConfiguration;
         }
 
         public bool TryRecoverOverlayOutput(
