@@ -206,15 +206,28 @@ namespace VCR.Runtime.Application
                 return false;
             }
 
-            _configurationStore ??=
-                new RuntimeConfigurationStore(
-                    ResolveConfigurationPath(
-                        ApplicationLaunchOptions.Parse(
-                            Environment.GetCommandLineArgs())));
+            try
+            {
+                _configurationStore ??=
+                    new RuntimeConfigurationStore(
+                        ResolveConfigurationPath(
+                            ApplicationLaunchOptions.Parse(
+                                Environment.GetCommandLineArgs())));
 
-            return _configurationStore.TrySave(
-                sceneRuntime.CaptureConfiguration(),
-                out error);
+                var configuration =
+                    sceneRuntime.CaptureConfiguration();
+
+                return _configurationStore.TrySave(
+                    configuration,
+                    out error);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Runtime configuration capture/save failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         public bool Suspend()
