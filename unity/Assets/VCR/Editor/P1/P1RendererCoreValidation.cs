@@ -1390,6 +1390,8 @@ namespace VCR.Editor.P1
                     applicationStartupFailure is
                         FileNotFoundException &&
                     !applicationBootstrap.IsStarted &&
+                    applicationBootstrap.ConfigurationPath ==
+                        null &&
                     applicationScene.State ==
                         SceneRuntimeState.Ready &&
                     applicationAfterFailedStartup
