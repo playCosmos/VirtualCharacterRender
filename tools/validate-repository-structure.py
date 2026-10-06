@@ -895,6 +895,45 @@ require_source_contains(
     "broadcast target evaluation must not resolve unrelated scene dependencies before render sampling",
 )
 
+require_source_contains(
+    single_character_scene_runtime,
+    "NotifyStatusChanged(",
+    "scene status notifications must isolate subscriber failures",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "scene.status_subscriber_failures",
+    "scene status subscriber failures must remain visible in diagnostics",
+)
+forbid_source_pattern(
+    single_character_scene_runtime,
+    r"StatusChanged\?\.Invoke",
+    "scene runtime must not let one status subscriber abort lifecycle transitions",
+)
+
+basic_environment_runtime = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "Unity"
+    / "BasicEnvironmentRuntime.cs"
+)
+require_source_contains(
+    basic_environment_runtime,
+    "NotifyStateChanged(",
+    "environment state notifications must isolate subscriber failures",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "environment.state_subscriber_failures",
+    "environment state subscriber failures must remain visible in diagnostics",
+)
+forbid_source_pattern(
+    basic_environment_runtime,
+    r"StateChanged\?\.Invoke",
+    "environment runtime must not let one state subscriber abort committed state/update dispatch",
+)
+
 p1_renderer_validation = (
     VCR
     / "Editor"
@@ -905,6 +944,11 @@ require_source_contains(
     p1_renderer_validation,
     "scene.TryCaptureRenderSettings(",
     "P1 validation must cover render-bootstrap availability with current settings",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "throwingSceneStatusSubscriber",
+    "P1 validation must prove scene status subscriber failures are isolated",
 )
 
 require_source_contains(
