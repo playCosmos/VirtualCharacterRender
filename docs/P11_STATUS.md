@@ -75,6 +75,7 @@ The next control slice is now also implemented:
 - Character: manual VRM path boundary plus Load / Reload / Unload actions over `SingleCharacterSceneRuntime`
 - Character keeps direct path input and now also exposes a Browse action through `ICharacterFileSelectionAdapter`; Unity Editor, Windows standalone, and macOS standalone adapters are implemented. The selected path is validated as an existing `.vrm` before it is copied into the path field.
 - scene-mutating buttons are disabled while a character load is already in progress and while the scene is suspended/shutting down/stopped
+- character Load/Reload UI requests are generation-scoped: only the newest async request may commit its completion/failure message, scene-runtime replacement invalidates older completions, and a successful Unload action invalidates outstanding load/reload UI results so stale cancellation/failure text cannot overwrite newer state
 - Camera / Output: Apply 720p60 and Apply 1080p60 actions use the existing broadcast-target runtime contract; Transparent / Topmost / Click-through buttons preserve the other overlay flags and apply through `SingleCharacterSceneRuntime.ApplyOverlayOutput`
 - Tracking: previous/next source selection, enable/disable, and recovery actions use `ITrackingRuntimeControl`
 - Motion / Expression: primary pose-layer weight plus manual expression set/clear/clear-all controls use the mixer/manual-expression contracts
