@@ -1111,6 +1111,24 @@ namespace VCR.Editor.P1
                     "SetEnvironmentState must report lifecycle rejection through false/error instead of throwing or mutating the suspended scene",
                     failures);
 
+                var suspendedBroadcastReturned =
+                    scene.TryApplyBroadcastCaptureTarget(
+                        BroadcastCaptureTarget
+                            .Minimum720p60,
+                        out var suspendedBroadcastError);
+
+                Expect(
+                    !suspendedBroadcastReturned &&
+                    !string.IsNullOrWhiteSpace(
+                        suspendedBroadcastError) &&
+                    suspendedBroadcastError.Contains(
+                        "Broadcast capture target apply failed",
+                        StringComparison.Ordinal) &&
+                    scene.State ==
+                        SceneRuntimeState.Suspended,
+                    "TryApplyBroadcastCaptureTarget must report lifecycle rejection through false/error instead of throwing or mutating the suspended scene",
+                    failures);
+
                 Expect(
                     scene.Resume() &&
                     scene.State ==
