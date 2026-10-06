@@ -87,11 +87,15 @@ namespace VCR.Runtime.Presentation2D
     /// backend parameter-id/value pairs.
     ///
     /// The backend still owns the SDK-specific parameter write.
+    ///
+    /// Values are borrowed from runtime-owned scratch storage and are valid
+    /// only for the duration of this synchronous call. Implementations must
+    /// consume them immediately and must not retain the span/backing storage.
     /// </summary>
     public interface ICharacter2DParameterSink
     {
         bool TryApplyParameters(
-            Character2DParameterValue[] values,
+            ReadOnlySpan<Character2DParameterValue> values,
             out string error);
     }
 
