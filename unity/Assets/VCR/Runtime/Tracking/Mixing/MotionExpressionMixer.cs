@@ -58,6 +58,8 @@ namespace VCR.Runtime.Tracking.Mixing
             Array.Empty<long>();
         private string[] _additionalPoseLayerSourceIds =
             Array.Empty<string>();
+        private TrackingFrame[] _additionalPoseLayerFrames =
+            Array.Empty<TrackingFrame>();
 
         private NormalizedExpressionState _targetExpressions;
         private NormalizedExpressionState _currentExpressions;
@@ -604,6 +606,9 @@ namespace VCR.Runtime.Tracking.Mixing
                     i,
                     out var frame);
 
+                _additionalPoseLayerFrames[i] =
+                    frame;
+
                 if (FrameChanged(
                         frame,
                         ref _additionalPoseLayerSequences[i],
@@ -643,9 +648,13 @@ namespace VCR.Runtime.Tracking.Mixing
                      i < additionalPoseLayers.Length;
                      i++)
                 {
-                    if (!TryGetAdditionalPoseLayerFrame(
-                            i,
-                            out var frame))
+                    var frame =
+                        i <
+                        _additionalPoseLayerFrames.Length
+                            ? _additionalPoseLayerFrames[i]
+                            : null;
+
+                    if (frame?.HumanoidPose == null)
                     {
                         continue;
                     }
@@ -751,6 +760,8 @@ namespace VCR.Runtime.Tracking.Mixing
             if (_additionalPoseLayerSequences.Length ==
                     count &&
                 _additionalPoseLayerSourceIds.Length ==
+                    count &&
+                _additionalPoseLayerFrames.Length ==
                     count)
             {
                 return;
@@ -760,6 +771,8 @@ namespace VCR.Runtime.Tracking.Mixing
                 new long[count];
             _additionalPoseLayerSourceIds =
                 new string[count];
+            _additionalPoseLayerFrames =
+                new TrackingFrame[count];
 
             for (var i = 0;
                  i < count;
@@ -995,6 +1008,8 @@ namespace VCR.Runtime.Tracking.Mixing
                 Array.Empty<long>();
             _additionalPoseLayerSourceIds =
                 Array.Empty<string>();
+            _additionalPoseLayerFrames =
+                Array.Empty<TrackingFrame>();
         }
 
         private void ResetExpressionState()
