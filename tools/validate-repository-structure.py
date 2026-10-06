@@ -1062,6 +1062,16 @@ forbid_source_pattern(
     r"ChildSequence",
     "tracking router must not regress to source/sequence-only duplicate suppression",
 )
+require_source_contains(
+    tracking_router,
+    "EnsureRoutePolicy()",
+    "tracking router must store and reuse a recovered default routing policy",
+)
+forbid_source_pattern(
+    tracking_router,
+    r"routePolicy\s*\?\?",
+    "tracking router hot paths must not allocate throwaway default policies",
+)
 
 p4_routing_validation = (
     VCR
@@ -1073,6 +1083,11 @@ require_source_contains(
     p4_routing_validation,
     "sample the selected preferred face once",
     "P4 validation must guard single-sample preferred face routing",
+)
+require_source_contains(
+    p4_routing_validation,
+    "router must store and reuse a recovered default policy",
+    "P4 validation must cover recovered route-policy reuse",
 )
 require_source_contains(
     p4_routing_validation,
