@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using VCR.Runtime.Character;
 using VCR.Runtime.Core;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Tracking.ArKit;
@@ -653,6 +654,106 @@ namespace VCR.Editor.P3
                             unknownConfidence,
                             -1f),
                         "MediaPipe normalizers must contain non-finite blendshape/confidence values instead of publishing NaN",
+                        failures);
+                }
+
+                var vrmTargetType =
+                    typeof(Vrm10TrackingTarget);
+                var sanitizeTrackingBounded =
+                    vrmTargetType.GetMethod(
+                        "SanitizeBounded",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var sanitizeTrackingNonNegative =
+                    vrmTargetType.GetMethod(
+                        "SanitizeNonNegative",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var trackingSmoothAlpha =
+                    vrmTargetType.GetMethod(
+                        "SmoothAlpha",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var trackingClamp01 =
+                    vrmTargetType.GetMethod(
+                        "Clamp01",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                if (sanitizeTrackingBounded == null ||
+                    sanitizeTrackingNonNegative == null ||
+                    trackingSmoothAlpha == null ||
+                    trackingClamp01 == null)
+                {
+                    failures.Add(
+                        "VRM tracking numeric sanitizer reflection contract is incomplete");
+                }
+                else
+                {
+                    var sanitizedThreshold =
+                        (float)
+                            sanitizeTrackingBounded.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN,
+                                    0.35f,
+                                    0f,
+                                    1f
+                                });
+                    var sanitizedSmoothing =
+                        (float)
+                            sanitizeTrackingNonNegative.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.PositiveInfinity,
+                                    14f
+                                });
+                    var invalidSpeedAlpha =
+                        (float)
+                            trackingSmoothAlpha.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN,
+                                    1f / 60f
+                                });
+                    var invalidDeltaAlpha =
+                        (float)
+                            trackingSmoothAlpha.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    18f,
+                                    float.NaN
+                                });
+                    var invalidExpression =
+                        (float)
+                            trackingClamp01.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN
+                                });
+
+                    Expect(
+                        Mathf.Approximately(
+                            sanitizedThreshold,
+                            0.35f) &&
+                        Mathf.Approximately(
+                            sanitizedSmoothing,
+                            14f) &&
+                        Mathf.Approximately(
+                            invalidSpeedAlpha,
+                            1f) &&
+                        Mathf.Approximately(
+                            invalidDeltaAlpha,
+                            0f) &&
+                        Mathf.Approximately(
+                            invalidExpression,
+                            0f),
+                        "VRM tracking application must contain non-finite configuration/smoothing/expression values",
                         failures);
                 }
 
