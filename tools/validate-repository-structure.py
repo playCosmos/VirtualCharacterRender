@@ -88,6 +88,24 @@ def forbid_source_pattern(path: Path, pattern: str, label: str) -> None:
         )
 
 
+def require_source_occurrences(
+    path: Path,
+    token: str,
+    expected: int,
+    label: str,
+) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    actual = source.count(token)
+    if actual != expected:
+        errors.append(
+            f"hot-path source occurrence mismatch: {label}: "
+            f"{path.relative_to(ROOT)}: expected {expected}, got {actual}"
+        )
+
+
 def require_source_order(
     path: Path,
     first: str,
@@ -621,6 +639,29 @@ require_source_contains(
     tracking_router,
     "_latestBodyHands = selected;",
     "tracking router body/hands output must preserve child-frame identity",
+)
+require_source_contains(
+    tracking_router,
+    "TryGetUsableFaceCandidate(",
+    "tracking router must reuse one sampled face candidate for activation, selection, and routing",
+)
+require_source_occurrences(
+    tracking_router,
+    "provider.TryGetLatestFace(",
+    1,
+    "tracking router must poll a face provider only through the single candidate-sampling helper",
+)
+
+p4_routing_validation = (
+    VCR
+    / "Editor"
+    / "P4"
+    / "P4TrackingRoutingValidation.cs"
+)
+require_source_contains(
+    p4_routing_validation,
+    "sample the selected preferred face once",
+    "P4 validation must guard single-sample preferred face routing",
 )
 
 vrm_tracking_target = (
