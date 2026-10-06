@@ -1060,6 +1060,107 @@ namespace VCR.Editor.P9
                 handler.SetEnvironmentRuntime(
                     environment);
 
+                var environmentCommand =
+                    new EventActionCommand(
+                        "environment-boundary",
+                        EventActionTypes
+                            .EnvironmentSetState,
+                        "environment.main",
+                        null,
+                        "exception-probe",
+                        0.0,
+                        false,
+                        1);
+
+                environment.ThrowOnStatus =
+                    true;
+
+                var environmentStatusEscaped =
+                    false;
+                var environmentCanHandle =
+                    false;
+
+                try
+                {
+                    environmentCanHandle =
+                        handler.CanHandle(
+                            environmentCommand);
+                }
+                catch
+                {
+                    environmentStatusEscaped =
+                        true;
+                }
+
+                Expect(
+                    !environmentStatusEscaped &&
+                    !environmentCanHandle,
+                    "environment action handler must contain IEnvironmentRuntime.Status getter exceptions during CanHandle",
+                    failures);
+
+                environment.ThrowOnStatus =
+                    false;
+                environment.ThrowOnSetState =
+                    true;
+
+                var environmentExecuteEscaped =
+                    false;
+                var environmentExecuteResult =
+                    false;
+                string environmentExecuteError =
+                    null;
+
+                try
+                {
+                    environmentExecuteResult =
+                        handler.TryExecute(
+                            environmentCommand,
+                            out environmentExecuteError);
+                }
+                catch
+                {
+                    environmentExecuteEscaped =
+                        true;
+                }
+
+                Expect(
+                    !environmentExecuteEscaped &&
+                    !environmentExecuteResult &&
+                    !string.IsNullOrWhiteSpace(
+                        environmentExecuteError) &&
+                    environmentExecuteError.Contains(
+                        "Environment runtime action failed",
+                        StringComparison.Ordinal),
+                    "environment action handler must contain delegated SetState exceptions as false/error",
+                    failures);
+
+                var environmentTransitionCommand =
+                    new EventActionCommand(
+                        "environment-boundary",
+                        EventActionTypes
+                            .EnvironmentSetState,
+                        "environment.main",
+                        "Fade",
+                        "exception-probe",
+                        0.25,
+                        true,
+                        2);
+
+                Expect(
+                    !handler.TryExecute(
+                        environmentTransitionCommand,
+                        out var environmentTransitionError) &&
+                    !string.IsNullOrWhiteSpace(
+                        environmentTransitionError) &&
+                    environmentTransitionError.Contains(
+                        "Environment runtime transition action failed",
+                        StringComparison.Ordinal),
+                    "environment transition action handler must contain delegated transition SetState exceptions as false/error",
+                    failures);
+
+                environment.ThrowOnSetState =
+                    false;
+
                 var cameraObject =
                     new GameObject(
                         "P9 Camera");
@@ -2555,6 +2656,43 @@ namespace VCR.Editor.P9
                         "p9.validation.preset",
                     "material.apply_preset must resolve a logical preset id without putting preset file paths or objects in rules",
                     failures);
+
+                presetResolver.ThrowOnResolve =
+                    true;
+
+                var resolverFailureEscaped =
+                    false;
+                var resolverFailureResult =
+                    false;
+                string resolverFailureError =
+                    null;
+
+                try
+                {
+                    resolverFailureResult =
+                        presetHandler.TryExecute(
+                            presetCommand,
+                            out resolverFailureError);
+                }
+                catch
+                {
+                    resolverFailureEscaped =
+                        true;
+                }
+
+                Expect(
+                    !resolverFailureEscaped &&
+                    !resolverFailureResult &&
+                    !string.IsNullOrWhiteSpace(
+                        resolverFailureError) &&
+                    resolverFailureError.Contains(
+                        "dependency failed",
+                        StringComparison.OrdinalIgnoreCase),
+                    "material preset resolver exceptions must be contained as false/error by the action handler",
+                    failures);
+
+                presetResolver.ThrowOnResolve =
+                    false;
             }
             catch (Exception exception)
             {
@@ -2717,10 +2855,22 @@ namespace VCR.Editor.P9
             set;
         }
 
+        public bool ThrowOnResolve
+        {
+            get;
+            set;
+        }
+
         public bool TryResolvePreset(
             string presetId,
             out MaterialOverridePreset preset)
         {
+            if (ThrowOnResolve)
+            {
+                throw new InvalidOperationException(
+                    "synthetic material preset resolver failure");
+            }
+
             preset =
                 Preset != null &&
                 string.Equals(
@@ -2751,13 +2901,36 @@ namespace VCR.Editor.P9
         } =
             EnvironmentTransitionSpec.Cut;
 
-        public EnvironmentRuntimeStatus Status =>
-            new(
-                _environmentId,
-                _stateId,
-                EnvironmentUpdatePolicy.Static,
-                true,
-                null);
+        public bool ThrowOnStatus
+        {
+            get;
+            set;
+        }
+
+        public bool ThrowOnSetState
+        {
+            get;
+            set;
+        }
+
+        public EnvironmentRuntimeStatus Status
+        {
+            get
+            {
+                if (ThrowOnStatus)
+                {
+                    throw new InvalidOperationException(
+                        "synthetic environment status failure");
+                }
+
+                return new EnvironmentRuntimeStatus(
+                    _environmentId,
+                    _stateId,
+                    EnvironmentUpdatePolicy.Static,
+                    true,
+                    null);
+            }
+        }
 
         public EnvironmentSpaceMode SpaceMode =>
             EnvironmentSpaceMode.World;
@@ -2793,6 +2966,12 @@ namespace VCR.Editor.P9
             EnvironmentTransitionSpec transition,
             out string error)
         {
+            if (ThrowOnSetState)
+            {
+                throw new InvalidOperationException(
+                    "synthetic environment state failure");
+            }
+
             error = null;
 
             if (string.IsNullOrWhiteSpace(
