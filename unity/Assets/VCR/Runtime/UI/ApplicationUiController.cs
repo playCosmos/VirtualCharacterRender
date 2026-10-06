@@ -6265,44 +6265,17 @@ namespace VCR.Runtime.UI
                 snapshot.Metrics ??
                 Array.Empty<RuntimeMetric>();
 
-            if (ReferenceEquals(
+            if (!ReferenceEquals(
                     source,
                     _diagnosticsMetricSource))
             {
-                return _diagnosticsSortedMetrics;
-            }
-
-            _diagnosticsMetricSource =
-                source;
-
-            if (source.Length == 0)
-            {
+                _diagnosticsMetricSource =
+                    source;
                 _diagnosticsSortedMetrics =
-                    Array.Empty<RuntimeMetric>();
-                return _diagnosticsSortedMetrics;
+                    source;
             }
 
-            var sorted =
-                (RuntimeMetric[])
-                    source.Clone();
-
-            Array.Sort(
-                sorted,
-                CompareRuntimeMetrics);
-
-            _diagnosticsSortedMetrics =
-                sorted;
-            return sorted;
-        }
-
-        private static int CompareRuntimeMetrics(
-            RuntimeMetric left,
-            RuntimeMetric right)
-        {
-            return string.Compare(
-                left.Name,
-                right.Name,
-                StringComparison.Ordinal);
+            return _diagnosticsSortedMetrics;
         }
 
         private string DiagnosticsSummary()
