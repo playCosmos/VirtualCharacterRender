@@ -6482,12 +6482,16 @@ namespace VCR.Runtime.UI
                 _materialSlotInput
                     ?.text
                     ?.Trim();
+            MaterialOverrideStatus status =
+                default;
             var hasStatus =
                 !string.IsNullOrWhiteSpace(
                     slotId) &&
                 _materialController.TryGetStatus(
                     slotId,
-                    out var status);
+                    out status);
+            MaterialSlotDescriptor slot =
+                default;
             var hasDescriptor =
                 !hasStatus &&
                 slotCount > 0 &&
@@ -6496,7 +6500,7 @@ namespace VCR.Runtime.UI
                         _materialSlotIndex,
                         0,
                         slotCount - 1),
-                    out var slot);
+                    out slot);
             var errorCount =
                 _materialController.ErrorCount;
 
