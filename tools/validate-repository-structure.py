@@ -235,6 +235,11 @@ require_source_contains(
     "MediaPipe normalizers must contain non-finite blendshape/confidence values",
     "P3 validation must cover MediaPipe normalizer numeric containment",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "VRM tracking application must contain non-finite configuration/smoothing/expression values",
+    "P3 validation must cover final VRM tracking numeric containment",
+)
 
 p0_vmc_validation = (
     VCR
@@ -3009,6 +3014,40 @@ require_source_contains(
     "P4 validation must cover router timing conversion sanitization and saturation",
 )
 
+tracking_source_health_snapshot = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "TrackingSourceHealthSnapshot.cs"
+)
+require_source_contains(
+    tracking_source_health_snapshot,
+    "internal static class TrackingTimestampMath",
+    "tracking timestamp age arithmetic must use the shared overflow-safe helper",
+)
+require_source_contains(
+    tracking_source_health_snapshot,
+    "unchecked(\n                    (ulong)(",
+    "tracking timestamp elapsed math must preserve the full non-negative long range without signed overflow",
+)
+
+tracking_presence_resolver = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "TrackingPresenceResolver.cs"
+)
+require_source_contains(
+    tracking_presence_resolver,
+    "TrackingTimestampMath\n                    .TryElapsedMicroseconds(",
+    "tracking presence freshness/timers must use overflow-safe timestamp math",
+)
+forbid_source_pattern(
+    tracking_presence_resolver,
+    r"nowUs\s*-\s*(?:frame\.SourceTimestampUs|_startedAtUs|_lostCandidateSinceUs|_restoreCandidateSinceUs)",
+    "tracking presence timing must not use signed long subtraction directly",
+)
+
 vrm_tracking_target = (
     VCR
     / "Runtime"
@@ -3019,6 +3058,26 @@ require_source_contains(
     vrm_tracking_target,
     "_lastFaceFrame",
     "VRM face/body target must detect routed snapshot changes by immutable frame identity",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "SanitizeConfiguration();",
+    "VRM tracking target must sanitize serialized numeric configuration before runtime use",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "float.IsFinite(\n                    point.Position.X)",
+    "VRM tracking target must reject non-finite body joint positions",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "private static bool TryToUnity(",
+    "VRM tracking target must reject non-finite or degenerate head quaternions before Transform application",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "return float.IsFinite(value)\n                ? Mathf.Clamp01(value)\n                : 0f;",
+    "VRM expression application must contain non-finite coefficients",
 )
 
 runtime_diagnostics_snapshot = (
