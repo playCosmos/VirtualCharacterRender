@@ -2225,6 +2225,8 @@ namespace VCR.Editor.P11
                 }
             }
 
+            ValidateCompletionProbeCache(
+                failures);
             ValidateDestroyedExecutorRefresh(
                 failures);
             ValidateDestroyedActionHandlerRefresh(
@@ -2233,6 +2235,143 @@ namespace VCR.Editor.P11
                 failures);
             ValidateDestroyedMotionRuntimeRefresh(
                 failures);
+        }
+
+        private static void ValidateCompletionProbeCache(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P11 Completion Probe Cache Validation");
+
+                var runtime =
+                    root.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+                var decoy =
+                    root.AddComponent<
+                        P11CountingDecoyExecutor>();
+                var probe =
+                    root.AddComponent<
+                        P11CountingCompletionExecutor>();
+
+                var executorsField =
+                    typeof(
+                        BasicCharacterAppearanceRuntime)
+                        .GetField(
+                            "_executors",
+                            System.Reflection
+                                .BindingFlags.Instance |
+                            System.Reflection
+                                .BindingFlags.NonPublic);
+                var pollMethod =
+                    typeof(
+                        BasicCharacterAppearanceRuntime)
+                        .GetMethod(
+                            "TryIsStepComplete",
+                            System.Reflection
+                                .BindingFlags.Instance |
+                            System.Reflection
+                                .BindingFlags.NonPublic);
+
+                if (executorsField == null ||
+                    pollMethod == null)
+                {
+                    failures.Add(
+                        "appearance completion-probe cache validation could not resolve runtime internals");
+                    return;
+                }
+
+                executorsField.SetValue(
+                    runtime,
+                    new IAppearanceTransitionStepExecutor[]
+                    {
+                        decoy,
+                        probe
+                    });
+
+                var step =
+                    new AppearanceTransitionStep
+                    {
+                        ActionType =
+                            P11CountingCompletionExecutor
+                                .ActionType,
+                        Blocking =
+                            true
+                    };
+
+                object cache = null;
+                var firstArguments =
+                    new object[]
+                    {
+                        step,
+                        cache,
+                        false,
+                        null
+                    };
+                var firstResult =
+                    pollMethod.Invoke(
+                        runtime,
+                        firstArguments) is bool
+                        firstSucceeded &&
+                    firstSucceeded;
+                cache =
+                    firstArguments[1];
+                var decoyCallsAfterFirst =
+                    decoy.CanExecuteCount;
+                var probeCallsAfterFirst =
+                    probe.CanExecuteCount;
+
+                var secondArguments =
+                    new object[]
+                    {
+                        step,
+                        cache,
+                        false,
+                        null
+                    };
+                var secondResult =
+                    pollMethod.Invoke(
+                        runtime,
+                        secondArguments) is bool
+                        secondSucceeded &&
+                    secondSucceeded;
+
+                Expect(
+                    firstResult &&
+                    secondResult &&
+                    cache != null &&
+                    decoyCallsAfterFirst == 1 &&
+                    decoy.CanExecuteCount ==
+                        decoyCallsAfterFirst &&
+                    probeCallsAfterFirst == 1 &&
+                    probe.CanExecuteCount ==
+                        probeCallsAfterFirst + 1 &&
+                    probe.CanTrackCompletionCount ==
+                        2 &&
+                    probe.CompletionPollCount ==
+                        2,
+                    "appearance transition completion polling must reuse the cached probe instead of rescanning unrelated executors on every wait-frame",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "appearance completion-probe cache validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
         }
 
         private static void ValidateDestroyedExecutorRefresh(
@@ -2576,6 +2715,101 @@ namespace VCR.Editor.P11
             {
                 failures.Add(message);
             }
+        }
+    }
+
+    internal sealed class P11CountingDecoyExecutor :
+        MonoBehaviour,
+        IAppearanceTransitionStepExecutor
+    {
+        public int CanExecuteCount
+        {
+            get;
+            private set;
+        }
+
+        public bool CanExecute(
+            AppearanceTransitionStep step)
+        {
+            CanExecuteCount++;
+            return false;
+        }
+
+        public bool TryExecute(
+            AppearanceTransitionStep step,
+            out string error)
+        {
+            error =
+                "decoy executor does not execute";
+            return false;
+        }
+    }
+
+    internal sealed class P11CountingCompletionExecutor :
+        MonoBehaviour,
+        IAppearanceTransitionStepExecutor,
+        IAppearanceTransitionStepCompletionProbe
+    {
+        public const string ActionType =
+            "cache.completion";
+
+        public int CanExecuteCount
+        {
+            get;
+            private set;
+        }
+
+        public int CanTrackCompletionCount
+        {
+            get;
+            private set;
+        }
+
+        public int CompletionPollCount
+        {
+            get;
+            private set;
+        }
+
+        public bool CanExecute(
+            AppearanceTransitionStep step)
+        {
+            CanExecuteCount++;
+            return step != null &&
+                string.Equals(
+                    step.ActionType,
+                    ActionType,
+                    StringComparison.Ordinal);
+        }
+
+        public bool TryExecute(
+            AppearanceTransitionStep step,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public bool CanTrackCompletion(
+            AppearanceTransitionStep step)
+        {
+            CanTrackCompletionCount++;
+            return step != null &&
+                string.Equals(
+                    step.ActionType,
+                    ActionType,
+                    StringComparison.Ordinal);
+        }
+
+        public bool TryIsComplete(
+            AppearanceTransitionStep step,
+            out bool complete,
+            out string error)
+        {
+            CompletionPollCount++;
+            complete = false;
+            error = null;
+            return true;
         }
     }
 
