@@ -16,6 +16,7 @@ namespace VCR.Runtime.Tracking.AudioUnity
         MonoBehaviour,
         ITrackingFrameProvider,
         ITrackingSourceHealthProvider,
+        IExpressionTrackingActivationControl,
         IRuntimeMetricsSource
     {
         [SerializeField] private AudioSource audioSource;
@@ -36,8 +37,12 @@ namespace VCR.Runtime.Tracking.AudioUnity
         private float _lastPublishedValue =
             float.NaN;
         private long _lastSampleTimestampUs;
+        private bool _expressionTrackingEnabled =
+            true;
 
         public float CurrentValue => _value;
+        public bool ExpressionTrackingEnabled =>
+            _expressionTrackingEnabled;
         public float CurrentRms => _rms;
 
         private void Awake()
@@ -47,6 +52,11 @@ namespace VCR.Runtime.Tracking.AudioUnity
 
         private void Update()
         {
+            if (!_expressionTrackingEnabled)
+            {
+                return;
+            }
+
             if (audioSource == null ||
                 !audioSource.isActiveAndEnabled)
             {
@@ -89,7 +99,8 @@ namespace VCR.Runtime.Tracking.AudioUnity
             }
 
             var state =
-                !isActiveAndEnabled
+                !isActiveAndEnabled ||
+                !_expressionTrackingEnabled
                     ? TrackingSourceHealthState.Stopped
                     : audioSource == null ||
                       !audioSource.isActiveAndEnabled
@@ -108,6 +119,33 @@ namespace VCR.Runtime.Tracking.AudioUnity
                         null),
                     _latest?.RuntimeTimestampUs ?? 0);
             return true;
+        }
+
+        public void SetExpressionTrackingEnabled(
+            bool enabled)
+        {
+            if (_expressionTrackingEnabled ==
+                enabled)
+            {
+                return;
+            }
+
+            _expressionTrackingEnabled =
+                enabled;
+
+            if (enabled)
+            {
+                return;
+            }
+
+            _value = 0f;
+            _rms = 0f;
+            _latest = null;
+            _lastPublishedValue =
+                float.NaN;
+            _lastSampleTimestampUs =
+                MonotonicClock
+                    .NowMicroseconds();
         }
 
         public bool TryGetLatestFace(
@@ -157,6 +195,14 @@ namespace VCR.Runtime.Tracking.AudioUnity
                     "tracking.audio.mouth",
                     _value,
                     "ratio"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "tracking.audio.enabled",
+                    _expressionTrackingEnabled
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
         }
 
         private void UpdateValue(
