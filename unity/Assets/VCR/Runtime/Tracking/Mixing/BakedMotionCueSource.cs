@@ -30,6 +30,8 @@ namespace VCR.Runtime.Tracking.Mixing
                 new(StringComparer.Ordinal);
         private readonly List<string> _cueIds =
             new();
+        private IReadOnlyList<string> _cueIdsView;
+        private IReadOnlyList<BakedMotionCueAsset> _cueAssetsView;
 
         private BakedMotionCueDefinition[] _configuredCues =
             Array.Empty<BakedMotionCueDefinition>();
@@ -57,10 +59,14 @@ namespace VCR.Runtime.Tracking.Mixing
                 _lastError);
 
         public IReadOnlyList<string> CueIds =>
-            _cueIds;
+            _cueIdsView ??=
+                _cueIds.AsReadOnly();
 
         public IReadOnlyList<BakedMotionCueAsset> CueAssets =>
-            cueAssets;
+            _cueAssetsView ??=
+                Array.AsReadOnly(
+                    cueAssets ??
+                    Array.Empty<BakedMotionCueAsset>());
 
         private void Awake()
         {
@@ -131,27 +137,55 @@ namespace VCR.Runtime.Tracking.Mixing
         public void ConfigureAssets(
             params BakedMotionCueAsset[] assets)
         {
+            var previousAssets =
+                cueAssets;
+            var previousConfiguredCues =
+                _configuredCues;
+
             cueAssets =
-                assets ??
-                Array.Empty<BakedMotionCueAsset>();
+                assets == null
+                    ? Array.Empty<BakedMotionCueAsset>()
+                    : (BakedMotionCueAsset[])
+                        assets.Clone();
+            _cueAssetsView = null;
             _configuredCues =
                 Array.Empty<BakedMotionCueDefinition>();
 
-            RebuildCues(
-                out _);
+            if (!RebuildCues(
+                    out _))
+            {
+                cueAssets =
+                    previousAssets;
+                _configuredCues =
+                    previousConfiguredCues;
+                _cueAssetsView = null;
+            }
         }
 
         public void ConfigureCues(
             params BakedMotionCueDefinition[] definitions)
         {
+            var previousAssets =
+                cueAssets;
+            var previousConfiguredCues =
+                _configuredCues;
+
             cueAssets =
                 Array.Empty<BakedMotionCueAsset>();
+            _cueAssetsView = null;
             _configuredCues =
-                definitions ??
-                Array.Empty<BakedMotionCueDefinition>();
+                CloneCueDefinitions(
+                    definitions);
 
-            RebuildCues(
-                out _);
+            if (!RebuildCues(
+                    out _))
+            {
+                cueAssets =
+                    previousAssets;
+                _configuredCues =
+                    previousConfiguredCues;
+                _cueAssetsView = null;
+            }
         }
 
         public bool TryRegisterAsset(
@@ -232,17 +266,32 @@ namespace VCR.Runtime.Tracking.Mixing
                 asset;
             cueAssets =
                 next;
+            _cueAssetsView = null;
 
-            return RebuildCues(
-                out error);
+            if (RebuildCues(
+                    out error))
+            {
+                return true;
+            }
+
+            cueAssets =
+                current;
+            _cueAssetsView = null;
+            return false;
         }
 
         public bool RebuildCues(
             out string error)
         {
             error = null;
-            _cues.Clear();
-            _cueIds.Clear();
+
+            var stagedCues =
+                new Dictionary<
+                    string,
+                    BakedMotionCueDefinition>(
+                        StringComparer.Ordinal);
+            var stagedCueIds =
+                new List<string>();
 
             foreach (var asset in
                      cueAssets ??
@@ -255,6 +304,8 @@ namespace VCR.Runtime.Tracking.Mixing
 
                 if (!TryAddCue(
                         asset.Cue,
+                        stagedCues,
+                        stagedCueIds,
                         out error))
                 {
                     return false;
@@ -267,11 +318,26 @@ namespace VCR.Runtime.Tracking.Mixing
             {
                 if (!TryAddCue(
                         cue,
+                        stagedCues,
+                        stagedCueIds,
                         out error))
                 {
                     return false;
                 }
             }
+
+            _cues.Clear();
+
+            foreach (var pair in stagedCues)
+            {
+                _cues.Add(
+                    pair.Key,
+                    pair.Value);
+            }
+
+            _cueIds.Clear();
+            _cueIds.AddRange(
+                stagedCueIds);
 
             _lastError = null;
             return true;
@@ -413,31 +479,64 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private bool TryAddCue(
             BakedMotionCueDefinition cue,
+            Dictionary<
+                string,
+                BakedMotionCueDefinition> targetCues,
+            List<string> targetCueIds,
             out string error)
         {
             error = null;
 
+            var resolvedCue =
+                cue?.Clone();
+
             if (!ValidateCue(
-                    cue,
+                    resolvedCue,
                     out error))
             {
                 return Fail(
                     error);
             }
 
-            if (!_cues.TryAdd(
-                    cue.CueId,
-                    cue))
+            if (!targetCues.TryAdd(
+                    resolvedCue.CueId,
+                    resolvedCue))
             {
                 error =
-                    $"Duplicate baked motion cue id '{cue.CueId}'.";
+                    $"Duplicate baked motion cue id '{resolvedCue.CueId}'.";
                 return Fail(
                     error);
             }
 
-            _cueIds.Add(
-                cue.CueId);
+            targetCueIds.Add(
+                resolvedCue.CueId);
             return true;
+        }
+
+        private static BakedMotionCueDefinition[]
+            CloneCueDefinitions(
+                BakedMotionCueDefinition[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    BakedMotionCueDefinition>();
+            }
+
+            var result =
+                new BakedMotionCueDefinition[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                result[i] =
+                    source[i]?.Clone();
+            }
+
+            return result;
         }
 
         private static bool ValidateCue(
