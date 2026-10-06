@@ -1374,7 +1374,7 @@ namespace VCR.Editor.P11
                 var effectHandler =
                     root.AddComponent<
                         EffectEventActionHandler>();
-                effectHandler.ConfigureBindings(
+                var externalEffectBinding =
                     new EffectEventActionHandler
                         .EffectBinding
                     {
@@ -1387,7 +1387,218 @@ namespace VCR.Editor.P11
                                 ParticleSystem>(),
                         DeactivateOnStop =
                             true
+                    };
+
+                effectHandler.ConfigureBindings(
+                    externalEffectBinding);
+
+                externalEffectBinding.EffectId =
+                    "mutated-external-effect";
+                externalEffectBinding.DeactivateOnStop =
+                    false;
+
+                var effectPlayCommand =
+                    new EventActionCommand(
+                        "effect-binding",
+                        EventActionTypes
+                            .EffectPlay,
+                        effectHandler.HandlerId,
+                        null,
+                        "confetti",
+                        0.0,
+                        false,
+                        1);
+
+                var effectStopCommand =
+                    new EventActionCommand(
+                        "effect-binding",
+                        EventActionTypes
+                            .EffectStop,
+                        effectHandler.HandlerId,
+                        null,
+                        "confetti",
+                        0.0,
+                        false,
+                        2);
+
+                Expect(
+                    effectHandler.TryExecute(
+                        effectPlayCommand,
+                        out var effectPlayError) &&
+                    string.IsNullOrWhiteSpace(
+                        effectPlayError) &&
+                    effectRoot.activeSelf &&
+                    effectHandler.TryExecute(
+                        effectStopCommand,
+                        out var effectStopError) &&
+                    string.IsNullOrWhiteSpace(
+                        effectStopError) &&
+                    !effectRoot.activeSelf,
+                    "effect bindings must be isolated from caller mutation, including DeactivateOnStop policy",
+                    failures);
+
+                effectHandler.ConfigureBindings(
+                    new EffectEventActionHandler
+                        .EffectBinding
+                    {
+                        EffectId =
+                            "invalid-effect"
                     });
+
+                Expect(
+                    !string.IsNullOrWhiteSpace(
+                        effectHandler.LastError) &&
+                    effectHandler.TryExecute(
+                        effectPlayCommand,
+                        out var preservedEffectError) &&
+                    string.IsNullOrWhiteSpace(
+                        preservedEffectError) &&
+                    effectRoot.activeSelf,
+                    "invalid effect binding replacement must preserve the previous live binding map",
+                    failures);
+
+                effectHandler.TryExecute(
+                    effectStopCommand,
+                    out _);
+
+                var propRoot =
+                    new GameObject(
+                        "Validation Prop Root");
+                propRoot.transform.SetParent(
+                    root.transform,
+                    false);
+                propRoot.SetActive(
+                    false);
+
+                var propHandler =
+                    root.AddComponent<
+                        PropEventActionHandler>();
+                var externalPropRoots =
+                    new[]
+                    {
+                        propRoot
+                    };
+                var externalPropBinding =
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "validation-prop",
+                        Roots =
+                            externalPropRoots
+                    };
+
+                propHandler.ConfigureBindings(
+                    externalPropBinding);
+
+                externalPropBinding.PropId =
+                    "mutated-external-prop";
+                externalPropRoots[0] =
+                    effectRoot;
+
+                var invalidPropValues =
+                    new[]
+                    {
+                        double.NaN,
+                        double.PositiveInfinity,
+                        double.NegativeInfinity,
+                        0.5,
+                        2.0,
+                        -1.0
+                    };
+
+                foreach (var invalidValue in
+                         invalidPropValues)
+                {
+                    propRoot.SetActive(
+                        false);
+
+                    var invalidPropCommand =
+                        new EventActionCommand(
+                            "prop-numeric",
+                            EventActionTypes
+                                .PropSetActive,
+                            propHandler.HandlerId,
+                            null,
+                            "validation-prop",
+                            invalidValue,
+                            true,
+                            3);
+
+                    Expect(
+                        !propHandler.TryExecute(
+                            invalidPropCommand,
+                            out var invalidPropError) &&
+                        !string.IsNullOrWhiteSpace(
+                            invalidPropError) &&
+                        !propRoot.activeSelf,
+                        "prop.set_active must reject non-finite and non-0/1 boolean values without mutating the prop",
+                        failures);
+                }
+
+                var enablePropCommand =
+                    new EventActionCommand(
+                        "prop-numeric",
+                        EventActionTypes
+                            .PropSetActive,
+                        propHandler.HandlerId,
+                        null,
+                        "validation-prop",
+                        1.0,
+                        true,
+                        4);
+                var disablePropCommand =
+                    new EventActionCommand(
+                        "prop-numeric",
+                        EventActionTypes
+                            .PropSetActive,
+                        propHandler.HandlerId,
+                        null,
+                        "validation-prop",
+                        0.0,
+                        true,
+                        5);
+
+                Expect(
+                    propHandler.TryExecute(
+                        enablePropCommand,
+                        out var enablePropError) &&
+                    string.IsNullOrWhiteSpace(
+                        enablePropError) &&
+                    propRoot.activeSelf &&
+                    propHandler.TryExecute(
+                        disablePropCommand,
+                        out var disablePropError) &&
+                    string.IsNullOrWhiteSpace(
+                        disablePropError) &&
+                    !propRoot.activeSelf,
+                    "prop.set_active must accept explicit finite 1/0 boolean values against the isolated live binding",
+                    failures);
+
+                propHandler.ConfigureBindings(
+                    new PropEventActionHandler
+                        .PropBinding
+                    {
+                        PropId =
+                            "invalid-prop",
+                        Roots =
+                            Array.Empty<GameObject>()
+                    });
+
+                Expect(
+                    !string.IsNullOrWhiteSpace(
+                        propHandler.LastError) &&
+                    propHandler.TryExecute(
+                        enablePropCommand,
+                        out var preservedPropError) &&
+                    string.IsNullOrWhiteSpace(
+                        preservedPropError) &&
+                    propRoot.activeSelf,
+                    "invalid prop binding replacement must preserve the previous live binding map",
+                    failures);
+
+                propRoot.SetActive(
+                    false);
 
                 var transitionExecutor =
                     root.AddComponent<
