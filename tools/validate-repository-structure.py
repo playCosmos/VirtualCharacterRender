@@ -846,6 +846,11 @@ require_source_contains(
 )
 require_source_contains(
     appearance_runtime,
+    "SetState(\n                    _state,\n                    error);",
+    "rejected ConfigureBindings input must preserve the restored operational appearance state",
+)
+require_source_contains(
+    appearance_runtime,
     "previousOutfits =\n                outfits;",
     "ConfigureBindings must retain previous authoring inputs until the replacement rebuild succeeds",
 )
@@ -1243,6 +1248,11 @@ require_source_contains(
     p11_appearance_validation,
     "rollbackRejected",
     "P11 appearance validation must prove failed rebuilds preserve the previous live cache/state",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"rejected-configure\"",
+    "P11 appearance validation must prove rejected ConfigureBindings input leaves the last known-good runtime operational",
 )
 require_source_contains(
     p11_appearance_validation,
