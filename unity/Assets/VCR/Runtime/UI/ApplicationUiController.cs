@@ -5498,14 +5498,14 @@ namespace VCR.Runtime.UI
             if (_materialPreviousSlotButton != null)
             {
                 _materialPreviousSlotButton.interactable =
-                    slots.Length >
+                    slotCount >
                     1;
             }
 
             if (_materialNextSlotButton != null)
             {
                 _materialNextSlotButton.interactable =
-                    slots.Length >
+                    slotCount >
                     1;
             }
 
