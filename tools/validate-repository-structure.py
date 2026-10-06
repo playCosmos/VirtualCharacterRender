@@ -779,6 +779,55 @@ require_source_contains(
     "var valueCount = 0;",
     "2D parameter mapping must pre-count emitted values and allocate one exact-size output array",
 )
+require_source_contains(
+    character_2d_parameter_mapping,
+    "public int Revision =>",
+    "2D parameter mapping profiles must version in-place Configure/Inspector mutations",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal static bool TryEvaluateValidated(",
+    "2D parameter mapping must expose a validated hot-path evaluator for the runtime host",
+)
+
+character_2d_runtime = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DRuntime.cs"
+)
+require_source_contains(
+    character_2d_runtime,
+    "_validatedMappingRevision",
+    "2D runtime mapping validation cache must include the profile revision",
+)
+require_source_contains(
+    character_2d_runtime,
+    "EnsureConfiguredMappingValidated(",
+    "2D runtime must cache mapping validation across unchanged tracking updates",
+)
+require_source_contains(
+    character_2d_runtime,
+    ".TryEvaluateValidated(",
+    "2D runtime hot path must use the already-validated mapping evaluator",
+)
+forbid_source_pattern(
+    character_2d_runtime,
+    r"Character2DParameterMapper\s*\n?\s*\.TryEvaluate\s*\(",
+    "2D runtime hot path must not repeat full mapping validation every changed tracking frame",
+)
+
+p13_source_validation = (
+    VCR
+    / "Editor"
+    / "P13"
+    / "P13SourceValidation.cs"
+)
+require_source_contains(
+    p13_source_validation,
+    "same profile object mutates",
+    "P13 validation must cover mapping-cache invalidation for in-place profile mutation",
+)
 
 capability_registry = (
     VCR
