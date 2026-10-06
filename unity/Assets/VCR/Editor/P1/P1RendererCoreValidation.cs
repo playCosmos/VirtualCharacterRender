@@ -1156,6 +1156,8 @@ namespace VCR.Editor.P1
                 }
             }
 
+            ValidateLifecycleFailureContainment(
+                failures);
             ValidateDestroyedInterfaceAdapters(
                 failures);
             ValidateDestroyedTrackingProviders(
@@ -1173,6 +1175,111 @@ namespace VCR.Editor.P1
                 "VCR P1 renderer core validation: FAIL\n" +
                 string.Join("\n", failures));
             return false;
+        }
+
+        private static void ValidateLifecycleFailureContainment(
+            List<string> failures)
+        {
+            GameObject suspendRoot = null;
+            GameObject resumeRoot = null;
+
+            try
+            {
+                suspendRoot =
+                    new GameObject(
+                        "P1 Suspend Failure Containment");
+                suspendRoot.AddComponent<
+                    Vrm10CharacterLoader>();
+                suspendRoot.AddComponent<
+                    DesktopRenderBootstrap>();
+                var suspendOverlay =
+                    suspendRoot.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+                var suspendScene =
+                    suspendRoot.AddComponent<
+                        SingleCharacterSceneRuntime>();
+
+                Expect(
+                    suspendScene.Initialize(),
+                    "suspend failure containment scene must initialize",
+                    failures);
+
+                suspendOverlay.ThrowOnShutdown =
+                    true;
+
+                var suspendResult =
+                    suspendScene.Suspend();
+
+                Expect(
+                    !suspendResult &&
+                    suspendScene.State ==
+                        SceneRuntimeState.Faulted &&
+                    !string.IsNullOrWhiteSpace(
+                        suspendScene.Status.LastError) &&
+                    suspendScene.Status.LastError.Contains(
+                        "Scene suspend failed",
+                        StringComparison.Ordinal),
+                    "overlay shutdown exceptions must be contained by Suspend and leave the scene explicitly Faulted",
+                    failures);
+
+                resumeRoot =
+                    new GameObject(
+                        "P1 Resume Failure Containment");
+                resumeRoot.AddComponent<
+                    Vrm10CharacterLoader>();
+                resumeRoot.AddComponent<
+                    DesktopRenderBootstrap>();
+                var resumeOverlay =
+                    resumeRoot.AddComponent<
+                        P1TestOverlayOutputAdapter>();
+                var resumeScene =
+                    resumeRoot.AddComponent<
+                        SingleCharacterSceneRuntime>();
+
+                Expect(
+                    resumeScene.Initialize() &&
+                    resumeScene.Suspend(),
+                    "resume failure containment scene must initialize and suspend",
+                    failures);
+
+                resumeOverlay.ThrowOnApply =
+                    true;
+
+                var resumeResult =
+                    resumeScene.Resume();
+
+                Expect(
+                    !resumeResult &&
+                    resumeScene.State ==
+                        SceneRuntimeState.Faulted &&
+                    !string.IsNullOrWhiteSpace(
+                        resumeScene.Status.LastError) &&
+                    resumeScene.Status.LastError.Contains(
+                        "Scene resume failed",
+                        StringComparison.Ordinal),
+                    "overlay apply exceptions must be contained by Resume and leave the scene explicitly Faulted",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "scene lifecycle failure containment unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (suspendRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        suspendRoot);
+                }
+
+                if (resumeRoot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        resumeRoot);
+                }
+            }
         }
 
         private static void ValidateDestroyedInterfaceAdapters(
