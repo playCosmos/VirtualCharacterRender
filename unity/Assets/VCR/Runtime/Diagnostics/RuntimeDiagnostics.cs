@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 using VCR.Runtime.Core;
 using VCR.Runtime.Tracking;
@@ -64,6 +65,10 @@ namespace VCR.Runtime.Diagnostics
         private long _snapshotSequence;
         private long _metricSourceFailureCount;
         private long _snapshotSubscriberFailureCount;
+        private readonly object _snapshotSubscriptionSync =
+            new();
+        private Action<RuntimeDiagnosticsSnapshot>[] _snapshotSubscribers =
+            Array.Empty<Action<RuntimeDiagnosticsSnapshot>>();
         private RuntimeDiagnosticsSnapshot _latestSnapshot;
 
         public RuntimeDiagnosticsSnapshot LatestSnapshot =>
@@ -94,7 +99,109 @@ namespace VCR.Runtime.Diagnostics
         public string EvidenceDirectory =>
             Application.persistentDataPath;
 
-        public event Action<RuntimeDiagnosticsSnapshot> SnapshotUpdated;
+        public event Action<RuntimeDiagnosticsSnapshot> SnapshotUpdated
+        {
+            add
+            {
+                if (value == null)
+                {
+                    return;
+                }
+
+                lock (_snapshotSubscriptionSync)
+                {
+                    var current =
+                        _snapshotSubscribers;
+                    var next =
+                        new Action<RuntimeDiagnosticsSnapshot>[
+                            current.Length + 1];
+
+                    Array.Copy(
+                        current,
+                        next,
+                        current.Length);
+                    next[current.Length] =
+                        value;
+
+                    Volatile.Write(
+                        ref _snapshotSubscribers,
+                        next);
+                }
+            }
+            remove
+            {
+                if (value == null)
+                {
+                    return;
+                }
+
+                lock (_snapshotSubscriptionSync)
+                {
+                    var current =
+                        _snapshotSubscribers;
+                    var index = -1;
+
+                    for (var i =
+                             current.Length - 1;
+                         i >= 0;
+                         i--)
+                    {
+                        if (Equals(
+                                current[i],
+                                value))
+                        {
+                            index = i;
+                            break;
+                        }
+                    }
+
+                    if (index < 0)
+                    {
+                        return;
+                    }
+
+                    if (current.Length == 1)
+                    {
+                        Volatile.Write(
+                            ref _snapshotSubscribers,
+                            Array.Empty<
+                                Action<RuntimeDiagnosticsSnapshot>>());
+                        return;
+                    }
+
+                    var next =
+                        new Action<RuntimeDiagnosticsSnapshot>[
+                            current.Length - 1];
+
+                    if (index > 0)
+                    {
+                        Array.Copy(
+                            current,
+                            0,
+                            next,
+                            0,
+                            index);
+                    }
+
+                    if (index <
+                        current.Length - 1)
+                    {
+                        Array.Copy(
+                            current,
+                            index + 1,
+                            next,
+                            index,
+                            current.Length -
+                            index -
+                            1);
+                    }
+
+                    Volatile.Write(
+                        ref _snapshotSubscribers,
+                        next);
+                }
+            }
+        }
 
         protected virtual void Awake()
         {
@@ -606,15 +713,11 @@ namespace VCR.Runtime.Diagnostics
             RuntimeDiagnosticsSnapshot snapshot)
         {
             var subscribers =
-                SnapshotUpdated;
+                Volatile.Read(
+                    ref _snapshotSubscribers);
 
-            if (subscribers == null)
-            {
-                return;
-            }
-
-            foreach (Action<RuntimeDiagnosticsSnapshot> subscriber in
-                     subscribers.GetInvocationList())
+            foreach (var subscriber in
+                     subscribers)
             {
                 try
                 {
