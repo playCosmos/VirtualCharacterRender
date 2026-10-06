@@ -121,46 +121,63 @@ namespace VCR.Runtime.Application
                     "Scene runtime initialization failed.");
             }
 
-            if (loadSavedConfiguration)
+            var startupBaseline =
+                sceneRuntime.CaptureConfiguration();
+
+            try
             {
-                if (_configurationStore.TryLoad(
-                        out var configuration,
-                        out var loadError))
+                if (loadSavedConfiguration)
                 {
-                    sceneRuntime.ApplyConfiguration(
-                        configuration);
+                    if (_configurationStore.TryLoad(
+                            out var configuration,
+                            out var loadError))
+                    {
+                        sceneRuntime.ApplyConfiguration(
+                            configuration);
+                    }
+                    else
+                    {
+                        Debug.LogWarning(
+                            "VCR configuration was not applied: " +
+                            loadError,
+                            this);
+                    }
                 }
-                else
+
+                var vrmPath =
+                    options.GetOrDefault(
+                        VrmOption);
+
+                if (!string.IsNullOrWhiteSpace(
+                        vrmPath))
                 {
-                    Debug.LogWarning(
-                        "VCR configuration was not applied: " +
-                        loadError,
-                        this);
-                }
-            }
+                    vrmPath =
+                        Path.GetFullPath(vrmPath);
 
-            var vrmPath =
-                options.GetOrDefault(
-                    VrmOption);
+                    Vrm10Instance loaded;
 
-            if (!string.IsNullOrWhiteSpace(
-                    vrmPath))
-            {
-                vrmPath =
-                    Path.GetFullPath(vrmPath);
+                    try
+                    {
+                        loaded =
+                            await sceneRuntime.LoadCharacterAsync(
+                                vrmPath);
+                    }
+                    catch (OperationCanceledException)
+                        when (_quitting)
+                    {
+                        return false;
+                    }
 
-                Vrm10Instance loaded;
+                    if (_quitting)
+                    {
+                        return false;
+                    }
 
-                try
-                {
-                    loaded =
-                        await sceneRuntime.LoadCharacterAsync(
-                            vrmPath);
-                }
-                catch (OperationCanceledException)
-                    when (_quitting)
-                {
-                    return false;
+                    if (loaded == null)
+                    {
+                        throw new InvalidOperationException(
+                            "VRM load returned no active character.");
+                    }
                 }
 
                 if (_quitting)
@@ -168,30 +185,75 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
-                if (loaded == null)
+                _started = true;
+
+                if (logStartup)
+                {
+                    Debug.Log(
+                        "VCR application runtime started. " +
+                        $"config='{_configurationStore.Path}', " +
+                        $"character='{sceneRuntime.CurrentCharacterPath ?? "<none>"}'.",
+                        this);
+                }
+
+                return true;
+            }
+            catch (Exception startupException)
+                when (!_quitting)
+            {
+                _started = false;
+
+                if (!TryRestoreStartupBaseline(
+                        startupBaseline,
+                        out var rollbackError))
                 {
                     throw new InvalidOperationException(
-                        "VRM load returned no active character.");
+                        "Application runtime startup failed and rollback was incomplete: " +
+                        rollbackError,
+                        startupException);
                 }
-            }
 
-            if (_quitting)
+                throw;
+            }
+        }
+
+        private bool TryRestoreStartupBaseline(
+            SceneRuntimeConfiguration startupBaseline,
+            out string error)
+        {
+            error = null;
+
+            if (sceneRuntime == null)
             {
+                error =
+                    "Scene runtime is unavailable.";
                 return false;
             }
 
-            _started = true;
-
-            if (logStartup)
+            try
             {
-                Debug.Log(
-                    "VCR application runtime started. " +
-                    $"config='{_configurationStore.Path}', " +
-                    $"character='{sceneRuntime.CurrentCharacterPath ?? "<none>"}'.",
-                    this);
-            }
+                sceneRuntime.ApplyConfiguration(
+                    startupBaseline);
 
-            return true;
+                if (sceneRuntime.State ==
+                        SceneRuntimeState.Faulted &&
+                    !sceneRuntime.Initialize())
+                {
+                    error =
+                        sceneRuntime.Status.LastError ??
+                        "Scene runtime recovery initialization failed.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Startup baseline restore failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         public bool SaveConfiguration(
