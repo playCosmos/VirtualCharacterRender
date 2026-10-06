@@ -125,6 +125,39 @@ namespace VCR.Editor.P0
                         "diagnostics.snapshot_subscriber_failures",
                         out var subscriberFailures) &&
                     subscriberFailures >= 2.0;
+
+                diagnostics.SetConsoleLogging(
+                    false);
+                InvokeReport(
+                    diagnostics,
+                    10.0);
+
+                var publishedMetrics =
+                    diagnostics.LatestSnapshot
+                        .Metrics;
+                var publishedMetricsSorted =
+                    true;
+
+                for (var i = 1;
+                     i < publishedMetrics.Length;
+                     i++)
+                {
+                    if (string.CompareOrdinal(
+                            publishedMetrics[i - 1]
+                                .Name,
+                            publishedMetrics[i]
+                                .Name) >
+                        0)
+                    {
+                        publishedMetricsSorted =
+                            false;
+                        break;
+                    }
+                }
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    publishedMetricsSorted;
             }
             finally
             {
@@ -202,6 +235,35 @@ namespace VCR.Editor.P0
                 new object[]
                 {
                     output
+                });
+        }
+
+        private static void InvokeReport(
+            RuntimeDiagnostics diagnostics,
+            double now)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        "Report",
+                        System.Reflection
+                            .BindingFlags.Instance |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    "Report");
+            }
+
+            method.Invoke(
+                diagnostics,
+                new object[]
+                {
+                    now
                 });
         }
 
