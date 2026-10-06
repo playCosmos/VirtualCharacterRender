@@ -158,6 +158,30 @@ namespace VCR.Editor.P0
                 runtimeBounds =
                     runtimeBounds &&
                     publishedMetricsSorted;
+
+                var csvProbe =
+                    new System.Text.StringBuilder();
+
+                InvokeCsvHelper(
+                    "AppendCsvNumber",
+                    csvProbe,
+                    1.25);
+                InvokeCsvHelper(
+                    "AppendCsvAge",
+                    csvProbe,
+                    double.NaN);
+                InvokeCsvHelper(
+                    "AppendCsvAge",
+                    csvProbe,
+                    2.5);
+                InvokeCsvSanitized(
+                    csvProbe,
+                    "metric\"unit");
+
+                runtimeBounds =
+                    runtimeBounds &&
+                    csvProbe.ToString() ==
+                        ",1.250,,2.500metric'unit";
             }
             finally
             {
@@ -207,6 +231,67 @@ namespace VCR.Editor.P0
                     "VCR P0 diagnostics math: FAIL " +
                     $"avg={average:F3} p95={p95:F3} p99={p99:F3}");
             }
+        }
+
+        private static void InvokeCsvHelper(
+            string methodName,
+            System.Text.StringBuilder builder,
+            double value)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        methodName,
+                        System.Reflection
+                            .BindingFlags.Static |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    methodName);
+            }
+
+            method.Invoke(
+                null,
+                new object[]
+                {
+                    builder,
+                    value
+                });
+        }
+
+        private static void InvokeCsvSanitized(
+            System.Text.StringBuilder builder,
+            string value)
+        {
+            var method =
+                typeof(RuntimeDiagnostics)
+                    .GetMethod(
+                        "AppendCsvSanitized",
+                        System.Reflection
+                            .BindingFlags.Static |
+                        System.Reflection
+                            .BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new System.MissingMethodException(
+                    typeof(RuntimeDiagnostics)
+                        .FullName,
+                    "AppendCsvSanitized");
+            }
+
+            method.Invoke(
+                null,
+                new object[]
+                {
+                    builder,
+                    value
+                });
         }
 
         private static void InvokeMetricCollection(
