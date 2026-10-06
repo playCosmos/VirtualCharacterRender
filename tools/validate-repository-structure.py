@@ -1378,6 +1378,16 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "\"Broadcast capture target apply failed: \" +",
+    "broadcast target apply must convert lifecycle/render exceptions into false/error results",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "renderBootstrap.Apply(\n                            previousSettings);",
+    "broadcast target apply must restore the previous render settings after a failed apply",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "RunRollbackStep(",
     "scene configuration rollback must isolate failures so later restore steps still run",
 )
