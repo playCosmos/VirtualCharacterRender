@@ -27,6 +27,7 @@ The first P5 slice introduces `ITrackingMixProvider` as the final one-performer 
 - keeps the original primary humanoid-pose slot and supports additional ordered pose layers
 - each pose layer carries Base/Tracking/Additive/Procedural role metadata, Override/Additive mode, global weight, root weights, and per-bone weights
 - pose-layer masks/settings/slots now use explicit ownership copies at public/configuration boundaries: callers receive defensive `Mask`/`Settings` copies and mixer configuration clones caller-owned objects, while blending uses internal `RuntimeMask`/`RuntimeSettings` accessors so the frame hot path remains allocation-free
+- pose/expression numeric configuration is finite-normalized at the runtime boundary: non-finite pose weights fall back to full weight, expression weight falls back to 1, and non-finite deadzone/smoothing fall back to 0; serialized expression-layer values are normalized again during mixer `Awake()` before entering frame hot paths
 - tracks immutable input snapshots by `TrackingFrame` reference identity rather than relying on source ID/sequence uniqueness; additional pose layers reuse one sampled frame array instead of parallel sequence/source tracking arrays
 - passes the routed base expression frame through unchanged when no expression overlay contributes and smoothing is disabled; mixer-owned frames are reserved for actual blend/smoothing output
 - accepts one optional expression-only overlay
