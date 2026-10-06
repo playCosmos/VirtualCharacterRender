@@ -205,6 +205,133 @@ namespace VCR.Editor.P11
                     configError,
                     failures);
 
+                var aliasRuntimeRoot =
+                    new GameObject(
+                        "Appearance Binding Isolation");
+                aliasRuntimeRoot.transform.SetParent(
+                    root.transform,
+                    false);
+                var aliasOutfitA =
+                    new GameObject(
+                        "Alias Outfit A");
+                aliasOutfitA.transform.SetParent(
+                    aliasRuntimeRoot.transform,
+                    false);
+                var aliasOutfitB =
+                    new GameObject(
+                        "Alias Outfit B");
+                aliasOutfitB.transform.SetParent(
+                    aliasRuntimeRoot.transform,
+                    false);
+                aliasOutfitA.SetActive(
+                    true);
+                aliasOutfitB.SetActive(
+                    false);
+
+                var aliasRuntime =
+                    aliasRuntimeRoot.AddComponent<
+                        BasicCharacterAppearanceRuntime>();
+                var aliasOutfitBinding =
+                    new AppearanceOutfitBinding
+                    {
+                        OutfitId =
+                            "alias-a",
+                        Roots =
+                            new[]
+                            {
+                                aliasOutfitA
+                            }
+                    };
+                var aliasPresetBinding =
+                    new AppearancePresetBinding
+                    {
+                        PresetId =
+                            "alias-a",
+                        OutfitId =
+                            "alias-a",
+                        Accessories =
+                            Array.Empty<
+                                AppearanceAccessorySelectionBinding>()
+                    };
+                var aliasTransitionStep =
+                    new AppearanceTransitionStepBinding
+                    {
+                        Kind =
+                            AppearanceTransitionStepKind
+                                .Commit
+                    };
+                var aliasTransitionBinding =
+                    new AppearanceTransitionBinding
+                    {
+                        TransitionId =
+                            "alias-transition",
+                        Steps =
+                            new[]
+                            {
+                                aliasTransitionStep
+                            }
+                    };
+
+                aliasRuntime.ConfigureBindings(
+                    new[]
+                    {
+                        aliasOutfitBinding
+                    },
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    new[]
+                    {
+                        aliasPresetBinding
+                    },
+                    new[]
+                    {
+                        aliasTransitionBinding
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                aliasOutfitBinding.OutfitId =
+                    "external-outfit";
+                aliasOutfitBinding.Roots[0] =
+                    aliasOutfitB;
+                aliasPresetBinding.PresetId =
+                    "external-preset";
+                aliasPresetBinding.OutfitId =
+                    "external-outfit";
+                aliasTransitionBinding.TransitionId =
+                    "external-transition";
+                aliasTransitionStep.Kind =
+                    AppearanceTransitionStepKind
+                        .Action;
+                aliasTransitionStep.ActionType =
+                    "effect.play";
+
+                var aliasRebuildSucceeded =
+                    aliasRuntime.RebuildConfiguration(
+                        out var aliasRebuildError);
+                var aliasApplySucceeded =
+                    aliasRuntime.SetPreset(
+                        "alias-a",
+                        "Immediate",
+                        out var aliasApplyError);
+
+                Expect(
+                    aliasRebuildSucceeded &&
+                    string.IsNullOrWhiteSpace(
+                        aliasRebuildError) &&
+                    aliasApplySucceeded &&
+                    string.IsNullOrWhiteSpace(
+                        aliasApplyError) &&
+                    aliasRuntime.PresetIds.Count == 1 &&
+                    aliasRuntime.PresetIds[0] ==
+                        "alias-a" &&
+                    aliasRuntime.TransitionIds.Count == 1 &&
+                    aliasRuntime.TransitionIds[0] ==
+                        "alias-transition" &&
+                    aliasOutfitA.activeSelf &&
+                    !aliasOutfitB.activeSelf,
+                    "appearance ConfigureBindings must deep-clone mutable binding definitions so later caller mutation cannot rewrite live or future rebuilt configuration",
+                    failures);
+
                 Expect(
                     runtime.PresetIds.Count == 2 &&
                     runtime.PresetIds[0] ==
