@@ -434,6 +434,8 @@ namespace VCR.Editor.P13
         {
             Character2DParameterMappingProfile profile =
                 null;
+            Character2DParameterMappingProfile isolationProfile =
+                null;
             GameObject root =
                 null;
 
@@ -442,6 +444,53 @@ namespace VCR.Editor.P13
                 profile =
                     ScriptableObject.CreateInstance<
                         Character2DParameterMappingProfile>();
+                isolationProfile =
+                    ScriptableObject.CreateInstance<
+                        Character2DParameterMappingProfile>();
+
+                var callerOwnedBinding =
+                    new Character2DParameterBinding
+                    {
+                        TargetParameterId =
+                            "OwnedBinding",
+                        InputMin = 0f,
+                        InputMax = 1f
+                    };
+
+                isolationProfile.Configure(
+                    "p13.fake",
+                    callerOwnedBinding);
+
+                var configuredRevision =
+                    isolationProfile.Revision;
+
+                callerOwnedBinding.TargetParameterId =
+                    "ExternalCallerMutation";
+
+                var exportedBindings =
+                    isolationProfile.Bindings;
+                exportedBindings[0].TargetParameterId =
+                    "ExternalExportMutation";
+
+                var recapturedBindings =
+                    isolationProfile.Bindings;
+
+                Expect(
+                    isolationProfile.BindingCount == 1 &&
+                    recapturedBindings.Length == 1 &&
+                    recapturedBindings[0]
+                        .TargetParameterId ==
+                        "OwnedBinding" &&
+                    isolationProfile.Revision ==
+                        configuredRevision &&
+                    Character2DParameterMapper
+                        .TryValidate(
+                            isolationProfile,
+                            out var isolationError) &&
+                    string.IsNullOrWhiteSpace(
+                        isolationError),
+                    "2D parameter mapping profile must deep-clone Configure inputs and public Bindings snapshots so external mutation cannot bypass revision/validation boundaries",
+                    failures);
 
                 profile.Configure(
                     "p13.fake",
@@ -1075,6 +1124,13 @@ namespace VCR.Editor.P13
                     UnityEngine.Object
                         .DestroyImmediate(
                             profile);
+                }
+
+                if (isolationProfile != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            isolationProfile);
                 }
             }
         }
