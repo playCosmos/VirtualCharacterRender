@@ -861,6 +861,16 @@ require_source_contains(
 )
 require_source_contains(
     appearance_runtime,
+    "var resolvedBinding =\n                    binding?.Clone();",
+    "appearance rebuild must clone mutable authoring outfit/accessory bindings again before storing live resolved caches",
+)
+require_source_contains(
+    appearance_runtime,
+    "foreach (var binding in\n                     _accessories.Values)",
+    "appearance accessory transform-state pruning must follow resolved bindings rather than mutable authoring objects",
+)
+require_source_contains(
+    appearance_runtime,
     "CloneAccessoryBindings(",
     "ConfigureBindings must deep-clone mutable accessory binding inputs",
 )
@@ -1258,6 +1268,11 @@ require_source_contains(
     p11_appearance_validation,
     "\"external-outfit\"",
     "P11 appearance validation must mutate caller-owned bindings after ConfigureBindings",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-authoring-outfit\"",
+    "P11 appearance validation must prove live resolved bindings are isolated from in-place serialized authoring edits until rebuild",
 )
 require_source_contains(
     p11_appearance_validation,
