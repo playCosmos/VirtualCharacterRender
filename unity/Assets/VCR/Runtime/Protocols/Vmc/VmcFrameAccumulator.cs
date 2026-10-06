@@ -526,18 +526,19 @@ namespace VCR.Runtime.Protocols.Vmc
         {
             var bones =
                 new NormalizedBonePose[_bones.Length];
-            var hasBone =
-                new bool[_hasBone.Length];
 
-            Array.Copy(_bones, bones, _bones.Length);
-            Array.Copy(_hasBone, hasBone, _hasBone.Length);
+            Array.Copy(
+                _bones,
+                bones,
+                _bones.Length);
 
             return new HumanoidPoseState(
                 _poseSpace,
                 _rootPosition,
                 _rootRotation,
                 bones,
-                hasBone,
+                HumanoidPoseState.CreateBoneMask(
+                    _hasBone),
                 SnapshotArrayOwnership.Transfer);
         }
 
