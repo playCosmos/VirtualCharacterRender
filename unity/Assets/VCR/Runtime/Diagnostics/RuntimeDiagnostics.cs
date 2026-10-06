@@ -26,6 +26,7 @@ namespace VCR.Runtime.Diagnostics
 
         [Header("Reporting")]
         [SerializeField, Min(1f)] private float reportIntervalSeconds = 5f;
+        [SerializeField, Min(5f)] private float metricSourceRefreshIntervalSeconds = 30f;
         [SerializeField, Range(120, 3600)] private int frameWindowFrames = 600;
         [SerializeField] private bool logToConsole = true;
         [SerializeField] private bool writeCsvEvidence = false;
@@ -61,6 +62,11 @@ namespace VCR.Runtime.Diagnostics
         private double _expressionAgeMs = double.NaN;
 
         private readonly List<RuntimeMetric> _metrics = new(64);
+        private readonly List<IRuntimeMetricsSource> _metricSources =
+            new(32);
+        private readonly StringBuilder _reportBuilder =
+            new(512);
+        private float _nextMetricSourceRefreshTime;
         private bool _csvHeaderWritten;
         private long _snapshotSequence;
         private long _metricSourceFailureCount;
@@ -213,6 +219,8 @@ namespace VCR.Runtime.Diagnostics
             _sortScratch =
                 new float[frameWindow];
             ResolveProvider();
+            RefreshMetricSources(
+                force: true);
         }
 
         protected virtual void Start()
@@ -572,7 +580,8 @@ namespace VCR.Runtime.Diagnostics
             if (logToConsole)
             {
                 var builder =
-                    new StringBuilder(512);
+                    _reportBuilder;
+                builder.Clear();
                 builder.Append(
                     "VCR runtime diagnostics: ");
                 builder.AppendFormat(
@@ -675,16 +684,22 @@ namespace VCR.Runtime.Diagnostics
         private void CollectSubsystemMetrics(
             List<RuntimeMetric> output)
         {
-            var behaviours =
-                FindObjectsByType<MonoBehaviour>(
-                    FindObjectsInactive.Exclude,
-                    FindObjectsSortMode.None);
+            RefreshMetricSources();
 
-            foreach (var behaviour in behaviours)
+            var staleSourceDetected =
+                false;
+
+            for (var i = 0;
+                 i < _metricSources.Count;
+                 i++)
             {
-                if (behaviour is not
-                    IRuntimeMetricsSource source)
+                var source =
+                    _metricSources[i];
+
+                if (!IsServiceAlive(source))
                 {
+                    staleSourceDetected =
+                        true;
                     continue;
                 }
 
@@ -699,6 +714,12 @@ namespace VCR.Runtime.Diagnostics
                 }
             }
 
+            if (staleSourceDetected)
+            {
+                _nextMetricSourceRefreshTime =
+                    0f;
+            }
+
             output.Add(
                 new RuntimeMetric(
                     "diagnostics.metric_source_failures",
@@ -709,6 +730,46 @@ namespace VCR.Runtime.Diagnostics
                     "diagnostics.snapshot_subscriber_failures",
                     _snapshotSubscriberFailureCount,
                     "count"));
+        }
+
+        private void RefreshMetricSources(
+            bool force = false)
+        {
+            var now =
+                Time.unscaledTime;
+
+            if (!force &&
+                now <
+                    _nextMetricSourceRefreshTime)
+            {
+                return;
+            }
+
+            _nextMetricSourceRefreshTime =
+                now +
+                Mathf.Max(
+                    5f,
+                    metricSourceRefreshIntervalSeconds);
+
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            _metricSources.Clear();
+
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour is
+                        IRuntimeMetricsSource source &&
+                    !ReferenceEquals(
+                        source,
+                        this))
+                {
+                    _metricSources.Add(
+                        source);
+                }
+            }
         }
 
         private void NotifySnapshotUpdated(
