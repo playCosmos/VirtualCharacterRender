@@ -509,6 +509,82 @@ namespace VCR.Editor.P3
                     "ARKit receiver configuration must contain non-finite timing/pose values and saturate oversized presence timing conversion",
                     failures);
 
+                var sanitizePreprocessValue =
+                    typeof(WebcamFramePreprocessor)
+                    .GetMethod(
+                        "SanitizeBounded",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                if (sanitizePreprocessValue == null)
+                {
+                    failures.Add(
+                        "Webcam preprocessing numeric sanitizer was not found");
+                }
+                else
+                {
+                    var sanitizedExposure =
+                        (float)
+                            sanitizePreprocessValue.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.NaN,
+                                    1.35f,
+                                    0.5f,
+                                    3f
+                                });
+                    var sanitizedGamma =
+                        (float)
+                            sanitizePreprocessValue.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    float.PositiveInfinity,
+                                    1.15f,
+                                    0.5f,
+                                    2f
+                                });
+                    var clampedLow =
+                        (float)
+                            sanitizePreprocessValue.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    -100f,
+                                    1f,
+                                    0.5f,
+                                    3f
+                                });
+                    var clampedHigh =
+                        (float)
+                            sanitizePreprocessValue.Invoke(
+                                null,
+                                new object[]
+                                {
+                                    100f,
+                                    1f,
+                                    0.5f,
+                                    2f
+                                });
+
+                    Expect(
+                        Mathf.Approximately(
+                            sanitizedExposure,
+                            1.35f) &&
+                        Mathf.Approximately(
+                            sanitizedGamma,
+                            1.15f) &&
+                        Mathf.Approximately(
+                            clampedLow,
+                            0.5f) &&
+                        Mathf.Approximately(
+                            clampedHigh,
+                            2f),
+                        "webcam preprocessing exposure/gamma sanitization must reject non-finite values and clamp finite out-of-range input",
+                        failures);
+                }
+
                 texture =
                     new Texture2D(
                         2,
