@@ -245,6 +245,22 @@ namespace VCR.Runtime.UI
         private bool _settingsSummaryRunInBackground;
         private string _settingsSummaryCache;
 
+        private bool _eventsSummaryStateValid;
+        private int _eventsSummaryRuleCount;
+        private string _eventsSummarySelectedRuleId;
+        private bool _eventsSummaryHasSelectedRule;
+        private bool _eventsSummarySelectedRuleEnabled;
+        private bool _eventsSummaryTraceEnabled;
+        private int _eventsSummaryMaxCommandsPerEvent;
+        private string _eventsSummaryRuleStorePath;
+        private long _eventsSummaryProcessedEvents;
+        private long _eventsSummaryMatchedRules;
+        private long _eventsSummaryExecutedActions;
+        private long _eventsSummaryFailedActions;
+        private long _eventsSummaryUnhandledActions;
+        private long _eventsSummaryAmbiguousActions;
+        private string _eventsSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -6482,20 +6498,205 @@ namespace VCR.Runtime.UI
                             0,
                             ruleCount - 1))
                     : null;
+            var engine =
+                eventRuntime.Engine;
+            var hasSelectedRule =
+                selectedRule != null;
+            var traceEnabled =
+                engine.TraceEnabled;
+            var maxCommandsPerEvent =
+                eventRuntime.MaxCommandsPerEvent;
+            var processedEvents =
+                engine.ProcessedEvents;
+            var matchedRules =
+                engine.MatchedRules;
+            var executedActions =
+                eventRuntime.ExecutedActions;
+            var failedActions =
+                eventRuntime.FailedActions;
+            var unhandledActions =
+                eventRuntime.UnhandledActions;
+            var ambiguousActions =
+                eventRuntime.AmbiguousActions;
+
+            if (EventsSummaryCacheMatches(
+                    ruleCount,
+                    selectedRule,
+                    traceEnabled,
+                    maxCommandsPerEvent,
+                    processedEvents,
+                    matchedRules,
+                    executedActions,
+                    failedActions,
+                    unhandledActions,
+                    ambiguousActions))
+            {
+                return _eventsSummaryCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Rules: ");
+            builder.Append(ruleCount);
+            builder.Append("\nSelected rule: ");
+            builder.Append(
+                hasSelectedRule
+                    ? selectedRule.Id
+                    : "<none>");
+            builder.Append(
+                "\nSelected enabled: ");
+            if (hasSelectedRule)
+            {
+                builder.Append(
+                    selectedRule.Enabled);
+            }
+            else
+            {
+                builder.Append("n/a");
+            }
+
+            builder.Append("\nTrace enabled: ");
+            builder.Append(traceEnabled);
+            builder.Append(
+                "\nMax commands/event: ");
+            builder.Append(
+                maxCommandsPerEvent);
+            builder.Append("\nPersisted rules: ");
+            builder.Append(
+                _eventRuleStorePath ??
+                "<not resolved>");
+            builder.Append("\nProcessed events: ");
+            builder.Append(processedEvents);
+            builder.Append("\nMatched rules: ");
+            builder.Append(matchedRules);
+            builder.Append(
+                "\nExecuted actions: ");
+            builder.Append(executedActions);
+            builder.Append("\nFailed actions: ");
+            builder.Append(failedActions);
+            builder.Append(
+                "\nUnhandled actions: ");
+            builder.Append(unhandledActions);
+            builder.Append(
+                "\nAmbiguous actions: ");
+            builder.Append(ambiguousActions);
+
+            CaptureEventsSummaryState(
+                ruleCount,
+                selectedRule,
+                traceEnabled,
+                maxCommandsPerEvent,
+                processedEvents,
+                matchedRules,
+                executedActions,
+                failedActions,
+                unhandledActions,
+                ambiguousActions);
+            _eventsSummaryCache =
+                builder.ToString();
+            return _eventsSummaryCache;
+        }
+
+        private bool EventsSummaryCacheMatches(
+            int ruleCount,
+            EventRuntimeRule selectedRule,
+            bool traceEnabled,
+            int maxCommandsPerEvent,
+            long processedEvents,
+            long matchedRules,
+            long executedActions,
+            long failedActions,
+            long unhandledActions,
+            long ambiguousActions)
+        {
+            var hasSelectedRule =
+                selectedRule != null;
 
             return
-                $"Rules: {ruleCount}\n" +
-                $"Selected rule: {selectedRule?.Id ?? "<none>"}\n" +
-                $"Selected enabled: {(selectedRule != null ? selectedRule.Enabled.ToString() : "n/a")}\n" +
-                $"Trace enabled: {eventRuntime.Engine.TraceEnabled}\n" +
-                $"Max commands/event: {eventRuntime.MaxCommandsPerEvent}\n" +
-                $"Persisted rules: {_eventRuleStorePath ?? "<not resolved>"}\n" +
-                $"Processed events: {eventRuntime.Engine.ProcessedEvents}\n" +
-                $"Matched rules: {eventRuntime.Engine.MatchedRules}\n" +
-                $"Executed actions: {eventRuntime.ExecutedActions}\n" +
-                $"Failed actions: {eventRuntime.FailedActions}\n" +
-                $"Unhandled actions: {eventRuntime.UnhandledActions}\n" +
-                $"Ambiguous actions: {eventRuntime.AmbiguousActions}";
+                _eventsSummaryStateValid &&
+                _eventsSummaryCache != null &&
+                _eventsSummaryRuleCount ==
+                    ruleCount &&
+                _eventsSummaryHasSelectedRule ==
+                    hasSelectedRule &&
+                string.Equals(
+                    _eventsSummarySelectedRuleId,
+                    hasSelectedRule
+                        ? selectedRule.Id
+                        : null,
+                    StringComparison.Ordinal) &&
+                (!hasSelectedRule ||
+                 _eventsSummarySelectedRuleEnabled ==
+                    selectedRule.Enabled) &&
+                _eventsSummaryTraceEnabled ==
+                    traceEnabled &&
+                _eventsSummaryMaxCommandsPerEvent ==
+                    maxCommandsPerEvent &&
+                string.Equals(
+                    _eventsSummaryRuleStorePath,
+                    _eventRuleStorePath,
+                    StringComparison.Ordinal) &&
+                _eventsSummaryProcessedEvents ==
+                    processedEvents &&
+                _eventsSummaryMatchedRules ==
+                    matchedRules &&
+                _eventsSummaryExecutedActions ==
+                    executedActions &&
+                _eventsSummaryFailedActions ==
+                    failedActions &&
+                _eventsSummaryUnhandledActions ==
+                    unhandledActions &&
+                _eventsSummaryAmbiguousActions ==
+                    ambiguousActions;
+        }
+
+        private void CaptureEventsSummaryState(
+            int ruleCount,
+            EventRuntimeRule selectedRule,
+            bool traceEnabled,
+            int maxCommandsPerEvent,
+            long processedEvents,
+            long matchedRules,
+            long executedActions,
+            long failedActions,
+            long unhandledActions,
+            long ambiguousActions)
+        {
+            var hasSelectedRule =
+                selectedRule != null;
+
+            _eventsSummaryRuleCount =
+                ruleCount;
+            _eventsSummaryHasSelectedRule =
+                hasSelectedRule;
+            _eventsSummarySelectedRuleId =
+                hasSelectedRule
+                    ? selectedRule.Id
+                    : null;
+            _eventsSummarySelectedRuleEnabled =
+                hasSelectedRule &&
+                selectedRule.Enabled;
+            _eventsSummaryTraceEnabled =
+                traceEnabled;
+            _eventsSummaryMaxCommandsPerEvent =
+                maxCommandsPerEvent;
+            _eventsSummaryRuleStorePath =
+                _eventRuleStorePath;
+            _eventsSummaryProcessedEvents =
+                processedEvents;
+            _eventsSummaryMatchedRules =
+                matchedRules;
+            _eventsSummaryExecutedActions =
+                executedActions;
+            _eventsSummaryFailedActions =
+                failedActions;
+            _eventsSummaryUnhandledActions =
+                unhandledActions;
+            _eventsSummaryAmbiguousActions =
+                ambiguousActions;
+            _eventsSummaryStateValid =
+                true;
         }
 
         private string OutputSummary()
