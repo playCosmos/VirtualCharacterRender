@@ -72,6 +72,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - direct overlay setting changes now commit `_overlayConfiguration` only after the adapter `Apply` succeeds; a throwing adapter no longer leaves the persisted/captured scene configuration claiming settings that were never applied
 - full `ApplyConfiguration` now captures the previous scene configuration and performs reverse-order best-effort rollback if a later subsystem apply fails, preventing overlay failures from leaving earlier environment/render/camera/light changes partially committed; rollback-step failures are isolated and reported without skipping the remaining restore steps
 - `Suspend()` and `Resume()` now contain presentation/overlay adapter exceptions and return `false` with an explicit `Faulted` scene state instead of leaking exceptions from their boolean lifecycle contract or leaving an ambiguous partially suspended/resumed state
+- `TryRecoverOverlayOutput(out error)` now preserves its Try-style contract while suspended/faulted/stopped: lifecycle rejection is returned as `false` plus an error string instead of escaping as an `InvalidOperationException`
 - missing `DesktopRenderBootstrap` lookup is negative-cached for one monotonic second, preserving late discovery while preventing repeated global lookup during temporary/partial scene configuration
 - serializable camera/light/output scene configuration
 - capture and reapply without storing Unity object references
