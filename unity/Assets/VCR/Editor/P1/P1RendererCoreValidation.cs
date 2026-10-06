@@ -131,6 +131,77 @@ namespace VCR.Editor.P1
                     "camera far clip must remain beyond near clip",
                     failures);
 
+                cameraController.Configure(
+                    camera,
+                    new SceneCameraSettings
+                    {
+                        LocalPosition =
+                            new Vector3(
+                                float.NaN,
+                                2f,
+                                float.PositiveInfinity),
+                        LocalEulerAngles =
+                            new Vector3(
+                                float.NaN,
+                                30f,
+                                float.NegativeInfinity),
+                        FieldOfView =
+                            float.NaN,
+                        NearClipPlane =
+                            float.PositiveInfinity,
+                        FarClipPlane =
+                            float.NaN
+                    });
+
+                var nonFiniteCameraSettings =
+                    cameraController.Settings;
+
+                Expect(
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalPosition.x) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalPosition.y -
+                        2f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalPosition.z +
+                        3f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalEulerAngles.x) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalEulerAngles.y -
+                        30f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .LocalEulerAngles.z) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .FieldOfView -
+                        35f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .NearClipPlane -
+                        0.05f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteCameraSettings
+                            .FarClipPlane -
+                        100f) <
+                        0.0001f,
+                    "camera settings must replace non-finite transform/projection values with finite defaults",
+                    failures);
+
                 var lightObject =
                     new GameObject(
                         "Main Directional Light");
@@ -177,6 +248,77 @@ namespace VCR.Editor.P1
                     "light intensity must clamp to zero minimum",
                     failures);
 
+                lightController.Configure(
+                    light,
+                    new SceneLightSettings
+                    {
+                        Enabled = true,
+                        LocalEulerAngles =
+                            new Vector3(
+                                float.NaN,
+                                25f,
+                                float.PositiveInfinity),
+                        Color =
+                            new Color(
+                                float.NaN,
+                                0.25f,
+                                float.NegativeInfinity,
+                                float.NaN),
+                        Intensity =
+                            float.NaN,
+                        Shadows =
+                            (LightShadows)999
+                    });
+
+                var nonFiniteLightSettings =
+                    lightController.Settings;
+
+                Expect(
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .LocalEulerAngles.x -
+                        45f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .LocalEulerAngles.y -
+                        25f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .LocalEulerAngles.z) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .Color.r -
+                        1f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .Color.g -
+                        0.25f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .Color.b -
+                        1f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .Color.a -
+                        1f) <
+                        0.0001f &&
+                    Math.Abs(
+                        nonFiniteLightSettings
+                            .Intensity -
+                        1f) <
+                        0.0001f &&
+                    nonFiniteLightSettings
+                        .Shadows ==
+                        LightShadows.None,
+                    "light settings must replace non-finite values and unsupported shadow modes with finite defaults",
+                    failures);
+
                 var render =
                     root.AddComponent<
                         DesktopRenderBootstrap>();
@@ -202,6 +344,49 @@ namespace VCR.Editor.P1
                         render.RenderScale - 2.0f) <
                     0.0001f,
                     "render scale must clamp to 2.0 maximum",
+                    failures);
+
+                render.SetRenderScale(
+                    float.NaN);
+
+                Expect(
+                    Math.Abs(
+                        render.RenderScale -
+                        1f) <
+                    0.0001f,
+                    "non-finite render scale must fall back to 1.0",
+                    failures);
+
+                render.Apply(
+                    new RenderRuntimeSettings
+                    {
+                        ResolutionPreset =
+                            (RenderResolutionPreset)999,
+                        Width = 640,
+                        Height = 480,
+                        RenderScale =
+                            float.PositiveInfinity,
+                        TargetFrameRate =
+                            1000,
+                        UseVSync = false,
+                        RunInBackground = true
+                    });
+
+                Expect(
+                    render.ResolutionPreset ==
+                        RenderResolutionPreset
+                            .Recommended1080p &&
+                    render.RequestedWidth ==
+                        1920 &&
+                    render.RequestedHeight ==
+                        1080 &&
+                    Math.Abs(
+                        render.RenderScale -
+                        1f) <
+                        0.0001f &&
+                    render.TargetFrameRate ==
+                        240,
+                    "render settings must sanitize non-finite scale and unsupported resolution preset before applying globals",
                     failures);
 
                 render.SetFramePacing(
