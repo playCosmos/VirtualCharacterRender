@@ -46,30 +46,111 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void ConfigureBindings(
             params PropBinding[] bindings)
         {
-            props =
-                bindings ??
-                Array.Empty<PropBinding>();
+            var stagedAuthoring =
+                CloneBindings(
+                    bindings);
 
-            if (!RebuildBindings(
+            if (!TryBuildBindingMap(
+                    stagedAuthoring,
+                    out var stagedResolved,
                     out var error))
             {
-                _lastError =
-                    error;
+                _lastError = error;
+                return;
             }
+
+            props =
+                stagedAuthoring;
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
         }
 
         public bool RebuildBindings(
             out string error)
         {
+            if (!TryBuildBindingMap(
+                    props,
+                    out var stagedResolved,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
+
+            CommitBindingMap(
+                stagedResolved);
+            _lastError = null;
+            return true;
+        }
+
+        private static PropBinding[]
+            CloneBindings(
+                PropBinding[] bindings)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return Array.Empty<PropBinding>();
+            }
+
+            var clones =
+                new PropBinding[
+                    bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                clones[i] =
+                    CloneBinding(
+                        bindings[i]);
+            }
+
+            return clones;
+        }
+
+        private static PropBinding
+            CloneBinding(
+                PropBinding binding)
+        {
+            if (binding == null)
+            {
+                return null;
+            }
+
+            return new PropBinding
+            {
+                PropId =
+                    binding.PropId,
+                Roots =
+                    binding.Roots == null
+                        ? Array.Empty<GameObject>()
+                        : (GameObject[])
+                            binding.Roots.Clone()
+            };
+        }
+
+        private static bool TryBuildBindingMap(
+            PropBinding[] bindings,
+            out Dictionary<string, PropBinding> resolved,
+            out string error)
+        {
             error = null;
-            _props.Clear();
+            resolved =
+                new Dictionary<string, PropBinding>(
+                    StringComparer.Ordinal);
             var rootOwners =
                 new Dictionary<int, string>();
 
-            foreach (var binding in
-                     props ??
+            foreach (var authoringBinding in
+                     bindings ??
                      Array.Empty<PropBinding>())
             {
+                var binding =
+                    CloneBinding(
+                        authoringBinding);
+
                 if (binding == null ||
                     string.IsNullOrWhiteSpace(
                         binding.PropId))
@@ -82,8 +163,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                 var id =
                     binding.PropId.Trim();
                 var roots =
-                    binding.Roots ??
-                    Array.Empty<GameObject>();
+                    binding.Roots;
 
                 if (roots.Length == 0)
                 {
@@ -129,7 +209,10 @@ namespace VCR.Runtime.EventRuntime.Unity
                         id);
                 }
 
-                if (!_props.TryAdd(
+                binding.PropId =
+                    id;
+
+                if (!resolved.TryAdd(
                         id,
                         binding))
                 {
@@ -139,8 +222,20 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            _lastError = null;
             return true;
+        }
+
+        private void CommitBindingMap(
+            Dictionary<string, PropBinding> resolved)
+        {
+            _props.Clear();
+
+            foreach (var pair in resolved)
+            {
+                _props.Add(
+                    pair.Key,
+                    pair.Value);
+            }
         }
 
         public bool CanHandle(
@@ -198,17 +293,23 @@ namespace VCR.Runtime.EventRuntime.Unity
                 if (command.ActionType ==
                     EventActionTypes.PropSetActive)
                 {
-                    if (!command.HasValue)
+                    if (!command.HasValue ||
+                        double.IsNaN(
+                            command.Value) ||
+                        double.IsInfinity(
+                            command.Value) ||
+                        (command.Value != 0.0 &&
+                         command.Value != 1.0))
                     {
                         error =
-                            $"Prop '{propId}' set_active requires a boolean numeric value.";
+                            $"Prop '{propId}' set_active requires an explicit finite 0/1 boolean value.";
                         return Fail(
                             error);
                     }
 
                     var active =
-                        command.Value >=
-                        0.5;
+                        command.Value ==
+                        1.0;
 
                     SetActive(
                         binding,
