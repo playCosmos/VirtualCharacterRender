@@ -75,6 +75,62 @@ namespace VCR.Editor.P6
                 invalidMode.IsImmediate,
                 "environment transition specs must sanitize non-finite durations and unsupported modes into safe immediate transitions",
                 failures);
+
+            var nonFiniteLighting =
+                new EnvironmentLightingProfile(
+                    float.NaN,
+                    float.PositiveInfinity,
+                    float.NegativeInfinity,
+                    float.NaN,
+                    float.PositiveInfinity);
+            var clampedLighting =
+                new EnvironmentLightingProfile(
+                    -1f,
+                    2f,
+                    0.5f,
+                    -2f,
+                    2f);
+
+            Expect(
+                Math.Abs(
+                    nonFiniteLighting.Red -
+                    1f) <
+                    0.0001f &&
+                Math.Abs(
+                    nonFiniteLighting.Green -
+                    1f) <
+                    0.0001f &&
+                Math.Abs(
+                    nonFiniteLighting.Blue -
+                    1f) <
+                    0.0001f &&
+                Math.Abs(
+                    nonFiniteLighting.IntensityMultiplier -
+                    1f) <
+                    0.0001f &&
+                Math.Abs(
+                    nonFiniteLighting.Weight) <
+                    0.0001f &&
+                Math.Abs(
+                    clampedLighting.Red) <
+                    0.0001f &&
+                Math.Abs(
+                    clampedLighting.Green -
+                    1f) <
+                    0.0001f &&
+                Math.Abs(
+                    clampedLighting.Blue -
+                    0.5f) <
+                    0.0001f &&
+                Math.Abs(
+                    clampedLighting.IntensityMultiplier) <
+                    0.0001f &&
+                Math.Abs(
+                    clampedLighting.Weight -
+                    1f) <
+                    0.0001f,
+                "environment lighting profiles must sanitize non-finite values to neutral/no-influence fallbacks while preserving finite clamp semantics",
+                failures);
         }
 
         private static void ValidateScheduler(
