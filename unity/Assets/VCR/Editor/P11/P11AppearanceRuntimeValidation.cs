@@ -341,6 +341,51 @@ namespace VCR.Editor.P11
                     "appearance quick-change order must preserve authoring order",
                     failures);
 
+                runtime.ConfigureBindings(
+                    Array.Empty<
+                        AppearanceOutfitBinding>(),
+                    Array.Empty<
+                        AppearanceAccessoryBinding>(),
+                    Array.Empty<
+                        AppearancePresetBinding>(),
+                    new[]
+                    {
+                        new AppearanceTransitionBinding
+                        {
+                            TransitionId =
+                                "rejected-configure",
+                            Steps =
+                                new[]
+                                {
+                                    new AppearanceTransitionStepBinding
+                                    {
+                                        Kind =
+                                            AppearanceTransitionStepKind
+                                                .Action,
+                                        ActionType =
+                                            "effect.play"
+                                    }
+                                }
+                        }
+                    },
+                    Array.Empty<MonoBehaviour>());
+
+                Expect(
+                    runtime.Status.State ==
+                        AppearanceRuntimeState.Ready &&
+                    !string.IsNullOrWhiteSpace(
+                        runtime.Status.LastError) &&
+                    runtime.PresetIds.Count == 2 &&
+                    runtime.PresetIds[0] ==
+                        "casual-hat" &&
+                    runtime.PresetIds[1] ==
+                        "formal-crown" &&
+                    runtime.TransitionIds.Count == 1 &&
+                    runtime.TransitionIds[0] ==
+                        "spin-confetti",
+                    "rejected ConfigureBindings input must preserve the last known-good runtime configuration and keep it operational",
+                    failures);
+
                 var transitionsField =
                     typeof(
                         BasicCharacterAppearanceRuntime)
