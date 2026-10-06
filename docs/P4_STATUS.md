@@ -54,6 +54,8 @@ Routed outputs now preserve the selected provider's immutable `TrackingFrame` ob
 
 Face routing also samples each needed candidate at most once per router update. A healthy preferred source that outranks the fallback is sampled once and then reused for activation, selection, and output; the fallback face provider is not polled in that case. If policy or health makes fallback competitive, it is enabled first and then sampled once.
 
+Expression fallback now follows the same activation principle. A healthy higher-priority external expression source such as VMC suspends an `IExpressionTrackingActivationControl` fallback before it is polled, allowing `AudioDrivenExpressionSource` to skip `AudioSource.GetOutputData` and RMS work entirely. If the external source is lost or routing policy explicitly prefers audio, the fallback is re-enabled before selection. Suspension clears the audio source's retained expression frame so a later reactivation waits for a fresh sample instead of routing stale mouth data.
+
 ## Source-free validation
 
 Interactive:
@@ -85,6 +87,7 @@ The P4 batch suite runs P0 through P3 source-free checks first, then verifies:
 - direct routed-frame reference reuse for face, body/hands, full-body, and expressions without wrapper allocation
 - loss/recovery and provider replacement when a source reuses a previous source ID/sequence
 - single-sample preferred-face routing and skipped fallback face reads when the preferred source already wins
+- suspended audio-expression fallback polling while VMC wins, automatic re-enable on VMC loss, and explicit audio-first policy override
 
 ## Still deferred to real devices / players
 
