@@ -2128,6 +2128,41 @@ namespace VCR.Editor.P9
                         preservedError),
                     "invalid audio binding replacement must fail closed without clearing the previous live binding map",
                     failures);
+
+                source.Stop();
+                UnityEngine.Object.DestroyImmediate(
+                    source);
+
+                var destroyedProbeEscaped =
+                    false;
+                var destroyedProbeResult =
+                    false;
+                string destroyedProbeError =
+                    null;
+
+                try
+                {
+                    destroyedProbeResult =
+                        handler.TryIsComplete(
+                            finiteCommand,
+                            out _,
+                            out destroyedProbeError);
+                }
+                catch
+                {
+                    destroyedProbeEscaped =
+                        true;
+                }
+
+                Expect(
+                    !destroyedProbeEscaped &&
+                    !handler.CanTrackCompletion(
+                        finiteCommand) &&
+                    !destroyedProbeResult &&
+                    !string.IsNullOrWhiteSpace(
+                        destroyedProbeError),
+                    "destroyed AudioSource completion probes must fail closed without escaping exceptions",
+                    failures);
             }
             catch (Exception exception)
             {
