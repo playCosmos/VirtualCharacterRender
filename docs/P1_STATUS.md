@@ -66,6 +66,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 
 - serializable renderer settings snapshot
 - render settings availability probe through `TryCaptureRenderSettings`: returns the live bootstrap settings when available and preserves the historical default-settings fallback while explicitly reporting unavailable when the bootstrap is missing
+- render-settings capture and broadcast-target evaluation resolve only `DesktopRenderBootstrap`; they no longer invoke full character/camera/light/overlay/environment dependency discovery for a render-only read
 - serializable camera/light/output scene configuration
 - capture and reapply without storing Unity object references
 - overlay output lifecycle owned through `IOverlayOutputAdapter`
