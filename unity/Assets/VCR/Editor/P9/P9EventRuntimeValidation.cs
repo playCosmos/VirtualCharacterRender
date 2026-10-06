@@ -2000,7 +2000,7 @@ namespace VCR.Editor.P9
                 var handler =
                     root.AddComponent<
                         AudioEventActionHandler>();
-                handler.ConfigureBindings(
+                var externalBinding =
                     new AudioEventActionHandler
                         .AudioBinding
                     {
@@ -2011,8 +2011,18 @@ namespace VCR.Editor.P9
                         Clip =
                             clip,
                         RestartOnPlay =
+                            false,
+                        Loop =
                             false
-                    });
+                    };
+
+                handler.ConfigureBindings(
+                    externalBinding);
+
+                externalBinding.AudioId =
+                    "mutated-external-audio";
+                externalBinding.Loop =
+                    true;
 
                 var nonFiniteValues =
                     new[]
@@ -2084,8 +2094,37 @@ namespace VCR.Editor.P9
                     Mathf.Abs(
                         source.volume -
                         1f) <
-                        0.0001f,
-                    "audio.play must continue clamping finite volume overrides into the AudioSource 0..1 range",
+                        0.0001f &&
+                    !source.loop,
+                    "audio.play must continue clamping finite volume overrides and must use the isolated live binding rather than caller mutations",
+                    failures);
+
+                source.Stop();
+
+                handler.ConfigureBindings(
+                    new AudioEventActionHandler
+                        .AudioBinding
+                    {
+                        AudioId =
+                            "invalid",
+                        Source =
+                            source,
+                        Clip =
+                            null
+                    });
+
+                source.clip =
+                    clip;
+
+                Expect(
+                    !string.IsNullOrWhiteSpace(
+                        handler.LastError) &&
+                    handler.TryExecute(
+                        finiteCommand,
+                        out var preservedError) &&
+                    string.IsNullOrWhiteSpace(
+                        preservedError),
+                    "invalid audio binding replacement must fail closed without clearing the previous live binding map",
                     failures);
             }
             catch (Exception exception)
