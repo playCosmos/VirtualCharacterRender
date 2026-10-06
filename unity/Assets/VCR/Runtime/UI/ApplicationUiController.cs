@@ -270,6 +270,7 @@ namespace VCR.Runtime.UI
         private bool _outputSummaryTransparent;
         private bool _outputSummaryTopmost;
         private bool _outputSummaryClickThrough;
+        private bool _outputSummaryRenderAvailable;
         private int _outputSummaryRenderWidth;
         private int _outputSummaryRenderHeight;
         private int _outputSummaryTargetFrameRate;
@@ -6733,13 +6734,15 @@ namespace VCR.Runtime.UI
                 hasAdapter
                     ? output.Settings
                     : default;
-            var render =
-                sceneRuntime.CaptureRenderSettings();
+            var renderAvailable =
+                sceneRuntime.TryCaptureRenderSettings(
+                    out var render);
 
             if (OutputSummaryCacheMatches(
                     hasAdapter,
                     status,
                     settings,
+                    renderAvailable,
                     render))
             {
                 return _outputSummaryCache;
@@ -6757,25 +6760,37 @@ namespace VCR.Runtime.UI
                             .NotActive,
                         "No overlay output adapter is configured.");
             var minimum =
-                BroadcastCaptureReadinessEvaluator
-                    .Evaluate(
-                        BroadcastCaptureTarget
-                            .Minimum720p60,
-                        readiness,
-                        render.Width,
-                        render.Height,
-                        render.TargetFrameRate,
-                        render.RunInBackground);
+                renderAvailable
+                    ? BroadcastCaptureReadinessEvaluator
+                        .Evaluate(
+                            BroadcastCaptureTarget
+                                .Minimum720p60,
+                            readiness,
+                            render.Width,
+                            render.Height,
+                            render.TargetFrameRate,
+                            render.RunInBackground)
+                    : new BroadcastCaptureReadiness(
+                        false,
+                        BroadcastCaptureReadinessFailure
+                            .InvalidTarget,
+                        "Render bootstrap is unavailable.");
             var recommended =
-                BroadcastCaptureReadinessEvaluator
-                    .Evaluate(
-                        BroadcastCaptureTarget
-                            .Recommended1080p60,
-                        readiness,
-                        render.Width,
-                        render.Height,
-                        render.TargetFrameRate,
-                        render.RunInBackground);
+                renderAvailable
+                    ? BroadcastCaptureReadinessEvaluator
+                        .Evaluate(
+                            BroadcastCaptureTarget
+                                .Recommended1080p60,
+                            readiness,
+                            render.Width,
+                            render.Height,
+                            render.TargetFrameRate,
+                            render.RunInBackground)
+                    : new BroadcastCaptureReadiness(
+                        false,
+                        BroadcastCaptureReadinessFailure
+                            .InvalidTarget,
+                        "Render bootstrap is unavailable.");
 
             var builder =
                 _summaryBuilder;
@@ -6849,6 +6864,7 @@ namespace VCR.Runtime.UI
                 hasAdapter,
                 status,
                 settings,
+                renderAvailable,
                 render);
             _outputSummaryCache =
                 builder.ToString();
@@ -6859,6 +6875,7 @@ namespace VCR.Runtime.UI
             bool hasAdapter,
             OverlayOutputStatus status,
             OverlayOutputSettings settings,
+            bool renderAvailable,
             RenderRuntimeSettings render)
         {
             return
@@ -6883,6 +6900,8 @@ namespace VCR.Runtime.UI
                       settings.Topmost &&
                   _outputSummaryClickThrough ==
                       settings.ClickThrough)) &&
+                _outputSummaryRenderAvailable ==
+                    renderAvailable &&
                 _outputSummaryRenderWidth ==
                     render.Width &&
                 _outputSummaryRenderHeight ==
@@ -6897,6 +6916,7 @@ namespace VCR.Runtime.UI
             bool hasAdapter,
             OverlayOutputStatus status,
             OverlayOutputSettings settings,
+            bool renderAvailable,
             RenderRuntimeSettings render)
         {
             _outputSummaryHasAdapter =
@@ -6926,6 +6946,8 @@ namespace VCR.Runtime.UI
             _outputSummaryClickThrough =
                 hasAdapter &&
                 settings.ClickThrough;
+            _outputSummaryRenderAvailable =
+                renderAvailable;
             _outputSummaryRenderWidth =
                 render.Width;
             _outputSummaryRenderHeight =
