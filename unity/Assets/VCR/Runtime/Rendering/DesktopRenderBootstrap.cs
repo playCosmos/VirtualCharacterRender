@@ -74,6 +74,7 @@ namespace VCR.Runtime.Rendering
         {
             ResolveTargetCamera();
             CaptureRuntimeState();
+            SanitizeConfiguration();
 
             Application.runInBackground = runInBackground;
 
@@ -117,17 +118,25 @@ namespace VCR.Runtime.Rendering
 
         public void Apply(RenderRuntimeSettings settings)
         {
-            resolutionPreset = settings.ResolutionPreset;
-            customWidth = Math.Max(320, settings.Width);
-            customHeight = Math.Max(240, settings.Height);
-            renderScale = Mathf.Clamp(
-                settings.RenderScale,
-                0.5f,
-                2.0f);
-            targetFrameRate = Math.Clamp(
-                settings.TargetFrameRate,
-                30,
-                240);
+            resolutionPreset =
+                SanitizeResolutionPreset(
+                    settings.ResolutionPreset);
+            customWidth =
+                Math.Max(
+                    320,
+                    settings.Width);
+            customHeight =
+                Math.Max(
+                    240,
+                    settings.Height);
+            renderScale =
+                SanitizeRenderScale(
+                    settings.RenderScale);
+            targetFrameRate =
+                Math.Clamp(
+                    settings.TargetFrameRate,
+                    30,
+                    240);
             useVSync = settings.UseVSync;
             runInBackground = settings.RunInBackground;
 
@@ -136,7 +145,9 @@ namespace VCR.Runtime.Rendering
 
         public void SetPreset(RenderResolutionPreset preset)
         {
-            resolutionPreset = preset;
+            resolutionPreset =
+                SanitizeResolutionPreset(
+                    preset);
             Apply();
         }
 
@@ -152,7 +163,9 @@ namespace VCR.Runtime.Rendering
 
         public void SetRenderScale(float scale)
         {
-            renderScale = Mathf.Clamp(scale, 0.5f, 2.0f);
+            renderScale =
+                SanitizeRenderScale(
+                    scale);
             Apply();
         }
 
@@ -323,9 +336,59 @@ namespace VCR.Runtime.Rendering
                 return;
             }
 
+            renderScale =
+                SanitizeRenderScale(
+                    renderScale);
             asset.renderScale =
-                Mathf.Clamp(renderScale, 0.5f, 2.0f);
+                renderScale;
         }
+
+        private void SanitizeConfiguration()
+        {
+            resolutionPreset =
+                SanitizeResolutionPreset(
+                    resolutionPreset);
+            customWidth =
+                Math.Max(
+                    320,
+                    customWidth);
+            customHeight =
+                Math.Max(
+                    240,
+                    customHeight);
+            renderScale =
+                SanitizeRenderScale(
+                    renderScale);
+            targetFrameRate =
+                Math.Clamp(
+                    targetFrameRate,
+                    30,
+                    240);
+        }
+
+        private static float SanitizeRenderScale(
+            float value)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return 1f;
+            }
+
+            return Mathf.Clamp(
+                value,
+                0.5f,
+                2.0f);
+        }
+
+        private static RenderResolutionPreset
+            SanitizeResolutionPreset(
+                RenderResolutionPreset value) =>
+                value == RenderResolutionPreset.Minimum720p ||
+                value == RenderResolutionPreset.Recommended1080p ||
+                value == RenderResolutionPreset.Custom
+                    ? value
+                    : RenderResolutionPreset.Recommended1080p;
 
         private static UniversalRenderPipelineAsset GetActiveUrpAsset()
         {
