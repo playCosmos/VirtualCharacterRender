@@ -690,6 +690,81 @@ namespace VCR.Editor.P1
                     "failed overlay adapter apply must not commit an unapplied configuration snapshot",
                     failures);
 
+                var beforeTransactionalFailure =
+                    scene.CaptureConfiguration();
+                var failingConfiguration =
+                    scene.CaptureConfiguration();
+                failingConfiguration.Rendering.Width =
+                    1024;
+                failingConfiguration.Rendering.Height =
+                    768;
+                failingConfiguration.Rendering.TargetFrameRate =
+                    90;
+                failingConfiguration.Camera.FieldOfView =
+                    61f;
+                failingConfiguration.Light.Intensity =
+                    1.25f;
+                failingConfiguration.EnvironmentStateId =
+                    "configured";
+                failingConfiguration.Overlay =
+                    new OverlayOutputConfiguration
+                    {
+                        Transparent = false,
+                        Topmost = true,
+                        ClickThrough = false
+                    };
+
+                outputAdapter.ThrowOnApply =
+                    true;
+                var transactionalApplyFailed =
+                    false;
+
+                try
+                {
+                    scene.ApplyConfiguration(
+                        failingConfiguration);
+                }
+                catch (InvalidOperationException)
+                {
+                    transactionalApplyFailed =
+                        true;
+                }
+                finally
+                {
+                    outputAdapter.ThrowOnApply =
+                        false;
+                }
+
+                var afterTransactionalFailure =
+                    scene.CaptureConfiguration();
+
+                Expect(
+                    transactionalApplyFailed &&
+                    afterTransactionalFailure.Rendering.Width ==
+                        beforeTransactionalFailure.Rendering.Width &&
+                    afterTransactionalFailure.Rendering.Height ==
+                        beforeTransactionalFailure.Rendering.Height &&
+                    afterTransactionalFailure.Rendering.TargetFrameRate ==
+                        beforeTransactionalFailure.Rendering.TargetFrameRate &&
+                    Math.Abs(
+                        afterTransactionalFailure.Camera.FieldOfView -
+                        beforeTransactionalFailure.Camera.FieldOfView) <
+                        0.0001f &&
+                    Math.Abs(
+                        afterTransactionalFailure.Light.Intensity -
+                        beforeTransactionalFailure.Light.Intensity) <
+                        0.0001f &&
+                    afterTransactionalFailure.EnvironmentStateId ==
+                        beforeTransactionalFailure.EnvironmentStateId &&
+                    afterTransactionalFailure.Overlay.Transparent ==
+                        beforeTransactionalFailure.Overlay.Transparent &&
+                    afterTransactionalFailure.Overlay.Topmost ==
+                        beforeTransactionalFailure.Overlay.Topmost &&
+                    afterTransactionalFailure.Overlay.ClickThrough ==
+                        beforeTransactionalFailure.Overlay.ClickThrough,
+                    "failed scene configuration apply must rollback earlier render/camera/light/environment mutations instead of leaving a partial configuration",
+                    failures);
+
                 configurationTestDirectory =
                     Path.Combine(
                         Path.GetTempPath(),
