@@ -1175,12 +1175,12 @@ namespace VCR.Editor.P13
         }
 
         public bool TryApplyParameters(
-            Character2DParameterValue[] values,
+            ReadOnlySpan<Character2DParameterValue> values,
             out string error)
         {
             error = null;
             LastParameterValues =
-                values;
+                values.ToArray();
             ParameterApplyCount++;
             return true;
         }
