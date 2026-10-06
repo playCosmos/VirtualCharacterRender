@@ -513,17 +513,35 @@ namespace VCR.Editor.P4
             var expressionSecond =
                 policy.ExpressionPriorityOrder;
 
+            if (faceFirst.Length > 0)
+            {
+                faceFirst[0] =
+                    TrackingSourceKind.AudioFallback;
+            }
+
+            if (expressionFirst.Length > 0)
+            {
+                expressionFirst[0] =
+                    TrackingSourceKind.ArKitFace;
+            }
+
             Expect(
-                ReferenceEquals(
+                !ReferenceEquals(
                     faceFirst,
-                    faceSecond),
-                "empty face priority recovery must cache the repaired default array",
+                    faceSecond) &&
+                faceSecond.Length > 0 &&
+                faceSecond[0] ==
+                    TrackingSourceKind.ArKitFace,
+                "public face priority access must return a defensive copy while preserving the cached default policy internally",
                 failures);
             Expect(
-                ReferenceEquals(
+                !ReferenceEquals(
                     expressionFirst,
-                    expressionSecond),
-                "null expression priority recovery must cache the repaired default array",
+                    expressionSecond) &&
+                expressionSecond.Length > 0 &&
+                expressionSecond[0] ==
+                    TrackingSourceKind.Vmc,
+                "public expression priority access must return a defensive copy while preserving the cached default policy internally",
                 failures);
             Expect(
                 policy.GetFacePriority(
