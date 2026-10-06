@@ -192,6 +192,40 @@ require_source_contains(
     "P0 VMC validation must invoke the borrowed in-parameter serialization overload",
 )
 
+locked_bounded_queues = [
+    VCR
+    / "Runtime"
+    / "Events"
+    / "Unity"
+    / "NormalizedEventHub.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "WebSocketUnity"
+    / "WebSocketEventClientTransport.cs",
+]
+for locked_queue in locked_bounded_queues:
+    require_source_contains(
+        locked_queue,
+        "Queue<",
+        "bounded Unity ingress queues must use reusable locked Queue<T> storage",
+    )
+    require_source_contains(
+        locked_queue,
+        "_queueSync",
+        "bounded Unity ingress queues must retain explicit synchronization",
+    )
+    forbid_source_pattern(
+        locked_queue,
+        r"\bConcurrentQueue\s*<",
+        "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
+    )
+
 udp_receivers = [
     VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs",
     VCR
@@ -340,6 +374,19 @@ require_source_contains(
     vrm_snapshot_provider,
     "request.IncludeHumanoidPose",
     "VRM snapshot provider must skip pose capture when not requested",
+)
+
+mixer_runtime = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "MotionExpressionMixer.cs"
+)
+require_source_contains(
+    mixer_runtime,
+    "_additionalPoseLayerFrames",
+    "mixer must reuse one additional-layer provider sample for change detection and blending",
 )
 
 snapshot_ownership = (
