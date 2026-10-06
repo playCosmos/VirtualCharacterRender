@@ -921,6 +921,84 @@ namespace VCR.Editor.P11
                     customError,
                     failures);
 
+                var throwingAction =
+                    root.AddComponent<
+                        P11ThrowingTransitionActionHandler>();
+                var throwingActionExecutor =
+                    root.AddComponent<
+                        AppearanceTransitionActionExecutor>();
+                throwingActionExecutor.SetActionHandlers(
+                    throwingAction);
+
+                throwingAction.ThrowCanHandle =
+                    true;
+
+                var throwingCanExecuteEscaped = false;
+                var throwingCanExecuteResult = false;
+
+                try
+                {
+                    throwingCanExecuteResult =
+                        throwingActionExecutor
+                            .CanExecute(
+                                customStep);
+                }
+                catch
+                {
+                    throwingCanExecuteEscaped =
+                        true;
+                }
+
+                Expect(
+                    !throwingCanExecuteEscaped &&
+                    !throwingCanExecuteResult &&
+                    !throwingActionExecutor.TryExecute(
+                        customStep,
+                        out var throwingHandleError) &&
+                    !string.IsNullOrEmpty(
+                        throwingHandleError) &&
+                    throwingHandleError.Contains(
+                        "CanHandle",
+                        StringComparison.Ordinal),
+                    "throwing delegated CanHandle probes must fail closed without escaping the appearance transition action bridge",
+                    failures);
+
+                throwingAction.ThrowCanHandle =
+                    false;
+                throwingAction.ThrowCanTrackCompletion =
+                    true;
+
+                var throwingTrackEscaped = false;
+                var throwingTrackResult = false;
+
+                try
+                {
+                    throwingTrackResult =
+                        throwingActionExecutor
+                            .CanTrackCompletion(
+                                customStep);
+                }
+                catch
+                {
+                    throwingTrackEscaped =
+                        true;
+                }
+
+                Expect(
+                    !throwingTrackEscaped &&
+                    !throwingTrackResult &&
+                    !throwingActionExecutor.TryIsComplete(
+                        customStep,
+                        out _,
+                        out var throwingTrackError) &&
+                    !string.IsNullOrEmpty(
+                        throwingTrackError) &&
+                    throwingTrackError.Contains(
+                        "CanTrackCompletion",
+                        StringComparison.Ordinal),
+                    "throwing delegated completion capability probes must fail closed with an explicit error",
+                    failures);
+
                 var blockingCustomStep =
                     new AppearanceTransitionStep
                     {
@@ -3101,6 +3179,57 @@ namespace VCR.Editor.P11
         {
             error = null;
             return CanExecute(step);
+        }
+    }
+
+    internal sealed class P11ThrowingTransitionActionHandler :
+        MonoBehaviour,
+        IEventActionHandler,
+        IEventActionCompletionProbe
+    {
+        public bool ThrowCanHandle { get; set; }
+        public bool ThrowCanTrackCompletion { get; set; }
+
+        public bool CanHandle(
+            EventActionCommand command)
+        {
+            if (ThrowCanHandle)
+            {
+                throw new InvalidOperationException(
+                    "CanHandle validation failure");
+            }
+
+            return true;
+        }
+
+        public bool TryExecute(
+            EventActionCommand command,
+            out string error)
+        {
+            error = null;
+            return true;
+        }
+
+        public bool CanTrackCompletion(
+            EventActionCommand command)
+        {
+            if (ThrowCanTrackCompletion)
+            {
+                throw new InvalidOperationException(
+                    "CanTrackCompletion validation failure");
+            }
+
+            return true;
+        }
+
+        public bool TryIsComplete(
+            EventActionCommand command,
+            out bool complete,
+            out string error)
+        {
+            complete = false;
+            error = null;
+            return true;
         }
     }
 
