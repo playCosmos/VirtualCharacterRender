@@ -38,6 +38,11 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
         private int maxMessageCharacters =
             65536;
 
+        private readonly object _parseSync =
+            new();
+        private readonly WebSocketEventMessage _documentScratch =
+            new();
+
         private INormalizedEventSink _sink;
         private float _nextSinkResolveRealtime;
         private long _accepted;
@@ -114,35 +119,40 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                 }
             }
 
-            WebSocketEventMessage document;
+            NormalizedEvent value;
 
-            try
+            lock (_parseSync)
             {
-                document =
-                    JsonUtility.FromJson<
-                        WebSocketEventMessage>(
-                        message);
-            }
-            catch (Exception exception)
-            {
-                return Reject(
-                    "WebSocket event JSON is invalid: " +
-                    exception.Message,
-                    out error);
-            }
+                ResetDocument(
+                    _documentScratch);
 
-            if (!WebSocketEventProtocol
-                .TryCreateEvent(
-                    document,
-                    sourceId,
-                    MonotonicClock
-                        .NowMicroseconds(),
-                    out var value,
-                    out error))
-            {
-                Interlocked.Increment(
-                    ref _rejected);
-                return false;
+                try
+                {
+                    JsonUtility.FromJsonOverwrite(
+                        message,
+                        _documentScratch);
+                }
+                catch (Exception exception)
+                {
+                    return Reject(
+                        "WebSocket event JSON is invalid: " +
+                        exception.Message,
+                        out error);
+                }
+
+                if (!WebSocketEventProtocol
+                    .TryCreateEvent(
+                        _documentScratch,
+                        sourceId,
+                        MonotonicClock
+                            .NowMicroseconds(),
+                        out value,
+                        out error))
+                {
+                    Interlocked.Increment(
+                        ref _rejected);
+                    return false;
+                }
             }
 
             try
@@ -183,6 +193,23 @@ namespace VCR.Runtime.Protocols.WebSocketUnity
                     "protocol.websocket.events.rejected",
                     RejectedCount,
                     "count"));
+        }
+
+        private static void ResetDocument(
+            WebSocketEventMessage document)
+        {
+            // Match a freshly constructed wire DTO so fields omitted by
+            // FromJsonOverwrite cannot inherit values from an earlier message.
+            document.version =
+                WebSocketEventProtocol.CurrentVersion;
+            document.op = null;
+            document.type = null;
+            document.actorId = null;
+            document.actorName = null;
+            document.text = null;
+            document.amount = 0.0;
+            document.currency = null;
+            document.hasAmount = false;
         }
 
         private static bool IsServiceAlive(
