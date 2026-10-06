@@ -1191,6 +1191,56 @@ require_source_contains(
     "_selectedFaceFrame",
     "tracking router duplicate suppression must use immutable frame identity",
 )
+require_source_contains(
+    tracking_router,
+    "_expressionFallbackActivation",
+    "tracking router must support suspending an expensive expression fallback",
+)
+require_source_contains(
+    tracking_router,
+    "UpdateExpressionFallbackActivation(",
+    "tracking router must gate expression fallback work before fallback polling",
+)
+require_source_contains(
+    tracking_router,
+    "tracking.route.fallback_expression_inference_enabled",
+    "tracking router metrics must expose expression fallback activation state",
+)
+
+audio_expression_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionSource.cs"
+)
+require_source_contains(
+    audio_expression_source,
+    "IExpressionTrackingActivationControl",
+    "audio expression fallback must expose router-controlled activation",
+)
+require_source_contains(
+    audio_expression_source,
+    "if (!_expressionTrackingEnabled)",
+    "disabled audio fallback must skip per-frame audio sampling and RMS work",
+)
+require_source_contains(
+    audio_expression_source,
+    "_latest = null;",
+    "disabling audio fallback must discard stale expression output",
+)
+
+expression_activation_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "IFaceTrackingActivationControl.cs"
+)
+require_source_contains(
+    expression_activation_contract,
+    "IExpressionTrackingActivationControl",
+    "tracking activation contracts must include expression fallback gating",
+)
 forbid_source_pattern(
     tracking_router,
     r"ChildSequence",
@@ -1227,6 +1277,11 @@ require_source_contains(
     p4_routing_validation,
     "without a loss gap",
     "P4 validation must cover same-source/same-sequence immutable frame replacement",
+)
+require_source_contains(
+    p4_routing_validation,
+    "must suspend audio fallback sampling",
+    "P4 validation must cover expression fallback activation and skipped polling",
 )
 
 vrm_tracking_target = (
