@@ -1338,6 +1338,22 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "\"Scene initialization failed: \"",
+    "scene Initialize must contain presentation apply exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "renderBootstrap\n                            ?.RestoreRuntimeOverrides()",
+    "failed scene initialization must rollback captured render overrides",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "RunRollbackStep(\n                    \"light\"",
+    "RunRollbackStep(\n                    \"render\"",
+    "scene initialization rollback must restore presentation state in reverse apply order",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "\"Scene resume failed: \"",
     "scene Resume must contain external presentation restore exceptions",
 )
