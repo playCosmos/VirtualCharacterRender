@@ -1124,8 +1124,8 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
-    "catch (Exception exception)\n            {\n                error =\n                    exception.Message;\n                return false;",
-    "overlay recovery must convert lifecycle rejection exceptions into false/error",
+    "\"Overlay output recovery failed: \" +\n                    exception.Message;",
+    "overlay recovery must convert lifecycle/adapter exceptions into structured false/error results",
 )
 require_source_contains(
     single_character_scene_runtime,
