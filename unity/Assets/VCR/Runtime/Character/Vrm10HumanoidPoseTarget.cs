@@ -614,7 +614,6 @@ namespace VCR.Runtime.Character
             }
 
             FadeCustomExpressionsToNeutral(
-                runtime,
                 alpha,
                 onlyMissingFromCurrentFrame: false);
         }
@@ -705,18 +704,25 @@ namespace VCR.Runtime.Character
             }
 
             FadeCustomExpressionsToNeutral(
-                runtime,
                 alpha,
                 onlyMissingFromCurrentFrame: true);
         }
 
         private void FadeCustomExpressionsToNeutral(
-            Vrm10RuntimeExpression runtime,
             float alpha,
             bool onlyMissingFromCurrentFrame)
         {
-            if (runtime == null ||
-                _smoothedCustomExpressions.Count == 0)
+            if (_smoothedCustomExpressions.Count == 0 ||
+                target == null ||
+                target.Runtime == null)
+            {
+                return;
+            }
+
+            var runtime =
+                target.Runtime.Expression;
+
+            if (runtime == null)
             {
                 return;
             }
