@@ -135,6 +135,7 @@ For steady-state tracking and UI operation:
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
 - normalized event hub, OSC-event ingress, and WebSocket ingress use lock-protected reusable `Queue<T>` storage; do not layer `ConcurrentQueue<T>` underneath the same lock because its segment-management overhead adds no concurrency benefit,
+- tracking route-policy priority arrays repair missing/empty serialized defaults once and cache the repaired arrays; per-frame priority lookup must not allocate fallback arrays,
 - additional pose-layer providers are sampled once per mixer update and the sampled frame is reused for both change detection and blending; do not call a layer provider twice in the same update,
 - baked/procedural motion cues still publish owned immutable pose snapshots while active, but their stable `TrackingFrame.SourceId` string is cached and rebuilt only when runtime/cue identity changes rather than concatenated every frame,
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
