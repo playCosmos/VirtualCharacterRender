@@ -539,6 +539,123 @@ namespace VCR.Editor.P6
                     "invalid lighting target must be rejected atomically without replacing the active valid target",
                     failures);
 
+                var throwingLightingObject =
+                    new GameObject(
+                        "Throwing Environment Light Target");
+                throwingLightingObject.transform.SetParent(
+                    root.transform,
+                    false);
+                var throwingLightingTarget =
+                    throwingLightingObject.AddComponent<
+                        P6ConditionalThrowEnvironmentLightingTarget>();
+                throwingLightingTarget.ThrowOnApply =
+                    true;
+
+                var throwingTargetAccepted =
+                    runtime.ConfigureLightingTargets(
+                        new MonoBehaviour[]
+                        {
+                            throwingLightingTarget
+                        },
+                        out var throwingTargetError);
+
+                Expect(
+                    !throwingTargetAccepted &&
+                    !string.IsNullOrWhiteSpace(
+                        throwingTargetError) &&
+                    runtime.LightingTargetCount == 1 &&
+                    Mathf.Abs(
+                        light.color.r - 0.5f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.g - 0.75f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.b - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.intensity - 3f) <
+                        0.001f,
+                    "lighting target apply failure must reject the new target set and restore the previous target/profile",
+                    failures);
+
+                throwingLightingTarget.ThrowOnApply =
+                    false;
+
+                Expect(
+                    runtime.ConfigureLightingTargets(
+                        new MonoBehaviour[]
+                        {
+                            lightingTarget,
+                            throwingLightingTarget
+                        },
+                        out var mixedLightingError) &&
+                    string.IsNullOrWhiteSpace(
+                        mixedLightingError) &&
+                    runtime.LightingTargetCount == 2,
+                    "lighting failure validation must configure a mixed healthy/throw-capable target set",
+                    failures);
+
+                throwingLightingTarget.ThrowOnApply =
+                    true;
+
+                var failedLightingProfile =
+                    new EnvironmentLightingProfile(
+                        red: 1f,
+                        green: 0f,
+                        blue: 0f,
+                        intensityMultiplier: 0.5f,
+                        weight: 1f);
+
+                var failedProfileAccepted =
+                    runtime.SetLightingProfile(
+                        failedLightingProfile,
+                        out var failedProfileError);
+
+                Expect(
+                    !failedProfileAccepted &&
+                    !string.IsNullOrWhiteSpace(
+                        failedProfileError) &&
+                    Mathf.Abs(
+                        runtime.LightingProfile.Red -
+                        lightingProfile.Red) <
+                        0.001f &&
+                    Mathf.Abs(
+                        runtime.LightingProfile.Green -
+                        lightingProfile.Green) <
+                        0.001f &&
+                    Mathf.Abs(
+                        runtime.LightingProfile.Blue -
+                        lightingProfile.Blue) <
+                        0.001f &&
+                    Mathf.Abs(
+                        runtime.LightingProfile.IntensityMultiplier -
+                        lightingProfile.IntensityMultiplier) <
+                        0.001f &&
+                    Mathf.Abs(
+                        runtime.LightingProfile.Weight -
+                        lightingProfile.Weight) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.r - 0.5f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.g - 0.75f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.color.b - 1f) <
+                        0.001f &&
+                    Mathf.Abs(
+                        light.intensity - 3f) <
+                        0.001f,
+                    "lighting profile apply failure must rollback the previous profile and already-mutated healthy targets",
+                    failures);
+
+                throwingLightingTarget.ThrowOnApply =
+                    false;
+                runtime.SetLightingTargets(
+                    lightingTarget);
+
                 runtime.SetLightingTargets();
 
                 Expect(
@@ -1502,6 +1619,38 @@ namespace VCR.Editor.P6
         public void ApplyEnvironmentLighting(
             EnvironmentLightingProfile profile)
         {
+        }
+    }
+
+    internal sealed class P6ConditionalThrowEnvironmentLightingTarget :
+        MonoBehaviour,
+        IEnvironmentLightingTarget
+    {
+        public bool ThrowOnValidate { get; set; }
+        public bool ThrowOnApply { get; set; }
+
+        public bool ValidateEnvironmentLighting(
+            EnvironmentLightingProfile profile,
+            out string error)
+        {
+            if (ThrowOnValidate)
+            {
+                throw new InvalidOperationException(
+                    "P6 lighting validation failure");
+            }
+
+            error = null;
+            return true;
+        }
+
+        public void ApplyEnvironmentLighting(
+            EnvironmentLightingProfile profile)
+        {
+            if (ThrowOnApply)
+            {
+                throw new InvalidOperationException(
+                    "P6 lighting apply failure");
+            }
         }
     }
 
