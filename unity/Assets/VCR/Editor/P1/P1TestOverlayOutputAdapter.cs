@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using VCR.Runtime.Output;
 
@@ -9,6 +10,7 @@ namespace VCR.Editor.P1
     {
         public int ApplyCount { get; private set; }
         public int ShutdownCount { get; private set; }
+        public bool ThrowOnApply { get; set; }
         public OverlayOutputSettings LastSettings { get; private set; }
 
         public OverlayOutputSettings Settings =>
@@ -25,6 +27,12 @@ namespace VCR.Editor.P1
 
         public void Apply(OverlayOutputSettings settings)
         {
+            if (ThrowOnApply)
+            {
+                throw new InvalidOperationException(
+                    "P1 overlay apply failure");
+            }
+
             LastSettings = settings;
             ApplyCount++;
         }
