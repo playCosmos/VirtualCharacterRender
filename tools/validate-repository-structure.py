@@ -740,6 +740,17 @@ require_source_contains(
     "NotifyStatusChanged(",
     "appearance status notifications must be routed through subscriber isolation",
 )
+require_source_order(
+    appearance_runtime,
+    "_currentPresetId =\n                    targetId;",
+    "if (!ReplaceUserPresets(",
+    "active user-preset rename must stage the new current id before registry replacement to avoid transient invalidation",
+)
+require_source_contains(
+    appearance_runtime,
+    "_currentPresetId =\n                        sourceId;",
+    "failed active user-preset rename must restore the previous current id",
+)
 require_source_contains(
     appearance_runtime,
     "_appearanceSubscriberFailureCount",
