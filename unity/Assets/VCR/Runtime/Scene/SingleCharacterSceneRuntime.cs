@@ -42,6 +42,7 @@ namespace VCR.Runtime.Scene
         private SceneRuntimeState _stateBeforeSuspend =
             SceneRuntimeState.Ready;
         private const double OptionalServiceDiscoveryRetrySeconds = 1.0;
+        private const double RenderBootstrapDiscoveryRetrySeconds = 1.0;
 
         private IOverlayOutputAdapter _overlayOutput;
         private IEnvironmentRuntime _environmentRuntime;
@@ -50,6 +51,7 @@ namespace VCR.Runtime.Scene
             OverlayOutputConfiguration.Default;
         private double _nextOverlayOutputResolveAt;
         private double _nextEnvironmentRuntimeResolveAt;
+        private double _nextRenderBootstrapResolveAt;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter =>
@@ -830,12 +832,31 @@ namespace VCR.Runtime.Scene
         {
             if (renderBootstrap != null)
             {
+                _nextRenderBootstrapResolveAt = 0d;
                 return;
             }
+
+            var now =
+                Time.realtimeSinceStartupAsDouble;
+
+            if (now <
+                _nextRenderBootstrapResolveAt)
+            {
+                return;
+            }
+
+            _nextRenderBootstrapResolveAt =
+                now +
+                RenderBootstrapDiscoveryRetrySeconds;
 
             renderBootstrap =
                 GetComponent<DesktopRenderBootstrap>() ??
                 FindFirstObjectByType<DesktopRenderBootstrap>();
+
+            if (renderBootstrap != null)
+            {
+                _nextRenderBootstrapResolveAt = 0d;
+            }
         }
 
         private void ResolveEnvironmentRuntime()
