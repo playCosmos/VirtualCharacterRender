@@ -1559,6 +1559,31 @@ forbid_source_pattern(
     r"StrictUtf8\.GetString\s*\(",
     "iFacialMocap UDP receive must not allocate one full packet string per datagram",
 )
+require_source_contains(
+    ifacial_receiver,
+    "StartStreamingV2Bytes",
+    "iFacialMocap handshake payload bytes must be cached instead of encoded on every retry",
+)
+require_source_contains(
+    ifacial_receiver,
+    "_handshakeSender",
+    "iFacialMocap handshake retries must reuse one sender socket per receiver lifecycle",
+)
+require_source_contains(
+    ifacial_receiver,
+    "handshakeSender?.Close();",
+    "iFacialMocap receiver shutdown must release the reusable handshake sender",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"using\s+var\s+sender\s*=\s*new\s+UdpClient",
+    "iFacialMocap handshake retry must not create and dispose a UDP socket on every send",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"var\s+bytes\s*=\s*Encoding\.UTF8\.GetBytes",
+    "iFacialMocap handshake retry must not re-encode the constant command on every send",
+)
 
 if VCR.is_dir():
     for path in VCR.rglob("*"):
