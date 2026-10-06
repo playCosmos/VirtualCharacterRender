@@ -674,6 +674,43 @@ require_source_contains(
     "eventRuntime.GetRuleAt(",
     "application UI event controls must use allocation-free indexed event rule lookup",
 )
+forbid_source_pattern(
+    application_ui,
+    r"CaptureStatuses\s*\(",
+    "application UI Settings refresh must not clone capability status arrays",
+)
+require_source_contains(
+    application_ui,
+    ".StatusCount",
+    "application UI Settings refresh must use allocation-free capability status counts",
+)
+require_source_contains(
+    application_ui,
+    "TryGetStatusAt(",
+    "application UI Settings refresh must use allocation-free indexed capability status lookup",
+)
+
+capability_registry = (
+    VCR
+    / "Runtime"
+    / "Capabilities"
+    / "CapabilityRegistry.cs"
+)
+require_source_contains(
+    capability_registry,
+    "_sortedIds",
+    "capability registry must maintain stable sorted ids for allocation-free indexed status lookup",
+)
+require_source_contains(
+    capability_registry,
+    "public bool TryGetStatusAt(",
+    "capability registry must expose allocation-free indexed status lookup",
+)
+forbid_source_pattern(
+    capability_registry,
+    r"Array\.Sort\s*\(",
+    "capability status capture must reuse the maintained sorted id index instead of sorting every snapshot",
+)
 
 event_runtime_host = (
     VCR
