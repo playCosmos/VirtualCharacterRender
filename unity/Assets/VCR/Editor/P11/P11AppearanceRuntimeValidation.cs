@@ -569,15 +569,57 @@ namespace VCR.Editor.P11
                         applyRenamedError,
                         failures);
 
-                    Expect(
+                    var activeRenameAppearanceNotifications =
+                        0;
+                    var activeRenameStatusNotifications =
+                        0;
+                    var activeRenameSawEmptyPreset =
+                        false;
+
+                    Action<AppearanceStateSnapshot>
+                        activeRenameAppearanceHandler =
+                            snapshot =>
+                            {
+                                activeRenameAppearanceNotifications++;
+                                if (string.IsNullOrWhiteSpace(
+                                        snapshot.PresetId))
+                                {
+                                    activeRenameSawEmptyPreset =
+                                        true;
+                                }
+                            };
+                    Action<AppearanceRuntimeStatus>
+                        activeRenameStatusHandler =
+                            _ =>
+                                activeRenameStatusNotifications++;
+
+                    runtime.AppearanceChanged +=
+                        activeRenameAppearanceHandler;
+                    runtime.StatusChanged +=
+                        activeRenameStatusHandler;
+
+                    var activeRenameSucceeded =
                         userRegistry.RenameUserPreset(
                             "user-renamed",
                             "user-final",
                             out _,
-                            out var currentRenameError) &&
+                            out var currentRenameError);
+
+                    runtime.AppearanceChanged -=
+                        activeRenameAppearanceHandler;
+                    runtime.StatusChanged -=
+                        activeRenameStatusHandler;
+
+                    Expect(
+                        activeRenameSucceeded &&
                         runtime.Current.PresetId ==
-                            "user-final",
-                        "renaming the currently selected user preset must update its current preset identity without changing appearance state: " +
+                            "user-final" &&
+                        activeRenameAppearanceNotifications ==
+                            1 &&
+                        activeRenameStatusNotifications ==
+                            1 &&
+                        !activeRenameSawEmptyPreset,
+                        "renaming the currently selected user preset must atomically remap its current identity without emitting a transient empty preset or duplicate status notification: " +
                         currentRenameError,
                         failures);
 
