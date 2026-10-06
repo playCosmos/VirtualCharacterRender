@@ -834,6 +834,26 @@ require_source_contains(
     "Time.realtimeSinceStartupAsDouble",
     "transition event-handler retry must use monotonic realtime",
 )
+require_source_contains(
+    appearance_transition_action_executor,
+    "TryFindHandlerCount(",
+    "appearance transition action bridge must contain delegated CanHandle probe failures",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "TryResolveCompletionProbe(",
+    "appearance transition action bridge must contain delegated completion probe failures",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "appearance.transition.action_handler_probe_failures",
+    "delegated action-handler probe failures must remain visible in diagnostics",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "appearance.transition.action_completion_probe_failures",
+    "delegated completion probe failures must remain visible in diagnostics",
+)
 
 application_ui = (
     VCR
