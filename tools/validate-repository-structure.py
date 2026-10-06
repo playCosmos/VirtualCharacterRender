@@ -1092,6 +1092,42 @@ require_source_contains(
 
 require_source_contains(
     application_ui,
+    "_environmentRuntime",
+    "application UI must cache the resolved environment runtime instead of polling scene discovery every refresh",
+)
+require_source_contains(
+    application_ui,
+    "_environmentRuntime =\n                        sceneRuntime?.EnvironmentRuntime;",
+    "application UI environment dependency must be refreshed on the bounded dependency pass",
+)
+require_source_contains(
+    application_ui,
+    "sceneRuntime != null &&\n                IsServiceAlive(_environmentRuntime)",
+    "application UI Environment availability must use the cached dependency",
+)
+require_source_contains(
+    application_ui,
+    "MissingTrackingControlDiscoveryRetrySeconds = 5f;",
+    "missing tracking controls must use a bounded low-frequency discovery retry",
+)
+require_source_contains(
+    application_ui,
+    "_nextTrackingControlResolveTime",
+    "tracking control discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    application_ui,
+    "ResolveTrackingControls(\n                    force);",
+    "periodic tracking-control resolution must preserve forced startup discovery",
+)
+require_source_contains(
+    application_ui,
+    "ResolveTrackingControls(\n                    force: true);",
+    "capability changes must bypass tracking-control negative caching",
+)
+
+require_source_contains(
+    application_ui,
     "_uiRefreshPassActive",
     "application UI must scope runtime sample reuse to one RefreshAll pass",
 )
