@@ -950,6 +950,21 @@ require_source_contains(
     "scene.status_subscriber_failures",
     "scene status subscriber failures must remain visible in diagnostics",
 )
+require_source_contains(
+    single_character_scene_runtime,
+    "catch (OperationCanceledException)",
+    "scene character loading must handle cancellation separately from faults",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RestoreStateAfterCancelledCharacterLoad(",
+    "scene character loading must restore idle state after an isolated cancellation",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_state !=\n                    SceneRuntimeState.LoadingCharacter",
+    "cancelled-load recovery must not overwrite newer lifecycle states",
+)
 forbid_source_pattern(
     single_character_scene_runtime,
     r"StatusChanged\?\.Invoke",
@@ -1006,6 +1021,21 @@ require_source_contains(
     p1_renderer_validation,
     "throwingSceneStatusSubscriber",
     "P1 validation must prove scene status subscriber failures are isolated",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "RestoreStateAfterCancelledCharacterLoad",
+    "P1 validation must cover cancelled character-load state recovery",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "stale cancelled-load completion must not overwrite a newer operation generation",
+    "P1 validation must guard stale cancelled-load generations",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "cancelled-load recovery must not overwrite a newer Suspend/Unload lifecycle state",
+    "P1 validation must guard lifecycle states newer than a cancelled load",
 )
 
 require_source_contains(
