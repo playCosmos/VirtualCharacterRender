@@ -50,6 +50,10 @@ namespace VCR.Runtime.UI
             _sectionLabels =
                 new();
 
+        private readonly Dictionary<Button, Text>
+            _buttonLabels =
+                new();
+
         private readonly List<ITrackingRuntimeControl>
             _trackingControls =
                 new();
@@ -248,6 +252,7 @@ namespace VCR.Runtime.UI
 
             _sectionButtons.Clear();
             _sectionLabels.Clear();
+            _buttonLabels.Clear();
             _root = null;
             _statusText = null;
             _sectionTitle = null;
@@ -6523,6 +6528,9 @@ namespace VCR.Runtime.UI
                     16,
                     TextAnchor.MiddleCenter);
             text.text = label;
+            _buttonLabels[
+                button] =
+                    text;
 
             Stretch(
                 text.rectTransform,
@@ -6689,15 +6697,41 @@ namespace VCR.Runtime.UI
                 : true;
         }
 
-        private static void SetButtonLabel(
+        private void SetButtonLabel(
             Button button,
             string label)
         {
-            if (button != null &&
-                button.GetComponentInChildren<Text>()
-                    is Text text)
+            if (button == null)
             {
-                text.text = label;
+                return;
+            }
+
+            if (!_buttonLabels.TryGetValue(
+                    button,
+                    out var text) ||
+                text == null)
+            {
+                text =
+                    button.GetComponentInChildren<
+                        Text>();
+
+                if (text == null)
+                {
+                    return;
+                }
+
+                _buttonLabels[
+                    button] =
+                        text;
+            }
+
+            if (!string.Equals(
+                    text.text,
+                    label,
+                    StringComparison.Ordinal))
+            {
+                text.text =
+                    label;
             }
         }
 
