@@ -702,9 +702,19 @@ namespace VCR.Runtime.Scene
             CancelActiveOperation();
             ResolveOverlayOutput();
 
-            if (IsServiceAlive(_overlayOutput))
+            try
             {
-                _overlayOutput.Shutdown();
+                if (IsServiceAlive(_overlayOutput))
+                {
+                    _overlayOutput.Shutdown();
+                }
+            }
+            catch (Exception exception)
+            {
+                SetFault(
+                    "Scene suspend failed: " +
+                    exception.Message);
+                return false;
             }
 
             SetState(SceneRuntimeState.Suspended);
@@ -721,23 +731,33 @@ namespace VCR.Runtime.Scene
 
             ResolveDependencies();
 
-            if (renderBootstrap != null)
+            try
             {
-                renderBootstrap.Apply();
-            }
-            if (cameraController != null)
-            {
-                cameraController.Apply();
-            }
-            if (lightController != null)
-            {
-                lightController.Apply();
-            }
+                if (renderBootstrap != null)
+                {
+                    renderBootstrap.Apply();
+                }
+                if (cameraController != null)
+                {
+                    cameraController.Apply();
+                }
+                if (lightController != null)
+                {
+                    lightController.Apply();
+                }
 
-            if (IsServiceAlive(_overlayOutput))
+                if (IsServiceAlive(_overlayOutput))
+                {
+                    _overlayOutput.Apply(
+                        _overlayConfiguration.ToSettings());
+                }
+            }
+            catch (Exception exception)
             {
-                _overlayOutput.Apply(
-                    _overlayConfiguration.ToSettings());
+                SetFault(
+                    "Scene resume failed: " +
+                    exception.Message);
+                return false;
             }
 
             _lastError = null;
