@@ -713,6 +713,33 @@ require_source_contains(
     "material override controller must expose allocation-free indexed slot lookup",
 )
 
+character_2d_parameter_mapping = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DParameterMapping.cs"
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"new\s+(?:System\.Collections\.Generic\.)?(?:HashSet|List)\s*<",
+    "2D parameter mapping hot paths must not allocate temporary HashSet/List scratch collections",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"\.ToArray\s*\(",
+    "2D parameter mapping hot paths must not allocate a second result array through ToArray",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"Enum\.IsDefined\s*\(",
+    "2D parameter validation must use allocation-free enum range checks",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "var valueCount = 0;",
+    "2D parameter mapping must pre-count emitted values and allocate one exact-size output array",
+)
+
 capability_registry = (
     VCR
     / "Runtime"
