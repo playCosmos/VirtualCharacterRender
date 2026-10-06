@@ -581,6 +581,30 @@ namespace VCR.Editor.P6
 
                 throwingLightingTarget.ThrowOnApply =
                     false;
+                throwingLightingTarget.ThrowOnValidate =
+                    true;
+
+                var throwingValidationAccepted =
+                    runtime.ConfigureLightingTargets(
+                        new MonoBehaviour[]
+                        {
+                            throwingLightingTarget
+                        },
+                        out var throwingValidationError);
+
+                Expect(
+                    !throwingValidationAccepted &&
+                    !string.IsNullOrWhiteSpace(
+                        throwingValidationError) &&
+                    runtime.LightingTargetCount == 1 &&
+                    Mathf.Abs(
+                        light.intensity - 3f) <
+                        0.001f,
+                    "lighting target validation exceptions must be returned through false/error without replacing the active target set",
+                    failures);
+
+                throwingLightingTarget.ThrowOnValidate =
+                    false;
 
                 Expect(
                     runtime.ConfigureLightingTargets(
