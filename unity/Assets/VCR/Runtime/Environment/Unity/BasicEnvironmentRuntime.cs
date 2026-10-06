@@ -334,11 +334,8 @@ namespace VCR.Runtime.Environment.Unity
             error = null;
 
             var next =
-                bindings == null
-                    ? Array.Empty<
-                        EnvironmentStateBinding>()
-                    : (EnvironmentStateBinding[])
-                        bindings.Clone();
+                CloneStateBindings(
+                    bindings);
 
             if (!ValidateStateBindings(
                     next,
@@ -359,16 +356,22 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            stateBindings = next;
+            var previous =
+                stateBindings;
 
             if (!TryApplyStateBinding(
+                    next,
                     stateId,
                     out error))
             {
+                TryRestoreStateBindings(
+                    previous,
+                    stateId);
                 _lastError = error;
                 return false;
             }
 
+            stateBindings = next;
             _lastError = null;
             return true;
         }
@@ -1848,23 +1851,34 @@ namespace VCR.Runtime.Environment.Unity
             string nextStateId,
             out string error)
         {
+            return TryApplyStateBinding(
+                stateBindings,
+                nextStateId,
+                out error);
+        }
+
+        private bool TryApplyStateBinding(
+            EnvironmentStateBinding[] bindings,
+            string nextStateId,
+            out string error)
+        {
             error = null;
 
-            if (stateBindings == null ||
-                stateBindings.Length == 0)
+            if (bindings == null ||
+                bindings.Length == 0)
             {
                 return true;
             }
 
             if (!ValidateStateBindings(
-                    stateBindings,
+                    bindings,
                     out error))
             {
                 return false;
             }
 
             if (!ContainsState(
-                    stateBindings,
+                    bindings,
                     nextStateId))
             {
                 error =
@@ -1872,24 +1886,112 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            foreach (var binding in
-                     stateBindings)
+            try
             {
-                var active =
-                    string.Equals(
-                        binding.StateId,
-                        nextStateId,
-                        StringComparison.Ordinal);
-
-                if (binding.Root.activeSelf !=
-                    active)
+                foreach (var binding in
+                         bindings)
                 {
-                    binding.Root.SetActive(
-                        active);
+                    var active =
+                        string.Equals(
+                            binding.StateId,
+                            nextStateId,
+                            StringComparison.Ordinal);
+
+                    if (binding.Root.activeSelf !=
+                        active)
+                    {
+                        binding.Root.SetActive(
+                            active);
+                    }
                 }
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Environment state binding apply failed: " +
+                    exception.Message;
+                return false;
             }
 
             return true;
+        }
+
+        private void TryRestoreStateBindings(
+            EnvironmentStateBinding[] bindings,
+            string activeStateId)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var binding in bindings)
+            {
+                if (binding?.Root == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var active =
+                        string.Equals(
+                            binding.StateId,
+                            activeStateId,
+                            StringComparison.Ordinal);
+
+                    if (binding.Root.activeSelf !=
+                        active)
+                    {
+                        binding.Root.SetActive(
+                            active);
+                    }
+                }
+                catch
+                {
+                    // Best-effort rollback after a failed binding apply.
+                }
+            }
+        }
+
+        private static EnvironmentStateBinding[]
+            CloneStateBindings(
+                EnvironmentStateBinding[] bindings)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return Array.Empty<
+                    EnvironmentStateBinding>();
+            }
+
+            var clones =
+                new EnvironmentStateBinding[
+                    bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                var source =
+                    bindings[i];
+
+                if (source == null)
+                {
+                    continue;
+                }
+
+                var clone =
+                    new EnvironmentStateBinding();
+                clone.Configure(
+                    source.StateId,
+                    source.Root);
+                clones[i] =
+                    clone;
+            }
+
+            return clones;
         }
 
         private bool ValidateStateBindings(
