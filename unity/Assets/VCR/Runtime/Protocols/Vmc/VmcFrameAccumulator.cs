@@ -682,9 +682,14 @@ namespace VCR.Runtime.Protocols.Vmc
                 standard,
                 _expressionStaging.Length);
 
+            var customCount =
+                _customExpressionStaging.Count;
             var custom =
-                new NamedExpressionValue[
-                    _customExpressionStaging.Count];
+                customCount == 0
+                    ? Array.Empty<
+                        NamedExpressionValue>()
+                    : new NamedExpressionValue[
+                        customCount];
 
             var index = 0;
             foreach (var pair in _customExpressionStaging)
