@@ -1000,6 +1000,16 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
+    "_motionPoseWeightLabelStateValid",
+    "motion pose-weight label formatting must be cached across unchanged refreshes",
+)
+require_source_contains(
+    application_ui,
+    "RefreshMotionPoseWeightLabel(",
+    "motion pose-weight slider callback and refresh path must share the cached label formatter",
+)
+require_source_contains(
+    application_ui,
     "_motionSummaryExpressionInput",
     "motion summary cache must include the selected expression input text",
 )
