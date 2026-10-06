@@ -173,6 +173,9 @@ namespace VCR.Runtime.UI
 
         private SingleCharacterSceneRuntime _subscribedSceneRuntime;
         private RuntimeDiagnostics _subscribedDiagnostics;
+        private IAppearanceRuntime _subscribedAppearanceRuntime;
+        private AppearanceStateSnapshot _currentAppearanceSnapshot;
+        private bool _hasCurrentAppearanceSnapshot;
 
         private float _nextRefreshTime;
         private float _nextDependencyResolveTime;
@@ -570,6 +573,37 @@ namespace VCR.Runtime.UI
                         OnDiagnosticsUpdated;
                 }
             }
+
+            var nextAppearanceRuntime =
+                IsServiceAlive(_appearanceRuntime)
+                    ? _appearanceRuntime
+                    : null;
+
+            if (!ReferenceEquals(
+                    _subscribedAppearanceRuntime,
+                    nextAppearanceRuntime))
+            {
+                if (_subscribedAppearanceRuntime != null)
+                {
+                    _subscribedAppearanceRuntime.AppearanceChanged -=
+                        OnAppearanceChanged;
+                }
+
+                _subscribedAppearanceRuntime =
+                    nextAppearanceRuntime;
+                _hasCurrentAppearanceSnapshot =
+                    false;
+
+                if (_subscribedAppearanceRuntime != null)
+                {
+                    _currentAppearanceSnapshot =
+                        _subscribedAppearanceRuntime.Current;
+                    _hasCurrentAppearanceSnapshot =
+                        true;
+                    _subscribedAppearanceRuntime.AppearanceChanged +=
+                        OnAppearanceChanged;
+                }
+            }
         }
 
         private void Unsubscribe()
@@ -586,8 +620,16 @@ namespace VCR.Runtime.UI
                     OnDiagnosticsUpdated;
             }
 
+            if (_subscribedAppearanceRuntime != null)
+            {
+                _subscribedAppearanceRuntime.AppearanceChanged -=
+                    OnAppearanceChanged;
+            }
+
             _subscribedSceneRuntime = null;
             _subscribedDiagnostics = null;
+            _subscribedAppearanceRuntime = null;
+            _hasCurrentAppearanceSnapshot = false;
         }
 
         private void OnSceneStatusChanged(
@@ -605,6 +647,35 @@ namespace VCR.Runtime.UI
             {
                 RefreshAll();
             }
+        }
+
+        private void OnAppearanceChanged(
+            AppearanceStateSnapshot snapshot)
+        {
+            _currentAppearanceSnapshot =
+                snapshot;
+            _hasCurrentAppearanceSnapshot =
+                true;
+        }
+
+        private AppearanceStateSnapshot
+            GetCurrentAppearanceSnapshot()
+        {
+            if (_hasCurrentAppearanceSnapshot)
+            {
+                return _currentAppearanceSnapshot;
+            }
+
+            if (!IsServiceAlive(_appearanceRuntime))
+            {
+                return default;
+            }
+
+            _currentAppearanceSnapshot =
+                _appearanceRuntime.Current;
+            _hasCurrentAppearanceSnapshot =
+                true;
+            return _currentAppearanceSnapshot;
         }
 
         private void BuildUi()
@@ -2427,15 +2498,15 @@ namespace VCR.Runtime.UI
 
             var transitionId =
                 GetSelectedAppearanceTransitionId();
-            var current =
-                _appearanceRuntime.Current;
+            var appearanceStatus =
+                _appearanceRuntime.Status;
 
             if (!ApplicationUiActionPolicy
                 .CanPreviewAppearanceTransition(
                     true,
-                    _appearanceRuntime.Status.State,
+                    appearanceStatus.State,
                     transitionId,
-                    current.OutfitId))
+                    appearanceStatus.CurrentOutfitId))
             {
                 _lastActionMessage =
                     string.Equals(
@@ -2599,7 +2670,7 @@ namespace VCR.Runtime.UI
             var previous =
                 registry.CaptureUserPresets();
             var previousCurrentPresetId =
-                _appearanceRuntime.Current.PresetId;
+                _appearanceRuntime.Status.CurrentPresetId;
 
             if (!registry.RemoveUserPreset(
                     presetId,
@@ -2626,7 +2697,7 @@ namespace VCR.Runtime.UI
                     !string.IsNullOrWhiteSpace(
                         previousCurrentPresetId) &&
                     !string.Equals(
-                        _appearanceRuntime.Current.PresetId,
+                        _appearanceRuntime.Status.CurrentPresetId,
                         previousCurrentPresetId,
                         StringComparison.Ordinal))
                 {
@@ -2689,7 +2760,7 @@ namespace VCR.Runtime.UI
             var previous =
                 registry.CaptureUserPresets();
             var previousCurrentPresetId =
-                _appearanceRuntime.Current.PresetId;
+                _appearanceRuntime.Status.CurrentPresetId;
 
             if (!registry.RenameUserPreset(
                     sourceId,
@@ -2779,7 +2850,7 @@ namespace VCR.Runtime.UI
             var previous =
                 registry.CaptureUserPresets();
             var previousCurrentPresetId =
-                _appearanceRuntime.Current.PresetId;
+                _appearanceRuntime.Status.CurrentPresetId;
 
             if (!registry.DuplicateUserPreset(
                     sourceId,
@@ -2875,7 +2946,7 @@ namespace VCR.Runtime.UI
             var previous =
                 registry.CaptureUserPresets();
             var previousCurrentPresetId =
-                _appearanceRuntime.Current.PresetId;
+                _appearanceRuntime.Status.CurrentPresetId;
 
             if (!registry.MoveUserPreset(
                     presetId,
@@ -2934,7 +3005,7 @@ namespace VCR.Runtime.UI
                 !string.IsNullOrWhiteSpace(
                     previousCurrentPresetId) &&
                 !string.Equals(
-                    _appearanceRuntime.Current.PresetId,
+                    _appearanceRuntime.Status.CurrentPresetId,
                     previousCurrentPresetId,
                     StringComparison.Ordinal))
             {
@@ -5049,7 +5120,7 @@ namespace VCR.Runtime.UI
                         : AppearanceRuntimeState.Unconfigured;
                 var currentAppearance =
                     appearanceRuntimeAlive
-                        ? _appearanceRuntime.Current
+                        ? GetCurrentAppearanceSnapshot()
                         : default;
                 var appearanceAvailable =
                     ApplicationUiActionPolicy
