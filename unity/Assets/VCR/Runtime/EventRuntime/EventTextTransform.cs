@@ -40,18 +40,37 @@ namespace VCR.Runtime.EventRuntime
                 result = result?.ToLowerInvariant();
             }
 
-            if (!string.IsNullOrEmpty(prefix))
+            var hasPrefix =
+                !string.IsNullOrEmpty(
+                    prefix);
+            var hasSuffix =
+                !string.IsNullOrEmpty(
+                    suffix);
+
+            if (hasPrefix &&
+                hasSuffix)
             {
-                result =
-                    prefix +
-                    (result ?? string.Empty);
+                return string.Concat(
+                    prefix,
+                    result ??
+                        string.Empty,
+                    suffix);
             }
 
-            if (!string.IsNullOrEmpty(suffix))
+            if (hasPrefix)
             {
-                result =
-                    (result ?? string.Empty) +
-                    suffix;
+                return string.Concat(
+                    prefix,
+                    result ??
+                        string.Empty);
+            }
+
+            if (hasSuffix)
+            {
+                return string.Concat(
+                    result ??
+                        string.Empty,
+                    suffix);
             }
 
             return result;
