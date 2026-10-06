@@ -230,6 +230,21 @@ namespace VCR.Runtime.UI
         private string _environmentSummaryError;
         private string _environmentSummaryCache;
 
+        private bool _settingsSummaryStateValid;
+        private bool _settingsSummaryRuntimeStarted;
+        private string _settingsSummaryConfigurationPath;
+        private int _settingsSummaryRegisteredCapabilities;
+        private int _settingsSummaryEnabledCapabilities;
+        private bool _settingsSummaryHasSelectedCapability;
+        private string _settingsSummaryCapabilityId;
+        private CapabilityState _settingsSummaryCapabilityState;
+        private string _settingsSummaryCapabilityError;
+        private float _settingsSummaryRenderScale;
+        private int _settingsSummaryTargetFrameRate;
+        private bool _settingsSummaryUseVSync;
+        private bool _settingsSummaryRunInBackground;
+        private string _settingsSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -6548,19 +6563,194 @@ namespace VCR.Runtime.UI
                 sceneRuntime != null
                     ? sceneRuntime.CaptureRenderSettings()
                     : RenderRuntimeSettings.Default1080p;
+            var runtimeStarted =
+                applicationBootstrap.IsStarted;
+            var configurationPath =
+                applicationBootstrap.ConfigurationPath;
+            var registeredCapabilities =
+                capabilities?.RegisteredCount ??
+                0;
+            var enabledCapabilities =
+                capabilities?.EnabledCount ??
+                0;
 
+            if (SettingsSummaryCacheMatches(
+                    runtimeStarted,
+                    configurationPath,
+                    registeredCapabilities,
+                    enabledCapabilities,
+                    hasSelectedCapability,
+                    selectedCapability,
+                    render))
+            {
+                return _settingsSummaryCache;
+            }
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Runtime started: ");
+            builder.Append(runtimeStarted);
+            builder.Append("\nConfiguration: ");
+            builder.Append(
+                configurationPath ??
+                "<default/not resolved>");
+            builder.Append(
+                "\nCapabilities registered: ");
+            builder.Append(
+                registeredCapabilities);
+            builder.Append(
+                "\nCapabilities enabled: ");
+            builder.Append(
+                enabledCapabilities);
+            builder.Append(
+                "\nSelected capability: ");
+            builder.Append(
+                hasSelectedCapability
+                    ? selectedCapability.Id
+                    : "<none>");
+            builder.Append(
+                "\nCapability state: ");
+            if (hasSelectedCapability)
+            {
+                builder.Append(
+                    selectedCapability.State);
+            }
+            else
+            {
+                builder.Append(
+                    "n/a");
+            }
+
+            builder.Append(
+                "\nCapability error: ");
+            builder.Append(
+                hasSelectedCapability
+                    ? selectedCapability.Error ??
+                      "<none>"
+                    : "n/a");
+            builder.Append(
+                "\nRender scale: ");
+            builder.Append(
+                render.RenderScale.ToString(
+                    "0.###",
+                    CultureInfo.InvariantCulture));
+            builder.Append(
+                "\nTarget FPS: ");
+            builder.Append(
+                render.TargetFrameRate);
+            builder.Append(
+                "\nVSync: ");
+            builder.Append(
+                render.UseVSync);
+            builder.Append(
+                "\nRun in background: ");
+            builder.Append(
+                render.RunInBackground);
+
+            CaptureSettingsSummaryState(
+                runtimeStarted,
+                configurationPath,
+                registeredCapabilities,
+                enabledCapabilities,
+                hasSelectedCapability,
+                selectedCapability,
+                render);
+            _settingsSummaryCache =
+                builder.ToString();
+            return _settingsSummaryCache;
+        }
+
+        private bool SettingsSummaryCacheMatches(
+            bool runtimeStarted,
+            string configurationPath,
+            int registeredCapabilities,
+            int enabledCapabilities,
+            bool hasSelectedCapability,
+            CapabilityStatusSnapshot selectedCapability,
+            RenderRuntimeSettings render)
+        {
             return
-                $"Runtime started: {applicationBootstrap.IsStarted}\n" +
-                $"Configuration: {applicationBootstrap.ConfigurationPath ?? "<default/not resolved>"}\n" +
-                $"Capabilities registered: {capabilities?.RegisteredCount ?? 0}\n" +
-                $"Capabilities enabled: {capabilities?.EnabledCount ?? 0}\n" +
-                $"Selected capability: {(hasSelectedCapability ? selectedCapability.Id : "<none>")}\n" +
-                $"Capability state: {(hasSelectedCapability ? selectedCapability.State.ToString() : "n/a")}\n" +
-                $"Capability error: {(hasSelectedCapability ? selectedCapability.Error ?? "<none>" : "n/a")}\n" +
-                $"Render scale: {render.RenderScale:0.###}\n" +
-                $"Target FPS: {render.TargetFrameRate}\n" +
-                $"VSync: {render.UseVSync}\n" +
-                $"Run in background: {render.RunInBackground}";
+                _settingsSummaryStateValid &&
+                _settingsSummaryCache != null &&
+                _settingsSummaryRuntimeStarted ==
+                    runtimeStarted &&
+                string.Equals(
+                    _settingsSummaryConfigurationPath,
+                    configurationPath,
+                    StringComparison.Ordinal) &&
+                _settingsSummaryRegisteredCapabilities ==
+                    registeredCapabilities &&
+                _settingsSummaryEnabledCapabilities ==
+                    enabledCapabilities &&
+                _settingsSummaryHasSelectedCapability ==
+                    hasSelectedCapability &&
+                string.Equals(
+                    _settingsSummaryCapabilityId,
+                    hasSelectedCapability
+                        ? selectedCapability.Id
+                        : null,
+                    StringComparison.Ordinal) &&
+                (!hasSelectedCapability ||
+                 _settingsSummaryCapabilityState ==
+                    selectedCapability.State) &&
+                string.Equals(
+                    _settingsSummaryCapabilityError,
+                    hasSelectedCapability
+                        ? selectedCapability.Error
+                        : null,
+                    StringComparison.Ordinal) &&
+                _settingsSummaryRenderScale ==
+                    render.RenderScale &&
+                _settingsSummaryTargetFrameRate ==
+                    render.TargetFrameRate &&
+                _settingsSummaryUseVSync ==
+                    render.UseVSync &&
+                _settingsSummaryRunInBackground ==
+                    render.RunInBackground;
+        }
+
+        private void CaptureSettingsSummaryState(
+            bool runtimeStarted,
+            string configurationPath,
+            int registeredCapabilities,
+            int enabledCapabilities,
+            bool hasSelectedCapability,
+            CapabilityStatusSnapshot selectedCapability,
+            RenderRuntimeSettings render)
+        {
+            _settingsSummaryRuntimeStarted =
+                runtimeStarted;
+            _settingsSummaryConfigurationPath =
+                configurationPath;
+            _settingsSummaryRegisteredCapabilities =
+                registeredCapabilities;
+            _settingsSummaryEnabledCapabilities =
+                enabledCapabilities;
+            _settingsSummaryHasSelectedCapability =
+                hasSelectedCapability;
+            _settingsSummaryCapabilityId =
+                hasSelectedCapability
+                    ? selectedCapability.Id
+                    : null;
+            _settingsSummaryCapabilityState =
+                hasSelectedCapability
+                    ? selectedCapability.State
+                    : default;
+            _settingsSummaryCapabilityError =
+                hasSelectedCapability
+                    ? selectedCapability.Error
+                    : null;
+            _settingsSummaryRenderScale =
+                render.RenderScale;
+            _settingsSummaryTargetFrameRate =
+                render.TargetFrameRate;
+            _settingsSummaryUseVSync =
+                render.UseVSync;
+            _settingsSummaryRunInBackground =
+                render.RunInBackground;
+            _settingsSummaryStateValid =
+                true;
         }
 
         private RuntimeMetric[]
