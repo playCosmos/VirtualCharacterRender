@@ -63,8 +63,8 @@ namespace VCR.Runtime.Character
 
         private NormalizedFaceState _latestFace;
         private NormalizedUpperBodyState _latestBody;
-        private long _lastFaceSequence = -1;
-        private long _lastBodySequence = -1;
+        private TrackingFrame _lastFaceFrame;
+        private TrackingFrame _lastBodyFrame;
         private string _lastFaceSourceId;
         private string _lastBodySourceId;
 
@@ -128,7 +128,9 @@ namespace VCR.Runtime.Character
             if (!_faceSuppressed &&
                 _provider.TryGetLatestFace(out var faceFrame) &&
                 faceFrame?.Face != null &&
-                faceFrame.Sequence != _lastFaceSequence)
+                !ReferenceEquals(
+                    faceFrame,
+                    _lastFaceFrame))
             {
                 if (!string.Equals(
                     _lastFaceSourceId,
@@ -139,7 +141,7 @@ namespace VCR.Runtime.Character
                     _lastFaceSourceId = faceFrame.SourceId;
                 }
 
-                _lastFaceSequence = faceFrame.Sequence;
+                _lastFaceFrame = faceFrame;
                 Submit(faceFrame);
             }
 
@@ -147,7 +149,9 @@ namespace VCR.Runtime.Character
                 !_bodySuppressed &&
                 _provider.TryGetLatestBodyHands(out var bodyFrame) &&
                 bodyFrame != null &&
-                bodyFrame.Sequence != _lastBodySequence)
+                !ReferenceEquals(
+                    bodyFrame,
+                    _lastBodyFrame))
             {
                 if (!string.Equals(
                     _lastBodySourceId,
@@ -158,7 +162,7 @@ namespace VCR.Runtime.Character
                     _lastBodySourceId = bodyFrame.SourceId;
                 }
 
-                _lastBodySequence = bodyFrame.Sequence;
+                _lastBodyFrame = bodyFrame;
                 Submit(bodyFrame);
             }
         }
@@ -241,8 +245,8 @@ namespace VCR.Runtime.Character
                     : null;
             trackingProviderBehaviour =
                 _provider as MonoBehaviour;
-            _lastFaceSequence = -1;
-            _lastBodySequence = -1;
+            _lastFaceFrame = null;
+            _lastBodyFrame = null;
             _lastFaceSourceId = null;
             _lastBodySourceId = null;
             _faceCalibrated = false;
@@ -379,7 +383,7 @@ namespace VCR.Runtime.Character
                 if (!fullBodyAvailable)
                 {
                     _latestBody = null;
-                    _lastBodySequence = -1;
+                    _lastBodyFrame = null;
                 }
             }
 
@@ -410,7 +414,7 @@ namespace VCR.Runtime.Character
             if (suppressed)
             {
                 _latestFace = null;
-                _lastFaceSequence = -1;
+                _lastFaceFrame = null;
             }
         }
 
@@ -427,7 +431,7 @@ namespace VCR.Runtime.Character
             if (suppressed)
             {
                 _latestBody = null;
-                _lastBodySequence = -1;
+                _lastBodyFrame = null;
             }
         }
 
