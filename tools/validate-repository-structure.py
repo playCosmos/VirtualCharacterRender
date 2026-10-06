@@ -2384,6 +2384,23 @@ require_source_contains(
     "VRM face/body target must detect routed snapshot changes by immutable frame identity",
 )
 
+runtime_diagnostics_snapshot = (
+    VCR
+    / "Runtime"
+    / "Diagnostics"
+    / "RuntimeDiagnosticsSnapshot.cs"
+)
+require_source_contains(
+    runtime_diagnostics_snapshot,
+    "public IReadOnlyList<RuntimeMetric> Metrics { get; }",
+    "runtime diagnostics snapshots must expose metrics through a read-only collection contract",
+)
+require_source_contains(
+    runtime_diagnostics_snapshot,
+    "Array.AsReadOnly(",
+    "runtime diagnostics snapshots must wrap published metric arrays once instead of exposing mutable backing arrays",
+)
+
 runtime_diagnostics = (
     VCR
     / "Runtime"
@@ -2466,6 +2483,11 @@ require_source_contains(
     p0_diagnostics_validation,
     "P0ThrowingMetricsSource",
     "P0 diagnostics validation must retain metric-source failure isolation coverage",
+)
+require_source_contains(
+    p0_diagnostics_validation,
+    "metricMutationRejected",
+    "P0 diagnostics validation must prove published metric collections reject external mutation",
 )
 
 humanoid_pose_state = (
