@@ -36,6 +36,7 @@ namespace VCR.Runtime.Presentation2D
         private ICharacter2DBackend
             _validatedMappingBackend;
         private string _validatedMappingBackendId;
+        private int _validatedMappingRevision = -1;
         private bool _mappingValidationCurrent;
         private bool _mappingValidationValid;
         private string _mappingValidationError;
@@ -469,6 +470,9 @@ namespace VCR.Runtime.Presentation2D
                 IsServiceAlive(_backend)
                     ? _backend.BackendId
                     : null;
+            var mappingRevision =
+                parameterMappingProfile?.Revision ??
+                -1;
 
             if (_mappingValidationCurrent &&
                 ReferenceEquals(
@@ -477,6 +481,8 @@ namespace VCR.Runtime.Presentation2D
                 ReferenceEquals(
                     _validatedMappingBackend,
                     _backend) &&
+                _validatedMappingRevision ==
+                    mappingRevision &&
                 string.Equals(
                     _validatedMappingBackendId,
                     backendId,
@@ -493,6 +499,8 @@ namespace VCR.Runtime.Presentation2D
                 _backend;
             _validatedMappingBackendId =
                 backendId;
+            _validatedMappingRevision =
+                mappingRevision;
             _mappingValidationCurrent =
                 true;
             _mappingValidationValid =
@@ -509,6 +517,7 @@ namespace VCR.Runtime.Presentation2D
             _validatedMappingProfile = null;
             _validatedMappingBackend = null;
             _validatedMappingBackendId = null;
+            _validatedMappingRevision = -1;
             _mappingValidationCurrent = false;
             _mappingValidationValid = false;
             _mappingValidationError = null;
