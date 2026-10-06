@@ -1177,6 +1177,11 @@ require_source_contains(
 )
 require_source_contains(
     basic_environment_runtime,
+    "\"Environment transition target validation failed: \"",
+    "environment transition validation exceptions must be converted into structured failures",
+)
+require_source_contains(
+    basic_environment_runtime,
     "TryApplyStateBinding(\n                    next,\n                    stateId,",
     "environment state-binding configuration must apply staged bindings before committing them",
 )
@@ -1233,6 +1238,16 @@ require_source_contains(
     p6_environment_validation,
     "P6ConditionalThrowEnvironmentLightingTarget",
     "P6 validation must cover lighting target apply failure rollback",
+)
+require_source_contains(
+    p6_environment_validation,
+    "ThrowOnValidate",
+    "P6 validation must cover transition/lighting validator exception containment",
+)
+require_source_contains(
+    p6_environment_validation,
+    "transitionValidationAccepted",
+    "P6 validation must prove transition validation exceptions leave state unchanged",
 )
 require_source_contains(
     p6_environment_validation,
