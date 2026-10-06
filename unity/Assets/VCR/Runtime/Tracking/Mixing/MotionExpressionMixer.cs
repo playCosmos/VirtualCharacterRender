@@ -86,8 +86,10 @@ namespace VCR.Runtime.Tracking.Mixing
                  ITrackingFrameProvider);
 
         public float ExpressionLayerWeight =>
-            Mathf.Clamp01(
-                expressionLayerWeight);
+            SanitizeUnitInterval(
+                expressionLayerWeight,
+                fallback:
+                    1f);
 
         public ExpressionBlendMode ExpressionLayerBlendMode =>
             expressionBlendMode;
@@ -101,6 +103,7 @@ namespace VCR.Runtime.Tracking.Mixing
 
         private void Awake()
         {
+            SanitizeExpressionLayerConfiguration();
             ResolveProviders();
         }
 
@@ -331,12 +334,69 @@ namespace VCR.Runtime.Tracking.Mixing
         {
             expressionBlendMode = mode;
             expressionLayerWeight =
-                Mathf.Clamp01(weight);
+                SanitizeUnitInterval(
+                    weight,
+                    fallback:
+                        1f);
             expressionDeadzone =
-                Mathf.Clamp01(deadzone);
+                SanitizeUnitInterval(
+                    deadzone,
+                    fallback:
+                        0f);
             expressionSmoothing =
-                Mathf.Max(0f, smoothing);
+                SanitizeNonNegative(
+                    smoothing,
+                    fallback:
+                        0f);
             _targetDirty = true;
+        }
+
+        private void SanitizeExpressionLayerConfiguration()
+        {
+            expressionLayerWeight =
+                SanitizeUnitInterval(
+                    expressionLayerWeight,
+                    fallback:
+                        1f);
+            expressionDeadzone =
+                SanitizeUnitInterval(
+                    expressionDeadzone,
+                    fallback:
+                        0f);
+            expressionSmoothing =
+                SanitizeNonNegative(
+                    expressionSmoothing,
+                    fallback:
+                        0f);
+        }
+
+        private static float SanitizeUnitInterval(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Clamp01(
+                value);
+        }
+
+        private static float SanitizeNonNegative(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Max(
+                0f,
+                value);
         }
 
         public bool TryGetLatestFace(
