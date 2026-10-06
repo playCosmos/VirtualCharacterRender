@@ -44,6 +44,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 - P0 `DesktopRenderBootstrap` promoted into the P1 renderer-core path
 - runtime render-scale control for URP
 - render scale clamped to 0.5–2.0
+- non-finite scene/render inputs fail safe before reaching Unity APIs: camera transform/projection components fall back to `SceneCameraSettings.Default`, light rotation/color/intensity/shadows fall back to `DefaultDirectional`, render scale falls back to `1.0`, and unsupported resolution presets normalize to `Recommended1080p`
 - resolution and frame-pacing controls remain independent from capability selection
 - global runtime settings are captured before first override:
   - run-in-background
