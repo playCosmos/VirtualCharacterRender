@@ -884,6 +884,21 @@ require_source_contains(
     "CloneTransitionBindings(",
     "ConfigureBindings must deep-clone mutable transition binding inputs",
 )
+require_source_contains(
+    appearance_runtime,
+    "_presetIds.AsReadOnly()",
+    "appearance preset ids must expose a cached read-only view rather than the mutable backing List",
+)
+require_source_contains(
+    appearance_runtime,
+    "_transitionIds.AsReadOnly()",
+    "appearance transition ids must expose a cached read-only view rather than the mutable backing List",
+)
+require_source_contains(
+    appearance_runtime,
+    "_userPresetIds.AsReadOnly()",
+    "appearance user-preset ids must expose a cached read-only view rather than the mutable backing List",
+)
 forbid_source_pattern(
     appearance_runtime,
     r"AppearanceChanged\?\.Invoke",
@@ -1273,6 +1288,11 @@ require_source_contains(
     p11_appearance_validation,
     "\"mutated-authoring-outfit\"",
     "P11 appearance validation must prove live resolved bindings are isolated from in-place serialized authoring edits until rebuild",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "presetMutationRejected",
+    "P11 appearance validation must prove exposed id collections reject external mutation",
 )
 require_source_contains(
     p11_appearance_validation,
