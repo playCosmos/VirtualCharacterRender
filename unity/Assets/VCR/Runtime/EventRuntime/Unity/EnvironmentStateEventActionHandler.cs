@@ -60,13 +60,23 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            return
-                string.IsNullOrWhiteSpace(
-                    command.TargetId) ||
-                string.Equals(
+            if (string.IsNullOrWhiteSpace(
+                    command.TargetId))
+            {
+                return true;
+            }
+
+            try
+            {
+                return string.Equals(
                     command.TargetId,
                     _runtime.Status.EnvironmentId,
                     StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public bool TryExecute(
@@ -101,9 +111,19 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             if (!hasTransitionMetadata)
             {
-                return _runtime.SetState(
-                    stateId,
-                    out error);
+                try
+                {
+                    return _runtime.SetState(
+                        stateId,
+                        out error);
+                }
+                catch (Exception exception)
+                {
+                    error =
+                        "Environment runtime action failed: " +
+                        exception.Message;
+                    return false;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(
@@ -134,12 +154,22 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
-            return _runtime.SetState(
-                stateId,
-                new EnvironmentTransitionSpec(
-                    mode,
-                    (float)duration),
-                out error);
+            try
+            {
+                return _runtime.SetState(
+                    stateId,
+                    new EnvironmentTransitionSpec(
+                        mode,
+                        (float)duration),
+                    out error);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Environment runtime transition action failed: " +
+                    exception.Message;
+                return false;
+            }
         }
 
         private static bool IsServiceAlive(
