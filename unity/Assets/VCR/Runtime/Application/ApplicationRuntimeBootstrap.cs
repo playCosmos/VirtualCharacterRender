@@ -422,7 +422,7 @@ namespace VCR.Runtime.Application
                     error))
             {
                 Debug.LogWarning(
-                    "VCR configuration save on quit failed: " +
+                    "VCR application shutdown completed with errors: " +
                     error,
                     this);
             }
