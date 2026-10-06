@@ -48,8 +48,12 @@ namespace VCR.Runtime.EventRuntime.Unity
             _sequences =
                 new(StringComparer.Ordinal);
 
+        private const double HandlerDiscoveryRetrySeconds =
+            1.0;
+
         private IEventActionHandler[] _handlers =
             Array.Empty<IEventActionHandler>();
+        private double _nextHandlerResolveAt;
         private Coroutine _activeCoroutine;
         private SequenceBinding _activeSequence;
         private string _activeSequenceId;
@@ -951,19 +955,45 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
-            if (_handlers.Length == 0)
+            var needsRebuild =
+                _handlers.Length == 0;
+
+            if (!needsRebuild)
             {
-                RebuildHandlers();
+                foreach (var handler in
+                         _handlers)
+                {
+                    if (!IsServiceAlive(handler))
+                    {
+                        needsRebuild = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!needsRebuild)
+            {
+                _nextHandlerResolveAt = 0d;
                 return;
             }
 
-            foreach (var handler in _handlers)
+            var now =
+                Time.realtimeSinceStartupAsDouble;
+
+            if (now <
+                _nextHandlerResolveAt)
             {
-                if (!IsServiceAlive(handler))
-                {
-                    RebuildHandlers();
-                    return;
-                }
+                return;
+            }
+
+            _nextHandlerResolveAt =
+                now +
+                HandlerDiscoveryRetrySeconds;
+            RebuildHandlers();
+
+            if (_handlers.Length > 0)
+            {
+                _nextHandlerResolveAt = 0d;
             }
         }
 
@@ -1034,6 +1064,18 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             _handlers =
                 list.ToArray();
+
+            if (_handlers.Length == 0 &&
+                autoFindHandlers)
+            {
+                _nextHandlerResolveAt =
+                    Time.realtimeSinceStartupAsDouble +
+                    HandlerDiscoveryRetrySeconds;
+            }
+            else
+            {
+                _nextHandlerResolveAt = 0d;
+            }
         }
 
         private int FindHandlerCount(
