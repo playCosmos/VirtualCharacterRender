@@ -902,8 +902,13 @@ namespace VCR.Runtime.Scene
 
         public void Shutdown()
         {
-            if (_state == SceneRuntimeState.Stopped ||
-                _state == SceneRuntimeState.ShuttingDown)
+            if (_state == SceneRuntimeState.ShuttingDown)
+            {
+                return;
+            }
+
+            if (_state == SceneRuntimeState.Stopped &&
+                _capabilities == null)
             {
                 return;
             }
@@ -920,14 +925,30 @@ namespace VCR.Runtime.Scene
 
             var capabilities =
                 _capabilities;
-            _capabilities = null;
 
             if (capabilities != null)
             {
-                RunShutdownStep(
-                    "capability disposal",
-                    capabilities.Dispose,
-                    failures);
+                try
+                {
+                    capabilities.Dispose();
+
+                    if (ReferenceEquals(
+                            _capabilities,
+                            capabilities))
+                    {
+                        _capabilities = null;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(
+                        "capability disposal: " +
+                        exception.Message);
+
+                    Debug.LogException(
+                        exception,
+                        this);
+                }
             }
 
             if (unloadCharacterOnShutdown &&
@@ -1465,7 +1486,6 @@ namespace VCR.Runtime.Scene
 
             var capabilities =
                 _capabilities;
-            _capabilities = null;
 
             if (capabilities == null)
             {
@@ -1475,6 +1495,13 @@ namespace VCR.Runtime.Scene
             try
             {
                 capabilities.Dispose();
+
+                if (ReferenceEquals(
+                        _capabilities,
+                        capabilities))
+                {
+                    _capabilities = null;
+                }
             }
             catch (Exception exception)
             {
