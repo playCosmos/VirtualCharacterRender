@@ -897,6 +897,11 @@ require_source_contains(
     "return sceneRuntime.Resume();",
     "application bootstrap resume must propagate the scene lifecycle result",
 )
+require_source_contains(
+    application_runtime_bootstrap,
+    "\"Runtime configuration capture/save failed: \"",
+    "application configuration save must contain scene snapshot/adapter getter exceptions",
+)
 
 application_ui = (
     VCR
@@ -1160,6 +1165,16 @@ require_source_contains(
     p1_renderer_validation,
     "RestoreStateAfterCancelledCharacterLoad",
     "P1 validation must cover cancelled character-load state recovery",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "ThrowOnSettingsRead",
+    "P1 validation must inject configuration-capture failure through the overlay settings getter",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "captureFailureSaveResult",
+    "P1 validation must prove configuration capture failure returns false/error without stopping the scene",
 )
 require_source_contains(
     p1_renderer_validation,
