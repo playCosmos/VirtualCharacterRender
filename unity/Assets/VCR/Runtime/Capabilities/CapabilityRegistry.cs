@@ -21,8 +21,11 @@ namespace VCR.Runtime.Capabilities
 
         private readonly Dictionary<string, Entry> _entries =
             new(StringComparer.Ordinal);
+        private readonly List<string> _sortedIds =
+            new();
 
         public int RegisteredCount => _entries.Count;
+        public int StatusCount => _sortedIds.Count;
 
         public int EnabledCount
         {
@@ -62,6 +65,21 @@ namespace VCR.Runtime.Capabilities
                     State =
                         CapabilityState.Disabled
                 });
+
+            var insertIndex =
+                _sortedIds.BinarySearch(
+                    capabilityId,
+                    StringComparer.Ordinal);
+
+            if (insertIndex < 0)
+            {
+                insertIndex =
+                    ~insertIndex;
+            }
+
+            _sortedIds.Insert(
+                insertIndex,
+                capabilityId);
 
             return true;
         }
@@ -188,30 +206,45 @@ namespace VCR.Runtime.Capabilities
                 entry.Instance != null;
         }
 
+        public bool TryGetStatusAt(
+            int index,
+            out CapabilityStatusSnapshot status)
+        {
+            if (index < 0 ||
+                index >= _sortedIds.Count)
+            {
+                status = default;
+                return false;
+            }
+
+            var id =
+                _sortedIds[index];
+            var entry =
+                _entries[id];
+
+            status =
+                new CapabilityStatusSnapshot(
+                    id,
+                    entry.State,
+                    entry.Error);
+            return true;
+        }
+
         public CapabilityStatusSnapshot[]
             CaptureStatuses()
         {
             var result =
                 new CapabilityStatusSnapshot[
-                    _entries.Count];
-            var index = 0;
+                    _sortedIds.Count];
 
-            foreach (var pair in _entries)
+            for (var i = 0;
+                 i < _sortedIds.Count;
+                 i++)
             {
-                result[index++] =
-                    new CapabilityStatusSnapshot(
-                        pair.Key,
-                        pair.Value.State,
-                        pair.Value.Error);
+                TryGetStatusAt(
+                    i,
+                    out result[i]);
             }
-
-            Array.Sort(
-                result,
-                (left, right) =>
-                    string.Compare(
-                        left.Id,
-                        right.Id,
-                        StringComparison.Ordinal));
 
             return result;
         }
@@ -273,6 +306,7 @@ namespace VCR.Runtime.Capabilities
             }
 
             _entries.Clear();
+            _sortedIds.Clear();
 
             if (failures != null)
             {
