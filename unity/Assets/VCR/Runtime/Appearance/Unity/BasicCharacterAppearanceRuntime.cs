@@ -104,6 +104,8 @@ namespace VCR.Runtime.Appearance.Unity
         private long _transitionQueueRejectedCount;
         private long _transitionInterruptedCount;
         private long _transitionCancelledCount;
+        private long _appearanceSubscriberFailureCount;
+        private long _statusSubscriberFailureCount;
 
         public AppearanceRuntimeStatus Status
         {
@@ -935,7 +937,7 @@ namespace VCR.Runtime.Appearance.Unity
             {
                 _currentPresetId =
                     targetId;
-                AppearanceChanged?.Invoke(
+                NotifyAppearanceChanged(
                     Current);
             }
 
@@ -1835,7 +1837,7 @@ namespace VCR.Runtime.Appearance.Unity
             _appearanceChangeCount++;
             _lastError = null;
 
-            AppearanceChanged?.Invoke(
+            NotifyAppearanceChanged(
                 Current);
 
             if (!preserveTransition)
@@ -3412,8 +3414,58 @@ namespace VCR.Runtime.Appearance.Unity
             _state = state;
             _lastError = error;
 
-            StatusChanged?.Invoke(
+            NotifyStatusChanged(
                 Status);
+        }
+
+        private void NotifyAppearanceChanged(
+            AppearanceStateSnapshot snapshot)
+        {
+            var subscribers =
+                AppearanceChanged;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<AppearanceStateSnapshot> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(snapshot);
+                }
+                catch
+                {
+                    _appearanceSubscriberFailureCount++;
+                }
+            }
+        }
+
+        private void NotifyStatusChanged(
+            AppearanceRuntimeStatus status)
+        {
+            var subscribers =
+                StatusChanged;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<AppearanceRuntimeStatus> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(status);
+                }
+                catch
+                {
+                    _statusSubscriberFailureCount++;
+                }
+            }
         }
 
         private AppearanceAccessorySelection[]
@@ -3570,6 +3622,16 @@ namespace VCR.Runtime.Appearance.Unity
                 new RuntimeMetric(
                     "appearance.transition.cancelled",
                     _transitionCancelledCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.subscriber.appearance_failures",
+                    _appearanceSubscriberFailureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.subscriber.status_failures",
+                    _statusSubscriberFailureCount,
                     "count"));
             output.Add(
                 new RuntimeMetric(
