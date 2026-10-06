@@ -791,6 +791,12 @@ namespace VCR.Editor.P5
                 InvokeUpdate(mixer);
 
                 Expect(
+                    poseOverrideLayer.PoseReadCount == 1 &&
+                    poseAdditiveLayer.PoseReadCount == 1,
+                    "each additional pose provider must be sampled once per mixer update and reused for change detection plus blending",
+                    failures);
+
+                Expect(
                     mixer is ITrackingMixProvider &&
                     mixer is ITrackingRouteProvider,
                     "mixer must satisfy final mix and routed provider contracts",
@@ -885,6 +891,12 @@ namespace VCR.Editor.P5
                             HumanoidPoseSpace.OriginalLocal);
 
                 InvokeUpdate(mixer);
+
+                Expect(
+                    poseOverrideLayer.PoseReadCount == 2 &&
+                    poseAdditiveLayer.PoseReadCount == 2,
+                    "additional pose provider reads must remain one-per-update when a layer changes",
+                    failures);
 
                 var hasMismatchPose =
                     mixer.TryGetLatestHumanoidPose(
@@ -1590,6 +1602,7 @@ namespace VCR.Editor.P5
     {
         public TrackingFrame PoseFrame { get; set; }
         public TrackingFrame ExpressionFrame { get; set; }
+        public int PoseReadCount { get; private set; }
 
         public bool TryGetLatestFace(
             out TrackingFrame frame)
@@ -1608,6 +1621,7 @@ namespace VCR.Editor.P5
         public bool TryGetLatestHumanoidPose(
             out TrackingFrame frame)
         {
+            PoseReadCount++;
             frame = PoseFrame;
             return frame != null;
         }
