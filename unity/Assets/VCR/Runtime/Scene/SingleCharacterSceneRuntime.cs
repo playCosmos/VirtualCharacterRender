@@ -673,60 +673,88 @@ namespace VCR.Runtime.Scene
             try
             {
                 EnsureOperational();
+
+                if (renderBootstrap == null)
+                {
+                    error =
+                        "Render bootstrap is unavailable.";
+                    return false;
+                }
+
+                if (target.Width < 320 ||
+                    target.Height < 240 ||
+                    target.FramesPerSecond < 30 ||
+                    target.FramesPerSecond > 240)
+                {
+                    error =
+                        "Broadcast target must be at least 320x240 and use 30..240 FPS.";
+                    return false;
+                }
+
+                var previousSettings =
+                    renderBootstrap.CaptureSettings();
+                var settings =
+                    previousSettings;
+
+                settings.ResolutionPreset =
+                    target.Tier switch
+                    {
+                        BroadcastCaptureTargetTier.Minimum720p60
+                            when target.Width == 1280 &&
+                                 target.Height == 720 =>
+                                RenderResolutionPreset.Minimum720p,
+
+                        BroadcastCaptureTargetTier.Recommended1080p60
+                            when target.Width == 1920 &&
+                                 target.Height == 1080 =>
+                                RenderResolutionPreset.Recommended1080p,
+
+                        _ =>
+                            RenderResolutionPreset.Custom
+                    };
+
+                settings.Width = target.Width;
+                settings.Height = target.Height;
+                settings.TargetFrameRate =
+                    target.FramesPerSecond;
+                settings.RunInBackground = true;
+
+                try
+                {
+                    renderBootstrap.Apply(
+                        settings);
+                    return true;
+                }
+                catch (Exception applyException)
+                {
+                    try
+                    {
+                        renderBootstrap.Apply(
+                            previousSettings);
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        error =
+                            "Broadcast capture target apply failed and render rollback was incomplete: " +
+                            applyException.Message +
+                            " | rollback: " +
+                            rollbackException.Message;
+                        return false;
+                    }
+
+                    error =
+                        "Broadcast capture target apply failed: " +
+                        applyException.Message;
+                    return false;
+                }
             }
             catch (Exception exception)
             {
-                error = exception.Message;
-                return false;
-            }
-
-            if (renderBootstrap == null)
-            {
                 error =
-                    "Render bootstrap is unavailable.";
+                    "Broadcast capture target apply failed: " +
+                    exception.Message;
                 return false;
             }
-
-            if (target.Width < 320 ||
-                target.Height < 240 ||
-                target.FramesPerSecond < 30 ||
-                target.FramesPerSecond > 240)
-            {
-                error =
-                    "Broadcast target must be at least 320x240 and use 30..240 FPS.";
-                return false;
-            }
-
-            var settings =
-                renderBootstrap.CaptureSettings();
-
-            settings.ResolutionPreset =
-                target.Tier switch
-                {
-                    BroadcastCaptureTargetTier.Minimum720p60
-                        when target.Width == 1280 &&
-                             target.Height == 720 =>
-                            RenderResolutionPreset.Minimum720p,
-
-                    BroadcastCaptureTargetTier.Recommended1080p60
-                        when target.Width == 1920 &&
-                             target.Height == 1080 =>
-                            RenderResolutionPreset.Recommended1080p,
-
-                    _ =>
-                        RenderResolutionPreset.Custom
-                };
-
-            settings.Width = target.Width;
-            settings.Height = target.Height;
-            settings.TargetFrameRate =
-                target.FramesPerSecond;
-            settings.RunInBackground = true;
-
-            renderBootstrap.Apply(
-                settings);
-
-            return true;
         }
 
         public bool Suspend()
