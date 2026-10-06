@@ -94,6 +94,9 @@ namespace VCR.Runtime.Tracking.Mixing
         private bool _registered;
         private bool _playing;
         private string _lastError;
+        private string _cachedSourceRuntimeId;
+        private string _cachedSourceCueId;
+        private string _cachedSourceId;
 
         private long _playCount;
         private long _releaseCount;
@@ -458,11 +461,45 @@ namespace VCR.Runtime.Tracking.Mixing
                     humanoidPose:
                         pose,
                     sourceId:
-                        runtimeId +
-                        ":" +
-                        cue.CueId,
+                        GetSourceId(
+                            cue),
                     runtimeTimestampUs:
                         nowUs);
+        }
+
+        private string GetSourceId(
+            ProceduralMotionCueDefinition cue)
+        {
+            var cueId =
+                cue?.CueId ??
+                string.Empty;
+            var currentRuntimeId =
+                runtimeId ??
+                string.Empty;
+
+            if (_cachedSourceId != null &&
+                string.Equals(
+                    _cachedSourceRuntimeId,
+                    currentRuntimeId,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    _cachedSourceCueId,
+                    cueId,
+                    StringComparison.Ordinal))
+            {
+                return _cachedSourceId;
+            }
+
+            _cachedSourceRuntimeId =
+                currentRuntimeId;
+            _cachedSourceCueId =
+                cueId;
+            _cachedSourceId =
+                currentRuntimeId +
+                ":" +
+                cueId;
+
+            return _cachedSourceId;
         }
 
         private static HumanoidPoseState BuildPose(
