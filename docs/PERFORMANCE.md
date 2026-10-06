@@ -134,6 +134,8 @@ For steady-state tracking and UI operation:
 - UI refresh must reuse cached navigation labels/components and must not allocate a full section snapshot on every refresh tick,
 - missing optional dependencies may trigger bounded discovery retries, not an unbounded per-frame `FindObjectsByType` scan; event-hub auto-rebinding uses a 1 Hz player-only lifecycle check,
 - event/appearance backlogs must remain bounded; QueueAll appearance transitions default to 32 pending requests and expose depth/limit/rejection metrics,
+- normalized event hub, OSC-event ingress, and WebSocket ingress use lock-protected reusable `Queue<T>` storage; do not layer `ConcurrentQueue<T>` underneath the same lock because its segment-management overhead adds no concurrency benefit,
+- additional pose-layer providers are sampled once per mixer update and the sampled frame is reused for both change detection and blending; do not call a layer provider twice in the same update,
 - recurring environment target dispatch must skip destroyed Unity targets instead of repeatedly throwing/catching stale-interface exceptions,
 - VMC sender dependency discovery is bounded to retry intervals rather than per-frame scene scans; OSC serialization writes directly into one reusable packet buffer plus reusable argument scratch, so the sender must not reintroduce per-message `byte[]` bundle staging,
 - VMC uses `ISelectiveNormalizedMotionSnapshotProvider` when available; disabling expression transmission must skip expression capture/allocation at the VRM snapshot source rather than capturing and discarding it afterward,
