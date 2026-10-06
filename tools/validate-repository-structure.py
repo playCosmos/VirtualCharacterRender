@@ -376,6 +376,69 @@ forbid_source_pattern(
     "VMC UDP receiver must not rebuild generic OSC message objects per datagram",
 )
 
+osc_event_mapper = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEvents"
+    / "OscNormalizedEventMapper.cs"
+)
+require_source_contains(
+    osc_event_mapper,
+    "internal static class OscNormalizedEventPacketReader",
+    "generic OSC event ingress must retain its specialized direct packet reader",
+)
+require_source_contains(
+    osc_event_mapper,
+    "ValidatePacket(",
+    "direct OSC event parsing must validate the complete packet before exposing events",
+)
+require_source_contains(
+    osc_event_mapper,
+    "ReadPacketEvents(",
+    "direct OSC event parsing must retain a separate post-validation mapping pass",
+)
+forbid_source_pattern(
+    osc_event_mapper,
+    r"new\s+OscMessage\b",
+    "direct OSC event packet parsing must not allocate transient OscMessage objects",
+)
+forbid_source_pattern(
+    osc_event_mapper,
+    r"new\s+OscArgument\s*\[",
+    "direct OSC event packet parsing must not allocate transient OSC argument arrays",
+)
+
+osc_event_receiver = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs"
+)
+require_source_contains(
+    osc_event_receiver,
+    "OscNormalizedEventPacketReader",
+    "OSC event UDP receive must use the specialized direct packet reader",
+)
+forbid_source_pattern(
+    osc_event_receiver,
+    r"OscPacketReader\s*\.\s*TryReadMessages",
+    "OSC event UDP receive must not rebuild generic OSC message objects per datagram",
+)
+
+p8_protocol_validation = (
+    VCR
+    / "Editor"
+    / "P8"
+    / "P8ProtocolEventAdapterValidation.cs"
+)
+require_source_contains(
+    p8_protocol_validation,
+    "ValidateOscDirectPacketPath",
+    "P8 protocol validation must cover direct OSC event parsing and malformed-packet atomicity",
+)
+
 humanoid_names = (
     VCR
     / "Runtime"
