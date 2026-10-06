@@ -157,3 +157,5 @@ The source architecture is complete enough for a checkpoint, but these evidence 
 Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime boundary. Later caller mutation of the original binding objects cannot rewrite the live environment configuration, and staged binding application must succeed before the new binding set is committed; failed applies restore the previous active binding state on a best-effort basis.
 
 Lighting configuration now follows the same fail-closed contract. `ConfigureLightingTargets(..., out error)` and `SetLightingProfile(..., out error)` convert validation/apply exceptions into structured failures, continue isolating individual target exceptions for diagnostics, and restore the previous target set/profile when a staged apply fails after another target has already changed.
+
+Non-Cut transition target validation now follows the same structured failure boundary: exceptions from `IEnvironmentTransitionTarget.ValidateEnvironmentTransition` are returned as `false` plus an error string before state id, root visibility, or transition status is mutated.
