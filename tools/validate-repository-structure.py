@@ -714,6 +714,31 @@ forbid_source_pattern(
     r"new\s+(?:System\.Text\.)?StringBuilder\s*\(",
     "application UI refresh must reuse its shared StringBuilder instead of allocating a new builder",
 )
+require_source_contains(
+    application_ui,
+    "SetInputTextIfChanged(",
+    "application UI refresh must suppress unchanged InputField text assignments",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_(?:eventMaxCommandsInput|settingsRenderScaleInput|settingsFpsInput)\.text\s*=",
+    "stable numeric UI refresh fields must not assign InputField.text directly",
+)
+require_source_contains(
+    application_ui,
+    "displayedMaxCommands",
+    "event max-command refresh must compare the existing numeric value before formatting",
+)
+require_source_contains(
+    application_ui,
+    "displayedRenderScale",
+    "render-scale refresh must compare the existing numeric value before formatting",
+)
+require_source_contains(
+    application_ui,
+    "displayedTargetFps",
+    "target-FPS refresh must compare the existing numeric value before formatting",
+)
 
 material_override_controller = (
     VCR
