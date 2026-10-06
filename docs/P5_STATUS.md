@@ -26,6 +26,7 @@ The first P5 slice introduces `ITrackingMixProvider` as the final one-performer 
 - passes face, body/hands, humanoid pose, and performer presence through
 - keeps the original primary humanoid-pose slot and supports additional ordered pose layers
 - each pose layer carries Base/Tracking/Additive/Procedural role metadata, Override/Additive mode, global weight, root weights, and per-bone weights
+- tracks immutable input snapshots by `TrackingFrame` reference identity rather than relying on source ID/sequence uniqueness; additional pose layers reuse one sampled frame array instead of parallel sequence/source tracking arrays
 - accepts one optional expression-only overlay
 - blends standard and named/custom expressions
 - supports Override, Additive, and Maximum modes
@@ -48,7 +49,7 @@ tools/validate-p5-source-free.ps1
 tools/validate-p5-source-free.sh
 ```
 
-The suite covers expression blend modes, deadzone behavior, custom expressions, smoothing alpha/convergence, face/presence passthrough, global/per-bone pose weighting, pose-space mismatch guards, ordered Override-to-Additive pose composition, overlay-to-base fallback, no-frame neutral signaling, and mixer diagnostics.
+The suite covers expression blend modes, deadzone behavior, custom expressions, smoothing alpha/convergence, face/presence passthrough, global/per-bone pose weighting, pose-space mismatch guards, ordered Override-to-Additive pose composition, overlay-to-base fallback, no-frame neutral signaling, same-source/same-sequence immutable frame replacement, and mixer diagnostics.
 
 These validation paths are implemented but have not been executed here because a Unity Editor/runtime is not available in this environment.
 
