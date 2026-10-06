@@ -725,9 +725,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     RunTask(
                         _faceFramePool,
                         faceTargetFps,
-                        () =>
-                            mediaPipeFaceEnabled,
-                        SubmitFace,
                         faceTask: true));
 
             _holisticCoroutine =
@@ -735,8 +732,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     RunTask(
                         _holisticFramePool,
                         holisticTargetFps,
-                        () => true,
-                        SubmitHolistic,
                         faceTask: false));
 
             Debug.Log(
@@ -751,16 +746,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private IEnumerator RunTask(
             TextureFramePool framePool,
             int targetFps,
-            Func<bool> shouldSubmit,
-            Action<Image, long> submit,
             bool faceTask)
         {
             AsyncGPUReadbackRequest readback =
                 default;
-
-            var waitForReadback =
-                new WaitUntil(
-                    () => readback.done);
 
             var intervalMs =
                 Math.Max(
@@ -776,7 +765,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
                    _state ==
                    MediaPipeWebcamLifecycleState.Running)
             {
-                if (!shouldSubmit())
+                if (!ShouldSubmitTask(faceTask))
                 {
                     yield return null;
                     continue;
@@ -832,7 +821,10 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         flipHorizontally,
                         flipVertically);
 
-                yield return waitForReadback;
+                while (!readback.done)
+                {
+                    yield return null;
+                }
 
                 var readbackElapsedUs =
                     Math.Max(
@@ -869,7 +861,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 if (_state !=
                         MediaPipeWebcamLifecycleState.Running ||
-                    !shouldSubmit())
+                    !ShouldSubmitTask(faceTask))
                 {
                     textureFrame.Release();
                     yield return null;
@@ -886,9 +878,18 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 try
                 {
-                    submit(
-                        image,
-                        timestampMs);
+                    if (faceTask)
+                    {
+                        SubmitFace(
+                            image,
+                            timestampMs);
+                    }
+                    else
+                    {
+                        SubmitHolistic(
+                            image,
+                            timestampMs);
+                    }
 
                     if (faceTask)
                     {
@@ -916,6 +917,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     timestampMs +
                     intervalMs;
             }
+        }
+
+        private bool ShouldSubmitTask(
+            bool faceTask)
+        {
+            return
+                !faceTask ||
+                mediaPipeFaceEnabled;
         }
 
         private void SubmitFace(
