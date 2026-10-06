@@ -19,6 +19,41 @@ namespace VCR.Runtime.Tracking.Mixing
                 0f,
                 1f,
                 1f);
+
+        public ProceduralBoneMotionCue Clone() =>
+            new()
+            {
+                Bone = Bone,
+                LocalPositionOffset =
+                    LocalPositionOffset,
+                LocalEulerDegrees =
+                    LocalEulerDegrees,
+                ProgressCurve =
+                    CloneCurve(
+                        ProgressCurve)
+            };
+
+        internal static AnimationCurve CloneCurve(
+            AnimationCurve source)
+        {
+            if (source == null)
+            {
+                return AnimationCurve.Linear(
+                    0f,
+                    0f,
+                    1f,
+                    1f);
+            }
+
+            return new AnimationCurve(
+                source.keys)
+            {
+                preWrapMode =
+                    source.preWrapMode,
+                postWrapMode =
+                    source.postWrapMode
+            };
+        }
     }
 
     [Serializable]
@@ -42,6 +77,43 @@ namespace VCR.Runtime.Tracking.Mixing
                 1f);
         public ProceduralBoneMotionCue[] Bones =
             Array.Empty<ProceduralBoneMotionCue>();
+
+        public ProceduralMotionCueDefinition Clone()
+        {
+            var clonedBones =
+                new ProceduralBoneMotionCue[
+                    Bones?.Length ?? 0];
+
+            for (var i = 0;
+                 i < clonedBones.Length;
+                 i++)
+            {
+                clonedBones[i] =
+                    Bones[i]?.Clone();
+            }
+
+            return new ProceduralMotionCueDefinition
+            {
+                CueId = CueId,
+                DurationSeconds =
+                    DurationSeconds,
+                Loop = Loop,
+                HoldLastPose =
+                    HoldLastPose,
+                PoseSpace =
+                    PoseSpace,
+                RootPositionOffset =
+                    RootPositionOffset,
+                RootEulerDegrees =
+                    RootEulerDegrees,
+                ProgressCurve =
+                    ProceduralBoneMotionCue
+                        .CloneCurve(
+                            ProgressCurve),
+                Bones =
+                    clonedBones
+            };
+        }
     }
 
     /// <summary>
@@ -86,6 +158,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 new(StringComparer.Ordinal);
         private readonly List<string> _cueIds =
             new();
+        private IReadOnlyList<string> _cueIdsView;
 
         private ProceduralMotionCueDefinition _activeCue;
         private TrackingFrame _latestPoseFrame;
@@ -111,7 +184,8 @@ namespace VCR.Runtime.Tracking.Mixing
                 _lastError);
 
         public IReadOnlyList<string> CueIds =>
-            _cueIds;
+            _cueIdsView ??=
+                _cueIds.AsReadOnly();
 
         private void Awake()
         {
@@ -183,27 +257,42 @@ namespace VCR.Runtime.Tracking.Mixing
         public void ConfigureCues(
             params ProceduralMotionCueDefinition[] definitions)
         {
-            cues =
-                definitions ??
-                Array.Empty<
-                    ProceduralMotionCueDefinition>();
+            var previousCues =
+                cues;
 
-            RebuildCues(
-                out _);
+            cues =
+                CloneCueDefinitions(
+                    definitions);
+
+            if (!RebuildCues(
+                    out _))
+            {
+                cues =
+                    previousCues;
+            }
         }
 
         public bool RebuildCues(
             out string error)
         {
             error = null;
-            _cues.Clear();
-            _cueIds.Clear();
 
-            foreach (var cue in
+            var stagedCues =
+                new Dictionary<
+                    string,
+                    ProceduralMotionCueDefinition>(
+                        StringComparer.Ordinal);
+            var stagedCueIds =
+                new List<string>();
+
+            foreach (var sourceCue in
                      cues ??
                      Array.Empty<
                          ProceduralMotionCueDefinition>())
             {
+                var cue =
+                    sourceCue?.Clone();
+
                 if (cue == null ||
                     string.IsNullOrWhiteSpace(
                         cue.CueId))
@@ -224,7 +313,7 @@ namespace VCR.Runtime.Tracking.Mixing
                     return Fail(error);
                 }
 
-                if (!_cues.TryAdd(
+                if (!stagedCues.TryAdd(
                         cue.CueId,
                         cue))
                 {
@@ -233,12 +322,51 @@ namespace VCR.Runtime.Tracking.Mixing
                     return Fail(error);
                 }
 
-                _cueIds.Add(
+                stagedCueIds.Add(
                     cue.CueId);
             }
 
+            _cues.Clear();
+
+            foreach (var pair in stagedCues)
+            {
+                _cues.Add(
+                    pair.Key,
+                    pair.Value);
+            }
+
+            _cueIds.Clear();
+            _cueIds.AddRange(
+                stagedCueIds);
+
             _lastError = null;
             return true;
+        }
+
+        private static ProceduralMotionCueDefinition[]
+            CloneCueDefinitions(
+                ProceduralMotionCueDefinition[] source)
+        {
+            if (source == null ||
+                source.Length == 0)
+            {
+                return Array.Empty<
+                    ProceduralMotionCueDefinition>();
+            }
+
+            var result =
+                new ProceduralMotionCueDefinition[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                result[i] =
+                    source[i]?.Clone();
+            }
+
+            return result;
         }
 
         public bool TryPlayCue(
