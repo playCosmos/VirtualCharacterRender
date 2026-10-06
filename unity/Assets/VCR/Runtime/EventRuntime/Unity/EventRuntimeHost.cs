@@ -60,6 +60,53 @@ namespace VCR.Runtime.EventRuntime.Unity
         public int RuleCount =>
             rules?.Length ?? 0;
 
+        public EventRuntimeRule GetRuleAt(
+            int index)
+        {
+            var current =
+                rules;
+
+            if (current == null ||
+                index < 0 ||
+                index >= current.Length)
+            {
+                return null;
+            }
+
+            return current[index];
+        }
+
+        public bool TryGetRule(
+            string ruleId,
+            out EventRuntimeRule rule)
+        {
+            rule = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    ruleId))
+            {
+                return false;
+            }
+
+            foreach (var candidate in
+                     rules ??
+                     Array.Empty<EventRuntimeRule>())
+            {
+                if (candidate != null &&
+                    string.Equals(
+                        candidate.Id,
+                        ruleId,
+                        StringComparison.Ordinal))
+                {
+                    rule =
+                        candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public EventRuntimeRuleDiagnostics[]
             GetRuleDiagnostics() =>
                 _engine.GetRuleDiagnostics();
