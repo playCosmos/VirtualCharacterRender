@@ -120,7 +120,9 @@ namespace VCR.Runtime.EventRuntime.Unity
 
         private void Awake()
         {
-            ApplyRules();
+            TryApplyRules(
+                rules,
+                out _);
             RebuildHandlers();
             ResolveEventHub();
         }
@@ -186,9 +188,15 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return;
             }
 
+            if (!TryApplyRules(
+                    staged,
+                    out _))
+            {
+                return;
+            }
+
             rules =
                 staged;
-            ApplyRules();
         }
 
         public EventRuntimeRule[] CaptureRules()
@@ -251,9 +259,21 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
+            var previousEnabled =
+                match.Enabled;
+
             match.Enabled =
                 enabled;
-            ApplyRules();
+
+            if (!TryApplyRules(
+                    rules,
+                    out error))
+            {
+                match.Enabled =
+                    previousEnabled;
+                return false;
+            }
+
             return true;
         }
 
@@ -271,9 +291,21 @@ namespace VCR.Runtime.EventRuntime.Unity
                 return false;
             }
 
+            var previousValue =
+                maxCommandsPerEvent;
+
             maxCommandsPerEvent =
                 value;
-            ApplyRules();
+
+            if (!TryApplyRules(
+                    rules,
+                    out error))
+            {
+                maxCommandsPerEvent =
+                    previousValue;
+                return false;
+            }
+
             return true;
         }
 
@@ -289,25 +321,25 @@ namespace VCR.Runtime.EventRuntime.Unity
             RebuildHandlers();
         }
 
-        private void ApplyRules()
+        private bool TryApplyRules(
+            EventRuntimeRule[] nextRules,
+            out string error)
         {
+            if (!_engine.TrySetRules(
+                    nextRules,
+                    out error))
+            {
+                _lastError =
+                    error;
+                return false;
+            }
+
             _engine.MaxCommandsPerEvent =
                 maxCommandsPerEvent;
             _engine.TraceEnabled =
                 enableRuleTracing;
-
-            if (!_engine.TrySetRules(
-                    rules,
-                    out var error))
-            {
-                rules =
-                    Array.Empty<EventRuntimeRule>();
-                _engine.TrySetRules(
-                    rules,
-                    out _);
-                _lastError =
-                    error;
-            }
+            _lastError = null;
+            return true;
         }
 
         private void ResolveEventHub()
