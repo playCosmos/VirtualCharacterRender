@@ -412,6 +412,26 @@ namespace VCR.Editor.P9
                 "text transforms must support deterministic trim/case/prefix/suffix mapping for state and actions",
                 failures);
 
+            var unchangedText =
+                "already-normalized";
+
+            Expect(
+                ReferenceEquals(
+                    unchangedText,
+                    EventTextTransform.Apply(
+                        unchangedText,
+                        EventTextTransformFlags.None,
+                        null,
+                        null)) &&
+                EventTextTransform.Apply(
+                    null,
+                    EventTextTransformFlags.None,
+                    "[",
+                    "]") ==
+                    "[]",
+                "text transform must preserve the original string when no work is configured and combine both affixes without changing null-value semantics",
+                failures);
+
             var cooldownRule =
                 new EventRuntimeRule
                 {
