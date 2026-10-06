@@ -90,6 +90,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void Awake()
         {
+            SanitizePresenceTimingConfiguration();
             EnsureRoutePolicy();
             ResolveProviders();
 
@@ -1332,10 +1333,56 @@ namespace VCR.Runtime.Tracking.Routing
                 Time.realtimeSinceStartupAsDouble * 1_000_000.0);
         }
 
-        private static long SecondsToMicroseconds(float seconds)
+        private void SanitizePresenceTimingConfiguration()
         {
-            return (long)(
-                Math.Max(0f, seconds) * 1_000_000.0);
+            subjectLostGraceSeconds =
+                SanitizeNonNegativeSeconds(
+                    subjectLostGraceSeconds,
+                    fallback:
+                        0.5f);
+            subjectRestoreStabilitySeconds =
+                SanitizeNonNegativeSeconds(
+                    subjectRestoreStabilitySeconds,
+                    fallback:
+                        0.15f);
+        }
+
+        private static float SanitizeNonNegativeSeconds(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Math.Max(
+                0f,
+                value);
+        }
+
+        private static long SecondsToMicroseconds(
+            float seconds)
+        {
+            if (float.IsNaN(seconds) ||
+                float.IsInfinity(seconds) ||
+                seconds <= 0f)
+            {
+                return 0L;
+            }
+
+            var microseconds =
+                (double)seconds *
+                1_000_000.0;
+
+            if (microseconds >=
+                long.MaxValue)
+            {
+                return long.MaxValue;
+            }
+
+            return (long)microseconds;
         }
     }
 }
