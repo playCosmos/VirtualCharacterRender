@@ -3692,10 +3692,10 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var rules =
-                eventRuntime.CaptureRules();
+            var ruleCount =
+                eventRuntime.RuleCount;
 
-            if (rules.Length == 0)
+            if (ruleCount == 0)
             {
                 _eventRuleIndex = 0;
                 _lastActionMessage =
@@ -3707,14 +3707,14 @@ namespace VCR.Runtime.UI
             _eventRuleIndex =
                 (_eventRuleIndex +
                  offset +
-                 rules.Length) %
-                rules.Length;
+                 ruleCount) %
+                ruleCount;
 
             if (_eventRuleInput != null)
             {
                 _eventRuleInput.text =
-                    rules[
-                        _eventRuleIndex]?.Id ??
+                    eventRuntime.GetRuleAt(
+                        _eventRuleIndex)?.Id ??
                     string.Empty;
             }
 
@@ -3731,10 +3731,10 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var rules =
-                eventRuntime.CaptureRules();
+            var ruleCount =
+                eventRuntime.RuleCount;
 
-            if (rules.Length == 0)
+            if (ruleCount == 0)
             {
                 _lastActionMessage =
                     "No event rules are configured.";
@@ -3748,19 +3748,9 @@ namespace VCR.Runtime.UI
             EventRuntimeRule selected =
                 null;
 
-            foreach (var rule in rules)
-            {
-                if (rule != null &&
-                    string.Equals(
-                        rule.Id,
-                        ruleId,
-                        StringComparison.Ordinal))
-                {
-                    selected =
-                        rule;
-                    break;
-                }
-            }
+            eventRuntime.TryGetRule(
+                ruleId,
+                out selected);
 
             if (selected == null)
             {
@@ -3768,10 +3758,10 @@ namespace VCR.Runtime.UI
                     Mathf.Clamp(
                         _eventRuleIndex,
                         0,
-                        rules.Length - 1);
+                        ruleCount - 1);
                 selected =
-                    rules[
-                        _eventRuleIndex];
+                    eventRuntime.GetRuleAt(
+                        _eventRuleIndex);
                 ruleId =
                     selected?.Id;
             }
@@ -3968,24 +3958,24 @@ namespace VCR.Runtime.UI
 
         private void RefreshEventControlState()
         {
-            var rules =
-                eventRuntime?.CaptureRules() ??
-                Array.Empty<EventRuntimeRule>();
+            var ruleCount =
+                eventRuntime?.RuleCount ??
+                0;
             var hasRules =
-                rules.Length > 0;
+                ruleCount > 0;
 
             _eventRuleIndex =
                 hasRules
                     ? Mathf.Clamp(
                         _eventRuleIndex,
                         0,
-                        rules.Length - 1)
+                        ruleCount - 1)
                     : 0;
 
             var selected =
                 hasRules
-                    ? rules[
-                        _eventRuleIndex]
+                    ? eventRuntime.GetRuleAt(
+                        _eventRuleIndex)
                     : null;
 
             if (_eventRuleInput != null &&
@@ -3999,13 +3989,13 @@ namespace VCR.Runtime.UI
             if (_eventPreviousRuleButton != null)
             {
                 _eventPreviousRuleButton.interactable =
-                    rules.Length > 1;
+                    ruleCount > 1;
             }
 
             if (_eventNextRuleButton != null)
             {
                 _eventNextRuleButton.interactable =
-                    rules.Length > 1;
+                    ruleCount > 1;
             }
 
             if (_eventToggleRuleButton != null)
@@ -6114,19 +6104,19 @@ namespace VCR.Runtime.UI
                 return "Event runtime unavailable.";
             }
 
-            var rules =
-                eventRuntime.CaptureRules();
+            var ruleCount =
+                eventRuntime.RuleCount;
             var selectedRule =
-                rules.Length > 0
-                    ? rules[
+                ruleCount > 0
+                    ? eventRuntime.GetRuleAt(
                         Mathf.Clamp(
                             _eventRuleIndex,
                             0,
-                            rules.Length - 1)]
+                            ruleCount - 1))
                     : null;
 
             return
-                $"Rules: {rules.Length}\n" +
+                $"Rules: {ruleCount}\n" +
                 $"Selected rule: {selectedRule?.Id ?? "<none>"}\n" +
                 $"Selected enabled: {(selectedRule != null ? selectedRule.Enabled.ToString() : "n/a")}\n" +
                 $"Trace enabled: {eventRuntime.Engine.TraceEnabled}\n" +
