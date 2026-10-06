@@ -439,6 +439,66 @@ require_source_contains(
     "P8 protocol validation must cover direct OSC event parsing and malformed-packet atomicity",
 )
 
+websocket_event_adapter = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "WebSocketUnity"
+    / "WebSocketEventInjectionAdapter.cs"
+)
+soop_event_adapter = (
+    VCR
+    / "Runtime"
+    / "Broadcast"
+    / "SoopUnity"
+    / "SoopBridgeEventAdapter.cs"
+)
+for json_event_adapter in [
+    websocket_event_adapter,
+    soop_event_adapter,
+]:
+    require_source_contains(
+        json_event_adapter,
+        "_documentScratch",
+        "JSON event ingress must reuse one DTO wrapper instead of allocating one per message",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "_parseSync",
+        "reusable JSON ingress DTO state must be protected against concurrent TryHandleText calls",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "JsonUtility.FromJsonOverwrite(",
+        "JSON event ingress must overwrite its reusable DTO wrapper",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "ResetDocument(",
+        "reusable JSON ingress DTO fields must be reset before each overwrite",
+    )
+    forbid_source_pattern(
+        json_event_adapter,
+        r"JsonUtility\s*\.\s*FromJson\s*<",
+        "JSON event ingress must not allocate a new DTO wrapper per message",
+    )
+
+require_source_contains(
+    p8_protocol_validation,
+    "ValidateJsonIngressScratchReset",
+    "P8 protocol validation must cover omitted-field reset for reusable JSON ingress DTOs",
+)
+require_source_contains(
+    p8_protocol_validation,
+    "SOOP JSON scratch reuse must reset omitted user/nickname fields",
+    "P8 protocol validation must prevent stale SOOP scratch fields from leaking across messages",
+)
+require_source_contains(
+    p8_protocol_validation,
+    "WebSocket JSON scratch reuse must reset every omitted optional field",
+    "P8 protocol validation must prevent stale WebSocket scratch fields from leaking across messages",
+)
+
 humanoid_names = (
     VCR
     / "Runtime"
