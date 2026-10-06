@@ -313,6 +313,107 @@ namespace VCR.Editor.P1
                     "scene status subscriber exceptions must not abort suspend/resume state transitions or block healthy subscribers",
                     failures);
 
+                var restoreCancelledLoadMethod =
+                    typeof(
+                        SingleCharacterSceneRuntime)
+                        .GetMethod(
+                            "RestoreStateAfterCancelledCharacterLoad",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
+
+                if (restoreCancelledLoadMethod == null)
+                {
+                    failures.Add(
+                        "scene cancelled-load recovery validation could not resolve the recovery helper");
+                }
+                else
+                {
+                    SetPrivateField(
+                        scene,
+                        "_operationGeneration",
+                        77);
+                    SetPrivateField(
+                        scene,
+                        "_state",
+                        SceneRuntimeState.LoadingCharacter);
+                    SetPrivateField(
+                        scene,
+                        "_lastError",
+                        "stale load error");
+
+                    restoreCancelledLoadMethod.Invoke(
+                        scene,
+                        new object[]
+                        {
+                            77
+                        });
+
+                    Expect(
+                        scene.State ==
+                            SceneRuntimeState.Ready &&
+                        string.IsNullOrEmpty(
+                            scene.Status.LastError),
+                        "matching cancelled character load must restore an idle Ready state when no character is active",
+                        failures);
+
+                    SetPrivateField(
+                        scene,
+                        "_operationGeneration",
+                        78);
+                    SetPrivateField(
+                        scene,
+                        "_state",
+                        SceneRuntimeState.LoadingCharacter);
+
+                    restoreCancelledLoadMethod.Invoke(
+                        scene,
+                        new object[]
+                        {
+                            77
+                        });
+
+                    Expect(
+                        scene.State ==
+                            SceneRuntimeState.LoadingCharacter,
+                        "stale cancelled-load completion must not overwrite a newer operation generation",
+                        failures);
+
+                    SetPrivateField(
+                        scene,
+                        "_operationGeneration",
+                        77);
+                    SetPrivateField(
+                        scene,
+                        "_state",
+                        SceneRuntimeState.Suspended);
+
+                    restoreCancelledLoadMethod.Invoke(
+                        scene,
+                        new object[]
+                        {
+                            77
+                        });
+
+                    Expect(
+                        scene.State ==
+                            SceneRuntimeState.Suspended,
+                        "cancelled-load recovery must not overwrite a newer Suspend/Unload lifecycle state",
+                        failures);
+
+                    SetPrivateField(
+                        scene,
+                        "_state",
+                        SceneRuntimeState.Ready);
+                    SetPrivateField(
+                        scene,
+                        "_operationGeneration",
+                        0);
+                    SetPrivateField(
+                        scene,
+                        "_lastError",
+                        null);
+                }
+
                 Expect(
                     scene.TryCaptureRenderSettings(
                         out var capturedRenderSettings) &&
