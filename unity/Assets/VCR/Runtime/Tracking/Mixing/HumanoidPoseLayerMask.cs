@@ -20,13 +20,22 @@ namespace VCR.Runtime.Tracking.Mixing
             Array.Empty<HumanoidBoneWeight>();
 
         public float DefaultBoneWeight =>
-            Mathf.Clamp01(defaultBoneWeight);
+            SanitizeWeight(
+                defaultBoneWeight,
+                fallback:
+                    1f);
 
         public float RootPositionWeight =>
-            Mathf.Clamp01(rootPositionWeight);
+            SanitizeWeight(
+                rootPositionWeight,
+                fallback:
+                    1f);
 
         public float RootRotationWeight =>
-            Mathf.Clamp01(rootRotationWeight);
+            SanitizeWeight(
+                rootRotationWeight,
+                fallback:
+                    1f);
 
         public bool HasFullWeight
         {
@@ -109,7 +118,10 @@ namespace VCR.Runtime.Tracking.Mixing
             float weight)
         {
             defaultBoneWeight =
-                Mathf.Clamp01(weight);
+                SanitizeWeight(
+                    weight,
+                    fallback:
+                        1f);
         }
 
         public void SetRootWeights(
@@ -117,9 +129,15 @@ namespace VCR.Runtime.Tracking.Mixing
             float rotationWeight)
         {
             rootPositionWeight =
-                Mathf.Clamp01(positionWeight);
+                SanitizeWeight(
+                    positionWeight,
+                    fallback:
+                        1f);
             rootRotationWeight =
-                Mathf.Clamp01(rotationWeight);
+                SanitizeWeight(
+                    rotationWeight,
+                    fallback:
+                        1f);
         }
 
         public HumanoidPoseLayerMask Clone()
@@ -143,12 +161,29 @@ namespace VCR.Runtime.Tracking.Mixing
             return clone;
         }
 
+        private static float SanitizeWeight(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Clamp01(
+                value);
+        }
+
         public void SetBoneWeight(
             HumanoidBoneId bone,
             float weight)
         {
             var clamped =
-                Mathf.Clamp01(weight);
+                SanitizeWeight(
+                    weight,
+                    fallback:
+                        DefaultBoneWeight);
 
             boneOverrides ??=
                 Array.Empty<HumanoidBoneWeight>();
