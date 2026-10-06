@@ -934,6 +934,18 @@ forbid_source_pattern(
     "environment runtime must not let one state subscriber abort committed state/update dispatch",
 )
 
+p6_environment_validation = (
+    VCR
+    / "Editor"
+    / "P6"
+    / "P6EnvironmentRuntimeValidation.cs"
+)
+require_source_contains(
+    p6_environment_validation,
+    "throwingStateSubscriber",
+    "P6 validation must prove environment state subscriber failures are isolated",
+)
+
 p1_renderer_validation = (
     VCR
     / "Editor"
