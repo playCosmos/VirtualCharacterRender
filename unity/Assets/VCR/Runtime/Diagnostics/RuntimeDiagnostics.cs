@@ -547,6 +547,8 @@ namespace VCR.Runtime.Diagnostics
 
             _metrics.Clear();
             CollectSubsystemMetrics(_metrics);
+            _metrics.Sort(
+                CompareRuntimeMetrics);
 
             TrackingPresenceSnapshot? presence =
                 IsServiceAlive(_presenceProvider)
@@ -679,6 +681,16 @@ namespace VCR.Runtime.Diagnostics
                 out averageMs,
                 out p95Ms,
                 out p99Ms);
+        }
+
+        private static int CompareRuntimeMetrics(
+            RuntimeMetric left,
+            RuntimeMetric right)
+        {
+            return string.Compare(
+                left.Name,
+                right.Name,
+                StringComparison.Ordinal);
         }
 
         private void CollectSubsystemMetrics(
