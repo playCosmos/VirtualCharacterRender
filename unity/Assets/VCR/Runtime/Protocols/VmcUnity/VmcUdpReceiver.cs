@@ -5,7 +5,6 @@ using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
 using VCR.Runtime.Core;
-using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Protocols.Vmc;
 using VCR.Runtime.Tracking;
 
@@ -360,9 +359,6 @@ namespace VCR.Runtime.Protocols.VmcUnity
             var packet =
                 new byte[
                     UdpReceiveBufferBytes];
-            var messages =
-                new List<OscMessage>(
-                    64);
 
             while (_running)
             {
@@ -399,17 +395,6 @@ namespace VCR.Runtime.Protocols.VmcUnity
                     Interlocked.Increment(
                         ref _packetCount);
 
-                    if (!OscPacketReader
-                        .TryReadMessages(
-                            packet,
-                            packetLength,
-                            messages))
-                    {
-                        Interlocked.Increment(
-                            ref _malformedPacketCount);
-                        continue;
-                    }
-
                     if (!_running)
                     {
                         return;
@@ -423,9 +408,15 @@ namespace VCR.Runtime.Protocols.VmcUnity
                         return;
                     }
 
-                    source.Process(
-                        messages,
-                        arrivalUs);
+                    if (!source.TryProcessPacket(
+                            packet,
+                            packetLength,
+                            arrivalUs,
+                            out _))
+                    {
+                        Interlocked.Increment(
+                            ref _malformedPacketCount);
+                    }
                 }
                 catch (SocketException exception)
                 {
