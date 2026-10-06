@@ -111,7 +111,7 @@ namespace VCR.Runtime.Application
             options ??=
                 ApplicationLaunchOptions.Parse(null);
 
-            _configurationStore =
+            var startupConfigurationStore =
                 new RuntimeConfigurationStore(
                     ResolveConfigurationPath(options));
 
@@ -128,7 +128,7 @@ namespace VCR.Runtime.Application
             {
                 if (loadSavedConfiguration)
                 {
-                    if (_configurationStore.TryLoad(
+                    if (startupConfigurationStore.TryLoad(
                             out var configuration,
                             out var loadError))
                     {
@@ -185,6 +185,8 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
+                _configurationStore =
+                    startupConfigurationStore;
                 _started = true;
 
                 if (logStartup)
