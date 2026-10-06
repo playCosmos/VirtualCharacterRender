@@ -1111,22 +1111,67 @@ namespace VCR.Editor.P9
                             }
                     });
 
+                var indexedRule =
+                    host.GetRuleAt(0);
+                var directLookup =
+                    host.TryGetRule(
+                        "manual-environment",
+                        out var directRule);
+                var indexedSummaryLookup =
+                    host.TryGetRuleSummaryAt(
+                        0,
+                        out var indexedSummary);
+                var idSummaryLookup =
+                    host.TryGetRuleSummary(
+                        "manual-environment",
+                        out var idSummary);
+
                 Expect(
                     host.RuleCount == 1 &&
-                    host.GetRuleAt(0)?.Id ==
+                    indexedRule?.Id ==
                         "manual-environment" &&
                     host.GetRuleAt(-1) == null &&
                     host.GetRuleAt(1) == null &&
-                    host.TryGetRule(
-                        "manual-environment",
-                        out var directRule) &&
-                    ReferenceEquals(
+                    directLookup &&
+                    directRule?.Id ==
+                        "manual-environment" &&
+                    !ReferenceEquals(
                         directRule,
-                        host.GetRuleAt(0)) &&
+                        indexedRule) &&
+                    indexedSummaryLookup &&
+                    indexedSummary.Id ==
+                        "manual-environment" &&
+                    indexedSummary.Enabled &&
+                    idSummaryLookup &&
+                    idSummary.Id ==
+                        "manual-environment" &&
+                    idSummary.Enabled &&
                     !host.TryGetRule(
                         "missing-rule",
+                        out _) &&
+                    !host.TryGetRuleSummary(
+                        "missing-rule",
                         out _),
-                    "event runtime host must expose allocation-free indexed/id rule lookup without changing defensive CaptureRules semantics",
+                    "event runtime host must expose allocation-free readonly summaries while mutable rule lookup returns defensive clones",
+                    failures);
+
+                indexedRule.Id =
+                    "mutated-indexed-rule";
+                directRule.Filter.Type =
+                    "mutated-direct-filter";
+
+                Expect(
+                    host.TryGetRuleSummaryAt(
+                        0,
+                        out var postMutationSummary) &&
+                    postMutationSummary.Id ==
+                        "manual-environment" &&
+                    postMutationSummary.Enabled &&
+                    host.GetRuleAt(0)?
+                        .Filter.Type ==
+                        NormalizedEventTypes
+                            .LocalManual,
+                    "mutating rules returned by GetRuleAt/TryGetRule must not mutate the live host rule graph",
                     failures);
 
                 var validHostRules =
