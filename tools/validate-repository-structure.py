@@ -905,13 +905,33 @@ require_source_contains(
 )
 forbid_source_pattern(
     application_ui,
-    r""Transparent: "\s*\+|"Topmost: "\s*\+|"Click-through: "\s*\+",
+    r'"Transparent: "\s*\+|"Topmost: "\s*\+|"Click-through: "\s*\+',
     "output control refresh must use stable label literals instead of rebuilding unchanged strings",
 )
 require_source_contains(
     application_ui,
     "var outputSettings =",
     "output control refresh must sample overlay settings once per refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "GetTrackingToggleLabel(",
+    "tracking control refresh must cache dynamic enable/disable labels",
+)
+require_source_contains(
+    application_ui,
+    "_trackingToggleLabelHasControl",
+    "tracking toggle label cache must distinguish no-control state explicitly",
+)
+require_source_contains(
+    application_ui,
+    "GetSettingsCapabilityLabel(",
+    "settings capability refresh must cache dynamic enable/disable/retry labels",
+)
+forbid_source_pattern(
+    application_ui,
+    r'"Trace: "\s*\+|"VSync: "\s*\+|"Background: "\s*\+|"CSV Evidence: "\s*\+|"Console Log: "\s*\+',
+    "boolean control refresh labels must use stable full-string literals",
 )
 require_source_contains(
     application_ui,
