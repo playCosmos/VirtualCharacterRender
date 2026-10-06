@@ -696,6 +696,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             _clock.Restart();
+            SanitizePresenceTimingConfiguration();
 
             _presenceResolver =
                 new TrackingPresenceResolver(
@@ -1143,14 +1144,68 @@ namespace VCR.Runtime.Tracking.MediaPipe
             return devices[0].name;
         }
 
+        private void SanitizePresenceTimingConfiguration()
+        {
+            subjectLostGraceSeconds =
+                SanitizeSeconds(
+                    subjectLostGraceSeconds,
+                    fallback:
+                        0.5f,
+                    minimum:
+                        0f);
+            subjectRestoreStabilitySeconds =
+                SanitizeSeconds(
+                    subjectRestoreStabilitySeconds,
+                    fallback:
+                        0.15f,
+                    minimum:
+                        0f);
+            sourceStaleSeconds =
+                SanitizeSeconds(
+                    sourceStaleSeconds,
+                    fallback:
+                        1f,
+                    minimum:
+                        0.1f);
+        }
+
+        private static float SanitizeSeconds(
+            float value,
+            float fallback,
+            float minimum)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Math.Max(
+                minimum,
+                value);
+        }
+
         private static long SecondsToMicroseconds(
             float seconds)
         {
-            return (long)(
-                Math.Max(
-                    0f,
-                    seconds) *
-                1_000_000.0);
+            if (float.IsNaN(seconds) ||
+                float.IsInfinity(seconds) ||
+                seconds <= 0f)
+            {
+                return 0L;
+            }
+
+            var microseconds =
+                (double)seconds *
+                1_000_000.0;
+
+            if (microseconds >=
+                long.MaxValue)
+            {
+                return long.MaxValue;
+            }
+
+            return (long)microseconds;
         }
 
         private void OnApplicationPause(
