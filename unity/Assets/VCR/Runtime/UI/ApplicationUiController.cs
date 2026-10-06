@@ -328,6 +328,14 @@ namespace VCR.Runtime.UI
         private string _motionSummaryExpressionInput;
         private string _motionSummaryCache;
 
+        private string _trackingToggleLabelDisplayName;
+        private bool _trackingToggleLabelEnabled;
+        private string _trackingToggleLabelCache;
+        private bool _settingsCapabilityLabelHasSelection;
+        private string _settingsCapabilityLabelId;
+        private CapabilityState _settingsCapabilityLabelState;
+        private string _settingsCapabilityLabelCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -4518,16 +4526,9 @@ namespace VCR.Runtime.UI
                     canMutate;
                 SetButtonLabel(
                     _settingsToggleCapabilityButton,
-                    hasSelected
-                        ? (selected.State ==
-                            CapabilityState.Enabled
-                            ? "Disable "
-                            : selected.State ==
-                                CapabilityState.Faulted
-                                ? "Retry "
-                                : "Enable ") +
-                          selected.Id
-                        : "No Capabilities");
+                    GetSettingsCapabilityLabel(
+                        hasSelected,
+                        selected));
             }
 
             RenderRuntimeSettings renderSettings =
@@ -5262,12 +5263,8 @@ namespace VCR.Runtime.UI
 
                     SetButtonLabel(
                         _trackingToggleButton,
-                        hasControl
-                            ? (control.ControlEnabled
-                                ? "Disable "
-                                : "Enable ") +
-                              control.DisplayName
-                            : "No Tracking Source");
+                        GetTrackingToggleLabel(
+                            control));
                 }
 
                 if (_trackingRecoverButton != null)
@@ -8477,6 +8474,92 @@ namespace VCR.Runtime.UI
             label.text =
                 title +
                 suffix;
+        }
+
+        private string GetTrackingToggleLabel(
+            ITrackingRuntimeControl control)
+        {
+            if (control == null)
+            {
+                _trackingToggleLabelDisplayName =
+                    null;
+                _trackingToggleLabelCache =
+                    "No Tracking Source";
+                return _trackingToggleLabelCache;
+            }
+
+            var displayName =
+                control.DisplayName;
+            var enabled =
+                control.ControlEnabled;
+
+            if (_trackingToggleLabelCache != null &&
+                _trackingToggleLabelEnabled ==
+                    enabled &&
+                string.Equals(
+                    _trackingToggleLabelDisplayName,
+                    displayName,
+                    StringComparison.Ordinal))
+            {
+                return _trackingToggleLabelCache;
+            }
+
+            _trackingToggleLabelDisplayName =
+                displayName;
+            _trackingToggleLabelEnabled =
+                enabled;
+            _trackingToggleLabelCache =
+                string.Concat(
+                    enabled
+                        ? "Disable "
+                        : "Enable ",
+                    displayName);
+            return _trackingToggleLabelCache;
+        }
+
+        private string GetSettingsCapabilityLabel(
+            bool hasSelection,
+            CapabilityStatusSnapshot selected)
+        {
+            if (!hasSelection)
+            {
+                _settingsCapabilityLabelHasSelection =
+                    false;
+                _settingsCapabilityLabelId = null;
+                _settingsCapabilityLabelCache =
+                    "No Capabilities";
+                return _settingsCapabilityLabelCache;
+            }
+
+            if (_settingsCapabilityLabelCache != null &&
+                _settingsCapabilityLabelHasSelection &&
+                _settingsCapabilityLabelState ==
+                    selected.State &&
+                string.Equals(
+                    _settingsCapabilityLabelId,
+                    selected.Id,
+                    StringComparison.Ordinal))
+            {
+                return _settingsCapabilityLabelCache;
+            }
+
+            _settingsCapabilityLabelHasSelection =
+                true;
+            _settingsCapabilityLabelState =
+                selected.State;
+            _settingsCapabilityLabelId =
+                selected.Id;
+            _settingsCapabilityLabelCache =
+                string.Concat(
+                    selected.State ==
+                        CapabilityState.Enabled
+                        ? "Disable "
+                        : selected.State ==
+                            CapabilityState.Faulted
+                            ? "Retry "
+                            : "Enable ",
+                    selected.Id);
+            return _settingsCapabilityLabelCache;
         }
 
         private static void SetInputTextIfChanged(
