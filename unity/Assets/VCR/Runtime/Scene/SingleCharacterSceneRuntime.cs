@@ -56,6 +56,7 @@ namespace VCR.Runtime.Scene
         private double _nextOverlayOutputResolveAt;
         private double _nextEnvironmentRuntimeResolveAt;
         private double _nextRenderBootstrapResolveAt;
+        private long _statusSubscriberFailureCount;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter =>
@@ -751,6 +752,11 @@ namespace VCR.Runtime.Scene
                 "scene.capabilities.enabled",
                 _capabilities?.EnabledCount ?? 0,
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "scene.status_subscriber_failures",
+                _statusSubscriberFailureCount,
+                "count"));
         }
 
         private int BeginOperation(
@@ -1048,7 +1054,33 @@ namespace VCR.Runtime.Scene
             }
 
             _state = state;
-            StatusChanged?.Invoke(Status);
+            NotifyStatusChanged(
+                Status);
+        }
+
+        private void NotifyStatusChanged(
+            SceneRuntimeStatus status)
+        {
+            var subscribers =
+                StatusChanged;
+
+            if (subscribers == null)
+            {
+                return;
+            }
+
+            foreach (Action<SceneRuntimeStatus> subscriber in
+                     subscribers.GetInvocationList())
+            {
+                try
+                {
+                    subscriber(status);
+                }
+                catch
+                {
+                    _statusSubscriberFailureCount++;
+                }
+            }
         }
 
         private void RunShutdownStep(
