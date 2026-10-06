@@ -205,6 +205,16 @@ require_source_contains(
     "ValidateAudioSnapshotSuppression",
     "P3 validation must cover unchanged audio expression snapshot suppression",
 )
+require_source_contains(
+    p3_tracking_validation,
+    "float.PositiveInfinity",
+    "P3 validation must inject non-finite audio fallback configuration",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "audio fallback math must contain non-finite configuration/input values",
+    "P3 validation must prove audio fallback math never publishes NaN from invalid numeric input",
+)
 
 p0_vmc_validation = (
     VCR
@@ -2763,6 +2773,29 @@ require_source_contains(
     "tracking router metrics must expose expression fallback activation state",
 )
 
+audio_expression_math = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionMath.cs"
+)
+require_source_contains(
+    audio_expression_math,
+    "private static bool IsFinite(",
+    "audio expression math must retain a shared finite-value guard",
+)
+require_source_contains(
+    audio_expression_math,
+    "if (!IsFinite(threshold) ||",
+    "audio level normalization must reject non-finite threshold/gain inputs",
+)
+require_source_contains(
+    audio_expression_math,
+    "deltaSeconds =\n                IsFinite(deltaSeconds)",
+    "audio smoothing must normalize non-finite delta time before exponent math",
+)
+
 audio_expression_source = (
     VCR
     / "Runtime"
@@ -2784,6 +2817,21 @@ require_source_contains(
     audio_expression_source,
     "_latest = null;",
     "disabling audio fallback must discard stale expression output",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeConfiguration();",
+    "audio expression source Awake must normalize serialized numeric configuration",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeRange(",
+    "audio expression threshold/gain configuration must reject non-finite values",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeMinimum(",
+    "audio expression attack/release configuration must reject non-finite values",
 )
 
 expression_activation_contract = (
