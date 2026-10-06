@@ -65,6 +65,7 @@ P0 hardware-dependent validation is deferred because the required physical test 
 ### Scene/output/environment configuration
 
 - serializable renderer settings snapshot
+- render settings availability probe through `TryCaptureRenderSettings`: returns the live bootstrap settings when available and preserves the historical default-settings fallback while explicitly reporting unavailable when the bootstrap is missing
 - serializable camera/light/output scene configuration
 - capture and reapply without storing Unity object references
 - overlay output lifecycle owned through `IOverlayOutputAdapter`
@@ -130,6 +131,7 @@ Current P1 source-free checks cover:
 - render-scale minimum/maximum clamp
 - frame-rate minimum clamp
 - empty scene initialization
+- live render-bootstrap availability/current-settings capture
 - unload state transition
 - shutdown state transition
 - restoration of process-global frame settings
