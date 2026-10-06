@@ -58,10 +58,10 @@ namespace VCR.Runtime.Diagnostics
                 Array.Empty<RuntimeMetric>();
             var metrics =
                 new RuntimeDiagnosticsMetricEvidence[
-                    sourceMetrics.Length];
+                    sourceMetrics.Count];
 
             for (var i = 0;
-                 i < sourceMetrics.Length;
+                 i < sourceMetrics.Count;
                  i++)
             {
                 metrics[i] =
