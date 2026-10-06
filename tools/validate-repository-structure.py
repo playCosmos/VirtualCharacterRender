@@ -176,6 +176,18 @@ forbid_source_pattern(
     "VMC sender must not rebuild a bundle from per-message byte arrays",
 )
 
+p3_tracking_validation = (
+    VCR
+    / "Editor"
+    / "P3"
+    / "P3BuiltInTrackingValidation.cs"
+)
+require_source_contains(
+    p3_tracking_validation,
+    "ValidateAudioSnapshotSuppression",
+    "P3 validation must cover unchanged audio expression snapshot suppression",
+)
+
 p0_vmc_validation = (
     VCR
     / "Editor"
@@ -552,6 +564,35 @@ for pose_bitmask_producer in pose_bitmask_producers:
         r"new\s+bool\s*\[\s*\(int\)HumanoidBoneId\.Count\s*\]",
         "hot immutable pose producers must not allocate a second bool[] presence snapshot",
     )
+
+audio_expression_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionSource.cs"
+)
+require_source_contains(
+    audio_expression_source,
+    "PublishEpsilon",
+    "audio fallback must retain an unchanged-value snapshot suppression threshold",
+)
+require_source_contains(
+    audio_expression_source,
+    "_lastSampleTimestampUs",
+    "audio fallback health must advance independently of immutable frame publication",
+)
+require_source_contains(
+    audio_expression_source,
+    "_lastPublishedValue",
+    "audio fallback must remember its last immutable published value",
+)
+require_source_order(
+    audio_expression_source,
+    "_lastSampleTimestampUs =",
+    "if (_latest != null",
+    "audio fallback health sampling must advance before unchanged frame publication is suppressed",
+)
 
 humanoid_pose_target = (
     VCR
