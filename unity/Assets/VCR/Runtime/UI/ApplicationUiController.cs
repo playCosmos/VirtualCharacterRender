@@ -317,6 +317,17 @@ namespace VCR.Runtime.UI
         private string _characterSummaryAppearanceError;
         private string _characterSummaryCache;
 
+        private bool _motionSummaryStateValid;
+        private bool _motionSummaryPoseConfigured;
+        private float _motionSummaryPoseWeight;
+        private bool _motionSummaryManualAvailable;
+        private long _motionSummaryManualSequence;
+        private bool _motionSummaryManualConnected;
+        private ExpressionBlendMode _motionSummaryBlendMode;
+        private float _motionSummaryLayerWeight;
+        private string _motionSummaryExpressionInput;
+        private string _motionSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -6568,38 +6579,143 @@ namespace VCR.Runtime.UI
                 return "Motion/expression mixer unavailable.";
             }
 
+            var poseConfigured =
+                _mixer.PrimaryPoseLayerConfigured;
+            var poseWeight =
+                _mixer.PrimaryPoseLayerWeight;
+            var manualAvailable =
+                _manualExpressionSource != null;
+            var manualSequence =
+                manualAvailable
+                    ? _manualExpressionSource.Sequence
+                    : 0L;
             var manualConnected =
-                _manualExpressionSource != null &&
+                manualAvailable &&
                 _mixer.IsExpressionLayerProvider(
                     _manualExpressionSource);
-            var selectedExpression =
-                _manualExpressionNameInput
-                    ?.text
-                    ?.Trim();
-            var selectedValue =
-                "<none>";
+            var blendMode =
+                _mixer.ExpressionLayerBlendMode;
+            var layerWeight =
+                _mixer.ExpressionLayerWeight;
+            var expressionInput =
+                _manualExpressionNameInput?.text;
 
-            if (_manualExpressionSource != null &&
-                StandardExpressionNames.TryParse(
-                    selectedExpression,
-                    out var expression))
+            if (_motionSummaryStateValid &&
+                _motionSummaryCache != null &&
+                _motionSummaryPoseConfigured ==
+                    poseConfigured &&
+                _motionSummaryPoseWeight ==
+                    poseWeight &&
+                _motionSummaryManualAvailable ==
+                    manualAvailable &&
+                _motionSummaryManualSequence ==
+                    manualSequence &&
+                _motionSummaryManualConnected ==
+                    manualConnected &&
+                _motionSummaryBlendMode ==
+                    blendMode &&
+                _motionSummaryLayerWeight ==
+                    layerWeight &&
+                string.Equals(
+                    _motionSummaryExpressionInput,
+                    expressionInput,
+                    StringComparison.Ordinal))
             {
-                selectedValue =
-                    _manualExpressionSource
-                        .GetExpression(
-                            expression)
-                        .ToString(
-                            "0.00");
+                return _motionSummaryCache;
             }
 
-            return
-                $"Primary pose layer configured: {_mixer.PrimaryPoseLayerConfigured}\n" +
-                $"Primary pose weight: {_mixer.PrimaryPoseLayerWeight:0.00}\n" +
-                $"Manual expression source: {(_manualExpressionSource != null ? "available" : "missing")}\n" +
-                $"Manual layer connected: {manualConnected}\n" +
-                $"Expression blend: {_mixer.ExpressionLayerBlendMode} @ {_mixer.ExpressionLayerWeight:0.00}\n" +
-                $"Selected manual expression: {(string.IsNullOrWhiteSpace(selectedExpression) ? "<none>" : selectedExpression)} = {selectedValue}\n" +
-                "Standard expressions: neutral, happy, angry, sad, relaxed, surprised, aa, ih, ou, ee, oh, blink, blinkLeft, blinkRight, lookUp, lookDown, lookLeft, lookRight";
+            var selectedExpression =
+                expressionInput?.Trim();
+            var hasSelectedValue =
+                manualAvailable &&
+                StandardExpressionNames.TryParse(
+                    selectedExpression,
+                    out var expression);
+            var selectedValue =
+                hasSelectedValue
+                    ? _manualExpressionSource
+                        .GetExpression(
+                            expression)
+                    : 0f;
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append(
+                "Primary pose layer configured: ");
+            builder.Append(
+                poseConfigured);
+            builder.Append(
+                "\nPrimary pose weight: ");
+            builder.Append(
+                poseWeight.ToString(
+                    "0.00",
+                    CultureInfo.InvariantCulture));
+            builder.Append(
+                "\nManual expression source: ");
+            builder.Append(
+                manualAvailable
+                    ? "available"
+                    : "missing");
+            builder.Append(
+                "\nManual layer connected: ");
+            builder.Append(
+                manualConnected);
+            builder.Append(
+                "\nExpression blend: ");
+            builder.Append(
+                blendMode);
+            builder.Append(" @ ");
+            builder.Append(
+                layerWeight.ToString(
+                    "0.00",
+                    CultureInfo.InvariantCulture));
+            builder.Append(
+                "\nSelected manual expression: ");
+            builder.Append(
+                string.IsNullOrWhiteSpace(
+                    selectedExpression)
+                    ? "<none>"
+                    : selectedExpression);
+            builder.Append(" = ");
+
+            if (hasSelectedValue)
+            {
+                builder.Append(
+                    selectedValue.ToString(
+                        "0.00",
+                        CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(
+                    "<none>");
+            }
+
+            builder.Append(
+                "\nStandard expressions: neutral, happy, angry, sad, relaxed, surprised, aa, ih, ou, ee, oh, blink, blinkLeft, blinkRight, lookUp, lookDown, lookLeft, lookRight");
+
+            _motionSummaryPoseConfigured =
+                poseConfigured;
+            _motionSummaryPoseWeight =
+                poseWeight;
+            _motionSummaryManualAvailable =
+                manualAvailable;
+            _motionSummaryManualSequence =
+                manualSequence;
+            _motionSummaryManualConnected =
+                manualConnected;
+            _motionSummaryBlendMode =
+                blendMode;
+            _motionSummaryLayerWeight =
+                layerWeight;
+            _motionSummaryExpressionInput =
+                expressionInput;
+            _motionSummaryStateValid =
+                true;
+            _motionSummaryCache =
+                builder.ToString();
+            return _motionSummaryCache;
         }
 
         private string EnvironmentSummary()
