@@ -983,6 +983,32 @@ namespace VCR.Editor.P6
                     transitionTarget,
                     transitionTarget);
 
+                transitionTarget.ThrowOnValidate =
+                    true;
+
+                var transitionValidationAccepted =
+                    runtime.SetState(
+                        "day",
+                        new EnvironmentTransitionSpec(
+                            EnvironmentTransitionMode.Crossfade,
+                            0.5f),
+                        out var transitionValidationError);
+
+                Expect(
+                    !transitionValidationAccepted &&
+                    !string.IsNullOrWhiteSpace(
+                        transitionValidationError) &&
+                    runtime.Status.StateId ==
+                        "night" &&
+                    !runtime.TransitionStatus.Active &&
+                    !day.activeSelf &&
+                    night.activeSelf,
+                    "transition target validation exceptions must return false/error without changing state or starting a transition",
+                    failures);
+
+                transitionTarget.ThrowOnValidate =
+                    false;
+
                 var transitionStarted =
                     runtime.SetState(
                         "day",
@@ -1684,6 +1710,7 @@ namespace VCR.Editor.P6
     {
         public int ApplyCount { get; private set; }
         public EnvironmentTransitionContext LastContext { get; private set; }
+        public bool ThrowOnValidate { get; set; }
 
         public bool ValidateEnvironmentTransition(
             EnvironmentTransitionSpec transition,
@@ -1691,6 +1718,12 @@ namespace VCR.Editor.P6
             string nextStateId,
             out string error)
         {
+            if (ThrowOnValidate)
+            {
+                throw new InvalidOperationException(
+                    "P6 transition validation failure");
+            }
+
             error = null;
             return
                 !transition.IsImmediate &&
