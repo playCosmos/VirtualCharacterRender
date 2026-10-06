@@ -1473,8 +1473,23 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
-    "eventRuntime.GetRuleAt(",
-    "application UI event controls must use allocation-free indexed event rule lookup",
+    "eventRuntime.TryGetRuleSummaryAt(",
+    "application UI event controls must use allocation-free readonly indexed event rule summaries",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.TryGetRuleSummary(",
+    "application UI event toggle lookup must use allocation-free readonly id summaries",
+)
+forbid_source_pattern(
+    application_ui,
+    r"eventRuntime\.GetRuleAt\s*\(",
+    "application UI refresh/navigation must not allocate defensive mutable rule clones",
+)
+forbid_source_pattern(
+    application_ui,
+    r"eventRuntime\.TryGetRule\s*\(",
+    "application UI refresh/toggle paths must not allocate defensive mutable rule clones",
 )
 forbid_source_pattern(
     application_ui,
@@ -2116,12 +2131,27 @@ event_runtime_host = (
 require_source_contains(
     event_runtime_host,
     "public EventRuntimeRule GetRuleAt(",
-    "event runtime host must expose allocation-free indexed rule lookup",
+    "event runtime host must retain compatibility rule lookup through defensive clones",
 )
 require_source_contains(
     event_runtime_host,
     "public bool TryGetRule(",
-    "event runtime host must expose allocation-free id rule lookup",
+    "event runtime host must retain compatibility id lookup through defensive clones",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRuleSummaryAt(",
+    "event runtime host must expose allocation-free readonly indexed rule summaries",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRuleSummary(",
+    "event runtime host must expose allocation-free readonly id rule summaries",
+)
+require_source_contains(
+    event_runtime_host,
+    "EventRuntimeRuleCloner\n                .CloneRule(",
+    "event runtime mutable rule lookup must clone the live rule before returning it",
 )
 require_source_contains(
     event_runtime_host,
