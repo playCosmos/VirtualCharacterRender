@@ -309,30 +309,44 @@ namespace VCR.Runtime.Application
         {
             error = null;
 
-            if (_quitting)
-            {
-                return true;
-            }
-
+            var firstShutdown =
+                !_quitting;
             _quitting = true;
 
-            var saveSucceeded = true;
+            var succeeded = true;
 
-            if (saveConfiguration &&
+            if (firstShutdown &&
+                saveConfiguration &&
                 _started &&
                 !SaveConfiguration(
                     out error))
             {
-                saveSucceeded = false;
+                succeeded = false;
             }
 
             if (sceneRuntime != null)
             {
                 sceneRuntime.Shutdown();
+
+                var sceneError =
+                    sceneRuntime.Status.LastError;
+
+                if (!string.IsNullOrWhiteSpace(
+                        sceneError))
+                {
+                    succeeded = false;
+                    error =
+                        string.IsNullOrWhiteSpace(
+                            error)
+                            ? sceneError
+                            : error +
+                              " | " +
+                              sceneError;
+                }
             }
 
             _started = false;
-            return saveSucceeded;
+            return succeeded;
         }
 
         private void OnApplicationQuit()
