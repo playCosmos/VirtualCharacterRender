@@ -328,6 +328,7 @@ namespace VCR.Runtime.UI
         private string _motionSummaryExpressionInput;
         private string _motionSummaryCache;
 
+        private bool _trackingToggleLabelHasControl;
         private string _trackingToggleLabelDisplayName;
         private bool _trackingToggleLabelEnabled;
         private string _trackingToggleLabelCache;
@@ -8481,6 +8482,8 @@ namespace VCR.Runtime.UI
         {
             if (control == null)
             {
+                _trackingToggleLabelHasControl =
+                    false;
                 _trackingToggleLabelDisplayName =
                     null;
                 _trackingToggleLabelCache =
@@ -8494,6 +8497,7 @@ namespace VCR.Runtime.UI
                 control.ControlEnabled;
 
             if (_trackingToggleLabelCache != null &&
+                _trackingToggleLabelHasControl &&
                 _trackingToggleLabelEnabled ==
                     enabled &&
                 string.Equals(
@@ -8504,6 +8508,8 @@ namespace VCR.Runtime.UI
                 return _trackingToggleLabelCache;
             }
 
+            _trackingToggleLabelHasControl =
+                true;
             _trackingToggleLabelDisplayName =
                 displayName;
             _trackingToggleLabelEnabled =
