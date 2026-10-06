@@ -164,8 +164,10 @@ namespace VCR.Runtime.Tracking
                         _restoreCandidateSinceUs = nowUs;
                     }
 
-                    if (nowUs - _restoreCandidateSinceUs >=
-                        _subjectRestoreStabilityUs)
+                    if (HasElapsed(
+                            nowUs,
+                            _restoreCandidateSinceUs,
+                            _subjectRestoreStabilityUs))
                     {
                         var wasEstablished = _subjectStateEstablished;
                         var wasLost =
@@ -198,8 +200,10 @@ namespace VCR.Runtime.Tracking
                         _lostCandidateSinceUs = nowUs;
                     }
 
-                    if (nowUs - _lostCandidateSinceUs >=
-                        _subjectLostGraceUs)
+                    if (HasElapsed(
+                            nowUs,
+                            _lostCandidateSinceUs,
+                            _subjectLostGraceUs))
                     {
                         var wasEstablished = _subjectStateEstablished;
                         var wasPresent =
@@ -279,7 +283,10 @@ namespace VCR.Runtime.Tracking
         private bool IsSourceDecisionReady(long nowUs)
         {
             EnsureStarted(nowUs);
-            return nowUs - _startedAtUs >= _sourceStaleUs;
+            return HasElapsed(
+                nowUs,
+                _startedAtUs,
+                _sourceStaleUs);
         }
 
         private static bool IsFresh(
@@ -292,8 +299,34 @@ namespace VCR.Runtime.Tracking
                 return false;
             }
 
-            var ageUs = nowUs - frame.SourceTimestampUs;
-            return ageUs >= 0 && ageUs <= staleUs;
+            return
+                TrackingTimestampMath
+                    .TryElapsedMicroseconds(
+                        nowUs,
+                        frame.SourceTimestampUs,
+                        out var ageUs) &&
+                ageUs <=
+                    (ulong)staleUs;
+        }
+
+        private static bool HasElapsed(
+            long nowUs,
+            long sinceUs,
+            long requiredUs)
+        {
+            if (requiredUs <= 0)
+            {
+                return true;
+            }
+
+            return
+                TrackingTimestampMath
+                    .TryElapsedMicroseconds(
+                        nowUs,
+                        sinceUs,
+                        out var elapsedUs) &&
+                elapsedUs >=
+                    (ulong)requiredUs;
         }
     }
 }
