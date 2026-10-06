@@ -251,6 +251,9 @@ namespace VCR.Editor.P3
                     "audio fallback attack/release smoothing must use separate time constants",
                     failures);
 
+                ValidateAudioSnapshotSuppression(
+                    failures);
+
                 texture =
                     new Texture2D(
                         2,
@@ -302,7 +305,7 @@ namespace VCR.Editor.P3
             {
                 Debug.Log(
                     "VCR P3 built-in tracking validation: PASS " +
-                    "(snapshot ownership/copy isolation, borrowed pose/expression/motion lifetime semantics, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math, disabled preprocessing path)");
+                    "(snapshot ownership/copy isolation, borrowed pose/expression/motion lifetime semantics, selective motion-domain requests, bounded MediaPipe submission correlation, ARKit lifecycle/no-subject/source-loss distinction, capture status, audio fallback math/unchanged-snapshot suppression, disabled preprocessing path)");
                 return true;
             }
 
@@ -313,6 +316,128 @@ namespace VCR.Editor.P3
                     failures));
 
             return false;
+        }
+
+        private static void ValidateAudioSnapshotSuppression(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P3 Audio Snapshot Suppression");
+                var source =
+                    root.AddComponent<
+                        AudioDrivenExpressionSource>();
+
+                var updateValue =
+                    typeof(AudioDrivenExpressionSource)
+                        .GetMethod(
+                            "UpdateValue",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
+
+                var valueField =
+                    typeof(AudioDrivenExpressionSource)
+                        .GetField(
+                            "_value",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
+
+                if (updateValue == null ||
+                    valueField == null)
+                {
+                    failures.Add(
+                        "audio fallback snapshot-suppression reflection contract is incomplete");
+                    return;
+                }
+
+                updateValue.Invoke(
+                    source,
+                    new object[]
+                    {
+                        0f
+                    });
+
+                var firstPublished =
+                    source.TryGetLatestExpressions(
+                        out var first) &&
+                    first?.Expressions != null &&
+                    Mathf.Approximately(
+                        first.Expressions.Get(
+                            StandardExpression.Aa),
+                        0f);
+
+                updateValue.Invoke(
+                    source,
+                    new object[]
+                    {
+                        0f
+                    });
+
+                var stableReference =
+                    source.TryGetLatestExpressions(
+                        out var second) &&
+                    ReferenceEquals(
+                        first,
+                        second);
+
+                valueField.SetValue(
+                    source,
+                    1f);
+                updateValue.Invoke(
+                    source,
+                    new object[]
+                    {
+                        1f
+                    });
+
+                var changedPublished =
+                    source.TryGetLatestExpressions(
+                        out var changed) &&
+                    changed?.Expressions != null &&
+                    !ReferenceEquals(
+                        second,
+                        changed) &&
+                    Mathf.Approximately(
+                        changed.Expressions.Get(
+                            StandardExpression.Aa),
+                        1f);
+
+                Expect(
+                    firstPublished &&
+                    stableReference &&
+                    changedPublished,
+                    "audio fallback must preserve the last immutable frame while the mouth value is unchanged and publish again at a changed boundary value",
+                    failures);
+
+                Expect(
+                    source.TryGetSourceHealth(
+                        TrackingRegion.Expressions,
+                        out var health) &&
+                    health.Health
+                        .LastUpdateTimestampUs > 0 &&
+                    health.LastFrameRuntimeTimestampUs > 0,
+                    "audio fallback health sampling must remain live when unchanged frame publication is suppressed",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "audio fallback snapshot-suppression validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
         }
 
         private static void ValidatePendingSubmissionTracker(
