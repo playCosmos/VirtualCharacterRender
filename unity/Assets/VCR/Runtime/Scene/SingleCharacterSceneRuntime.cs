@@ -593,19 +593,31 @@ namespace VCR.Runtime.Scene
             string stateId,
             out string error)
         {
-            EnsureOperational();
-            ResolveEnvironmentRuntime();
+            error = null;
 
-            if (!IsServiceAlive(_environmentRuntime))
+            try
+            {
+                EnsureOperational();
+                ResolveEnvironmentRuntime();
+
+                if (!IsServiceAlive(_environmentRuntime))
+                {
+                    error =
+                        "No environment runtime is configured.";
+                    return false;
+                }
+
+                return _environmentRuntime.SetState(
+                    stateId,
+                    out error);
+            }
+            catch (Exception exception)
             {
                 error =
-                    "No environment runtime is configured.";
+                    "Environment state change failed: " +
+                    exception.Message;
                 return false;
             }
-
-            return _environmentRuntime.SetState(
-                stateId,
-                out error);
         }
 
         public void ApplyOverlayOutput(
