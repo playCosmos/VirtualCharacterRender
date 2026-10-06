@@ -411,8 +411,7 @@ namespace VCR.Runtime.Presentation2D
 
                     EnsureParameterScratchCapacity(
                         parameterMappingProfile
-                            .Bindings
-                            .Length);
+                            .BindingCount);
 
                     if (!Character2DParameterMapper
                         .TryEvaluateValidatedInto(
