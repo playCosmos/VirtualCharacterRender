@@ -480,6 +480,8 @@ namespace VCR.Editor.P0
 
             var borrowedSenderEquivalencePass =
                 ValidateBorrowedSenderEquivalence();
+            var numericContainmentPass =
+                ValidateVmcNumericContainment();
             var directPacketPathPass =
                 ValidateDirectVmcPacketPath(
                     packet,
@@ -637,6 +639,7 @@ namespace VCR.Editor.P0
                 reusableWriterPass &&
                 customBoundsPass &&
                 borrowedSenderEquivalencePass &&
+                numericContainmentPass &&
                 directPacketPathPass &&
                 sourceLifecyclePass &&
                 decoded.Count == 6 &&
@@ -1212,6 +1215,216 @@ namespace VCR.Editor.P0
             {
                 Debug.LogError(
                     "VCR P0 borrowed VMC sender equivalence validation exception: " +
+                    exception);
+                return false;
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object
+                        .DestroyImmediate(
+                            root);
+                }
+            }
+        }
+
+        private static bool ValidateVmcNumericContainment()
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P0 VMC Numeric Containment");
+                var sender =
+                    root.AddComponent<
+                        VmcUdpSender>();
+
+                var bones =
+                    new NormalizedBonePose[
+                        (int)HumanoidBoneId.Count];
+                var hasBone =
+                    new bool[
+                        (int)HumanoidBoneId.Count];
+                var hips =
+                    (int)HumanoidBoneId.Hips;
+
+                bones[hips] =
+                    new NormalizedBonePose(
+                        new TrackingVector3(
+                            float.NaN,
+                            float.PositiveInfinity,
+                            float.NegativeInfinity),
+                        new TrackingQuaternion(
+                            float.NaN,
+                            0f,
+                            0f,
+                            0f));
+                hasBone[hips] =
+                    true;
+
+                var pose =
+                    new HumanoidPoseState(
+                        HumanoidPoseSpace.OriginalLocal,
+                        new TrackingVector3(
+                            float.NaN,
+                            float.PositiveInfinity,
+                            float.NegativeInfinity),
+                        new TrackingQuaternion(
+                            float.NaN,
+                            0f,
+                            0f,
+                            0f),
+                        bones,
+                        hasBone,
+                        SnapshotArrayOwnership.Copy);
+
+                var standard =
+                    new float[
+                        (int)StandardExpression.Count];
+                standard[
+                    (int)StandardExpression.Happy] =
+                        float.NaN;
+                var expressions =
+                    new NormalizedExpressionState(
+                        standard,
+                        new[]
+                        {
+                            new NamedExpressionValue(
+                                "numeric-invalid",
+                                float.PositiveInfinity)
+                        },
+                        SnapshotArrayOwnership.Copy);
+
+                var frame =
+                    new TrackingFrame(
+                        sequence: 1,
+                        sourceTimestampUs: 1,
+                        validRegions:
+                            TrackingRegion.FullBody |
+                            TrackingRegion.Expressions,
+                        confidence: 1f,
+                        subjectDetected: true,
+                        humanoidPose: pose,
+                        expressions: expressions,
+                        sourceId: "p0-vmc-numeric",
+                        runtimeTimestampUs: 1);
+
+                var senderType =
+                    typeof(VmcUdpSender);
+                var buildBundle =
+                    senderType.GetMethod(
+                        "BuildBundle",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic,
+                        binder: null,
+                        types:
+                            new[]
+                            {
+                                typeof(TrackingFrame),
+                                typeof(float)
+                            },
+                        modifiers: null);
+                var scratchField =
+                    senderType.GetField(
+                        "_packetScratch",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+                var finiteOrZero =
+                    senderType.GetMethod(
+                        "FiniteOrZero",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var clamp01Finite =
+                    senderType.GetMethod(
+                        "Clamp01Finite",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+                var providerClamp =
+                    typeof(Vrm10MotionSnapshotProvider)
+                        .GetMethod(
+                            "Clamp01Finite",
+                            BindingFlags.Static |
+                            BindingFlags.NonPublic);
+
+                if (buildBundle == null ||
+                    scratchField == null ||
+                    finiteOrZero == null ||
+                    clamp01Finite == null ||
+                    providerClamp == null)
+                {
+                    return false;
+                }
+
+                var packetLength =
+                    (int)buildBundle.Invoke(
+                        sender,
+                        new object[]
+                        {
+                            frame,
+                            float.NaN
+                        });
+                var packet =
+                    (byte[])scratchField.GetValue(
+                        sender);
+                var messages =
+                    new List<OscMessage>();
+
+                if (!OscPacketReader.TryReadMessages(
+                        packet,
+                        packetLength,
+                        messages))
+                {
+                    return false;
+                }
+
+                foreach (var message in messages)
+                {
+                    foreach (var argument in
+                             message.Arguments ??
+                             Array.Empty<OscArgument>())
+                    {
+                        if (argument.TryGetFloat(
+                                out var value) &&
+                            !float.IsFinite(value))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                return
+                    Mathf.Approximately(
+                        (float)finiteOrZero.Invoke(
+                            null,
+                            new object[]
+                            {
+                                float.NaN
+                            }),
+                        0f) &&
+                    Mathf.Approximately(
+                        (float)clamp01Finite.Invoke(
+                            null,
+                            new object[]
+                            {
+                                float.PositiveInfinity
+                            }),
+                        0f) &&
+                    Mathf.Approximately(
+                        (float)providerClamp.Invoke(
+                            null,
+                            new object[]
+                            {
+                                float.NegativeInfinity
+                            }),
+                        0f);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "VCR P0 VMC numeric containment validation exception: " +
                     exception);
                 return false;
             }
