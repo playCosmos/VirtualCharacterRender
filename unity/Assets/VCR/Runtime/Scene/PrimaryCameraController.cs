@@ -137,24 +137,64 @@ namespace VCR.Runtime.Scene
         private static SceneCameraSettings Sanitize(
             SceneCameraSettings value)
         {
+            var fallback =
+                SceneCameraSettings.Default;
+
+            value.LocalPosition =
+                SanitizeVector3(
+                    value.LocalPosition,
+                    fallback.LocalPosition);
+            value.LocalEulerAngles =
+                SanitizeVector3(
+                    value.LocalEulerAngles,
+                    fallback.LocalEulerAngles);
+
             value.FieldOfView =
                 Mathf.Clamp(
-                    value.FieldOfView,
+                    FiniteOrDefault(
+                        value.FieldOfView,
+                        fallback.FieldOfView),
                     1f,
                     179f);
 
             value.NearClipPlane =
                 Mathf.Max(
                     0.001f,
-                    value.NearClipPlane);
+                    FiniteOrDefault(
+                        value.NearClipPlane,
+                        fallback.NearClipPlane));
 
             value.FarClipPlane =
                 Mathf.Max(
                     value.NearClipPlane + 0.01f,
-                    value.FarClipPlane);
+                    FiniteOrDefault(
+                        value.FarClipPlane,
+                        fallback.FarClipPlane));
 
             return value;
         }
+
+        private static Vector3 SanitizeVector3(
+            Vector3 value,
+            Vector3 fallback) =>
+                new(
+                    FiniteOrDefault(
+                        value.x,
+                        fallback.x),
+                    FiniteOrDefault(
+                        value.y,
+                        fallback.y),
+                    FiniteOrDefault(
+                        value.z,
+                        fallback.z));
+
+        private static float FiniteOrDefault(
+            float value,
+            float fallback) =>
+                !float.IsNaN(value) &&
+                !float.IsInfinity(value)
+                    ? value
+                    : fallback;
 
         private void OnDestroy()
         {
