@@ -193,6 +193,15 @@ namespace VCR.Runtime.UI
         private int _settingsCapabilityIndex;
         private int _diagnosticsMetricPage;
 
+        private long _diagnosticsSummarySequence = -1;
+        private int _diagnosticsSummaryPage = -1;
+        private float _diagnosticsSummaryReportInterval =
+            float.NaN;
+        private bool _diagnosticsSummaryConsoleLogging;
+        private bool _diagnosticsSummaryCsvEvidence;
+        private string _diagnosticsSummaryEvidenceDirectory;
+        private string _diagnosticsSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -574,6 +583,7 @@ namespace VCR.Runtime.UI
                 _diagnosticsSortedMetrics =
                     Array.Empty<RuntimeMetric>();
                 _diagnosticsMetricPage = 0;
+                InvalidateDiagnosticsSummaryCache();
 
                 if (_subscribedDiagnostics != null)
                 {
@@ -640,6 +650,7 @@ namespace VCR.Runtime.UI
             _diagnosticsMetricSource = null;
             _diagnosticsSortedMetrics =
                 Array.Empty<RuntimeMetric>();
+            InvalidateDiagnosticsSummaryCache();
             _hasCurrentAppearanceSnapshot = false;
         }
 
@@ -6319,6 +6330,34 @@ namespace VCR.Runtime.UI
                     start +
                     pageSize);
 
+            var reportInterval =
+                diagnostics.ReportIntervalSeconds;
+            var consoleLogging =
+                diagnostics.ConsoleLoggingEnabled;
+            var csvEvidence =
+                diagnostics.CsvEvidenceEnabled;
+            var evidenceDirectory =
+                diagnostics.EvidenceDirectory;
+
+            if (_diagnosticsSummaryCache != null &&
+                _diagnosticsSummarySequence ==
+                    snapshot.Sequence &&
+                _diagnosticsSummaryPage ==
+                    _diagnosticsMetricPage &&
+                _diagnosticsSummaryReportInterval ==
+                    reportInterval &&
+                _diagnosticsSummaryConsoleLogging ==
+                    consoleLogging &&
+                _diagnosticsSummaryCsvEvidence ==
+                    csvEvidence &&
+                string.Equals(
+                    _diagnosticsSummaryEvidenceDirectory,
+                    evidenceDirectory,
+                    StringComparison.Ordinal))
+            {
+                return _diagnosticsSummaryCache;
+            }
+
             var builder =
                 _summaryBuilder;
             builder.Clear();
@@ -6344,9 +6383,9 @@ namespace VCR.Runtime.UI
 
             builder.AppendLine();
             builder.AppendLine(
-                $"Reporting: every {diagnostics.ReportIntervalSeconds:0.###}s | console {diagnostics.ConsoleLoggingEnabled} | CSV {diagnostics.CsvEvidenceEnabled}");
+                $"Reporting: every {reportInterval:0.###}s | console {consoleLogging} | CSV {csvEvidence}");
             builder.AppendLine(
-                $"Evidence directory: {diagnostics.EvidenceDirectory}");
+                $"Evidence directory: {evidenceDirectory}");
             builder.AppendLine();
             builder.AppendLine(
                 $"Subsystem metrics: {metrics.Length} | page {_diagnosticsMetricPage + 1}/{pageCount}");
@@ -6389,7 +6428,34 @@ namespace VCR.Runtime.UI
                 }
             }
 
-            return builder.ToString();
+            _diagnosticsSummarySequence =
+                snapshot.Sequence;
+            _diagnosticsSummaryPage =
+                _diagnosticsMetricPage;
+            _diagnosticsSummaryReportInterval =
+                reportInterval;
+            _diagnosticsSummaryConsoleLogging =
+                consoleLogging;
+            _diagnosticsSummaryCsvEvidence =
+                csvEvidence;
+            _diagnosticsSummaryEvidenceDirectory =
+                evidenceDirectory;
+            _diagnosticsSummaryCache =
+                builder.ToString();
+
+            return _diagnosticsSummaryCache;
+        }
+
+        private void InvalidateDiagnosticsSummaryCache()
+        {
+            _diagnosticsSummarySequence = -1;
+            _diagnosticsSummaryPage = -1;
+            _diagnosticsSummaryReportInterval =
+                float.NaN;
+            _diagnosticsSummaryConsoleLogging = false;
+            _diagnosticsSummaryCsvEvidence = false;
+            _diagnosticsSummaryEvidenceDirectory = null;
+            _diagnosticsSummaryCache = null;
         }
 
         private static string FormatDiagnosticValue(
