@@ -261,6 +261,21 @@ namespace VCR.Runtime.UI
         private long _eventsSummaryAmbiguousActions;
         private string _eventsSummaryCache;
 
+        private bool _outputSummaryStateValid;
+        private bool _outputSummaryHasAdapter;
+        private OverlayOutputState _outputSummaryState;
+        private string _outputSummaryError;
+        private int _outputSummaryClientWidth;
+        private int _outputSummaryClientHeight;
+        private bool _outputSummaryTransparent;
+        private bool _outputSummaryTopmost;
+        private bool _outputSummaryClickThrough;
+        private int _outputSummaryRenderWidth;
+        private int _outputSummaryRenderHeight;
+        private int _outputSummaryTargetFrameRate;
+        private bool _outputSummaryRunInBackground;
+        private string _outputSummaryCache;
+
         public ApplicationUiModel Model => _model;
 
         private void Awake()
@@ -6708,34 +6723,219 @@ namespace VCR.Runtime.UI
 
             var output =
                 sceneRuntime.OverlayOutput;
-            var readiness =
-                sceneRuntime.OverlayCaptureReadiness;
-
-            var minimum =
-                sceneRuntime
-                    .EvaluateBroadcastCaptureTarget(
-                        BroadcastCaptureTarget
-                            .Minimum720p60);
-
-            var recommended =
-                sceneRuntime
-                    .EvaluateBroadcastCaptureTarget(
-                        BroadcastCaptureTarget
-                            .Recommended1080p60);
-
+            var hasAdapter =
+                output != null;
             var status =
-                output?.Status;
+                hasAdapter
+                    ? output.Status
+                    : default;
+            var settings =
+                hasAdapter
+                    ? output.Settings
+                    : default;
+            var render =
+                sceneRuntime.CaptureRenderSettings();
 
+            if (OutputSummaryCacheMatches(
+                    hasAdapter,
+                    status,
+                    settings,
+                    render))
+            {
+                return _outputSummaryCache;
+            }
+
+            var readiness =
+                hasAdapter
+                    ? OverlayCaptureReadinessEvaluator
+                        .Evaluate(
+                            status,
+                            settings)
+                    : new OverlayCaptureReadiness(
+                        false,
+                        OverlayCaptureReadinessFailure
+                            .NotActive,
+                        "No overlay output adapter is configured.");
+            var minimum =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget
+                            .Minimum720p60,
+                        readiness,
+                        render.Width,
+                        render.Height,
+                        render.TargetFrameRate,
+                        render.RunInBackground);
+            var recommended =
+                BroadcastCaptureReadinessEvaluator
+                    .Evaluate(
+                        BroadcastCaptureTarget
+                            .Recommended1080p60,
+                        readiness,
+                        render.Width,
+                        render.Height,
+                        render.TargetFrameRate,
+                        render.RunInBackground);
+
+            var builder =
+                _summaryBuilder;
+            builder.Clear();
+            builder.Append("Output state: ");
+            if (hasAdapter)
+            {
+                builder.Append(
+                    status.State);
+            }
+            else
+            {
+                builder.Append("none");
+            }
+
+            builder.Append("\nTransparent: ");
+            if (hasAdapter)
+            {
+                builder.Append(
+                    settings.Transparent);
+            }
+            else
+            {
+                builder.Append("n/a");
+            }
+
+            builder.Append("\nTopmost: ");
+            if (hasAdapter)
+            {
+                builder.Append(
+                    settings.Topmost);
+            }
+            else
+            {
+                builder.Append("n/a");
+            }
+
+            builder.Append(
+                "\nClick-through: ");
+            if (hasAdapter)
+            {
+                builder.Append(
+                    settings.ClickThrough);
+            }
+            else
+            {
+                builder.Append("n/a");
+            }
+
+            builder.Append(
+                "\nCapture ready: ");
+            builder.Append(readiness.Ready);
+            builder.Append(
+                "\nCapture readiness: ");
+            builder.Append(readiness.Failure);
+            builder.Append(
+                "\n720p60 configured: ");
+            builder.Append(minimum.Ready);
+            builder.Append(
+                "\n1080p60 configured: ");
+            builder.Append(recommended.Ready);
+            builder.Append(
+                "\nOutput error: ");
+            builder.Append(
+                hasAdapter
+                    ? status.LastError ??
+                      "<none>"
+                    : "<none>");
+
+            CaptureOutputSummaryState(
+                hasAdapter,
+                status,
+                settings,
+                render);
+            _outputSummaryCache =
+                builder.ToString();
+            return _outputSummaryCache;
+        }
+
+        private bool OutputSummaryCacheMatches(
+            bool hasAdapter,
+            OverlayOutputStatus status,
+            OverlayOutputSettings settings,
+            RenderRuntimeSettings render)
+        {
             return
-                $"Output state: {(status.HasValue ? status.Value.State.ToString() : "none")}\n" +
-                $"Transparent: {output?.Settings.Transparent.ToString() ?? "n/a"}\n" +
-                $"Topmost: {output?.Settings.Topmost.ToString() ?? "n/a"}\n" +
-                $"Click-through: {output?.Settings.ClickThrough.ToString() ?? "n/a"}\n" +
-                $"Capture ready: {readiness.Ready}\n" +
-                $"Capture readiness: {readiness.Failure}\n" +
-                $"720p60 configured: {minimum.Ready}\n" +
-                $"1080p60 configured: {recommended.Ready}\n" +
-                $"Output error: {status?.LastError ?? "<none>"}";
+                _outputSummaryStateValid &&
+                _outputSummaryCache != null &&
+                _outputSummaryHasAdapter ==
+                    hasAdapter &&
+                (!hasAdapter ||
+                 (_outputSummaryState ==
+                      status.State &&
+                  string.Equals(
+                      _outputSummaryError,
+                      status.LastError,
+                      StringComparison.Ordinal) &&
+                  _outputSummaryClientWidth ==
+                      status.ClientWidth &&
+                  _outputSummaryClientHeight ==
+                      status.ClientHeight &&
+                  _outputSummaryTransparent ==
+                      settings.Transparent &&
+                  _outputSummaryTopmost ==
+                      settings.Topmost &&
+                  _outputSummaryClickThrough ==
+                      settings.ClickThrough)) &&
+                _outputSummaryRenderWidth ==
+                    render.Width &&
+                _outputSummaryRenderHeight ==
+                    render.Height &&
+                _outputSummaryTargetFrameRate ==
+                    render.TargetFrameRate &&
+                _outputSummaryRunInBackground ==
+                    render.RunInBackground;
+        }
+
+        private void CaptureOutputSummaryState(
+            bool hasAdapter,
+            OverlayOutputStatus status,
+            OverlayOutputSettings settings,
+            RenderRuntimeSettings render)
+        {
+            _outputSummaryHasAdapter =
+                hasAdapter;
+            _outputSummaryState =
+                hasAdapter
+                    ? status.State
+                    : default;
+            _outputSummaryError =
+                hasAdapter
+                    ? status.LastError
+                    : null;
+            _outputSummaryClientWidth =
+                hasAdapter
+                    ? status.ClientWidth
+                    : 0;
+            _outputSummaryClientHeight =
+                hasAdapter
+                    ? status.ClientHeight
+                    : 0;
+            _outputSummaryTransparent =
+                hasAdapter &&
+                settings.Transparent;
+            _outputSummaryTopmost =
+                hasAdapter &&
+                settings.Topmost;
+            _outputSummaryClickThrough =
+                hasAdapter &&
+                settings.ClickThrough;
+            _outputSummaryRenderWidth =
+                render.Width;
+            _outputSummaryRenderHeight =
+                render.Height;
+            _outputSummaryTargetFrameRate =
+                render.TargetFrameRate;
+            _outputSummaryRunInBackground =
+                render.RunInBackground;
+            _outputSummaryStateValid =
+                true;
         }
 
         private string SettingsSummary()
