@@ -193,6 +193,26 @@ forbid_source_pattern(
     r"OscPacketWriter\s*\.\s*WriteBundle\s*\(",
     "VMC sender must not rebuild a bundle from per-message byte arrays",
 )
+require_source_contains(
+    vmc_sender,
+    "SanitizeConfiguration();",
+    "VMC sender must sanitize serialized scheduling/destination configuration before runtime use",
+)
+require_source_contains(
+    vmc_sender,
+    "private static float FiniteOrZero(",
+    "VMC sender must contain non-finite scalar output before OSC serialization",
+)
+require_source_contains(
+    vmc_sender,
+    "private static float Clamp01Finite(",
+    "VMC sender must contain non-finite expression weights before OSC serialization",
+)
+require_source_contains(
+    vmc_sender,
+    "var rotationValid =",
+    "VMC sender must replace non-finite or degenerate provider quaternions before wire output",
+)
 
 p3_tracking_validation = (
     VCR
@@ -261,6 +281,11 @@ require_source_contains(
     p0_vmc_validation,
     "ValidateBorrowedSenderEquivalence",
     "P0 VMC validation must compare borrowed and immutable sender packet bytes",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateVmcNumericContainment",
+    "P0 VMC validation must prove non-finite pose/expression/time values are contained before wire serialization",
 )
 require_source_contains(
     p0_vmc_validation,
@@ -3352,6 +3377,21 @@ require_source_contains(
     vrm_motion_snapshot_provider,
     "GetWeight(",
     "VRM motion snapshot capture must read weights through the stable key list",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "TryCaptureTransform(",
+    "VRM motion snapshot capture must exclude non-finite or degenerate Unity transforms",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "private static float Clamp01Finite(",
+    "VRM motion snapshot capture must finite-clamp expression weights",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "q.sqrMagnitude < 1e-8f",
+    "VRM motion snapshot capture must reject degenerate quaternions",
 )
 forbid_source_pattern(
     vrm_motion_snapshot_provider,
