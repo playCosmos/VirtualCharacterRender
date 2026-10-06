@@ -927,7 +927,7 @@ forbid_source_pattern(
 require_source_contains(
     character_2d_parameter_mapping,
     "var valueCount = 0;",
-    "2D parameter mapping must pre-count emitted values and allocate one exact-size output array",
+    "2D parameter snapshot API must pre-count emitted values and allocate one exact-size owned output array",
 )
 require_source_contains(
     character_2d_parameter_mapping,
@@ -937,7 +937,12 @@ require_source_contains(
 require_source_contains(
     character_2d_parameter_mapping,
     "internal static bool TryEvaluateValidated(",
-    "2D parameter mapping must expose a validated hot-path evaluator for the runtime host",
+    "2D parameter mapping must retain its exact-size validated snapshot evaluator",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal static bool TryEvaluateValidatedInto(",
+    "2D parameter mapping must expose a caller-buffer evaluator for the runtime hot path",
 )
 
 character_2d_runtime = (
@@ -958,13 +963,40 @@ require_source_contains(
 )
 require_source_contains(
     character_2d_runtime,
-    ".TryEvaluateValidated(",
-    "2D runtime hot path must use the already-validated mapping evaluator",
+    "_parameterScratch",
+    "2D runtime must retain reusable mapped-parameter scratch storage",
+)
+require_source_contains(
+    character_2d_runtime,
+    "EnsureParameterScratchCapacity(",
+    "2D runtime must grow mapped-parameter scratch only when profile capacity requires it",
+)
+require_source_contains(
+    character_2d_runtime,
+    ".TryEvaluateValidatedInto(",
+    "2D runtime hot path must evaluate directly into reusable mapped-parameter scratch",
+)
+require_source_contains(
+    character_2d_runtime,
+    "_parameterScratch.AsSpan(",
+    "2D runtime must pass only the emitted mapped-parameter range to the backend sink",
 )
 forbid_source_pattern(
     character_2d_runtime,
     r"Character2DParameterMapper\s*\n?\s*\.TryEvaluate\s*\(",
     "2D runtime hot path must not repeat full mapping validation every changed tracking frame",
+)
+
+character_2d_contracts = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DBackendContracts.cs"
+)
+require_source_contains(
+    character_2d_contracts,
+    "ReadOnlySpan<Character2DParameterValue>",
+    "2D mapped-parameter sinks must synchronously borrow runtime scratch instead of receiving owned arrays",
 )
 
 p13_source_validation = (
@@ -977,6 +1009,11 @@ require_source_contains(
     p13_source_validation,
     "same profile object mutates",
     "P13 validation must cover mapping-cache invalidation for in-place profile mutation",
+)
+require_source_contains(
+    p13_source_validation,
+    "reuse the same parameter scratch when capacity is unchanged",
+    "P13 validation must cover mapped-parameter scratch reuse across changed frames",
 )
 
 capability_registry = (
