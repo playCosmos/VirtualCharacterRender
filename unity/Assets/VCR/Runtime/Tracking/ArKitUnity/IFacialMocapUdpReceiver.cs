@@ -129,6 +129,11 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 Interlocked.Read(ref _socketErrorCount),
                 _lastError);
 
+        private void OnValidate()
+        {
+            SanitizeReceiverConfiguration();
+        }
+
         private void OnEnable()
         {
             if (!Application.isPlaying)
@@ -353,6 +358,8 @@ namespace VCR.Runtime.Tracking.ArKitUnity
 
         private void StartReceiver()
         {
+            SanitizeReceiverConfiguration();
+
             if (!StopReceiver())
             {
                 _lastError =
@@ -784,9 +791,102 @@ namespace VCR.Runtime.Tracking.ArKitUnity
             StopReceiver();
         }
 
+        private void SanitizeReceiverConfiguration()
+        {
+            handshakeRetrySeconds =
+                SanitizeSeconds(
+                    handshakeRetrySeconds,
+                    fallback: 2f,
+                    minimum: 0.25f);
+            sourceStaleSeconds =
+                SanitizeSeconds(
+                    sourceStaleSeconds,
+                    fallback: 1f,
+                    minimum: 0.1f);
+            restoreStabilitySeconds =
+                SanitizeSeconds(
+                    restoreStabilitySeconds,
+                    fallback: 0.15f,
+                    minimum: 0f);
+            headPositionScale =
+                SanitizeFinite(
+                    headPositionScale,
+                    fallback: 1f);
+            headEulerSigns =
+                SanitizeVector3(
+                    headEulerSigns,
+                    new Vector3(
+                        -1f,
+                        -1f,
+                        1f));
+            headPositionSigns =
+                SanitizeVector3(
+                    headPositionSigns,
+                    new Vector3(
+                        1f,
+                        1f,
+                        -1f));
+        }
+
+        private static float SanitizeSeconds(
+            float value,
+            float fallback,
+            float minimum)
+        {
+            if (!float.IsFinite(value))
+            {
+                return fallback;
+            }
+
+            return Math.Max(
+                minimum,
+                value);
+        }
+
+        private static float SanitizeFinite(
+            float value,
+            float fallback)
+        {
+            return float.IsFinite(value)
+                ? value
+                : fallback;
+        }
+
+        private static Vector3 SanitizeVector3(
+            Vector3 value,
+            Vector3 fallback)
+        {
+            return new Vector3(
+                SanitizeFinite(
+                    value.x,
+                    fallback.x),
+                SanitizeFinite(
+                    value.y,
+                    fallback.y),
+                SanitizeFinite(
+                    value.z,
+                    fallback.z));
+        }
+
         private static long SecondsToMicroseconds(float seconds)
         {
-            return (long)(Math.Max(0f, seconds) * 1_000_000.0);
+            if (!float.IsFinite(seconds) ||
+                seconds <= 0f)
+            {
+                return 0L;
+            }
+
+            var microseconds =
+                (double)seconds *
+                1_000_000.0;
+
+            if (microseconds >=
+                long.MaxValue)
+            {
+                return long.MaxValue;
+            }
+
+            return (long)microseconds;
         }
     }
 }
