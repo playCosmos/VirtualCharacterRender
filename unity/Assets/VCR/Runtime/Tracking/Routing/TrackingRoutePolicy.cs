@@ -28,7 +28,16 @@ namespace VCR.Runtime.Tracking.Routing
             TrackingSourceKind.AudioFallback
         };
 
-        public TrackingSourceKind[] FacePriorityOrder
+        public TrackingSourceKind[] FacePriorityOrder =>
+            (TrackingSourceKind[])
+                RuntimeFacePriorityOrder.Clone();
+
+        public TrackingSourceKind[] ExpressionPriorityOrder =>
+            (TrackingSourceKind[])
+                RuntimeExpressionPriorityOrder.Clone();
+
+        internal TrackingSourceKind[]
+            RuntimeFacePriorityOrder
         {
             get
             {
@@ -43,7 +52,8 @@ namespace VCR.Runtime.Tracking.Routing
             }
         }
 
-        public TrackingSourceKind[] ExpressionPriorityOrder
+        internal TrackingSourceKind[]
+            RuntimeExpressionPriorityOrder
         {
             get
             {
@@ -61,7 +71,8 @@ namespace VCR.Runtime.Tracking.Routing
         public int GetFacePriority(
             TrackingSourceKind kind)
         {
-            var order = FacePriorityOrder;
+            var order =
+                RuntimeFacePriorityOrder;
 
             for (var i = 0; i < order.Length; i++)
             {
@@ -77,7 +88,8 @@ namespace VCR.Runtime.Tracking.Routing
         public int GetExpressionPriority(
             TrackingSourceKind kind)
         {
-            var order = ExpressionPriorityOrder;
+            var order =
+                RuntimeExpressionPriorityOrder;
 
             for (var i = 0; i < order.Length; i++)
             {
