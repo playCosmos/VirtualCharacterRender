@@ -345,6 +345,8 @@ namespace VCR.Runtime.UI
         private string _diagnosticsNextLabelCache;
         private ApplicationUiSection _contextVisibilitySection =
             ApplicationUiSection.Count;
+        private readonly byte[] _sectionAvailabilityCache =
+            new byte[(int)ApplicationUiSection.Count];
 
         public ApplicationUiModel Model => _model;
 
@@ -511,6 +513,10 @@ namespace VCR.Runtime.UI
             _appearanceMoveUserPresetDownButton = null;
             _contextVisibilitySection =
                 ApplicationUiSection.Count;
+            Array.Clear(
+                _sectionAvailabilityCache,
+                0,
+                _sectionAvailabilityCache.Length);
 
             BuildUi();
             RefreshAll();
@@ -4812,7 +4818,19 @@ namespace VCR.Runtime.UI
                 var available =
                     _model.IsAvailable(
                         section);
+                var availabilityState =
+                    available
+                        ? (byte)2
+                        : (byte)1;
 
+                if (_sectionAvailabilityCache[i] ==
+                    availabilityState)
+                {
+                    continue;
+                }
+
+                _sectionAvailabilityCache[i] =
+                    availabilityState;
                 button.interactable =
                     available;
 
@@ -4887,223 +4905,8 @@ namespace VCR.Runtime.UI
             {
                 _contextVisibilitySection =
                     selected;
-
-                if (_appearanceActions != null &&
-                    _appearanceActions.gameObject.activeSelf !=
-                        characterSelected)
-            {
-                _appearanceActions.gameObject.SetActive(
-                    characterSelected);
-            }
-
-            if (_appearanceDirectActions != null &&
-                _appearanceDirectActions.gameObject.activeSelf !=
-                    characterSelected)
-            {
-                _appearanceDirectActions.gameObject.SetActive(
-                    characterSelected);
-            }
-
-            if (_appearancePersistenceActions != null &&
-                _appearancePersistenceActions.gameObject.activeSelf !=
-                    characterSelected)
-            {
-                _appearancePersistenceActions.gameObject.SetActive(
-                    characterSelected);
-            }
-
-            if (_appearancePresetManagementActions != null &&
-                _appearancePresetManagementActions.gameObject.activeSelf !=
-                    characterSelected)
-            {
-                _appearancePresetManagementActions.gameObject.SetActive(
-                    characterSelected);
-            }
-
-            SetActive(
-                _characterPathInput,
-                characterSelected);
-            SetActive(
-                _characterBrowseButton,
-                characterSelected);
-            SetActive(
-                _loadCharacterButton,
-                characterSelected);
-            SetActive(
-                _reloadCharacterButton,
-                characterSelected);
-            SetActive(
-                _unloadCharacterButton,
-                characterSelected);
-            SetActive(
-                _trackingPreviousButton,
-                trackingSelected);
-            SetActive(
-                _trackingToggleButton,
-                trackingSelected);
-            SetActive(
-                _trackingRecoverButton,
-                trackingSelected);
-            SetActive(
-                _trackingNextButton,
-                trackingSelected);
-
-            SetActive(
-                _apply720p60Button,
-                outputSelected);
-            SetActive(
-                _apply1080p60Button,
-                outputSelected);
-            SetActive(
-                _outputTransparentButton,
-                outputSelected);
-            SetActive(
-                _outputTopmostButton,
-                outputSelected);
-            SetActive(
-                _outputClickThroughButton,
-                outputSelected);
-
-            SetActive(
-                _motionPoseWeightLabel,
-                motionSelected);
-            SetActive(
-                _motionPoseWeightSlider,
-                motionSelected);
-            SetActive(
-                _manualExpressionNameInput,
-                motionSelected);
-            SetActive(
-                _manualExpressionValueInput,
-                motionSelected);
-            SetActive(
-                _manualExpressionApplyButton,
-                motionSelected);
-            SetActive(
-                _manualExpressionClearButton,
-                motionSelected);
-            SetActive(
-                _manualExpressionClearAllButton,
-                motionSelected);
-
-            SetActive(
-                _environmentStateInput,
-                environmentSelected);
-            SetActive(
-                _environmentTransitionModeButton,
-                environmentSelected);
-            SetActive(
-                _environmentTransitionDurationInput,
-                environmentSelected);
-            SetActive(
-                _environmentApplyStateButton,
-                environmentSelected);
-
-            SetActive(
-                _materialPreviousSlotButton,
-                materialSelected);
-            SetActive(
-                _materialNextSlotButton,
-                materialSelected);
-            SetActive(
-                _materialSlotInput,
-                materialSelected);
-            SetActive(
-                _materialShaderInput,
-                materialSelected);
-            SetActive(
-                _materialApplyShaderButton,
-                materialSelected);
-            SetActive(
-                _materialPropertyInput,
-                materialSelected);
-            SetActive(
-                _materialValueInput,
-                materialSelected);
-            SetActive(
-                _materialSetFloatButton,
-                materialSelected);
-            SetActive(
-                _materialClearOverrideButton,
-                materialSelected);
-            SetActive(
-                _materialRefreshSlotsButton,
-                materialSelected);
-
-            SetActive(
-                _eventPreviousRuleButton,
-                eventsSelected);
-            SetActive(
-                _eventNextRuleButton,
-                eventsSelected);
-            SetActive(
-                _eventRuleInput,
-                eventsSelected);
-            SetActive(
-                _eventToggleRuleButton,
-                eventsSelected);
-            SetActive(
-                _eventTraceButton,
-                eventsSelected);
-            SetActive(
-                _eventMaxCommandsInput,
-                eventsSelected);
-            SetActive(
-                _eventApplyMaxCommandsButton,
-                eventsSelected);
-            SetActive(
-                _eventSaveRulesButton,
-                eventsSelected);
-            SetActive(
-                _eventReloadRulesButton,
-                eventsSelected);
-
-            SetActive(
-                _settingsPreviousCapabilityButton,
-                settingsSelected);
-            SetActive(
-                _settingsNextCapabilityButton,
-                settingsSelected);
-            SetActive(
-                _settingsToggleCapabilityButton,
-                settingsSelected);
-            SetActive(
-                _settingsRenderScaleInput,
-                settingsSelected);
-            SetActive(
-                _settingsApplyRenderScaleButton,
-                settingsSelected);
-            SetActive(
-                _settingsFpsInput,
-                settingsSelected);
-            SetActive(
-                _settingsApplyFpsButton,
-                settingsSelected);
-            SetActive(
-                _settingsVsyncButton,
-                settingsSelected);
-            SetActive(
-                _settingsRunInBackgroundButton,
-                settingsSelected);
-
-            SetActive(
-                _diagnosticsPreviousPageButton,
-                diagnosticsSelected);
-            SetActive(
-                _diagnosticsNextPageButton,
-                diagnosticsSelected);
-            SetActive(
-                _diagnosticsCaptureButton,
-                diagnosticsSelected);
-            SetActive(
-                _diagnosticsSaveSnapshotButton,
-                diagnosticsSelected);
-            SetActive(
-                _diagnosticsCsvButton,
-                diagnosticsSelected);
-                SetActive(
-                    _diagnosticsConsoleButton,
-                    diagnosticsSelected);
+                RefreshContextActionVisibility(
+                    selected);
             }
 
             if (motionSelected)
@@ -5618,6 +5421,256 @@ namespace VCR.Runtime.UI
                         canApply;
                 }
             }
+        }
+
+        private void RefreshContextActionVisibility(
+            ApplicationUiSection selected)
+        {
+            var characterSelected =
+                selected ==
+                ApplicationUiSection.Character;
+            var outputSelected =
+                selected ==
+                ApplicationUiSection.CameraOutput;
+            var trackingSelected =
+                selected ==
+                ApplicationUiSection.Tracking;
+            var motionSelected =
+                selected ==
+                ApplicationUiSection.MotionExpression;
+            var environmentSelected =
+                selected ==
+                ApplicationUiSection.Environment;
+            var materialSelected =
+                selected ==
+                ApplicationUiSection.MaterialShader;
+            var eventsSelected =
+                selected ==
+                ApplicationUiSection.Events;
+            var settingsSelected =
+                selected ==
+                ApplicationUiSection.Settings;
+            var diagnosticsSelected =
+                selected ==
+                ApplicationUiSection.Diagnostics;
+
+                if (_appearanceActions != null &&
+                    _appearanceActions.gameObject.activeSelf !=
+                        characterSelected)
+            {
+                _appearanceActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            if (_appearanceDirectActions != null &&
+                _appearanceDirectActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearanceDirectActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            if (_appearancePersistenceActions != null &&
+                _appearancePersistenceActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearancePersistenceActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            if (_appearancePresetManagementActions != null &&
+                _appearancePresetManagementActions.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _appearancePresetManagementActions.gameObject.SetActive(
+                    characterSelected);
+            }
+
+            SetActive(
+                _characterPathInput,
+                characterSelected);
+            SetActive(
+                _characterBrowseButton,
+                characterSelected);
+            SetActive(
+                _loadCharacterButton,
+                characterSelected);
+            SetActive(
+                _reloadCharacterButton,
+                characterSelected);
+            SetActive(
+                _unloadCharacterButton,
+                characterSelected);
+            SetActive(
+                _trackingPreviousButton,
+                trackingSelected);
+            SetActive(
+                _trackingToggleButton,
+                trackingSelected);
+            SetActive(
+                _trackingRecoverButton,
+                trackingSelected);
+            SetActive(
+                _trackingNextButton,
+                trackingSelected);
+
+            SetActive(
+                _apply720p60Button,
+                outputSelected);
+            SetActive(
+                _apply1080p60Button,
+                outputSelected);
+            SetActive(
+                _outputTransparentButton,
+                outputSelected);
+            SetActive(
+                _outputTopmostButton,
+                outputSelected);
+            SetActive(
+                _outputClickThroughButton,
+                outputSelected);
+
+            SetActive(
+                _motionPoseWeightLabel,
+                motionSelected);
+            SetActive(
+                _motionPoseWeightSlider,
+                motionSelected);
+            SetActive(
+                _manualExpressionNameInput,
+                motionSelected);
+            SetActive(
+                _manualExpressionValueInput,
+                motionSelected);
+            SetActive(
+                _manualExpressionApplyButton,
+                motionSelected);
+            SetActive(
+                _manualExpressionClearButton,
+                motionSelected);
+            SetActive(
+                _manualExpressionClearAllButton,
+                motionSelected);
+
+            SetActive(
+                _environmentStateInput,
+                environmentSelected);
+            SetActive(
+                _environmentTransitionModeButton,
+                environmentSelected);
+            SetActive(
+                _environmentTransitionDurationInput,
+                environmentSelected);
+            SetActive(
+                _environmentApplyStateButton,
+                environmentSelected);
+
+            SetActive(
+                _materialPreviousSlotButton,
+                materialSelected);
+            SetActive(
+                _materialNextSlotButton,
+                materialSelected);
+            SetActive(
+                _materialSlotInput,
+                materialSelected);
+            SetActive(
+                _materialShaderInput,
+                materialSelected);
+            SetActive(
+                _materialApplyShaderButton,
+                materialSelected);
+            SetActive(
+                _materialPropertyInput,
+                materialSelected);
+            SetActive(
+                _materialValueInput,
+                materialSelected);
+            SetActive(
+                _materialSetFloatButton,
+                materialSelected);
+            SetActive(
+                _materialClearOverrideButton,
+                materialSelected);
+            SetActive(
+                _materialRefreshSlotsButton,
+                materialSelected);
+
+            SetActive(
+                _eventPreviousRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventNextRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventRuleInput,
+                eventsSelected);
+            SetActive(
+                _eventToggleRuleButton,
+                eventsSelected);
+            SetActive(
+                _eventTraceButton,
+                eventsSelected);
+            SetActive(
+                _eventMaxCommandsInput,
+                eventsSelected);
+            SetActive(
+                _eventApplyMaxCommandsButton,
+                eventsSelected);
+            SetActive(
+                _eventSaveRulesButton,
+                eventsSelected);
+            SetActive(
+                _eventReloadRulesButton,
+                eventsSelected);
+
+            SetActive(
+                _settingsPreviousCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsNextCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsToggleCapabilityButton,
+                settingsSelected);
+            SetActive(
+                _settingsRenderScaleInput,
+                settingsSelected);
+            SetActive(
+                _settingsApplyRenderScaleButton,
+                settingsSelected);
+            SetActive(
+                _settingsFpsInput,
+                settingsSelected);
+            SetActive(
+                _settingsApplyFpsButton,
+                settingsSelected);
+            SetActive(
+                _settingsVsyncButton,
+                settingsSelected);
+            SetActive(
+                _settingsRunInBackgroundButton,
+                settingsSelected);
+
+            SetActive(
+                _diagnosticsPreviousPageButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsNextPageButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsCaptureButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsSaveSnapshotButton,
+                diagnosticsSelected);
+            SetActive(
+                _diagnosticsCsvButton,
+                diagnosticsSelected);
+                SetActive(
+                    _diagnosticsConsoleButton,
+                    diagnosticsSelected);
+
         }
 
         private void RefreshMaterialControlState()
