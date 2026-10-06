@@ -436,9 +436,10 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 new byte[
                     UdpReceiveBufferBytes];
 
-            var messages =
-                new List<OscMessage>(
-                    16);
+            var events =
+                new List<NormalizedEvent>(
+                    OscPacketReader
+                        .MaxMessagesPerPacket);
 
             while (_running)
             {
@@ -471,27 +472,36 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                         continue;
                     }
 
-                    if (!OscPacketReader
-                        .TryReadMessages(
+                    var timestampUs =
+                        MonotonicClock
+                            .NowMicroseconds();
+
+                    if (!OscNormalizedEventPacketReader
+                        .TryReadEvents(
                             packet,
                             packetLength,
-                            messages))
+                            sourceId,
+                            timestampUs,
+                            events,
+                            out var rejectedMessages))
                     {
                         Interlocked.Increment(
                             ref _malformedPacketCount);
                         continue;
                     }
 
-                    var timestampUs =
-                        MonotonicClock
-                            .NowMicroseconds();
-
-                    foreach (var message in
-                             messages)
+                    if (rejectedMessages > 0)
                     {
-                        if (!TryQueueMessage(
-                                message,
-                                timestampUs,
+                        Interlocked.Add(
+                            ref _rejectedEventCount,
+                            rejectedMessages);
+                    }
+
+                    foreach (var value in
+                             events)
+                    {
+                        if (!TryQueueEvent(
+                                value,
                                 generation,
                                 out _))
                         {
@@ -571,6 +581,19 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                     ref _rejectedEventCount);
                 return false;
             }
+
+            return TryQueueEvent(
+                value,
+                generation,
+                out error);
+        }
+
+        private bool TryQueueEvent(
+            NormalizedEvent value,
+            long? generation,
+            out string error)
+        {
+            error = null;
 
             lock (_queueSync)
             {
