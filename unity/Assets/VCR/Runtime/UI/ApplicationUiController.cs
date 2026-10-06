@@ -5028,14 +5028,25 @@ namespace VCR.Runtime.UI
 
             if (characterSelected)
             {
+                var appearanceRuntimeAlive =
+                    IsServiceAlive(
+                        _appearanceRuntime);
+                var appearanceStatus =
+                    appearanceRuntimeAlive
+                        ? _appearanceRuntime.Status
+                        : default;
                 var appearanceState =
-                    IsServiceAlive(_appearanceRuntime)
-                        ? _appearanceRuntime.Status.State
+                    appearanceRuntimeAlive
+                        ? appearanceStatus.State
                         : AppearanceRuntimeState.Unconfigured;
+                var currentAppearance =
+                    appearanceRuntimeAlive
+                        ? _appearanceRuntime.Current
+                        : default;
                 var appearanceAvailable =
                     ApplicationUiActionPolicy
                         .CanMutateAppearance(
-                            IsServiceAlive(_appearanceRuntime),
+                            appearanceRuntimeAlive,
                             appearanceState);
 
                 if (_appearancePreviousButton != null)
@@ -5043,7 +5054,7 @@ namespace VCR.Runtime.UI
                     _appearancePreviousButton.interactable =
                         appearanceAvailable &&
                         _appearanceRuntime.PresetIds.Count > 0 &&
-                        !_appearanceRuntime.Status.Busy;
+                        !appearanceStatus.Busy;
                 }
 
                 if (_appearanceNextButton != null)
@@ -5051,27 +5062,23 @@ namespace VCR.Runtime.UI
                     _appearanceNextButton.interactable =
                         appearanceAvailable &&
                         _appearanceRuntime.PresetIds.Count > 0 &&
-                        !_appearanceRuntime.Status.Busy;
+                        !appearanceStatus.Busy;
                 }
 
                 if (_appearanceTransitionButton != null)
                 {
                     _appearanceTransitionButton.interactable =
                         appearanceAvailable &&
-                        !_appearanceRuntime.Status.Busy;
+                        !appearanceStatus.Busy;
 
-                    var runtimeStatus =
-                        IsServiceAlive(_appearanceRuntime)
-                            ? _appearanceRuntime.Status
-                            : default;
                     var transitionLabel =
-                        runtimeStatus.Busy &&
+                        appearanceStatus.Busy &&
                         !string.IsNullOrWhiteSpace(
-                            runtimeStatus.ActiveTransitionId)
-                            ? runtimeStatus.ActiveTransitionId +
+                            appearanceStatus.ActiveTransitionId)
+                            ? appearanceStatus.ActiveTransitionId +
                               " " +
                               Math.Round(
-                                  runtimeStatus
+                                  appearanceStatus
                                       .TransitionProgress01 *
                                   100.0) +
                               "%"
@@ -5086,24 +5093,24 @@ namespace VCR.Runtime.UI
                 if (_appearanceCancelButton != null)
                 {
                     _appearanceCancelButton.interactable =
-                        IsServiceAlive(_appearanceRuntime) &&
+                        appearanceRuntimeAlive &&
                         ApplicationUiActionPolicy
                             .CanCancelAppearanceTransition(
                                 true,
-                                _appearanceRuntime.Status);
+                                appearanceStatus);
                 }
 
                 if (_appearanceRestoreButton != null)
                 {
                     _appearanceRestoreButton.interactable =
                         appearanceAvailable &&
-                        !_appearanceRuntime.Status.Busy;
+                        !appearanceStatus.Busy;
                 }
 
-                if (IsServiceAlive(_appearanceRuntime))
+                if (appearanceRuntimeAlive)
                 {
                     var current =
-                        _appearanceRuntime.Current;
+                        currentAppearance;
 
                     if (_appearancePresetInput != null &&
                         !_appearancePresetInput.isFocused &&
@@ -5215,11 +5222,11 @@ namespace VCR.Runtime.UI
                     _appearancePreviewButton.interactable =
                         ApplicationUiActionPolicy
                             .CanPreviewAppearanceTransition(
-                                IsServiceAlive(_appearanceRuntime),
+                                appearanceRuntimeAlive,
                                 appearanceState,
                                 GetSelectedAppearanceTransitionId(),
-                                IsServiceAlive(_appearanceRuntime)
-                                    ? _appearanceRuntime.Current.OutfitId
+                                appearanceRuntimeAlive
+                                    ? currentAppearance.OutfitId
                                     : null);
                 }
 
