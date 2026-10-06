@@ -622,18 +622,22 @@ namespace VCR.Runtime.UI
                             FindObjectsInactive.Exclude);
                 }
 
+                MonoBehaviour[] activeDependencyBehaviours =
+                    null;
+
                 ResolveTrackingControls();
-                ResolveCharacterFileSelectionAdapter();
-                ResolveAppearanceRuntime();
+                ResolveCharacterFileSelectionAdapter(
+                    ref activeDependencyBehaviours);
+                ResolveAppearanceRuntime(
+                    ref activeDependencyBehaviours);
 
                 if (!IsServiceAlive(_trackingPresence))
                 {
                     _trackingPresence = null;
 
                     var behaviours =
-                        FindObjectsByType<MonoBehaviour>(
-                            FindObjectsInactive.Exclude,
-                            FindObjectsSortMode.None);
+                        GetActiveDependencyBehaviours(
+                            ref activeDependencyBehaviours);
 
                     ITrackingPresenceProvider direct = null;
 
@@ -8531,6 +8535,15 @@ namespace VCR.Runtime.UI
 
         private void ResolveCharacterFileSelectionAdapter()
         {
+            MonoBehaviour[] activeDependencyBehaviours =
+                null;
+            ResolveCharacterFileSelectionAdapter(
+                ref activeDependencyBehaviours);
+        }
+
+        private void ResolveCharacterFileSelectionAdapter(
+            ref MonoBehaviour[] activeDependencyBehaviours)
+        {
             if (IsServiceAlive(_characterFileSelectionAdapter) &&
                 _characterFileSelectionAdapter.IsSupported)
             {
@@ -8540,9 +8553,8 @@ namespace VCR.Runtime.UI
             ICharacterFileSelectionAdapter fallback =
                 null;
             var behaviours =
-                FindObjectsByType<MonoBehaviour>(
-                    FindObjectsInactive.Exclude,
-                    FindObjectsSortMode.None);
+                GetActiveDependencyBehaviours(
+                    ref activeDependencyBehaviours);
 
             foreach (var behaviour in
                      behaviours)
@@ -8568,7 +8580,8 @@ namespace VCR.Runtime.UI
                 fallback;
         }
 
-        private void ResolveAppearanceRuntime()
+        private void ResolveAppearanceRuntime(
+            ref MonoBehaviour[] activeDependencyBehaviours)
         {
             if (IsServiceAlive(
                     _appearanceRuntime))
@@ -8579,9 +8592,8 @@ namespace VCR.Runtime.UI
             _appearanceRuntime = null;
 
             var behaviours =
-                FindObjectsByType<MonoBehaviour>(
-                    FindObjectsInactive.Exclude,
-                    FindObjectsSortMode.None);
+                GetActiveDependencyBehaviours(
+                    ref activeDependencyBehaviours);
 
             foreach (var behaviour in behaviours)
             {
@@ -8593,6 +8605,17 @@ namespace VCR.Runtime.UI
                     return;
                 }
             }
+        }
+
+        private static MonoBehaviour[]
+            GetActiveDependencyBehaviours(
+                ref MonoBehaviour[] behaviours)
+        {
+            behaviours ??=
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+            return behaviours;
         }
 
         private void ResolveTrackingControls()
