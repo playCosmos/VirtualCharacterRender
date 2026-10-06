@@ -108,44 +108,99 @@ namespace VCR.Runtime.Protocols.Vmc
                     return false;
                 }
 
-                if (!_accumulator.Process(
-                        messages,
+                _accumulator.Process(
+                    messages,
+                    arrivalTimestampUs,
+                    out var frame);
+
+                return PublishProcessedFrame(
+                    frame,
+                    arrivalTimestampUs);
+            }
+        }
+
+        /// <summary>
+        /// Parses and applies one OSC/VMC datagram directly from the reusable
+        /// network buffer. Returns false only when the packet is malformed.
+        /// A valid heartbeat/ignored packet returns true with producedFrame=false.
+        /// </summary>
+        public bool TryProcessPacket(
+            byte[] packet,
+            int length,
+            long arrivalTimestampUs,
+            out bool producedFrame)
+        {
+            lock (_sync)
+            {
+                ThrowIfDisposed();
+                producedFrame = false;
+
+                if (!_started)
+                {
+                    return true;
+                }
+
+                if (!VmcPacketReader.TryProcess(
+                        packet,
+                        length,
+                        _accumulator,
                         arrivalTimestampUs,
                         out var frame))
                 {
-                    _health =
-                        new TrackingSourceHealth(
-                            TrackingSourceHealthState.Healthy,
-                            arrivalTimestampUs,
-                            _health.Confidence,
-                            null);
                     return false;
                 }
 
-                _latest.Publish(frame);
-                Volatile.Write(
-                    ref _lastSubjectDetected,
-                    frame.SubjectDetected ? 1 : 0);
+                producedFrame =
+                    PublishProcessedFrame(
+                        frame,
+                        arrivalTimestampUs);
+                return true;
+            }
+        }
 
-                if (frame.HumanoidPose != null)
-                {
-                    _latestPose.Publish(frame);
-                }
-
-                if (frame.Expressions != null)
-                {
-                    _latestExpressions.Publish(frame);
-                }
-
+        private bool PublishProcessedFrame(
+            TrackingFrame frame,
+            long arrivalTimestampUs)
+        {
+            if (frame == null)
+            {
                 _health =
                     new TrackingSourceHealth(
                         TrackingSourceHealthState.Healthy,
                         arrivalTimestampUs,
-                        frame.Confidence,
+                        _health.Confidence,
                         null);
-
-                return true;
+                return false;
             }
+
+            _latest.Publish(
+                frame);
+            Volatile.Write(
+                ref _lastSubjectDetected,
+                frame.SubjectDetected
+                    ? 1
+                    : 0);
+
+            if (frame.HumanoidPose != null)
+            {
+                _latestPose.Publish(
+                    frame);
+            }
+
+            if (frame.Expressions != null)
+            {
+                _latestExpressions.Publish(
+                    frame);
+            }
+
+            _health =
+                new TrackingSourceHealth(
+                    TrackingSourceHealthState.Healthy,
+                    arrivalTimestampUs,
+                    frame.Confidence,
+                    null);
+
+            return true;
         }
 
         public bool TryTakeLatest(out TrackingFrame frame)
