@@ -166,6 +166,7 @@ namespace VCR.Runtime.UI
         private ICharacterFileSelectionAdapter _characterFileSelectionAdapter;
         private IAppearanceRuntime _appearanceRuntime;
         private IEnvironmentRuntime _environmentRuntime;
+        private SingleCharacterSceneRuntime _environmentRuntimeOwner;
         private AppearanceUserPresetStore _appearancePresetStore;
         private EventRuntimeConfigurationStore _eventRuleStore;
         private string _eventRuleStorePath;
@@ -626,10 +627,15 @@ namespace VCR.Runtime.UI
                             FindObjectsInactive.Exclude);
                 }
 
-                if (!IsServiceAlive(_environmentRuntime))
+                if (!ReferenceEquals(
+                        _environmentRuntimeOwner,
+                        sceneRuntime) ||
+                    !IsServiceAlive(_environmentRuntime))
                 {
                     _environmentRuntime =
                         sceneRuntime?.EnvironmentRuntime;
+                    _environmentRuntimeOwner =
+                        sceneRuntime;
                 }
 
                 MonoBehaviour[] activeDependencyBehaviours =
@@ -703,8 +709,7 @@ namespace VCR.Runtime.UI
 
             _model.SetAvailability(
                 ApplicationUiSection.Environment,
-                sceneRuntime != null &&
-                IsServiceAlive(_environmentRuntime),
+                GetCachedEnvironmentRuntime() != null,
                 "Environment runtime is unavailable.");
 
             _model.SetAvailability(
@@ -5933,9 +5938,7 @@ namespace VCR.Runtime.UI
         private void RefreshEnvironmentControlState()
         {
             var runtime =
-                IsServiceAlive(_environmentRuntime)
-                    ? _environmentRuntime
-                    : null;
+                GetCachedEnvironmentRuntime();
             var status =
                 runtime?.Status;
 
@@ -7003,9 +7006,7 @@ namespace VCR.Runtime.UI
         private string EnvironmentSummary()
         {
             var runtime =
-                IsServiceAlive(_environmentRuntime)
-                    ? _environmentRuntime
-                    : null;
+                GetCachedEnvironmentRuntime();
 
             if (runtime == null)
             {
@@ -8627,6 +8628,21 @@ namespace VCR.Runtime.UI
                     return;
                 }
             }
+        }
+
+        private IEnvironmentRuntime
+            GetCachedEnvironmentRuntime()
+        {
+            if (sceneRuntime == null ||
+                !ReferenceEquals(
+                    _environmentRuntimeOwner,
+                    sceneRuntime) ||
+                !IsServiceAlive(_environmentRuntime))
+            {
+                return null;
+            }
+
+            return _environmentRuntime;
         }
 
         private static MonoBehaviour[]
