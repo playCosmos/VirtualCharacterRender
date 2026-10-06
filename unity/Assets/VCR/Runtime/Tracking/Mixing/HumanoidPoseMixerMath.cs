@@ -39,6 +39,17 @@ namespace VCR.Runtime.Tracking.Mixing
                 return basePose;
             }
 
+            if (settings.BlendMode ==
+                    HumanoidPoseBlendMode.Override &&
+                weight >= 1f &&
+                mask.HasFullWeight &&
+                LayerCoversBase(
+                    basePose,
+                    layerPose))
+            {
+                return layerPose;
+            }
+
             var poseSpace =
                 basePose?.PoseSpace ??
                 layerPose.PoseSpace;
@@ -191,6 +202,36 @@ namespace VCR.Runtime.Tracking.Mixing
                 bones,
                 hasBone,
                 SnapshotArrayOwnership.Transfer);
+        }
+
+        private static bool LayerCoversBase(
+            HumanoidPoseState basePose,
+            HumanoidPoseState layerPose)
+        {
+            if (basePose == null)
+            {
+                return true;
+            }
+
+            for (var i = 0;
+                 i < (int)HumanoidBoneId.Count;
+                 i++)
+            {
+                var bone =
+                    (HumanoidBoneId)i;
+
+                if (basePose.TryGet(
+                        bone,
+                        out _) &&
+                    !layerPose.TryGet(
+                        bone,
+                        out _))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static TrackingVector3 Add(
