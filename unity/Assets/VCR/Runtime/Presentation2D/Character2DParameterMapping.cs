@@ -222,6 +222,33 @@ namespace VCR.Runtime.Presentation2D
                 return false;
             }
 
+            return TryEvaluateValidated(
+                profile,
+                backendId,
+                snapshot,
+                out values,
+                out error);
+        }
+
+        internal static bool TryEvaluateValidated(
+            Character2DParameterMappingProfile profile,
+            string backendId,
+            Character2DInputSnapshot snapshot,
+            out Character2DParameterValue[] values,
+            out string error)
+        {
+            values =
+                Array.Empty<
+                    Character2DParameterValue>();
+            error = null;
+
+            if (profile == null)
+            {
+                error =
+                    "2D parameter mapping profile is required.";
+                return false;
+            }
+
             if (!string.Equals(
                     profile.BackendId,
                     backendId,
