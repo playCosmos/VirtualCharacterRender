@@ -116,16 +116,24 @@ namespace VCR.Runtime.EventRuntime.Unity
         public void ConfigureSequences(
             params SequenceBinding[] bindings)
         {
-            sequences =
-                bindings ??
-                Array.Empty<SequenceBinding>();
+            var stagedAuthoring =
+                CloneBindings(
+                    bindings);
 
-            if (!RebuildBindings(
+            if (!TryBuildSequenceMap(
+                    stagedAuthoring,
+                    out var stagedResolved,
                     out var error))
             {
-                _lastError =
-                    error;
+                _lastError = error;
+                return;
             }
+
+            sequences =
+                stagedAuthoring;
+            CommitSequenceMap(
+                stagedResolved);
+            _lastError = null;
         }
 
         public void SetActionHandlers(
@@ -142,50 +150,173 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool RebuildBindings(
             out string error)
         {
-            error = null;
+            if (!TryBuildSequenceMap(
+                    sequences,
+                    out var stagedResolved,
+                    out error))
+            {
+                _lastError = error;
+                return false;
+            }
 
-            var staged =
+            CommitSequenceMap(
+                stagedResolved);
+            _lastError = null;
+            return true;
+        }
+
+        private static SequenceBinding[]
+            CloneBindings(
+                SequenceBinding[] bindings)
+        {
+            if (bindings == null ||
+                bindings.Length == 0)
+            {
+                return Array.Empty<SequenceBinding>();
+            }
+
+            var clones =
+                new SequenceBinding[
+                    bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                clones[i] =
+                    CloneBinding(
+                        bindings[i]);
+            }
+
+            return clones;
+        }
+
+        private static SequenceBinding
+            CloneBinding(
+                SequenceBinding binding)
+        {
+            if (binding == null)
+            {
+                return null;
+            }
+
+            return new SequenceBinding
+            {
+                SequenceId =
+                    binding.SequenceId,
+                Steps =
+                    CloneSteps(
+                        binding.Steps),
+                CancellationSteps =
+                    CloneSteps(
+                        binding.CancellationSteps)
+            };
+        }
+
+        private static SequenceStep[]
+            CloneSteps(
+                SequenceStep[] steps)
+        {
+            if (steps == null ||
+                steps.Length == 0)
+            {
+                return Array.Empty<SequenceStep>();
+            }
+
+            var clones =
+                new SequenceStep[
+                    steps.Length];
+
+            for (var i = 0;
+                 i < steps.Length;
+                 i++)
+            {
+                var step =
+                    steps[i];
+
+                if (step == null)
+                {
+                    continue;
+                }
+
+                clones[i] =
+                    new SequenceStep
+                    {
+                        TimeSeconds =
+                            step.TimeSeconds,
+                        ActionType =
+                            step.ActionType,
+                        TargetId =
+                            step.TargetId,
+                        Name =
+                            step.Name,
+                        Text =
+                            step.Text,
+                        Value =
+                            step.Value,
+                        HasValue =
+                            step.HasValue,
+                        Required =
+                            step.Required
+                    };
+            }
+
+            return clones;
+        }
+
+        private static bool TryBuildSequenceMap(
+            SequenceBinding[] bindings,
+            out Dictionary<string, SequenceBinding> resolved,
+            out string error)
+        {
+            error = null;
+            resolved =
                 new Dictionary<string, SequenceBinding>(
                     StringComparer.Ordinal);
 
-            foreach (var binding in
-                     sequences ??
+            foreach (var authoringBinding in
+                     bindings ??
                      Array.Empty<SequenceBinding>())
             {
+                var binding =
+                    CloneBinding(
+                        authoringBinding);
+
                 if (!ValidateBinding(
                         binding,
                         out error))
                 {
-                    _lastError =
-                        error;
                     return false;
                 }
 
                 var id =
                     binding.SequenceId.Trim();
+                binding.SequenceId =
+                    id;
 
-                if (!staged.TryAdd(
+                if (!resolved.TryAdd(
                         id,
                         binding))
                 {
                     error =
                         $"Duplicate scene sequence id '{id}'.";
-                    _lastError =
-                        error;
                     return false;
                 }
             }
 
+            return true;
+        }
+
+        private void CommitSequenceMap(
+            Dictionary<string, SequenceBinding> resolved)
+        {
             _sequences.Clear();
 
-            foreach (var item in staged)
+            foreach (var item in resolved)
             {
                 _sequences[item.Key] =
                     item.Value;
             }
-
-            _lastError = null;
-            return true;
         }
 
         public bool CanHandle(
@@ -750,6 +881,17 @@ namespace VCR.Runtime.EventRuntime.Unity
             {
                 error =
                     $"Scene sequence '{sequenceId}' cancellation steps execute immediately and must use time 0.";
+                return false;
+            }
+
+            if (step.HasValue &&
+                (double.IsNaN(
+                     step.Value) ||
+                 double.IsInfinity(
+                     step.Value)))
+            {
+                error =
+                    $"Scene sequence '{sequenceId}' contains a non-finite step value.";
                 return false;
             }
 
