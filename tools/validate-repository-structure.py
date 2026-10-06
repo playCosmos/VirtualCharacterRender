@@ -1211,6 +1211,21 @@ require_source_contains(
 )
 require_source_contains(
     application_runtime_bootstrap,
+    "var startupBaseline =\n                sceneRuntime.CaptureConfiguration();",
+    "application startup must capture the pre-attempt scene configuration before applying persisted state",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "TryRestoreStartupBaseline(",
+    "failed application startup attempts must restore their pre-attempt scene configuration",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "sceneRuntime.State ==\n                        SceneRuntimeState.Faulted &&\n                    !sceneRuntime.Initialize()",
+    "startup rollback must recover a transient faulted scene so the same bootstrap can be retried",
+)
+require_source_contains(
+    application_runtime_bootstrap,
     "var firstShutdown =\n                !_quitting;",
     "application shutdown must distinguish the first call from later cleanup retries without blocking retries",
 )
