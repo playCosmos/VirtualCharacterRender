@@ -37,15 +37,37 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             var joints = new TrackingPoint[(int)UpperBodyJoint.Count];
-            joints[(int)UpperBodyJoint.Nose] = Convert(landmarks[Nose]);
-            joints[(int)UpperBodyJoint.LeftShoulder] = Convert(landmarks[LeftShoulder]);
-            joints[(int)UpperBodyJoint.RightShoulder] = Convert(landmarks[RightShoulder]);
-            joints[(int)UpperBodyJoint.LeftElbow] = Convert(landmarks[LeftElbow]);
-            joints[(int)UpperBodyJoint.RightElbow] = Convert(landmarks[RightElbow]);
-            joints[(int)UpperBodyJoint.LeftWrist] = Convert(landmarks[LeftWrist]);
-            joints[(int)UpperBodyJoint.RightWrist] = Convert(landmarks[RightWrist]);
-            joints[(int)UpperBodyJoint.LeftHip] = Convert(landmarks[LeftHip]);
-            joints[(int)UpperBodyJoint.RightHip] = Convert(landmarks[RightHip]);
+
+            if (!TryConvert(
+                    landmarks[Nose],
+                    out joints[(int)UpperBodyJoint.Nose]) ||
+                !TryConvert(
+                    landmarks[LeftShoulder],
+                    out joints[(int)UpperBodyJoint.LeftShoulder]) ||
+                !TryConvert(
+                    landmarks[RightShoulder],
+                    out joints[(int)UpperBodyJoint.RightShoulder]) ||
+                !TryConvert(
+                    landmarks[LeftElbow],
+                    out joints[(int)UpperBodyJoint.LeftElbow]) ||
+                !TryConvert(
+                    landmarks[RightElbow],
+                    out joints[(int)UpperBodyJoint.RightElbow]) ||
+                !TryConvert(
+                    landmarks[LeftWrist],
+                    out joints[(int)UpperBodyJoint.LeftWrist]) ||
+                !TryConvert(
+                    landmarks[RightWrist],
+                    out joints[(int)UpperBodyJoint.RightWrist]) ||
+                !TryConvert(
+                    landmarks[LeftHip],
+                    out joints[(int)UpperBodyJoint.LeftHip]) ||
+                !TryConvert(
+                    landmarks[RightHip],
+                    out joints[(int)UpperBodyJoint.RightHip]))
+            {
+                return null;
+            }
 
             return new NormalizedUpperBodyState(
                 joints,
@@ -77,7 +99,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
             foreach (var joint in ConfidenceJoints)
             {
                 var confidence = body.Get(joint).Confidence;
-                if (confidence >= 0f)
+                if (float.IsFinite(confidence) &&
+                    confidence >= 0f)
                 {
                     sum += confidence;
                     count++;
@@ -99,7 +122,12 @@ namespace VCR.Runtime.Tracking.MediaPipe
             var joints = new TrackingPoint[(int)HandJoint.Count];
             for (var i = 0; i < joints.Length; i++)
             {
-                joints[i] = Convert(landmarks[i]);
+                if (!TryConvert(
+                        landmarks[i],
+                        out joints[i]))
+                {
+                    return null;
+                }
             }
 
             return new NormalizedHandState(
@@ -108,8 +136,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 SnapshotArrayOwnership.Transfer);
         }
 
-        private static TrackingPoint Convert(in Landmark landmark)
+        private static bool TryConvert(
+            in Landmark landmark,
+            out TrackingPoint point)
         {
+            point = default;
+
+            if (!float.IsFinite(landmark.x) ||
+                !float.IsFinite(landmark.y) ||
+                !float.IsFinite(landmark.z))
+            {
+                return false;
+            }
+
             // MediaPipe real-world: +X right, +Y down, +Z back.
             // VCR normalized:       +X right, +Y up,   +Z forward.
             var position = new TrackingVector3(
@@ -117,22 +156,62 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 -landmark.y,
                 -landmark.z);
 
-            var confidence = Confidence(landmark.visibility, landmark.presence);
-            return new TrackingPoint(position, confidence);
+            point = new TrackingPoint(
+                position,
+                Confidence(
+                    landmark.visibility,
+                    landmark.presence));
+            return true;
         }
 
-        private static float Confidence(float? visibility, float? presence)
+        private static float Confidence(
+            float? visibility,
+            float? presence)
         {
-            if (visibility.HasValue && presence.HasValue)
+            var visibilityValue =
+                SanitizeConfidence(
+                    visibility);
+            var presenceValue =
+                SanitizeConfidence(
+                    presence);
+
+            if (visibilityValue >= 0f &&
+                presenceValue >= 0f)
             {
-                return visibility.Value < presence.Value
-                    ? visibility.Value
-                    : presence.Value;
+                return visibilityValue <
+                    presenceValue
+                        ? visibilityValue
+                        : presenceValue;
             }
 
-            if (visibility.HasValue) return visibility.Value;
-            if (presence.HasValue) return presence.Value;
-            return -1f;
+            if (visibilityValue >= 0f)
+            {
+                return visibilityValue;
+            }
+
+            return presenceValue;
+        }
+
+        private static float SanitizeConfidence(
+            float? value)
+        {
+            if (!value.HasValue ||
+                !float.IsFinite(value.Value))
+            {
+                return -1f;
+            }
+
+            if (value.Value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value.Value >= 1f)
+            {
+                return 1f;
+            }
+
+            return value.Value;
         }
     }
 }
