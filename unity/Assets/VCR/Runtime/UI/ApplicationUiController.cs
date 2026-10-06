@@ -4196,11 +4196,13 @@ namespace VCR.Runtime.UI
                         ruleCount - 1)
                     : 0;
 
+            EventRuntimeRuleSummary selected =
+                default;
             var hasSelected =
                 hasRules &&
                 eventRuntime.TryGetRuleSummaryAt(
                     _eventRuleIndex,
-                    out var selected);
+                    out selected);
 
             if (_eventRuleInput != null &&
                 !_eventRuleInput.isFocused)
@@ -7409,6 +7411,8 @@ namespace VCR.Runtime.UI
 
             var ruleCount =
                 eventRuntime.RuleCount;
+            EventRuntimeRuleSummary selectedRule =
+                default;
             var hasSelectedRule =
                 ruleCount > 0 &&
                 eventRuntime.TryGetRuleSummaryAt(
@@ -7416,7 +7420,7 @@ namespace VCR.Runtime.UI
                         _eventRuleIndex,
                         0,
                         ruleCount - 1),
-                    out var selectedRule);
+                    out selectedRule);
             var engine =
                 eventRuntime.Engine;
             var traceEnabled =
