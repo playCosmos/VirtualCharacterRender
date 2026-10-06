@@ -1368,6 +1368,16 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "public bool SetEnvironmentState(\n            string stateId,\n            out string error)\n        {\n            error = null;",
+    "scene environment state changes must initialize structured error reporting",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Environment state change failed: \" +\n                    exception.Message;",
+    "scene environment state changes must convert lifecycle/adapter exceptions into false/error results",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "RunRollbackStep(",
     "scene configuration rollback must isolate failures so later restore steps still run",
 )
