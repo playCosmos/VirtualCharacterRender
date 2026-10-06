@@ -4057,15 +4057,6 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private CapabilityStatusSnapshot[]
-            CaptureCapabilityStatuses()
-        {
-            return sceneRuntime?.Capabilities
-                ?.CaptureStatuses() ??
-                Array.Empty<
-                    CapabilityStatusSnapshot>();
-        }
-
         private void SelectPreviousCapability()
         {
             SelectCapability(
@@ -4081,10 +4072,13 @@ namespace VCR.Runtime.UI
         private void SelectCapability(
             int offset)
         {
-            var statuses =
-                CaptureCapabilityStatuses();
+            var registry =
+                sceneRuntime?.Capabilities;
+            var statusCount =
+                registry?.StatusCount ??
+                0;
 
-            if (statuses.Length == 0)
+            if (statusCount == 0)
             {
                 _settingsCapabilityIndex = 0;
                 _lastActionMessage =
@@ -4096,8 +4090,8 @@ namespace VCR.Runtime.UI
             _settingsCapabilityIndex =
                 (_settingsCapabilityIndex +
                  offset +
-                 statuses.Length) %
-                statuses.Length;
+                 statusCount) %
+                statusCount;
 
             RefreshAll();
         }
@@ -4106,8 +4100,9 @@ namespace VCR.Runtime.UI
         {
             var registry =
                 sceneRuntime?.Capabilities;
-            var statuses =
-                CaptureCapabilityStatuses();
+            var statusCount =
+                registry?.StatusCount ??
+                0;
 
             if (registry == null ||
                 sceneRuntime == null ||
@@ -4115,7 +4110,7 @@ namespace VCR.Runtime.UI
                     .CanApplyRuntimeSettings(
                         true,
                         sceneRuntime.State) ||
-                statuses.Length == 0)
+                statusCount == 0)
             {
                 _lastActionMessage =
                     "No runtime capabilities are registered.";
@@ -4127,11 +4122,17 @@ namespace VCR.Runtime.UI
                 Mathf.Clamp(
                     _settingsCapabilityIndex,
                     0,
-                    statuses.Length - 1);
+                    statusCount - 1);
 
-            var selected =
-                statuses[
-                    _settingsCapabilityIndex];
+            if (!registry.TryGetStatusAt(
+                    _settingsCapabilityIndex,
+                    out var selected))
+            {
+                _lastActionMessage =
+                    "Selected runtime capability is unavailable.";
+                RefreshAll();
+                return;
+            }
 
             if (selected.State ==
                 CapabilityState.Enabled)
@@ -4306,24 +4307,27 @@ namespace VCR.Runtime.UI
 
         private void RefreshSettingsControlState()
         {
-            var statuses =
-                CaptureCapabilityStatuses();
+            var registry =
+                sceneRuntime?.Capabilities;
+            var statusCount =
+                registry?.StatusCount ??
+                0;
             var hasCapabilities =
-                statuses.Length > 0;
+                statusCount > 0;
 
             _settingsCapabilityIndex =
                 hasCapabilities
                     ? Mathf.Clamp(
                         _settingsCapabilityIndex,
                         0,
-                        statuses.Length - 1)
+                        statusCount - 1)
                     : 0;
 
-            var selected =
-                hasCapabilities
-                    ? statuses[
-                        _settingsCapabilityIndex]
-                    : default;
+            var hasSelected =
+                hasCapabilities &&
+                registry.TryGetStatusAt(
+                    _settingsCapabilityIndex,
+                    out var selected);
             var canMutate =
                 sceneRuntime != null &&
                 ApplicationUiActionPolicy
@@ -4334,14 +4338,14 @@ namespace VCR.Runtime.UI
             if (_settingsPreviousCapabilityButton != null)
             {
                 _settingsPreviousCapabilityButton.interactable =
-                    statuses.Length > 1 &&
+                    statusCount > 1 &&
                     canMutate;
             }
 
             if (_settingsNextCapabilityButton != null)
             {
                 _settingsNextCapabilityButton.interactable =
-                    statuses.Length > 1 &&
+                    statusCount > 1 &&
                     canMutate;
             }
 
@@ -6178,18 +6182,17 @@ namespace VCR.Runtime.UI
 
             var capabilities =
                 sceneRuntime?.Capabilities;
-            var statuses =
-                capabilities?.CaptureStatuses() ??
-                Array.Empty<
-                    CapabilityStatusSnapshot>();
-            var selectedCapability =
-                statuses.Length > 0
-                    ? statuses[
-                        Mathf.Clamp(
-                            _settingsCapabilityIndex,
-                            0,
-                            statuses.Length - 1)]
-                    : default;
+            var statusCount =
+                capabilities?.StatusCount ??
+                0;
+            var hasSelectedCapability =
+                statusCount > 0 &&
+                capabilities.TryGetStatusAt(
+                    Mathf.Clamp(
+                        _settingsCapabilityIndex,
+                        0,
+                        statusCount - 1),
+                    out var selectedCapability);
             var render =
                 sceneRuntime != null
                     ? sceneRuntime.CaptureRenderSettings()
@@ -6200,9 +6203,9 @@ namespace VCR.Runtime.UI
                 $"Configuration: {applicationBootstrap.ConfigurationPath ?? "<default/not resolved>"}\n" +
                 $"Capabilities registered: {capabilities?.RegisteredCount ?? 0}\n" +
                 $"Capabilities enabled: {capabilities?.EnabledCount ?? 0}\n" +
-                $"Selected capability: {(statuses.Length > 0 ? selectedCapability.Id : "<none>")}\n" +
-                $"Capability state: {(statuses.Length > 0 ? selectedCapability.State.ToString() : "n/a")}\n" +
-                $"Capability error: {(statuses.Length > 0 ? selectedCapability.Error ?? "<none>" : "n/a")}\n" +
+                $"Selected capability: {(hasSelectedCapability ? selectedCapability.Id : "<none>")}\n" +
+                $"Capability state: {(hasSelectedCapability ? selectedCapability.State.ToString() : "n/a")}\n" +
+                $"Capability error: {(hasSelectedCapability ? selectedCapability.Error ?? "<none>" : "n/a")}\n" +
                 $"Render scale: {render.RenderScale:0.###}\n" +
                 $"Target FPS: {render.TargetFrameRate}\n" +
                 $"VSync: {render.UseVSync}\n" +
