@@ -152,6 +152,8 @@ Timed coroutine execution, QueueAll saturation/rejection behavior under real eve
 
 Transition dependency discovery is hardened for the optional-handler case: missing `IAppearanceTransitionStepExecutor` instances and missing delegated `IEventActionHandler` instances are negative-cached for one monotonic second, while configured/live handlers remain immediately usable. This prevents repeated full-scene `MonoBehaviour` scans when transition presentation capabilities are intentionally absent.
 
+The application UI dependency refresh also reuses one active-`MonoBehaviour` discovery snapshot across the optional character-file selector, appearance runtime, and tracking-presence resolvers. Their standalone/manual resolver paths still perform a live scan when explicitly invoked, while the periodic 2-second dependency pass no longer allocates duplicate scene-wide arrays for the same snapshot.
+
 ## Runtime scene
 
 Interactive scene generation:
