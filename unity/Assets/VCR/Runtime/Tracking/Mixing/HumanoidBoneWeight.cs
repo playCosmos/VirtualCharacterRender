@@ -14,10 +14,27 @@ namespace VCR.Runtime.Tracking.Mixing
             float weight)
         {
             this.bone = bone;
-            this.weight = Mathf.Clamp01(weight);
+            this.weight =
+                SanitizeWeight(
+                    weight);
         }
 
         public HumanoidBoneId Bone => bone;
-        public float Weight => Mathf.Clamp01(weight);
+        public float Weight =>
+            SanitizeWeight(
+                weight);
+
+        private static float SanitizeWeight(
+            float value)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01(
+                value);
+        }
     }
 }
