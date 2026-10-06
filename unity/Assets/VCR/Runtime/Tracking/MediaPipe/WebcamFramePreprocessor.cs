@@ -59,17 +59,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
             _material.SetFloat(
                 "_Exposure",
-                Mathf.Clamp(
+                SanitizeBounded(
                     exposure,
-                    0.5f,
-                    3f));
+                    fallback: 1.35f,
+                    minimum: 0.5f,
+                    maximum: 3f));
 
             _material.SetFloat(
                 "_Gamma",
-                Mathf.Clamp(
+                SanitizeBounded(
                     gamma,
-                    0.5f,
-                    2f));
+                    fallback: 1.15f,
+                    minimum: 0.5f,
+                    maximum: 2f));
 
             Graphics.Blit(
                 source,
@@ -125,6 +127,24 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
             _materialResolveAttempted =
                 false;
+        }
+
+        private static float SanitizeBounded(
+            float value,
+            float fallback,
+            float minimum,
+            float maximum)
+        {
+            if (!float.IsFinite(value))
+            {
+                value =
+                    fallback;
+            }
+
+            return Mathf.Clamp(
+                value,
+                minimum,
+                maximum);
         }
 
         private void EnsureMaterial()
