@@ -251,6 +251,42 @@ namespace VCR.Editor.P3
                     "audio fallback attack/release smoothing must use separate time constants",
                     failures);
 
+                var invalidNormalizedAudio =
+                    AudioDrivenExpressionMath
+                        .NormalizeLevel(
+                            rms: 0.06f,
+                            threshold:
+                                float.NaN,
+                            gain:
+                                float.PositiveInfinity);
+                var invalidSmoothedAudio =
+                    AudioDrivenExpressionMath
+                        .Smooth(
+                            current:
+                                float.NaN,
+                            target:
+                                float.PositiveInfinity,
+                            deltaSeconds:
+                                float.NaN,
+                            attackSeconds:
+                                float.NaN,
+                            releaseSeconds:
+                                float.NegativeInfinity);
+
+                Expect(
+                    float.IsFinite(
+                        invalidNormalizedAudio) &&
+                    Mathf.Approximately(
+                        invalidNormalizedAudio,
+                        0f) &&
+                    float.IsFinite(
+                        invalidSmoothedAudio) &&
+                    Mathf.Approximately(
+                        invalidSmoothedAudio,
+                        0f),
+                    "audio fallback math must contain non-finite configuration/input values instead of publishing NaN",
+                    failures);
+
                 ValidateAudioSnapshotSuppression(
                     failures);
 
@@ -332,12 +368,88 @@ namespace VCR.Editor.P3
                     root.AddComponent<
                         AudioDrivenExpressionSource>();
 
+                var sourceType =
+                    typeof(
+                        AudioDrivenExpressionSource);
+                var sanitizeConfiguration =
+                    sourceType.GetMethod(
+                        "SanitizeConfiguration",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+                var noiseThresholdField =
+                    sourceType.GetField(
+                        "noiseThreshold",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+                var gainField =
+                    sourceType.GetField(
+                        "gain",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+                var attackField =
+                    sourceType.GetField(
+                        "attackSeconds",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+                var releaseField =
+                    sourceType.GetField(
+                        "releaseSeconds",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                if (sanitizeConfiguration == null ||
+                    noiseThresholdField == null ||
+                    gainField == null ||
+                    attackField == null ||
+                    releaseField == null)
+                {
+                    failures.Add(
+                        "audio fallback numeric-sanitization reflection contract is incomplete");
+                    return;
+                }
+
+                noiseThresholdField.SetValue(
+                    source,
+                    float.NaN);
+                gainField.SetValue(
+                    source,
+                    float.PositiveInfinity);
+                attackField.SetValue(
+                    source,
+                    float.NaN);
+                releaseField.SetValue(
+                    source,
+                    float.NegativeInfinity);
+
+                sanitizeConfiguration.Invoke(
+                    source,
+                    null);
+
+                Expect(
+                    Mathf.Approximately(
+                        (float)noiseThresholdField.GetValue(
+                            source),
+                        0.01f) &&
+                    Mathf.Approximately(
+                        (float)gainField.GetValue(
+                            source),
+                        18f) &&
+                    Mathf.Approximately(
+                        (float)attackField.GetValue(
+                            source),
+                        0.035f) &&
+                    Mathf.Approximately(
+                        (float)releaseField.GetValue(
+                            source),
+                        0.12f),
+                    "audio fallback component must restore safe finite defaults for non-finite serialized configuration",
+                    failures);
+
                 var updateValue =
-                    typeof(AudioDrivenExpressionSource)
-                        .GetMethod(
-                            "UpdateValue",
-                            BindingFlags.Instance |
-                            BindingFlags.NonPublic);
+                    sourceType.GetMethod(
+                        "UpdateValue",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
 
                 var valueField =
                     typeof(AudioDrivenExpressionSource)
