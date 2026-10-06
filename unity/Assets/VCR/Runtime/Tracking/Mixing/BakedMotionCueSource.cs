@@ -674,9 +674,7 @@ namespace VCR.Runtime.Tracking.Mixing
             var bones =
                 new NormalizedBonePose[
                     (int)HumanoidBoneId.Count];
-            var hasBone =
-                new bool[
-                    (int)HumanoidBoneId.Count];
+            ulong boneMask = 0;
 
             foreach (var track in
                      cue.Bones ??
@@ -718,8 +716,9 @@ namespace VCR.Runtime.Tracking.Mixing
                             position),
                         ToTrackingQuaternion(
                             rotation));
-                hasBone[index] =
-                    true;
+                boneMask |=
+                    HumanoidPoseState.BoneBit(
+                        (HumanoidBoneId)index);
             }
 
             return new HumanoidPoseState(
@@ -729,7 +728,7 @@ namespace VCR.Runtime.Tracking.Mixing
                 ToTrackingQuaternion(
                     rootRotation),
                 bones,
-                hasBone);
+                boneMask);
         }
 
         private static void ResolveFramePair(
