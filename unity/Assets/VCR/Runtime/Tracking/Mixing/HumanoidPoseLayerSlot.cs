@@ -28,8 +28,21 @@ namespace VCR.Runtime.Tracking.Mixing
                 : null;
 
         public HumanoidPoseLayerSettings Settings =>
+            RuntimeSettings.Clone();
+
+        internal HumanoidPoseLayerSettings RuntimeSettings =>
             settings ??=
                 new HumanoidPoseLayerSettings();
+
+        public HumanoidPoseLayerSlot Clone()
+        {
+            var clone =
+                new HumanoidPoseLayerSlot();
+            clone.Configure(
+                providerBehaviour,
+                RuntimeSettings);
+            return clone;
+        }
 
         public void Configure(
             MonoBehaviour provider,
@@ -37,7 +50,7 @@ namespace VCR.Runtime.Tracking.Mixing
         {
             providerBehaviour = provider;
             settings =
-                layerSettings ??
+                layerSettings?.Clone() ??
                 new HumanoidPoseLayerSettings();
         }
     }
