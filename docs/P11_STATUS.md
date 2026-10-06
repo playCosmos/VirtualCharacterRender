@@ -50,6 +50,7 @@ Diagnostics
 - fixed navigation section order
 - unavailable sections disabled with a visible reason
 - low-rate 0.5-second refresh by default rather than expensive frame-by-frame data reconstruction
+- repeated refreshes cache `AppearanceChanged` state snapshots instead of polling the defensive-copy `Current` accessor; current preset/outfit identifiers use the allocation-free appearance status contract
 - scene-status and diagnostics events also trigger refresh
 - application configuration save action
 - settings-preserving overlay recovery action
