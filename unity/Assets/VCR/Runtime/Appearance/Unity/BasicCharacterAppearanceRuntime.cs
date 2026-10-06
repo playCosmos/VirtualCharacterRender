@@ -771,9 +771,7 @@ namespace VCR.Runtime.Appearance.Unity
                 !_presets.ContainsKey(
                     _currentPresetId))
             {
-                _currentPresetId = null;
-                AppearanceChanged?.Invoke(
-                    Current);
+                ClearCurrentPresetAndNotify();
             }
 
             SetState(
@@ -821,9 +819,7 @@ namespace VCR.Runtime.Appearance.Unity
                     id,
                     StringComparison.Ordinal))
             {
-                _currentPresetId = null;
-                AppearanceChanged?.Invoke(
-                    Current);
+                ClearCurrentPresetAndNotify();
             }
 
             SetState(
@@ -3294,6 +3290,19 @@ namespace VCR.Runtime.Appearance.Unity
             SetState(
                 AppearanceRuntimeState.Faulted,
                 error);
+        }
+
+        private void ClearCurrentPresetAndNotify()
+        {
+            if (string.IsNullOrWhiteSpace(
+                    _currentPresetId))
+            {
+                return;
+            }
+
+            _currentPresetId = null;
+            AppearanceChanged?.Invoke(
+                Current);
         }
 
         private void SetState(
