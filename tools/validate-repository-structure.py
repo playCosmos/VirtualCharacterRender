@@ -1115,6 +1115,31 @@ require_source_contains(
 )
 require_source_contains(
     runtime_diagnostics,
+    "_csvBuilder",
+    "runtime diagnostics CSV evidence must reuse one StringBuilder across reports",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "AppendCsvSanitized(",
+    "runtime diagnostics CSV evidence must sanitize metric text while appending instead of allocating a replacement string",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"var\s+metricsText\s*=\s*new\s+StringBuilder",
+    "runtime diagnostics CSV evidence must not allocate a separate metrics StringBuilder per report",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"var\s+line\s*=\s*string\.Format\s*\(",
+    "runtime diagnostics CSV evidence must build directly into the reusable CSV buffer",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"\.ToString\s*\(\)\.Replace\s*\(",
+    "runtime diagnostics CSV evidence must sanitize while appending instead of allocating a replacement copy",
+)
+require_source_contains(
+    runtime_diagnostics,
     "RuntimeMetricComparison",
     "runtime diagnostics metric sorting must reuse a cached comparison delegate",
 )
