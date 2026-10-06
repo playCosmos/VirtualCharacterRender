@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VCR.Runtime.Appearance;
+using VCR.Runtime.Core;
 
 namespace VCR.Runtime.EventRuntime.Unity
 {
@@ -14,7 +15,8 @@ namespace VCR.Runtime.EventRuntime.Unity
     public sealed class AppearanceTransitionActionExecutor :
         MonoBehaviour,
         IAppearanceTransitionStepExecutor,
-        IAppearanceTransitionStepCompletionProbe
+        IAppearanceTransitionStepCompletionProbe,
+        IRuntimeMetricsSource
     {
         [SerializeField] private MonoBehaviour[] actionHandlerBehaviours =
             Array.Empty<MonoBehaviour>();
@@ -25,6 +27,8 @@ namespace VCR.Runtime.EventRuntime.Unity
         private IEventActionHandler[] _handlers =
             Array.Empty<IEventActionHandler>();
         private double _nextHandlerResolveAt;
+        private long _handlerCapabilityProbeFailureCount;
+        private long _completionCapabilityProbeFailureCount;
 
         private void Awake()
         {
@@ -60,9 +64,12 @@ namespace VCR.Runtime.EventRuntime.Unity
             EnsureHandlers();
 
             return
-                FindHandlerCount(
+                TryFindHandlerCount(
                     ToCommand(step),
-                    out _) == 1;
+                    out var count,
+                    out _,
+                    out _) &&
+                count == 1;
         }
 
         public bool TryExecute(
@@ -95,10 +102,15 @@ namespace VCR.Runtime.EventRuntime.Unity
 
             var command =
                 ToCommand(step);
-            var count =
-                FindHandlerCount(
+
+            if (!TryFindHandlerCount(
                     command,
-                    out var handler);
+                    out var count,
+                    out var handler,
+                    out error))
+            {
+                return false;
+            }
 
             if (count == 0)
             {
@@ -131,29 +143,11 @@ namespace VCR.Runtime.EventRuntime.Unity
         public bool CanTrackCompletion(
             AppearanceTransitionStep step)
         {
-            if (!CanExecute(
-                    step))
-            {
-                return false;
-            }
-
-            EnsureHandlers();
-
-            var command =
-                ToCommand(
-                    step);
-            var count =
-                FindHandlerCount(
-                    command,
-                    out var handler);
-
             return
-                count == 1 &&
-                handler is
-                    IEventActionCompletionProbe
-                        probe &&
-                probe.CanTrackCompletion(
-                    command);
+                TryResolveCompletionProbe(
+                    step,
+                    out _,
+                    out _);
         }
 
         public bool TryIsComplete(
@@ -164,10 +158,12 @@ namespace VCR.Runtime.EventRuntime.Unity
             complete = false;
             error = null;
 
-            if (!CanTrackCompletion(
-                    step))
+            if (!TryResolveCompletionProbe(
+                    step,
+                    out var probe,
+                    out error))
             {
-                error =
+                error ??=
                     $"Transition action '{step?.ActionType ?? "<null>"}' does not expose completion tracking.";
                 return false;
             }
@@ -175,14 +171,10 @@ namespace VCR.Runtime.EventRuntime.Unity
             var command =
                 ToCommand(
                     step);
-            FindHandlerCount(
-                command,
-                out var handler);
 
             try
             {
-                return ((IEventActionCompletionProbe)
-                        handler)
+                return probe
                     .TryIsComplete(
                         command,
                         out complete,
@@ -332,18 +324,103 @@ namespace VCR.Runtime.EventRuntime.Unity
             }
         }
 
-        private int FindHandlerCount(
+        private bool TryResolveCompletionProbe(
+            AppearanceTransitionStep step,
+            out IEventActionCompletionProbe probe,
+            out string error)
+        {
+            probe = null;
+            error = null;
+
+            if (step == null ||
+                step.Kind !=
+                    AppearanceTransitionStepKind.Action ||
+                string.IsNullOrWhiteSpace(
+                    step.ActionType) ||
+                step.ActionType.StartsWith(
+                    "appearance.",
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            EnsureHandlers();
+
+            var command =
+                ToCommand(
+                    step);
+
+            if (!TryFindHandlerCount(
+                    command,
+                    out var count,
+                    out var handler,
+                    out error))
+            {
+                return false;
+            }
+
+            if (count != 1 ||
+                handler is not
+                    IEventActionCompletionProbe
+                        completionProbe)
+            {
+                return false;
+            }
+
+            if (!TryCanTrackCompletion(
+                    completionProbe,
+                    command,
+                    out var canTrack,
+                    out error))
+            {
+                return false;
+            }
+
+            if (!canTrack)
+            {
+                return false;
+            }
+
+            probe =
+                completionProbe;
+            return true;
+        }
+
+        private bool TryFindHandlerCount(
             EventActionCommand command,
-            out IEventActionHandler handler)
+            out int count,
+            out IEventActionHandler handler,
+            out string error)
         {
             handler = null;
-            var count = 0;
+            count = 0;
+            error = null;
 
             foreach (var candidate in _handlers)
             {
-                if (!IsServiceAlive(candidate) ||
-                    !candidate.CanHandle(
-                        command))
+                if (!IsServiceAlive(candidate))
+                {
+                    continue;
+                }
+
+                bool canHandle;
+
+                try
+                {
+                    canHandle =
+                        candidate.CanHandle(
+                            command);
+                }
+                catch (Exception exception)
+                {
+                    _handlerCapabilityProbeFailureCount++;
+                    error =
+                        "Event action handler CanHandle failed: " +
+                        exception.Message;
+                    return false;
+                }
+
+                if (!canHandle)
                 {
                     continue;
                 }
@@ -356,7 +433,53 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            return count;
+            return true;
+        }
+
+        private bool TryCanTrackCompletion(
+            IEventActionCompletionProbe probe,
+            EventActionCommand command,
+            out bool canTrack,
+            out string error)
+        {
+            canTrack = false;
+            error = null;
+
+            try
+            {
+                canTrack =
+                    probe.CanTrackCompletion(
+                        command);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                _completionCapabilityProbeFailureCount++;
+                error =
+                    "Event action completion CanTrackCompletion failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.action_handler_probe_failures",
+                    _handlerCapabilityProbeFailureCount,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "appearance.transition.action_completion_probe_failures",
+                    _completionCapabilityProbeFailureCount,
+                    "count"));
         }
     }
 }
