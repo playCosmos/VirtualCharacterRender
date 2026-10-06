@@ -1084,6 +1084,26 @@ require_source_contains(
 )
 require_source_contains(
     basic_environment_runtime,
+    "TryApplyLightingProfileToTargets(",
+    "environment lighting applies must report target execution failures through the public bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "var previousProfile =\n                _lightingProfile;",
+    "environment lighting profile changes must retain the previous profile for rollback",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "lightingTargetBehaviours =\n                    previousBehaviours;",
+    "failed lighting-target replacement must restore the previous target configuration",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment lighting target validation failed: \"",
+    "environment lighting validation exceptions must be converted into structured failures",
+)
+require_source_contains(
+    basic_environment_runtime,
     "TryApplyStateBinding(\n                    next,\n                    stateId,",
     "environment state-binding configuration must apply staged bindings before committing them",
 )
@@ -1108,6 +1128,16 @@ require_source_contains(
     p6_environment_validation,
     "\"external-day\"",
     "P6 validation must prove configured state bindings are isolated from later caller mutation",
+)
+require_source_contains(
+    p6_environment_validation,
+    "P6ConditionalThrowEnvironmentLightingTarget",
+    "P6 validation must cover lighting target apply failure rollback",
+)
+require_source_contains(
+    p6_environment_validation,
+    "failedProfileAccepted",
+    "P6 validation must cover lighting profile rollback after partial target execution",
 )
 
 p1_renderer_validation = (
