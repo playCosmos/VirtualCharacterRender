@@ -1120,6 +1120,79 @@ namespace VCR.Editor.P9
                     "event runtime host must expose allocation-free indexed/id rule lookup without changing defensive CaptureRules semantics",
                     failures);
 
+                var validHostRules =
+                    host.CaptureRules();
+                var previousMaxCommands =
+                    host.MaxCommandsPerEvent;
+                var invalidHostRule =
+                    new EventRuntimeRule
+                    {
+                        Id =
+                            "invalid-host-rule",
+                        Enabled =
+                            true
+                    };
+                var invalidHostRules =
+                    new EventRuntimeRule[
+                        EventRuntimeRuleSetBounds.MaxRules +
+                        1];
+                invalidHostRules[0] =
+                    invalidHostRule;
+
+                typeof(EventRuntimeHost)
+                    .GetField(
+                        "rules",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic)
+                    ?.SetValue(
+                        host,
+                        invalidHostRules);
+
+                var invalidToggleResult =
+                    host.TrySetRuleEnabled(
+                        "invalid-host-rule",
+                        false,
+                        out var invalidToggleError);
+
+                Expect(
+                    !invalidToggleResult &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidToggleError) &&
+                    host.RuleCount ==
+                        invalidHostRules.Length &&
+                    invalidHostRule.Enabled &&
+                    host.Engine
+                        .GetRuleDiagnostics()
+                        .Length == 1,
+                    "failed host rule apply must preserve the previous engine rules, keep the host rule set intact, and rollback the requested enabled mutation",
+                    failures);
+
+                var invalidMaxResult =
+                    host.TrySetMaxCommandsPerEvent(
+                        64,
+                        out var invalidMaxError);
+
+                Expect(
+                    !invalidMaxResult &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidMaxError) &&
+                    host.MaxCommandsPerEvent ==
+                        previousMaxCommands &&
+                    host.RuleCount ==
+                        invalidHostRules.Length,
+                    "failed max-command apply must rollback the host limit instead of reporting success or clearing rules",
+                    failures);
+
+                host.SetRules(
+                    validHostRules);
+
+                Expect(
+                    host.RuleCount == 1 &&
+                    host.GetRuleAt(0)?.Id ==
+                        "manual-environment",
+                    "event runtime host validation must restore the valid rule set after failure injection",
+                    failures);
+
                 hub.Publish(
                     new NormalizedEvent(
                         NormalizedEventTypes
