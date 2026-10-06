@@ -1094,6 +1094,23 @@ namespace VCR.Editor.P1
                     "TryRecoverOverlayOutput must report suspended-state rejection through false/error instead of throwing or mutating lifecycle state",
                     failures);
 
+                var suspendedEnvironmentReturned =
+                    scene.SetEnvironmentState(
+                        "reactive",
+                        out var suspendedEnvironmentError);
+
+                Expect(
+                    !suspendedEnvironmentReturned &&
+                    !string.IsNullOrWhiteSpace(
+                        suspendedEnvironmentError) &&
+                    suspendedEnvironmentError.Contains(
+                        "Environment state change failed",
+                        StringComparison.Ordinal) &&
+                    scene.State ==
+                        SceneRuntimeState.Suspended,
+                    "SetEnvironmentState must report lifecycle rejection through false/error instead of throwing or mutating the suspended scene",
+                    failures);
+
                 Expect(
                     scene.Resume() &&
                     scene.State ==
