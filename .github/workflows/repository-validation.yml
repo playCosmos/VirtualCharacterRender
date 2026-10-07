@@ -8,6 +8,7 @@ on:
       - "checkpoint/**"
       - "feature/**"
       - "fix/**"
+      - "release/**"
   pull_request:
   workflow_dispatch:
     inputs:
