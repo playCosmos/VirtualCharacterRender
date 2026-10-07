@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace VCR.Editor.P11
 {
-    internal static class P11GraphGroupPathUtility
+    public static class P11GraphGroupPathUtility
     {
         public static bool TryNormalize(
             string groupPath,
