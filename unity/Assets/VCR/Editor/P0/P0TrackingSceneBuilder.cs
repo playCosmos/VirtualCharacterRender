@@ -21,7 +21,9 @@ namespace VCR.Editor.P0
         public const string P0ScenePath =
             "Assets/VCR/P0/P0Runtime.unity";
 
-        private const string Vrm10MToonShaderPath =
+        private const string Vrm10BuiltInMToonShaderPath =
+            "Packages/com.vrmc.vrm/MToon10/Shaders/vrmc_materials_mtoon.shader";
+        private const string Vrm10UrpMToonShaderPath =
             "Packages/com.vrmc.vrm/MToon10/Shaders/vrmc_materials_mtoon_urp.shader";
         private const string UrpLitShaderPath =
             "Packages/com.unity.render-pipelines.universal/Shaders/Lit.shader";
@@ -171,9 +173,15 @@ namespace VCR.Editor.P0
                 characterRoot.AddComponent<
                     Vrm10CharacterLoader>();
 
-            var vrm10MToonShader =
+            var vrm10BuiltInMToonShader =
                 AssetDatabase.LoadAssetAtPath<Shader>(
-                    Vrm10MToonShaderPath);
+                    Vrm10BuiltInMToonShaderPath);
+            var builtInStandardShader =
+                Shader.Find(
+                    "Standard");
+            var vrm10UrpMToonShader =
+                AssetDatabase.LoadAssetAtPath<Shader>(
+                    Vrm10UrpMToonShaderPath);
             var urpLitShader =
                 AssetDatabase.LoadAssetAtPath<Shader>(
                     UrpLitShaderPath);
@@ -181,14 +189,18 @@ namespace VCR.Editor.P0
                 AssetDatabase.LoadAssetAtPath<Shader>(
                     UniUnlitShaderPath);
 
-            if (vrm10MToonShader == null ||
+            if (vrm10BuiltInMToonShader == null ||
+                builtInStandardShader == null ||
+                vrm10UrpMToonShader == null ||
                 urpLitShader == null ||
                 uniUnlitShader == null)
             {
                 Object.DestroyImmediate(runtimeRoot);
                 Debug.LogError(
                     $"VCR {logContext}: required VRM runtime shaders could not be resolved. " +
-                    $"MToon={(vrm10MToonShader != null)}, " +
+                    $"Built-in MToon={(vrm10BuiltInMToonShader != null)}, " +
+                    $"Standard={(builtInStandardShader != null)}, " +
+                    $"URP MToon={(vrm10UrpMToonShader != null)}, " +
                     $"URP Lit={(urpLitShader != null)}, " +
                     $"UniUnlit={(uniUnlitShader != null)}. " +
                     "Check the pinned UniVRM/URP package contents before building.");
@@ -196,7 +208,9 @@ namespace VCR.Editor.P0
             }
 
             loader.ConfigureRuntimeImportShaders(
-                vrm10MToonShader,
+                vrm10BuiltInMToonShader,
+                builtInStandardShader,
+                vrm10UrpMToonShader,
                 urpLitShader,
                 uniUnlitShader);
             loader.SetTrackingProvider(router);
