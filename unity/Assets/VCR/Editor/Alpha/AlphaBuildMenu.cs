@@ -20,6 +20,11 @@ namespace VCR.Editor.Alpha
             "Builds/Alpha/0.1.0-alpha.1/macOS/VirtualCharacterRender.app";
 
         [MenuItem("VCR/Alpha/Validate Source-Free (No Physical Camera or ARKit Required)")]
+        public static void ValidateSourceFreeFromMenu()
+        {
+            ValidateSourceFree();
+        }
+
         public static bool ValidateSourceFree()
         {
             Debug.Log(
@@ -39,6 +44,11 @@ namespace VCR.Editor.Alpha
         }
 
         [MenuItem("VCR/Alpha/Build/Windows x64 Development Alpha")]
+        public static void BuildWindowsFromMenu()
+        {
+            BuildWindows();
+        }
+
         public static bool BuildWindows()
         {
             return Build(
@@ -47,6 +57,11 @@ namespace VCR.Editor.Alpha
         }
 
         [MenuItem("VCR/Alpha/Build/macOS Development Alpha")]
+        public static void BuildMacFromMenu()
+        {
+            BuildMac();
+        }
+
         public static bool BuildMac()
         {
             return Build(
