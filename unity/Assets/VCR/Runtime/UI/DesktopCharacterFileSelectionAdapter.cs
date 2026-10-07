@@ -113,7 +113,7 @@ namespace VCR.Runtime.UI
                             "Select VRM Character",
                             ResolveInitialDirectory(
                                 currentPath) ??
-                            Application.dataPath,
+                            UnityEngine.Application.dataPath,
                             "vrm"
                         }) as string;
 
