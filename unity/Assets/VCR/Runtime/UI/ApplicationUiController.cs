@@ -72,6 +72,12 @@ namespace VCR.Runtime.UI
         private Text _statusText;
         private Text _sectionTitle;
         private Text _contentText;
+        private RectTransform _renderViewportFrame;
+        private RectTransform _trackingCameraPreviewPanel;
+        private RawImage _trackingCameraPreviewImage;
+        private Text _trackingCameraPreviewPrivacyText;
+        private Button _trackingCameraPreviewButton;
+        private bool _trackingCameraPreviewRequested;
         private Button _saveButton;
         private Button _recoverOutputButton;
 
@@ -432,6 +438,13 @@ namespace VCR.Runtime.UI
 
             if (selected)
             {
+                // A raw camera preview is privacy-sensitive. Navigating away
+                // from Tracking always returns it to the hidden state.
+                if (section != ApplicationUiSection.Tracking)
+                {
+                    _trackingCameraPreviewRequested = false;
+                }
+
                 RefreshAll();
             }
 
@@ -905,10 +918,11 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             background.color =
                 new Color(
-                    0.035f,
-                    0.04f,
-                    0.05f,
-                    0.92f);
+                    0.018f,
+                    0.022f,
+                    0.03f,
+                    0.08f);
+            background.raycastTarget = false;
 
             var top =
                 CreateRect(
@@ -931,18 +945,39 @@ namespace VCR.Runtime.UI
                     0.12f,
                     1f);
 
+            var applicationTitle =
+                CreateText(
+                    "Application Title",
+                    top,
+                    18,
+                    TextAnchor.MiddleLeft);
+            applicationTitle.text =
+                "Virtual Character Renderer";
+            applicationTitle.fontStyle =
+                FontStyle.Bold;
+            applicationTitle.raycastTarget =
+                false;
+            Stretch(
+                applicationTitle.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(18f, 0f),
+                new Vector2(-520f, 0f));
+
             _statusText =
                 CreateText(
                     "Status",
                     top,
-                    18,
-                    TextAnchor.MiddleLeft);
+                    15,
+                    TextAnchor.MiddleRight);
+            _statusText.raycastTarget =
+                false;
 
             Stretch(
                 _statusText.rectTransform,
                 Vector2.zero,
                 Vector2.one,
-                new Vector2(18f, 0f),
+                new Vector2(520f, 0f),
                 new Vector2(-18f, 0f));
 
             var navigation =
@@ -957,9 +992,9 @@ namespace VCR.Runtime.UI
             navigation.pivot =
                 new Vector2(0f, 1f);
             navigation.offsetMin =
-                new Vector2(0f, 0f);
+                new Vector2(8f, 276f);
             navigation.offsetMax =
-                new Vector2(248f, -56f);
+                new Vector2(220f, -64f);
 
             var navImage =
                 navigation.gameObject
@@ -1024,23 +1059,73 @@ namespace VCR.Runtime.UI
                 }
             }
 
+            _renderViewportFrame =
+                CreateRect(
+                    "Render Viewport",
+                    _root);
+            _renderViewportFrame.anchorMin =
+                Vector2.zero;
+            _renderViewportFrame.anchorMax =
+                Vector2.one;
+            _renderViewportFrame.offsetMin =
+                new Vector2(228f, 276f);
+            _renderViewportFrame.offsetMax =
+                new Vector2(-442f, -64f);
+
+            var viewportBackground =
+                _renderViewportFrame.gameObject
+                    .AddComponent<Image>();
+            viewportBackground.color =
+                new Color(
+                    0.01f,
+                    0.015f,
+                    0.025f,
+                    0.06f);
+            viewportBackground.raycastTarget =
+                false;
+
+            var viewportLabel =
+                CreateText(
+                    "Render Viewport Label",
+                    _renderViewportFrame,
+                    13,
+                    TextAnchor.UpperLeft);
+            viewportLabel.text =
+                "RENDER VIEW";
+            viewportLabel.color =
+                new Color(
+                    0.60f,
+                    0.66f,
+                    0.76f,
+                    0.82f);
+            viewportLabel.raycastTarget =
+                false;
+            Stretch(
+                viewportLabel.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(12f, 8f),
+                new Vector2(-12f, -8f));
+
             var content =
                 CreateRect(
-                    "Content",
+                    "Inspector",
                     _root);
 
             content.anchorMin =
-                Vector2.zero;
+                new Vector2(1f, 0f);
             content.anchorMax =
-                Vector2.one;
+                new Vector2(1f, 1f);
+            content.pivot =
+                new Vector2(1f, 1f);
             content.offsetMin =
                 new Vector2(
-                    248f,
-                    0f);
+                    -434f,
+                    276f);
             content.offsetMax =
                 new Vector2(
-                    0f,
-                    -56f);
+                    -8f,
+                    -64f);
 
             var contentImage =
                 content.gameObject
@@ -1049,8 +1134,8 @@ namespace VCR.Runtime.UI
                 new Color(
                     0.05f,
                     0.055f,
-                    0.065f,
-                    0.93f);
+                    0.07f,
+                    0.985f);
 
             _sectionTitle =
                 CreateText(
@@ -1081,7 +1166,7 @@ namespace VCR.Runtime.UI
                 CreateText(
                     "Content Text",
                     content,
-                    18,
+                    15,
                     TextAnchor.UpperLeft);
 
             _contentText.horizontalOverflow =
@@ -1097,15 +1182,69 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 452f);
+                    new Vector2(20f, 84f);
             _contentText.rectTransform
                 .offsetMax =
-                    new Vector2(-24f, -84f);
+                    new Vector2(-20f, -82f);
+
+            _trackingCameraPreviewPanel =
+                CreateRect(
+                    "Tracking Camera Preview",
+                    content);
+            _trackingCameraPreviewPanel.anchorMin =
+                new Vector2(0f, 0f);
+            _trackingCameraPreviewPanel.anchorMax =
+                new Vector2(1f, 0f);
+            _trackingCameraPreviewPanel.pivot =
+                new Vector2(0.5f, 0f);
+            _trackingCameraPreviewPanel.offsetMin =
+                new Vector2(16f, 84f);
+            _trackingCameraPreviewPanel.offsetMax =
+                new Vector2(-16f, 260f);
+
+            var trackingPreviewBackground =
+                _trackingCameraPreviewPanel.gameObject
+                    .AddComponent<Image>();
+            trackingPreviewBackground.color =
+                new Color(
+                    0.025f,
+                    0.03f,
+                    0.04f,
+                    1f);
+            trackingPreviewBackground.raycastTarget =
+                false;
+
+            _trackingCameraPreviewImage =
+                _trackingCameraPreviewPanel.gameObject
+                    .AddComponent<RawImage>();
+            _trackingCameraPreviewImage.color =
+                Color.white;
+            _trackingCameraPreviewImage.raycastTarget =
+                false;
+
+            _trackingCameraPreviewPrivacyText =
+                CreateText(
+                    "Camera Preview Privacy",
+                    _trackingCameraPreviewPanel,
+                    15,
+                    TextAnchor.MiddleCenter);
+            _trackingCameraPreviewPrivacyText.text =
+                "Camera preview is hidden by default.\nUse Show Camera Preview to reveal it.";
+            _trackingCameraPreviewPrivacyText.raycastTarget =
+                false;
+            Stretch(
+                _trackingCameraPreviewPrivacyText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(18f, 18f),
+                new Vector2(-18f, -18f));
+            _trackingCameraPreviewPanel.gameObject.SetActive(
+                false);
 
             _contextActions =
                 CreateRect(
                     "Section Actions",
-                    content);
+                    _root);
 
             _contextActions.anchorMin =
                 new Vector2(0f, 0f);
@@ -1114,9 +1253,9 @@ namespace VCR.Runtime.UI
             _contextActions.pivot =
                 new Vector2(0.5f, 0f);
             _contextActions.offsetMin =
-                new Vector2(24f, 76f);
+                new Vector2(228f, 196f);
             _contextActions.offsetMax =
-                new Vector2(-24f, 182f);
+                new Vector2(-8f, 268f);
 
             AddActionPanelBackground(
                 _contextActions);
@@ -1229,6 +1368,15 @@ namespace VCR.Runtime.UI
             _trackingNextButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 120f;
+
+            _trackingCameraPreviewButton =
+                CreateButton(
+                    "Show Camera Preview",
+                    _contextActions,
+                    ToggleTrackingCameraPreview);
+            _trackingCameraPreviewButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 190f;
 
             _apply720p60Button =
                 CreateButton(
@@ -1691,7 +1839,7 @@ namespace VCR.Runtime.UI
             _appearanceActions =
                 CreateRect(
                     "Appearance Actions",
-                    content);
+                    _root);
 
             _appearanceActions.anchorMin =
                 new Vector2(0f, 0f);
@@ -1700,9 +1848,9 @@ namespace VCR.Runtime.UI
             _appearanceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceActions.offsetMin =
-                new Vector2(24f, 190f);
+                new Vector2(228f, 148f);
             _appearanceActions.offsetMax =
-                new Vector2(-24f, 246f);
+                new Vector2(-8f, 192f);
 
             AddActionPanelBackground(
                 _appearanceActions);
@@ -1775,7 +1923,7 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions =
                 CreateRect(
                     "Appearance Direct Actions",
-                    content);
+                    _root);
 
             _appearanceDirectActions.anchorMin =
                 new Vector2(0f, 0f);
@@ -1784,9 +1932,9 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceDirectActions.offsetMin =
-                new Vector2(24f, 252f);
+                new Vector2(228f, 100f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-24f, 308f);
+                new Vector2(-8f, 144f);
 
             AddActionPanelBackground(
                 _appearanceDirectActions);
@@ -1877,7 +2025,7 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions =
                 CreateRect(
                     "Appearance Saved Presets",
-                    content);
+                    _root);
 
             _appearancePersistenceActions.anchorMin =
                 new Vector2(0f, 0f);
@@ -1886,9 +2034,9 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePersistenceActions.offsetMin =
-                new Vector2(24f, 314f);
+                new Vector2(228f, 52f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-24f, 370f);
+                new Vector2(-8f, 96f);
 
             AddActionPanelBackground(
                 _appearancePersistenceActions);
@@ -1934,7 +2082,7 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions =
                 CreateRect(
                     "Appearance Preset Management",
-                    content);
+                    _root);
 
             _appearancePresetManagementActions.anchorMin =
                 new Vector2(0f, 0f);
@@ -1943,9 +2091,9 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePresetManagementActions.offsetMin =
-                new Vector2(24f, 376f);
+                new Vector2(228f, 8f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-24f, 432f);
+                new Vector2(-8f, 48f);
 
             AddActionPanelBackground(
                 _appearancePresetManagementActions);
@@ -5781,6 +5929,9 @@ namespace VCR.Runtime.UI
             SetActive(
                 _trackingNextButton,
                 trackingSelected);
+            SetActive(
+                _trackingCameraPreviewButton,
+                trackingSelected);
 
             SetActive(
                 _apply720p60Button,
@@ -5935,10 +6086,96 @@ namespace VCR.Runtime.UI
             SetActive(
                 _diagnosticsCsvButton,
                 diagnosticsSelected);
-                SetActive(
-                    _diagnosticsConsoleButton,
-                    diagnosticsSelected);
+            SetActive(
+                _diagnosticsConsoleButton,
+                diagnosticsSelected);
 
+            RefreshTrackingCameraPreviewPrivacy(
+                trackingSelected);
+        }
+
+        private void ToggleTrackingCameraPreview()
+        {
+            _trackingCameraPreviewRequested =
+                !_trackingCameraPreviewRequested;
+
+            RefreshTrackingCameraPreviewPrivacy(
+                _model.SelectedSection ==
+                ApplicationUiSection.Tracking);
+        }
+
+        public void BindTrackingCameraPreviewTexture(
+            Texture texture)
+        {
+            if (_trackingCameraPreviewImage != null)
+            {
+                _trackingCameraPreviewImage.texture =
+                    texture;
+            }
+
+            RefreshTrackingCameraPreviewPrivacy(
+                _model.SelectedSection ==
+                ApplicationUiSection.Tracking);
+        }
+
+        private void RefreshTrackingCameraPreviewPrivacy(
+            bool trackingSelected)
+        {
+            var shouldReveal =
+                trackingSelected &&
+                _trackingCameraPreviewRequested;
+
+            if (_trackingCameraPreviewPanel != null &&
+                _trackingCameraPreviewPanel.gameObject.activeSelf !=
+                    shouldReveal)
+            {
+                _trackingCameraPreviewPanel.gameObject.SetActive(
+                    shouldReveal);
+            }
+
+            var hasTexture =
+                _trackingCameraPreviewImage != null &&
+                _trackingCameraPreviewImage.texture != null;
+
+            if (_trackingCameraPreviewImage != null)
+            {
+                _trackingCameraPreviewImage.enabled =
+                    shouldReveal &&
+                    hasTexture;
+            }
+
+            if (_trackingCameraPreviewPrivacyText != null)
+            {
+                _trackingCameraPreviewPrivacyText.gameObject.SetActive(
+                    shouldReveal &&
+                    !hasTexture);
+
+                if (shouldReveal &&
+                    !hasTexture)
+                {
+                    SetTextIfChanged(
+                        _trackingCameraPreviewPrivacyText,
+                        "Camera preview was explicitly requested, but no video surface is connected in this alpha.");
+                }
+            }
+
+            SetButtonLabel(
+                _trackingCameraPreviewButton,
+                _trackingCameraPreviewRequested
+                    ? "Hide Camera Preview"
+                    : "Show Camera Preview");
+
+            if (_contentText != null)
+            {
+                var offset =
+                    _contentText.rectTransform.offsetMin;
+                offset.y =
+                    shouldReveal
+                        ? 276f
+                        : 84f;
+                _contentText.rectTransform.offsetMin =
+                    offset;
+            }
         }
 
         private void RefreshMaterialControlState()
