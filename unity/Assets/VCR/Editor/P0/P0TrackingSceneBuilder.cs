@@ -21,6 +21,13 @@ namespace VCR.Editor.P0
         public const string P0ScenePath =
             "Assets/VCR/P0/P0Runtime.unity";
 
+        private const string Vrm10MToonShaderPath =
+            "Packages/com.vrmc.vrm/MToon10/Shaders/vrmc_materials_mtoon_urp.shader";
+        private const string UrpLitShaderPath =
+            "Packages/com.unity.render-pipelines.universal/Shaders/Lit.shader";
+        private const string UniUnlitShaderPath =
+            "Packages/com.vrmc.gltf/UniUnlit/Shaders/UniUnlit.shader";
+
         [MenuItem("VCR/P0/Create Runtime Test Scene")]
         public static void CreateRuntimeTestScene()
         {
@@ -163,6 +170,35 @@ namespace VCR.Editor.P0
             var loader =
                 characterRoot.AddComponent<
                     Vrm10CharacterLoader>();
+
+            var vrm10MToonShader =
+                AssetDatabase.LoadAssetAtPath<Shader>(
+                    Vrm10MToonShaderPath);
+            var urpLitShader =
+                AssetDatabase.LoadAssetAtPath<Shader>(
+                    UrpLitShaderPath);
+            var uniUnlitShader =
+                AssetDatabase.LoadAssetAtPath<Shader>(
+                    UniUnlitShaderPath);
+
+            if (vrm10MToonShader == null ||
+                urpLitShader == null ||
+                uniUnlitShader == null)
+            {
+                Object.DestroyImmediate(runtimeRoot);
+                Debug.LogError(
+                    $"VCR {logContext}: required VRM runtime shaders could not be resolved. " +
+                    $"MToon={(vrm10MToonShader != null)}, " +
+                    $"URP Lit={(urpLitShader != null)}, " +
+                    $"UniUnlit={(uniUnlitShader != null)}. " +
+                    "Check the pinned UniVRM/URP package contents before building.");
+                return false;
+            }
+
+            loader.ConfigureRuntimeImportShaders(
+                vrm10MToonShader,
+                urpLitShader,
+                uniUnlitShader);
             loader.SetTrackingProvider(router);
 
             var renderBootstrap =
