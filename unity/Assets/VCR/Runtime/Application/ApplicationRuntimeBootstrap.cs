@@ -49,7 +49,7 @@ namespace VCR.Runtime.Application
 
         private async void Start()
         {
-            if (Application.isEditor)
+            if (UnityEngine.Application.isEditor)
             {
                 return;
             }
@@ -339,7 +339,7 @@ namespace VCR.Runtime.Application
                     : configurationFileName;
 
             return Path.Combine(
-                Application.persistentDataPath,
+                UnityEngine.Application.persistentDataPath,
                 fileName);
         }
 
