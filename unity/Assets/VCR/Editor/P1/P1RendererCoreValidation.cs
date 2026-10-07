@@ -1015,12 +1015,23 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    scene.Initialize() &&
+                    !scene.Initialize() &&
+                    scene.State ==
+                        SceneRuntimeState.Faulted &&
+                    !string.IsNullOrWhiteSpace(
+                        scene.Status.LastError),
+                    "scene initialization alone must not clear an incomplete configuration rollback fault",
+                    failures);
+
+                scene.ApplyConfiguration(
+                    beforeTransactionalFailure);
+
+                Expect(
                     scene.State ==
                         SceneRuntimeState.Ready &&
                     string.IsNullOrWhiteSpace(
                         scene.Status.LastError),
-                    "scene initialization must recover an incomplete configuration rollback fault before later validation continues",
+                    "a successful full scene configuration apply must clear the rollback-recovery fault before later validation continues",
                     failures);
 
                 configurationTestDirectory =
