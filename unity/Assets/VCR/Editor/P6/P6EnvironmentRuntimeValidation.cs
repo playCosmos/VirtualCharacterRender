@@ -1631,6 +1631,22 @@ namespace VCR.Editor.P6
                     "failed final root commit must remain an explicit active 100-percent completion-pending transition",
                     failures);
 
+                var repeatedTargetDuringPending =
+                    runtime.SetState(
+                        "night",
+                        out var repeatedTargetError);
+
+                Expect(
+                    !repeatedTargetDuringPending &&
+                    !string.IsNullOrWhiteSpace(
+                        repeatedTargetError) &&
+                    repeatedTargetError.Contains(
+                        "Environment transition completion failed",
+                        StringComparison.Ordinal) &&
+                    runtime.TransitionStatus.Active,
+                    "same-state idempotence must not hide or clear an unresolved transition completion failure",
+                    failures);
+
                 var replacedDuringPending =
                     runtime.SetState(
                         "day",
@@ -1642,6 +1658,23 @@ namespace VCR.Editor.P6
                         pendingReplacementError) &&
                     runtime.TransitionStatus.Active,
                     "a new state change must not overwrite an unresolved transition completion failure",
+                    failures);
+
+                var pendingMetrics =
+                    new List<RuntimeMetric>();
+                runtime.CollectMetrics(
+                    pendingMetrics);
+
+                Expect(
+                    TryGetMetric(
+                        pendingMetrics,
+                        "environment.transition_completion_pending",
+                        out var completionPendingMetric) &&
+                    Math.Abs(
+                        completionPendingMetric -
+                        1.0) <
+                        0.001,
+                    "transition diagnostics must expose a failed 100-percent completion as pending",
                     failures);
 
                 var replacementNight =
@@ -1674,6 +1707,11 @@ namespace VCR.Editor.P6
                     transition.StartedAtTimestampUs +
                     300_000);
 
+                var recoveredMetrics =
+                    new List<RuntimeMetric>();
+                runtime.CollectMetrics(
+                    recoveredMetrics);
+
                 Expect(
                     !runtime.TransitionStatus.Active &&
                     Math.Abs(
@@ -1681,8 +1719,17 @@ namespace VCR.Editor.P6
                         1f) <
                         0.0001f &&
                     !day.activeSelf &&
-                    replacementNight.activeSelf,
-                    "a repaired completion-pending transition must commit exactly once and end with only the target root active",
+                    replacementNight.activeSelf &&
+                    string.IsNullOrWhiteSpace(
+                        runtime.Status.LastError) &&
+                    TryGetMetric(
+                        recoveredMetrics,
+                        "environment.transition_completion_pending",
+                        out var recoveredPendingMetric) &&
+                    Math.Abs(
+                        recoveredPendingMetric) <
+                        0.001,
+                    "a repaired completion-pending transition must commit exactly once, clear the stale completion error, and end with only the target root active",
                     failures);
             }
             catch (Exception exception)
