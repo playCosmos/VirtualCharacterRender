@@ -1494,6 +1494,17 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "\"Broadcast capture target apply failed and render rollback was incomplete: \"",
+    "failed broadcast render apply must surface incomplete rollback details",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "\"Broadcast capture target apply failed and render rollback was incomplete: \"",
+    "SetFault(\n                            error);",
+    "incomplete broadcast render rollback must fault the scene before returning false",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "RunRollbackStep(",
     "scene configuration rollback must isolate failures so later restore steps still run",
 )
