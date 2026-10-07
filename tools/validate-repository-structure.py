@@ -601,8 +601,8 @@ osc_event_mapper = (
 )
 require_source_contains(
     osc_event_mapper,
-    "internal static class OscNormalizedEventPacketReader",
-    "generic OSC event ingress must retain its specialized direct packet reader",
+    "public static class OscNormalizedEventPacketReader",
+    "generic OSC event ingress must retain its specialized direct packet reader across the Unity transport assembly boundary",
 )
 require_source_contains(
     osc_event_mapper,
@@ -3627,8 +3627,8 @@ tracking_source_health_snapshot = (
 )
 require_source_contains(
     tracking_source_health_snapshot,
-    "internal static class TrackingTimestampMath",
-    "tracking timestamp age arithmetic must use the shared overflow-safe helper",
+    "public static class TrackingTimestampMath",
+    "tracking timestamp age arithmetic must use the shared overflow-safe helper across routing assemblies",
 )
 require_source_contains(
     tracking_source_health_snapshot,
