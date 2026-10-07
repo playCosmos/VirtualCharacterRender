@@ -149,7 +149,7 @@ namespace VCR.Runtime.UI
             public string lpstrCustomFilter;
             public int nMaxCustFilter;
             public int nFilterIndex;
-            public StringBuilder lpstrFile;
+            public IntPtr lpstrFile;
             public int nMaxFile;
             [MarshalAs(UnmanagedType.LPWStr)]
             public string lpstrFileTitle;
@@ -183,28 +183,59 @@ namespace VCR.Runtime.UI
 
         [DllImport(
             "comdlg32.dll",
+            EntryPoint = "GetOpenFileNameW",
+            ExactSpelling = true,
             CharSet = CharSet.Unicode,
             SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetOpenFileName(
+        private static extern bool GetOpenFileNameW(
             ref OpenFileName ofn);
 
         [DllImport("comdlg32.dll")]
         private static extern int
             CommDlgExtendedError();
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr
+            GetActiveWindow();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr
+            GetForegroundWindow();
+
         private static CharacterFileSelectionResult
             SelectWindows(
                 string currentPath)
         {
+            const int maxFileCharacters =
+                32768;
+            var buffer =
+                IntPtr.Zero;
+
             try
             {
                 var initialDirectory =
                     ResolveInitialDirectory(
                         currentPath);
-                var buffer =
-                    new StringBuilder(
-                        32768);
+
+                buffer =
+                    Marshal.AllocHGlobal(
+                        maxFileCharacters *
+                        sizeof(char));
+                Marshal.WriteInt16(
+                    buffer,
+                    0,
+                    0);
+
+                var owner =
+                    GetActiveWindow();
+
+                if (owner ==
+                    IntPtr.Zero)
+                {
+                    owner =
+                        GetForegroundWindow();
+                }
 
                 var ofn =
                     new OpenFileName
@@ -212,12 +243,14 @@ namespace VCR.Runtime.UI
                         lStructSize =
                             Marshal.SizeOf<
                                 OpenFileName>(),
+                        hwndOwner =
+                            owner,
                         lpstrFilter =
                             "VRM Character (*.vrm)\0*.vrm\0All Files (*.*)\0*.*\0\0",
                         lpstrFile =
                             buffer,
                         nMaxFile =
-                            buffer.Capacity,
+                            maxFileCharacters,
                         lpstrInitialDir =
                             initialDirectory,
                         lpstrTitle =
@@ -231,7 +264,7 @@ namespace VCR.Runtime.UI
                             "vrm"
                     };
 
-                if (!GetOpenFileName(
+                if (!GetOpenFileNameW(
                         ref ofn))
                 {
                     var code =
@@ -245,8 +278,12 @@ namespace VCR.Runtime.UI
                                 $"Windows file dialog failed with common-dialog error 0x{code:X}.");
                 }
 
+                var selected =
+                    Marshal.PtrToStringUni(
+                        buffer);
+
                 return ValidateSelectedPath(
-                    buffer.ToString());
+                    selected);
             }
             catch (Exception exception)
             {
@@ -254,6 +291,15 @@ namespace VCR.Runtime.UI
                     .Failure(
                         "Windows file dialog failed: " +
                         exception.Message);
+            }
+            finally
+            {
+                if (buffer !=
+                    IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(
+                        buffer);
+                }
             }
         }
 #endif
@@ -278,6 +324,8 @@ namespace VCR.Runtime.UI
                         currentPath);
                 var script =
                     new StringBuilder();
+                script.AppendLine(
+                    "activate");
 
                 if (!string.IsNullOrWhiteSpace(
                         initialDirectory))
