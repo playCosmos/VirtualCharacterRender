@@ -1203,9 +1203,12 @@ namespace VCR.Editor.P12
             _propPending = false;
             _lastValidPropJson = null;
 
+            string propError =
+                null;
+
             if (_propHandler != null &&
                 _propHandler.RebuildBindings(
-                    out var error))
+                    out propError))
             {
                 _lastValidPropJson =
                     EditorJsonUtility.ToJson(
@@ -1217,7 +1220,7 @@ namespace VCR.Editor.P12
             {
                 SetMessage(
                     "Current prop bindings are invalid: " +
-                    error,
+                    propError,
                     MessageType.Warning);
             }
         }
@@ -1235,9 +1238,12 @@ namespace VCR.Editor.P12
             _effectPending = false;
             _lastValidEffectJson = null;
 
+            string effectError =
+                null;
+
             if (_effectHandler != null &&
                 _effectHandler.RebuildBindings(
-                    out var error))
+                    out effectError))
             {
                 _lastValidEffectJson =
                     EditorJsonUtility.ToJson(
@@ -1249,7 +1255,7 @@ namespace VCR.Editor.P12
             {
                 SetMessage(
                     "Current effect bindings are invalid: " +
-                    error,
+                    effectError,
                     MessageType.Warning);
             }
         }
@@ -1267,9 +1273,12 @@ namespace VCR.Editor.P12
             _sequencePending = false;
             _lastValidSequenceJson = null;
 
+            string sequenceError =
+                null;
+
             if (_sequenceHandler != null &&
                 _sequenceHandler.RebuildBindings(
-                    out var error))
+                    out sequenceError))
             {
                 _lastValidSequenceJson =
                     EditorJsonUtility.ToJson(
@@ -1281,7 +1290,7 @@ namespace VCR.Editor.P12
             {
                 SetMessage(
                     "Current scene sequences are invalid: " +
-                    error,
+                    sequenceError,
                     MessageType.Warning);
             }
         }
