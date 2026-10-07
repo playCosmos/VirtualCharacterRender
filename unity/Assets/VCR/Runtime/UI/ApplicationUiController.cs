@@ -6639,70 +6639,70 @@ namespace VCR.Runtime.UI
                 characterSelected);
             SetActive(
                 _trackingPreviousButton,
-                true);
+                false);
             SetActive(
                 _trackingToggleButton,
-                true);
+                false);
             SetActive(
                 _trackingRecoverButton,
-                true);
+                false);
             SetActive(
                 _trackingNextButton,
-                true);
+                false);
             SetActive(
                 _trackingCameraPreviewButton,
                 true);
 
             SetActive(
                 _apply720p60Button,
-                true);
+                false);
             SetActive(
                 _apply1080p60Button,
-                true);
+                false);
             SetActive(
                 _outputTransparentButton,
-                true);
+                false);
             SetActive(
                 _outputTopmostButton,
-                true);
+                false);
             SetActive(
                 _outputClickThroughButton,
-                true);
+                false);
 
             SetActive(
                 _motionPoseWeightLabel,
-                true);
+                false);
             SetActive(
                 _motionPoseWeightSlider,
-                true);
+                false);
             SetActive(
                 _manualExpressionNameInput,
-                true);
+                false);
             SetActive(
                 _manualExpressionValueInput,
-                true);
+                false);
             SetActive(
                 _manualExpressionApplyButton,
-                true);
+                false);
             SetActive(
                 _manualExpressionClearButton,
-                true);
+                false);
             SetActive(
                 _manualExpressionClearAllButton,
-                true);
+                false);
 
             SetActive(
                 _environmentStateInput,
-                true);
+                false);
             SetActive(
                 _environmentTransitionModeButton,
-                true);
+                false);
             SetActive(
                 _environmentTransitionDurationInput,
-                true);
+                false);
             SetActive(
                 _environmentApplyStateButton,
-                true);
+                false);
 
             SetActive(
                 _materialPreviousSlotButton,
