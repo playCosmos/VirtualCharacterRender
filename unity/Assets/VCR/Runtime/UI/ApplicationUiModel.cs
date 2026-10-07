@@ -158,7 +158,7 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Events =>
                     "Events",
                 ApplicationUiSection.CameraOutput =>
-                    "Camera / Output",
+                    "Output",
                 ApplicationUiSection.Settings =>
                     "Settings",
                 ApplicationUiSection.Diagnostics =>
