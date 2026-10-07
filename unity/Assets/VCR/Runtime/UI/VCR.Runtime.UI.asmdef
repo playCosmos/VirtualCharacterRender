@@ -17,7 +17,8 @@
     "VCR.Runtime.EventRuntime",
     "VCR.Runtime.Rendering",
     "VCR.Runtime.Core",
-    "VCR.Runtime.Materials"
+    "VCR.Runtime.Materials",
+    "VRM10"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
