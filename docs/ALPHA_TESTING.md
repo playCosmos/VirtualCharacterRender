@@ -37,7 +37,7 @@ Run:
 ./tools/build-alpha.ps1
 ~~~
 
-The script bootstraps the pinned MediaPipe 0.16.3 package when missing, runs the complete P0-P13 source-free validation chain, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player, and packages the output as a ZIP.
+The script bootstraps the pinned MediaPipe 0.16.3 package when missing, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player, and packages the output as a ZIP. The P0-P13 source-free validation chain is intentionally a separate evidence pass so Editor-only validation defects cannot prevent creation of an alpha binary that is needed to test the runtime itself.
 
 Expected outputs:
 
@@ -46,7 +46,7 @@ Builds/Alpha/0.1.0-alpha.1/Windows/VirtualCharacterRender.exe
 Builds/Alpha/VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip
 ~~~
 
-To run only the non-hardware validation chain:
+Run the non-hardware validation chain separately:
 
 ~~~powershell
 ./tools/validate-alpha-source-free.ps1
