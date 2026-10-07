@@ -110,6 +110,10 @@ Do not mark these PASS from the initial alpha run:
 
 Transparent-window behavior itself can be exercised without a camera, but OBS evidence remains a separate platform validation item.
 
+## VRM shader regression gate
+
+Standalone builds must retain serialized references to UniVRM URP MToon, URP Lit, and UniUnlit shaders. A runtime error containing `Value cannot be null. Parameter name: Shader` blocks publishing the alpha binaries.
+
 ## Failure reporting
 
 For every failure, record the alpha version, commit SHA, Windows version/GPU, Unity build result when relevant, whether a VRM was loaded, the exact action that failed, the Console/player log excerpt, and reproduction steps.
