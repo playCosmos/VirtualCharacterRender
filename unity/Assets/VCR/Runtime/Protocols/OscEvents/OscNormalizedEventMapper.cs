@@ -204,7 +204,7 @@ namespace VCR.Runtime.Protocols.OscEvents
     /// buffer, avoiding transient OscMessage/address/argument-array objects.
     /// Only strings retained by the resulting NormalizedEvent are decoded.
     /// </summary>
-    internal static class OscNormalizedEventPacketReader
+    public static class OscNormalizedEventPacketReader
     {
         private const int MaxBundleDepth = 4;
 
