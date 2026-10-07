@@ -186,10 +186,9 @@ namespace VCR.Runtime.Environment.Unity
 
             if (_transitionStatus.Active)
             {
-                TryApplyStateBinding(
-                    stateId,
+                TryCompleteTransition(
+                    MonotonicClock.NowMicroseconds(),
                     out _);
-                _transitionStatus = default;
             }
 
             if (_transitionDriver != null)
@@ -550,10 +549,13 @@ namespace VCR.Runtime.Environment.Unity
             var nowUs =
                 MonotonicClock.NowMicroseconds();
 
-            if (_transitionStatus.Active)
+            if (_transitionStatus.Active &&
+                !TryCompleteTransition(
+                    nowUs,
+                    out error))
             {
-                CompleteTransition(
-                    nowUs);
+                _lastError = error;
+                return false;
             }
 
             var previous =
@@ -765,10 +767,13 @@ namespace VCR.Runtime.Environment.Unity
         {
             error = null;
 
-            if (_transitionStatus.Active)
+            if (_transitionStatus.Active &&
+                !TryCompleteTransition(
+                    MonotonicClock.NowMicroseconds(),
+                    out error))
             {
-                CompleteTransition(
-                    MonotonicClock.NowMicroseconds());
+                _lastError = error;
+                return false;
             }
 
             var nextBehaviours =
@@ -853,7 +858,7 @@ namespace VCR.Runtime.Environment.Unity
 
             _transitionStatus =
                 new EnvironmentTransitionStatus(
-                    progress < 1f,
+                    true,
                     _transitionStatus.Mode,
                     _transitionStatus
                         .PreviousStateId,
@@ -874,7 +879,9 @@ namespace VCR.Runtime.Environment.Unity
 
             if (progress >= 1f)
             {
-                CompleteTransitionRoots();
+                TryCompleteTransition(
+                    nowUs,
+                    out _);
             }
 
             return true;
@@ -1575,17 +1582,20 @@ namespace VCR.Runtime.Environment.Unity
                     deltaSeconds));
         }
 
-        private void CompleteTransition(
-            long nowUs)
+        private bool TryCompleteTransition(
+            long nowUs,
+            out string error)
         {
+            error = null;
+
             if (!_transitionStatus.Active)
             {
-                return;
+                return true;
             }
 
             _transitionStatus =
                 new EnvironmentTransitionStatus(
-                    false,
+                    true,
                     _transitionStatus.Mode,
                     _transitionStatus
                         .PreviousStateId,
@@ -1602,22 +1612,42 @@ namespace VCR.Runtime.Environment.Unity
                     progress: 1f,
                     deltaSeconds: 0f));
 
-            CompleteTransitionRoots();
-        }
-
-        private void CompleteTransitionRoots()
-        {
             if (!TryApplyStateBinding(
                     stateId,
-                    out var error))
+                    out var rootError))
             {
+                error =
+                    "Environment transition completion failed: " +
+                    rootError;
                 _lastError = error;
+
+                if (_transitionDriver != null)
+                {
+                    _transitionDriver.enabled = false;
+                }
+
+                return false;
             }
+
+            _transitionStatus =
+                new EnvironmentTransitionStatus(
+                    false,
+                    _transitionStatus.Mode,
+                    _transitionStatus
+                        .PreviousStateId,
+                    _transitionStatus.StateId,
+                    _transitionStatus
+                        .StartedAtTimestampUs,
+                    _transitionStatus
+                        .DurationSeconds,
+                    1f);
 
             if (_transitionDriver != null)
             {
                 _transitionDriver.enabled = false;
             }
+
+            return true;
         }
 
         private bool TryPrepareTransitionBindings(
