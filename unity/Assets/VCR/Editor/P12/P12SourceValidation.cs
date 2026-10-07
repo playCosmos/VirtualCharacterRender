@@ -1383,6 +1383,9 @@ namespace VCR.Editor.P12
                     .CaptureGroupPaths(
                         transition);
 
+            string validHierarchyError =
+                null;
+
             Expect(
                 Array.IndexOf(
                     hierarchyPaths,
@@ -1399,7 +1402,7 @@ namespace VCR.Editor.P12
                 P11TransitionDependencyAuthoringUtility
                     .TryValidateGroupMetadata(
                         transition,
-                        out var validHierarchyError),
+                        out validHierarchyError),
                 "P12 graph group hierarchy capture must include implicit parent paths and valid nested metadata: " +
                 validHierarchyError,
                 failures);
@@ -2538,6 +2541,9 @@ namespace VCR.Editor.P12
                             valid
                         });
 
+            string collisionError =
+                null;
+
             Expect(
                 collisionMerge.Length ==
                     3 &&
@@ -2550,7 +2556,7 @@ namespace VCR.Editor.P12
                 P12EventRuleAuthoringUtility
                     .TryValidateRules(
                         collisionMerge,
-                        out var collisionError),
+                        out collisionError),
                 "P12 event rule library merge must suffix colliding rule ids deterministically without invalidating rules: " +
                 collisionError,
                 failures);
@@ -2786,13 +2792,16 @@ namespace VCR.Editor.P12
                     setError,
                     failures);
 
+                string completionError =
+                    null;
+
                 Expect(
                     handler.CanTrackCompletion(
                         setCommand) &&
                     handler.TryIsComplete(
                         setCommand,
                         out var setComplete,
-                        out var completionError) &&
+                        out completionError) &&
                     setComplete,
                     "P12 prop actions must expose immediate completion for transition dependency use: " +
                     completionError,
@@ -4253,6 +4262,11 @@ namespace VCR.Editor.P12
                             P12BuiltInEventRuleTemplate
                                 .DonationEffect);
 
+                string json =
+                    null;
+                string serializeError =
+                    null;
+
                 Expect(
                     P12EventRuleLibraryUtility
                         .TryCreatePackage(
@@ -4274,13 +4288,18 @@ namespace VCR.Editor.P12
                     P12EventRuleLibraryUtility
                         .TrySerialize(
                             package,
-                            out var json,
-                            out var serializeError),
+                            out json,
+                            out serializeError),
                     "P12 event rule library browser validation package must serialize: " +
                     packageError +
                     " / " +
                     serializeError,
                     failures);
+
+                string previousJson =
+                    null;
+                string previousSerializeError =
+                    null;
 
                 Expect(
                     P12EventRuleLibraryUtility
@@ -4301,8 +4320,8 @@ namespace VCR.Editor.P12
                     P12EventRuleLibraryUtility
                         .TrySerialize(
                             previousPackage,
-                            out var previousJson,
-                            out var previousSerializeError),
+                            out previousJson,
+                            out previousSerializeError),
                     "P12 event rule library previous revision must serialize for history validation: " +
                     previousPackageError +
                     " / " +
@@ -4456,6 +4475,9 @@ namespace VCR.Editor.P12
                     "P12 event rule library browser must retain invalid/future packages for diagnostics",
                     failures);
 
+                string historyError =
+                    null;
+
                 Expect(
                     valid != null &&
                     P12EventRuleLibraryBrowserUtility
@@ -4463,7 +4485,7 @@ namespace VCR.Editor.P12
                             entries,
                             valid,
                             out var history,
-                            out var historyError) &&
+                            out historyError) &&
                     history.Length ==
                         2 &&
                     history[0].Revision ==
@@ -4474,6 +4496,9 @@ namespace VCR.Editor.P12
                     historyError,
                     failures);
 
+                string previousError =
+                    null;
+
                 Expect(
                     valid != null &&
                     P12EventRuleLibraryBrowserUtility
@@ -4481,7 +4506,7 @@ namespace VCR.Editor.P12
                             entries,
                             valid,
                             out var previousEntry,
-                            out var previousError) &&
+                            out previousError) &&
                     previousEntry != null &&
                     previousEntry.Revision ==
                         3,
@@ -4531,6 +4556,9 @@ namespace VCR.Editor.P12
                     ImportAssetOptions
                         .ForceUpdate);
 
+                string duplicateRevisionError =
+                    null;
+
                 Expect(
                     P12EventRuleLibraryBrowserUtility
                         .TryScan(
@@ -4543,7 +4571,7 @@ namespace VCR.Editor.P12
                             duplicateRevisionEntries,
                             valid,
                             out _,
-                            out var duplicateRevisionError) &&
+                            out duplicateRevisionError) &&
                     duplicateRevisionError != null &&
                     duplicateRevisionError.IndexOf(
                         "ambiguous",
