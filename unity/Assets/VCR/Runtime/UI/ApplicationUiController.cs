@@ -74,6 +74,7 @@ namespace VCR.Runtime.UI
         private Text _contentText;
         private RectTransform _inspectorSummaryPanel;
         private RectTransform _characterModelPanel;
+        private RectTransform _characterPresetPanel;
         private RectTransform _renderViewportFrame;
         private Image _renderViewportBackground;
         private Text _renderViewportEmptyStateText;
@@ -484,6 +485,7 @@ namespace VCR.Runtime.UI
             _contentText = null;
             _inspectorSummaryPanel = null;
             _characterModelPanel = null;
+            _characterPresetPanel = null;
             _renderViewportFrame = null;
             _renderViewportBackground = null;
             _renderViewportEmptyStateText = null;
@@ -1372,12 +1374,81 @@ namespace VCR.Runtime.UI
                     0.82f);
             viewportLabel.raycastTarget =
                 false;
+            viewportLabel.gameObject.SetActive(
+                false);
             Stretch(
                 viewportLabel.rectTransform,
                 Vector2.zero,
                 Vector2.one,
                 new Vector2(12f, 8f),
                 new Vector2(-12f, -8f));
+
+            var renderToolbar =
+                CreateRect(
+                    "Render Toolbar",
+                    _renderViewportFrame);
+            renderToolbar.anchorMin =
+                new Vector2(0f, 1f);
+            renderToolbar.anchorMax =
+                new Vector2(1f, 1f);
+            renderToolbar.pivot =
+                new Vector2(0.5f, 1f);
+            renderToolbar.offsetMin =
+                new Vector2(10f, -44f);
+            renderToolbar.offsetMax =
+                new Vector2(-54f, -6f);
+
+            var renderToolbarLayout =
+                renderToolbar.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            renderToolbarLayout.spacing = 6f;
+            renderToolbarLayout.childControlWidth = true;
+            renderToolbarLayout.childControlHeight = true;
+            renderToolbarLayout.childForceExpandWidth = false;
+            renderToolbarLayout.childForceExpandHeight = true;
+
+            CreateToolbarButton(
+                renderToolbar,
+                "화면 비율  16:9",
+                126f,
+                () => ShowUiMessage(
+                    "화면 비율은 출력 설정과 연결됩니다."));
+            CreateToolbarButton(
+                renderToolbar,
+                "뷰  카메라",
+                96f,
+                () => ShowUiMessage(
+                    "카메라 뷰가 선택되었습니다."));
+            CreateToolbarButton(
+                renderToolbar,
+                "⌗ 그리드",
+                86f,
+                () => ShowUiMessage(
+                    "그리드 표시는 뷰 오버레이 연결 전입니다."));
+            CreateToolbarButton(
+                renderToolbar,
+                "통계 표시",
+                90f,
+                () => ShowUiMessage(
+                    "통계 표시는 진단 패널에서 확인할 수 있습니다."));
+
+            var maximizeRenderButton =
+                CreateButton(
+                    "⛶",
+                    _renderViewportFrame,
+                    windowChrome.ToggleZoom);
+            var maximizeRect =
+                maximizeRenderButton.GetComponent<RectTransform>();
+            maximizeRect.anchorMin =
+                new Vector2(1f, 1f);
+            maximizeRect.anchorMax =
+                new Vector2(1f, 1f);
+            maximizeRect.pivot =
+                new Vector2(1f, 1f);
+            maximizeRect.offsetMin =
+                new Vector2(-48f, -44f);
+            maximizeRect.offsetMax =
+                new Vector2(-10f, -6f);
 
             _renderViewportEmptyStateText =
                 CreateText(
@@ -1834,6 +1905,92 @@ namespace VCR.Runtime.UI
                     "모델 해제",
                     characterLoadRow,
                     UnloadCharacter);
+
+            _characterPresetPanel =
+                CreateRect(
+                    "Character Presets",
+                    content);
+            _characterPresetPanel.anchorMin =
+                new Vector2(0f, 1f);
+            _characterPresetPanel.anchorMax =
+                new Vector2(1f, 1f);
+            _characterPresetPanel.pivot =
+                new Vector2(0.5f, 1f);
+            _characterPresetPanel.offsetMin =
+                new Vector2(16f, -316f);
+            _characterPresetPanel.offsetMax =
+                new Vector2(-16f, -228f);
+            AddActionPanelBackground(
+                _characterPresetPanel);
+
+            var presetTitle =
+                CreateText(
+                    "Character Presets Title",
+                    _characterPresetPanel,
+                    13,
+                    TextAnchor.MiddleLeft);
+            presetTitle.text =
+                "<b>프리셋</b>";
+            presetTitle.supportRichText =
+                true;
+            presetTitle.rectTransform.anchorMin =
+                new Vector2(0f, 1f);
+            presetTitle.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            presetTitle.rectTransform.pivot =
+                new Vector2(0.5f, 1f);
+            presetTitle.rectTransform.offsetMin =
+                new Vector2(10f, -26f);
+            presetTitle.rectTransform.offsetMax =
+                new Vector2(-10f, -4f);
+
+            var presetRow =
+                CreateRect(
+                    "Character Preset Row",
+                    _characterPresetPanel);
+            presetRow.anchorMin =
+                new Vector2(0f, 0f);
+            presetRow.anchorMax =
+                new Vector2(1f, 0f);
+            presetRow.offsetMin =
+                new Vector2(8f, 8f);
+            presetRow.offsetMax =
+                new Vector2(-8f, 54f);
+            var presetRowLayout =
+                presetRow.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            presetRowLayout.spacing = 6f;
+            presetRowLayout.childControlWidth = true;
+            presetRowLayout.childControlHeight = true;
+            presetRowLayout.childForceExpandWidth = true;
+            presetRowLayout.childForceExpandHeight = true;
+
+            CreateButton(
+                "기본",
+                presetRow,
+                RestoreDefaultAppearance);
+            CreateButton(
+                "캐주얼",
+                presetRow,
+                ApplyPreviousAppearancePreset);
+            CreateButton(
+                "스테이지",
+                presetRow,
+                ApplyNextAppearancePreset);
+            CreateButton(
+                "나이트",
+                presetRow,
+                PreviewSelectedAppearanceTransition);
+            CreateButton(
+                "커스텀1",
+                presetRow,
+                () => ShowUiMessage(
+                    "커스텀 프리셋은 사용자 프리셋 저장 기능과 연결됩니다."));
+            CreateButton(
+                "+",
+                presetRow,
+                () => ShowUiMessage(
+                    "새 프리셋 추가는 고급 외형 관리에서 사용할 수 있습니다."));
 
             _trackingPreviousButton =
                 CreateButton(
@@ -2795,6 +2952,14 @@ namespace VCR.Runtime.UI
                 _sectionLabels[section].alignment =
                     TextAnchor.MiddleLeft;
             }
+        }
+
+        private void ShowUiMessage(
+            string message)
+        {
+            _lastActionMessage =
+                message;
+            RefreshAll();
         }
 
         private void ShowProfileLoadUnavailable()
@@ -6556,6 +6721,14 @@ namespace VCR.Runtime.UI
                     characterSelected);
             }
 
+            if (_characterPresetPanel != null &&
+                _characterPresetPanel.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _characterPresetPanel.gameObject.SetActive(
+                    characterSelected);
+            }
+
             SetButtonLabel(
                 _appearanceAdvancedButton,
                 _appearanceAdvancedExpanded
@@ -6819,7 +6992,7 @@ namespace VCR.Runtime.UI
                         : 78f;
                 max.y =
                     characterSelected
-                        ? -230f
+                        ? -324f
                         : -54f;
 
                 _inspectorSummaryPanel.offsetMin =
@@ -9601,6 +9774,24 @@ namespace VCR.Runtime.UI
                             ? "Console Log: On"
                             : "Console Log: Off");
             }
+        }
+
+        private Button CreateToolbarButton(
+            Transform parent,
+            string label,
+            float preferredWidth,
+            Action onClick)
+        {
+            var button =
+                CreateButton(
+                    label,
+                    parent,
+                    onClick);
+            button.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth =
+                    preferredWidth;
+            return button;
         }
 
         private RectTransform CreateDashboardCard(
