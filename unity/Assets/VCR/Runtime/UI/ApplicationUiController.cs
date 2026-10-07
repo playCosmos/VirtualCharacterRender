@@ -1020,8 +1020,8 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             appMarkImage.color =
                 new Color(
-                    0.12f,
-                    0.42f,
+                    0.80f,
+                    0.25f,
                     0.86f,
                     1f);
             appMarkImage.raycastTarget =
@@ -1032,7 +1032,7 @@ namespace VCR.Runtime.UI
                     appMark,
                     13,
                     TextAnchor.MiddleCenter);
-            appMarkText.text = "V";
+            appMarkText.text = "A";
             appMarkText.fontStyle =
                 FontStyle.Bold;
             appMarkText.raycastTarget =
@@ -1072,7 +1072,7 @@ namespace VCR.Runtime.UI
                 Vector2.zero,
                 Vector2.one,
                 Vector2.zero,
-                new Vector2(-138f, 0f));
+                new Vector2(-520f, 0f));
             var titleDragImage =
                 titleDragArea.gameObject
                     .AddComponent<Image>();
@@ -1098,13 +1098,70 @@ namespace VCR.Runtime.UI
                     TextAnchor.MiddleRight);
             _statusText.raycastTarget =
                 false;
+            _statusText.gameObject.SetActive(
+                false);
 
-            Stretch(
-                _statusText.rectTransform,
-                Vector2.zero,
-                Vector2.one,
-                new Vector2(420f, 0f),
-                new Vector2(-152f, 0f));
+            var topActions =
+                CreateRect(
+                    "Application Actions",
+                    top);
+            topActions.anchorMin =
+                new Vector2(1f, 0f);
+            topActions.anchorMax =
+                new Vector2(1f, 1f);
+            topActions.pivot =
+                new Vector2(1f, 0.5f);
+            topActions.offsetMin =
+                new Vector2(-512f, 6f);
+            topActions.offsetMax =
+                new Vector2(-144f, -6f);
+
+            var topActionLayout =
+                topActions.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            topActionLayout.spacing = 6f;
+            topActionLayout.childControlWidth = true;
+            topActionLayout.childControlHeight = true;
+            topActionLayout.childForceExpandWidth = false;
+            topActionLayout.childForceExpandHeight = true;
+
+            var loadProfileButton =
+                CreateButton(
+                    "프로파일 불러오기",
+                    topActions,
+                    ShowProfileLoadUnavailable);
+            loadProfileButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 112f;
+
+            var saveProfileButton =
+                CreateButton(
+                    "프로파일 저장",
+                    topActions,
+                    SaveConfiguration);
+            saveProfileButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 96f;
+
+            var settingsButton =
+                CreateButton(
+                    "⚙",
+                    topActions,
+                    () => SelectSection(
+                        ApplicationUiSection.Settings));
+            settingsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 38f;
+
+            var diagnosticsButton =
+                CreateButton(
+                    "▣",
+                    topActions,
+                    () => SelectSection(
+                        ApplicationUiSection.Diagnostics));
+            diagnosticsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 38f;
 
             var windowControls =
                 CreateRect(
@@ -2738,6 +2795,13 @@ namespace VCR.Runtime.UI
                 _sectionLabels[section].alignment =
                     TextAnchor.MiddleLeft;
             }
+        }
+
+        private void ShowProfileLoadUnavailable()
+        {
+            _lastActionMessage =
+                "프로파일 불러오기는 아직 런타임 로더 연결 전입니다.";
+            RefreshAll();
         }
 
         private void SaveConfiguration()
