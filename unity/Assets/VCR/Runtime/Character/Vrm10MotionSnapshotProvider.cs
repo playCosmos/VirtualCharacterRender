@@ -397,6 +397,11 @@ namespace VCR.Runtime.Character
             var q =
                 transform.localRotation;
 
+            var rotationMagnitudeSquared =
+                Quaternion.Dot(
+                    q,
+                    q);
+
             if (!float.IsFinite(p.x) ||
                 !float.IsFinite(p.y) ||
                 !float.IsFinite(p.z) ||
@@ -404,8 +409,9 @@ namespace VCR.Runtime.Character
                 !float.IsFinite(q.y) ||
                 !float.IsFinite(q.z) ||
                 !float.IsFinite(q.w) ||
-                !float.IsFinite(q.sqrMagnitude) ||
-                q.sqrMagnitude < 1e-8f)
+                !float.IsFinite(
+                    rotationMagnitudeSquared) ||
+                rotationMagnitudeSquared < 1e-8f)
             {
                 return false;
             }
