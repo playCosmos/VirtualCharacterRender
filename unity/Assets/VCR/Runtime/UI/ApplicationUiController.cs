@@ -75,6 +75,8 @@ namespace VCR.Runtime.UI
         private RectTransform _inspectorSummaryPanel;
         private RectTransform _characterModelPanel;
         private RectTransform _renderViewportFrame;
+        private Image _renderViewportBackground;
+        private Text _renderViewportEmptyStateText;
         private RectTransform _trackingCameraPreviewPanel;
         private RawImage _trackingCameraPreviewImage;
         private Text _trackingCameraPreviewPrivacyText;
@@ -474,6 +476,8 @@ namespace VCR.Runtime.UI
             _inspectorSummaryPanel = null;
             _characterModelPanel = null;
             _renderViewportFrame = null;
+            _renderViewportBackground = null;
+            _renderViewportEmptyStateText = null;
             _trackingCameraPreviewPanel = null;
             _trackingCameraPreviewImage = null;
             _trackingCameraPreviewPrivacyText = null;
@@ -1094,16 +1098,16 @@ namespace VCR.Runtime.UI
             _renderViewportFrame.offsetMax =
                 new Vector2(-442f, -64f);
 
-            var viewportBackground =
+            _renderViewportBackground =
                 _renderViewportFrame.gameObject
                     .AddComponent<Image>();
-            viewportBackground.color =
+            _renderViewportBackground.color =
                 new Color(
-                    0.01f,
-                    0.015f,
                     0.025f,
-                    0.06f);
-            viewportBackground.raycastTarget =
+                    0.032f,
+                    0.045f,
+                    0.94f);
+            _renderViewportBackground.raycastTarget =
                 false;
 
             var viewportLabel =
@@ -1128,6 +1132,31 @@ namespace VCR.Runtime.UI
                 Vector2.one,
                 new Vector2(12f, 8f),
                 new Vector2(-12f, -8f));
+
+            _renderViewportEmptyStateText =
+                CreateText(
+                    "Render Viewport Empty State",
+                    _renderViewportFrame,
+                    17,
+                    TextAnchor.MiddleCenter);
+            _renderViewportEmptyStateText.text =
+                "<b>No character loaded</b>\nChoose a VRM model from the Character inspector.";
+            _renderViewportEmptyStateText.supportRichText =
+                true;
+            _renderViewportEmptyStateText.color =
+                new Color(
+                    0.68f,
+                    0.73f,
+                    0.82f,
+                    1f);
+            _renderViewportEmptyStateText.raycastTarget =
+                false;
+            Stretch(
+                _renderViewportEmptyStateText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(48f, 48f),
+                new Vector2(-48f, -48f));
 
             var content =
                 CreateRect(
@@ -1493,6 +1522,8 @@ namespace VCR.Runtime.UI
                     "Load VRM",
                     characterLoadRow,
                     LoadCharacterFromPath);
+            SetPrimaryButtonStyle(
+                _loadCharacterButton);
 
             _reloadCharacterButton =
                 CreateButton(
@@ -5434,6 +5465,7 @@ namespace VCR.Runtime.UI
             }
 
                 RefreshContextActions();
+                RefreshRenderViewportState();
 
                 RefreshStatus();
                 RefreshContent();
@@ -6797,6 +6829,44 @@ namespace VCR.Runtime.UI
             {
                 _manualExpressionClearAllButton.interactable =
                     manualLayerReady;
+            }
+        }
+
+        private void RefreshRenderViewportState()
+        {
+            if (_renderViewportBackground == null ||
+                _renderViewportEmptyStateText == null)
+            {
+                return;
+            }
+
+            var hasCharacter =
+                sceneRuntime != null &&
+                sceneRuntime.Status.HasCharacter;
+
+            _renderViewportBackground.color =
+                hasCharacter
+                    ? new Color(
+                        0.01f,
+                        0.015f,
+                        0.025f,
+                        0.06f)
+                    : new Color(
+                        0.025f,
+                        0.032f,
+                        0.045f,
+                        0.94f);
+
+            _renderViewportEmptyStateText.gameObject.SetActive(
+                !hasCharacter);
+
+            if (!hasCharacter)
+            {
+                SetTextIfChanged(
+                    _renderViewportEmptyStateText,
+                    sceneRuntime == null
+                        ? "<b>Renderer unavailable</b>\nThe scene runtime is not ready."
+                        : "<b>No character loaded</b>\nChoose a VRM model from the Character inspector.");
             }
         }
 
