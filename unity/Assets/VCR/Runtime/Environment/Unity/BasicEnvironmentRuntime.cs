@@ -1649,25 +1649,53 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            foreach (var binding in
-                     stateBindings)
-            {
-                var active =
-                    string.Equals(
-                        binding.StateId,
-                        previousStateId,
-                        StringComparison.Ordinal) ||
-                    string.Equals(
-                        binding.StateId,
-                        nextStateId,
-                        StringComparison.Ordinal);
+            var previousActiveStates =
+                CaptureBindingActiveStates(
+                    stateBindings);
 
-                if (binding.Root.activeSelf !=
-                    active)
+            try
+            {
+                foreach (var binding in
+                         stateBindings)
                 {
-                    binding.Root.SetActive(
-                        active);
+                    var active =
+                        string.Equals(
+                            binding.StateId,
+                            previousStateId,
+                            StringComparison.Ordinal) ||
+                        string.Equals(
+                            binding.StateId,
+                            nextStateId,
+                            StringComparison.Ordinal);
+
+                    if (binding.Root.activeSelf !=
+                        active)
+                    {
+                        binding.Root.SetActive(
+                            active);
+                    }
                 }
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Environment transition binding prepare failed: " +
+                    exception.Message;
+
+                var rollbackError =
+                    RestoreBindingActiveStates(
+                        stateBindings,
+                        previousActiveStates);
+
+                if (!string.IsNullOrWhiteSpace(
+                        rollbackError))
+                {
+                    error +=
+                        " | rollback incomplete: " +
+                        rollbackError;
+                }
+
+                return false;
             }
 
             return true;
@@ -1973,6 +2001,10 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
+            var previousActiveStates =
+                CaptureBindingActiveStates(
+                    bindings);
+
             try
             {
                 foreach (var binding in
@@ -1997,10 +2029,84 @@ namespace VCR.Runtime.Environment.Unity
                 error =
                     "Environment state binding apply failed: " +
                     exception.Message;
+
+                var rollbackError =
+                    RestoreBindingActiveStates(
+                        bindings,
+                        previousActiveStates);
+
+                if (!string.IsNullOrWhiteSpace(
+                        rollbackError))
+                {
+                    error +=
+                        " | rollback incomplete: " +
+                        rollbackError;
+                }
+
                 return false;
             }
 
             return true;
+        }
+
+        private static bool[] CaptureBindingActiveStates(
+            EnvironmentStateBinding[] bindings)
+        {
+            var states =
+                new bool[bindings.Length];
+
+            for (var i = 0;
+                 i < bindings.Length;
+                 i++)
+            {
+                states[i] =
+                    bindings[i]?.Root != null &&
+                    bindings[i].Root.activeSelf;
+            }
+
+            return states;
+        }
+
+        private static string RestoreBindingActiveStates(
+            EnvironmentStateBinding[] bindings,
+            bool[] states)
+        {
+            List<string> failures = null;
+
+            for (var i = 0;
+                 i < bindings.Length &&
+                 i < states.Length;
+                 i++)
+            {
+                var root =
+                    bindings[i]?.Root;
+
+                if (root == null ||
+                    root.activeSelf == states[i])
+                {
+                    continue;
+                }
+
+                try
+                {
+                    root.SetActive(
+                        states[i]);
+                }
+                catch (Exception exception)
+                {
+                    failures ??=
+                        new List<string>();
+                    failures.Add(
+                        root.name + ": " +
+                        exception.Message);
+                }
+            }
+
+            return failures == null
+                ? null
+                : string.Join(
+                    " | ",
+                    failures);
         }
 
         private void TryRestoreStateBindings(
