@@ -998,7 +998,7 @@ namespace VCR.Runtime.UI
             navigation.pivot =
                 new Vector2(0f, 1f);
             navigation.offsetMin =
-                new Vector2(8f, 276f);
+                new Vector2(8f, 8f);
             navigation.offsetMax =
                 new Vector2(220f, -64f);
 
@@ -1214,7 +1214,7 @@ namespace VCR.Runtime.UI
             _trackingCameraPreviewPanel.offsetMin =
                 new Vector2(16f, 84f);
             _trackingCameraPreviewPanel.offsetMax =
-                new Vector2(-16f, 260f);
+                new Vector2(-16f, 214f);
 
             var trackingPreviewBackground =
                 _trackingCameraPreviewPanel.gameObject
@@ -1278,7 +1278,7 @@ namespace VCR.Runtime.UI
             _contextActions.pivot =
                 new Vector2(0.5f, 0f);
             _contextActions.offsetMin =
-                new Vector2(228f, 196f);
+                new Vector2(228f, 162f);
             _contextActions.offsetMax =
                 new Vector2(-8f, 268f);
 
@@ -1301,7 +1301,7 @@ namespace VCR.Runtime.UI
                     8f);
             contextLayout.cellSize =
                 new Vector2(
-                    220f,
+                    198f,
                     41f);
             contextLayout.constraint =
                 GridLayoutGroup.Constraint
@@ -1873,9 +1873,9 @@ namespace VCR.Runtime.UI
             _appearanceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceActions.offsetMin =
-                new Vector2(228f, 148f);
+                new Vector2(228f, 122f);
             _appearanceActions.offsetMax =
-                new Vector2(-8f, 192f);
+                new Vector2(-8f, 156f);
 
             AddActionPanelBackground(
                 _appearanceActions);
@@ -1898,7 +1898,7 @@ namespace VCR.Runtime.UI
                     ApplyPreviousAppearancePreset);
             _appearancePreviousButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 150f;
+                .preferredWidth = 132f;
 
             _appearanceNextButton =
                 CreateButton(
@@ -1907,7 +1907,7 @@ namespace VCR.Runtime.UI
                     ApplyNextAppearancePreset);
             _appearanceNextButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 150f;
+                .preferredWidth = 132f;
 
             _appearanceTransitionButton =
                 CreateButton(
@@ -1916,7 +1916,7 @@ namespace VCR.Runtime.UI
                     SelectNextAppearanceTransition);
             _appearanceTransitionButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 240f;
+                .preferredWidth = 200f;
 
             _appearanceRestoreButton =
                 CreateButton(
@@ -1925,7 +1925,7 @@ namespace VCR.Runtime.UI
                     RestoreDefaultAppearance);
             _appearanceRestoreButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 170f;
+                .preferredWidth = 144f;
 
             _appearancePreviewButton =
                 CreateButton(
@@ -1934,7 +1934,7 @@ namespace VCR.Runtime.UI
                     PreviewSelectedAppearanceTransition);
             _appearancePreviewButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 170f;
+                .preferredWidth = 144f;
 
             _appearanceCancelButton =
                 CreateButton(
@@ -1943,7 +1943,7 @@ namespace VCR.Runtime.UI
                     CancelAppearanceTransition);
             _appearanceCancelButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 160f;
+                .preferredWidth = 136f;
 
             _appearanceDirectActions =
                 CreateRect(
@@ -1957,9 +1957,9 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceDirectActions.offsetMin =
-                new Vector2(228f, 100f);
+                new Vector2(228f, 84f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-8f, 144f);
+                new Vector2(-8f, 118f);
 
             AddActionPanelBackground(
                 _appearanceDirectActions);
@@ -1982,7 +1982,7 @@ namespace VCR.Runtime.UI
                     "Preset ID");
             _appearancePresetInput.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 170f;
+                .preferredWidth = 140f;
 
             _appearanceApplyPresetButton =
                 CreateButton(
@@ -1991,7 +1991,7 @@ namespace VCR.Runtime.UI
                     ApplyAppearancePresetFromInput);
             _appearanceApplyPresetButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 120f;
+                .preferredWidth = 105f;
 
             _appearanceOutfitInput =
                 CreateInputField(
@@ -2000,7 +2000,7 @@ namespace VCR.Runtime.UI
                     "Outfit ID");
             _appearanceOutfitInput.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 160f;
+                .preferredWidth = 130f;
 
             _appearanceApplyOutfitButton =
                 CreateButton(
@@ -2009,7 +2009,7 @@ namespace VCR.Runtime.UI
                     ApplyAppearanceOutfitFromInput);
             _appearanceApplyOutfitButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 120f;
+                .preferredWidth = 105f;
 
             _appearanceAccessorySlotInput =
                 CreateInputField(
@@ -2018,7 +2018,7 @@ namespace VCR.Runtime.UI
                     "Slot ID");
             _appearanceAccessorySlotInput.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 120f;
+                .preferredWidth = 90f;
 
             _appearanceAccessoryInput =
                 CreateInputField(
@@ -2027,7 +2027,7 @@ namespace VCR.Runtime.UI
                     "Accessory ID");
             _appearanceAccessoryInput.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 150f;
+                .preferredWidth = 120f;
 
             _appearanceSetAccessoryButton =
                 CreateButton(
@@ -2059,9 +2059,9 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePersistenceActions.offsetMin =
-                new Vector2(228f, 52f);
+                new Vector2(228f, 46f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-8f, 96f);
+                new Vector2(-8f, 80f);
 
             AddActionPanelBackground(
                 _appearancePersistenceActions);
@@ -2118,7 +2118,7 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.offsetMin =
                 new Vector2(228f, 8f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-8f, 48f);
+                new Vector2(-8f, 42f);
 
             AddActionPanelBackground(
                 _appearancePresetManagementActions);
@@ -6256,7 +6256,7 @@ namespace VCR.Runtime.UI
                     _contentText.rectTransform.offsetMin;
                 offset.y =
                     shouldReveal
-                        ? 276f
+                        ? 228f
                         : 84f;
                 _contentText.rectTransform.offsetMin =
                     offset;
