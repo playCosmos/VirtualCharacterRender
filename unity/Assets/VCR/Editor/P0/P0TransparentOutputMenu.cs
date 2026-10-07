@@ -353,6 +353,10 @@ namespace VCR.Editor.P0
 
         private static void ConfigurePlayerSettings()
         {
+            PlayerSettings.companyName =
+                "playCosmos";
+            PlayerSettings.productName =
+                "Virtual Character Renderer";
             PlayerSettings.runInBackground = true;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.fullScreenMode =
