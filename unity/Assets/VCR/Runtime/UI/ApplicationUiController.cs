@@ -905,10 +905,10 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             background.color =
                 new Color(
-                    0.055f,
-                    0.06f,
-                    0.07f,
-                    0.96f);
+                    0.035f,
+                    0.04f,
+                    0.05f,
+                    0.92f);
 
             var top =
                 CreateRect(
@@ -977,13 +977,15 @@ namespace VCR.Runtime.UI
                         VerticalLayoutGroup>();
             navLayout.padding =
                 new RectOffset(
-                    10,
-                    10,
                     12,
-                    12);
-            navLayout.spacing = 7f;
+                    12,
+                    16,
+                    16);
+            navLayout.spacing = 8f;
             navLayout.childControlHeight = true;
             navLayout.childForceExpandHeight = false;
+            navLayout.childAlignment =
+                TextAnchor.UpperLeft;
 
             for (var i = 0;
                  i < (int)ApplicationUiSection.Count;
@@ -1012,6 +1014,14 @@ namespace VCR.Runtime.UI
                     button;
                 _sectionLabels[section] =
                     button.GetComponentInChildren<Text>();
+
+                if (_sectionLabels[section] !=
+                    null)
+                {
+                    _sectionLabels[section]
+                        .alignment =
+                            TextAnchor.MiddleLeft;
+                }
             }
 
             var content =
@@ -1037,10 +1047,10 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             contentImage.color =
                 new Color(
-                    0.045f,
                     0.05f,
-                    0.06f,
-                    0.96f);
+                    0.055f,
+                    0.065f,
+                    0.93f);
 
             _sectionTitle =
                 CreateText(
@@ -1064,6 +1074,8 @@ namespace VCR.Runtime.UI
             _sectionTitle.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -18f);
+            _sectionTitle.fontStyle =
+                FontStyle.Bold;
 
             _contentText =
                 CreateText(
@@ -1075,7 +1087,7 @@ namespace VCR.Runtime.UI
             _contentText.horizontalOverflow =
                 HorizontalWrapMode.Wrap;
             _contentText.verticalOverflow =
-                VerticalWrapMode.Overflow;
+                VerticalWrapMode.Truncate;
 
             _contentText.rectTransform
                 .anchorMin =
@@ -1085,7 +1097,7 @@ namespace VCR.Runtime.UI
                     new Vector2(1f, 1f);
             _contentText.rectTransform
                 .offsetMin =
-                    new Vector2(24f, 300f);
+                    new Vector2(24f, 452f);
             _contentText.rectTransform
                 .offsetMax =
                     new Vector2(-24f, -84f);
@@ -1102,18 +1114,37 @@ namespace VCR.Runtime.UI
             _contextActions.pivot =
                 new Vector2(0.5f, 0f);
             _contextActions.offsetMin =
-                new Vector2(24f, 72f);
+                new Vector2(24f, 76f);
             _contextActions.offsetMax =
-                new Vector2(-24f, 122f);
+                new Vector2(-24f, 182f);
+
+            AddActionPanelBackground(
+                _contextActions);
 
             var contextLayout =
                 _contextActions.gameObject
                     .AddComponent<
-                        HorizontalLayoutGroup>();
-            contextLayout.spacing = 10f;
-            contextLayout.childForceExpandWidth = false;
-            contextLayout.childControlWidth = true;
-            contextLayout.childControlHeight = true;
+                        GridLayoutGroup>();
+            contextLayout.padding =
+                new RectOffset(
+                    8,
+                    8,
+                    8,
+                    8);
+            contextLayout.spacing =
+                new Vector2(
+                    8f,
+                    8f);
+            contextLayout.cellSize =
+                new Vector2(
+                    220f,
+                    41f);
+            contextLayout.constraint =
+                GridLayoutGroup.Constraint
+                    .FixedColumnCount;
+            contextLayout.constraintCount = 5;
+            contextLayout.childAlignment =
+                TextAnchor.UpperLeft;
 
             _characterPathInput =
                 CreateInputField(
@@ -1129,7 +1160,7 @@ namespace VCR.Runtime.UI
 
             _characterBrowseButton =
                 CreateButton(
-                    "Browse…",
+                    "Browse VRM…",
                     _contextActions,
                     BrowseCharacterFile);
             _characterBrowseButton.gameObject
@@ -1138,7 +1169,7 @@ namespace VCR.Runtime.UI
 
             _loadCharacterButton =
                 CreateButton(
-                    "Load Character",
+                    "Load VRM",
                     _contextActions,
                     LoadCharacterFromPath);
             _loadCharacterButton.gameObject
@@ -1147,7 +1178,7 @@ namespace VCR.Runtime.UI
 
             _reloadCharacterButton =
                 CreateButton(
-                    "Reload Character",
+                    "Reload",
                     _contextActions,
                     ReloadCharacter);
             _reloadCharacterButton.gameObject
@@ -1156,7 +1187,7 @@ namespace VCR.Runtime.UI
 
             _unloadCharacterButton =
                 CreateButton(
-                    "Unload Character",
+                    "Unload",
                     _contextActions,
                     UnloadCharacter);
             _unloadCharacterButton.gameObject
@@ -1669,15 +1700,20 @@ namespace VCR.Runtime.UI
             _appearanceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceActions.offsetMin =
-                new Vector2(24f, 128f);
+                new Vector2(24f, 190f);
             _appearanceActions.offsetMax =
-                new Vector2(-24f, 178f);
+                new Vector2(-24f, 246f);
+
+            AddActionPanelBackground(
+                _appearanceActions);
 
             var appearanceLayout =
                 _appearanceActions.gameObject
                     .AddComponent<
                         HorizontalLayoutGroup>();
-            appearanceLayout.spacing = 10f;
+            appearanceLayout.padding =
+                new RectOffset(8, 8, 6, 6);
+            appearanceLayout.spacing = 8f;
             appearanceLayout.childForceExpandWidth = false;
             appearanceLayout.childControlWidth = true;
             appearanceLayout.childControlHeight = true;
@@ -1748,14 +1784,19 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceDirectActions.offsetMin =
-                new Vector2(24f, 184f);
+                new Vector2(24f, 252f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-24f, 234f);
+                new Vector2(-24f, 308f);
+
+            AddActionPanelBackground(
+                _appearanceDirectActions);
 
             var appearanceDirectLayout =
                 _appearanceDirectActions.gameObject
                     .AddComponent<
                         HorizontalLayoutGroup>();
+            appearanceDirectLayout.padding =
+                new RectOffset(8, 8, 6, 6);
             appearanceDirectLayout.spacing = 8f;
             appearanceDirectLayout.childForceExpandWidth = false;
             appearanceDirectLayout.childControlWidth = true;
@@ -1845,14 +1886,19 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePersistenceActions.offsetMin =
-                new Vector2(24f, 240f);
+                new Vector2(24f, 314f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-24f, 290f);
+                new Vector2(-24f, 370f);
+
+            AddActionPanelBackground(
+                _appearancePersistenceActions);
 
             var appearancePersistenceLayout =
                 _appearancePersistenceActions.gameObject
                     .AddComponent<
                         HorizontalLayoutGroup>();
+            appearancePersistenceLayout.padding =
+                new RectOffset(8, 8, 6, 6);
             appearancePersistenceLayout.spacing = 8f;
             appearancePersistenceLayout.childForceExpandWidth = false;
             appearancePersistenceLayout.childControlWidth = true;
@@ -1897,14 +1943,19 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePresetManagementActions.offsetMin =
-                new Vector2(24f, 296f);
+                new Vector2(24f, 376f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-24f, 346f);
+                new Vector2(-24f, 432f);
+
+            AddActionPanelBackground(
+                _appearancePresetManagementActions);
 
             var appearancePresetManagementLayout =
                 _appearancePresetManagementActions.gameObject
                     .AddComponent<
                         HorizontalLayoutGroup>();
+            appearancePresetManagementLayout.padding =
+                new RectOffset(8, 8, 6, 6);
             appearancePresetManagementLayout.spacing = 8f;
             appearancePresetManagementLayout.childForceExpandWidth = false;
             appearancePresetManagementLayout.childControlWidth = true;
@@ -1971,11 +2022,16 @@ namespace VCR.Runtime.UI
             actions.offsetMax =
                 new Vector2(-24f, 62f);
 
+            AddActionPanelBackground(
+                actions);
+
             var actionLayout =
                 actions.gameObject
                     .AddComponent<
                         HorizontalLayoutGroup>();
-            actionLayout.spacing = 10f;
+            actionLayout.padding =
+                new RectOffset(8, 8, 5, 5);
+            actionLayout.spacing = 8f;
             actionLayout.childForceExpandWidth = false;
             actionLayout.childControlWidth = true;
             actionLayout.childControlHeight = true;
@@ -4888,10 +4944,15 @@ namespace VCR.Runtime.UI
                 var available =
                     _model.IsAvailable(
                         section);
+                var selectedSection =
+                    section ==
+                    _model.SelectedSection;
                 var availabilityState =
-                    available
-                        ? (byte)2
-                        : (byte)1;
+                    !available
+                        ? (byte)1
+                        : selectedSection
+                            ? (byte)3
+                            : (byte)2;
 
                 if (_sectionAvailabilityCache[i] ==
                     availabilityState)
@@ -4916,7 +4977,8 @@ namespace VCR.Runtime.UI
                     SetSectionLabel(
                         label,
                         title,
-                        available);
+                        available,
+                        selectedSection);
                 }
             }
 
@@ -8585,6 +8647,27 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private static void AddActionPanelBackground(
+            RectTransform panel)
+        {
+            if (panel == null)
+            {
+                return;
+            }
+
+            var image =
+                panel.gameObject
+                    .AddComponent<Image>();
+            image.color =
+                new Color(
+                    0.075f,
+                    0.085f,
+                    0.105f,
+                    0.96f);
+            image.raycastTarget =
+                false;
+        }
+
         private Button CreateButton(
             string label,
             Transform parent,
@@ -8609,6 +8692,35 @@ namespace VCR.Runtime.UI
                 rect.gameObject
                     .AddComponent<Button>();
             button.targetGraphic = image;
+
+            var colors =
+                button.colors;
+            colors.normalColor =
+                Color.white;
+            colors.highlightedColor =
+                new Color(
+                    1.18f,
+                    1.18f,
+                    1.18f,
+                    1f);
+            colors.pressedColor =
+                new Color(
+                    0.78f,
+                    0.82f,
+                    0.88f,
+                    1f);
+            colors.selectedColor =
+                colors.highlightedColor;
+            colors.disabledColor =
+                new Color(
+                    0.55f,
+                    0.55f,
+                    0.55f,
+                    0.55f);
+            colors.fadeDuration =
+                0.08f;
+            button.colors =
+                colors;
 
             if (onClick != null)
             {
@@ -8960,7 +9072,8 @@ namespace VCR.Runtime.UI
         private static void SetSectionLabel(
             Text label,
             string title,
-            bool available)
+            bool available,
+            bool selected)
         {
             if (label == null)
             {
@@ -8970,44 +9083,42 @@ namespace VCR.Runtime.UI
             title ??=
                 string.Empty;
 
-            if (available)
-            {
-                if (!string.Equals(
-                        label.text,
-                        title,
-                        StringComparison.Ordinal))
-                {
-                    label.text =
-                        title;
-                }
+            var expected =
+                selected && available
+                    ? "> " + title
+                    : "  " + title;
 
-                return;
-            }
-
-            const string suffix =
-                "  — unavailable";
-            var current =
-                label.text ??
-                string.Empty;
-            var expectedLength =
-                title.Length +
-                suffix.Length;
-
-            if (current.Length ==
-                    expectedLength &&
-                current.StartsWith(
-                    title,
-                    StringComparison.Ordinal) &&
-                current.EndsWith(
-                    suffix,
+            if (!string.Equals(
+                    label.text,
+                    expected,
                     StringComparison.Ordinal))
             {
-                return;
+                label.text =
+                    expected;
             }
 
-            label.text =
-                title +
-                suffix;
+            label.fontStyle =
+                selected && available
+                    ? FontStyle.Bold
+                    : FontStyle.Normal;
+            label.color =
+                !available
+                    ? new Color(
+                        0.43f,
+                        0.46f,
+                        0.52f,
+                        1f)
+                    : selected
+                        ? new Color(
+                            0.58f,
+                            0.76f,
+                            1f,
+                            1f)
+                        : new Color(
+                            0.90f,
+                            0.92f,
+                            0.95f,
+                            1f);
         }
 
         private string GetAppearanceTransitionButtonLabel(
@@ -9319,6 +9430,20 @@ namespace VCR.Runtime.UI
                 rect.gameObject
                     .AddComponent<InputField>();
             input.targetGraphic = image;
+            input.customCaretColor =
+                true;
+            input.caretColor =
+                new Color(
+                    0.58f,
+                    0.76f,
+                    1f,
+                    1f);
+            input.selectionColor =
+                new Color(
+                    0.32f,
+                    0.48f,
+                    0.72f,
+                    0.55f);
 
             var text =
                 CreateText(
