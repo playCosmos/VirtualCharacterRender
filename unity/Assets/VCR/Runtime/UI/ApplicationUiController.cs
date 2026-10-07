@@ -2970,8 +2970,28 @@ namespace VCR.Runtime.UI
 
         private void ShowProfileLoadUnavailable()
         {
-            _lastActionMessage =
-                "프로파일 불러오기는 아직 런타임 로더 연결 전입니다.";
+            if (applicationBootstrap == null)
+            {
+                _lastActionMessage =
+                    "프로파일 불러오기를 사용할 수 없습니다.";
+                RefreshAll();
+                return;
+            }
+
+            if (applicationBootstrap
+                .ReloadSavedConfiguration(
+                    out var error))
+            {
+                _lastActionMessage =
+                    "프로파일을 불러왔습니다.";
+            }
+            else
+            {
+                _lastActionMessage =
+                    "프로파일 불러오기 실패: " +
+                    (error ?? "알 수 없는 오류");
+            }
+
             RefreshAll();
         }
 
