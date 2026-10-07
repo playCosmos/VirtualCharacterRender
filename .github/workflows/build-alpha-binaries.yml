@@ -41,7 +41,7 @@ jobs:
 
       - name: Bootstrap pinned MediaPipe package and models
         shell: bash
-        run: ./tools/bootstrap-mediapipe.sh
+        run: bash ./tools/bootstrap-mediapipe.sh
 
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
