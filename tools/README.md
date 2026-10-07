@@ -4,6 +4,28 @@ Developer and content-pipeline tooling lives here.
 
 Runtime-critical behavior must not depend on ad-hoc developer scripts.
 
+## Alpha 0.1.0-alpha.1
+
+The alpha build keeps the current runtime feature set intact while allowing the first local validation pass to run without physical webcam or ARKit hardware.
+
+Windows:
+
+~~~powershell
+./tools/build-alpha.ps1
+./tools/run-alpha.ps1
+~~~
+
+Validation only:
+
+~~~powershell
+./tools/validate-alpha-source-free.ps1
+~~~
+
+The alpha integrated scene contains MediaPipe webcam, ARKit/iFacialMocap, VMC receive/send, UI, Appearance, material, event, environment, diagnostics, motion/expression and P13 2D-host components. Physical/external tracking inputs start disabled; this changes startup state, not build inclusion.
+
+See docs/ALPHA_TESTING.md for the first-pass checklist and deferred hardware evidence.
+
+
 ## MediaPipe bootstrap
 
 Windows:
