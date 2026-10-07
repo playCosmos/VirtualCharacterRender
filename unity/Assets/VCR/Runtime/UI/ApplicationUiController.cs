@@ -86,6 +86,15 @@ namespace VCR.Runtime.UI
         private Button _recoverOutputButton;
 
         private RectTransform _contextActions;
+        private RectTransform _bottomDashboard;
+        private RectTransform _trackingDashboardContent;
+        private RectTransform _motionDashboardContent;
+        private RectTransform _controlDashboardContent;
+        private RectTransform _environmentDashboardContent;
+        private RectTransform _outputDashboardContent;
+        private RectTransform _advancedNavigationGroup;
+        private Button _advancedNavigationToggleButton;
+        private bool _advancedNavigationExpanded;
         private RectTransform _appearanceActions;
         private RectTransform _appearanceDirectActions;
         private RectTransform _appearancePersistenceActions;
@@ -486,6 +495,15 @@ namespace VCR.Runtime.UI
             _saveButton = null;
             _recoverOutputButton = null;
             _contextActions = null;
+            _bottomDashboard = null;
+            _trackingDashboardContent = null;
+            _motionDashboardContent = null;
+            _controlDashboardContent = null;
+            _environmentDashboardContent = null;
+            _outputDashboardContent = null;
+            _advancedNavigationGroup = null;
+            _advancedNavigationToggleButton = null;
+            _advancedNavigationExpanded = false;
             _appearanceActions = null;
             _appearanceDirectActions = null;
             _appearancePersistenceActions = null;
@@ -718,6 +736,17 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Diagnostics,
                 diagnostics != null,
                 "Runtime diagnostics are unavailable.");
+
+            _model.SetAvailability(
+                ApplicationUiSection.Expression,
+                _mixer != null,
+                "Expression runtime is unavailable.");
+
+            _model.SetAvailability(
+                ApplicationUiSection.Appearance,
+                IsServiceAlive(_appearanceRuntime) ||
+                sceneRuntime != null,
+                "Appearance runtime is unavailable.");
         }
 
         private void Subscribe()
@@ -5763,7 +5792,9 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Tracking;
             var motionSelected =
                 selected ==
-                ApplicationUiSection.MotionExpression;
+                    ApplicationUiSection.MotionExpression ||
+                selected ==
+                    ApplicationUiSection.Expression;
             var environmentSelected =
                 selected ==
                 ApplicationUiSection.Environment;
@@ -6317,7 +6348,12 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Tracking;
             var motionSelected =
                 selected ==
-                ApplicationUiSection.MotionExpression;
+                    ApplicationUiSection.MotionExpression ||
+                selected ==
+                    ApplicationUiSection.Expression;
+            var appearanceSelected =
+                selected ==
+                    ApplicationUiSection.Appearance;
             var environmentSelected =
                 selected ==
                 ApplicationUiSection.Environment;
@@ -6334,16 +6370,20 @@ namespace VCR.Runtime.UI
                 selected ==
                 ApplicationUiSection.Diagnostics;
 
+            var appearanceVisible =
+                characterSelected ||
+                appearanceSelected;
+
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
-                    characterSelected)
+                    appearanceVisible)
             {
                 _appearanceActions.gameObject.SetActive(
-                    characterSelected);
+                    appearanceVisible);
             }
 
             var appearanceAdvancedVisible =
-                characterSelected &&
+                appearanceVisible &&
                 _appearanceAdvancedExpanded;
 
             if (_appearanceDirectActions != null &&
@@ -7251,6 +7291,10 @@ namespace VCR.Runtime.UI
                         TrackingSummary(),
                     ApplicationUiSection.MotionExpression =>
                         MotionSummary(),
+                    ApplicationUiSection.Expression =>
+                        MotionSummary(),
+                    ApplicationUiSection.Appearance =>
+                        CharacterSummary(),
                     ApplicationUiSection.Environment =>
                         EnvironmentSummary(),
                     ApplicationUiSection.MaterialShader =>
