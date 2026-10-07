@@ -1283,9 +1283,9 @@ namespace VCR.Runtime.UI
             _renderViewportFrame.anchorMax =
                 Vector2.one;
             _renderViewportFrame.offsetMin =
-                new Vector2(228f, 62f);
+                new Vector2(222f, 318f);
             _renderViewportFrame.offsetMax =
-                new Vector2(-442f, -54f);
+                new Vector2(-568f, -54f);
 
             _renderViewportBackground =
                 _renderViewportFrame.gameObject
@@ -1360,8 +1360,8 @@ namespace VCR.Runtime.UI
                 new Vector2(1f, 1f);
             content.offsetMin =
                 new Vector2(
-                    -434f,
-                    8f);
+                    -560f,
+                    318f);
             content.offsetMax =
                 new Vector2(
                     -8f,
@@ -1395,6 +1395,8 @@ namespace VCR.Runtime.UI
                     1f);
             inspectorKicker.raycastTarget =
                 false;
+            inspectorKicker.gameObject.SetActive(
+                false);
             inspectorKicker.rectTransform.anchorMin =
                 new Vector2(0f, 1f);
             inspectorKicker.rectTransform.anchorMax =
@@ -1410,7 +1412,7 @@ namespace VCR.Runtime.UI
                 CreateText(
                     "Section Title",
                     content,
-                    26,
+                    18,
                     TextAnchor.UpperLeft);
 
             _sectionTitle.rectTransform
@@ -1424,10 +1426,10 @@ namespace VCR.Runtime.UI
                     new Vector2(0.5f, 1f);
             _sectionTitle.rectTransform
                 .offsetMin =
-                    new Vector2(20f, -76f);
+                    new Vector2(16f, -46f);
             _sectionTitle.rectTransform
                 .offsetMax =
-                    new Vector2(-20f, -30f);
+                    new Vector2(-16f, -12f);
             _sectionTitle.fontStyle =
                 FontStyle.Bold;
 
@@ -1442,7 +1444,7 @@ namespace VCR.Runtime.UI
             _inspectorSummaryPanel.offsetMin =
                 new Vector2(16f, 78f);
             _inspectorSummaryPanel.offsetMax =
-                new Vector2(-16f, -84f);
+                new Vector2(-16f, -230f);
 
             var inspectorSummaryImage =
                 _inspectorSummaryPanel.gameObject
@@ -1493,15 +1495,15 @@ namespace VCR.Runtime.UI
                     "Character Model Card",
                     content);
             _characterModelPanel.anchorMin =
-                new Vector2(0f, 0f);
+                new Vector2(0f, 1f);
             _characterModelPanel.anchorMax =
-                new Vector2(1f, 0f);
+                new Vector2(1f, 1f);
             _characterModelPanel.pivot =
-                new Vector2(0.5f, 0f);
+                new Vector2(0.5f, 1f);
             _characterModelPanel.offsetMin =
-                new Vector2(16f, 76f);
+                new Vector2(16f, -220f);
             _characterModelPanel.offsetMax =
-                new Vector2(-16f, 222f);
+                new Vector2(-16f, -54f);
             AddActionPanelBackground(
                 _characterModelPanel);
 
@@ -1639,6 +1641,56 @@ namespace VCR.Runtime.UI
             _trackingCameraPreviewPanel.gameObject.SetActive(
                 false);
 
+            _bottomDashboard =
+                CreateRect(
+                    "Bottom Dashboard",
+                    _root);
+            _bottomDashboard.anchorMin =
+                new Vector2(0f, 0f);
+            _bottomDashboard.anchorMax =
+                new Vector2(1f, 0f);
+            _bottomDashboard.pivot =
+                new Vector2(0.5f, 0f);
+            _bottomDashboard.offsetMin =
+                new Vector2(8f, 8f);
+            _bottomDashboard.offsetMax =
+                new Vector2(-8f, 310f);
+
+            var bottomDashboardLayout =
+                _bottomDashboard.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            bottomDashboardLayout.spacing = 8f;
+            bottomDashboardLayout.childControlWidth = true;
+            bottomDashboardLayout.childControlHeight = true;
+            bottomDashboardLayout.childForceExpandWidth = true;
+            bottomDashboardLayout.childForceExpandHeight = true;
+
+            CreateDashboardCard(
+                _bottomDashboard,
+                "트래킹",
+                320f,
+                out _trackingDashboardContent);
+            CreateDashboardCard(
+                _bottomDashboard,
+                "모션 & 표정",
+                278f,
+                out _motionDashboardContent);
+            CreateDashboardCard(
+                _bottomDashboard,
+                "조작",
+                260f,
+                out _controlDashboardContent);
+            CreateDashboardCard(
+                _bottomDashboard,
+                "배경 & 카메라",
+                280f,
+                out _environmentDashboardContent);
+            CreateDashboardCard(
+                _bottomDashboard,
+                "출력",
+                320f,
+                out _outputDashboardContent);
+
             _contextActions =
                 CreateRect(
                     "Section Actions",
@@ -1651,9 +1703,9 @@ namespace VCR.Runtime.UI
             _contextActions.pivot =
                 new Vector2(0.5f, 0f);
             _contextActions.offsetMin =
-                new Vector2(228f, 8f);
+                new Vector2(222f, 318f);
             _contextActions.offsetMax =
-                new Vector2(-442f, 114f);
+                new Vector2(-568f, 424f);
 
             AddActionPanelBackground(
                 _contextActions);
