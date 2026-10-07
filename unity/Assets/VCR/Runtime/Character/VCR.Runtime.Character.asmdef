@@ -7,7 +7,9 @@
     "VCR.Runtime.Tracking.Mixing",
     "UniGLTF",
     "VRM10",
-    "VCR.Runtime.Materials.Unity"
+    "VCR.Runtime.Materials.Unity",
+    "UniHumanoid",
+    "UniGLTF.Utils"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
