@@ -9,7 +9,9 @@
     "VCR.Runtime.Tracking.ArKit",
     "VCR.Runtime.Tracking.ArKitUnity",
     "VCR.Runtime.Tracking.MediaPipe",
-    "VCR.Runtime.Tracking.AudioUnity"
+    "VCR.Runtime.Tracking.AudioUnity",
+    "VCR.Runtime.Character",
+    "VCR.Runtime.Core"
   ],
   "includePlatforms": [
     "Editor"
