@@ -72,6 +72,8 @@ namespace VCR.Runtime.UI
         private Text _statusText;
         private Text _sectionTitle;
         private Text _contentText;
+        private RectTransform _inspectorSummaryPanel;
+        private RectTransform _characterModelPanel;
         private RectTransform _renderViewportFrame;
         private RectTransform _trackingCameraPreviewPanel;
         private RawImage _trackingCameraPreviewImage;
@@ -151,6 +153,8 @@ namespace VCR.Runtime.UI
         private Button _appearanceRestoreButton;
         private Button _appearancePreviewButton;
         private Button _appearanceCancelButton;
+        private Button _appearanceAdvancedButton;
+        private bool _appearanceAdvancedExpanded;
         private InputField _appearancePresetInput;
         private Button _appearanceApplyPresetButton;
         private InputField _appearanceOutfitInput;
@@ -467,6 +471,8 @@ namespace VCR.Runtime.UI
             _statusText = null;
             _sectionTitle = null;
             _contentText = null;
+            _inspectorSummaryPanel = null;
+            _characterModelPanel = null;
             _renderViewportFrame = null;
             _trackingCameraPreviewPanel = null;
             _trackingCameraPreviewImage = null;
@@ -549,6 +555,8 @@ namespace VCR.Runtime.UI
             _appearanceRestoreButton = null;
             _appearancePreviewButton = null;
             _appearanceCancelButton = null;
+            _appearanceAdvancedButton = null;
+            _appearanceAdvancedExpanded = false;
             _appearancePresetInput = null;
             _appearanceApplyPresetButton = null;
             _appearanceOutfitInput = null;
@@ -1082,7 +1090,7 @@ namespace VCR.Runtime.UI
             _renderViewportFrame.anchorMax =
                 Vector2.one;
             _renderViewportFrame.offsetMin =
-                new Vector2(228f, 276f);
+                new Vector2(228f, 62f);
             _renderViewportFrame.offsetMax =
                 new Vector2(-442f, -64f);
 
@@ -1151,11 +1159,40 @@ namespace VCR.Runtime.UI
                     0.07f,
                     0.985f);
 
+            var inspectorKicker =
+                CreateText(
+                    "Inspector Kicker",
+                    content,
+                    11,
+                    TextAnchor.UpperLeft);
+            inspectorKicker.text =
+                "PROPERTY INSPECTOR";
+            inspectorKicker.fontStyle =
+                FontStyle.Bold;
+            inspectorKicker.color =
+                new Color(
+                    0.42f,
+                    0.58f,
+                    0.82f,
+                    1f);
+            inspectorKicker.raycastTarget =
+                false;
+            inspectorKicker.rectTransform.anchorMin =
+                new Vector2(0f, 1f);
+            inspectorKicker.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            inspectorKicker.rectTransform.pivot =
+                new Vector2(0.5f, 1f);
+            inspectorKicker.rectTransform.offsetMin =
+                new Vector2(20f, -28f);
+            inspectorKicker.rectTransform.offsetMax =
+                new Vector2(-20f, -10f);
+
             _sectionTitle =
                 CreateText(
                     "Section Title",
                     content,
-                    28,
+                    26,
                     TextAnchor.UpperLeft);
 
             _sectionTitle.rectTransform
@@ -1169,37 +1206,155 @@ namespace VCR.Runtime.UI
                     new Vector2(0.5f, 1f);
             _sectionTitle.rectTransform
                 .offsetMin =
-                    new Vector2(24f, -76f);
+                    new Vector2(20f, -76f);
             _sectionTitle.rectTransform
                 .offsetMax =
-                    new Vector2(-24f, -18f);
+                    new Vector2(-20f, -30f);
             _sectionTitle.fontStyle =
                 FontStyle.Bold;
+
+            _inspectorSummaryPanel =
+                CreateRect(
+                    "Inspector Summary Card",
+                    content);
+            _inspectorSummaryPanel.anchorMin =
+                Vector2.zero;
+            _inspectorSummaryPanel.anchorMax =
+                Vector2.one;
+            _inspectorSummaryPanel.offsetMin =
+                new Vector2(16f, 78f);
+            _inspectorSummaryPanel.offsetMax =
+                new Vector2(-16f, -84f);
+
+            var inspectorSummaryImage =
+                _inspectorSummaryPanel.gameObject
+                    .AddComponent<Image>();
+            inspectorSummaryImage.color =
+                new Color(
+                    0.068f,
+                    0.075f,
+                    0.092f,
+                    0.98f);
+            inspectorSummaryImage.raycastTarget =
+                false;
+            var inspectorSummaryOutline =
+                _inspectorSummaryPanel.gameObject
+                    .AddComponent<Outline>();
+            inspectorSummaryOutline.effectColor =
+                new Color(
+                    0.12f,
+                    0.16f,
+                    0.23f,
+                    0.95f);
+            inspectorSummaryOutline.effectDistance =
+                new Vector2(1f, -1f);
 
             _contentText =
                 CreateText(
                     "Content Text",
-                    content,
-                    15,
+                    _inspectorSummaryPanel,
+                    14,
                     TextAnchor.UpperLeft);
-
+            _contentText.supportRichText =
+                true;
+            _contentText.lineSpacing =
+                1.12f;
             _contentText.horizontalOverflow =
                 HorizontalWrapMode.Wrap;
             _contentText.verticalOverflow =
                 VerticalWrapMode.Truncate;
+            Stretch(
+                _contentText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(14f, 12f),
+                new Vector2(-14f, -12f));
 
-            _contentText.rectTransform
-                .anchorMin =
-                    new Vector2(0f, 0f);
-            _contentText.rectTransform
-                .anchorMax =
-                    new Vector2(1f, 1f);
-            _contentText.rectTransform
-                .offsetMin =
-                    new Vector2(20f, 84f);
-            _contentText.rectTransform
-                .offsetMax =
-                    new Vector2(-20f, -82f);
+            _characterModelPanel =
+                CreateRect(
+                    "Character Model Card",
+                    content);
+            _characterModelPanel.anchorMin =
+                new Vector2(0f, 0f);
+            _characterModelPanel.anchorMax =
+                new Vector2(1f, 0f);
+            _characterModelPanel.pivot =
+                new Vector2(0.5f, 0f);
+            _characterModelPanel.offsetMin =
+                new Vector2(16f, 76f);
+            _characterModelPanel.offsetMax =
+                new Vector2(-16f, 222f);
+            AddActionPanelBackground(
+                _characterModelPanel);
+
+            var modelCardTitle =
+                CreateText(
+                    "VRM Model Card Title",
+                    _characterModelPanel,
+                    12,
+                    TextAnchor.MiddleLeft);
+            modelCardTitle.text =
+                "VRM MODEL";
+            modelCardTitle.fontStyle =
+                FontStyle.Bold;
+            modelCardTitle.color =
+                new Color(
+                    0.66f,
+                    0.74f,
+                    0.86f,
+                    1f);
+            modelCardTitle.raycastTarget =
+                false;
+            modelCardTitle.rectTransform.anchorMin =
+                new Vector2(0f, 1f);
+            modelCardTitle.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            modelCardTitle.rectTransform.pivot =
+                new Vector2(0.5f, 1f);
+            modelCardTitle.rectTransform.offsetMin =
+                new Vector2(12f, -28f);
+            modelCardTitle.rectTransform.offsetMax =
+                new Vector2(-12f, -6f);
+
+            var characterFileRow =
+                CreateRect(
+                    "Character File Row",
+                    _characterModelPanel);
+            characterFileRow.anchorMin =
+                new Vector2(0f, 0f);
+            characterFileRow.anchorMax =
+                new Vector2(1f, 0f);
+            characterFileRow.offsetMin =
+                new Vector2(10f, 62f);
+            characterFileRow.offsetMax =
+                new Vector2(-10f, 102f);
+            var characterFileLayout =
+                characterFileRow.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            characterFileLayout.spacing = 8f;
+            characterFileLayout.childForceExpandWidth = false;
+            characterFileLayout.childControlWidth = true;
+            characterFileLayout.childControlHeight = true;
+
+            var characterLoadRow =
+                CreateRect(
+                    "Character Load Row",
+                    _characterModelPanel);
+            characterLoadRow.anchorMin =
+                new Vector2(0f, 0f);
+            characterLoadRow.anchorMax =
+                new Vector2(1f, 0f);
+            characterLoadRow.offsetMin =
+                new Vector2(10f, 12f);
+            characterLoadRow.offsetMax =
+                new Vector2(-10f, 52f);
+            var characterLoadLayout =
+                characterLoadRow.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            characterLoadLayout.spacing = 8f;
+            characterLoadLayout.childForceExpandWidth = true;
+            characterLoadLayout.childControlWidth = true;
+            characterLoadLayout.childControlHeight = true;
 
             _trackingCameraPreviewPanel =
                 CreateRect(
@@ -1313,50 +1468,43 @@ namespace VCR.Runtime.UI
             _characterPathInput =
                 CreateInputField(
                     "Character Path",
-                    _contextActions,
-                    "VRM path");
+                    characterFileRow,
+                    "Select a .vrm file");
 
             var pathLayout =
                 _characterPathInput.gameObject
-                    .AddComponent<
-                        LayoutElement>();
-            pathLayout.preferredWidth = 360f;
+                    .AddComponent<LayoutElement>();
+            pathLayout.preferredWidth = 250f;
+            pathLayout.flexibleWidth = 1f;
 
             _characterBrowseButton =
                 CreateButton(
                     "Browse VRM…",
-                    _contextActions,
+                    characterFileRow,
                     BrowseCharacterFile);
             _characterBrowseButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 100f;
+                .preferredWidth = 118f;
+            SetPrimaryButtonStyle(
+                _characterBrowseButton);
 
             _loadCharacterButton =
                 CreateButton(
                     "Load VRM",
-                    _contextActions,
+                    characterLoadRow,
                     LoadCharacterFromPath);
-            _loadCharacterButton.gameObject
-                .AddComponent<LayoutElement>()
-                .preferredWidth = 150f;
 
             _reloadCharacterButton =
                 CreateButton(
                     "Reload",
-                    _contextActions,
+                    characterLoadRow,
                     ReloadCharacter);
-            _reloadCharacterButton.gameObject
-                .AddComponent<LayoutElement>()
-                .preferredWidth = 160f;
 
             _unloadCharacterButton =
                 CreateButton(
                     "Unload",
-                    _contextActions,
+                    characterLoadRow,
                     UnloadCharacter);
-            _unloadCharacterButton.gameObject
-                .AddComponent<LayoutElement>()
-                .preferredWidth = 160f;
 
             _trackingPreviousButton =
                 CreateButton(
@@ -1873,9 +2021,9 @@ namespace VCR.Runtime.UI
             _appearanceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceActions.offsetMin =
-                new Vector2(228f, 122f);
+                new Vector2(228f, 8f);
             _appearanceActions.offsetMax =
-                new Vector2(-8f, 156f);
+                new Vector2(-8f, 54f);
 
             AddActionPanelBackground(
                 _appearanceActions);
@@ -1891,6 +2039,26 @@ namespace VCR.Runtime.UI
             appearanceLayout.childControlWidth = true;
             appearanceLayout.childControlHeight = true;
 
+            var appearanceQuickLabel =
+                CreateText(
+                    "Appearance Quick Label",
+                    _appearanceActions,
+                    12,
+                    TextAnchor.MiddleLeft);
+            appearanceQuickLabel.text =
+                "QUICK LOOK";
+            appearanceQuickLabel.fontStyle =
+                FontStyle.Bold;
+            appearanceQuickLabel.color =
+                new Color(
+                    0.62f,
+                    0.70f,
+                    0.82f,
+                    1f);
+            appearanceQuickLabel.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 78f;
+
             _appearancePreviousButton =
                 CreateButton(
                     "Previous Look",
@@ -1898,7 +2066,7 @@ namespace VCR.Runtime.UI
                     ApplyPreviousAppearancePreset);
             _appearancePreviousButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 132f;
+                .preferredWidth = 116f;
 
             _appearanceNextButton =
                 CreateButton(
@@ -1907,7 +2075,7 @@ namespace VCR.Runtime.UI
                     ApplyNextAppearancePreset);
             _appearanceNextButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 132f;
+                .preferredWidth = 116f;
 
             _appearanceTransitionButton =
                 CreateButton(
@@ -1916,7 +2084,7 @@ namespace VCR.Runtime.UI
                     SelectNextAppearanceTransition);
             _appearanceTransitionButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 200f;
+                .preferredWidth = 168f;
 
             _appearanceRestoreButton =
                 CreateButton(
@@ -1925,7 +2093,7 @@ namespace VCR.Runtime.UI
                     RestoreDefaultAppearance);
             _appearanceRestoreButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 144f;
+                .preferredWidth = 124f;
 
             _appearancePreviewButton =
                 CreateButton(
@@ -1934,7 +2102,7 @@ namespace VCR.Runtime.UI
                     PreviewSelectedAppearanceTransition);
             _appearancePreviewButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 144f;
+                .preferredWidth = 128f;
 
             _appearanceCancelButton =
                 CreateButton(
@@ -1943,7 +2111,16 @@ namespace VCR.Runtime.UI
                     CancelAppearanceTransition);
             _appearanceCancelButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 136f;
+                .preferredWidth = 118f;
+
+            _appearanceAdvancedButton =
+                CreateButton(
+                    "Advanced…",
+                    _appearanceActions,
+                    ToggleAppearanceAdvanced);
+            _appearanceAdvancedButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 112f;
 
             _appearanceDirectActions =
                 CreateRect(
@@ -1957,9 +2134,9 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceDirectActions.offsetMin =
-                new Vector2(228f, 84f);
+                new Vector2(228f, 58f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-8f, 118f);
+                new Vector2(-8f, 98f);
 
             AddActionPanelBackground(
                 _appearanceDirectActions);
@@ -2059,9 +2236,9 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePersistenceActions.offsetMin =
-                new Vector2(228f, 46f);
+                new Vector2(228f, 102f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-8f, 80f);
+                new Vector2(-8f, 142f);
 
             AddActionPanelBackground(
                 _appearancePersistenceActions);
@@ -2116,9 +2293,9 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePresetManagementActions.offsetMin =
-                new Vector2(228f, 8f);
+                new Vector2(228f, 146f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-8f, 42f);
+                new Vector2(-8f, 186f);
 
             AddActionPanelBackground(
                 _appearancePresetManagementActions);
@@ -5213,6 +5390,30 @@ namespace VCR.Runtime.UI
                         available,
                         selectedSection);
                 }
+
+                var navigationImage =
+                    button.targetGraphic as Image;
+                if (navigationImage != null)
+                {
+                    navigationImage.color =
+                        !available
+                            ? new Color(
+                                0.085f,
+                                0.09f,
+                                0.105f,
+                                1f)
+                            : selectedSection
+                                ? new Color(
+                                    0.10f,
+                                    0.34f,
+                                    0.68f,
+                                    1f)
+                                : new Color(
+                                    0.12f,
+                                    0.135f,
+                                    0.16f,
+                                    1f);
+                }
             }
 
             if (_saveButton != null)
@@ -5400,14 +5601,13 @@ namespace VCR.Runtime.UI
                 selected ==
                 ApplicationUiSection.Diagnostics;
 
-            if (_contextVisibilitySection !=
-                selected)
-            {
-                _contextVisibilitySection =
-                    selected;
-                RefreshContextActionVisibility(
-                    selected);
-            }
+            // Re-apply visibility every refresh. This deliberately avoids
+            // stale active states when the runtime UI is rebuilt or a parent
+            // panel was toggled while the selected section stayed the same.
+            _contextVisibilitySection =
+                selected;
+            RefreshContextActionVisibility(
+                selected);
 
             if (motionSelected)
             {
@@ -5963,29 +6163,58 @@ namespace VCR.Runtime.UI
                     characterSelected);
             }
 
+            var appearanceAdvancedVisible =
+                characterSelected &&
+                _appearanceAdvancedExpanded;
+
             if (_appearanceDirectActions != null &&
                 _appearanceDirectActions.gameObject.activeSelf !=
-                    characterSelected)
+                    appearanceAdvancedVisible)
             {
                 _appearanceDirectActions.gameObject.SetActive(
-                    characterSelected);
+                    appearanceAdvancedVisible);
             }
 
             if (_appearancePersistenceActions != null &&
                 _appearancePersistenceActions.gameObject.activeSelf !=
-                    characterSelected)
+                    appearanceAdvancedVisible)
             {
                 _appearancePersistenceActions.gameObject.SetActive(
-                    characterSelected);
+                    appearanceAdvancedVisible);
             }
 
             if (_appearancePresetManagementActions != null &&
                 _appearancePresetManagementActions.gameObject.activeSelf !=
-                    characterSelected)
+                    appearanceAdvancedVisible)
             {
                 _appearancePresetManagementActions.gameObject.SetActive(
+                    appearanceAdvancedVisible);
+            }
+
+            if (_contextActions != null &&
+                _contextActions.gameObject.activeSelf ==
+                    characterSelected)
+            {
+                _contextActions.gameObject.SetActive(
+                    !characterSelected);
+            }
+
+            if (_characterModelPanel != null &&
+                _characterModelPanel.gameObject.activeSelf !=
+                    characterSelected)
+            {
+                _characterModelPanel.gameObject.SetActive(
                     characterSelected);
             }
+
+            SetButtonLabel(
+                _appearanceAdvancedButton,
+                _appearanceAdvancedExpanded
+                    ? "Advanced ▲"
+                    : "Advanced ▼");
+
+            RefreshDashboardGeometry(
+                selected);
 
             SetActive(
                 _characterPathInput,
@@ -6179,6 +6408,55 @@ namespace VCR.Runtime.UI
                 trackingSelected);
         }
 
+        private void ToggleAppearanceAdvanced()
+        {
+            _appearanceAdvancedExpanded =
+                !_appearanceAdvancedExpanded;
+
+            RefreshContextActionVisibility(
+                _model.SelectedSection);
+            RefreshAll();
+        }
+
+        private void RefreshDashboardGeometry(
+            ApplicationUiSection selected)
+        {
+            var characterSelected =
+                selected ==
+                ApplicationUiSection.Character;
+            var trackingPreviewVisible =
+                selected ==
+                    ApplicationUiSection.Tracking &&
+                _trackingCameraPreviewRequested;
+
+            if (_renderViewportFrame != null)
+            {
+                var offsetMin =
+                    _renderViewportFrame.offsetMin;
+                offsetMin.y =
+                    characterSelected
+                        ? _appearanceAdvancedExpanded
+                            ? 194f
+                            : 62f
+                        : 122f;
+                _renderViewportFrame.offsetMin =
+                    offsetMin;
+            }
+
+            if (_inspectorSummaryPanel != null)
+            {
+                var offsetMin =
+                    _inspectorSummaryPanel.offsetMin;
+                offsetMin.y =
+                    characterSelected ||
+                    trackingPreviewVisible
+                        ? 230f
+                        : 78f;
+                _inspectorSummaryPanel.offsetMin =
+                    offsetMin;
+            }
+        }
+
         private void ToggleTrackingCameraPreview()
         {
             _trackingCameraPreviewRequested =
@@ -6250,17 +6528,8 @@ namespace VCR.Runtime.UI
                     ? "Hide Camera Preview"
                     : "Show Camera Preview");
 
-            if (_contentText != null)
-            {
-                var offset =
-                    _contentText.rectTransform.offsetMin;
-                offset.y =
-                    shouldReveal
-                        ? 228f
-                        : 84f;
-                _contentText.rectTransform.offsetMin =
-                    offset;
-            }
+            RefreshDashboardGeometry(
+                _model.SelectedSection);
         }
 
         private void RefreshMaterialControlState()
@@ -8988,6 +9257,39 @@ namespace VCR.Runtime.UI
                     0.96f);
             image.raycastTarget =
                 false;
+
+            var outline =
+                panel.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.13f,
+                    0.17f,
+                    0.24f,
+                    0.95f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
+        }
+
+        private static void SetPrimaryButtonStyle(
+            Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var image =
+                button.targetGraphic as Image;
+            if (image != null)
+            {
+                image.color =
+                    new Color(
+                        0.10f,
+                        0.38f,
+                        0.78f,
+                        1f);
+            }
         }
 
         private Button CreateButton(
