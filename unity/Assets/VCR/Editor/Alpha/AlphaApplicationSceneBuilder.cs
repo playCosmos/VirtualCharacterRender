@@ -208,8 +208,9 @@ namespace VCR.Editor.Alpha
             character2D.Configure(
                 backend: null,
                 trackingProvider: mixer,
-                Character2DInputDomain.Face |
-                Character2DInputDomain.Expressions);
+                inputs:
+                    Character2DInputDomain.Face |
+                    Character2DInputDomain.Expressions);
             character2D.enabled = false;
 
             var scene =
