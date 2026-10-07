@@ -1580,6 +1580,23 @@ require_source_contains(
     "environment transition specs must sanitize non-finite durations",
 )
 
+p6_environment_validation = (
+    VCR
+    / "Editor"
+    / "P6"
+    / "P6EnvironmentRuntimeValidation.cs"
+)
+require_source_contains(
+    p6_environment_validation,
+    "ValidateTransitionCompletionFailure(",
+    "P6 validation must retain transition completion failure/recovery coverage",
+)
+require_source_contains(
+    p6_environment_validation,
+    "\"environment.transition_completion_pending\"",
+    "P6 validation must assert the transition completion-pending diagnostic",
+)
+
 basic_environment_runtime = (
     VCR
     / "Runtime"
