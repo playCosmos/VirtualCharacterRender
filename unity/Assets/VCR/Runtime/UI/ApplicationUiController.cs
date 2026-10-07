@@ -7709,22 +7709,24 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("<b>MODEL</b>\n");
+            builder.Append("<b>모델 정보</b>\n");
             if (status.HasCharacter)
             {
+                builder.Append("이름        ");
                 builder.Append(
                     string.IsNullOrWhiteSpace(
                         status.CurrentCharacterPath)
-                        ? "VRM loaded"
-                        : Path.GetFileName(
+                        ? "VRM 모델"
+                        : Path.GetFileNameWithoutExtension(
                             status.CurrentCharacterPath));
-                builder.Append("\nState  ");
+                builder.Append("\n상태        ");
                 builder.Append(status.State);
+                builder.Append("\n포맷        VRM");
             }
             else
             {
                 builder.Append(
-                    "No VRM loaded\nUse Browse VRM to choose a model.");
+                    "이름        -\n상태        모델 없음\n포맷        VRM");
             }
 
             if (!string.IsNullOrWhiteSpace(
@@ -7736,39 +7738,39 @@ namespace VCR.Runtime.UI
                 builder.Append("</color>");
             }
 
-            builder.Append("\n\n<b>APPEARANCE</b>\n");
+            builder.Append("\n\n<b>외형</b>\n");
             if (!appearanceAvailable)
             {
                 builder.Append(
-                    "Appearance runtime unavailable");
+                    "외형 런타임을 사용할 수 없습니다.");
             }
             else
             {
-                builder.Append("Preset  ");
+                builder.Append("프리셋      ");
                 builder.Append(
                     appearance.CurrentPresetId ??
-                    "Default");
-                builder.Append("\nOutfit  ");
+                    "기본");
+                builder.Append("\n의상        ");
                 builder.Append(
                     appearance.CurrentOutfitId ??
-                    "Default");
-                builder.Append("\nSaved presets  ");
+                    "기본");
+                builder.Append("\n저장 프리셋 ");
                 builder.Append(userPresetCount);
 
                 builder.Append(
-                    "\n\n<b>TRANSITION</b>\n");
+                    "\n\n<b>전환</b>  ");
                 if (appearance.Busy)
                 {
                     builder.Append(
                         appearance.ActiveTransitionId ??
-                        "Transition");
+                        "전환");
                     builder.Append("  ");
                     builder.Append(transitionPercent);
                     builder.Append("%");
                 }
                 else
                 {
-                    builder.Append("Idle");
+                    builder.Append("대기");
                 }
 
                 if (!string.IsNullOrWhiteSpace(
