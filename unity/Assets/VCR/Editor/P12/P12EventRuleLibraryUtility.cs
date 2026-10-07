@@ -20,7 +20,7 @@ namespace VCR.Editor.P12
     }
 
     [Serializable]
-    internal sealed class P12EventRuleLibraryPackage
+    public sealed class P12EventRuleLibraryPackage
     {
         public const int CurrentVersion = 2;
 
