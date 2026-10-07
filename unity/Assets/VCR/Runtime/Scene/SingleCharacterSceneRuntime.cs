@@ -530,11 +530,19 @@ namespace VCR.Runtime.Scene
                     throw;
                 }
 
-                throw new InvalidOperationException(
-                    "Scene configuration apply failed and rollback was incomplete: " +
+                var rollbackError =
+                    "Scene configuration apply failed: " +
+                    exception.Message +
+                    " | rollback incomplete: " +
                     string.Join(
                         " | ",
-                        rollbackFailures),
+                        rollbackFailures);
+
+                SetFault(
+                    rollbackError);
+
+                throw new InvalidOperationException(
+                    rollbackError,
                     exception);
             }
         }
