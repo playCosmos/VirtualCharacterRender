@@ -52,7 +52,7 @@ namespace VCR.Runtime.Application
         {
             return new AppearanceUserPresetStore(
                 Path.Combine(
-                    Application.persistentDataPath,
+                    UnityEngine.Application.persistentDataPath,
                     "appearance-profiles"));
         }
 
