@@ -98,6 +98,7 @@ Environment diagnostics now expose:
 - state/update/space target counts and modes
 - lighting target count/profile weight/failures
 - transition target count/mode/progress/failures
+- transition completion-pending state when progress reaches 1.0 but final root commit is unresolved
 - update dispatch last/total/average milliseconds
 - transition dispatch last/total/average milliseconds
 - recurring-driver state
@@ -129,6 +130,7 @@ The P6 suite covers:
 - space-target apply-exception fail-closed rollback
 - non-Cut transition rejection without a target
 - Crossfade start/midpoint/completion root semantics
+- destroyed final state-root completion failure remains pending, blocks overwrite/idempotent bypass, and recovers after repaired bindings
 - CanvasGroup Cut/Fade/Crossfade alpha behavior and Dissolve rejection
 - transition-target de-duplication and diagnostics
 - parallax update math and no-self-Update contract
