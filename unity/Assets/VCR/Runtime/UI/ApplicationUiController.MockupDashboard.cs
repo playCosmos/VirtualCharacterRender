@@ -888,7 +888,7 @@ namespace VCR.Runtime.UI
             _dashboardSettingsModal.gameObject.SetActive(
                 true);
             _dashboardSettingsModal.SetAsLastSibling();
-            RefreshSettingsControlState();
+            RefreshAll();
         }
 
         private void CloseSettingsModal()
@@ -897,6 +897,7 @@ namespace VCR.Runtime.UI
             {
                 _dashboardSettingsModal.gameObject.SetActive(
                     false);
+                RefreshAll();
             }
         }
 
