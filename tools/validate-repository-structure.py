@@ -1380,6 +1380,17 @@ require_source_contains(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "\" | rollback incomplete: \"",
+    "incomplete scene configuration rollback errors must retain explicit rollback context",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "var rollbackError =",
+    "SetFault(\n                    rollbackError);",
+    "incomplete scene configuration rollback must fault the scene before propagating the exception",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "\"Scene suspend failed: \"",
     "scene Suspend must contain external adapter shutdown exceptions",
 )
