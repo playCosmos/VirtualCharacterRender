@@ -1,0 +1,79 @@
+name: Publish alpha release
+
+on:
+  push:
+    branches:
+      - "release/0.1.0-alpha.1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-alpha-0.1.0-alpha.1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release snapshot
+        uses: actions/checkout@v4
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v0.1.0-alpha.1
+          TITLE: VirtualCharacterRender 0.1.0-alpha.1
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/release-notes.md <<'EOF'
+          ## VirtualCharacterRender 0.1.0-alpha.1
+
+          First integrated alpha for local desktop testing.
+
+          This alpha keeps the current implemented feature set intact. MediaPipe webcam, ARKit/iFacialMocap, VMC receive/send, rendering/output, application UI, Appearance/outfit/accessory transitions, material overrides, events, environment, diagnostics, motion/expression, and the backend-neutral P13 2D host remain included.
+
+          ### Initial validation scope
+
+          The first pass is intentionally equipment-free: physical webcam and ARKit/iFacialMocap evidence is deferred, but those implementations are not removed from the build. Physical/external tracking inputs start disabled in the integrated alpha scene so the application, VRM, UI, rendering/output, configuration, environment, materials, Appearance, events, and diagnostics can be tested first.
+
+          ### Windows local build
+
+          Requires Unity 6000.3.25f1 and PowerShell.
+
+          ```powershell
+          git checkout release/0.1.0-alpha.1
+          ./tools/build-alpha.ps1
+          ./tools/run-alpha.ps1
+          ```
+
+          With a VRM:
+
+          ```powershell
+          ./tools/run-alpha.ps1 -Vrm "C:\\models\\avatar.vrm"
+          ```
+
+          The build script bootstraps the pinned MediaPipe package when needed, runs the inherited P0-P13 source-free validation chain, creates the integrated alpha scene, builds the Windows x64 Development Player, and packages it as a ZIP.
+
+          ### Important
+
+          No prebuilt Windows executable is attached to this release yet because the current automation environment does not have the pinned Unity Editor/player build environment. GitHub's source ZIP/TAR and the repository build scripts are the alpha distribution for this first test pass.
+
+          See `docs/ALPHA_TESTING.md` for the full checklist and deferred hardware evidence.
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --notes-file /tmp/release-notes.md \
+              --prerelease
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes-file /tmp/release-notes.md \
+              --prerelease
+          fi
