@@ -1172,7 +1172,7 @@ namespace VCR.Runtime.UI
             content.offsetMin =
                 new Vector2(
                     -434f,
-                    276f);
+                    8f);
             content.offsetMax =
                 new Vector2(
                     -8f,
@@ -1462,9 +1462,9 @@ namespace VCR.Runtime.UI
             _contextActions.pivot =
                 new Vector2(0.5f, 0f);
             _contextActions.offsetMin =
-                new Vector2(228f, 162f);
+                new Vector2(228f, 8f);
             _contextActions.offsetMax =
-                new Vector2(-8f, 268f);
+                new Vector2(-442f, 114f);
 
             AddActionPanelBackground(
                 _contextActions);
@@ -2054,7 +2054,7 @@ namespace VCR.Runtime.UI
             _appearanceActions.offsetMin =
                 new Vector2(228f, 8f);
             _appearanceActions.offsetMax =
-                new Vector2(-8f, 54f);
+                new Vector2(-442f, 54f);
 
             AddActionPanelBackground(
                 _appearanceActions);
@@ -2167,7 +2167,7 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.offsetMin =
                 new Vector2(228f, 58f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-8f, 98f);
+                new Vector2(-442f, 98f);
 
             AddActionPanelBackground(
                 _appearanceDirectActions);
@@ -2269,7 +2269,7 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.offsetMin =
                 new Vector2(228f, 102f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-8f, 142f);
+                new Vector2(-442f, 142f);
 
             AddActionPanelBackground(
                 _appearancePersistenceActions);
@@ -2326,7 +2326,7 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.offsetMin =
                 new Vector2(228f, 146f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-8f, 186f);
+                new Vector2(-442f, 186f);
 
             AddActionPanelBackground(
                 _appearancePresetManagementActions);
