@@ -1258,7 +1258,7 @@ namespace VCR.Runtime.UI
             navigation.offsetMin =
                 new Vector2(8f, 318f);
             navigation.offsetMax =
-                new Vector2(214f, -54f);
+                new Vector2(214f, -8f);
 
             var navImage =
                 navigation.gameObject
@@ -1295,8 +1295,7 @@ namespace VCR.Runtime.UI
                     ApplicationUiSection.Expression,
                     ApplicationUiSection.Appearance,
                     ApplicationUiSection.Environment,
-                    ApplicationUiSection.CameraOutput,
-                    ApplicationUiSection.Settings
+                    ApplicationUiSection.CameraOutput
                 };
 
             for (var i = 0;
@@ -1355,7 +1354,7 @@ namespace VCR.Runtime.UI
             _renderViewportFrame.offsetMin =
                 new Vector2(222f, 318f);
             _renderViewportFrame.offsetMax =
-                new Vector2(-568f, -54f);
+                new Vector2(-568f, -8f);
 
             _renderViewportBackground =
                 _renderViewportFrame.gameObject
@@ -1401,7 +1400,10 @@ namespace VCR.Runtime.UI
                     17,
                     TextAnchor.MiddleCenter);
             _renderViewportEmptyStateText.text =
-                "<b>No character loaded</b>\nChoose a VRM model from the Character inspector.";
+                "<b>처음 시작하기</b>\n" +
+                "① 오른쪽에서 VRM 모델 불러오기  →  ② 트래킹 방식 선택\n" +
+                "③ 미리보기 확인  →  ④ 출력 설정\n" +
+                "<size=12><color=#9EABBC>카메라와 ARKit 없이도 모델·동작·외형·배경·출력 기능을 먼저 확인할 수 있습니다.</color></size>";
             _renderViewportEmptyStateText.supportRichText =
                 true;
             _renderViewportEmptyStateText.color =
@@ -1437,7 +1439,7 @@ namespace VCR.Runtime.UI
             content.offsetMax =
                 new Vector2(
                     -8f,
-                    -54f);
+                    -8f);
 
             var contentImage =
                 content.gameObject
@@ -9844,10 +9846,21 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             image.color =
                 new Color(
-                    0.14f,
-                    0.16f,
-                    0.19f,
+                    0.095f,
+                    0.115f,
+                    0.145f,
                     1f);
+            var outline =
+                rect.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.20f,
+                    0.27f,
+                    0.36f,
+                    0.72f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
 
             var button =
                 rect.gameObject
@@ -9893,7 +9906,7 @@ namespace VCR.Runtime.UI
                 CreateText(
                     "Label",
                     rect,
-                    16,
+                    13,
                     TextAnchor.MiddleCenter);
             text.font =
                 _uiFontMedium ??
@@ -10622,10 +10635,21 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             image.color =
                 new Color(
-                    0.10f,
-                    0.11f,
-                    0.13f,
+                    0.075f,
+                    0.09f,
+                    0.115f,
                     1f);
+            var outline =
+                rect.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.18f,
+                    0.24f,
+                    0.32f,
+                    0.85f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
 
             var input =
                 rect.gameObject
@@ -10650,7 +10674,7 @@ namespace VCR.Runtime.UI
                 CreateText(
                     "Text",
                     rect,
-                    16,
+                    13,
                     TextAnchor.MiddleLeft);
             text.raycastTarget = true;
 
@@ -10665,7 +10689,7 @@ namespace VCR.Runtime.UI
                 CreateText(
                     "Placeholder",
                     rect,
-                    16,
+                    13,
                     TextAnchor.MiddleLeft);
             placeholderText.text =
                 placeholder;
