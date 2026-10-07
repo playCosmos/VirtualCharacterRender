@@ -1876,13 +1876,18 @@ namespace VCR.Editor.P8
                 var sparseWebSocketJson =
                     "{\"version\":1,\"op\":\"event.inject\",\"type\":\"local.manual\"}";
 
-                Expect(
+                var fullWebSocketAccepted =
                     webSocket.TryHandleText(
                         fullWebSocketJson,
-                        out var fullWebSocketError) &&
+                        out var fullWebSocketError);
+                var sparseWebSocketAccepted =
                     webSocket.TryHandleText(
                         sparseWebSocketJson,
-                        out var sparseWebSocketError) &&
+                        out var sparseWebSocketError);
+
+                Expect(
+                    fullWebSocketAccepted &&
+                    sparseWebSocketAccepted &&
                     string.IsNullOrEmpty(
                         fullWebSocketError) &&
                     string.IsNullOrEmpty(
@@ -1920,13 +1925,18 @@ namespace VCR.Editor.P8
                 var sparseSoopJson =
                     "{\"version\":1,\"type\":\"chat\",\"eventId\":\"scratch-soop-2\",\"text\":\"second\"}";
 
-                Expect(
+                var fullSoopAccepted =
                     soop.TryHandleText(
                         fullSoopJson,
-                        out var fullSoopError) &&
+                        out var fullSoopError);
+                var sparseSoopAccepted =
                     soop.TryHandleText(
                         sparseSoopJson,
-                        out var sparseSoopError) &&
+                        out var sparseSoopError);
+
+                Expect(
+                    fullSoopAccepted &&
+                    sparseSoopAccepted &&
                     string.IsNullOrEmpty(
                         fullSoopError) &&
                     string.IsNullOrEmpty(
@@ -2387,13 +2397,18 @@ namespace VCR.Editor.P8
                 transport.SetHandler(
                     throwingHandler);
 
-                Expect(
+                var firstQueued =
                     transport.TryQueueText(
                         "one",
-                        out var firstQueueError) &&
+                        out var firstQueueError);
+                var secondQueued =
                     transport.TryQueueText(
                         "two",
-                        out var secondQueueError),
+                        out var secondQueueError);
+
+                Expect(
+                    firstQueued &&
+                    secondQueued,
                     "throwing WebSocket handler validation must queue both messages: " +
                     firstQueueError +
                     " / " +
@@ -2471,13 +2486,18 @@ namespace VCR.Editor.P8
                                 "two")
                         });
 
-                Expect(
+                var firstOscQueued =
                     receiver.TryQueueMessage(
                         firstOsc,
-                        out var firstOscError) &&
+                        out var firstOscError);
+                var secondOscQueued =
                     receiver.TryQueueMessage(
                         secondOsc,
-                        out var secondOscError),
+                        out var secondOscError);
+
+                Expect(
+                    firstOscQueued &&
+                    secondOscQueued,
                     "throwing OSC sink validation must queue both events: " +
                     firstOscError +
                     " / " +
