@@ -4,6 +4,7 @@ using System.Reflection;
 using UniVRM10;
 using UnityEditor;
 using UnityEngine;
+using Object = UnityEngine.Object;
 using VCR.Runtime.Character;
 using VCR.Runtime.Protocols.Osc;
 using VCR.Runtime.Protocols.Vmc;
