@@ -113,11 +113,13 @@ namespace VCR.Runtime.Tracking.Mixing
             {
                 var bone =
                     (HumanoidBoneId)i;
+                NormalizedBonePose baseBone =
+                    default;
                 var hasBase =
                     basePose != null &&
                     basePose.TryGet(
                         bone,
-                        out var baseBone);
+                        out baseBone);
                 var hasLayer =
                     layerPose.TryGet(
                         bone,
