@@ -487,11 +487,12 @@ namespace VCR.Runtime.Presentation2D
             }
 
             for (var i = 0;
-                 i < bindings.Length;
+                 i < bindingCount;
                  i++)
             {
                 var binding =
-                    bindings[i];
+                    profile.GetBindingAt(
+                        i);
 
                 if (!TryReadSource(
                         binding,
