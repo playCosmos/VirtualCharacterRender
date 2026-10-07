@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VCR.Runtime.Appearance;
-using VCR.Editor.P12;
 
 namespace VCR.Editor.P11
 {
@@ -211,7 +210,7 @@ namespace VCR.Editor.P11
                             AppearanceTransitionStep>();
                 }
 
-                if (!P12TransitionDependencyAuthoringUtility
+                if (!P11TransitionDependencyAuthoringUtility
                     .TryValidateGroupMetadata(
                         transition,
                         out var metadataError))
