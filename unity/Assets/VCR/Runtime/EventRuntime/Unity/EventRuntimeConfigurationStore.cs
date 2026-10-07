@@ -26,7 +26,8 @@ namespace VCR.Runtime.EventRuntime.Unity
             }
 
             _path =
-                Path.GetFullPath(path);
+                System.IO.Path.GetFullPath(
+                    path);
         }
 
         public string Path => _path;
