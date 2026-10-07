@@ -810,6 +810,9 @@ namespace VCR.Runtime.Scene
                             applyException.Message +
                             " | rollback: " +
                             rollbackException.Message;
+
+                        SetFault(
+                            error);
                         return false;
                     }
 
