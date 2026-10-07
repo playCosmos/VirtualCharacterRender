@@ -17,7 +17,7 @@ namespace VCR.Runtime.UI
     public sealed class DesktopWindowChromeController :
         MonoBehaviour
     {
-        [SerializeField] private bool borderlessStandalone = true;
+        [SerializeField] private bool borderlessStandalone = false;
         [SerializeField, Min(0.1f)] private float borderlessRetrySeconds = 0.5f;
 
         private Vector2 _dragOffset;
@@ -53,6 +53,35 @@ namespace VCR.Runtime.UI
                 {
                     return false;
                 }
+            }
+        }
+
+        public void UseNativeChrome()
+        {
+            borderlessStandalone = false;
+            _borderlessConfirmed = false;
+            _dragging = false;
+
+            if (UnityEngine.Application.isEditor)
+            {
+                return;
+            }
+
+            try
+            {
+                if (IsBorderlessNative())
+                {
+                    SetBorderlessNative(
+                        false);
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                // Native window integration is optional for the main settings UI.
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // Fall back to the operating system window frame.
             }
         }
 
