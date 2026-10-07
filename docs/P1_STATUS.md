@@ -1,6 +1,6 @@
 # P1 Status
 
-Updated: 2026-10-02
+Updated: 2026-10-07
 
 ## Active branch
 
@@ -175,12 +175,18 @@ Current P1 source-free checks cover:
 
 The planned P1 renderer-core source implementation is complete enough to proceed to P2.
 
+Build evidence now available:
+
+- Unity 6000.3.25f1 package resolution and full project compilation succeeded in the alpha desktop build workflow
+- Windows x64 and macOS Development standalone players were generated, verified, packaged, and attached to the `v0.1.0-alpha.1` prerelease from release snapshot `7b3ca49639fe203adbabc278cc65ef5b9d5777d9`
+- the successful binary workflow is run `37583662055`
+
 Still unresolved:
 
-- Unity 6000.3.25f1 compile/package-resolution execution
-- actual P1 Windows/macOS standalone build execution
 - real platform suspend/resume behavior
+- runtime smoke evidence from the published Windows/macOS players
 - all hardware-dependent P0 evidence carried forward from the preserved P0 checkpoint
+- release signing/notarization and final performance evidence
 
 These remain validation items, not reasons to expand P1 architecture further without evidence.
 
