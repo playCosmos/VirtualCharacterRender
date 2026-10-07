@@ -26,7 +26,7 @@ namespace VCR.Runtime.UI
 {
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(40000)]
-    public sealed class ApplicationUiController :
+    public sealed partial class ApplicationUiController :
         MonoBehaviour
     {
         [Header("Runtime")]
@@ -2892,6 +2892,12 @@ namespace VCR.Runtime.UI
                     .AddComponent<
                         LayoutElement>();
             recoveryLayout.preferredWidth = 160f;
+
+            FinalizeMockupDashboard(
+                top,
+                navigation,
+                content,
+                windowChrome);
         }
 
         private void AddNavigationHeader(
@@ -5932,6 +5938,7 @@ namespace VCR.Runtime.UI
 
                 RefreshContextActions();
                 RefreshRenderViewportState();
+                RefreshMockupDashboard();
 
                 RefreshStatus();
                 RefreshContent();
@@ -7030,7 +7037,6 @@ namespace VCR.Runtime.UI
             bool trackingSelected)
         {
             var shouldReveal =
-                trackingSelected &&
                 _trackingCameraPreviewRequested;
 
             if (_trackingCameraPreviewPanel != null &&
@@ -7039,6 +7045,14 @@ namespace VCR.Runtime.UI
             {
                 _trackingCameraPreviewPanel.gameObject.SetActive(
                     shouldReveal);
+            }
+
+            if (_trackingCameraPrivacyPlaceholder != null &&
+                _trackingCameraPrivacyPlaceholder.gameObject.activeSelf ==
+                    shouldReveal)
+            {
+                _trackingCameraPrivacyPlaceholder.gameObject.SetActive(
+                    !shouldReveal);
             }
 
             var hasTexture =
@@ -7070,8 +7084,8 @@ namespace VCR.Runtime.UI
             SetButtonLabel(
                 _trackingCameraPreviewButton,
                 _trackingCameraPreviewRequested
-                    ? "Hide Camera Preview"
-                    : "Show Camera Preview");
+                    ? "카메라 미리보기 숨기기"
+                    : "카메라 미리보기 보기");
 
             RefreshDashboardGeometry(
                 _model.SelectedSection);
