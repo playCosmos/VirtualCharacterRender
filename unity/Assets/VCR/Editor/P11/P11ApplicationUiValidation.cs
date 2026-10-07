@@ -417,6 +417,9 @@ namespace VCR.Editor.P11
                     .SetPoseLayerProvider(
                         validationManual);
 
+                string poseWeightError =
+                    null;
+
                 Expect(
                     validationMixer
                         .IsExpressionLayerProvider(
@@ -428,7 +431,7 @@ namespace VCR.Editor.P11
                     validationMixer
                         .TrySetPrimaryPoseLayerWeight(
                             0.35f,
-                            out var poseWeightError) &&
+                            out poseWeightError) &&
                     Math.Abs(
                         validationMixer
                             .PrimaryPoseLayerWeight -
