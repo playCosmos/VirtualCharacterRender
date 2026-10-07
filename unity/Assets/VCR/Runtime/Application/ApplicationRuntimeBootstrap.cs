@@ -258,6 +258,48 @@ namespace VCR.Runtime.Application
             }
         }
 
+        public bool ReloadSavedConfiguration(
+            out string error)
+        {
+            error = null;
+
+            ResolveSceneRuntime();
+
+            if (sceneRuntime == null)
+            {
+                error =
+                    "Scene runtime is unavailable.";
+                return false;
+            }
+
+            try
+            {
+                _configurationStore ??=
+                    new RuntimeConfigurationStore(
+                        ResolveConfigurationPath(
+                            ApplicationLaunchOptions.Parse(
+                                Environment.GetCommandLineArgs())));
+
+                if (!_configurationStore.TryLoad(
+                        out var configuration,
+                        out error))
+                {
+                    return false;
+                }
+
+                sceneRuntime.ApplyConfiguration(
+                    configuration);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Runtime configuration load/apply failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
         public bool SaveConfiguration(
             out string error)
         {
