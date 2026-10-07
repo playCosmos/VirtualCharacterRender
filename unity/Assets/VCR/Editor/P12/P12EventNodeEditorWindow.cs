@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VCR.Editor.P11;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.EventRuntime.Unity;
 
@@ -365,7 +366,7 @@ namespace VCR.Editor.P12
 
                 if (string.IsNullOrWhiteSpace(
                         rawGroup) ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .TryNormalize(
                             rawGroup,
                             out group,
@@ -498,7 +499,7 @@ namespace VCR.Editor.P12
             }
 
             var paths =
-                P12GraphGroupPathUtility
+                P11GraphGroupPathUtility
                     .CaptureHierarchyPaths(
                         rawGroups);
 
@@ -725,13 +726,13 @@ namespace VCR.Editor.P12
             string destinationError =
                 null;
             var sourceValid =
-                P12GraphGroupPathUtility
+                P11GraphGroupPathUtility
                     .TryNormalize(
                         source,
                         out normalizedSource,
                         out sourceError);
             var destinationValid =
-                P12GraphGroupPathUtility
+                P11GraphGroupPathUtility
                     .TryNormalize(
                         _groupHierarchyDestination,
                         out normalizedDestination,
@@ -791,7 +792,7 @@ namespace VCR.Editor.P12
                         .FindPropertyRelative(
                             "GraphGroup");
 
-                if (!P12GraphGroupPathUtility
+                if (!P11GraphGroupPathUtility
                     .TryRewrite(
                         property.stringValue,
                         normalizedSource,
@@ -827,7 +828,7 @@ namespace VCR.Editor.P12
         private void ClearSerializedGroupHierarchy(
             string source)
         {
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     source,
                     out var normalizedSource,
@@ -858,7 +859,7 @@ namespace VCR.Editor.P12
                         .FindPropertyRelative(
                             "GraphGroup");
 
-                if (!P12GraphGroupPathUtility
+                if (!P11GraphGroupPathUtility
                     .Matches(
                         property.stringValue,
                         normalizedSource,
@@ -894,7 +895,7 @@ namespace VCR.Editor.P12
             bool enabled,
             bool includeDescendants)
         {
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     source,
                     out var normalizedSource,
@@ -928,7 +929,7 @@ namespace VCR.Editor.P12
                             "GraphGroup")
                         .stringValue;
 
-                if (!P12GraphGroupPathUtility
+                if (!P11GraphGroupPathUtility
                     .Matches(
                         group,
                         normalizedSource,
@@ -978,7 +979,7 @@ namespace VCR.Editor.P12
                             "GraphGroup")
                         .stringValue;
 
-                if (P12GraphGroupPathUtility
+                if (P11GraphGroupPathUtility
                     .Matches(
                         group,
                         groupPath,
@@ -1103,7 +1104,7 @@ namespace VCR.Editor.P12
                             "GraphGroup")
                         .stringValue;
 
-                if (P12GraphGroupPathUtility
+                if (P11GraphGroupPathUtility
                     .Matches(
                         candidateGroup,
                         group,
