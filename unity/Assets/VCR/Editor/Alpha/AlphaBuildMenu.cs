@@ -91,9 +91,13 @@ namespace VCR.Editor.Alpha
             P0TransparentOutputMenu.ConfigureProjectBaseline();
             AssetDatabase.SaveAssets();
 
+            var absoluteLocation =
+                ResolveRepositoryOutputPath(
+                    location);
+
             var directory =
                 Path.GetDirectoryName(
-                    location);
+                    absoluteLocation);
 
             if (!string.IsNullOrWhiteSpace(
                     directory))
@@ -113,7 +117,7 @@ namespace VCR.Editor.Alpha
                                     .ScenePath
                             },
                         locationPathName =
-                            location,
+                            absoluteLocation,
                         target =
                             target,
                         options =
@@ -143,7 +147,7 @@ namespace VCR.Editor.Alpha
                 $"target={target}, " +
                 $"size={summary.totalSize} bytes, " +
                 $"time={summary.totalTime}, " +
-                $"output='{location}'. " +
+                $"output='{absoluteLocation}'. " +
                 "The build contains current runtime features including webcam/ARKit/VMC integrations, " +
                 "but those physical-input paths start disabled in the alpha scene.");
 
@@ -166,6 +170,32 @@ namespace VCR.Editor.Alpha
         {
             ExitWithResult(
                 BuildMac());
+        }
+
+        private static string ResolveRepositoryOutputPath(
+            string relativePath)
+        {
+            var projectRoot =
+                Directory.GetParent(
+                    Application.dataPath)?.FullName;
+
+            var repositoryRoot =
+                projectRoot == null
+                    ? null
+                    : Directory.GetParent(
+                        projectRoot)?.FullName;
+
+            if (string.IsNullOrWhiteSpace(
+                    repositoryRoot))
+            {
+                throw new InvalidOperationException(
+                    "VCR Alpha build could not resolve the repository root from Application.dataPath.");
+            }
+
+            return Path.GetFullPath(
+                Path.Combine(
+                    repositoryRoot,
+                    relativePath));
         }
 
         private static void ExitWithResult(
