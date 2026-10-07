@@ -1,0 +1,37 @@
+{
+  "name": "VCR.Editor.Alpha",
+  "rootNamespace": "VCR.Editor.Alpha",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Editor.P13",
+    "VCR.Runtime.Application",
+    "VCR.Runtime.Appearance",
+    "VCR.Runtime.Appearance.Unity",
+    "VCR.Runtime.Character",
+    "VCR.Runtime.Diagnostics",
+    "VCR.Runtime.Environment",
+    "VCR.Runtime.EventRuntime.Unity",
+    "VCR.Runtime.Events.Unity",
+    "VCR.Runtime.Materials.Unity",
+    "VCR.Runtime.Presentation2D",
+    "VCR.Runtime.Protocols.VmcUnity",
+    "VCR.Runtime.Scene",
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Tracking.ArKitUnity",
+    "VCR.Runtime.Tracking.MediaPipe",
+    "VCR.Runtime.Tracking.Mixing",
+    "VCR.Runtime.Tracking.Routing",
+    "VCR.Runtime.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
