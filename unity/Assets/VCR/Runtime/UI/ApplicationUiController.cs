@@ -79,6 +79,7 @@ namespace VCR.Runtime.UI
         private Image _renderViewportBackground;
         private Text _renderViewportEmptyStateText;
         private RectTransform _trackingCameraPreviewPanel;
+        private RectTransform _trackingCameraPrivacyPlaceholder;
         private RawImage _trackingCameraPreviewImage;
         private Text _trackingCameraPreviewPrivacyText;
         private Button _trackingCameraPreviewButton;
@@ -490,6 +491,7 @@ namespace VCR.Runtime.UI
             _renderViewportBackground = null;
             _renderViewportEmptyStateText = null;
             _trackingCameraPreviewPanel = null;
+            _trackingCameraPrivacyPlaceholder = null;
             _trackingCameraPreviewImage = null;
             _trackingCameraPreviewPrivacyText = null;
             _trackingCameraPreviewButton = null;
@@ -1819,6 +1821,67 @@ namespace VCR.Runtime.UI
                 320f,
                 out _outputDashboardContent);
 
+            CreateDashboardTabRow(
+                _trackingDashboardContent,
+                "웹캠",
+                "ARKit (Mac)",
+                "MediaPipe");
+            CreateDashboardTabRow(
+                _motionDashboardContent,
+                "기본 동작",
+                "표정 프리셋");
+            CreateDashboardTabRow(
+                _environmentDashboardContent,
+                "배경",
+                "조명",
+                "카메라");
+
+            _trackingCameraPrivacyPlaceholder =
+                CreateRect(
+                    "Tracking Camera Privacy Placeholder",
+                    _trackingDashboardContent);
+            var trackingPrivacyLayout =
+                _trackingCameraPrivacyPlaceholder.gameObject
+                    .AddComponent<LayoutElement>();
+            trackingPrivacyLayout.preferredHeight = 92f;
+            trackingPrivacyLayout.flexibleHeight = 1f;
+            var trackingPrivacyBackground =
+                _trackingCameraPrivacyPlaceholder.gameObject
+                    .AddComponent<Image>();
+            trackingPrivacyBackground.color =
+                new Color(
+                    0.075f,
+                    0.085f,
+                    0.105f,
+                    1f);
+            var trackingPrivacyText =
+                CreateText(
+                    "Tracking Camera Privacy Text",
+                    _trackingCameraPrivacyPlaceholder,
+                    13,
+                    TextAnchor.MiddleCenter);
+            trackingPrivacyText.text =
+                "<b>카메라 미리보기 숨김</b>\n<size=11><color=#A6B0BF>(버튼을 눌러서만 표시됩니다)</color></size>";
+            trackingPrivacyText.supportRichText =
+                true;
+            Stretch(
+                trackingPrivacyText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(8f, 8f),
+                new Vector2(-8f, -8f));
+
+            _trackingCameraPreviewPanel.SetParent(
+                _trackingDashboardContent,
+                false);
+            var trackingPreviewLayout =
+                _trackingCameraPreviewPanel.gameObject
+                    .AddComponent<LayoutElement>();
+            trackingPreviewLayout.preferredHeight = 92f;
+            trackingPreviewLayout.flexibleHeight = 1f;
+            _trackingCameraPreviewPanel.gameObject.SetActive(
+                false);
+
             _contextActions =
                 CreateRect(
                     "Section Actions",
@@ -1994,7 +2057,7 @@ namespace VCR.Runtime.UI
 
             _trackingPreviousButton =
                 CreateButton(
-                    "Prev Source",
+                    "이전 소스",
                     _trackingDashboardContent,
                     SelectPreviousTrackingControl);
             _trackingPreviousButton.gameObject
@@ -2003,7 +2066,7 @@ namespace VCR.Runtime.UI
 
             _trackingToggleButton =
                 CreateButton(
-                    "Toggle Tracking",
+                    "트래킹 전환",
                     _trackingDashboardContent,
                     ToggleSelectedTrackingControl);
             _trackingToggleButton.gameObject
@@ -2012,7 +2075,7 @@ namespace VCR.Runtime.UI
 
             _trackingRecoverButton =
                 CreateButton(
-                    "Recover Source",
+                    "소스 복구",
                     _trackingDashboardContent,
                     RecoverSelectedTrackingControl);
             _trackingRecoverButton.gameObject
@@ -2021,7 +2084,7 @@ namespace VCR.Runtime.UI
 
             _trackingNextButton =
                 CreateButton(
-                    "Next Source",
+                    "다음 소스",
                     _trackingDashboardContent,
                     SelectNextTrackingControl);
             _trackingNextButton.gameObject
@@ -2030,7 +2093,7 @@ namespace VCR.Runtime.UI
 
             _trackingCameraPreviewButton =
                 CreateButton(
-                    "Show Camera Preview",
+                    "카메라 미리보기 보기",
                     _trackingDashboardContent,
                     ToggleTrackingCameraPreview);
             _trackingCameraPreviewButton.gameObject
@@ -2039,7 +2102,7 @@ namespace VCR.Runtime.UI
 
             _apply720p60Button =
                 CreateButton(
-                    "Apply 720p60",
+                    "720p / 60 FPS",
                     _outputDashboardContent,
                     Apply720p60);
             _apply720p60Button.gameObject
@@ -2048,7 +2111,7 @@ namespace VCR.Runtime.UI
 
             _apply1080p60Button =
                 CreateButton(
-                    "Apply 1080p60",
+                    "1080p / 60 FPS",
                     _outputDashboardContent,
                     Apply1080p60);
             _apply1080p60Button.gameObject
@@ -2057,7 +2120,7 @@ namespace VCR.Runtime.UI
 
             _outputTransparentButton =
                 CreateButton(
-                    "Transparent",
+                    "투명 배경",
                     _outputDashboardContent,
                     ToggleOverlayTransparent);
             _outputTransparentButton.gameObject
@@ -2066,7 +2129,7 @@ namespace VCR.Runtime.UI
 
             _outputTopmostButton =
                 CreateButton(
-                    "Topmost",
+                    "항상 위",
                     _outputDashboardContent,
                     ToggleOverlayTopmost);
             _outputTopmostButton.gameObject
@@ -2075,7 +2138,7 @@ namespace VCR.Runtime.UI
 
             _outputClickThroughButton =
                 CreateButton(
-                    "Click-through",
+                    "클릭 통과",
                     _outputDashboardContent,
                     ToggleOverlayClickThrough);
             _outputClickThroughButton.gameObject
@@ -2089,7 +2152,7 @@ namespace VCR.Runtime.UI
                     15,
                     TextAnchor.MiddleLeft);
             _motionPoseWeightLabel.text =
-                "Pose Weight";
+                "포즈 강도";
             _motionPoseWeightLabel.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 110f;
@@ -2162,7 +2225,7 @@ namespace VCR.Runtime.UI
 
             _environmentTransitionModeButton =
                 CreateButton(
-                    "Transition: Cut",
+                    "전환: Cut",
                     _environmentDashboardContent,
                     SelectNextEnvironmentTransitionMode);
             _environmentTransitionModeButton.gameObject
@@ -2182,7 +2245,7 @@ namespace VCR.Runtime.UI
 
             _environmentApplyStateButton =
                 CreateButton(
-                    "Apply State",
+                    "배경 적용",
                     _environmentDashboardContent,
                     ApplyEnvironmentState);
             _environmentApplyStateButton.gameObject
@@ -2528,7 +2591,7 @@ namespace VCR.Runtime.UI
                     12,
                     TextAnchor.MiddleLeft);
             appearanceQuickLabel.text =
-                "QUICK LOOK";
+                "빠른 외형";
             appearanceQuickLabel.fontStyle =
                 FontStyle.Bold;
             appearanceQuickLabel.color =
@@ -2543,7 +2606,7 @@ namespace VCR.Runtime.UI
 
             _appearancePreviousButton =
                 CreateButton(
-                    "Previous Look",
+                    "이전 외형",
                     _appearanceActions,
                     ApplyPreviousAppearancePreset);
             _appearancePreviousButton.gameObject
@@ -2552,7 +2615,7 @@ namespace VCR.Runtime.UI
 
             _appearanceNextButton =
                 CreateButton(
-                    "Next Look",
+                    "다음 외형",
                     _appearanceActions,
                     ApplyNextAppearancePreset);
             _appearanceNextButton.gameObject
@@ -2561,7 +2624,7 @@ namespace VCR.Runtime.UI
 
             _appearanceTransitionButton =
                 CreateButton(
-                    "Transition: Immediate",
+                    "전환: 즉시",
                     _appearanceActions,
                     SelectNextAppearanceTransition);
             _appearanceTransitionButton.gameObject
@@ -2570,7 +2633,7 @@ namespace VCR.Runtime.UI
 
             _appearanceRestoreButton =
                 CreateButton(
-                    "Restore Default",
+                    "기본 복원",
                     _appearanceActions,
                     RestoreDefaultAppearance);
             _appearanceRestoreButton.gameObject
@@ -2579,7 +2642,7 @@ namespace VCR.Runtime.UI
 
             _appearancePreviewButton =
                 CreateButton(
-                    "Preview Transition",
+                    "전환 미리보기",
                     _appearanceActions,
                     PreviewSelectedAppearanceTransition);
             _appearancePreviewButton.gameObject
@@ -2588,7 +2651,7 @@ namespace VCR.Runtime.UI
 
             _appearanceCancelButton =
                 CreateButton(
-                    "Cancel Transition",
+                    "전환 취소",
                     _appearanceActions,
                     CancelAppearanceTransition);
             _appearanceCancelButton.gameObject
@@ -7097,7 +7160,7 @@ namespace VCR.Runtime.UI
                 {
                     SetTextIfChanged(
                         _trackingCameraPreviewPrivacyText,
-                        "Camera preview was explicitly requested, but no video surface is connected in this alpha.");
+                        "카메라 미리보기를 요청했지만 연결된 영상 소스가 없습니다.");
                 }
             }
 
@@ -9810,6 +9873,49 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void CreateDashboardTabRow(
+            Transform parent,
+            params string[] labels)
+        {
+            var row =
+                CreateRect(
+                    "Dashboard Tabs",
+                    parent);
+            var rowLayoutElement =
+                row.gameObject
+                    .AddComponent<LayoutElement>();
+            rowLayoutElement.preferredHeight = 30f;
+            rowLayoutElement.flexibleHeight = 0f;
+
+            var layout =
+                row.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 4f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+
+            if (labels == null)
+            {
+                return;
+            }
+
+            for (var i = 0;
+                 i < labels.Length;
+                 i++)
+            {
+                var tabLabel =
+                    labels[i];
+                CreateButton(
+                    tabLabel,
+                    row,
+                    () => ShowUiMessage(
+                        tabLabel +
+                        " 탭이 선택되었습니다."));
+            }
+        }
+
         private Button CreateToolbarButton(
             Transform parent,
             string label,
@@ -10533,7 +10639,7 @@ namespace VCR.Runtime.UI
             return mode switch
             {
                 EnvironmentTransitionMode.Cut =>
-                    "Transition: Cut",
+                    "전환: Cut",
                 EnvironmentTransitionMode.Fade =>
                     "Transition: Fade",
                 EnvironmentTransitionMode.Crossfade =>
