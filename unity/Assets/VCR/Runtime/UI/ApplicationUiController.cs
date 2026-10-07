@@ -1186,9 +1186,9 @@ namespace VCR.Runtime.UI
             navigation.pivot =
                 new Vector2(0f, 1f);
             navigation.offsetMin =
-                new Vector2(8f, 8f);
+                new Vector2(8f, 318f);
             navigation.offsetMax =
-                new Vector2(220f, -54f);
+                new Vector2(214f, -54f);
 
             var navImage =
                 navigation.gameObject
@@ -1206,11 +1206,11 @@ namespace VCR.Runtime.UI
                         VerticalLayoutGroup>();
             navLayout.padding =
                 new RectOffset(
-                    12,
-                    12,
-                    16,
-                    16);
-            navLayout.spacing = 8f;
+                    8,
+                    8,
+                    8,
+                    8);
+            navLayout.spacing = 4f;
             navLayout.childControlHeight = true;
             navLayout.childForceExpandHeight = false;
             navLayout.childAlignment =
@@ -1220,24 +1220,14 @@ namespace VCR.Runtime.UI
                 new[]
                 {
                     ApplicationUiSection.Character,
-                    ApplicationUiSection.Tracking,
                     ApplicationUiSection.MotionExpression,
+                    ApplicationUiSection.Tracking,
+                    ApplicationUiSection.Expression,
+                    ApplicationUiSection.Appearance,
                     ApplicationUiSection.Environment,
                     ApplicationUiSection.CameraOutput,
                     ApplicationUiSection.Settings
                 };
-
-            var advancedSections =
-                new[]
-                {
-                    ApplicationUiSection.MaterialShader,
-                    ApplicationUiSection.Events,
-                    ApplicationUiSection.Diagnostics
-                };
-
-            AddNavigationHeader(
-                navigation,
-                "WORKSPACE");
 
             for (var i = 0;
                  i < primarySections.Length;
@@ -1248,18 +1238,41 @@ namespace VCR.Runtime.UI
                     primarySections[i]);
             }
 
-            AddNavigationHeader(
-                navigation,
-                "ADVANCED");
-
-            for (var i = 0;
-                 i < advancedSections.Length;
-                 i++)
-            {
-                AddNavigationSectionButton(
+            _advancedNavigationToggleButton =
+                CreateButton(
+                    "고급 도구 ▾",
                     navigation,
-                    advancedSections[i]);
-            }
+                    ToggleAdvancedNavigation);
+            _advancedNavigationToggleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredHeight = 30f;
+
+            _advancedNavigationGroup =
+                CreateRect(
+                    "Advanced Navigation",
+                    navigation);
+            var advancedLayoutElement =
+                _advancedNavigationGroup.gameObject
+                    .AddComponent<LayoutElement>();
+            advancedLayoutElement.preferredHeight = 126f;
+            var advancedLayout =
+                _advancedNavigationGroup.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            advancedLayout.spacing = 4f;
+            advancedLayout.childControlHeight = true;
+            advancedLayout.childForceExpandHeight = false;
+
+            AddNavigationSectionButton(
+                _advancedNavigationGroup,
+                ApplicationUiSection.MaterialShader);
+            AddNavigationSectionButton(
+                _advancedNavigationGroup,
+                ApplicationUiSection.Events);
+            AddNavigationSectionButton(
+                _advancedNavigationGroup,
+                ApplicationUiSection.Diagnostics);
+            _advancedNavigationGroup.gameObject.SetActive(
+                false);
 
             _renderViewportFrame =
                 CreateRect(
@@ -2665,7 +2678,7 @@ namespace VCR.Runtime.UI
             var layout =
                 button.gameObject
                     .AddComponent<LayoutElement>();
-            layout.preferredHeight = 42f;
+            layout.preferredHeight = 54f;
 
             _sectionButtons[section] =
                 button;
@@ -10015,9 +10028,8 @@ namespace VCR.Runtime.UI
                 string.Empty;
 
             var expected =
-                selected && available
-                    ? "> " + title
-                    : "  " + title;
+                BuildNavigationDisplayText(
+                    title);
 
             if (!string.Equals(
                     label.text,
@@ -10028,10 +10040,10 @@ namespace VCR.Runtime.UI
                     expected;
             }
 
+            label.supportRichText = true;
             label.fontStyle =
-                selected && available
-                    ? FontStyle.Bold
-                    : FontStyle.Normal;
+                FontStyle.Normal;
+            label.lineSpacing = 0.88f;
             label.color =
                 !available
                     ? new Color(
@@ -10039,17 +10051,55 @@ namespace VCR.Runtime.UI
                         0.46f,
                         0.52f,
                         1f)
-                    : selected
-                        ? new Color(
-                            0.58f,
-                            0.76f,
-                            1f,
-                            1f)
-                        : new Color(
-                            0.90f,
-                            0.92f,
-                            0.95f,
-                            1f);
+                    : new Color(
+                        0.96f,
+                        0.97f,
+                        1f,
+                        1f);
+        }
+
+        private static string BuildNavigationDisplayText(
+            string title)
+        {
+            return title switch
+            {
+                "캐릭터" =>
+                    "<b>캐릭터</b>\n<size=11><color=#A6B0BF>모델 / 외형 / 동작</color></size>",
+                "모션 & 애니메이션" =>
+                    "<b>모션 & 애니메이션</b>\n<size=11><color=#A6B0BF>포즈 / 제스처 / 타임라인</color></size>",
+                "트래킹" =>
+                    "<b>트래킹</b>\n<size=11><color=#A6B0BF>웹캠 / ARKit / MediaPipe</color></size>",
+                "표정" =>
+                    "<b>표정</b>\n<size=11><color=#A6B0BF>감정 / 립싱크 / 파라미터</color></size>",
+                "의상 & 액세서리" =>
+                    "<b>의상 & 액세서리</b>\n<size=11><color=#A6B0BF>프리셋 / 퀵체인지 / 이펙트</color></size>",
+                "배경 & 스테이지" =>
+                    "<b>배경 & 스테이지</b>\n<size=11><color=#A6B0BF>배경 / 조명 / 카메라</color></size>",
+                "출력" =>
+                    "<b>출력</b>\n<size=11><color=#A6B0BF>렌더링 / 해상도 / 프레임</color></size>",
+                "설정" =>
+                    "<b>설정</b>\n<size=11><color=#A6B0BF>일반 / 단축키 / 언어</color></size>",
+                _ =>
+                    title ?? string.Empty
+            };
+        }
+
+        private void ToggleAdvancedNavigation()
+        {
+            _advancedNavigationExpanded =
+                !_advancedNavigationExpanded;
+
+            if (_advancedNavigationGroup != null)
+            {
+                _advancedNavigationGroup.gameObject.SetActive(
+                    _advancedNavigationExpanded);
+            }
+
+            SetButtonLabel(
+                _advancedNavigationToggleButton,
+                _advancedNavigationExpanded
+                    ? "고급 도구 ▴"
+                    : "고급 도구 ▾");
         }
 
         private string GetAppearanceTransitionButtonLabel(
