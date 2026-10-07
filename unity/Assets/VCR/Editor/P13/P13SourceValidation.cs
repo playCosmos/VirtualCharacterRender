@@ -231,6 +231,9 @@ namespace VCR.Editor.P13
                     "2D host unload must return the fake backend to Ready",
                     failures);
 
+                string postReloadApplyError =
+                    null;
+
                 Expect(
                     runtime.TryLoadModel(
                         new Character2DModelRequest(
@@ -239,7 +242,7 @@ namespace VCR.Editor.P13
                             "/tmp/model-b"),
                         out var reloadError) &&
                     runtime.ProcessLatest(
-                        out var postReloadApplyError) &&
+                        out postReloadApplyError) &&
                     backend.ApplyCount ==
                         4,
                     "2D host unload/reload must reset frame-reference cache so the current tracking snapshot is applied to the new model: " +
@@ -296,12 +299,15 @@ namespace VCR.Editor.P13
                     Character2DInputDomain.Face |
                     Character2DInputDomain.Expressions);
 
+                string recoveredProviderError =
+                    null;
+
                 Expect(
                     runtime.enabled &&
                     backend.Status.State ==
                         Character2DBackendState.ModelLoaded &&
                     runtime.ProcessLatest(
-                        out var recoveredProviderError) &&
+                        out recoveredProviderError) &&
                     backend.ApplyCount ==
                         5,
                     "2D host must re-enable from explicit dependency reconfiguration without reloading the model: " +
@@ -736,6 +742,9 @@ namespace VCR.Editor.P13
                         DefaultInputValue = 0.25f
                     });
 
+                string mappedApplyError =
+                    null;
+
                 Expect(
                     runtime.TryLoadModel(
                         new Character2DModelRequest(
@@ -744,7 +753,7 @@ namespace VCR.Editor.P13
                             "/tmp/mapped-model"),
                         out var mappedLoadError) &&
                     runtime.ProcessLatest(
-                        out var mappedApplyError) &&
+                        out mappedApplyError) &&
                     backend.ApplyCount == 0 &&
                     backend.ParameterApplyCount == 1 &&
                     backend.LastParameterValues !=
