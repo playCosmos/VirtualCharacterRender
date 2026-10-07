@@ -982,6 +982,13 @@ namespace VCR.Editor.P1
 
                 Expect(
                     transactionalApplyFailed &&
+                    scene.State ==
+                        SceneRuntimeState.Faulted &&
+                    !string.IsNullOrWhiteSpace(
+                        scene.Status.LastError) &&
+                    scene.Status.LastError.Contains(
+                        "rollback incomplete",
+                        StringComparison.Ordinal) &&
                     afterTransactionalFailure.Rendering.Width ==
                         beforeTransactionalFailure.Rendering.Width &&
                     afterTransactionalFailure.Rendering.Height ==
@@ -1004,7 +1011,16 @@ namespace VCR.Editor.P1
                         beforeTransactionalFailure.Overlay.Topmost &&
                     afterTransactionalFailure.Overlay.ClickThrough ==
                         beforeTransactionalFailure.Overlay.ClickThrough,
-                    "failed scene configuration apply must rollback earlier render/camera/light/environment mutations instead of leaving a partial configuration",
+                    "incomplete scene configuration rollback must preserve recovered values where possible while marking the scene Faulted",
+                    failures);
+
+                Expect(
+                    scene.Initialize() &&
+                    scene.State ==
+                        SceneRuntimeState.Ready &&
+                    string.IsNullOrWhiteSpace(
+                        scene.Status.LastError),
+                    "scene initialization must recover an incomplete configuration rollback fault before later validation continues",
                     failures);
 
                 configurationTestDirectory =
