@@ -32,15 +32,23 @@ namespace VCR.Editor.P0
         [MenuItem("VCR/P0/Validate Current Platform Shader Bundle")]
         public static void ValidateCurrentPlatformBundle()
         {
-#if UNITY_EDITOR_WIN
-            var platformFolder = "windows";
-#elif UNITY_EDITOR_OSX
-            var platformFolder = "macos";
-#else
-            Debug.LogError(
-                "VCR P0 shader bundle: current Editor platform is not a supported P0 desktop target.");
-            return;
-#endif
+            var platformFolder =
+                EditorUserBuildSettings.activeBuildTarget switch
+                {
+                    BuildTarget.StandaloneWindows64 =>
+                        "windows",
+                    BuildTarget.StandaloneOSX =>
+                        "macos",
+                    _ =>
+                        null
+                };
+
+            if (platformFolder == null)
+            {
+                Debug.LogError(
+                    "VCR P0 shader bundle: active build target is not a supported desktop target.");
+                return;
+            }
 
             var bundlePath =
                 Path.GetFullPath(
