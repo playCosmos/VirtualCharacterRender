@@ -154,7 +154,7 @@ The source architecture is complete enough for a checkpoint, but these evidence 
 
 `StateChanged` notification is subscriber-isolated. A throwing UI/plugin observer cannot interrupt the already-committed environment state change, update dispatch, or transition setup; failures are counted as `environment.state_subscriber_failures`.
 
-Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime boundary. Later caller mutation of the original binding objects cannot rewrite the live environment configuration, and staged binding application must succeed before the new binding set is committed; failed applies restore the previous active binding state on a best-effort basis.
+Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime boundary. Later caller mutation of the original binding objects cannot rewrite the live environment configuration, and staged binding application must succeed before the new binding set is committed. Immediate state switches and non-Cut transition root preparation now snapshot every bound root's `activeSelf` value before mutation and restore that exact snapshot if a later `SetActive` fails; rollback failures remain explicit in the returned error instead of silently leaving partially toggled roots.
 
 Lighting configuration now follows the same fail-closed contract. `ConfigureLightingTargets(..., out error)` and `SetLightingProfile(..., out error)` convert validation/apply exceptions into structured failures, continue isolating individual target exceptions for diagnostics, and restore the previous target set/profile when a staged apply fails after another target has already changed.
 
