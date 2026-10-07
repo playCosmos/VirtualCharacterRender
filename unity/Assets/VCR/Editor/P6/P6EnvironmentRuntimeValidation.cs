@@ -1624,8 +1624,8 @@ namespace VCR.Editor.P6
                         1f) <
                         0.0001f &&
                     !string.IsNullOrWhiteSpace(
-                        runtime.Status.LastError) &&
-                    runtime.Status.LastError.Contains(
+                        runtime.Status.Error) &&
+                    runtime.Status.Error.Contains(
                         "Environment transition completion failed",
                         StringComparison.Ordinal),
                     "failed final root commit must remain an explicit active 100-percent completion-pending transition",
@@ -1721,7 +1721,7 @@ namespace VCR.Editor.P6
                     !day.activeSelf &&
                     replacementNight.activeSelf &&
                     string.IsNullOrWhiteSpace(
-                        runtime.Status.LastError) &&
+                        runtime.Status.Error) &&
                     TryGetMetric(
                         recoveredMetrics,
                         "environment.transition_completion_pending",
