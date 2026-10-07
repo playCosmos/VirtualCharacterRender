@@ -11,7 +11,8 @@
     "VCR.Runtime.Scene",
     "VCR.Runtime.Materials.Unity",
     "VCR.Runtime.Tracking",
-    "VCR.Runtime.Tracking.Mixing"
+    "VCR.Runtime.Tracking.Mixing",
+    "VCR.Runtime.Materials"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
