@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using VCR.Editor.P11;
 using VCR.Runtime.EventRuntime;
 
 namespace VCR.Editor.P12
@@ -57,7 +58,7 @@ namespace VCR.Editor.P12
                 if (!string.IsNullOrWhiteSpace(
                         rule.GraphGroup))
                 {
-                    if (!P12GraphGroupPathUtility
+                    if (!P11GraphGroupPathUtility
                         .TryNormalize(
                             rule.GraphGroup,
                             out var normalizedGroup,
@@ -148,7 +149,7 @@ namespace VCR.Editor.P12
 
                 if (string.IsNullOrWhiteSpace(
                         rawGroup) ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .TryNormalize(
                             rawGroup,
                             out group,
@@ -256,7 +257,7 @@ namespace VCR.Editor.P12
 
             if (string.IsNullOrWhiteSpace(
                     rawGroup) ||
-                !P12GraphGroupPathUtility
+                !P11GraphGroupPathUtility
                     .TryNormalize(
                         rawGroup,
                         out group,
@@ -291,7 +292,7 @@ namespace VCR.Editor.P12
                     rules[index]
                         ?.GraphGroup;
 
-                if (P12GraphGroupPathUtility
+                if (P11GraphGroupPathUtility
                         .TryNormalize(
                             candidateRaw,
                             out var candidateGroup,
@@ -325,7 +326,7 @@ namespace VCR.Editor.P12
             bool enabled,
             bool includeDescendants)
         {
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     group,
                     out var normalized,
@@ -341,7 +342,7 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule == null ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .Matches(
                             rule.GraphGroup,
                             normalized,
@@ -379,7 +380,7 @@ namespace VCR.Editor.P12
                 }
             }
 
-            return P12GraphGroupPathUtility
+            return P11GraphGroupPathUtility
                 .CaptureHierarchyPaths(
                     groups);
         }
@@ -395,12 +396,12 @@ namespace VCR.Editor.P12
             affectedRules = 0;
             error = null;
 
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     sourceGroupPath,
                     out var source,
                     out error) ||
-                !P12GraphGroupPathUtility
+                !P11GraphGroupPathUtility
                     .TryNormalize(
                         destinationGroupPath,
                         out var destination,
@@ -434,7 +435,7 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule == null ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .TryRewrite(
                             rule.GraphGroup,
                             source,
@@ -470,7 +471,7 @@ namespace VCR.Editor.P12
             affectedRules = 0;
             error = null;
 
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     sourceGroupPath,
                     out var source,
@@ -484,7 +485,7 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule == null ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .Matches(
                             rule.GraphGroup,
                             source,
@@ -514,7 +515,7 @@ namespace VCR.Editor.P12
                 string groupPath,
                 bool includeDescendants)
         {
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     groupPath,
                     out var normalized,
@@ -532,7 +533,7 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule != null &&
-                    P12GraphGroupPathUtility
+                    P11GraphGroupPathUtility
                         .Matches(
                             rule.GraphGroup,
                             normalized,
@@ -561,12 +562,12 @@ namespace VCR.Editor.P12
             duplicatedCount = 0;
             error = null;
 
-            if (!P12GraphGroupPathUtility
+            if (!P11GraphGroupPathUtility
                 .TryNormalize(
                     sourceGroupPath,
                     out var source,
                     out error) ||
-                !P12GraphGroupPathUtility
+                !P11GraphGroupPathUtility
                     .TryNormalize(
                         destinationGroupPath,
                         out var destination,
@@ -615,7 +616,7 @@ namespace VCR.Editor.P12
                      Array.Empty<EventRuntimeRule>())
             {
                 if (rule == null ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .Matches(
                             rule.GraphGroup,
                             source,
@@ -629,7 +630,7 @@ namespace VCR.Editor.P12
                         rule);
 
                 if (clone == null ||
-                    !P12GraphGroupPathUtility
+                    !P11GraphGroupPathUtility
                         .TryRewrite(
                             rule.GraphGroup,
                             source,
