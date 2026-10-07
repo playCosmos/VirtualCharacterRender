@@ -916,6 +916,8 @@ namespace VCR.Runtime.UI
             }
 
             uiFont ??=
+                Resources.Load<Font>(
+                    "Fonts/Pretendard-Regular") ??
                 Resources.GetBuiltinResource<Font>(
                     "LegacyRuntime.ttf");
 
@@ -944,12 +946,12 @@ namespace VCR.Runtime.UI
 
             var top =
                 CreateRect(
-                    "Status Bar",
+                    "Application Title Bar",
                     _root);
 
             AnchorTop(
                 top,
-                56f,
+                46f,
                 left: 0f,
                 right: 0f);
 
@@ -958,16 +960,65 @@ namespace VCR.Runtime.UI
                     .AddComponent<Image>();
             topImage.color =
                 new Color(
-                    0.09f,
-                    0.10f,
-                    0.12f,
+                    0.045f,
+                    0.05f,
+                    0.062f,
                     1f);
+
+            var windowChrome =
+                GetComponent<
+                    DesktopWindowChromeController>() ??
+                gameObject.AddComponent<
+                    DesktopWindowChromeController>();
+
+            var appMark =
+                CreateRect(
+                    "Application Mark",
+                    top);
+            appMark.anchorMin =
+                new Vector2(0f, 0.5f);
+            appMark.anchorMax =
+                new Vector2(0f, 0.5f);
+            appMark.pivot =
+                new Vector2(0f, 0.5f);
+            appMark.offsetMin =
+                new Vector2(12f, -13f);
+            appMark.offsetMax =
+                new Vector2(38f, 13f);
+            var appMarkImage =
+                appMark.gameObject
+                    .AddComponent<Image>();
+            appMarkImage.color =
+                new Color(
+                    0.12f,
+                    0.42f,
+                    0.86f,
+                    1f);
+            appMarkImage.raycastTarget =
+                false;
+            var appMarkText =
+                CreateText(
+                    "Application Mark Text",
+                    appMark,
+                    13,
+                    TextAnchor.MiddleCenter);
+            appMarkText.text = "V";
+            appMarkText.fontStyle =
+                FontStyle.Bold;
+            appMarkText.raycastTarget =
+                false;
+            Stretch(
+                appMarkText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
 
             var applicationTitle =
                 CreateText(
                     "Application Title",
                     top,
-                    18,
+                    15,
                     TextAnchor.MiddleLeft);
             applicationTitle.text =
                 "Virtual Character Renderer";
@@ -979,14 +1030,41 @@ namespace VCR.Runtime.UI
                 applicationTitle.rectTransform,
                 Vector2.zero,
                 Vector2.one,
-                new Vector2(18f, 0f),
-                new Vector2(-520f, 0f));
+                new Vector2(48f, 0f),
+                new Vector2(-720f, 0f));
+
+            var titleDragArea =
+                CreateRect(
+                    "Title Bar Drag Area",
+                    top);
+            Stretch(
+                titleDragArea,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                new Vector2(-138f, 0f));
+            var titleDragImage =
+                titleDragArea.gameObject
+                    .AddComponent<Image>();
+            titleDragImage.color =
+                new Color(
+                    0f,
+                    0f,
+                    0f,
+                    0f);
+            titleDragImage.raycastTarget = true;
+            var titleDragHandle =
+                titleDragArea.gameObject
+                    .AddComponent<
+                        DesktopWindowDragHandle>();
+            titleDragHandle.Bind(
+                windowChrome);
 
             _statusText =
                 CreateText(
                     "Status",
                     top,
-                    15,
+                    12,
                     TextAnchor.MiddleRight);
             _statusText.raycastTarget =
                 false;
@@ -995,8 +1073,76 @@ namespace VCR.Runtime.UI
                 _statusText.rectTransform,
                 Vector2.zero,
                 Vector2.one,
-                new Vector2(520f, 0f),
-                new Vector2(-18f, 0f));
+                new Vector2(420f, 0f),
+                new Vector2(-152f, 0f));
+
+            var windowControls =
+                CreateRect(
+                    "Window Controls",
+                    top);
+            windowControls.anchorMin =
+                new Vector2(1f, 0f);
+            windowControls.anchorMax =
+                new Vector2(1f, 1f);
+            windowControls.pivot =
+                new Vector2(1f, 0.5f);
+            windowControls.offsetMin =
+                new Vector2(-138f, 0f);
+            windowControls.offsetMax =
+                Vector2.zero;
+
+            var windowControlLayout =
+                windowControls.gameObject
+                    .AddComponent<
+                        HorizontalLayoutGroup>();
+            windowControlLayout.spacing = 0f;
+            windowControlLayout.padding =
+                new RectOffset(0, 0, 0, 0);
+            windowControlLayout.childAlignment =
+                TextAnchor.MiddleRight;
+            windowControlLayout.childControlWidth = true;
+            windowControlLayout.childControlHeight = true;
+            windowControlLayout.childForceExpandWidth = false;
+            windowControlLayout.childForceExpandHeight = true;
+
+            var minimizeButton =
+                CreateButton(
+                    "—",
+                    windowControls,
+                    windowChrome.Minimize);
+            minimizeButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 46f;
+            minimizeButton.gameObject.SetActive(
+                windowChrome.CanMinimize);
+
+            var zoomButton =
+                CreateButton(
+                    "□",
+                    windowControls,
+                    windowChrome.ToggleZoom);
+            zoomButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 46f;
+
+            var closeButton =
+                CreateButton(
+                    "×",
+                    windowControls,
+                    windowChrome.CloseApplication);
+            closeButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 46f;
+            if (closeButton.targetGraphic is
+                Image closeImage)
+            {
+                closeImage.color =
+                    new Color(
+                        0.18f,
+                        0.075f,
+                        0.085f,
+                        1f);
+            }
 
             var navigation =
                 CreateRect(
@@ -1012,7 +1158,7 @@ namespace VCR.Runtime.UI
             navigation.offsetMin =
                 new Vector2(8f, 8f);
             navigation.offsetMax =
-                new Vector2(220f, -64f);
+                new Vector2(220f, -54f);
 
             var navImage =
                 navigation.gameObject
@@ -1096,7 +1242,7 @@ namespace VCR.Runtime.UI
             _renderViewportFrame.offsetMin =
                 new Vector2(228f, 62f);
             _renderViewportFrame.offsetMax =
-                new Vector2(-442f, -64f);
+                new Vector2(-442f, -54f);
 
             _renderViewportBackground =
                 _renderViewportFrame.gameObject
@@ -1176,7 +1322,7 @@ namespace VCR.Runtime.UI
             content.offsetMax =
                 new Vector2(
                     -8f,
-                    -64f);
+                    -54f);
 
             var contentImage =
                 content.gameObject
