@@ -6,7 +6,6 @@ using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
 using VCR.Runtime.Tracking.Mixing;
-using VCR.Editor.P12;
 
 namespace VCR.Editor.P11
 {
@@ -1929,7 +1928,7 @@ namespace VCR.Editor.P11
                 CaptureTransition(
                     transition);
             var paths =
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .CaptureGroupPaths(
                         captured);
 
@@ -2037,7 +2036,7 @@ namespace VCR.Editor.P11
             if (clear)
             {
                 changed =
-                    P12TransitionDependencyAuthoringUtility
+                    P11TransitionDependencyAuthoringUtility
                         .TryClearGroupHierarchy(
                             captured,
                             sourcePath,
@@ -2048,7 +2047,7 @@ namespace VCR.Editor.P11
             else
             {
                 changed =
-                    P12TransitionDependencyAuthoringUtility
+                    P11TransitionDependencyAuthoringUtility
                         .TryRewriteGroupHierarchy(
                             captured,
                             sourcePath,
@@ -2318,7 +2317,7 @@ namespace VCR.Editor.P11
             if (remove)
             {
                 changed =
-                    P12TransitionDependencyAuthoringUtility
+                    P11TransitionDependencyAuthoringUtility
                         .TryRemoveDependency(
                             authored,
                             _dependencyGraphSourceIndex,
@@ -2328,7 +2327,7 @@ namespace VCR.Editor.P11
             else
             {
                 changed =
-                    P12TransitionDependencyAuthoringUtility
+                    P11TransitionDependencyAuthoringUtility
                         .TryAddDependency(
                             authored,
                             _dependencyGraphSourceIndex,
@@ -2410,7 +2409,7 @@ namespace VCR.Editor.P11
                     ? string.Empty
                     : _dependencyGraphGroupName;
 
-            if (!P12TransitionDependencyAuthoringUtility
+            if (!P11TransitionDependencyAuthoringUtility
                 .TryAssignDependencyGroup(
                     authored,
                     _dependencyGraphTargetIndex,
@@ -4303,7 +4302,7 @@ namespace VCR.Editor.P11
                             .GetArrayElementAtIndex(
                                 i));
 
-                if (P12TransitionDependencyAuthoringUtility
+                if (P11TransitionDependencyAuthoringUtility
                     .TryValidateGroupMetadata(
                         transition,
                         out var transitionError))
