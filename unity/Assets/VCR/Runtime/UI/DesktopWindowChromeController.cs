@@ -35,7 +35,7 @@ namespace VCR.Runtime.UI
         {
             get
             {
-                if (Application.isEditor)
+                if (UnityEngine.Application.isEditor)
                 {
                     return false;
                 }
@@ -94,7 +94,7 @@ namespace VCR.Runtime.UI
 
         public void BeginDrag()
         {
-            if (Application.isEditor ||
+            if (UnityEngine.Application.isEditor ||
                 IsZoomed)
             {
                 _dragging = false;
@@ -119,7 +119,7 @@ namespace VCR.Runtime.UI
         public void DragToCursor()
         {
             if (!_dragging ||
-                Application.isEditor ||
+                UnityEngine.Application.isEditor ||
                 IsZoomed)
             {
                 return;
@@ -156,7 +156,7 @@ namespace VCR.Runtime.UI
 
         public void ToggleZoom()
         {
-            if (Application.isEditor)
+            if (UnityEngine.Application.isEditor)
             {
                 return;
             }
@@ -205,7 +205,7 @@ namespace VCR.Runtime.UI
 #if UNITY_EDITOR
             return;
 #else
-            Application.Quit();
+            UnityEngine.Application.Quit();
 #endif
         }
 
@@ -213,7 +213,7 @@ namespace VCR.Runtime.UI
             bool force)
         {
             if (!borderlessStandalone ||
-                Application.isEditor)
+                UnityEngine.Application.isEditor)
             {
                 return;
             }
