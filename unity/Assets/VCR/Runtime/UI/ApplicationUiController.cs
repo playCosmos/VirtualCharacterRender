@@ -1214,8 +1214,19 @@ namespace VCR.Runtime.UI
             trackingPreviewBackground.raycastTarget =
                 false;
 
+            var trackingCameraPreviewImageRect =
+                CreateRect(
+                    "Camera Preview Surface",
+                    _trackingCameraPreviewPanel);
+            Stretch(
+                trackingCameraPreviewImageRect,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(8f, 8f),
+                new Vector2(-8f, -8f));
+
             _trackingCameraPreviewImage =
-                _trackingCameraPreviewPanel.gameObject
+                trackingCameraPreviewImageRect.gameObject
                     .AddComponent<RawImage>();
             _trackingCameraPreviewImage.color =
                 Color.white;
