@@ -152,7 +152,7 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.MotionExpression =>
                     "Motion / Expression",
                 ApplicationUiSection.Environment =>
-                    "Environment",
+                    "Background / Stage",
                 ApplicationUiSection.MaterialShader =>
                     "Material / Shader",
                 ApplicationUiSection.Events =>
