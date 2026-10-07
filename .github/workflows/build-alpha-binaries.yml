@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: build-alpha-0.1.0-alpha.1
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
