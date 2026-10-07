@@ -18,11 +18,12 @@ namespace VCR.Runtime.UI
         MonoBehaviour
     {
         [SerializeField] private bool borderlessStandalone = true;
-        [SerializeField, Min(0.1f)] private float borderlessReapplySeconds = 0.5f;
+        [SerializeField, Min(0.1f)] private float borderlessRetrySeconds = 0.5f;
 
         private Vector2 _dragOffset;
         private bool _dragging;
-        private float _nextBorderlessApplyAt;
+        private bool _borderlessConfirmed;
+        private float _nextBorderlessRetryAt;
 
         public bool CanMinimize =>
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -218,26 +219,44 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            // IMPORTANT: never keep applying SetBorderless(true) after the
+            // native window already reports borderless. On Windows each style
+            // mutation can trigger another non-client-area recalculation; the
+            // old 0.5s unconditional call caused a slow cumulative shrink.
+            if (_borderlessConfirmed)
+            {
+                return;
+            }
+
             var now =
                 Time.unscaledTime;
 
             if (!force &&
                 now <
-                    _nextBorderlessApplyAt)
+                    _nextBorderlessRetryAt)
             {
                 return;
             }
 
-            _nextBorderlessApplyAt =
+            _nextBorderlessRetryAt =
                 now +
                 Mathf.Max(
                     0.1f,
-                    borderlessReapplySeconds);
+                    borderlessRetrySeconds);
 
             try
             {
+                if (IsBorderlessNative())
+                {
+                    _borderlessConfirmed = true;
+                    return;
+                }
+
                 SetBorderlessNative(
                     true);
+
+                _borderlessConfirmed =
+                    IsBorderlessNative();
             }
             catch (DllNotFoundException)
             {
@@ -320,6 +339,13 @@ namespace VCR.Runtime.UI
             IntPtr hWnd,
             int nCmdShow);
 #endif
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "IsBorderless",
+            CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsBorderlessNative();
 
         [DllImport(
             "LibUniWinC",
