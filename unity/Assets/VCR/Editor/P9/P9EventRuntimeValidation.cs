@@ -1888,12 +1888,17 @@ namespace VCR.Editor.P9
                     EnvironmentUpdatePolicy.Static,
                     EnvironmentSpaceMode.World);
 
-                Expect(
+                var environmentCanHandle =
                     environmentHandler.CanHandle(
-                        environmentCommand) &&
+                        environmentCommand);
+                var environmentRecovered =
                     environmentHandler.TryExecute(
                         environmentCommand,
-                        out var environmentRecoveryError) &&
+                        out var environmentRecoveryError);
+
+                Expect(
+                    environmentCanHandle &&
+                    environmentRecovered &&
                     replacementEnvironment.Status.StateId ==
                         "replacement",
                     "environment action handler must discard a destroyed cached runtime and auto-discover its replacement: " +
