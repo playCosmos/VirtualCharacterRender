@@ -361,6 +361,11 @@ namespace VCR.Editor.P0
             PlayerSettings.resizableWindow = true;
             PlayerSettings.fullScreenMode =
                 FullScreenMode.Windowed;
+            // The application dashboard is not the broadcast framebuffer.
+            // Start below FHD so a native title bar + Windows taskbar still
+            // fit on a 1920x1080 desktop without clipping.
+            PlayerSettings.defaultScreenWidth = 1600;
+            PlayerSettings.defaultScreenHeight = 900;
 
             PlayerSettings.macOS.cameraUsageDescription =
                 "VirtualCharacterRender uses the camera for face, hand, and upper-body tracking.";
