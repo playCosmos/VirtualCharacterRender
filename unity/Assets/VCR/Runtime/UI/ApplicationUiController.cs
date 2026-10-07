@@ -1022,41 +1022,49 @@ namespace VCR.Runtime.UI
             navLayout.childAlignment =
                 TextAnchor.UpperLeft;
 
+            var primarySections =
+                new[]
+                {
+                    ApplicationUiSection.Character,
+                    ApplicationUiSection.Tracking,
+                    ApplicationUiSection.MotionExpression,
+                    ApplicationUiSection.Environment,
+                    ApplicationUiSection.CameraOutput,
+                    ApplicationUiSection.Settings
+                };
+
+            var advancedSections =
+                new[]
+                {
+                    ApplicationUiSection.MaterialShader,
+                    ApplicationUiSection.Events,
+                    ApplicationUiSection.Diagnostics
+                };
+
+            AddNavigationHeader(
+                navigation,
+                "WORKSPACE");
+
             for (var i = 0;
-                 i < (int)ApplicationUiSection.Count;
+                 i < primarySections.Length;
                  i++)
             {
-                var section =
-                    (ApplicationUiSection)i;
+                AddNavigationSectionButton(
+                    navigation,
+                    primarySections[i]);
+            }
 
-                var button =
-                    CreateButton(
-                        ApplicationUiModel.GetTitle(
-                            section),
-                        navigation,
-                        () =>
-                        {
-                            SelectSection(section);
-                        });
+            AddNavigationHeader(
+                navigation,
+                "ADVANCED");
 
-                var layout =
-                    button.gameObject
-                        .AddComponent<
-                            LayoutElement>();
-                layout.preferredHeight = 42f;
-
-                _sectionButtons[section] =
-                    button;
-                _sectionLabels[section] =
-                    button.GetComponentInChildren<Text>();
-
-                if (_sectionLabels[section] !=
-                    null)
-                {
-                    _sectionLabels[section]
-                        .alignment =
-                            TextAnchor.MiddleLeft;
-                }
+            for (var i = 0;
+                 i < advancedSections.Length;
+                 i++)
+            {
+                AddNavigationSectionButton(
+                    navigation,
+                    advancedSections[i]);
             }
 
             _renderViewportFrame =
@@ -2219,6 +2227,66 @@ namespace VCR.Runtime.UI
                     .AddComponent<
                         LayoutElement>();
             recoveryLayout.preferredWidth = 160f;
+        }
+
+        private void AddNavigationHeader(
+            Transform parent,
+            string label)
+        {
+            var header =
+                CreateText(
+                    label + " Header",
+                    parent,
+                    11,
+                    TextAnchor.MiddleLeft);
+            header.text =
+                label;
+            header.fontStyle =
+                FontStyle.Bold;
+            header.color =
+                new Color(
+                    0.48f,
+                    0.53f,
+                    0.62f,
+                    1f);
+            header.raycastTarget =
+                false;
+
+            var layout =
+                header.gameObject
+                    .AddComponent<LayoutElement>();
+            layout.preferredHeight = 22f;
+        }
+
+        private void AddNavigationSectionButton(
+            Transform parent,
+            ApplicationUiSection section)
+        {
+            var button =
+                CreateButton(
+                    ApplicationUiModel.GetTitle(
+                        section),
+                    parent,
+                    () =>
+                    {
+                        SelectSection(section);
+                    });
+
+            var layout =
+                button.gameObject
+                    .AddComponent<LayoutElement>();
+            layout.preferredHeight = 42f;
+
+            _sectionButtons[section] =
+                button;
+            _sectionLabels[section] =
+                button.GetComponentInChildren<Text>();
+
+            if (_sectionLabels[section] != null)
+            {
+                _sectionLabels[section].alignment =
+                    TextAnchor.MiddleLeft;
+            }
         }
 
         private void SaveConfiguration()
