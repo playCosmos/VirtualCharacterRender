@@ -892,21 +892,22 @@ namespace VCR.Runtime.UI
                 RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder =
                 1000;
+            _canvas.pixelPerfect = true;
 
             var scaler =
                 GetComponent<CanvasScaler>() ??
                 gameObject.AddComponent<
                     CanvasScaler>();
 
+            // Desktop dashboard controls use real screen pixels. Fractional
+            // ScaleWithScreenSize factors made small glyphs visibly soft at
+            // common non-reference window sizes such as 1668x900.
             scaler.uiScaleMode =
                 CanvasScaler.ScaleMode
-                    .ScaleWithScreenSize;
-            scaler.referenceResolution =
-                new Vector2(
-                    1920f,
-                    1080f);
-            scaler.matchWidthOrHeight =
-                0.5f;
+                    .ConstantPixelSize;
+            scaler.scaleFactor = 1f;
+            scaler.referencePixelsPerUnit =
+                100f;
 
             if (GetComponent<
                     GraphicRaycaster>() == null)
@@ -6607,6 +6608,11 @@ namespace VCR.Runtime.UI
                     ApplicationUiSection.Tracking &&
                 _trackingCameraPreviewRequested;
 
+            var contextDockHeight =
+                characterSelected
+                    ? 0f
+                    : RefreshAdaptiveContextDock();
+
             if (_renderViewportFrame != null)
             {
                 var offsetMin =
@@ -6616,7 +6622,10 @@ namespace VCR.Runtime.UI
                         ? _appearanceAdvancedExpanded
                             ? 194f
                             : 62f
-                        : 122f;
+                        : Mathf.Max(
+                            62f,
+                            contextDockHeight +
+                            16f);
                 _renderViewportFrame.offsetMin =
                     offsetMin;
             }
@@ -6633,6 +6642,93 @@ namespace VCR.Runtime.UI
                 _inspectorSummaryPanel.offsetMin =
                     offsetMin;
             }
+        }
+
+        private float RefreshAdaptiveContextDock()
+        {
+            if (_contextActions == null)
+            {
+                return 0f;
+            }
+
+            var grid =
+                _contextActions.GetComponent<
+                    GridLayoutGroup>();
+
+            if (grid == null)
+            {
+                return 0f;
+            }
+
+            var availableWidth =
+                Mathf.Max(
+                    198f,
+                    Screen.width -
+                    228f -
+                    442f);
+
+            var cellWidth =
+                198f;
+            var horizontalSpacing =
+                8f;
+            var horizontalPadding =
+                16f;
+            var columns =
+                Mathf.Clamp(
+                    Mathf.FloorToInt(
+                        (availableWidth -
+                         horizontalPadding +
+                         horizontalSpacing) /
+                        (cellWidth +
+                         horizontalSpacing)),
+                    1,
+                    5);
+
+            grid.constraint =
+                GridLayoutGroup.Constraint
+                    .FixedColumnCount;
+            grid.constraintCount =
+                columns;
+
+            var activeCount = 0;
+            for (var i = 0;
+                 i < _contextActions.childCount;
+                 i++)
+            {
+                if (_contextActions
+                    .GetChild(i)
+                    .gameObject
+                    .activeSelf)
+                {
+                    activeCount++;
+                }
+            }
+
+            var rows =
+                Mathf.Max(
+                    1,
+                    Mathf.CeilToInt(
+                        activeCount /
+                        (float)columns));
+            var dockHeight =
+                16f +
+                rows * 41f +
+                Mathf.Max(
+                    0,
+                    rows - 1) *
+                8f;
+
+            _contextActions.offsetMin =
+                new Vector2(
+                    228f,
+                    8f);
+            _contextActions.offsetMax =
+                new Vector2(
+                    -442f,
+                    8f +
+                    dockHeight);
+
+            return dockHeight;
         }
 
         private void ToggleTrackingCameraPreview()
