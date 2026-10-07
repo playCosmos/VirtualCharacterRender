@@ -6856,43 +6856,27 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("VCR  |  ");
 
-            if (sceneAvailable)
-            {
-                builder.Append(
-                    sceneStatus.State);
-            }
-            else
-            {
-                builder.Append(
-                    "No Scene Runtime");
-            }
-
-            builder.Append("  |  ");
+            builder.Append(
+                sceneAvailable
+                    ? sceneStatus.State.ToString()
+                    : "Runtime unavailable");
+            builder.Append("    Character ");
             builder.Append(
                 sceneAvailable &&
                 sceneStatus.HasCharacter
-                    ? "Character: loaded"
-                    : "Character: none");
-            builder.Append("  |  ");
-
-            if (outputAvailable)
-            {
-                builder.Append("Output: ");
-                builder.Append(
-                    outputState);
-            }
-            else
-            {
-                builder.Append(
-                    "Output: none");
-            }
+                    ? "Loaded"
+                    : "Not loaded");
+            builder.Append("    Output ");
+            builder.Append(
+                outputAvailable
+                    ? outputState.ToString()
+                    : "Unavailable");
 
             if (!string.IsNullOrWhiteSpace(
                     _lastActionMessage))
             {
-                builder.Append("  |  ");
+                builder.Append("    ");
                 builder.Append(
                     _lastActionMessage);
             }
@@ -7038,100 +7022,77 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("Runtime state: ");
-            builder.Append(status.State);
-            builder.Append(
-                "\nCharacter loaded: ");
-            builder.Append(
-                status.HasCharacter);
-            builder.Append("\nModel path: ");
-            builder.Append(
-                status.CurrentCharacterPath ??
-                "<none>");
-            builder.Append(
-                "\nLast runtime error: ");
-            builder.Append(
-                status.LastError ??
-                "<none>");
-
-            if (!appearanceAvailable)
+            builder.Append("<b>MODEL</b>\n");
+            if (status.HasCharacter)
             {
                 builder.Append(
-                    "\nAppearance: runtime unavailable");
+                    string.IsNullOrWhiteSpace(
+                        status.CurrentCharacterPath)
+                        ? "VRM loaded"
+                        : Path.GetFileName(
+                            status.CurrentCharacterPath));
+                builder.Append("\nState  ");
+                builder.Append(status.State);
             }
             else
             {
                 builder.Append(
-                    "\nAppearance state: ");
+                    "No VRM loaded\nUse Browse VRM to choose a model.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    status.LastError))
+            {
                 builder.Append(
-                    appearance.State);
+                    "\n<color=#FF8A8A>");
+                builder.Append(status.LastError);
+                builder.Append("</color>");
+            }
+
+            builder.Append("\n\n<b>APPEARANCE</b>\n");
+            if (!appearanceAvailable)
+            {
                 builder.Append(
-                    "\nAppearance preset: ");
+                    "Appearance runtime unavailable");
+            }
+            else
+            {
+                builder.Append("Preset  ");
                 builder.Append(
                     appearance.CurrentPresetId ??
-                    "<none>");
-                builder.Append("\nOutfit: ");
+                    "Default");
+                builder.Append("\nOutfit  ");
                 builder.Append(
                     appearance.CurrentOutfitId ??
-                    "<none>");
-                builder.Append(
-                    "\nUser presets: ");
-                builder.Append(
-                    userPresetCount);
-                builder.Append(
-                    "\nUser preset order: ");
-                AppendUserPresetOrder(
-                    builder,
-                    userPresetRegistry);
-                builder.Append(
-                    "\nTransition: ");
-                builder.Append(
-                    appearance.ActiveTransitionId ??
-                    "<none>");
-                builder.Append(
-                    "\nTransition progress: ");
+                    "Default");
+                builder.Append("\nSaved presets  ");
+                builder.Append(userPresetCount);
 
+                builder.Append(
+                    "\n\n<b>TRANSITION</b>\n");
                 if (appearance.Busy)
                 {
                     builder.Append(
-                        transitionPercent);
-                    builder.Append("% (");
-                    builder.Append(
-                        appearance
-                            .TransitionElapsedSeconds
-                            .ToString(
-                                "0.00",
-                                CultureInfo.InvariantCulture));
-                    builder.Append("s / ");
-                    builder.Append(
-                        appearance
-                            .TransitionDurationSeconds
-                            .ToString(
-                                "0.00",
-                                CultureInfo.InvariantCulture));
-                    builder.Append("s)");
+                        appearance.ActiveTransitionId ??
+                        "Transition");
+                    builder.Append("  ");
+                    builder.Append(transitionPercent);
+                    builder.Append("%");
                 }
                 else
                 {
-                    builder.Append(
-                        "<idle>");
+                    builder.Append("Idle");
                 }
 
-                builder.Append(
-                    "\nTransition committed: ");
-                builder.Append(
-                    appearance
-                        .TransitionCommitted);
-                builder.Append(
-                    "\nTransition cancelable: ");
-                builder.Append(
-                    appearance
-                        .CanCancelTransition);
-                builder.Append(
-                    "\nAppearance error: ");
-                builder.Append(
-                    appearance.LastError ??
-                    "<none>");
+                if (!string.IsNullOrWhiteSpace(
+                        appearance.LastError))
+                {
+                    builder.Append(
+                        "\n<color=#FF8A8A>");
+                    builder.Append(
+                        appearance.LastError);
+                    builder.Append("</color>");
+                }
             }
 
             CaptureCharacterSummaryState(
@@ -7413,29 +7374,32 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("Subject: ");
+            builder.Append("<b>TRACKING STATUS</b>\n");
+            builder.Append("Subject  ");
             builder.Append(presence.SubjectState);
-            builder.Append("\nAny source available: ");
-            builder.Append(presence.AnySourceAvailable);
-            builder.Append("\nFace source: ");
-            builder.Append(presence.FaceSourceAvailable);
-            builder.Append("\nBody/hands source: ");
-            builder.Append(presence.BodyHandsSourceAvailable);
-            builder.Append("\nFull-body source: ");
-            builder.Append(presence.FullBodySourceAvailable);
-            builder.Append("\nEvents: ");
-            builder.Append(presence.Events);
+            builder.Append("\nFace  ");
+            builder.Append(
+                presence.FaceSourceAvailable
+                    ? "Available"
+                    : "Unavailable");
+            builder.Append("\nBody / Hands  ");
+            builder.Append(
+                presence.BodyHandsSourceAvailable
+                    ? "Available"
+                    : "Unavailable");
+            builder.Append("\nFull Body  ");
+            builder.Append(
+                presence.FullBodySourceAvailable
+                    ? "Available"
+                    : "Unavailable");
 
+            builder.Append("\n\n<b>INPUT SOURCES</b>\n");
             if (_trackingControls.Count == 0)
             {
-                builder.Append(
-                    "\nSource controls: <none>");
+                builder.Append("No tracking source configured");
             }
             else
             {
-                builder.Append(
-                    "\nSource controls:\n");
-
                 for (var i = 0;
                      i < _trackingControls.Count;
                      i++)
@@ -7447,21 +7411,26 @@ namespace VCR.Runtime.UI
 
                     var control =
                         _trackingControls[i];
-
                     builder.Append(
                         i == _trackingControlIndex
-                            ? '>'
-                            : ' ');
-                    builder.Append(' ');
+                            ? "● "
+                            : "  ");
                     builder.Append(control.DisplayName);
-                    builder.Append(": enabled=");
-                    builder.Append(control.ControlEnabled);
-                    builder.Append(", health=");
-                    builder.Append(control.ControlHealthState);
-                    builder.Append(", error=");
+                    builder.Append("  ");
                     builder.Append(
-                        control.ControlError ??
-                        "<none>");
+                        control.ControlEnabled
+                            ? control.ControlHealthState.ToString()
+                            : "Off");
+
+                    if (!string.IsNullOrWhiteSpace(
+                            control.ControlError))
+                    {
+                        builder.Append(
+                            "  <color=#FF8A8A>");
+                        builder.Append(
+                            control.ControlError);
+                        builder.Append("</color>");
+                    }
                 }
             }
 
@@ -7665,59 +7634,52 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
+            builder.Append("<b>MOTION</b>\n");
+            builder.Append("Pose layer  ");
             builder.Append(
-                "Primary pose layer configured: ");
-            builder.Append(
-                poseConfigured);
-            builder.Append(
-                "\nPrimary pose weight: ");
+                poseConfigured
+                    ? "Ready"
+                    : "Not configured");
+            builder.Append("\nPose weight  ");
             builder.Append(
                 poseWeight.ToString(
                     "0.00",
                     CultureInfo.InvariantCulture));
+
+            builder.Append("\n\n<b>EXPRESSION</b>\n");
+            builder.Append("Manual control  ");
             builder.Append(
-                "\nManual expression source: ");
-            builder.Append(
-                manualAvailable
-                    ? "available"
-                    : "missing");
-            builder.Append(
-                "\nManual layer connected: ");
-            builder.Append(
-                manualConnected);
-            builder.Append(
-                "\nExpression blend: ");
-            builder.Append(
-                blendMode);
-            builder.Append(" @ ");
+                manualAvailable &&
+                manualConnected
+                    ? "Ready"
+                    : "Unavailable");
+            builder.Append("\nBlend  ");
+            builder.Append(blendMode);
+            builder.Append("  ");
             builder.Append(
                 layerWeight.ToString(
                     "0.00",
                     CultureInfo.InvariantCulture));
-            builder.Append(
-                "\nSelected manual expression: ");
-            builder.Append(
-                string.IsNullOrWhiteSpace(
-                    selectedExpression)
-                    ? "<none>"
-                    : selectedExpression);
-            builder.Append(" = ");
 
-            if (hasSelectedValue)
+            if (!string.IsNullOrWhiteSpace(
+                    selectedExpression))
             {
                 builder.Append(
-                    selectedValue.ToString(
-                        "0.00",
-                        CultureInfo.InvariantCulture));
-            }
-            else
-            {
+                    "\nSelected  ");
                 builder.Append(
-                    "<none>");
+                    selectedExpression);
+                if (hasSelectedValue)
+                {
+                    builder.Append("  ");
+                    builder.Append(
+                        selectedValue.ToString(
+                            "0.00",
+                            CultureInfo.InvariantCulture));
+                }
             }
 
             builder.Append(
-                "\nStandard expressions: neutral, happy, angry, sad, relaxed, surprised, aa, ih, ou, ee, oh, blink, blinkLeft, blinkRight, lookUp, lookDown, lookLeft, lookRight");
+                "\n\nUse the controls below to adjust pose weight or apply an expression.");
 
             _motionSummaryPoseConfigured =
                 poseConfigured;
@@ -7777,55 +7739,49 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("Environment: ");
+            builder.Append("<b>BACKGROUND / STAGE</b>\n");
+            builder.Append("Environment  ");
             builder.Append(
                 status.EnvironmentId ??
-                "<none>");
-            builder.Append("\nState: ");
+                "None");
+            builder.Append("\nState  ");
             builder.Append(
                 status.StateId ??
-                "<none>");
-            builder.Append("\nSpace: ");
+                "None");
+            builder.Append("\nSpace  ");
             builder.Append(spaceMode);
-            builder.Append("\nActive: ");
-            builder.Append(status.Active);
-            builder.Append("\nTransition: ");
+            builder.Append("\nStatus  ");
+            builder.Append(
+                status.Active
+                    ? "Active"
+                    : "Inactive");
 
+            builder.Append("\n\n<b>TRANSITION</b>\n");
             if (transition.Active)
             {
                 builder.Append(
                     transition.Mode);
-                builder.Append(' ');
+                builder.Append("  ");
                 builder.Append(
                     transitionPercent);
-                builder.Append("% (");
-                builder.Append(
-                    transition.PreviousStateId);
-                builder.Append(" → ");
-                builder.Append(
-                    transition.StateId);
-                builder.Append(", ");
-                builder.Append(
-                    transition.DurationSeconds
-                        .ToString(
-                            "0.###",
-                            CultureInfo.InvariantCulture));
-                builder.Append("s)");
+                builder.Append("%");
             }
             else
             {
-                builder.Append(
-                    "<idle>");
+                builder.Append("Idle");
             }
-
-            builder.Append(
-                "\nSelected transition mode: ");
+            builder.Append("\nMode  ");
             builder.Append(
                 _environmentTransitionMode);
-            builder.Append("\nError: ");
-            builder.Append(
-                status.Error ??
-                "<none>");
+
+            if (!string.IsNullOrWhiteSpace(
+                    status.Error))
+            {
+                builder.Append(
+                    "\n<color=#FF8A8A>");
+                builder.Append(status.Error);
+                builder.Append("</color>");
+            }
 
             CaptureEnvironmentSummaryState(
                 status,
@@ -8426,70 +8382,65 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("Output state: ");
-            if (hasAdapter)
-            {
-                builder.Append(
-                    status.State);
-            }
-            else
-            {
-                builder.Append("none");
-            }
-
-            builder.Append("\nTransparent: ");
-            if (hasAdapter)
-            {
-                builder.Append(
-                    settings.Transparent);
-            }
-            else
-            {
-                builder.Append("n/a");
-            }
-
-            builder.Append("\nTopmost: ");
-            if (hasAdapter)
-            {
-                builder.Append(
-                    settings.Topmost);
-            }
-            else
-            {
-                builder.Append("n/a");
-            }
-
-            builder.Append(
-                "\nClick-through: ");
-            if (hasAdapter)
-            {
-                builder.Append(
-                    settings.ClickThrough);
-            }
-            else
-            {
-                builder.Append("n/a");
-            }
-
-            builder.Append(
-                "\nCapture ready: ");
-            builder.Append(readiness.Ready);
-            builder.Append(
-                "\nCapture readiness: ");
-            builder.Append(readiness.Failure);
-            builder.Append(
-                "\n720p60 configured: ");
-            builder.Append(minimum.Ready);
-            builder.Append(
-                "\n1080p60 configured: ");
-            builder.Append(recommended.Ready);
-            builder.Append(
-                "\nOutput error: ");
+            builder.Append("<b>RENDER OUTPUT</b>\n");
+            builder.Append("State  ");
             builder.Append(
                 hasAdapter
-                    ? status.LastError ??
-                      "<none>"
-                    : "<none>");
+                    ? status.State.ToString()
+                    : "Unavailable");
+            if (renderAvailable)
+            {
+                builder.Append("\nResolution  ");
+                builder.Append(render.Width);
+                builder.Append(" × ");
+                builder.Append(render.Height);
+                builder.Append("\nTarget FPS  ");
+                builder.Append(
+                    render.TargetFrameRate);
+            }
+
+            builder.Append("\n\n<b>WINDOW / OVERLAY</b>\n");
+            builder.Append("Transparent  ");
+            builder.Append(
+                hasAdapter &&
+                settings.Transparent
+                    ? "On"
+                    : "Off");
+            builder.Append("\nAlways on top  ");
+            builder.Append(
+                hasAdapter &&
+                settings.Topmost
+                    ? "On"
+                    : "Off");
+            builder.Append("\nClick-through  ");
+            builder.Append(
+                hasAdapter &&
+                settings.ClickThrough
+                    ? "On"
+                    : "Off");
+
+            builder.Append("\n\n<b>PROFILE CHECK</b>\n");
+            builder.Append("720p60  ");
+            builder.Append(
+                minimum.Ready
+                    ? "Ready"
+                    : "Needs attention");
+            builder.Append("\n1080p60  ");
+            builder.Append(
+                recommended.Ready
+                    ? "Ready"
+                    : "Needs attention");
+
+            if (hasAdapter &&
+                !string.IsNullOrWhiteSpace(
+                    status.LastError))
+            {
+                builder.Append(
+                    "\n<color=#FF8A8A>");
+                builder.Append(
+                    status.LastError);
+                builder.Append("</color>");
+            }
 
             CaptureOutputSummaryState(
                 hasAdapter,
@@ -8641,64 +8592,64 @@ namespace VCR.Runtime.UI
             var builder =
                 _summaryBuilder;
             builder.Clear();
-            builder.Append("Runtime started: ");
-            builder.Append(runtimeStarted);
-            builder.Append("\nConfiguration: ");
+            builder.Append("<b>APPLICATION</b>\n");
+            builder.Append("Runtime  ");
             builder.Append(
-                configurationPath ??
-                "<default/not resolved>");
+                runtimeStarted
+                    ? "Running"
+                    : "Stopped");
+            builder.Append("\nConfiguration  ");
             builder.Append(
-                "\nCapabilities registered: ");
-            builder.Append(
-                registeredCapabilities);
-            builder.Append(
-                "\nCapabilities enabled: ");
-            builder.Append(
-                enabledCapabilities);
-            builder.Append(
-                "\nSelected capability: ");
-            builder.Append(
-                hasSelectedCapability
-                    ? selectedCapability.Id
-                    : "<none>");
-            builder.Append(
-                "\nCapability state: ");
-            if (hasSelectedCapability)
-            {
-                builder.Append(
-                    selectedCapability.State);
-            }
-            else
-            {
-                builder.Append(
-                    "n/a");
-            }
+                string.IsNullOrWhiteSpace(
+                    configurationPath)
+                    ? "Default"
+                    : Path.GetFileName(
+                        configurationPath));
 
-            builder.Append(
-                "\nCapability error: ");
-            builder.Append(
-                hasSelectedCapability
-                    ? selectedCapability.Error ??
-                      "<none>"
-                    : "n/a");
-            builder.Append(
-                "\nRender scale: ");
+            builder.Append("\n\n<b>PERFORMANCE</b>\n");
+            builder.Append("Render scale  ");
             builder.Append(
                 render.RenderScale.ToString(
                     "0.###",
                     CultureInfo.InvariantCulture));
-            builder.Append(
-                "\nTarget FPS: ");
+            builder.Append("\nTarget FPS  ");
             builder.Append(
                 render.TargetFrameRate);
+            builder.Append("\nVSync  ");
             builder.Append(
-                "\nVSync: ");
+                render.UseVSync
+                    ? "On"
+                    : "Off");
+            builder.Append("\nRun in background  ");
             builder.Append(
-                render.UseVSync);
-            builder.Append(
-                "\nRun in background: ");
-            builder.Append(
-                render.RunInBackground);
+                render.RunInBackground
+                    ? "On"
+                    : "Off");
+
+            builder.Append("\n\n<b>CAPABILITIES</b>\n");
+            builder.Append(enabledCapabilities);
+            builder.Append(" enabled / ");
+            builder.Append(registeredCapabilities);
+            builder.Append(" registered");
+            if (hasSelectedCapability)
+            {
+                builder.Append("\nSelected  ");
+                builder.Append(
+                    selectedCapability.Id);
+                builder.Append("  ");
+                builder.Append(
+                    selectedCapability.State);
+
+                if (!string.IsNullOrWhiteSpace(
+                        selectedCapability.Error))
+                {
+                    builder.Append(
+                        "\n<color=#FF8A8A>");
+                    builder.Append(
+                        selectedCapability.Error);
+                    builder.Append("</color>");
+                }
+            }
 
             CaptureSettingsSummaryState(
                 runtimeStarted,
