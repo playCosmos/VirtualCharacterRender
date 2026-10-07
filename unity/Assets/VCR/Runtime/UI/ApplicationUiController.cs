@@ -1781,7 +1781,7 @@ namespace VCR.Runtime.UI
             _trackingPreviousButton =
                 CreateButton(
                     "Prev Source",
-                    _contextActions,
+                    _trackingDashboardContent,
                     SelectPreviousTrackingControl);
             _trackingPreviousButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1790,7 +1790,7 @@ namespace VCR.Runtime.UI
             _trackingToggleButton =
                 CreateButton(
                     "Toggle Tracking",
-                    _contextActions,
+                    _trackingDashboardContent,
                     ToggleSelectedTrackingControl);
             _trackingToggleButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1799,7 +1799,7 @@ namespace VCR.Runtime.UI
             _trackingRecoverButton =
                 CreateButton(
                     "Recover Source",
-                    _contextActions,
+                    _trackingDashboardContent,
                     RecoverSelectedTrackingControl);
             _trackingRecoverButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1808,7 +1808,7 @@ namespace VCR.Runtime.UI
             _trackingNextButton =
                 CreateButton(
                     "Next Source",
-                    _contextActions,
+                    _trackingDashboardContent,
                     SelectNextTrackingControl);
             _trackingNextButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1817,7 +1817,7 @@ namespace VCR.Runtime.UI
             _trackingCameraPreviewButton =
                 CreateButton(
                     "Show Camera Preview",
-                    _contextActions,
+                    _trackingDashboardContent,
                     ToggleTrackingCameraPreview);
             _trackingCameraPreviewButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1826,7 +1826,7 @@ namespace VCR.Runtime.UI
             _apply720p60Button =
                 CreateButton(
                     "Apply 720p60",
-                    _contextActions,
+                    _outputDashboardContent,
                     Apply720p60);
             _apply720p60Button.gameObject
                 .AddComponent<LayoutElement>()
@@ -1835,7 +1835,7 @@ namespace VCR.Runtime.UI
             _apply1080p60Button =
                 CreateButton(
                     "Apply 1080p60",
-                    _contextActions,
+                    _outputDashboardContent,
                     Apply1080p60);
             _apply1080p60Button.gameObject
                 .AddComponent<LayoutElement>()
@@ -1844,7 +1844,7 @@ namespace VCR.Runtime.UI
             _outputTransparentButton =
                 CreateButton(
                     "Transparent",
-                    _contextActions,
+                    _outputDashboardContent,
                     ToggleOverlayTransparent);
             _outputTransparentButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1853,7 +1853,7 @@ namespace VCR.Runtime.UI
             _outputTopmostButton =
                 CreateButton(
                     "Topmost",
-                    _contextActions,
+                    _outputDashboardContent,
                     ToggleOverlayTopmost);
             _outputTopmostButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1862,7 +1862,7 @@ namespace VCR.Runtime.UI
             _outputClickThroughButton =
                 CreateButton(
                     "Click-through",
-                    _contextActions,
+                    _outputDashboardContent,
                     ToggleOverlayClickThrough);
             _outputClickThroughButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1871,7 +1871,7 @@ namespace VCR.Runtime.UI
             _motionPoseWeightLabel =
                 CreateText(
                     "Pose Weight Label",
-                    _contextActions,
+                    _motionDashboardContent,
                     15,
                     TextAnchor.MiddleLeft);
             _motionPoseWeightLabel.text =
@@ -1883,7 +1883,7 @@ namespace VCR.Runtime.UI
             _motionPoseWeightSlider =
                 CreateSlider(
                     "Primary Pose Weight",
-                    _contextActions,
+                    _motionDashboardContent,
                     0f,
                     1f,
                     1f,
@@ -1895,7 +1895,7 @@ namespace VCR.Runtime.UI
             _manualExpressionNameInput =
                 CreateInputField(
                     "Manual Expression Name",
-                    _contextActions,
+                    _motionDashboardContent,
                     "Expression");
             _manualExpressionNameInput.gameObject
                 .AddComponent<LayoutElement>()
@@ -1904,7 +1904,7 @@ namespace VCR.Runtime.UI
             _manualExpressionValueInput =
                 CreateInputField(
                     "Manual Expression Value",
-                    _contextActions,
+                    _motionDashboardContent,
                     "0..1");
             _manualExpressionValueInput.gameObject
                 .AddComponent<LayoutElement>()
@@ -1913,7 +1913,7 @@ namespace VCR.Runtime.UI
             _manualExpressionApplyButton =
                 CreateButton(
                     "Apply",
-                    _contextActions,
+                    _motionDashboardContent,
                     ApplyManualExpression);
             _manualExpressionApplyButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1922,7 +1922,7 @@ namespace VCR.Runtime.UI
             _manualExpressionClearButton =
                 CreateButton(
                     "Clear",
-                    _contextActions,
+                    _motionDashboardContent,
                     ClearManualExpression);
             _manualExpressionClearButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1931,7 +1931,7 @@ namespace VCR.Runtime.UI
             _manualExpressionClearAllButton =
                 CreateButton(
                     "Clear All",
-                    _contextActions,
+                    _motionDashboardContent,
                     ClearAllManualExpressions);
             _manualExpressionClearAllButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1940,7 +1940,7 @@ namespace VCR.Runtime.UI
             _environmentStateInput =
                 CreateInputField(
                     "Environment State",
-                    _contextActions,
+                    _environmentDashboardContent,
                     "State ID");
             _environmentStateInput.gameObject
                 .AddComponent<LayoutElement>()
@@ -1949,7 +1949,7 @@ namespace VCR.Runtime.UI
             _environmentTransitionModeButton =
                 CreateButton(
                     "Transition: Cut",
-                    _contextActions,
+                    _environmentDashboardContent,
                     SelectNextEnvironmentTransitionMode);
             _environmentTransitionModeButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -1958,7 +1958,7 @@ namespace VCR.Runtime.UI
             _environmentTransitionDurationInput =
                 CreateInputField(
                     "Environment Transition Duration",
-                    _contextActions,
+                    _environmentDashboardContent,
                     "Duration s");
             _environmentTransitionDurationInput.text =
                 "0";
@@ -1969,7 +1969,7 @@ namespace VCR.Runtime.UI
             _environmentApplyStateButton =
                 CreateButton(
                     "Apply State",
-                    _contextActions,
+                    _environmentDashboardContent,
                     ApplyEnvironmentState);
             _environmentApplyStateButton.gameObject
                 .AddComponent<LayoutElement>()
@@ -2284,32 +2284,28 @@ namespace VCR.Runtime.UI
             _appearanceActions =
                 CreateRect(
                     "Appearance Actions",
-                    _root);
-
-            _appearanceActions.anchorMin =
-                new Vector2(0f, 0f);
-            _appearanceActions.anchorMax =
-                new Vector2(1f, 0f);
-            _appearanceActions.pivot =
-                new Vector2(0.5f, 0f);
-            _appearanceActions.offsetMin =
-                new Vector2(228f, 8f);
-            _appearanceActions.offsetMax =
-                new Vector2(-442f, 54f);
-
-            AddActionPanelBackground(
-                _appearanceActions);
+                    _controlDashboardContent);
+            Stretch(
+                _appearanceActions,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
 
             var appearanceLayout =
                 _appearanceActions.gameObject
-                    .AddComponent<
-                        HorizontalLayoutGroup>();
+                    .AddComponent<GridLayoutGroup>();
             appearanceLayout.padding =
-                new RectOffset(8, 8, 6, 6);
-            appearanceLayout.spacing = 8f;
-            appearanceLayout.childForceExpandWidth = false;
-            appearanceLayout.childControlWidth = true;
-            appearanceLayout.childControlHeight = true;
+                new RectOffset(4, 4, 4, 4);
+            appearanceLayout.spacing =
+                new Vector2(4f, 4f);
+            appearanceLayout.cellSize =
+                new Vector2(112f, 34f);
+            appearanceLayout.constraint =
+                GridLayoutGroup.Constraint.FixedColumnCount;
+            appearanceLayout.constraintCount = 2;
+            appearanceLayout.childAlignment =
+                TextAnchor.UpperLeft;
 
             var appearanceQuickLabel =
                 CreateText(
@@ -2406,9 +2402,9 @@ namespace VCR.Runtime.UI
             _appearanceDirectActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearanceDirectActions.offsetMin =
-                new Vector2(228f, 58f);
+                new Vector2(222f, 318f);
             _appearanceDirectActions.offsetMax =
-                new Vector2(-442f, 98f);
+                new Vector2(-568f, 358f);
 
             AddActionPanelBackground(
                 _appearanceDirectActions);
@@ -2508,9 +2504,9 @@ namespace VCR.Runtime.UI
             _appearancePersistenceActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePersistenceActions.offsetMin =
-                new Vector2(228f, 102f);
+                new Vector2(222f, 362f);
             _appearancePersistenceActions.offsetMax =
-                new Vector2(-442f, 142f);
+                new Vector2(-568f, 402f);
 
             AddActionPanelBackground(
                 _appearancePersistenceActions);
@@ -2565,9 +2561,9 @@ namespace VCR.Runtime.UI
             _appearancePresetManagementActions.pivot =
                 new Vector2(0.5f, 0f);
             _appearancePresetManagementActions.offsetMin =
-                new Vector2(228f, 146f);
+                new Vector2(222f, 406f);
             _appearancePresetManagementActions.offsetMax =
-                new Vector2(-442f, 186f);
+                new Vector2(-568f, 446f);
 
             AddActionPanelBackground(
                 _appearancePresetManagementActions);
