@@ -40,6 +40,8 @@ namespace VCR.Runtime.UI
         [SerializeField, Min(0.25f)] private float refreshIntervalSeconds = 0.5f;
         [SerializeField, Min(0.5f)] private float dependencyResolveIntervalSeconds = 2f;
         [SerializeField] private Font uiFont;
+        private Font _uiFontMedium;
+        private Font _uiFontSemiBold;
 
         private readonly ApplicationUiModel _model =
             new();
@@ -954,6 +956,15 @@ namespace VCR.Runtime.UI
                     "Fonts/Pretendard-Regular") ??
                 Resources.GetBuiltinResource<Font>(
                     "LegacyRuntime.ttf");
+            _uiFontMedium ??=
+                Resources.Load<Font>(
+                    "Fonts/Pretendard-Medium") ??
+                uiFont;
+            _uiFontSemiBold ??=
+                Resources.Load<Font>(
+                    "Fonts/Pretendard-SemiBold") ??
+                _uiFontMedium ??
+                uiFont;
 
             _root =
                 CreateRect(
@@ -1056,8 +1067,10 @@ namespace VCR.Runtime.UI
                     TextAnchor.MiddleLeft);
             applicationTitle.text =
                 "Virtual Character Renderer";
+            applicationTitle.font =
+                _uiFontSemiBold;
             applicationTitle.fontStyle =
-                FontStyle.Bold;
+                FontStyle.Normal;
             applicationTitle.raycastTarget =
                 false;
             Stretch(
@@ -1560,8 +1573,10 @@ namespace VCR.Runtime.UI
             _sectionTitle.rectTransform
                 .offsetMax =
                     new Vector2(-16f, -12f);
+            _sectionTitle.font =
+                _uiFontSemiBold;
             _sectionTitle.fontStyle =
-                FontStyle.Bold;
+                FontStyle.Normal;
 
             _inspectorSummaryPanel =
                 CreateRect(
@@ -3015,6 +3030,10 @@ namespace VCR.Runtime.UI
             {
                 _sectionLabels[section].alignment =
                     TextAnchor.MiddleLeft;
+                _sectionLabels[section].font =
+                    _uiFontSemiBold ??
+                    _uiFontMedium ??
+                    uiFont;
             }
         }
 
@@ -9982,7 +10001,13 @@ namespace VCR.Runtime.UI
                     15,
                     TextAnchor.MiddleLeft);
             header.text =
-                "<b>" + title + "</b>";
+                title;
+            header.font =
+                _uiFontSemiBold ??
+                _uiFontMedium ??
+                uiFont;
+            header.fontStyle =
+                FontStyle.Normal;
             header.supportRichText =
                 true;
             header.raycastTarget =
@@ -10149,6 +10174,9 @@ namespace VCR.Runtime.UI
                     rect,
                     16,
                     TextAnchor.MiddleCenter);
+            text.font =
+                _uiFontMedium ??
+                uiFont;
             text.text = label;
             _buttonLabels[
                 button] =
