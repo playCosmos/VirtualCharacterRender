@@ -2723,7 +2723,7 @@ namespace VCR.Runtime.UI
             var transitionId =
                 GetSelectedAppearanceTransitionId();
             var current =
-                _appearanceRuntime.Current;
+                GetCurrentAppearanceSnapshot();
             var appearanceStatus =
                 _appearanceRuntime.Status;
 
