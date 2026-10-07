@@ -869,12 +869,6 @@ namespace VCR.Runtime.Environment.Unity
                         .DurationSeconds,
                     progress);
 
-            ApplyTransitionTargets(
-                CreateTransitionContext(
-                    nowUs,
-                    progress,
-                    deltaSeconds));
-
             _transitionTickCount++;
 
             if (progress >= 1f)
@@ -882,7 +876,14 @@ namespace VCR.Runtime.Environment.Unity
                 TryCompleteTransition(
                     nowUs,
                     out _);
+                return true;
             }
+
+            ApplyTransitionTargets(
+                CreateTransitionContext(
+                    nowUs,
+                    progress,
+                    deltaSeconds));
 
             return true;
         }
