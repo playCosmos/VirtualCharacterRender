@@ -2956,11 +2956,6 @@ namespace VCR.Runtime.UI
                         LayoutElement>();
             recoveryLayout.preferredWidth = 160f;
 
-            FinalizeMockupDashboard(
-                top,
-                navigation,
-                content,
-                windowChrome);
         }
 
         private void AddNavigationHeader(
@@ -6021,7 +6016,6 @@ namespace VCR.Runtime.UI
 
                 RefreshContextActions();
                 RefreshRenderViewportState();
-                RefreshMockupDashboard();
 
                 RefreshStatus();
                 RefreshContent();
