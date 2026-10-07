@@ -6160,11 +6160,13 @@ namespace VCR.Runtime.UI
                 sceneAvailable
                     ? sceneRuntime.Status
                     : default;
+            OverlayOutputStatus outputStatus =
+                default;
             var outputAvailable =
                 sceneAvailable &&
                 TryGetOverlayOutputForUiRefresh(
                     out var outputPresent,
-                    out var outputStatus,
+                    out outputStatus,
                     out _,
                     out _) &&
                 outputPresent;
