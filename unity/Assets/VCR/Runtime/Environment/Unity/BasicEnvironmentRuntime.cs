@@ -196,8 +196,10 @@ namespace VCR.Runtime.Environment.Unity
                 _transitionDriver.enabled = false;
             }
 
-            ApplyLightingProfileToTargets(
-                EnvironmentLightingProfile.Neutral);
+            TryApplyLightingProfileToTargets(
+                _lightingTargets,
+                EnvironmentLightingProfile.Neutral,
+                out _);
         }
 
         public void Configure(
