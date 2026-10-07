@@ -22,7 +22,9 @@
     "VCR.Runtime.Tracking",
     "VCR.Runtime.Tracking.Mixing",
     "VCR.Runtime.UI",
-    "VCR.Runtime.Capabilities"
+    "VCR.Runtime.Capabilities",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Diagnostics"
   ],
   "includePlatforms": [
     "Editor"
