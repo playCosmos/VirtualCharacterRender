@@ -1391,6 +1391,27 @@ require_source_order(
 )
 require_source_contains(
     single_character_scene_runtime,
+    "_configurationRecoveryPending",
+    "scene runtime must explicitly track incomplete configuration rollback recovery",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "_configurationRecoveryPending =\n                    true;",
+    "SetFault(\n                    rollbackError);",
+    "configuration rollback recovery must be marked pending before the scene is faulted",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "if (_configurationRecoveryPending)\n            {\n                return false;\n            }",
+    "scene initialization alone must not clear an incomplete configuration rollback fault",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"scene.configuration_recovery_pending\"",
+    "configuration rollback recovery state must remain visible in runtime diagnostics",
+)
+require_source_contains(
+    single_character_scene_runtime,
     "\"Scene suspend failed: \"",
     "scene Suspend must contain external adapter shutdown exceptions",
 )
