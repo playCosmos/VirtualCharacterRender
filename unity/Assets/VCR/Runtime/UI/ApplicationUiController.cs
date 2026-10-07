@@ -1514,7 +1514,7 @@ namespace VCR.Runtime.UI
                     12,
                     TextAnchor.MiddleLeft);
             modelCardTitle.text =
-                "VRM MODEL";
+                "VRM 모델";
             modelCardTitle.fontStyle =
                 FontStyle.Bold;
             modelCardTitle.color =
@@ -1749,7 +1749,7 @@ namespace VCR.Runtime.UI
 
             _characterBrowseButton =
                 CreateButton(
-                    "Browse VRM…",
+                    "VRM 찾기…",
                     characterFileRow,
                     BrowseCharacterFile);
             _characterBrowseButton.gameObject
@@ -1760,7 +1760,7 @@ namespace VCR.Runtime.UI
 
             _loadCharacterButton =
                 CreateButton(
-                    "Load VRM",
+                    "불러오기",
                     characterLoadRow,
                     LoadCharacterFromPath);
             SetPrimaryButtonStyle(
@@ -1768,13 +1768,13 @@ namespace VCR.Runtime.UI
 
             _reloadCharacterButton =
                 CreateButton(
-                    "Reload",
+                    "다시 불러오기",
                     characterLoadRow,
                     ReloadCharacter);
 
             _unloadCharacterButton =
                 CreateButton(
-                    "Unload",
+                    "모델 해제",
                     characterLoadRow,
                     UnloadCharacter);
 
@@ -6432,8 +6432,7 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Diagnostics;
 
             var appearanceVisible =
-                characterSelected ||
-                appearanceSelected;
+                true;
 
             if (_appearanceActions != null &&
                 _appearanceActions.gameObject.activeSelf !=
@@ -6471,12 +6470,18 @@ namespace VCR.Runtime.UI
                     appearanceAdvancedVisible);
             }
 
+            var advancedContextSelected =
+                materialSelected ||
+                eventsSelected ||
+                settingsSelected ||
+                diagnosticsSelected;
+
             if (_contextActions != null &&
-                _contextActions.gameObject.activeSelf ==
-                    characterSelected)
+                _contextActions.gameObject.activeSelf !=
+                    advancedContextSelected)
             {
                 _contextActions.gameObject.SetActive(
-                    !characterSelected);
+                    advancedContextSelected);
             }
 
             if (_characterModelPanel != null &&
@@ -6513,70 +6518,70 @@ namespace VCR.Runtime.UI
                 characterSelected);
             SetActive(
                 _trackingPreviousButton,
-                trackingSelected);
+                true);
             SetActive(
                 _trackingToggleButton,
-                trackingSelected);
+                true);
             SetActive(
                 _trackingRecoverButton,
-                trackingSelected);
+                true);
             SetActive(
                 _trackingNextButton,
-                trackingSelected);
+                true);
             SetActive(
                 _trackingCameraPreviewButton,
-                trackingSelected);
+                true);
 
             SetActive(
                 _apply720p60Button,
-                outputSelected);
+                true);
             SetActive(
                 _apply1080p60Button,
-                outputSelected);
+                true);
             SetActive(
                 _outputTransparentButton,
-                outputSelected);
+                true);
             SetActive(
                 _outputTopmostButton,
-                outputSelected);
+                true);
             SetActive(
                 _outputClickThroughButton,
-                outputSelected);
+                true);
 
             SetActive(
                 _motionPoseWeightLabel,
-                motionSelected);
+                true);
             SetActive(
                 _motionPoseWeightSlider,
-                motionSelected);
+                true);
             SetActive(
                 _manualExpressionNameInput,
-                motionSelected);
+                true);
             SetActive(
                 _manualExpressionValueInput,
-                motionSelected);
+                true);
             SetActive(
                 _manualExpressionApplyButton,
-                motionSelected);
+                true);
             SetActive(
                 _manualExpressionClearButton,
-                motionSelected);
+                true);
             SetActive(
                 _manualExpressionClearAllButton,
-                motionSelected);
+                true);
 
             SetActive(
                 _environmentStateInput,
-                environmentSelected);
+                true);
             SetActive(
                 _environmentTransitionModeButton,
-                environmentSelected);
+                true);
             SetActive(
                 _environmentTransitionDurationInput,
-                environmentSelected);
+                true);
             SetActive(
                 _environmentApplyStateButton,
-                environmentSelected);
+                true);
 
             SetActive(
                 _materialPreviousSlotButton,
@@ -6703,133 +6708,61 @@ namespace VCR.Runtime.UI
         {
             var characterSelected =
                 selected ==
-                ApplicationUiSection.Character;
+                    ApplicationUiSection.Character;
+            var appearanceSelected =
+                selected ==
+                    ApplicationUiSection.Appearance;
+            var advancedSelected =
+                selected ==
+                    ApplicationUiSection.MaterialShader ||
+                selected ==
+                    ApplicationUiSection.Events ||
+                selected ==
+                    ApplicationUiSection.Settings ||
+                selected ==
+                    ApplicationUiSection.Diagnostics;
             var trackingPreviewVisible =
                 selected ==
                     ApplicationUiSection.Tracking &&
                 _trackingCameraPreviewRequested;
-
-            var contextDockHeight =
-                characterSelected
-                    ? 0f
-                    : RefreshAdaptiveContextDock();
 
             if (_renderViewportFrame != null)
             {
                 var offsetMin =
                     _renderViewportFrame.offsetMin;
                 offsetMin.y =
-                    characterSelected
-                        ? _appearanceAdvancedExpanded
-                            ? 194f
-                            : 62f
-                        : Mathf.Max(
-                            62f,
-                            contextDockHeight +
-                            16f);
+                    (characterSelected ||
+                     appearanceSelected) &&
+                    _appearanceAdvancedExpanded
+                        ? 454f
+                        : advancedSelected
+                            ? 432f
+                            : 318f;
                 _renderViewportFrame.offsetMin =
                     offsetMin;
             }
 
             if (_inspectorSummaryPanel != null)
             {
-                var offsetMin =
+                var min =
                     _inspectorSummaryPanel.offsetMin;
-                offsetMin.y =
-                    characterSelected ||
+                var max =
+                    _inspectorSummaryPanel.offsetMax;
+
+                min.y =
                     trackingPreviewVisible
                         ? 230f
                         : 78f;
+                max.y =
+                    characterSelected
+                        ? -230f
+                        : -54f;
+
                 _inspectorSummaryPanel.offsetMin =
-                    offsetMin;
+                    min;
+                _inspectorSummaryPanel.offsetMax =
+                    max;
             }
-        }
-
-        private float RefreshAdaptiveContextDock()
-        {
-            if (_contextActions == null)
-            {
-                return 0f;
-            }
-
-            var grid =
-                _contextActions.GetComponent<
-                    GridLayoutGroup>();
-
-            if (grid == null)
-            {
-                return 0f;
-            }
-
-            var availableWidth =
-                Mathf.Max(
-                    198f,
-                    Screen.width -
-                    228f -
-                    442f);
-
-            var cellWidth =
-                198f;
-            var horizontalSpacing =
-                8f;
-            var horizontalPadding =
-                16f;
-            var columns =
-                Mathf.Clamp(
-                    Mathf.FloorToInt(
-                        (availableWidth -
-                         horizontalPadding +
-                         horizontalSpacing) /
-                        (cellWidth +
-                         horizontalSpacing)),
-                    1,
-                    5);
-
-            grid.constraint =
-                GridLayoutGroup.Constraint
-                    .FixedColumnCount;
-            grid.constraintCount =
-                columns;
-
-            var activeCount = 0;
-            for (var i = 0;
-                 i < _contextActions.childCount;
-                 i++)
-            {
-                if (_contextActions
-                    .GetChild(i)
-                    .gameObject
-                    .activeSelf)
-                {
-                    activeCount++;
-                }
-            }
-
-            var rows =
-                Mathf.Max(
-                    1,
-                    Mathf.CeilToInt(
-                        activeCount /
-                        (float)columns));
-            var dockHeight =
-                16f +
-                rows * 41f +
-                Mathf.Max(
-                    0,
-                    rows - 1) *
-                8f;
-
-            _contextActions.offsetMin =
-                new Vector2(
-                    228f,
-                    8f);
-            _contextActions.offsetMax =
-                new Vector2(
-                    -442f,
-                    8f +
-                    dockHeight);
-
-            return dockHeight;
         }
 
         private void ToggleTrackingCameraPreview()
@@ -9604,6 +9537,102 @@ namespace VCR.Runtime.UI
                             ? "Console Log: On"
                             : "Console Log: Off");
             }
+        }
+
+        private RectTransform CreateDashboardCard(
+            Transform parent,
+            string title,
+            float preferredWidth,
+            out RectTransform content)
+        {
+            var card =
+                CreateRect(
+                    title + " Dashboard Card",
+                    parent);
+
+            var cardImage =
+                card.gameObject
+                    .AddComponent<Image>();
+            cardImage.color =
+                new Color(
+                    0.055f,
+                    0.065f,
+                    0.08f,
+                    0.99f);
+            cardImage.raycastTarget =
+                false;
+
+            var outline =
+                card.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.16f,
+                    0.21f,
+                    0.28f,
+                    1f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
+
+            var cardLayout =
+                card.gameObject
+                    .AddComponent<LayoutElement>();
+            cardLayout.preferredWidth =
+                preferredWidth;
+            cardLayout.flexibleWidth = 1f;
+
+            var header =
+                CreateText(
+                    title + " Header",
+                    card,
+                    15,
+                    TextAnchor.MiddleLeft);
+            header.text =
+                "<b>" + title + "</b>";
+            header.supportRichText =
+                true;
+            header.raycastTarget =
+                false;
+            header.rectTransform.anchorMin =
+                new Vector2(0f, 1f);
+            header.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            header.rectTransform.pivot =
+                new Vector2(0.5f, 1f);
+            header.rectTransform.offsetMin =
+                new Vector2(10f, -34f);
+            header.rectTransform.offsetMax =
+                new Vector2(-10f, -4f);
+
+            content =
+                CreateRect(
+                    title + " Content",
+                    card);
+            Stretch(
+                content,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 10f),
+                new Vector2(-10f, -40f));
+
+            var layout =
+                content.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 5f;
+            layout.padding =
+                new RectOffset(
+                    0,
+                    0,
+                    0,
+                    0);
+            layout.childAlignment =
+                TextAnchor.UpperLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+
+            return card;
         }
 
         private static void AddActionPanelBackground(
