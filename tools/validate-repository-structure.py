@@ -1634,6 +1634,38 @@ require_source_contains(
 )
 require_source_contains(
     basic_environment_runtime,
+    "private bool TryCompleteTransition(",
+    "environment transition completion must expose a transactional success/failure boundary",
+)
+require_source_order(
+    basic_environment_runtime,
+    "new EnvironmentTransitionStatus(\n                    true,",
+    "TryApplyStateBinding(\n                    stateId,",
+    "environment transition completion must remain active until final root activation succeeds",
+)
+require_source_order(
+    basic_environment_runtime,
+    "TryApplyStateBinding(\n                    stateId,",
+    "new EnvironmentTransitionStatus(\n                    false,",
+    "environment transition completion must commit inactive status only after final root activation succeeds",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment transition completion failed: \"",
+    "environment transition completion root failures must remain explicit",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "sameState &&\n                _transitionStatus.Active",
+    "same-state idempotence must not bypass an unresolved transition completion",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"environment.transition_completion_pending\"",
+    "environment diagnostics must expose 100-percent transitions whose final root commit is still pending",
+)
+require_source_contains(
+    basic_environment_runtime,
     "TryApplyLightingProfileToTargets(",
     "environment lighting applies must report target execution failures through the public bool/error contract",
 )
