@@ -2275,8 +2275,8 @@ forbid_source_pattern(
 )
 require_source_contains(
     application_ui,
-    "var outputSettings =",
-    "output control refresh must sample overlay settings once per refresh pass",
+    "out var outputSettings,",
+    "output control refresh must reuse the sampled overlay settings snapshot within a refresh pass",
 )
 require_source_contains(
     application_ui,
@@ -2453,8 +2453,8 @@ require_source_contains(
 )
 require_source_contains(
     application_ui,
-    "GetOverlayOutputForUiRefresh()",
-    "application UI must share one overlay-output lookup within a refresh pass",
+    "TryGetOverlayOutputForUiRefresh(",
+    "application UI must share one exception-contained overlay status/settings snapshot within a refresh pass",
 )
 require_source_contains(
     application_ui,
