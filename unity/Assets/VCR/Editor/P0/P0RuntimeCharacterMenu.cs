@@ -1,6 +1,7 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using Object = UnityEngine.Object;
 using VCR.Runtime.Character;
 
 namespace VCR.Editor.P0
