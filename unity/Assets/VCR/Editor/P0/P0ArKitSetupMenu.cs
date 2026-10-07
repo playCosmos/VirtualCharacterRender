@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using Object = UnityEngine.Object;
 using VCR.Runtime.Tracking;
 using VCR.Runtime.Tracking.ArKit;
 using VCR.Runtime.Tracking.ArKitUnity;
@@ -196,7 +197,7 @@ namespace VCR.Editor.P0
                     new NormalizedFaceState(
                         TrackingQuaternion.Identity,
                         TrackingVector3.Zero,
-                        frame.Coefficients),
+                        frame.Coefficients.ToArray()),
                     timestampUs: 1);
 
                 var published =
@@ -208,7 +209,7 @@ namespace VCR.Editor.P0
                     new NormalizedFaceState(
                         TrackingQuaternion.Identity,
                         TrackingVector3.Zero,
-                        frame.Coefficients),
+                        frame.Coefficients.ToArray()),
                     timestampUs: 2);
 
                 source.Stop();
@@ -226,7 +227,7 @@ namespace VCR.Editor.P0
                         new NormalizedFaceState(
                             TrackingQuaternion.Identity,
                             TrackingVector3.Zero,
-                            frame.Coefficients),
+                            frame.Coefficients.ToArray()),
                         timestampUs: 3);
                 }
                 catch (InvalidOperationException)
