@@ -4,6 +4,8 @@
 
 Current alpha candidate: 0.1.0-alpha.1.
 
+Source snapshot branch: release/0.1.0-alpha.1.
+
 This alpha is a full-feature integration build of the current develop runtime. No existing camera, ARKit, VMC, rendering, UI, appearance, event, material, environment, diagnostics, or 2D-host implementation is compiled out for the alpha.
 
 The first validation pass intentionally does not require physical webcam or ARKit/iFacialMocap hardware. That is a validation-scope decision only, not a product-feature removal.
