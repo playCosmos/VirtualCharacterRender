@@ -707,8 +707,12 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
+                    scene.HasOverlayOutput &&
                     ReferenceEquals(
-                        scene.OverlayOutput,
+                        GetPrivateField<
+                            IOverlayOutputAdapter>(
+                                scene,
+                                "_overlayOutput"),
                         outputAdapter),
                     "scene runtime must resolve the overlay output adapter",
                     failures);
@@ -882,15 +886,15 @@ namespace VCR.Editor.P1
                 outputAdapter.ThrowOnSettingsRead =
                     true;
 
-                IOverlayOutputAdapter resolvedOverlay =
-                    null;
+                var overlayPresent =
+                    false;
                 var overlayResolutionThrew =
                     false;
 
                 try
                 {
-                    resolvedOverlay =
-                        scene.OverlayOutput;
+                    overlayPresent =
+                        scene.HasOverlayOutput;
                 }
                 catch
                 {
@@ -917,8 +921,12 @@ namespace VCR.Editor.P1
 
                 Expect(
                     !overlayResolutionThrew &&
+                    overlayPresent &&
                     ReferenceEquals(
-                        resolvedOverlay,
+                        GetPrivateField<
+                            IOverlayOutputAdapter>(
+                                scene,
+                                "_overlayOutput"),
                         outputAdapter) &&
                     !settingsFailureReadiness.Ready &&
                     settingsFailureReadiness.Failure ==
@@ -1861,7 +1869,12 @@ namespace VCR.Editor.P1
                     environment);
 
                 Expect(
-                    scene.OverlayOutput == null,
+                    !scene.HasOverlayOutput &&
+                    GetPrivateField<
+                        IOverlayOutputAdapter>(
+                            scene,
+                            "_overlayOutput") ==
+                        null,
                     "destroyed overlay adapters cached through an interface must be treated as unavailable",
                     failures);
 
@@ -1893,10 +1906,14 @@ namespace VCR.Editor.P1
                     EnvironmentSpaceMode.World);
 
                 Expect(
+                    scene.HasOverlayOutput &&
                     ReferenceEquals(
-                        scene.OverlayOutput,
+                        GetPrivateField<
+                            IOverlayOutputAdapter>(
+                                scene,
+                                "_overlayOutput"),
                         replacementOverlay),
-                    "overlay output getter must re-resolve a live replacement after the cached Unity adapter is destroyed",
+                    "overlay output availability probe must re-resolve a live replacement after the cached Unity adapter is destroyed",
                     failures);
 
                 Expect(
