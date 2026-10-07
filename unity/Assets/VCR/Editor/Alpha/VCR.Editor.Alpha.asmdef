@@ -21,7 +21,8 @@
     "VCR.Runtime.Tracking.MediaPipe",
     "VCR.Runtime.Tracking.Mixing",
     "VCR.Runtime.Tracking.Routing",
-    "VCR.Runtime.UI"
+    "VCR.Runtime.UI",
+    "VCR.Runtime.Core"
   ],
   "includePlatforms": [
     "Editor"
