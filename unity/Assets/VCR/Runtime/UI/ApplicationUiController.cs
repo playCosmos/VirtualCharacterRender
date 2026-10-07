@@ -2722,6 +2722,8 @@ namespace VCR.Runtime.UI
 
             var transitionId =
                 GetSelectedAppearanceTransitionId();
+            var current =
+                _appearanceRuntime.Current;
             var appearanceStatus =
                 _appearanceRuntime.Status;
 
@@ -3841,7 +3843,7 @@ namespace VCR.Runtime.UI
                 eventRuntime;
             _eventRuleStorePath =
                 Path.Combine(
-                    Application.persistentDataPath,
+                    UnityEngine.Application.persistentDataPath,
                     "VCR",
                     "event-rules.json");
 
@@ -4735,10 +4737,15 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var output =
-                sceneRuntime.OverlayOutput;
+            var outputReadable =
+                TryGetOverlayOutputForUiRefresh(
+                    out var outputPresent,
+                    out _,
+                    out var current,
+                    out var outputError);
 
-            if (output == null ||
+            if (!outputPresent ||
+                !outputReadable ||
                 !ApplicationUiActionPolicy
                     .CanApplyOverlaySetting(
                         true,
@@ -4746,15 +4753,15 @@ namespace VCR.Runtime.UI
                         true))
             {
                 _lastActionMessage =
-                    output == null
+                    !outputPresent
                         ? "No overlay output adapter is configured."
-                        : "Overlay output settings cannot be changed while the scene runtime is busy.";
+                        : !outputReadable
+                            ? "Overlay output state is unavailable: " +
+                              (outputError ?? "unknown error")
+                            : "Overlay output settings cannot be changed while the scene runtime is busy.";
                 RefreshAll();
                 return;
             }
-
-            var current =
-                output.Settings;
             var next =
                 new OverlayOutputSettings(
                     transparent
@@ -4921,9 +4928,13 @@ namespace VCR.Runtime.UI
 
             if (_recoverOutputButton != null)
             {
+                TryGetOverlayOutputForUiRefresh(
+                    out var recoverOutputPresent,
+                    out _,
+                    out _,
+                    out _);
                 _recoverOutputButton.interactable =
-                    GetOverlayOutputForUiRefresh() !=
-                    null;
+                    recoverOutputPresent;
             }
 
                 RefreshContextActions();
@@ -5200,18 +5211,19 @@ namespace VCR.Runtime.UI
             {
                 var status =
                     sceneRuntime.Status;
-                var output =
-                    GetOverlayOutputForUiRefresh();
+                var outputReadable =
+                    TryGetOverlayOutputForUiRefresh(
+                        out var outputPresent,
+                        out _,
+                        out var outputSettings,
+                        out _);
                 var canApplyOverlay =
                     ApplicationUiActionPolicy
                         .CanApplyOverlaySetting(
                             true,
                             status.State,
-                            output != null);
-                var outputSettings =
-                    output != null
-                        ? output.Settings
-                        : default;
+                            outputPresent &&
+                            outputReadable);
 
                 if (_outputTransparentButton != null)
                 {
@@ -5219,7 +5231,7 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputTransparentButton,
-                        output == null
+                        !outputReadable
                             ? "Transparent: n/a"
                             : outputSettings.Transparent
                                 ? "Transparent: On"
@@ -5232,7 +5244,7 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputTopmostButton,
-                        output == null
+                        !outputReadable
                             ? "Topmost: n/a"
                             : outputSettings.Topmost
                                 ? "Topmost: On"
@@ -5245,7 +5257,7 @@ namespace VCR.Runtime.UI
                         canApplyOverlay;
                     SetButtonLabel(
                         _outputClickThroughButton,
-                        output == null
+                        !outputReadable
                             ? "Click-through: n/a"
                             : outputSettings.ClickThrough
                                 ? "Click-through: On"
@@ -6148,15 +6160,17 @@ namespace VCR.Runtime.UI
                 sceneAvailable
                     ? sceneRuntime.Status
                     : default;
-            var output =
-                sceneAvailable
-                    ? GetOverlayOutputForUiRefresh()
-                    : null;
             var outputAvailable =
-                output != null;
+                sceneAvailable &&
+                TryGetOverlayOutputForUiRefresh(
+                    out var outputPresent,
+                    out var outputStatus,
+                    out _,
+                    out _) &&
+                outputPresent;
             var outputState =
                 outputAvailable
-                    ? output.Status.State
+                    ? outputStatus.State
                     : default;
 
             if (_statusBarStateValid &&
@@ -6979,11 +6993,13 @@ namespace VCR.Runtime.UI
 
             var selectedExpression =
                 expressionInput?.Trim();
+            StandardExpression expression =
+                default;
             var hasSelectedValue =
                 manualAvailable &&
                 StandardExpressionNames.TryParse(
                     selectedExpression,
-                    out var expression);
+                    out expression);
             var selectedValue =
                 hasSelectedValue
                     ? _manualExpressionSource
@@ -7564,6 +7580,7 @@ namespace VCR.Runtime.UI
 
             CaptureEventsSummaryState(
                 ruleCount,
+                hasSelectedRule,
                 selectedRule,
                 traceEnabled,
                 maxCommandsPerEvent,
@@ -7682,18 +7699,12 @@ namespace VCR.Runtime.UI
                 return "Scene/output runtime unavailable.";
             }
 
-            var output =
-                GetOverlayOutputForUiRefresh();
-            var hasAdapter =
-                output != null;
-            var status =
-                hasAdapter
-                    ? output.Status
-                    : default;
-            var settings =
-                hasAdapter
-                    ? output.Settings
-                    : default;
+            var outputReadable =
+                TryGetOverlayOutputForUiRefresh(
+                    out var hasAdapter,
+                    out var status,
+                    out var settings,
+                    out var outputError);
             var renderAvailable =
                 TryGetRenderSettingsForUiRefresh(
                     out var render);
@@ -7709,16 +7720,21 @@ namespace VCR.Runtime.UI
             }
 
             var readiness =
-                hasAdapter
+                hasAdapter &&
+                outputReadable
                     ? OverlayCaptureReadinessEvaluator
                         .Evaluate(
                             status,
                             settings)
                     : new OverlayCaptureReadiness(
                         false,
-                        OverlayCaptureReadinessFailure
-                            .NotActive,
-                        "No overlay output adapter is configured.");
+                        hasAdapter
+                            ? OverlayCaptureReadinessFailure.Faulted
+                            : OverlayCaptureReadinessFailure.NotActive,
+                        hasAdapter
+                            ? outputError ??
+                              "Overlay output state is unavailable."
+                            : "No overlay output adapter is configured.");
             var minimum =
                 renderAvailable
                     ? BroadcastCaptureReadinessEvaluator
@@ -9598,7 +9614,7 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            if (Application.isPlaying)
+            if (UnityEngine.Application.isPlaying)
             {
                 Destroy(value);
             }
