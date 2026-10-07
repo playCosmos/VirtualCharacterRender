@@ -17,6 +17,11 @@ namespace VCR.Runtime.UI
         private RectTransform _dashboardSettingsModal;
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
+        private Text _dashboardEnvironmentStatusText;
+        private Button _dashboardResolutionButton;
+        private Button _dashboardFpsButton;
+        private Button _dashboardBackgroundModeButton;
+        private Button _dashboardTopmostButton;
 
         private void FinalizeMockupDashboard(
             RectTransform titleBar,
@@ -154,16 +159,18 @@ namespace VCR.Runtime.UI
             left.anchorMin =
                 new Vector2(0f, 0f);
             left.anchorMax =
-                new Vector2(0.68f, 1f);
+                new Vector2(0.72f, 1f);
             left.offsetMin =
-                new Vector2(6f, 4f);
+                new Vector2(8f, 4f);
             left.offsetMax =
                 new Vector2(-4f, -4f);
 
             var leftLayout =
                 left.gameObject
                     .AddComponent<HorizontalLayoutGroup>();
-            leftLayout.spacing = 6f;
+            leftLayout.spacing = 12f;
+            leftLayout.childAlignment =
+                TextAnchor.MiddleLeft;
             leftLayout.childControlWidth = true;
             leftLayout.childControlHeight = true;
             leftLayout.childForceExpandWidth = false;
@@ -171,40 +178,23 @@ namespace VCR.Runtime.UI
 
             AddToolbarLabel(
                 left,
-                "화면 비율",
-                58f);
-            AddToolbarButton(
-                left,
-                "16:9⌄",
-                70f,
-                () =>
-                    SetDashboardNotice(
-                        "화면 비율: 16:9"));
+                "미리보기",
+                52f);
             AddToolbarLabel(
                 left,
-                "뷰",
-                24f);
-            AddToolbarButton(
+                "16:9",
+                42f);
+            AddToolbarLabel(
                 left,
-                "카메라⌄",
-                84f,
-                () =>
-                    SetDashboardNotice(
-                        "카메라 뷰"));
-            AddToolbarButton(
-                left,
-                "⌖",
-                38f,
-                () =>
-                    SetDashboardNotice(
-                        "카메라 프레이밍"));
+                "카메라 뷰",
+                68f);
 
             var right =
                 CreateRect(
                     "Viewport Toolbar Right",
                     toolbar);
             right.anchorMin =
-                new Vector2(0.58f, 0f);
+                new Vector2(0.72f, 0f);
             right.anchorMax =
                 new Vector2(1f, 1f);
             right.offsetMin =
@@ -225,22 +215,8 @@ namespace VCR.Runtime.UI
 
             AddToolbarButton(
                 right,
-                "⌗ 그리드",
-                90f,
-                () =>
-                    SetDashboardNotice(
-                        "그리드 표시 전환"));
-            AddToolbarButton(
-                right,
-                "통계 표시",
+                "⛶ 크게 보기",
                 92f,
-                () =>
-                    SetDashboardNotice(
-                        "통계 표시 전환"));
-            AddToolbarButton(
-                right,
-                "⛶",
-                38f,
                 windowChrome != null
                     ? windowChrome.ToggleZoom
                     : null);
@@ -1103,36 +1079,23 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .preferredHeight = 24f;
 
-            var quality =
-                CreateDashboardRow(
-                    _trackingDashboardContent,
-                    "Tracking Quality",
-                    30f);
-            var qualityLabel =
+            var sourceHelp =
                 CreateText(
-                    "Tracking Quality Label",
-                    quality,
-                    12,
+                    "Tracking Source Help",
+                    _trackingDashboardContent,
+                    11,
                     TextAnchor.MiddleLeft);
-            qualityLabel.text =
-                "트래킹 품질";
-            qualityLabel.gameObject
+            sourceHelp.text =
+                "사용할 수 있는 입력 소스만 활성화됩니다. 카메라 영상은 위 버튼을 눌렀을 때만 표시됩니다.";
+            sourceHelp.color =
+                new Color(
+                    0.58f,
+                    0.64f,
+                    0.72f,
+                    1f);
+            sourceHelp.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 82f;
-            AddDashboardTab(
-                quality,
-                "표준",
-                false,
-                () =>
-                    SelectSection(
-                        ApplicationUiSection.Tracking));
-            AddDashboardTab(
-                quality,
-                "⚙",
-                false,
-                () =>
-                    SelectSection(
-                        ApplicationUiSection.Tracking));
+                .preferredHeight = 34f;
         }
 
         private void BuildMockupMotionCard()
@@ -1167,58 +1130,24 @@ namespace VCR.Runtime.UI
                     34f);
             AddDashboardTab(
                 tabs,
-                "기본 동작",
+                "모션",
                 true,
                 () =>
                     SelectSection(
                         ApplicationUiSection.MotionExpression));
             AddDashboardTab(
                 tabs,
-                "표정 프리셋",
+                "표정",
                 false,
                 () =>
                     SelectSection(
                         ApplicationUiSection.Expression));
 
-            var motions =
-                new[]
-                {
-                    "대기 01",
-                    "대기 02",
-                    "인사하기",
-                    "손 흔들기",
-                    "놀람",
-                    "하트",
-                    "사용자 모션 1",
-                    "사용자 모션 2"
-                };
-
-            for (var i = 0;
-                 i < motions.Length;
-                 i++)
-            {
-                var motion =
-                    motions[i];
-                var button =
-                    CreateButton(
-                        "▶   " +
-                        motion +
-                        "                         ···",
-                        _motionDashboardContent,
-                        () =>
-                            SetDashboardNotice(
-                                motion));
-                AddPreferredHeight(
-                    button.gameObject,
-                    25f);
-                var label =
-                    button.GetComponentInChildren<Text>();
-                if (label != null)
-                {
-                    label.alignment =
-                        TextAnchor.MiddleLeft;
-                }
-            }
+            AddDashboardEmptyState(
+                _motionDashboardContent,
+                "등록된 모션이 없습니다.",
+                "실제 모션/애니메이션이 등록되면 이 영역에만 표시합니다. 예시 모션은 만들지 않습니다.",
+                116f);
         }
 
         private void BuildMockupControlCard()
@@ -1231,54 +1160,29 @@ namespace VCR.Runtime.UI
             SetDashboardVerticalLayout(
                 _controlDashboardContent);
 
-            CreateDashboardSliderRow(
+            AddDashboardEmptyState(
                 _controlDashboardContent,
-                "전체 크기",
-                0f,
-                2f,
-                1f);
-            CreateDashboardSliderRow(
-                _controlDashboardContent,
-                "높이 오프셋",
-                -1f,
-                1f,
-                0f);
-            CreateDashboardSliderRow(
-                _controlDashboardContent,
-                "시선 강도",
-                0f,
-                1f,
-                1f);
-            CreateDashboardSliderRow(
-                _controlDashboardContent,
-                "블링크",
-                0f,
-                1f,
-                1f);
+                "모델 조작값 대기 중",
+                "모델에서 실제로 제어 가능한 파라미터가 확인된 뒤에만 슬라이더와 토글을 표시합니다.",
+                118f);
 
-            AddDashboardToggle(
-                _controlDashboardContent,
-                "물리 연산 (머리카락/의상)",
-                true);
-            AddDashboardToggle(
-                _controlDashboardContent,
-                "바닥 그림자",
-                true);
-            AddDashboardToggle(
-                _controlDashboardContent,
-                "자동 카메라 프레이밍",
-                false);
-
-            var reset =
-                CreateButton(
-                    "↻ 리셋",
+            var help =
+                CreateText(
+                    "Control Availability Help",
                     _controlDashboardContent,
-                    () =>
-                        SetDashboardNotice(
-                            "조작 값을 초기화했습니다."));
-            AddPreferredHeight(
-                reset.gameObject,
-                34f);
+                    11,
+                    TextAnchor.MiddleLeft);
+            help.text =
+                "현재 알파 빌드의 렌더링·트래킹·외형 런타임은 유지되며, 동작하지 않는 장식용 컨트롤만 숨깁니다.";
+            help.color =
+                new Color(
+                    0.56f,
+                    0.62f,
+                    0.70f,
+                    1f);
+            help.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredHeight = 44f;
         }
 
         private void BuildMockupEnvironmentCard()
@@ -1300,83 +1204,21 @@ namespace VCR.Runtime.UI
             HideDashboardLegacyControl(
                 _environmentApplyStateButton);
 
-            var tabs =
-                CreateDashboardRow(
+            _dashboardEnvironmentStatusText =
+                CreateText(
+                    "Environment Runtime Status",
                     _environmentDashboardContent,
-                    "Environment Tabs",
-                    34f);
-            AddDashboardTab(
-                tabs,
-                "배경",
-                true,
-                () =>
-                    SelectSection(
-                        ApplicationUiSection.Environment));
-            AddDashboardTab(
-                tabs,
-                "조명",
-                false,
-                () =>
-                    SelectSection(
-                        ApplicationUiSection.Environment));
-            AddDashboardTab(
-                tabs,
-                "카메라",
-                false,
-                () =>
-                    SelectSection(
-                        ApplicationUiSection.Environment));
-
-            var gridRect =
-                CreateRect(
-                    "Environment Preset Grid",
-                    _environmentDashboardContent);
-            gridRect.gameObject
+                    12,
+                    TextAnchor.MiddleLeft);
+            _dashboardEnvironmentStatusText.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredHeight = 184f;
+                .preferredHeight = 34f;
 
-            var grid =
-                gridRect.gameObject
-                    .AddComponent<GridLayoutGroup>();
-            grid.cellSize =
-                new Vector2(
-                    78f,
-                    82f);
-            grid.spacing =
-                new Vector2(
-                    6f,
-                    6f);
-            grid.constraint =
-                GridLayoutGroup.Constraint
-                    .FixedColumnCount;
-            grid.constraintCount = 3;
-            grid.childAlignment =
-                TextAnchor.UpperCenter;
-
-            AddEnvironmentTile(
-                gridRect,
-                "▦\n투명 배경",
-                "transparent");
-            AddEnvironmentTile(
-                gridRect,
-                "▧\n단색 배경",
-                "solid");
-            AddEnvironmentTile(
-                gridRect,
-                "▣\n스튜디오",
-                "studio");
-            AddEnvironmentTile(
-                gridRect,
-                "▤\n방",
-                "room");
-            AddEnvironmentTile(
-                gridRect,
-                "▥\n야외",
-                "outdoor");
-            AddEnvironmentTile(
-                gridRect,
-                "···\n커스텀",
-                "custom");
+            AddDashboardEmptyState(
+                _environmentDashboardContent,
+                "등록된 배경 프리셋이 없습니다.",
+                "현재 런타임 상태는 위에 표시합니다. 스튜디오·방·야외 같은 예시 항목은 실제 데이터가 없으면 노출하지 않습니다.",
+                132f);
         }
 
         private void BuildMockupOutputCard()
@@ -1400,48 +1242,70 @@ namespace VCR.Runtime.UI
             HideDashboardLegacyControl(
                 _outputClickThroughButton);
 
-            AddOutputValueRow(
-                "해상도",
-                "1920 × 1080 (Full HD)⌄",
-                Apply1080p60);
-            AddOutputValueRow(
-                "프레임 레이트",
-                "60 FPS⌄",
-                Apply1080p60);
-            AddOutputValueRow(
-                "배경 모드",
-                "▧ 투명 배경 (Alpha)",
-                ToggleOverlayTransparent);
-            AddOutputValueRow(
-                "안티앨리어싱",
-                "TAA (권장)⌄",
-                () =>
-                    SetDashboardNotice(
-                        "안티앨리어싱 설정"));
+            _dashboardResolutionButton =
+                AddOutputValueRow(
+                    "해상도",
+                    "확인 중…",
+                    ToggleDashboardResolution);
+            _dashboardFpsButton =
+                AddOutputValueRow(
+                    "프레임",
+                    "확인 중…",
+                    ToggleDashboardResolution);
+            _dashboardBackgroundModeButton =
+                AddOutputValueRow(
+                    "배경 모드",
+                    "확인 중…",
+                    ToggleOverlayTransparent);
+            _dashboardTopmostButton =
+                AddOutputValueRow(
+                    "창 표시",
+                    "확인 중…",
+                    ToggleOverlayTopmost);
 
-            AddDashboardToggle(
-                _outputDashboardContent,
-                "가상 카메라 출력 활성화",
-                true);
-            AddDashboardToggle(
-                _outputDashboardContent,
-                "창 항상 위에 표시",
-                true,
-                ToggleOverlayTopmost);
-
-            var detach =
-                CreateButton(
-                    "↗ 미리보기 창 분리",
+            var help =
+                CreateText(
+                    "Output Help",
                     _outputDashboardContent,
-                    () =>
-                        SetDashboardNotice(
-                            "미리보기 창 분리"));
-            AddPreferredHeight(
-                detach.gameObject,
-                34f);
+                    11,
+                    TextAnchor.MiddleLeft);
+            help.text =
+                "해상도/프레임은 720p60 ↔ 1080p60 프리셋을 전환합니다. 표시 값은 현재 런타임 상태를 그대로 반영합니다.";
+            help.color =
+                new Color(
+                    0.56f,
+                    0.62f,
+                    0.70f,
+                    1f);
+            help.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredHeight = 42f;
         }
 
-        private void AddOutputValueRow(
+        private void ToggleDashboardResolution()
+        {
+            if (sceneRuntime == null)
+            {
+                SetDashboardNotice(
+                    "렌더링 설정을 사용할 수 없습니다.");
+                return;
+            }
+
+            var current =
+                sceneRuntime.CaptureRenderSettings();
+
+            if (current.Width >= 1600 ||
+                current.Height >= 900)
+            {
+                Apply720p60();
+            }
+            else
+            {
+                Apply1080p60();
+            }
+        }
+
+        private Button AddOutputValueRow(
             string label,
             string value,
             Action action)
@@ -1471,6 +1335,8 @@ namespace VCR.Runtime.UI
             valueButton.gameObject
                 .AddComponent<LayoutElement>()
                 .flexibleWidth = 1f;
+
+            return valueButton;
         }
 
         private void AddEnvironmentTile(
@@ -1769,6 +1635,39 @@ namespace VCR.Runtime.UI
             return panel;
         }
 
+        private void AddDashboardEmptyState(
+            Transform parent,
+            string title,
+            string detail,
+            float height)
+        {
+            var panel =
+                CreateDashboardPanel(
+                    parent,
+                    title + " Empty State",
+                    height);
+
+            var titleText =
+                CreateText(
+                    title + " Empty Title",
+                    panel,
+                    13,
+                    TextAnchor.MiddleCenter);
+            titleText.text =
+                "<b>" + title + "</b>\n<size=11><color=#97A3B3>" +
+                detail +
+                "</color></size>";
+            titleText.supportRichText = true;
+            titleText.font =
+                _dashboardFontMedium;
+            Stretch(
+                titleText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(16f, 12f),
+                new Vector2(-16f, -12f));
+        }
+
         private void SetDashboardVerticalLayout(
             RectTransform content)
         {
@@ -1914,6 +1813,73 @@ namespace VCR.Runtime.UI
                         ? "트래킹 상태   ● 활성"
                         : "트래킹 상태   ● 비활성화");
             }
+
+            if (_dashboardEnvironmentStatusText != null)
+            {
+                var environmentStatus =
+                    IsServiceAlive(_environmentRuntime)
+                        ? _environmentRuntime.Status
+                        : default;
+                SetTextIfChanged(
+                    _dashboardEnvironmentStatusText,
+                    IsServiceAlive(_environmentRuntime)
+                        ? "현재 환경   " +
+                          (string.IsNullOrWhiteSpace(
+                               environmentStatus.StateId)
+                              ? "기본"
+                              : environmentStatus.StateId)
+                        : "현재 환경   사용할 수 없음");
+            }
+
+            if (TryGetRenderSettingsForUiRefresh(
+                    out var renderSettings))
+            {
+                SetButtonLabel(
+                    _dashboardResolutionButton,
+                    renderSettings.Width +
+                    " × " +
+                    renderSettings.Height +
+                    (renderSettings.Width >= 1600
+                        ? "  ·  720p로 전환"
+                        : "  ·  1080p로 전환"));
+                SetButtonLabel(
+                    _dashboardFpsButton,
+                    renderSettings.TargetFrameRate +
+                    " FPS  ·  프리셋 전환");
+            }
+            else
+            {
+                SetButtonLabel(
+                    _dashboardResolutionButton,
+                    "렌더링 설정 없음");
+                SetButtonLabel(
+                    _dashboardFpsButton,
+                    "렌더링 설정 없음");
+            }
+
+            var overlayReadable =
+                TryGetOverlayOutputForUiRefresh(
+                    out var overlayPresent,
+                    out _,
+                    out var overlaySettings,
+                    out _);
+
+            SetButtonLabel(
+                _dashboardBackgroundModeButton,
+                overlayPresent &&
+                overlayReadable
+                    ? overlaySettings.Transparent
+                        ? "투명 배경 (Alpha)"
+                        : "불투명 배경"
+                    : "출력 어댑터 없음");
+            SetButtonLabel(
+                _dashboardTopmostButton,
+                overlayPresent &&
+                overlayReadable
+                    ? overlaySettings.Topmost
+                        ? "항상 위: 켜짐"
+                        : "항상 위: 꺼짐"
+                    : "출력 어댑터 없음");
 
             RefreshDashboardPresetGallery();
 
