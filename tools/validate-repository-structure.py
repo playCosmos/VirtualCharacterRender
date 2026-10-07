@@ -1609,6 +1609,31 @@ require_source_contains(
 )
 require_source_contains(
     basic_environment_runtime,
+    "CaptureBindingActiveStates(",
+    "environment binding activation must snapshot exact root states before mutation",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "RestoreBindingActiveStates(",
+    "environment binding activation failures must restore the exact pre-apply root states",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment state binding apply failed: \"",
+    "environment state binding apply exceptions must be contained by the bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment transition binding prepare failed: \"",
+    "environment transition root preparation exceptions must be contained by the bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\" | rollback incomplete: \"",
+    "environment binding rollback failures must remain explicit in structured errors",
+)
+require_source_contains(
+    basic_environment_runtime,
     "TryApplyLightingProfileToTargets(",
     "environment lighting applies must report target execution failures through the public bool/error contract",
 )
