@@ -467,6 +467,12 @@ namespace VCR.Runtime.UI
             _statusText = null;
             _sectionTitle = null;
             _contentText = null;
+            _renderViewportFrame = null;
+            _trackingCameraPreviewPanel = null;
+            _trackingCameraPreviewImage = null;
+            _trackingCameraPreviewPrivacyText = null;
+            _trackingCameraPreviewButton = null;
+            _trackingCameraPreviewRequested = false;
             _saveButton = null;
             _recoverOutputButton = null;
             _contextActions = null;
