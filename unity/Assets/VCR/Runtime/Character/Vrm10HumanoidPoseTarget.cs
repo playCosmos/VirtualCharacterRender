@@ -981,8 +981,15 @@ namespace VCR.Runtime.Character
                     value.Z,
                     value.W);
 
+            var magnitudeSquared =
+                Quaternion.Dot(
+                    candidate,
+                    candidate);
+
             if (!IsFinite(candidate) ||
-                candidate.sqrMagnitude <
+                !float.IsFinite(
+                    magnitudeSquared) ||
+                magnitudeSquared <
                     1e-8f)
             {
                 return false;
