@@ -4184,8 +4184,7 @@ namespace VCR.Runtime.Appearance.Unity
         {
             return
                 (slotId ?? string.Empty) +
-                "
-" +
+                "\n" +
                 (accessoryId ?? string.Empty);
         }
 
