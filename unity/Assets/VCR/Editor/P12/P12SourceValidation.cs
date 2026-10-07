@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VCR.Editor.P11;
 using VCR.Runtime.Appearance;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.EventRuntime;
@@ -1249,7 +1250,7 @@ namespace VCR.Editor.P12
                 };
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryAddDependency(
                         transition,
                         0,
@@ -1272,7 +1273,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryAddDependency(
                         transition,
                         1,
@@ -1298,12 +1299,12 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .HasDependency(
                         transition,
                         0,
                         2) &&
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .HasDependency(
                         transition,
                         1,
@@ -1312,7 +1313,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryAssignDependencyGroup(
                         transition,
                         2,
@@ -1340,7 +1341,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryAssignDependencyGroup(
                         transition,
                         2,
@@ -1378,7 +1379,7 @@ namespace VCR.Editor.P12
                     "wardrobe/change";
 
             var hierarchyPaths =
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .CaptureGroupPaths(
                         transition);
 
@@ -1395,7 +1396,7 @@ namespace VCR.Editor.P12
                 Array.IndexOf(
                     hierarchyPaths,
                     "wardrobe/change/effects") >= 0 &&
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryValidateGroupMetadata(
                         transition,
                         out var validHierarchyError),
@@ -1404,7 +1405,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryRewriteGroupHierarchy(
                         transition,
                         " wardrobe / change ",
@@ -1432,7 +1433,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                !P12TransitionDependencyAuthoringUtility
+                !P11TransitionDependencyAuthoringUtility
                     .TryRewriteGroupHierarchy(
                         transition,
                         "show/wardrobe",
@@ -1447,7 +1448,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryClearGroupHierarchy(
                         transition,
                         "show/wardrobe",
@@ -1471,7 +1472,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryClearGroupHierarchy(
                         transition,
                         "show/wardrobe",
@@ -1499,7 +1500,7 @@ namespace VCR.Editor.P12
                     "bad//path";
 
             Expect(
-                !P12TransitionDependencyAuthoringUtility
+                !P11TransitionDependencyAuthoringUtility
                     .TryValidateGroupMetadata(
                         transition,
                         out var invalidGroupPathError) &&
@@ -1516,7 +1517,7 @@ namespace VCR.Editor.P12
                     string.Empty;
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryRemoveDependency(
                         transition,
                         0,
@@ -1534,7 +1535,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                P12TransitionDependencyAuthoringUtility
+                P11TransitionDependencyAuthoringUtility
                     .TryRemoveDependency(
                         transition,
                         1,
@@ -1552,7 +1553,7 @@ namespace VCR.Editor.P12
                 failures);
 
             Expect(
-                !P12TransitionDependencyAuthoringUtility
+                !P11TransitionDependencyAuthoringUtility
                     .TryAddDependency(
                         transition,
                         2,
@@ -1574,7 +1575,7 @@ namespace VCR.Editor.P12
                 string.Empty;
 
             Expect(
-                !P12TransitionDependencyAuthoringUtility
+                !P11TransitionDependencyAuthoringUtility
                     .TryAddDependency(
                         transition,
                         0,
