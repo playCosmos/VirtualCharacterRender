@@ -1,18 +1,18 @@
 using System;
 using System.Runtime.InteropServices;
-using Kirurobo;
 using UnityEngine;
 
 namespace VCR.Runtime.UI
 {
     /// <summary>
-    /// Owns the native desktop window chrome used by the in-app title bar.
-    /// UniWinC remains the single native window attachment; this controller
-    /// only keeps the attached player borderless and exposes window actions
-    /// to the runtime UI.
+    /// Native bridge for the custom in-app title bar.
+    ///
+    /// UniWinC's managed controller remains owned by the output layer. The UI
+    /// talks only to the small public native window surface that UniWinC
+    /// already ships, keeping the UI assembly independent from Kirurobo's
+    /// managed assembly.
     /// </summary>
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UniWindowController))]
     [DefaultExecutionOrder(200)]
     public sealed class DesktopWindowChromeController :
         MonoBehaviour
@@ -20,7 +20,6 @@ namespace VCR.Runtime.UI
         [SerializeField] private bool borderlessStandalone = true;
         [SerializeField, Min(0.1f)] private float borderlessReapplySeconds = 0.5f;
 
-        private UniWindowController _window;
         private Vector2 _dragOffset;
         private bool _dragging;
         private float _nextBorderlessApplyAt;
@@ -32,19 +31,38 @@ namespace VCR.Runtime.UI
             false;
 #endif
 
-        public bool IsZoomed =>
-            _window != null &&
-            _window.isZoomed;
+        public bool IsZoomed
+        {
+            get
+            {
+                if (Application.isEditor)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    return IsMaximizedNative();
+                }
+                catch (DllNotFoundException)
+                {
+                    return false;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return false;
+                }
+            }
+        }
 
         private void Awake()
         {
-            _window =
-                GetComponent<UniWindowController>();
-
-            if (_window != null)
+#if !UNITY_EDITOR
+            if (Screen.fullScreen)
             {
-                _window.forceWindowed = true;
+                Screen.fullScreen = false;
             }
+#endif
         }
 
         private void Start()
@@ -76,31 +94,59 @@ namespace VCR.Runtime.UI
 
         public void BeginDrag()
         {
-            if (_window == null ||
-                _window.isZoomed)
+            if (Application.isEditor ||
+                IsZoomed)
+            {
+                _dragging = false;
+                return;
+            }
+
+            if (!TryGetCursorPosition(
+                    out var cursor) ||
+                !TryGetWindowPosition(
+                    out var window))
             {
                 _dragging = false;
                 return;
             }
 
             _dragOffset =
-                _window.cursorPosition -
-                _window.windowPosition;
+                cursor -
+                window;
             _dragging = true;
         }
 
         public void DragToCursor()
         {
             if (!_dragging ||
-                _window == null ||
-                _window.isZoomed)
+                Application.isEditor ||
+                IsZoomed)
             {
                 return;
             }
 
-            _window.windowPosition =
-                _window.cursorPosition -
-                _dragOffset;
+            if (!TryGetCursorPosition(
+                    out var cursor))
+            {
+                return;
+            }
+
+            try
+            {
+                SetPositionNative(
+                    cursor.x -
+                        _dragOffset.x,
+                    cursor.y -
+                        _dragOffset.y);
+            }
+            catch (DllNotFoundException)
+            {
+                _dragging = false;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                _dragging = false;
+            }
         }
 
         public void EndDrag()
@@ -110,14 +156,26 @@ namespace VCR.Runtime.UI
 
         public void ToggleZoom()
         {
-            if (_window == null)
+            if (Application.isEditor)
             {
                 return;
             }
 
             _dragging = false;
-            _window.isZoomed =
-                !_window.isZoomed;
+
+            try
+            {
+                SetMaximizedNative(
+                    !IsMaximizedNative());
+            }
+            catch (DllNotFoundException)
+            {
+                return;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return;
+            }
 
             ApplyBorderlessIfNeeded(
                 force: true);
@@ -183,11 +241,71 @@ namespace VCR.Runtime.UI
             }
             catch (DllNotFoundException)
             {
-                // UniWinC is optional outside supported standalone targets.
+                // Keep the UI usable on unsupported development targets.
             }
             catch (EntryPointNotFoundException)
             {
-                // Keep the player usable if a future UniWinC binary changes.
+                // Keep the UI usable if a future UniWinC binary changes.
+            }
+        }
+
+        private static bool TryGetCursorPosition(
+            out Vector2 position)
+        {
+            position = Vector2.zero;
+
+            try
+            {
+                if (!GetCursorPositionNative(
+                        out var x,
+                        out var y))
+                {
+                    return false;
+                }
+
+                position =
+                    new Vector2(
+                        x,
+                        y);
+                return true;
+            }
+            catch (DllNotFoundException)
+            {
+                return false;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryGetWindowPosition(
+            out Vector2 position)
+        {
+            position = Vector2.zero;
+
+            try
+            {
+                if (!GetPositionNative(
+                        out var x,
+                        out var y))
+                {
+                    return false;
+                }
+
+                position =
+                    new Vector2(
+                        x,
+                        y);
+                return true;
+            }
+            catch (DllNotFoundException)
+            {
+                return false;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return false;
             }
         }
 
@@ -210,5 +328,46 @@ namespace VCR.Runtime.UI
         private static extern void SetBorderlessNative(
             [MarshalAs(UnmanagedType.U1)]
             bool enabled);
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "IsMaximized",
+            CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsMaximizedNative();
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "SetMaximized",
+            CallingConvention = CallingConvention.Winapi)]
+        private static extern void SetMaximizedNative(
+            [MarshalAs(UnmanagedType.U1)]
+            bool maximized);
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "GetPosition",
+            CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetPositionNative(
+            out float x,
+            out float y);
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "SetPosition",
+            CallingConvention = CallingConvention.Winapi)]
+        private static extern void SetPositionNative(
+            float x,
+            float y);
+
+        [DllImport(
+            "LibUniWinC",
+            EntryPoint = "GetCursorPosition",
+            CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetCursorPositionNative(
+            out float x,
+            out float y);
     }
 }
