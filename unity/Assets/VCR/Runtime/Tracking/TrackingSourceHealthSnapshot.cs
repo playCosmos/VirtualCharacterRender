@@ -52,7 +52,7 @@ namespace VCR.Runtime.Tracking
         }
     }
 
-    internal static class TrackingTimestampMath
+    public static class TrackingTimestampMath
     {
         public static bool TryElapsedMicroseconds(
             long nowUs,
