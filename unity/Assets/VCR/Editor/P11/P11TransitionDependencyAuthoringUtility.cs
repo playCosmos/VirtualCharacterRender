@@ -4,7 +4,7 @@ using VCR.Runtime.Appearance;
 
 namespace VCR.Editor.P11
 {
-    internal static class P11TransitionDependencyAuthoringUtility
+    public static class P11TransitionDependencyAuthoringUtility
     {
         public static bool TryAddDependency(
             AppearanceTransitionPreset transition,
