@@ -35,6 +35,8 @@ namespace VCR.Runtime.Character
 
         [Header("Materials")]
         [SerializeField] private bool attachMaterialOverrideController = true;
+        [SerializeField] private Shader vrm10BuiltInMToonShader;
+        [SerializeField] private Shader builtInStandardShader;
         [SerializeField] private Shader vrm10UrpMToonShader;
         [SerializeField] private Shader urpLitShader;
         [SerializeField] private Shader uniUnlitShader;
@@ -212,13 +214,22 @@ namespace VCR.Runtime.Character
         }
 
         public void ConfigureRuntimeImportShaders(
-            Shader mtoonShader,
+            Shader builtInMToonShader,
+            Shader standardShader,
+            Shader urpMToonShader,
             Shader litShader,
             Shader unlitShader)
         {
-            vrm10UrpMToonShader = mtoonShader;
-            urpLitShader = litShader;
-            uniUnlitShader = unlitShader;
+            vrm10BuiltInMToonShader =
+                builtInMToonShader;
+            builtInStandardShader =
+                standardShader;
+            vrm10UrpMToonShader =
+                urpMToonShader;
+            urpLitShader =
+                litShader;
+            uniUnlitShader =
+                unlitShader;
         }
 
         public void SetTrackingProvider(
@@ -247,32 +258,68 @@ namespace VCR.Runtime.Character
                 Vrm10MaterialDescriptorGeneratorUtility
                     .GetValidVrm10MaterialDescriptorGenerator();
 
-            if (generator is not
+            if (generator is
                 UrpVrm10MaterialDescriptorGenerator urp)
             {
-                return generator;
+                if (vrm10UrpMToonShader != null)
+                {
+                    urp.MToonMaterialImporter.Shader =
+                        vrm10UrpMToonShader;
+                }
+
+                if (urpLitShader != null)
+                {
+                    urp.PbrMaterialImporter.Shader =
+                        urpLitShader;
+                    urp.DefaultMaterialImporter.Shader =
+                        urpLitShader;
+                }
+
+                if (uniUnlitShader != null)
+                {
+                    urp.UnlitMaterialImporter.Shader =
+                        uniUnlitShader;
+                }
+
+                EnsureUrpImportShaders(
+                    urp);
+                return urp;
             }
 
-            if (vrm10UrpMToonShader != null)
+            if (generator is
+                BuiltInVrm10MaterialDescriptorGenerator builtIn)
             {
-                urp.MToonMaterialImporter.Shader =
-                    vrm10UrpMToonShader;
+                if (vrm10BuiltInMToonShader != null)
+                {
+                    builtIn.MToonMaterialImporter.Shader =
+                        vrm10BuiltInMToonShader;
+                }
+
+                if (builtInStandardShader != null)
+                {
+                    builtIn.PbrMaterialImporter.Shader =
+                        builtInStandardShader;
+                    builtIn.DefaultMaterialImporter.Shader =
+                        builtInStandardShader;
+                }
+
+                if (uniUnlitShader != null)
+                {
+                    builtIn.UnlitMaterialImporter.Shader =
+                        uniUnlitShader;
+                }
+
+                EnsureBuiltInImportShaders(
+                    builtIn);
+                return builtIn;
             }
 
-            if (urpLitShader != null)
-            {
-                urp.PbrMaterialImporter.Shader =
-                    urpLitShader;
-                urp.DefaultMaterialImporter.Shader =
-                    urpLitShader;
-            }
+            return generator;
+        }
 
-            if (uniUnlitShader != null)
-            {
-                urp.UnlitMaterialImporter.Shader =
-                    uniUnlitShader;
-            }
-
+        private static void EnsureUrpImportShaders(
+            UrpVrm10MaterialDescriptorGenerator urp)
+        {
             var missing =
                 new System.Collections.Generic.List<string>();
 
@@ -295,16 +342,56 @@ namespace VCR.Runtime.Character
                     "UniGLTF/UniUnlit");
             }
 
-            if (missing.Count > 0)
+            ThrowIfImportShadersMissing(
+                "URP",
+                missing);
+        }
+
+        private static void EnsureBuiltInImportShaders(
+            BuiltInVrm10MaterialDescriptorGenerator builtIn)
+        {
+            var missing =
+                new System.Collections.Generic.List<string>();
+
+            if (builtIn.MToonMaterialImporter.Shader == null)
             {
-                throw new InvalidOperationException(
-                    "VRM runtime shader dependency is missing: " +
-                    string.Join(", ", missing) +
-                    ". Rebuild the runtime scene/player so the UniVRM " +
-                    "shader assets are serialized into the build.");
+                missing.Add(
+                    "VRM10/MToon10");
             }
 
-            return urp;
+            if (builtIn.PbrMaterialImporter.Shader == null ||
+                builtIn.DefaultMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "Standard");
+            }
+
+            if (builtIn.UnlitMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "UniGLTF/UniUnlit");
+            }
+
+            ThrowIfImportShadersMissing(
+                "Built-in RP",
+                missing);
+        }
+
+        private static void ThrowIfImportShadersMissing(
+            string pipeline,
+            System.Collections.Generic.List<string> missing)
+        {
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                "VRM runtime shader dependency is missing " +
+                $"for {pipeline}: " +
+                string.Join(", ", missing) +
+                ". Rebuild the runtime scene/player so the UniVRM " +
+                "shader assets are serialized into the build.");
         }
 
         private void ConfigureLoadedCharacter(
