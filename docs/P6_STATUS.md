@@ -63,6 +63,7 @@ Engine-neutral transition contracts now include:
 - keeps previous and next state roots active while a non-Cut transition is running
 - creates/enables `EnvironmentTransitionDriver` only while a transition is active
 - completes to one active state root and disables the driver
+- transition completion is committed only after the final target-state root activation succeeds; if final root collapse fails, status remains Active at progress 1.0 with an explicit completion error and a `environment.transition_completion_pending` diagnostic instead of falsely reporting completion
 - completes an active transition before transition-target replacement
 - reports transition count/progress/failure/cost diagnostics
 
@@ -154,7 +155,7 @@ The source architecture is complete enough for a checkpoint, but these evidence 
 
 `StateChanged` notification is subscriber-isolated. A throwing UI/plugin observer cannot interrupt the already-committed environment state change, update dispatch, or transition setup; failures are counted as `environment.state_subscriber_failures`.
 
-Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime boundary. Later caller mutation of the original binding objects cannot rewrite the live environment configuration, and staged binding application must succeed before the new binding set is committed. Immediate state switches and non-Cut transition root preparation now snapshot every bound root's `activeSelf` value before mutation and restore that exact snapshot if a later `SetActive` fails; rollback failures remain explicit in the returned error instead of silently leaving partially toggled roots.
+Configured `EnvironmentStateBinding` inputs are deep-cloned at the runtime boundary. Later caller mutation of the original binding objects cannot rewrite the live environment configuration, and staged binding application must succeed before the new binding set is committed. Immediate state switches and non-Cut transition root preparation now snapshot every bound root's `activeSelf` value before mutation and restore that exact snapshot if a later `SetActive` fails; rollback failures remain explicit in the returned error instead of silently leaving partially toggled roots. Transition completion uses the same fail-closed rule: same-state idempotence cannot bypass a pending completion fault, unrelated state changes cannot overwrite it, and repairing the bindings allows a later completion retry to commit inactive status and clear the stale completion error.
 
 Lighting configuration now follows the same fail-closed contract. `ConfigureLightingTargets(..., out error)` and `SetLightingProfile(..., out error)` convert validation/apply exceptions into structured failures, continue isolating individual target exceptions for diagnostics, and restore the previous target set/profile when a staged apply fails after another target has already changed.
 
