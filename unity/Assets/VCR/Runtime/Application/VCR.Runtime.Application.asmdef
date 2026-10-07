@@ -4,7 +4,8 @@
   "references": [
     "VCR.Runtime.Core",
     "VCR.Runtime.Scene",
-    "VCR.Runtime.Appearance"
+    "VCR.Runtime.Appearance",
+    "VRM10"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
