@@ -57,6 +57,7 @@ namespace VCR.Runtime.Scene
         private double _nextEnvironmentRuntimeResolveAt;
         private double _nextRenderBootstrapResolveAt;
         private long _statusSubscriberFailureCount;
+        private bool _configurationRecoveryPending;
 
         public SceneRuntimeState State => _state;
         public Vrm10Instance CurrentCharacter =>
@@ -281,6 +282,11 @@ namespace VCR.Runtime.Scene
                 }
 
                 SetFault(message);
+                return false;
+            }
+
+            if (_configurationRecoveryPending)
+            {
                 return false;
             }
 
@@ -515,6 +521,17 @@ namespace VCR.Runtime.Scene
 
                 _overlayConfiguration =
                     nextOverlayConfiguration;
+
+                if (_configurationRecoveryPending)
+                {
+                    _configurationRecoveryPending =
+                        false;
+                    _lastError = null;
+                    SetState(
+                        CurrentCharacter != null
+                            ? SceneRuntimeState.CharacterReady
+                            : SceneRuntimeState.Ready);
+                }
             }
             catch (Exception exception)
             {
@@ -537,6 +554,9 @@ namespace VCR.Runtime.Scene
                     string.Join(
                         " | ",
                         rollbackFailures);
+
+                _configurationRecoveryPending =
+                    true;
 
                 SetFault(
                     rollbackError);
@@ -1069,6 +1089,11 @@ namespace VCR.Runtime.Scene
                 "scene.status_subscriber_failures",
                 _statusSubscriberFailureCount,
                 "count"));
+
+            output.Add(new RuntimeMetric(
+                "scene.configuration_recovery_pending",
+                _configurationRecoveryPending ? 1 : 0,
+                "bool"));
         }
 
         private void RestoreStateAfterCancelledCharacterLoad(
