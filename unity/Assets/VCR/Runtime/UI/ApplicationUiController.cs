@@ -7596,8 +7596,11 @@ namespace VCR.Runtime.UI
 
             SetTextIfChanged(
                 _sectionTitle,
-                ApplicationUiModel
-                    .GetTitle(selected));
+                selected ==
+                    ApplicationUiSection.Character
+                    ? "모델"
+                    : ApplicationUiModel
+                        .GetTitle(selected));
 
             if (!_model.IsAvailable(
                     selected))
