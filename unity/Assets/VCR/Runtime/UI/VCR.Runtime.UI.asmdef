@@ -16,7 +16,8 @@
     "UnityEngine.UI",
     "VCR.Runtime.EventRuntime",
     "VCR.Runtime.Rendering",
-    "VCR.Runtime.Core"
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Materials"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
