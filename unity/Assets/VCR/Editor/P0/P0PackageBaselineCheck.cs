@@ -52,7 +52,7 @@ namespace VCR.Editor.P0
         [MenuItem("VCR/P0/Validate Package Baseline")]
         public static void Validate()
         {
-            var packages = PackageInfo.GetAllRegisteredPackages()
+            var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
                 .ToDictionary(package => package.name, StringComparer.Ordinal);
 
             var failures = new List<string>();
