@@ -10,6 +10,20 @@ This alpha is a full-feature integration build of the current develop runtime. N
 
 The first validation pass intentionally does not require physical webcam or ARKit/iFacialMocap hardware. That is a validation-scope decision only, not a product-feature removal.
 
+## Build evidence
+
+Alpha binary workflow run `37583662055` completed successfully against release snapshot `7b3ca49639fe203adbabc278cc65ef5b9d5777d9` with Unity `6000.3.25f1`.
+
+Both target jobs passed the Unity player build, output verification, ZIP packaging, artifact upload, and release-attachment stages:
+
+- Windows x64 Development build: `VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip` (86,620,269 bytes)
+- macOS Development build: `VirtualCharacterRender-0.1.0-alpha.1-macOS.zip` (94,086,025 bytes)
+
+The release-attachment job also passed, so both archives are published on the `v0.1.0-alpha.1` GitHub prerelease.
+
+This closes compile/package-resolution and standalone binary-generation evidence for the current alpha source snapshot. It does not close runtime behavior, hardware tracking, OBS, signing/notarization, or performance evidence.
+
+
 ## Startup policy
 
 The integrated alpha scene includes these physical/external input components but starts them disabled:
