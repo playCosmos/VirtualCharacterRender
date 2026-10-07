@@ -6,6 +6,9 @@
     "com.unity.ugui": "2.0.0",
     "com.vrmc.gltf": "https://github.com/vrm-c/UniVRM.git?path=/Packages/UniGLTF#v0.131.2",
     "com.vrmc.univrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM#v0.131.2",
-    "com.vrmc.vrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.2"
+    "com.vrmc.vrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.2",
+    "com.unity.modules.assetbundle": "1.0.0",
+    "com.unity.modules.physics2d": "1.0.0",
+    "com.unity.modules.video": "1.0.0"
   }
 }
