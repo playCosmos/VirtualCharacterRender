@@ -43,6 +43,10 @@ jobs:
         shell: bash
         run: bash ./tools/bootstrap-mediapipe.sh
 
+      - name: Bootstrap pinned Pretendard UI font
+        shell: bash
+        run: bash ./tools/bootstrap-ui-fonts.sh
+
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
