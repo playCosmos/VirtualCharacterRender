@@ -25,6 +25,7 @@ namespace VCR.Editor.P6
                 failures);
             ValidateScheduler(failures);
             ValidateRuntime(failures);
+            ValidateTransitionCompletionFailure(failures);
             ValidateDestroyedTargetLifetime(failures);
 
             if (failures.Count == 0)
@@ -1519,6 +1520,183 @@ namespace VCR.Editor.P6
                 {
                     UnityEngine.Object
                         .DestroyImmediate(root);
+                }
+            }
+        }
+
+        private static void ValidateTransitionCompletionFailure(
+            List<string> failures)
+        {
+            GameObject root = null;
+
+            try
+            {
+                root =
+                    new GameObject(
+                        "P6 Transition Completion Failure");
+
+                var day =
+                    new GameObject(
+                        "Day");
+                var night =
+                    new GameObject(
+                        "Night");
+                day.transform.SetParent(
+                    root.transform,
+                    false);
+                night.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var runtime =
+                    root.AddComponent<
+                        BasicEnvironmentRuntime>();
+                runtime.Configure(
+                    "environment.p6.transition-completion",
+                    "day",
+                    EnvironmentUpdatePolicy.EventDriven,
+                    EnvironmentSpaceMode.World);
+
+                var dayBinding =
+                    new EnvironmentStateBinding();
+                dayBinding.Configure(
+                    "day",
+                    day);
+                var nightBinding =
+                    new EnvironmentStateBinding();
+                nightBinding.Configure(
+                    "night",
+                    night);
+
+                Expect(
+                    runtime.ConfigureStateBindings(
+                        new[]
+                        {
+                            dayBinding,
+                            nightBinding
+                        },
+                        out var bindingError),
+                    "transition completion failure validation must configure state roots: " +
+                    bindingError,
+                    failures);
+
+                var transitionTarget =
+                    root.AddComponent<
+                        P6FakeEnvironmentTransitionTarget>();
+                runtime.SetTransitionTargets(
+                    transitionTarget);
+
+                var started =
+                    runtime.SetState(
+                        "night",
+                        new EnvironmentTransitionSpec(
+                            EnvironmentTransitionMode.Crossfade,
+                            0.1f),
+                        out var startError);
+
+                var transition =
+                    runtime.TransitionStatus;
+
+                Expect(
+                    started &&
+                    string.IsNullOrEmpty(
+                        startError) &&
+                    transition.Active &&
+                    day.activeSelf &&
+                    night.activeSelf,
+                    "transition completion failure validation must start with both transition roots active",
+                    failures);
+
+                UnityEngine.Object.DestroyImmediate(
+                    night);
+
+                runtime.TickTransition(
+                    transition.StartedAtTimestampUs +
+                    200_000);
+
+                var pending =
+                    runtime.TransitionStatus;
+
+                Expect(
+                    pending.Active &&
+                    Math.Abs(
+                        pending.Progress -
+                        1f) <
+                        0.0001f &&
+                    !string.IsNullOrWhiteSpace(
+                        runtime.Status.LastError) &&
+                    runtime.Status.LastError.Contains(
+                        "Environment transition completion failed",
+                        StringComparison.Ordinal),
+                    "failed final root commit must remain an explicit active 100-percent completion-pending transition",
+                    failures);
+
+                var replacedDuringPending =
+                    runtime.SetState(
+                        "day",
+                        out var pendingReplacementError);
+
+                Expect(
+                    !replacedDuringPending &&
+                    !string.IsNullOrWhiteSpace(
+                        pendingReplacementError) &&
+                    runtime.TransitionStatus.Active,
+                    "a new state change must not overwrite an unresolved transition completion failure",
+                    failures);
+
+                var replacementNight =
+                    new GameObject(
+                        "Night Replacement");
+                replacementNight.transform.SetParent(
+                    root.transform,
+                    false);
+
+                var replacementNightBinding =
+                    new EnvironmentStateBinding();
+                replacementNightBinding.Configure(
+                    "night",
+                    replacementNight);
+
+                Expect(
+                    runtime.ConfigureStateBindings(
+                        new[]
+                        {
+                            dayBinding,
+                            replacementNightBinding
+                        },
+                        out var repairError) &&
+                    string.IsNullOrEmpty(
+                        repairError),
+                    "transition completion failure validation must allow repaired state bindings",
+                    failures);
+
+                runtime.TickTransition(
+                    transition.StartedAtTimestampUs +
+                    300_000);
+
+                Expect(
+                    !runtime.TransitionStatus.Active &&
+                    Math.Abs(
+                        runtime.TransitionStatus.Progress -
+                        1f) <
+                        0.0001f &&
+                    !day.activeSelf &&
+                    replacementNight.activeSelf,
+                    "a repaired completion-pending transition must commit exactly once and end with only the target root active",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(
+                    "transition completion failure validation unexpected exception: " +
+                    exception);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        root);
                 }
             }
         }
