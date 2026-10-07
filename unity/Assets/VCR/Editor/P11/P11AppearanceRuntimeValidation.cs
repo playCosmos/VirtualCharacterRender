@@ -1048,11 +1048,13 @@ namespace VCR.Editor.P11
                     runtime.AppearanceChanged +=
                         definitionReplacementHandler;
 
+                    string definitionReplacementError =
+                        null;
                     var definitionReplacementSucceeded =
                         mismatchedDefinitionIndex >= 0 &&
                         userRegistry.ReplaceUserPresets(
                             mismatchedDefinitions,
-                            out var definitionReplacementError);
+                            out definitionReplacementError);
 
                     runtime.AppearanceChanged -=
                         definitionReplacementHandler;
@@ -1163,16 +1165,23 @@ namespace VCR.Editor.P11
                         currentReapplyError,
                         failures);
 
+                    string managedProfileSaveError =
+                        null;
+                    string managedProfileLoadError =
+                        null;
+                    AppearancePreset[] managedUserPresets =
+                        Array.Empty<AppearancePreset>();
+
                     Expect(
                         store.TrySave(
                             characterPath,
                             userRegistry
                                 .CaptureUserPresets(),
-                            out var managedProfileSaveError) &&
+                            out managedProfileSaveError) &&
                         store.TryLoad(
                             characterPath,
-                            out var managedUserPresets,
-                            out var managedProfileLoadError) &&
+                            out managedUserPresets,
+                            out managedProfileLoadError) &&
                         managedUserPresets.Length ==
                             2 &&
                         managedUserPresets[0].Id ==
@@ -1309,12 +1318,15 @@ namespace VCR.Editor.P11
                         eventSequence:
                             1);
 
+                string eventError =
+                    null;
+
                 Expect(
                     appearanceHandler.CanHandle(
                         eventCommand) &&
                     appearanceHandler.TryExecute(
                         eventCommand,
-                        out var eventError),
+                        out eventError),
                     "event runtime appearance.set_preset must reach the same appearance runtime contract: " +
                     eventError,
                     failures);
@@ -1744,12 +1756,15 @@ namespace VCR.Editor.P11
                             "user-action"
                     };
 
+                string customError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         customStep) &&
                     transitionExecutor.TryExecute(
                         customStep,
-                        out var customError) &&
+                        out customError) &&
                     fakeAction.ExecutionCount == 1 &&
                     fakeAction.LastText ==
                         "user-action",
@@ -1906,12 +1921,15 @@ namespace VCR.Editor.P11
                             "confetti"
                     };
 
+                string effectError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         effectStep) &&
                     transitionExecutor.TryExecute(
                         effectStep,
-                        out var effectError) &&
+                        out effectError) &&
                     effectRoot.activeSelf,
                     "appearance transition must be able to play a registered built-in effect through the shared action bridge: " +
                     effectError,
@@ -2000,12 +2018,15 @@ namespace VCR.Editor.P11
                             true
                     };
 
+                string audioPlayError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         audioPlayStep) &&
                     transitionExecutor.TryExecute(
                         audioPlayStep,
-                        out var audioPlayError) &&
+                        out audioPlayError) &&
                     audioSource.clip ==
                         audioClip &&
                     audioSource.loop &&
@@ -2032,12 +2053,15 @@ namespace VCR.Editor.P11
                             "wardrobe-chime"
                     };
 
+                string audioStopError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         audioStopStep) &&
                     transitionExecutor.TryExecute(
                         audioStopStep,
-                        out var audioStopError),
+                        out audioStopError),
                     "appearance transition must stop registered audio through audio.stop: " +
                     audioStopError,
                     failures);
@@ -2331,12 +2355,15 @@ namespace VCR.Editor.P11
                             "spin"
                     };
 
+                string motionPlayError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         motionPlayStep) &&
                     transitionExecutor.TryExecute(
                         motionPlayStep,
-                        out var motionPlayError) &&
+                        out motionPlayError) &&
                     motionSource.Status.Playing &&
                     motionSource.TryGetLatestHumanoidPose(
                         out _),
@@ -2378,12 +2405,15 @@ namespace VCR.Editor.P11
                             "spin"
                     };
 
+                string motionReleaseError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         motionReleaseStep) &&
                     transitionExecutor.TryExecute(
                         motionReleaseStep,
-                        out var motionReleaseError) &&
+                        out motionReleaseError) &&
                     !motionSource.Status.Playing &&
                     !motionSource.TryGetLatestHumanoidPose(
                         out _),
@@ -2420,12 +2450,15 @@ namespace VCR.Editor.P11
                             "clip-step"
                     };
 
+                string bakedPlayError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         bakedPlayStep) &&
                     transitionExecutor.TryExecute(
                         bakedPlayStep,
-                        out var bakedPlayError) &&
+                        out bakedPlayError) &&
                     bakedSource.Status.Playing &&
                     bakedSource.TryGetLatestHumanoidPose(
                         out _),
@@ -2446,12 +2479,15 @@ namespace VCR.Editor.P11
                             "clip-step"
                     };
 
+                string bakedReleaseError =
+                    null;
+
                 Expect(
                     transitionExecutor.CanExecute(
                         bakedReleaseStep) &&
                     transitionExecutor.TryExecute(
                         bakedReleaseStep,
-                        out var bakedReleaseError) &&
+                        out bakedReleaseError) &&
                     !bakedSource.Status.Playing,
                     "motion.release without TargetId must route to the runtime that owns the baked cue: " +
                     bakedReleaseError,
@@ -3725,11 +3761,14 @@ namespace VCR.Editor.P11
                     root.AddComponent<
                         P11FakeTransitionActionHandler>();
 
+                string error =
+                    null;
+
                 Expect(
                     executor.CanExecute(step) &&
                     executor.TryExecute(
                         step,
-                        out var error) &&
+                        out error) &&
                     replacement.ExecutionCount == 1 &&
                     replacement.LastText ==
                         "replacement-handler",
