@@ -529,10 +529,28 @@ namespace VCR.Runtime.Environment.Unity
                 return false;
             }
 
-            if (string.Equals(
+            var sameState =
+                string.Equals(
                     stateId,
                     nextStateId,
-                    StringComparison.Ordinal))
+                    StringComparison.Ordinal);
+
+            if (sameState &&
+                _transitionStatus.Active)
+            {
+                if (!TryCompleteTransition(
+                        MonotonicClock.NowMicroseconds(),
+                        out error))
+                {
+                    _lastError = error;
+                    return false;
+                }
+
+                _lastError = null;
+                return true;
+            }
+
+            if (sameState)
             {
                 _lastError = null;
                 return true;
@@ -1050,6 +1068,14 @@ namespace VCR.Runtime.Environment.Unity
                 "environment.transition_progress",
                 _transitionStatus.Progress,
                 "ratio"));
+
+            output.Add(new RuntimeMetric(
+                "environment.transition_completion_pending",
+                _transitionStatus.Active &&
+                _transitionStatus.Progress >= 1f
+                    ? 1
+                    : 0,
+                "bool"));
 
             output.Add(new RuntimeMetric(
                 "environment.transition_count",
@@ -1594,6 +1620,8 @@ namespace VCR.Runtime.Environment.Unity
                 return true;
             }
 
+            _lastError = null;
+
             _transitionStatus =
                 new EnvironmentTransitionStatus(
                     true,
@@ -1621,6 +1649,7 @@ namespace VCR.Runtime.Environment.Unity
                     "Environment transition completion failed: " +
                     rootError;
                 _lastError = error;
+                _transitionFailureCount++;
 
                 if (_transitionDriver != null)
                 {
