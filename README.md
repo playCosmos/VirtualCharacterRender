@@ -90,6 +90,7 @@ The source implementation has progressed through the P11 Application UI and P12 
 - [P11 status](docs/P11_STATUS.md)
 - [P12 status](docs/P12_STATUS.md)
 - [P13 status](docs/P13_STATUS.md)
+- [Alpha testing](docs/ALPHA_TESTING.md)
 - [2D backend adapter contract](docs/PRESENTATION2D_ADAPTERS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
