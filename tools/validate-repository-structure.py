@@ -3960,8 +3960,8 @@ require_source_contains(
 )
 require_source_contains(
     vrm_motion_snapshot_provider,
-    "q.sqrMagnitude < 1e-8f",
-    "VRM motion snapshot capture must reject degenerate quaternions",
+    "rotationMagnitudeSquared < 1e-8f",
+    "VRM motion snapshot capture must reject degenerate quaternions without relying on a non-existent Unity Quaternion.sqrMagnitude member",
 )
 forbid_source_pattern(
     vrm_motion_snapshot_provider,
