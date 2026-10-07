@@ -15,11 +15,13 @@ Windows:
 ./tools/run-alpha.ps1
 ~~~
 
-Validation only:
+Independent source-free validation evidence:
 
 ~~~powershell
 ./tools/validate-alpha-source-free.ps1
 ~~~
+
+`build-alpha.ps1` does not require this validation pass to succeed. Binary generation and source-free evidence are deliberately separate for the alpha so Editor-only validation failures cannot block player-runtime testing.
 
 The alpha integrated scene contains MediaPipe webcam, ARKit/iFacialMocap, VMC receive/send, UI, Appearance, material, event, environment, diagnostics, motion/expression and P13 2D-host components. Physical/external tracking inputs start disabled; this changes startup state, not build inclusion.
 
