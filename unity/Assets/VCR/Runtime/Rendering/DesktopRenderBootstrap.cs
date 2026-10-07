@@ -30,7 +30,7 @@ namespace VCR.Runtime.Rendering
             RenderResolutionPreset.Recommended1080p;
         [SerializeField, Min(320)] private int customWidth = 1920;
         [SerializeField, Min(240)] private int customHeight = 1080;
-        [SerializeField] private bool applyStandaloneWindowResolution = true;
+        [SerializeField] private bool applyStandaloneWindowResolution = false;
 
         [Header("Graphics quality")]
         [SerializeField, Range(0.5f, 2.0f)] private float renderScale = 1.0f;
