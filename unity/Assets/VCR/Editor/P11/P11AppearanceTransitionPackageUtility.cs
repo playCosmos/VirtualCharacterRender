@@ -5,7 +5,7 @@ using VCR.Runtime.Appearance;
 
 namespace VCR.Editor.P11
 {
-    internal static class
+    public static class
         P11AppearanceTransitionPackageUtility
     {
         public static AppearanceTransitionPackage
