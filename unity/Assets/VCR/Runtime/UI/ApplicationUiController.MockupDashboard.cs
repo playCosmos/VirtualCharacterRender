@@ -11,6 +11,10 @@ namespace VCR.Runtime.UI
         private Font _dashboardFontSemiBold;
         private RectTransform _trackingCameraPrivacyPlaceholder;
         private RectTransform _dashboardPresetPanel;
+        private RectTransform _dashboardPresetGrid;
+        private Text _dashboardPresetEmptyText;
+        private string _dashboardPresetSignature;
+        private RectTransform _dashboardSettingsModal;
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
 
@@ -30,8 +34,9 @@ namespace VCR.Runtime.UI
                 _dashboardFontMedium ??
                 uiFont;
 
-            StyleMockupTitleBar(
-                titleBar);
+            UseNativeDesktopChrome(
+                titleBar,
+                windowChrome);
             BuildMockupViewportToolbar(
                 windowChrome);
             BuildMockupInspector(
@@ -41,6 +46,9 @@ namespace VCR.Runtime.UI
             BuildMockupControlCard();
             BuildMockupEnvironmentCard();
             BuildMockupOutputCard();
+            BuildSettingsLauncher(
+                navigation);
+            BuildSettingsModal();
             ApplyPretendardTypography();
         }
 
@@ -490,12 +498,12 @@ namespace VCR.Runtime.UI
                     -10f,
                     -6f);
 
-            var presetGrid =
+            _dashboardPresetGrid =
                 CreateRect(
                     "Preset Grid",
                     _dashboardPresetPanel);
             Stretch(
-                presetGrid,
+                _dashboardPresetGrid,
                 Vector2.zero,
                 Vector2.one,
                 new Vector2(
@@ -506,7 +514,7 @@ namespace VCR.Runtime.UI
                     -36f));
 
             var grid =
-                presetGrid.gameObject
+                _dashboardPresetGrid.gameObject
                     .AddComponent<GridLayoutGroup>();
             grid.padding =
                 new RectOffset(
@@ -520,7 +528,7 @@ namespace VCR.Runtime.UI
                     0f);
             grid.cellSize =
                 new Vector2(
-                    78f,
+                    92f,
                     88f);
             grid.constraint =
                 GridLayoutGroup.Constraint
@@ -529,37 +537,28 @@ namespace VCR.Runtime.UI
             grid.childAlignment =
                 TextAnchor.MiddleLeft;
 
-            AddPresetTile(
-                presetGrid,
-                "기본",
-                "default");
-            AddPresetTile(
-                presetGrid,
-                "캐주얼",
-                "casual");
-            AddPresetTile(
-                presetGrid,
-                "스테이지",
-                "stage");
-            AddPresetTile(
-                presetGrid,
-                "나이트",
-                "night");
-            AddPresetTile(
-                presetGrid,
-                "커스텀1",
-                "custom1");
+            _dashboardPresetEmptyText =
+                CreateText(
+                    "Preset Empty State",
+                    _dashboardPresetPanel,
+                    12,
+                    TextAnchor.MiddleCenter);
+            _dashboardPresetEmptyText.text =
+                "모델에 등록된 프리셋이 없습니다.";
+            _dashboardPresetEmptyText.color =
+                new Color(
+                    0.58f,
+                    0.64f,
+                    0.72f,
+                    1f);
+            Stretch(
+                _dashboardPresetEmptyText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(14f, 12f),
+                new Vector2(-14f, -38f));
 
-            var addPreset =
-                CreateButton(
-                    "+\n추가",
-                    presetGrid,
-                    () =>
-                        SetDashboardNotice(
-                            "새 프리셋 추가"));
-            addPreset.gameObject
-                .AddComponent<LayoutElement>()
-                .preferredHeight = 88f;
+            RefreshDashboardPresetGallery();
         }
 
         private void AddPresetTile(
@@ -584,6 +583,402 @@ namespace VCR.Runtime.UI
                         0.11f,
                         0.14f,
                         1f);
+            }
+        }
+
+        private void UseNativeDesktopChrome(
+            RectTransform titleBar,
+            DesktopWindowChromeController windowChrome)
+        {
+            windowChrome?.UseNativeChrome();
+
+            if (titleBar != null)
+            {
+                titleBar.gameObject.SetActive(
+                    false);
+            }
+        }
+
+        private void BuildSettingsLauncher(
+            RectTransform navigation)
+        {
+            if (navigation == null)
+            {
+                return;
+            }
+
+            var button =
+                CreateButton(
+                    "⚙  환경설정…",
+                    navigation,
+                    OpenSettingsModal);
+            button.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredHeight = 34f;
+
+            var label =
+                button.GetComponentInChildren<Text>();
+            if (label != null)
+            {
+                label.alignment =
+                    TextAnchor.MiddleLeft;
+            }
+        }
+
+        private void BuildSettingsModal()
+        {
+            if (_root == null ||
+                _dashboardSettingsModal != null)
+            {
+                return;
+            }
+
+            _dashboardSettingsModal =
+                CreateRect(
+                    "Settings Modal Overlay",
+                    _root);
+            Stretch(
+                _dashboardSettingsModal,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
+
+            var blocker =
+                _dashboardSettingsModal.gameObject
+                    .AddComponent<Image>();
+            blocker.color =
+                new Color(
+                    0.01f,
+                    0.015f,
+                    0.025f,
+                    0.78f);
+            blocker.raycastTarget = true;
+
+            var panel =
+                CreateRect(
+                    "Settings Modal",
+                    _dashboardSettingsModal);
+            panel.anchorMin =
+                new Vector2(0.5f, 0.5f);
+            panel.anchorMax =
+                new Vector2(0.5f, 0.5f);
+            panel.pivot =
+                new Vector2(0.5f, 0.5f);
+            panel.sizeDelta =
+                new Vector2(520f, 430f);
+
+            var panelImage =
+                panel.gameObject
+                    .AddComponent<Image>();
+            panelImage.color =
+                new Color(
+                    0.055f,
+                    0.065f,
+                    0.085f,
+                    1f);
+            var panelOutline =
+                panel.gameObject
+                    .AddComponent<Outline>();
+            panelOutline.effectColor =
+                new Color(
+                    0.20f,
+                    0.28f,
+                    0.40f,
+                    0.9f);
+            panelOutline.effectDistance =
+                new Vector2(1f, -1f);
+
+            var title =
+                CreateText(
+                    "Settings Modal Title",
+                    panel,
+                    18,
+                    TextAnchor.MiddleLeft);
+            title.text = "환경설정";
+            title.font =
+                _dashboardFontSemiBold;
+            title.rectTransform.anchorMin =
+                new Vector2(0f, 1f);
+            title.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            title.rectTransform.pivot =
+                new Vector2(0.5f, 1f);
+            title.rectTransform.offsetMin =
+                new Vector2(20f, -52f);
+            title.rectTransform.offsetMax =
+                new Vector2(-70f, -14f);
+
+            var close =
+                CreateButton(
+                    "×",
+                    panel,
+                    CloseSettingsModal);
+            close.GetComponent<RectTransform>()
+                .anchorMin =
+                    new Vector2(1f, 1f);
+            close.GetComponent<RectTransform>()
+                .anchorMax =
+                    new Vector2(1f, 1f);
+            close.GetComponent<RectTransform>()
+                .pivot =
+                    new Vector2(1f, 1f);
+            close.GetComponent<RectTransform>()
+                .anchoredPosition =
+                    new Vector2(-14f, -14f);
+            close.GetComponent<RectTransform>()
+                .sizeDelta =
+                    new Vector2(38f, 34f);
+
+            var body =
+                CreateRect(
+                    "Settings Modal Body",
+                    panel);
+            Stretch(
+                body,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(20f, 20f),
+                new Vector2(-20f, -66f));
+
+            var layout =
+                body.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 10f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            var help =
+                CreateText(
+                    "Settings Help",
+                    body,
+                    12,
+                    TextAnchor.MiddleLeft);
+            help.text =
+                "프로그램 전체 동작에 영향을 주는 항목만 모았습니다. 고급 진단/개발 도구는 왼쪽 ‘고급 도구’에서 확인합니다.";
+            help.color =
+                new Color(
+                    0.62f,
+                    0.68f,
+                    0.76f,
+                    1f);
+            help.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredHeight = 42f;
+
+            var renderScaleRow =
+                CreateDashboardRow(
+                    body,
+                    "Render Scale Settings Row",
+                    38f);
+            var renderScaleLabel =
+                CreateText(
+                    "Render Scale Label",
+                    renderScaleRow,
+                    12,
+                    TextAnchor.MiddleLeft);
+            renderScaleLabel.text =
+                "렌더 스케일";
+            renderScaleLabel.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
+            _settingsRenderScaleInput =
+                CreateInputField(
+                    "Settings Modal Render Scale",
+                    renderScaleRow,
+                    "0.5 ~ 2.0");
+            _settingsRenderScaleInput.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+            _settingsApplyRenderScaleButton =
+                CreateButton(
+                    "적용",
+                    renderScaleRow,
+                    ApplySettingsRenderScale);
+            _settingsApplyRenderScaleButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 72f;
+
+            var fpsRow =
+                CreateDashboardRow(
+                    body,
+                    "FPS Settings Row",
+                    38f);
+            var fpsLabel =
+                CreateText(
+                    "FPS Label",
+                    fpsRow,
+                    12,
+                    TextAnchor.MiddleLeft);
+            fpsLabel.text =
+                "목표 프레임";
+            fpsLabel.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 110f;
+            _settingsFpsInput =
+                CreateInputField(
+                    "Settings Modal FPS",
+                    fpsRow,
+                    "30 ~ 240");
+            _settingsFpsInput.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+            _settingsApplyFpsButton =
+                CreateButton(
+                    "적용",
+                    fpsRow,
+                    ApplySettingsFps);
+            _settingsApplyFpsButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 72f;
+
+            _settingsVsyncButton =
+                CreateButton(
+                    "VSync",
+                    body,
+                    ToggleSettingsVsync);
+            AddPreferredHeight(
+                _settingsVsyncButton.gameObject,
+                36f);
+
+            _settingsRunInBackgroundButton =
+                CreateButton(
+                    "백그라운드 실행",
+                    body,
+                    ToggleSettingsRunInBackground);
+            AddPreferredHeight(
+                _settingsRunInBackgroundButton.gameObject,
+                36f);
+
+            var persistenceRow =
+                CreateDashboardRow(
+                    body,
+                    "Configuration Persistence Row",
+                    38f);
+            var load =
+                CreateButton(
+                    "저장된 설정 불러오기",
+                    persistenceRow,
+                    ShowProfileLoadUnavailable);
+            load.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+            var save =
+                CreateButton(
+                    "현재 설정 저장",
+                    persistenceRow,
+                    SaveConfiguration);
+            save.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            _dashboardSettingsModal.gameObject.SetActive(
+                false);
+        }
+
+        private void OpenSettingsModal()
+        {
+            if (_dashboardSettingsModal == null)
+            {
+                return;
+            }
+
+            _dashboardSettingsModal.gameObject.SetActive(
+                true);
+            _dashboardSettingsModal.SetAsLastSibling();
+            RefreshSettingsControlState();
+        }
+
+        private void CloseSettingsModal()
+        {
+            if (_dashboardSettingsModal != null)
+            {
+                _dashboardSettingsModal.gameObject.SetActive(
+                    false);
+            }
+        }
+
+        private void RefreshDashboardPresetGallery()
+        {
+            if (_dashboardPresetGrid == null)
+            {
+                return;
+            }
+
+            var presetIds =
+                IsServiceAlive(_appearanceRuntime)
+                    ? _appearanceRuntime.PresetIds
+                    : null;
+
+            var signature =
+                presetIds == null ||
+                presetIds.Count == 0
+                    ? string.Empty
+                    : string.Join(
+                        "\u001f",
+                        presetIds);
+
+            if (string.Equals(
+                    signature,
+                    _dashboardPresetSignature,
+                    StringComparison.Ordinal))
+            {
+                if (_dashboardPresetEmptyText != null)
+                {
+                    _dashboardPresetEmptyText.gameObject.SetActive(
+                        string.IsNullOrEmpty(
+                            signature));
+                }
+                return;
+            }
+
+            _dashboardPresetSignature =
+                signature;
+
+            for (var index =
+                     _dashboardPresetGrid.childCount - 1;
+                 index >= 0;
+                 index--)
+            {
+                Destroy(
+                    _dashboardPresetGrid
+                        .GetChild(index)
+                        .gameObject);
+            }
+
+            var hasPresets =
+                presetIds != null &&
+                presetIds.Count > 0;
+
+            if (_dashboardPresetEmptyText != null)
+            {
+                _dashboardPresetEmptyText.gameObject.SetActive(
+                    !hasPresets);
+            }
+
+            if (!hasPresets)
+            {
+                return;
+            }
+
+            for (var i = 0;
+                 i < presetIds.Count;
+                 i++)
+            {
+                var presetId =
+                    presetIds[i];
+                if (string.IsNullOrWhiteSpace(
+                        presetId))
+                {
+                    continue;
+                }
+
+                AddPresetTile(
+                    _dashboardPresetGrid,
+                    presetId,
+                    presetId);
             }
         }
 
@@ -1517,6 +1912,14 @@ namespace VCR.Runtime.UI
                     active
                         ? "트래킹 상태   ● 활성"
                         : "트래킹 상태   ● 비활성화");
+            }
+
+            RefreshDashboardPresetGallery();
+
+            if (_dashboardSettingsModal != null &&
+                _dashboardSettingsModal.gameObject.activeSelf)
+            {
+                RefreshSettingsControlState();
             }
 
             if (_dashboardPresetPanel != null)
