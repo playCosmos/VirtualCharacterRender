@@ -36,3 +36,8 @@ unity/Assets/StreamingAssets/VCR/Models/face_landmarker_v2_with_blendshapes.byte
 unity/Assets/StreamingAssets/VCR/Models/face_landmarker_v2_with_blendshapes.bytes.meta
 unity/Assets/StreamingAssets/VCR/Models/holistic_landmarker.bytes
 unity/Assets/StreamingAssets/VCR/Models/holistic_landmarker.bytes.meta
+
+# Bootstrapped UI font (verified by tools/bootstrap-ui-fonts.sh)
+unity/Assets/VCR/Resources/Fonts/Pretendard-Regular.otf
+unity/Assets/VCR/Resources/Fonts/Pretendard-Regular.otf.meta
+
