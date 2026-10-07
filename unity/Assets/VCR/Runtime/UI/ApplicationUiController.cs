@@ -6548,7 +6548,10 @@ namespace VCR.Runtime.UI
                 ApplicationUiSection.Events;
             var settingsSelected =
                 selected ==
-                ApplicationUiSection.Settings;
+                    ApplicationUiSection.Settings;
+            var settingsModalVisible =
+                _dashboardSettingsModal != null &&
+                _dashboardSettingsModal.gameObject.activeSelf;
             var diagnosticsSelected =
                 selected ==
                 ApplicationUiSection.Diagnostics;
@@ -6774,24 +6777,28 @@ namespace VCR.Runtime.UI
             SetActive(
                 _settingsToggleCapabilityButton,
                 settingsSelected);
+            var settingsControlsVisible =
+                settingsSelected ||
+                settingsModalVisible;
+
             SetActive(
                 _settingsRenderScaleInput,
-                settingsSelected);
+                settingsControlsVisible);
             SetActive(
                 _settingsApplyRenderScaleButton,
-                settingsSelected);
+                settingsControlsVisible);
             SetActive(
                 _settingsFpsInput,
-                settingsSelected);
+                settingsControlsVisible);
             SetActive(
                 _settingsApplyFpsButton,
-                settingsSelected);
+                settingsControlsVisible);
             SetActive(
                 _settingsVsyncButton,
-                settingsSelected);
+                settingsControlsVisible);
             SetActive(
                 _settingsRunInBackgroundButton,
-                settingsSelected);
+                settingsControlsVisible);
 
             SetActive(
                 _diagnosticsPreviousPageButton,
