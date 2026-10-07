@@ -926,8 +926,8 @@ namespace VCR.Runtime.Materials.Unity
                     propertyType == ShaderPropertyType.Float ||
                     propertyType == ShaderPropertyType.Range,
 
-                ShaderParameterKind.Int ||
-                ShaderParameterKind.Bool ||
+                ShaderParameterKind.Int or
+                ShaderParameterKind.Bool or
                 ShaderParameterKind.Enum =>
                     propertyType == ShaderPropertyType.Int ||
                     propertyType == ShaderPropertyType.Float ||
