@@ -23,6 +23,7 @@ namespace VCR.Runtime.UI
         private Vector2 _dragOffset;
         private bool _dragging;
         private bool _borderlessConfirmed;
+        private bool _nativeChromeRequested;
         private float _nextBorderlessRetryAt;
 
         public bool CanMinimize =>
@@ -59,6 +60,7 @@ namespace VCR.Runtime.UI
         public void UseNativeChrome()
         {
             borderlessStandalone = false;
+            _nativeChromeRequested = true;
             _borderlessConfirmed = false;
             _dragging = false;
 
@@ -97,13 +99,13 @@ namespace VCR.Runtime.UI
 
         private void Start()
         {
-            ApplyBorderlessIfNeeded(
+            ApplyRequestedChromeMode(
                 force: true);
         }
 
         private void Update()
         {
-            ApplyBorderlessIfNeeded(
+            ApplyRequestedChromeMode(
                 force: false);
 
             if (_dragging)
@@ -117,7 +119,7 @@ namespace VCR.Runtime.UI
         {
             if (hasFocus)
             {
-                ApplyBorderlessIfNeeded(
+                ApplyRequestedChromeMode(
                     force: true);
             }
         }
@@ -239,11 +241,48 @@ namespace VCR.Runtime.UI
 #endif
         }
 
+        private void ApplyRequestedChromeMode(
+            bool force)
+        {
+            if (UnityEngine.Application.isEditor)
+            {
+                return;
+            }
+
+            if (_nativeChromeRequested)
+            {
+                ApplyNativeChromeIfNeeded();
+                return;
+            }
+
+            ApplyBorderlessIfNeeded(
+                force);
+        }
+
+        private void ApplyNativeChromeIfNeeded()
+        {
+            try
+            {
+                if (IsBorderlessNative())
+                {
+                    SetBorderlessNative(
+                        false);
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                // Keep the UI usable on unsupported development targets.
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // Fall back to the operating system window frame.
+            }
+        }
+
         private void ApplyBorderlessIfNeeded(
             bool force)
         {
-            if (!borderlessStandalone ||
-                UnityEngine.Application.isEditor)
+            if (!borderlessStandalone)
             {
                 return;
             }
