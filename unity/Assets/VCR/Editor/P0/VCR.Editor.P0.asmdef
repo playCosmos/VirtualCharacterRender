@@ -27,7 +27,8 @@
     "VCR.Runtime.P0",
     "VCR.Runtime.Scene",
     "VCR.Runtime.Application",
-    "VCR.Runtime.Core"
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Camera"
   ],
   "includePlatforms": [
     "Editor"
