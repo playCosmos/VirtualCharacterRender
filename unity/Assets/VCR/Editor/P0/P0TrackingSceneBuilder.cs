@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Runtime.Application;
+using VCR.Runtime.Camera;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.Events.Unity;
@@ -138,9 +139,15 @@ namespace VCR.Editor.P0
                 runtimeRoot.transform,
                 false);
 
+            var cameraCapture =
+                runtimeRoot.AddComponent<
+                    CameraCaptureRuntime>();
+
             var mediaPipe =
                 trackingRoot.AddComponent<
                     MediaPipeWebcamTrackingRunner>();
+            mediaPipe.SetCameraCaptureRuntime(
+                cameraCapture);
 
             var router =
                 trackingRoot.AddComponent<
