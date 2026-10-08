@@ -1850,7 +1850,9 @@ namespace VCR.Runtime.UI
                     out var local))
             {
                 panel.anchoredPosition =
-                    local;
+                    ClampDashboardFloatingPosition(
+                        panel,
+                        local);
             }
 
             UpdateDashboardDockDropPreview(
@@ -2181,20 +2183,24 @@ namespace VCR.Runtime.UI
                         out var local))
             {
                 panel.anchoredPosition =
-                    local;
+                    ClampDashboardFloatingPosition(
+                        panel,
+                        local);
             }
             else
             {
                 panel.anchoredPosition =
-                    new Vector2(
-                        PlayerPrefs.GetFloat(
-                            DashboardPanelPositionXKeyPrefix +
-                            panelId,
-                            0f),
-                        PlayerPrefs.GetFloat(
-                            DashboardPanelPositionYKeyPrefix +
-                            panelId,
-                            0f));
+                    ClampDashboardFloatingPosition(
+                        panel,
+                        new Vector2(
+                            PlayerPrefs.GetFloat(
+                                DashboardPanelPositionXKeyPrefix +
+                                panelId,
+                                0f),
+                            PlayerPrefs.GetFloat(
+                                DashboardPanelPositionYKeyPrefix +
+                                panelId,
+                                0f)));
             }
 
             if (_dashboardPanelResizeHandles.TryGetValue(
@@ -2288,13 +2294,93 @@ namespace VCR.Runtime.UI
                 DashboardPanelFloatingKeyPrefix +
                 panelId,
                 0);
-            PlayerPrefs.SetInt(
-                DashboardPanelOrderKeyPrefix +
-                panelId,
-                panel.GetSiblingIndex());
+            SaveDashboardDockOrders();
             PlayerPrefs.Save();
 
             RefreshDashboardDockHost();
+        }
+
+        private Vector2 ClampDashboardFloatingPosition(
+            RectTransform panel,
+            Vector2 localPosition)
+        {
+            if (panel == null ||
+                _root == null)
+            {
+                return localPosition;
+            }
+
+            var rootSize =
+                _root.rect.size;
+            var panelSize =
+                panel.rect.size;
+
+            var halfRootX =
+                Mathf.Max(
+                    0f,
+                    rootSize.x *
+                    0.5f);
+            var halfRootY =
+                Mathf.Max(
+                    0f,
+                    rootSize.y *
+                    0.5f);
+
+            var halfPanelX =
+                Mathf.Max(
+                    40f,
+                    panelSize.x *
+                    0.5f);
+            var halfPanelY =
+                Mathf.Max(
+                    24f,
+                    panelSize.y *
+                    0.5f);
+
+            // Keep the title/drag area recoverable even after a monitor or
+            // window-size change. A small body overhang is acceptable.
+            return new Vector2(
+                Mathf.Clamp(
+                    localPosition.x,
+                    -halfRootX +
+                    halfPanelX *
+                    0.35f,
+                    halfRootX -
+                    halfPanelX *
+                    0.35f),
+                Mathf.Clamp(
+                    localPosition.y,
+                    -halfRootY +
+                    34f,
+                    halfRootY -
+                    34f));
+        }
+
+        private void SaveDashboardDockOrders()
+        {
+            if (_bottomDashboard == null)
+            {
+                return;
+            }
+
+            foreach (var pair in
+                     _dashboardPanels)
+            {
+                var panel =
+                    pair.Value;
+
+                if (panel == null ||
+                    panel.parent !=
+                        _bottomDashboard)
+                {
+                    continue;
+                }
+
+                PlayerPrefs.SetInt(
+                    DashboardPanelOrderKeyPrefix +
+                    pair.Key,
+                    panel.GetSiblingIndex());
+            }
         }
 
         private void SaveDashboardFloatingGeometry(
@@ -2394,6 +2480,10 @@ namespace VCR.Runtime.UI
             {
                 _trackingCameraPreviewRequested =
                     false;
+                cameraCapture?.TrySetConsumerActive(
+                    VCR.Runtime.Camera.CameraCaptureConsumer.Preview,
+                    false,
+                    out _);
                 RefreshTrackingCameraPreviewPrivacy(
                     false);
             }
@@ -2403,6 +2493,15 @@ namespace VCR.Runtime.UI
 
         private void RestoreDefaultDashboardPanelLayout()
         {
+            _trackingCameraPreviewRequested =
+                false;
+            cameraCapture?.TrySetConsumerActive(
+                VCR.Runtime.Camera.CameraCaptureConsumer.Preview,
+                false,
+                out _);
+            RefreshTrackingCameraPreviewPrivacy(
+                false);
+
             foreach (var pair in
                      _dashboardPanels)
             {
