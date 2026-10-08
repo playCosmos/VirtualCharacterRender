@@ -73,6 +73,9 @@ namespace VCR.Editor.Alpha
                 return false;
             }
 
+            var cameraCapture =
+                root.GetComponent<
+                    CameraCaptureRuntime>();
             var mediaPipe =
                 tracking.GetComponent<
                     MediaPipeWebcamTrackingRunner>();
@@ -89,7 +92,8 @@ namespace VCR.Editor.Alpha
                 eventsRoot.GetComponent<
                     NormalizedEventHub>();
 
-            if (mediaPipe == null ||
+            if (cameraCapture == null ||
+                mediaPipe == null ||
                 router == null ||
                 loader == null ||
                 diagnostics == null ||
@@ -102,6 +106,8 @@ namespace VCR.Editor.Alpha
 
             // Alpha includes every tracking implementation, but starts physical
             // input sources disabled so non-hardware validation can run first.
+            mediaPipe.SetCameraCaptureRuntime(
+                cameraCapture);
             mediaPipe.enabled = false;
 
             var arkit =
