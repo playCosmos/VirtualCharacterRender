@@ -4,7 +4,8 @@
   "references": [
     "VCR.Runtime.Core",
     "VCR.Runtime.Tracking",
-    "Mediapipe.Runtime"
+    "Mediapipe.Runtime",
+    "VCR.Runtime.Camera"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
