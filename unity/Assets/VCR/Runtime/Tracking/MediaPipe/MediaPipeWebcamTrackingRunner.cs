@@ -8,6 +8,7 @@ using Mediapipe;
 using Mediapipe.Unity.Experimental;
 using UnityEngine;
 using UnityEngine.Rendering;
+using VCR.Runtime.Camera;
 using VCR.Runtime.Core;
 
 namespace VCR.Runtime.Tracking.MediaPipe
@@ -39,6 +40,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
             128L * 1024L * 1024L;
 
         [Header("Camera")]
+        [SerializeField] private CameraCaptureRuntime cameraCapture;
         [SerializeField] private string deviceName = "";
         [SerializeField, Min(160)] private int requestedWidth = 640;
         [SerializeField, Min(120)] private int requestedHeight = 480;
@@ -69,7 +71,6 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private readonly Stopwatch _clock = new();
 
-        private WebCamTexture _webcam;
         private TextureFramePool _faceFramePool;
         private TextureFramePool _holisticFramePool;
 
@@ -102,8 +103,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private MediaPipeWebcamLifecycleState _state =
             MediaPipeWebcamLifecycleState.Stopped;
-        private string _selectedDeviceName;
         private string _lastError;
+        private bool _cameraConsumerActive;
         private bool _applicationSuspended;
         private bool _destroying;
 
@@ -159,6 +160,38 @@ namespace VCR.Runtime.Tracking.MediaPipe
             };
         }
 
+        public void SetCameraCaptureRuntime(
+            CameraCaptureRuntime value)
+        {
+            if (ReferenceEquals(
+                    cameraCapture,
+                    value))
+            {
+                return;
+            }
+
+            if (_cameraConsumerActive &&
+                cameraCapture != null)
+            {
+                cameraCapture.TrySetConsumerActive(
+                    CameraCaptureConsumer.Tracking,
+                    false,
+                    out _);
+                _cameraConsumerActive = false;
+            }
+
+            cameraCapture =
+                value;
+
+            if (enabled &&
+                Application.isPlaying &&
+                !_destroying &&
+                !_applicationSuspended)
+            {
+                Restart();
+            }
+        }
+
         public bool TryApplyConfiguration(
             IReadOnlyDictionary<string, string> values,
             out string error)
@@ -209,6 +242,19 @@ namespace VCR.Runtime.Tracking.MediaPipe
             requestedWidth = nextWidth;
             requestedHeight = nextHeight;
             requestedFps = nextFps;
+
+            ResolveCameraCapture();
+
+            if (cameraCapture != null &&
+                !cameraCapture.TryConfigure(
+                    deviceName,
+                    requestedWidth,
+                    requestedHeight,
+                    requestedFps,
+                    out error))
+            {
+                return false;
+            }
 
             if (enabled &&
                 Application.isPlaying)
@@ -263,9 +309,9 @@ namespace VCR.Runtime.Tracking.MediaPipe
         public MediaPipeWebcamStatus Status =>
             new(
                 _state,
-                _selectedDeviceName,
-                _webcam != null ? _webcam.width : 0,
-                _webcam != null ? _webcam.height : 0,
+                cameraCapture?.SelectedDeviceName,
+                cameraCapture?.Width ?? 0,
+                cameraCapture?.Height ?? 0,
                 requestedFps,
                 mediaPipeFaceEnabled,
                 preprocessingMode,
@@ -579,12 +625,12 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
             output.Add(new RuntimeMetric(
                 "tracking.mediapipe.capture.width",
-                _webcam?.width ?? 0,
+                cameraCapture?.Width ?? 0,
                 "px"));
 
             output.Add(new RuntimeMetric(
                 "tracking.mediapipe.capture.height",
-                _webcam?.height ?? 0,
+                cameraCapture?.Height ?? 0,
                 "px"));
 
             output.Add(new RuntimeMetric(
@@ -697,6 +743,46 @@ namespace VCR.Runtime.Tracking.MediaPipe
             CleanupRuntimeResources(
                 stopStartupCoroutine: false);
 
+            ResolveCameraCapture();
+
+            if (cameraCapture == null)
+            {
+                _lastError =
+                    "Shared camera capture runtime is unavailable.";
+                _state =
+                    MediaPipeWebcamLifecycleState.Faulted;
+                return;
+            }
+
+            if (!cameraCapture.TryConfigure(
+                    deviceName,
+                    requestedWidth,
+                    requestedHeight,
+                    requestedFps,
+                    out var configureError))
+            {
+                _lastError =
+                    configureError ??
+                    "Camera capture configuration failed.";
+                _state =
+                    MediaPipeWebcamLifecycleState.Faulted;
+                return;
+            }
+
+            if (!cameraCapture.TrySetConsumerActive(
+                    CameraCaptureConsumer.Tracking,
+                    true,
+                    out var consumerError))
+            {
+                _lastError =
+                    consumerError ??
+                    "Camera capture could not be activated for tracking.";
+                _state =
+                    MediaPipeWebcamLifecycleState.Faulted;
+                return;
+            }
+
+            _cameraConsumerActive = true;
             _lastError = null;
             _state =
                 MediaPipeWebcamLifecycleState.Starting;
@@ -708,60 +794,41 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
         private IEnumerator StartRuntimeRoutine()
         {
-            yield return
-                Application.RequestUserAuthorization(
-                    UserAuthorization.WebCam);
-
-            if (!Application.HasUserAuthorization(
-                    UserAuthorization.WebCam))
-            {
-                FailStartup(
-                    "Webcam permission was not granted.");
-                yield break;
-            }
-
-            var devices =
-                WebCamTexture.devices;
-
-            if (devices == null ||
-                devices.Length == 0)
-            {
-                FailStartup(
-                    "No webcam devices were found.");
-                yield break;
-            }
-
-            _selectedDeviceName =
-                SelectDeviceName(devices);
-
-            _webcam =
-                new WebCamTexture(
-                    _selectedDeviceName,
-                    requestedWidth,
-                    requestedHeight,
-                    requestedFps);
-            _webcam.Play();
-
             var startupDeadline =
-                Time.realtimeSinceStartup + 5f;
+                Time.realtimeSinceStartup +
+                6f;
 
-            while (_webcam != null &&
-                   _webcam.isPlaying &&
-                   (_webcam.width <= 16 ||
-                    _webcam.height <= 16) &&
+            while (cameraCapture != null &&
+                   cameraCapture.State ==
+                       CameraCaptureState.Starting &&
                    Time.realtimeSinceStartup <
-                   startupDeadline)
+                       startupDeadline)
             {
                 yield return null;
             }
 
-            if (_webcam == null ||
-                !_webcam.isPlaying ||
-                _webcam.width <= 16 ||
-                _webcam.height <= 16)
+            if (cameraCapture == null ||
+                cameraCapture.State ==
+                    CameraCaptureState.Faulted)
             {
                 FailStartup(
-                    "Webcam did not produce a valid frame within the startup timeout.");
+                    cameraCapture?.LastError ??
+                    "Shared camera capture failed to start.");
+                yield break;
+            }
+
+            var webcam =
+                cameraCapture.CaptureTexture;
+
+            if (cameraCapture.State !=
+                    CameraCaptureState.Running ||
+                webcam == null ||
+                !webcam.isPlaying ||
+                webcam.width <= 16 ||
+                webcam.height <= 16)
+            {
+                FailStartup(
+                    "Shared camera capture did not produce a valid frame within the startup timeout.");
                 yield break;
             }
 
@@ -804,15 +871,15 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 _faceFramePool =
                     new TextureFramePool(
-                        _webcam.width,
-                        _webcam.height,
+                        webcam.width,
+                        webcam.height,
                         TextureFormat.RGBA32,
                         textureFramePoolSize);
 
                 _holisticFramePool =
                     new TextureFramePool(
-                        _webcam.width,
-                        _webcam.height,
+                        webcam.width,
+                        webcam.height,
                         TextureFormat.RGBA32,
                         textureFramePoolSize);
             }
@@ -865,8 +932,8 @@ namespace VCR.Runtime.Tracking.MediaPipe
                         faceTask: false));
 
             Debug.Log(
-                $"VCR MediaPipe started: device='{_selectedDeviceName}', " +
-                $"actual={_webcam.width}x{_webcam.height}, " +
+                $"VCR MediaPipe started: device='{cameraCapture.SelectedDeviceName}', " +
+                $"actual={webcam.width}x{webcam.height}, " +
                 $"cameraRequestedFps={requestedFps}, " +
                 $"faceTargetFps={faceTargetFps}, " +
                 $"holisticTargetFps={holisticTargetFps}.",
@@ -903,11 +970,13 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 var nowMs =
                     _clock.ElapsedMilliseconds;
+                var webcam =
+                    cameraCapture?.CaptureTexture;
 
                 if (nowMs < nextDueMs ||
-                    _webcam == null ||
-                    !_webcam.isPlaying ||
-                    !_webcam.didUpdateThisFrame)
+                    webcam == null ||
+                    !webcam.isPlaying ||
+                    !webcam.didUpdateThisFrame)
                 {
                     yield return null;
                     continue;
@@ -936,7 +1005,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
 
                 var inferenceTexture =
                     _preprocessor.Prepare(
-                        _webcam,
+                        webcam,
                         preprocessingMode,
                         lowLightExposure,
                         lowLightGamma);
@@ -1198,16 +1267,14 @@ namespace VCR.Runtime.Tracking.MediaPipe
             _holisticFramePool?.Dispose();
             _holisticFramePool = null;
 
-            if (_webcam != null)
+            if (_cameraConsumerActive &&
+                cameraCapture != null)
             {
-                if (_webcam.isPlaying)
-                {
-                    _webcam.Stop();
-                }
-
-                Destroy(
-                    _webcam);
-                _webcam = null;
+                cameraCapture.TrySetConsumerActive(
+                    CameraCaptureConsumer.Tracking,
+                    false,
+                    out _);
+                _cameraConsumerActive = false;
             }
 
             _preprocessor?.Dispose();
@@ -1249,28 +1316,24 @@ namespace VCR.Runtime.Tracking.MediaPipe
             return bytes;
         }
 
-        private string SelectDeviceName(
-            WebCamDevice[] devices)
+        private void ResolveCameraCapture()
         {
-            if (!string.IsNullOrWhiteSpace(
-                    deviceName))
+            if (cameraCapture != null)
             {
-                foreach (var device in
-                         devices)
-                {
-                    if (device.name ==
-                        deviceName)
-                    {
-                        return device.name;
-                    }
-                }
-
-                Debug.LogWarning(
-                    $"VCR: requested webcam '{deviceName}' was not found; using the first device.",
-                    this);
+                return;
             }
 
-            return devices[0].name;
+            cameraCapture =
+                GetComponentInParent<
+                    CameraCaptureRuntime>();
+
+            if (cameraCapture == null)
+            {
+                cameraCapture =
+                    FindFirstObjectByType<
+                        CameraCaptureRuntime>(
+                            FindObjectsInactive.Include);
+            }
         }
 
         private void SanitizePresenceTimingConfiguration()
