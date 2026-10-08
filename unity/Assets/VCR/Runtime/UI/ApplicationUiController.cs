@@ -7016,11 +7016,12 @@ namespace VCR.Runtime.UI
 
             var hasTexture =
                 _trackingCameraPreviewImage != null &&
-                _trackingCameraPreviewImage.texture != null &&
-                (cameraCapture == null ||
-                 cameraCapture.State ==
-                    CameraCaptureState.Running ||
-                 runtimeTexture == null);
+                (cameraCapture != null
+                    ? cameraCapture.State ==
+                          CameraCaptureState.Running &&
+                      runtimeTexture != null
+                    : _trackingCameraPreviewImage.texture !=
+                      null);
 
             if (_trackingCameraPreviewImage != null)
             {
