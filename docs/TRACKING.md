@@ -205,7 +205,7 @@ The Unity dependency is pinned to Ultraleap Tracking 7.3.0. The adapter uses an 
 
 The input-source UI exposes Ultraleap through the same add/enable/settings flow as MediaPipe, ARKit, and VMC. Configuration currently includes Desktop/Screentop tracking mode, Tracking Service endpoint, and device-space position/rotation offsets.
 
-Normalized hand landmarks are now independently routed with Ultraleap priority and MediaPipe fallback. Finger-bone retargeting remains a separate character-output stage; the current VRM target still preserves normalized hand data without applying finger bones.
+Normalized hand landmarks are independently routed with Ultraleap priority and MediaPipe fallback. `Vrm10HandTrackingTarget` now consumes that hand-only route after the full-body and face targets. It drives the VRM hand/wrist plus the Unity humanoid proximal/intermediate/distal finger bones using a source-relative calibration, smoothing, confidence filtering, and neutral return. This lets Ultraleap override hand/finger motion while MediaPipe continues to own upper body and remains the hand fallback.
 
 ## Audio fallback
 
@@ -346,7 +346,9 @@ MediaPipe callback-owned result buffers are never retained outside the adapter. 
 - first valid upper-body frame establishes torso/arm reference directions.
 - blink and eye look map to VRM standard expression presets.
 - mouth coefficients use provisional P0 geometric-to-phoneme heuristics.
-- normalized hand data is preserved, but finger retargeting is intentionally deferred.
+- `Vrm10HandTrackingTarget` applies normalized left/right hand landmarks to wrist/hand orientation and 15 humanoid finger segments per hand.
+- the first valid hand frame calibrates source-relative palm/finger directions; source changes or tracking loss recalibrate the affected hand.
+- Ultraleap is preferred through the hand-only route and MediaPipe remains the fallback without allocating composite routing frames.
 
 The P0 relative-direction upper-body solver is a feasibility mapper, not the final IK/full-body solver.
 
