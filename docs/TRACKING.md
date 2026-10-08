@@ -92,6 +92,20 @@ Calibration / Temporal Filtering
      One Active Character
 ```
 
+## Camera capture and preview boundary
+
+Physical webcam ownership is separate from tracking-source ownership.
+
+```text
+CameraCaptureRuntime
+  ├─ Preview consumer   -> privacy-controlled camera preview panel
+  └─ Tracking consumer  -> MediaPipeWebcamTrackingRunner
+```
+
+The camera opens once while at least one consumer is active. Hiding the preview releases only the preview consumer and does not stop MediaPipe. Disabling MediaPipe releases only the tracking consumer and does not close a preview that the user explicitly opened. No camera preview is activated implicitly by selecting a tracking source or navigating settings.
+
+MediaPipe still owns inference preprocessing, FaceLandmarker/Holistic scheduling, and tracking-specific flip policy. `CameraCaptureRuntime` owns only permission, physical device selection, resolution/FPS, and capture lifecycle.
+
 ## Webcam quality path
 
 The webcam path targets:
