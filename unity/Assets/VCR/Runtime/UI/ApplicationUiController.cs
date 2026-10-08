@@ -10308,7 +10308,7 @@ namespace VCR.Runtime.UI
                 "모션 & 애니메이션" =>
                     "<b>모션 & 애니메이션</b>\n<size=11><color=#A6B0BF>포즈 / 제스처 / 타임라인</color></size>",
                 "트래킹" =>
-                    "<b>트래킹</b>\n<size=11><color=#A6B0BF>웹캠 / ARKit / MediaPipe</color></size>",
+                    "<b>트래킹</b>\n<size=11><color=#A6B0BF>자동 혼합 / 입력 소스 / 보정</color></size>",
                 "표정" =>
                     "<b>표정</b>\n<size=11><color=#A6B0BF>감정 / 립싱크 / 파라미터</color></size>",
                 "의상 & 액세서리" =>
