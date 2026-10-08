@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,8 +19,14 @@ namespace VCR.Runtime.UI
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
         private Text _dashboardTrackingRouteText;
-        private Text _dashboardMediaPipeStatusText;
-        private Text _dashboardArKitStatusText;
+        private RectTransform _dashboardTrackingSourceList;
+        private string _dashboardTrackingSourceSignature;
+        private readonly Dictionary<string, Text>
+            _dashboardTrackingSourceStatusTexts =
+                new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button>
+            _dashboardTrackingSourceToggleButtons =
+                new(StringComparer.OrdinalIgnoreCase);
         private Text _dashboardEnvironmentStatusText;
         private Button _dashboardResolutionButton;
         private Button _dashboardFpsButton;
@@ -1007,45 +1014,26 @@ namespace VCR.Runtime.UI
                 new Vector2(12f, 8f),
                 new Vector2(-12f, -8f));
 
-            var mediaPipeRow =
-                CreateDashboardRow(
-                    _trackingDashboardContent,
-                    "MediaPipe Source Status",
-                    26f);
-            _dashboardMediaPipeStatusText =
-                CreateText(
-                    "MediaPipe Source Status Text",
-                    mediaPipeRow,
-                    11,
-                    TextAnchor.MiddleLeft);
-            _dashboardMediaPipeStatusText.text =
-                "MediaPipe 웹캠   확인 중…";
-            Stretch(
-                _dashboardMediaPipeStatusText.rectTransform,
-                Vector2.zero,
-                Vector2.one,
-                new Vector2(4f, 0f),
-                new Vector2(-4f, 0f));
+            _dashboardTrackingSourceList =
+                CreateRect(
+                    "Tracking Input Sources",
+                    _trackingDashboardContent);
+            var sourceListLayoutElement =
+                _dashboardTrackingSourceList.gameObject
+                    .AddComponent<LayoutElement>();
+            sourceListLayoutElement.preferredHeight =
+                Mathf.Max(
+                    32f,
+                    _trackingControls.Count * 30f);
 
-            var arKitRow =
-                CreateDashboardRow(
-                    _trackingDashboardContent,
-                    "ARKit Source Status",
-                    26f);
-            _dashboardArKitStatusText =
-                CreateText(
-                    "ARKit Source Status Text",
-                    arKitRow,
-                    11,
-                    TextAnchor.MiddleLeft);
-            _dashboardArKitStatusText.text =
-                "ARKit (iPhone/iPad)   확인 중…";
-            Stretch(
-                _dashboardArKitStatusText.rectTransform,
-                Vector2.zero,
-                Vector2.one,
-                new Vector2(4f, 0f),
-                new Vector2(-4f, 0f));
+            var sourceListLayout =
+                _dashboardTrackingSourceList.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            sourceListLayout.spacing = 3f;
+            sourceListLayout.childControlHeight = true;
+            sourceListLayout.childForceExpandHeight = false;
+
+            RefreshDashboardTrackingSources();
 
             var privacyFrame =
                 CreateDashboardPanel(
@@ -1816,29 +1804,290 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private string GetDashboardTrackingSourceStatus(
-            string controlId)
+        private void RefreshDashboardTrackingSources()
         {
-            ITrackingRuntimeControl control = null;
+            if (_dashboardTrackingSourceList == null)
+            {
+                return;
+            }
+
+            var signatureBuilder =
+                new System.Text.StringBuilder();
 
             for (var i = 0;
                  i < _trackingControls.Count;
                  i++)
             {
-                var candidate =
+                var control =
                     _trackingControls[i];
 
-                if (candidate != null &&
-                    string.Equals(
-                        candidate.ControlId,
-                        controlId,
-                        StringComparison.OrdinalIgnoreCase))
+                if (control == null)
                 {
-                    control = candidate;
-                    break;
+                    continue;
+                }
+
+                signatureBuilder
+                    .Append(control.ControlId)
+                    .Append('\u001f')
+                    .Append(control.DisplayName)
+                    .Append('\u001e');
+            }
+
+            var signature =
+                signatureBuilder.ToString();
+
+            if (!string.Equals(
+                    signature,
+                    _dashboardTrackingSourceSignature,
+                    StringComparison.Ordinal))
+            {
+                _dashboardTrackingSourceSignature =
+                    signature;
+                _dashboardTrackingSourceStatusTexts.Clear();
+                _dashboardTrackingSourceToggleButtons.Clear();
+
+                for (var index =
+                         _dashboardTrackingSourceList.childCount - 1;
+                     index >= 0;
+                     index--)
+                {
+                    Destroy(
+                        _dashboardTrackingSourceList
+                            .GetChild(index)
+                            .gameObject);
+                }
+
+                for (var i = 0;
+                     i < _trackingControls.Count;
+                     i++)
+                {
+                    var control =
+                        _trackingControls[i];
+
+                    if (control == null ||
+                        string.IsNullOrWhiteSpace(
+                            control.ControlId))
+                    {
+                        continue;
+                    }
+
+                    AddDashboardTrackingSourceRow(
+                        control);
+                }
+
+                var layoutElement =
+                    _dashboardTrackingSourceList
+                        .GetComponent<LayoutElement>();
+                if (layoutElement != null)
+                {
+                    layoutElement.preferredHeight =
+                        Mathf.Max(
+                            32f,
+                            _dashboardTrackingSourceStatusTexts.Count *
+                            30f);
                 }
             }
 
+            foreach (var pair in
+                     _dashboardTrackingSourceStatusTexts)
+            {
+                var control =
+                    FindTrackingControl(
+                        pair.Key);
+
+                SetTextIfChanged(
+                    pair.Value,
+                    control == null
+                        ? "사용 불가"
+                        : GetDashboardTrackingSourceStatus(
+                            control));
+            }
+
+            foreach (var pair in
+                     _dashboardTrackingSourceToggleButtons)
+            {
+                var control =
+                    FindTrackingControl(
+                        pair.Key);
+
+                SetButtonLabel(
+                    pair.Value,
+                    control != null &&
+                    control.ControlEnabled
+                        ? "끄기"
+                        : "켜기");
+                pair.Value.interactable =
+                    control != null;
+            }
+        }
+
+        private void AddDashboardTrackingSourceRow(
+            ITrackingRuntimeControl control)
+        {
+            var controlId =
+                control.ControlId;
+
+            var row =
+                CreateDashboardRow(
+                    _dashboardTrackingSourceList,
+                    "Tracking Source " +
+                    controlId,
+                    28f);
+
+            var name =
+                CreateText(
+                    "Tracking Source Name " +
+                    controlId,
+                    row,
+                    11,
+                    TextAnchor.MiddleLeft);
+            name.text =
+                GetDashboardTrackingSourceDisplayName(
+                    control);
+            name.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 116f;
+
+            var status =
+                CreateText(
+                    "Tracking Source Status " +
+                    controlId,
+                    row,
+                    11,
+                    TextAnchor.MiddleLeft);
+            status.color =
+                new Color(
+                    0.66f,
+                    0.71f,
+                    0.79f,
+                    1f);
+            status.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            var toggle =
+                CreateButton(
+                    control.ControlEnabled
+                        ? "끄기"
+                        : "켜기",
+                    row,
+                    () =>
+                        ToggleDashboardTrackingSource(
+                            controlId));
+            toggle.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 54f;
+
+            _dashboardTrackingSourceStatusTexts[
+                controlId] =
+                    status;
+            _dashboardTrackingSourceToggleButtons[
+                controlId] =
+                    toggle;
+        }
+
+        private void ToggleDashboardTrackingSource(
+            string controlId)
+        {
+            var control =
+                FindTrackingControl(
+                    controlId);
+
+            if (control == null)
+            {
+                SetDashboardNotice(
+                    "트래킹 입력 소스를 찾을 수 없습니다.");
+                return;
+            }
+
+            var targetEnabled =
+                !control.ControlEnabled;
+
+            if (!control.TrySetControlEnabled(
+                    targetEnabled,
+                    out var error))
+            {
+                SetDashboardNotice(
+                    GetDashboardTrackingSourceDisplayName(
+                        control) +
+                    (targetEnabled
+                        ? " 켜기 실패: "
+                        : " 끄기 실패: ") +
+                    (error ?? "알 수 없는 오류"));
+                RefreshAll();
+                return;
+            }
+
+            SetDashboardNotice(
+                GetDashboardTrackingSourceDisplayName(
+                    control) +
+                (targetEnabled
+                    ? " 켜짐"
+                    : " 꺼짐"));
+
+            ResolveTrackingControls(
+                force: true);
+            RefreshAvailability();
+            RefreshAll();
+        }
+
+        private ITrackingRuntimeControl FindTrackingControl(
+            string controlId)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    controlId))
+            {
+                return null;
+            }
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
+                var control =
+                    _trackingControls[i];
+
+                if (control != null &&
+                    string.Equals(
+                        control.ControlId,
+                        controlId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return control;
+                }
+            }
+
+            return null;
+        }
+
+        private static string
+            GetDashboardTrackingSourceDisplayName(
+                ITrackingRuntimeControl control)
+        {
+            if (control == null)
+            {
+                return "알 수 없는 소스";
+            }
+
+            return control.ControlId switch
+            {
+                "mediapipe-webcam" =>
+                    "MediaPipe",
+                "arkit-ifacialmocap" =>
+                    "ARKit",
+                "vmc-udp" =>
+                    "VMC",
+                _ =>
+                    string.IsNullOrWhiteSpace(
+                        control.DisplayName)
+                        ? control.ControlId
+                        : control.DisplayName
+            };
+        }
+
+        private static string GetDashboardTrackingSourceStatus(
+            ITrackingRuntimeControl control)
+        {
             if (control == null)
             {
                 return "사용 불가";
@@ -1858,11 +2107,14 @@ namespace VCR.Runtime.UI
                 TrackingSourceHealthState.Starting =>
                     "시작 중",
                 TrackingSourceHealthState.SourceLost =>
-                    "대기 중 · 신호 없음",
+                    "켜짐 · 입력 대기",
                 TrackingSourceHealthState.Faulted =>
-                    "오류",
+                    string.IsNullOrWhiteSpace(
+                        control.ControlError)
+                        ? "오류"
+                        : "오류 · 확인 필요",
                 _ =>
-                    "꺼짐"
+                    "켜짐 · 대기"
             };
         }
 
@@ -1904,16 +2156,7 @@ namespace VCR.Runtime.UI
                         : "트래킹 상태   ● 비활성화");
             }
 
-            SetTextIfChanged(
-                _dashboardMediaPipeStatusText,
-                "MediaPipe 웹캠   " +
-                GetDashboardTrackingSourceStatus(
-                    "mediapipe-webcam"));
-            SetTextIfChanged(
-                _dashboardArKitStatusText,
-                "ARKit (iPhone/iPad)   " +
-                GetDashboardTrackingSourceStatus(
-                    "arkit-ifacialmocap"));
+            RefreshDashboardTrackingSources();
 
             if (_dashboardEnvironmentStatusText != null)
             {
