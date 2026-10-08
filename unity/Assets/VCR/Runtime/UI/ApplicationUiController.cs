@@ -455,13 +455,8 @@ namespace VCR.Runtime.UI
 
             if (selected)
             {
-                // A raw camera preview is privacy-sensitive. Navigating away
-                // from Tracking always returns it to the hidden state.
-                if (section != ApplicationUiSection.Tracking)
-                {
-                    _trackingCameraPreviewRequested = false;
-                }
-
+                // Camera preview is an independent privacy-controlled panel.
+                // Section navigation must never reveal or hide it implicitly.
                 RefreshAll();
             }
 
@@ -6861,13 +6856,7 @@ namespace VCR.Runtime.UI
                 var offsetMin =
                     _renderViewportFrame.offsetMin;
                 offsetMin.y =
-                    (characterSelected ||
-                     appearanceSelected) &&
-                    _appearanceAdvancedExpanded
-                        ? 454f
-                        : advancedSelected
-                            ? 432f
-                            : 318f;
+                    GetDashboardWorkspaceBottomInset();
                 _renderViewportFrame.offsetMin =
                     offsetMin;
             }
