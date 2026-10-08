@@ -20,6 +20,7 @@ namespace VCR.Runtime.Tracking.Routing
     public sealed class PriorityTrackingRouter :
         MonoBehaviour,
         ITrackingRouteProvider,
+        ITrackingHandFrameProvider,
         ITrackingRouteStatusProvider,
         IRuntimeMetricsSource
     {
@@ -70,6 +71,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private TrackingFrame _latestFace;
         private TrackingFrame _latestBodyHands;
+        private TrackingFrame _latestHands;
         private TrackingFrame _latestHumanoidPose;
         private TrackingFrame _latestExpressions;
 
@@ -79,7 +81,7 @@ namespace VCR.Runtime.Tracking.Routing
         private TrackingFrame _selectedBodyFrame;
         private TrackingFrame _selectedHandsFrame;
         private string _selectedBodySourceId;
-        private long _bodySequence;
+        private string _selectedHandsSourceId;
 
         private TrackingFrame _selectedPoseFrame;
         private string _selectedPoseSourceId;
@@ -182,7 +184,9 @@ namespace VCR.Runtime.Tracking.Routing
             {
                 _providerFailureCount++;
                 _latestBodyHands = null;
+                _latestHands = null;
                 ResetBodySelection();
+                ResetHandsSelection();
             }
 
             try
@@ -221,6 +225,12 @@ namespace VCR.Runtime.Tracking.Routing
         public bool TryGetLatestBodyHands(out TrackingFrame frame)
         {
             frame = _latestBodyHands;
+            return frame != null;
+        }
+
+        public bool TryGetLatestHands(out TrackingFrame frame)
+        {
+            frame = _latestHands;
             return frame != null;
         }
 
@@ -368,7 +378,7 @@ namespace VCR.Runtime.Tracking.Routing
                     ? behaviour as ITrackingSourceHealthProvider
                     : null;
 
-            ResetBodySelection();
+            ResetHandsSelection();
         }
 
         private void AssignFallbackProvider(
@@ -670,233 +680,96 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void UpdateBodyHandsSnapshot()
         {
-            TrackingFrame fallbackFrame = null;
-            var fallbackUsable =
-                IsServiceAlive(
-                    _fallbackProvider) &&
-                (IsSourceHealthUsable(
-                     _fallbackHealth,
-                     TrackingRegion.UpperBody) ||
-                 IsSourceHealthUsable(
-                     _fallbackHealth,
-                     TrackingRegion.Hands)) &&
-                _fallbackProvider.TryGetLatestBodyHands(
-                    out fallbackFrame) &&
-                fallbackFrame != null &&
-                (fallbackFrame.UpperBody != null ||
-                 fallbackFrame.LeftHand != null ||
-                 fallbackFrame.RightHand != null);
+            TrackingFrame selected = null;
 
-            TrackingFrame preferredHandsFrame = null;
-            var preferredHandsUsable =
-                IsServiceAlive(
+            if (IsServiceAlive(_fallbackProvider) &&
+                IsSourceHealthUsable(
+                    _fallbackHealth,
+                    TrackingRegion.UpperBody) &&
+                _fallbackProvider.TryGetLatestBodyHands(
+                    out var fallbackFrame) &&
+                fallbackFrame != null)
+            {
+                selected = fallbackFrame;
+            }
+
+            if (selected == null)
+            {
+                _latestBodyHands = null;
+                ResetBodySelection();
+            }
+            else if (!ReferenceEquals(
+                         selected,
+                         _selectedBodyFrame))
+            {
+                CountSourceSwitch(
+                    _selectedBodySourceId,
+                    selected.SourceId,
+                    ref _bodySourceSwitches);
+
+                _selectedBodyFrame =
+                    selected;
+                _selectedBodySourceId =
+                    selected.SourceId;
+
+                // Preserve the immutable provider frame. The repository hot
+                // path contract deliberately forbids route-envelope allocation.
+                _latestBodyHands = selected;
+            }
+
+            UpdateHandsSnapshot(
+                selected);
+        }
+
+        private void UpdateHandsSnapshot(
+            TrackingFrame fallbackFrame)
+        {
+            TrackingFrame selected = null;
+
+            if (IsServiceAlive(
                     _preferredHandsProvider) &&
                 IsSourceHealthUsable(
                     _preferredHandsHealth,
                     TrackingRegion.Hands) &&
-                _preferredHandsProvider.TryGetLatestBodyHands(
-                    out preferredHandsFrame) &&
-                preferredHandsFrame != null &&
-                preferredHandsFrame.SubjectDetected &&
-                (preferredHandsFrame.LeftHand != null ||
-                 preferredHandsFrame.RightHand != null);
-
-            if (!fallbackUsable &&
-                !preferredHandsUsable)
+                _preferredHandsProvider
+                    .TryGetLatestBodyHands(
+                        out var preferredFrame) &&
+                preferredFrame != null &&
+                preferredFrame.SubjectDetected &&
+                (preferredFrame.LeftHand != null ||
+                 preferredFrame.RightHand != null))
             {
-                _latestBodyHands = null;
-                ResetBodySelection();
+                selected =
+                    preferredFrame;
+            }
+            else if (fallbackFrame != null &&
+                     (fallbackFrame.LeftHand != null ||
+                      fallbackFrame.RightHand != null))
+            {
+                selected =
+                    fallbackFrame;
+            }
+
+            if (selected == null)
+            {
+                _latestHands = null;
+                ResetHandsSelection();
                 return;
             }
 
             if (ReferenceEquals(
-                    fallbackFrame,
-                    _selectedBodyFrame) &&
-                ReferenceEquals(
-                    preferredHandsFrame,
+                    selected,
                     _selectedHandsFrame))
             {
                 return;
             }
 
-            var upperBody =
-                fallbackUsable
-                    ? fallbackFrame.UpperBody
-                    : null;
-
-            var leftHand =
-                preferredHandsUsable &&
-                preferredHandsFrame.LeftHand != null
-                    ? preferredHandsFrame.LeftHand
-                    : fallbackUsable
-                        ? fallbackFrame.LeftHand
-                        : null;
-
-            var rightHand =
-                preferredHandsUsable &&
-                preferredHandsFrame.RightHand != null
-                    ? preferredHandsFrame.RightHand
-                    : fallbackUsable
-                        ? fallbackFrame.RightHand
-                        : null;
-
-            var regions =
-                TrackingRegion.None;
-
-            if (upperBody != null)
-            {
-                regions |=
-                    TrackingRegion.UpperBody;
-            }
-
-            if (leftHand != null)
-            {
-                regions |=
-                    TrackingRegion.LeftHand;
-            }
-
-            if (rightHand != null)
-            {
-                regions |=
-                    TrackingRegion.RightHand;
-            }
-
-            if (regions ==
-                TrackingRegion.None)
-            {
-                _latestBodyHands = null;
-                ResetBodySelection();
-                return;
-            }
-
-            var preferredHandsSelected =
-                preferredHandsUsable &&
-                (ReferenceEquals(
-                     leftHand,
-                     preferredHandsFrame.LeftHand) ||
-                 ReferenceEquals(
-                     rightHand,
-                     preferredHandsFrame.RightHand));
-
-            var nextSourceId =
-                BuildBodyHandsSourceId(
-                    fallbackUsable
-                        ? fallbackFrame
-                        : null,
-                    preferredHandsSelected
-                        ? preferredHandsFrame
-                        : null);
-
-            CountSourceSwitch(
-                _selectedBodySourceId,
-                nextSourceId,
-                ref _bodySourceSwitches);
-
-            _selectedBodyFrame =
-                fallbackFrame;
             _selectedHandsFrame =
-                preferredHandsFrame;
-            _selectedBodySourceId =
-                nextSourceId;
-
-            var runtimeTimestampUs =
-                Math.Max(
-                    fallbackUsable
-                        ? fallbackFrame.RuntimeTimestampUs
-                        : 0L,
-                    preferredHandsSelected
-                        ? preferredHandsFrame.RuntimeTimestampUs
-                        : 0L);
-
-            var sourceTimestampUs =
-                Math.Max(
-                    fallbackUsable
-                        ? fallbackFrame.SourceTimestampUs
-                        : 0L,
-                    preferredHandsSelected
-                        ? preferredHandsFrame.SourceTimestampUs
-                        : 0L);
-
-            _latestBodyHands =
-                new TrackingFrame(
-                    ++_bodySequence,
-                    sourceTimestampUs,
-                    regions,
-                    MaxFiniteConfidence(
-                        fallbackUsable
-                            ? fallbackFrame.Confidence
-                            : float.NaN,
-                        preferredHandsSelected
-                            ? preferredHandsFrame.Confidence
-                            : float.NaN),
-                    subjectDetected:
-                        (fallbackUsable &&
-                         fallbackFrame.SubjectDetected) ||
-                        (preferredHandsSelected &&
-                         preferredHandsFrame.SubjectDetected),
-                    upperBody:
-                        upperBody,
-                    leftHand:
-                        leftHand,
-                    rightHand:
-                        rightHand,
-                    sourceId:
-                        nextSourceId,
-                    runtimeTimestampUs:
-                        runtimeTimestampUs);
-        }
-
-        private static string BuildBodyHandsSourceId(
-            TrackingFrame fallbackFrame,
-            TrackingFrame preferredHandsFrame)
-        {
-            if (fallbackFrame == null)
-            {
-                return
-                    preferredHandsFrame?.SourceId;
-            }
-
-            if (preferredHandsFrame == null)
-            {
-                return
-                    fallbackFrame.SourceId;
-            }
-
-            return
-                "body:" +
-                (fallbackFrame.SourceId ??
-                 "fallback") +
-                "|hands:" +
-                (preferredHandsFrame.SourceId ??
-                 "preferred");
-        }
-
-        private static float MaxFiniteConfidence(
-            float first,
-            float second)
-        {
-            var firstValid =
-                float.IsFinite(first);
-            var secondValid =
-                float.IsFinite(second);
-
-            if (firstValid &&
-                secondValid)
-            {
-                return Math.Max(
-                    first,
-                    second);
-            }
-
-            if (firstValid)
-            {
-                return first;
-            }
-
-            return
-                secondValid
-                    ? second
-                    : float.NaN;
+                selected;
+            _selectedHandsSourceId =
+                selected.SourceId;
+            _latestHands =
+                selected;
         }
 
         private void UpdateExternalPoseSnapshots()
@@ -1265,6 +1138,12 @@ namespace VCR.Runtime.Tracking.Routing
                 status.BodyHandsAgeMs);
             AddAgeMetric(
                 output,
+                "tracking.route.hands_age",
+                FrameAgeMs(
+                    _latestHands,
+                    MonotonicClock.NowMicroseconds()));
+            AddAgeMetric(
+                output,
                 "tracking.route.fullbody_age",
                 status.FullBodyAgeMs);
             AddAgeMetric(
@@ -1546,8 +1425,13 @@ namespace VCR.Runtime.Tracking.Routing
         private void ResetBodySelection()
         {
             _selectedBodyFrame = null;
-            _selectedHandsFrame = null;
             _selectedBodySourceId = null;
+        }
+
+        private void ResetHandsSelection()
+        {
+            _selectedHandsFrame = null;
+            _selectedHandsSourceId = null;
         }
 
         private void ResetPoseSelection()
