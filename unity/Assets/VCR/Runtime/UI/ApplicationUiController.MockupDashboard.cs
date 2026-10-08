@@ -114,8 +114,7 @@ namespace VCR.Runtime.UI
             ApplyObsWorkspaceGeometry(
                 navigation,
                 inspector);
-            BuildMockupViewportToolbar(
-                windowChrome);
+            BuildMockupViewportToolbar();
             BuildMockupInspector(
                 inspector);
             BuildMockupTrackingCard();
@@ -181,8 +180,7 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private void BuildMockupViewportToolbar(
-            DesktopWindowChromeController windowChrome)
+        private void BuildMockupViewportToolbar()
         {
             if (_renderViewportFrame == null)
             {
@@ -262,37 +260,6 @@ namespace VCR.Runtime.UI
                 "카메라 뷰",
                 68f);
 
-            var right =
-                CreateRect(
-                    "Viewport Toolbar Right",
-                    toolbar);
-            right.anchorMin =
-                new Vector2(0.72f, 0f);
-            right.anchorMax =
-                new Vector2(1f, 1f);
-            right.offsetMin =
-                new Vector2(4f, 4f);
-            right.offsetMax =
-                new Vector2(-6f, -4f);
-
-            var rightLayout =
-                right.gameObject
-                    .AddComponent<HorizontalLayoutGroup>();
-            rightLayout.spacing = 6f;
-            rightLayout.childAlignment =
-                TextAnchor.MiddleRight;
-            rightLayout.childControlWidth = true;
-            rightLayout.childControlHeight = true;
-            rightLayout.childForceExpandWidth = false;
-            rightLayout.childForceExpandHeight = true;
-
-            AddToolbarButton(
-                right,
-                "⛶ 크게 보기",
-                92f,
-                windowChrome != null
-                    ? windowChrome.ToggleZoom
-                    : null);
         }
 
         private void AddToolbarLabel(
@@ -316,39 +283,6 @@ namespace VCR.Runtime.UI
             text.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = width;
-        }
-
-        private Button AddToolbarButton(
-            Transform parent,
-            string label,
-            float width,
-            Action action)
-        {
-            var button =
-                CreateButton(
-                    label,
-                    parent,
-                    action);
-            var layout =
-                button.gameObject
-                    .AddComponent<LayoutElement>();
-            layout.preferredWidth =
-                width;
-            layout.preferredHeight =
-                30f;
-
-            if (button.targetGraphic is
-                Image image)
-            {
-                image.color =
-                    new Color(
-                        0.09f,
-                        0.105f,
-                        0.13f,
-                        1f);
-            }
-
-            return button;
         }
 
         private void BuildMockupInspector(
