@@ -8,6 +8,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VCR.Runtime.Application;
 using VCR.Runtime.Appearance;
+using VCR.Runtime.Camera;
 using VCR.Runtime.Capabilities;
 using VCR.Runtime.Core;
 using VCR.Runtime.Diagnostics;
@@ -32,6 +33,7 @@ namespace VCR.Runtime.UI
         [Header("Runtime")]
         [SerializeField] private ApplicationRuntimeBootstrap applicationBootstrap;
         [SerializeField] private SingleCharacterSceneRuntime sceneRuntime;
+        [SerializeField] private CameraCaptureRuntime cameraCapture;
         [SerializeField] private RuntimeDiagnostics diagnostics;
         [SerializeField] private EventRuntimeHost eventRuntime;
 
@@ -421,10 +423,24 @@ namespace VCR.Runtime.UI
         private void OnEnable()
         {
             Subscribe();
+
+            if (_trackingCameraPreviewRequested)
+            {
+                ResolveDependencies(
+                    force: true);
+                cameraCapture?.TrySetConsumerActive(
+                    CameraCaptureConsumer.Preview,
+                    true,
+                    out _);
+            }
         }
 
         private void OnDisable()
         {
+            cameraCapture?.TrySetConsumerActive(
+                CameraCaptureConsumer.Preview,
+                false,
+                out _);
             Unsubscribe();
         }
 
@@ -466,6 +482,14 @@ namespace VCR.Runtime.UI
         [ContextMenu("Rebuild Application UI")]
         public void RebuildUi()
         {
+            if (_trackingCameraPreviewRequested)
+            {
+                cameraCapture?.TrySetConsumerActive(
+                    CameraCaptureConsumer.Preview,
+                    false,
+                    out _);
+            }
+
             if (_root != null)
             {
                 DestroyObject(
@@ -6887,17 +6911,62 @@ namespace VCR.Runtime.UI
 
         private void ToggleTrackingCameraPreview()
         {
-            _trackingCameraPreviewRequested =
+            var next =
                 !_trackingCameraPreviewRequested;
 
+            ResolveDependencies(
+                force: true);
+
+            if (next)
+            {
+                if (cameraCapture == null)
+                {
+                    SetDashboardNotice(
+                        "카메라 캡처 런타임을 찾을 수 없습니다.");
+                    _trackingCameraPreviewRequested =
+                        false;
+                    RefreshTrackingCameraPreviewPrivacy(
+                        false);
+                    return;
+                }
+
+                if (!cameraCapture.TrySetConsumerActive(
+                        CameraCaptureConsumer.Preview,
+                        true,
+                        out var error))
+                {
+                    SetDashboardNotice(
+                        "카메라 미리보기 시작 실패: " +
+                        (error ?? "알 수 없는 오류"));
+                    _trackingCameraPreviewRequested =
+                        false;
+                    RefreshTrackingCameraPreviewPrivacy(
+                        false);
+                    return;
+                }
+
+                _trackingCameraPreviewRequested =
+                    true;
+            }
+            else
+            {
+                _trackingCameraPreviewRequested =
+                    false;
+                cameraCapture?.TrySetConsumerActive(
+                    CameraCaptureConsumer.Preview,
+                    false,
+                    out _);
+            }
+
             RefreshTrackingCameraPreviewPrivacy(
-                _model.SelectedSection ==
-                ApplicationUiSection.Tracking);
+                false);
         }
 
         public void BindTrackingCameraPreviewTexture(
             Texture texture)
         {
+            // Compatibility path for external preview sources. The shared
+            // CameraCaptureRuntime remains the primary source when available.
             if (_trackingCameraPreviewImage != null)
             {
                 _trackingCameraPreviewImage.texture =
@@ -6905,15 +6974,29 @@ namespace VCR.Runtime.UI
             }
 
             RefreshTrackingCameraPreviewPrivacy(
-                _model.SelectedSection ==
-                ApplicationUiSection.Tracking);
+                false);
         }
 
         private void RefreshTrackingCameraPreviewPrivacy(
-            bool trackingSelected)
+            bool _)
         {
             var shouldReveal =
                 _trackingCameraPreviewRequested;
+
+            var runtimeTexture =
+                shouldReveal
+                    ? cameraCapture?.PreviewTexture
+                    : null;
+
+            if (_trackingCameraPreviewImage != null &&
+                runtimeTexture != null &&
+                !ReferenceEquals(
+                    _trackingCameraPreviewImage.texture,
+                    runtimeTexture))
+            {
+                _trackingCameraPreviewImage.texture =
+                    runtimeTexture;
+            }
 
             if (_trackingCameraPreviewPanel != null &&
                 _trackingCameraPreviewPanel.gameObject.activeSelf !=
@@ -6933,7 +7016,11 @@ namespace VCR.Runtime.UI
 
             var hasTexture =
                 _trackingCameraPreviewImage != null &&
-                _trackingCameraPreviewImage.texture != null;
+                _trackingCameraPreviewImage.texture != null &&
+                (cameraCapture == null ||
+                 cameraCapture.State ==
+                    CameraCaptureState.Running ||
+                 runtimeTexture == null);
 
             if (_trackingCameraPreviewImage != null)
             {
@@ -6951,9 +7038,22 @@ namespace VCR.Runtime.UI
                 if (shouldReveal &&
                     !hasTexture)
                 {
+                    var message =
+                        cameraCapture == null
+                            ? "연결된 카메라 캡처 런타임이 없습니다."
+                            : cameraCapture.State ==
+                                CameraCaptureState.Faulted
+                                ? "카메라 미리보기 오류: " +
+                                  (cameraCapture.LastError ??
+                                   "카메라를 열 수 없습니다.")
+                                : cameraCapture.State ==
+                                    CameraCaptureState.Starting
+                                    ? "카메라를 시작하는 중…"
+                                    : "카메라 영상 입력을 기다리는 중…";
+
                     SetTextIfChanged(
                         _trackingCameraPreviewPrivacyText,
-                        "카메라 미리보기를 요청했지만 연결된 영상 소스가 없습니다.");
+                        message);
                 }
             }
 
@@ -10011,6 +10111,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime == null ||
                 diagnostics == null ||
                 eventRuntime == null ||
+                cameraCapture == null ||
                 _mixer == null ||
                 _manualExpressionSource == null ||
                 _materialController == null;
@@ -10064,6 +10165,14 @@ namespace VCR.Runtime.UI
                 {
                     eventRuntime =
                         runtimeHost;
+                }
+
+                if (cameraCapture == null &&
+                    behaviour is
+                        CameraCaptureRuntime captureRuntime)
+                {
+                    cameraCapture =
+                        captureRuntime;
                 }
 
                 if (_mixer == null &&
