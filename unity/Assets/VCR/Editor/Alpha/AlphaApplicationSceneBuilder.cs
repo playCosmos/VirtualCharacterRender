@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Leap;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -16,6 +17,7 @@ using VCR.Runtime.Tracking.ArKitUnity;
 using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Runtime.Tracking.Mixing;
 using VCR.Runtime.Tracking.Routing;
+using VCR.Runtime.Tracking.Ultraleap;
 using VCR.Runtime.UI;
 
 namespace VCR.Editor.Alpha
@@ -117,8 +119,32 @@ namespace VCR.Editor.Alpha
                     VmcUdpSender>();
             vmcSender.enabled = false;
 
+            var ultraleapObject =
+                new GameObject(
+                    "Ultraleap");
+            ultraleapObject.transform.SetParent(
+                tracking,
+                false);
+
+            var ultraleapProvider =
+                ultraleapObject.AddComponent<
+                    LeapServiceProvider>();
+            var ultraleap =
+                ultraleapObject.AddComponent<
+                    UltraleapTrackingRunner>();
+            ultraleap.ConfigureProvider(
+                ultraleapProvider);
+
+            // Hardware inputs remain opt-in. The generic tracking-source UI
+            // enables the adapter and its provider together after the user
+            // explicitly adds/enables Ultraleap.
+            ultraleap.enabled = false;
+            ultraleapProvider.enabled = false;
+
             router.SetPreferredFaceProvider(
                 arkit);
+            router.SetPreferredHandsProvider(
+                ultraleap);
             router.SetFallbackProvider(
                 mediaPipe);
             router.SetExternalPoseProvider(
@@ -233,7 +259,7 @@ namespace VCR.Editor.Alpha
             Debug.Log(
                 "VCR Alpha integrated runtime scene created. " +
                 "All current runtime feature families remain included; " +
-                "MediaPipe webcam, ARKit/iFacialMocap, VMC receive/send, and 2D host start disabled for equipment-free alpha validation.");
+                "MediaPipe webcam, ARKit/iFacialMocap, Ultraleap hands, VMC receive/send, and 2D host start disabled for equipment-free alpha validation.");
 
             return true;
         }
