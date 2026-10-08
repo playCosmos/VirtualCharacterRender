@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.UI
 {
@@ -19,14 +20,42 @@ namespace VCR.Runtime.UI
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
         private Text _dashboardTrackingRouteText;
+
+        private const string TrackingInputsConfiguredKey =
+            "VCR.TrackingInputs.Configured.v1";
+        private const string TrackingInputEnabledKeyPrefix =
+            "VCR.TrackingInputs.Enabled.v1.";
+        private const string TrackingInputSettingKeyPrefix =
+            "VCR.TrackingInputs.Setting.v1.";
+
         private RectTransform _dashboardTrackingSourceList;
+        private RectTransform _dashboardTrackingSourcePicker;
+        private Text _dashboardTrackingSourcePickerEmptyText;
+        private Button _dashboardTrackingSourceAddButton;
         private string _dashboardTrackingSourceSignature;
+        private bool _dashboardTrackingSourcePickerOpen;
+        private bool _dashboardTrackingConfigurationLoaded;
+        private readonly HashSet<string>
+            _dashboardConfiguredTrackingSources =
+                new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Text>
             _dashboardTrackingSourceStatusTexts =
                 new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button>
             _dashboardTrackingSourceToggleButtons =
                 new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, float>
+            _dashboardTrackingSourceLastClickTimes =
+                new(StringComparer.OrdinalIgnoreCase);
+
+        private RectTransform _dashboardTrackingSourceSettingsModal;
+        private Text _dashboardTrackingSourceSettingsTitle;
+        private RectTransform _dashboardTrackingSourceSettingsBody;
+        private string _dashboardTrackingSourceSettingsControlId;
+        private readonly Dictionary<string, InputField>
+            _dashboardTrackingSourceSettingsInputs =
+                new(StringComparer.OrdinalIgnoreCase);
+
         private Text _dashboardEnvironmentStatusText;
         private Button _dashboardResolutionButton;
         private Button _dashboardFpsButton;
@@ -64,6 +93,7 @@ namespace VCR.Runtime.UI
             BuildSettingsLauncher(
                 navigation);
             BuildSettingsModal();
+            BuildTrackingSourceSettingsModal();
             ApplyPretendardTypography();
         }
 
@@ -1014,6 +1044,54 @@ namespace VCR.Runtime.UI
                 new Vector2(12f, 8f),
                 new Vector2(-12f, -8f));
 
+            EnsureDashboardTrackingConfigurationLoaded();
+
+            var sourceHeader =
+                CreateDashboardRow(
+                    _trackingDashboardContent,
+                    "Tracking Input Source Header",
+                    30f);
+
+            var sourceHeaderLabel =
+                CreateText(
+                    "Tracking Input Source Header Label",
+                    sourceHeader,
+                    12,
+                    TextAnchor.MiddleLeft);
+            sourceHeaderLabel.text =
+                "<b>입력 소스</b>";
+            sourceHeaderLabel.supportRichText = true;
+            sourceHeaderLabel.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            _dashboardTrackingSourceAddButton =
+                CreateButton(
+                    "+",
+                    sourceHeader,
+                    ToggleDashboardTrackingSourcePicker);
+            _dashboardTrackingSourceAddButton.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 34f;
+
+            _dashboardTrackingSourcePicker =
+                CreateRect(
+                    "Tracking Input Source Picker",
+                    _trackingDashboardContent);
+            var pickerLayoutElement =
+                _dashboardTrackingSourcePicker.gameObject
+                    .AddComponent<LayoutElement>();
+            pickerLayoutElement.preferredHeight = 0f;
+
+            var pickerLayout =
+                _dashboardTrackingSourcePicker.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            pickerLayout.spacing = 3f;
+            pickerLayout.childControlHeight = true;
+            pickerLayout.childForceExpandHeight = false;
+            _dashboardTrackingSourcePicker.gameObject.SetActive(
+                false);
+
             _dashboardTrackingSourceList =
                 CreateRect(
                     "Tracking Input Sources",
@@ -1021,10 +1099,7 @@ namespace VCR.Runtime.UI
             var sourceListLayoutElement =
                 _dashboardTrackingSourceList.gameObject
                     .AddComponent<LayoutElement>();
-            sourceListLayoutElement.preferredHeight =
-                Mathf.Max(
-                    32f,
-                    _trackingControls.Count * 30f);
+            sourceListLayoutElement.preferredHeight = 34f;
 
             var sourceListLayout =
                 _dashboardTrackingSourceList.gameObject
@@ -1114,7 +1189,7 @@ namespace VCR.Runtime.UI
                     11,
                     TextAnchor.MiddleLeft);
             sourceHelp.text =
-                "ARKit과 MediaPipe는 택일이 아닙니다. ARKit이 연결되면 얼굴을 우선 담당하고 MediaPipe는 손·상체를 계속 추적합니다.";
+                "+ 버튼으로 필요한 입력 소스를 추가합니다. 추가된 소스는 켜기/끄기가 가능하며, 더블클릭 또는 ⚙ 버튼으로 설정을 다시 열 수 있습니다.";
             sourceHelp.color =
                 new Color(
                     0.58f,
@@ -1804,12 +1879,187 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void EnsureDashboardTrackingConfigurationLoaded()
+        {
+            if (_dashboardTrackingConfigurationLoaded)
+            {
+                return;
+            }
+
+            _dashboardTrackingConfigurationLoaded = true;
+            _dashboardConfiguredTrackingSources.Clear();
+
+            var configured =
+                PlayerPrefs.GetString(
+                    TrackingInputsConfiguredKey,
+                    string.Empty);
+
+            var ids =
+                configured.Split(
+                    new[]
+                    {
+                        '\n'
+                    },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            for (var i = 0;
+                 i < ids.Length;
+                 i++)
+            {
+                var id =
+                    ids[i].Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        id) ||
+                    FindTrackingControl(id) == null)
+                {
+                    continue;
+                }
+
+                _dashboardConfiguredTrackingSources.Add(
+                    id);
+            }
+
+            foreach (var controlId in
+                     _dashboardConfiguredTrackingSources)
+            {
+                var control =
+                    FindTrackingControl(
+                        controlId);
+
+                if (control == null)
+                {
+                    continue;
+                }
+
+                ApplyPersistedDashboardTrackingSettings(
+                    control);
+
+                var shouldEnable =
+                    PlayerPrefs.GetInt(
+                        TrackingInputEnabledKeyPrefix +
+                        controlId,
+                        0) != 0;
+
+                if (control.ControlEnabled !=
+                    shouldEnable)
+                {
+                    control.TrySetControlEnabled(
+                        shouldEnable,
+                        out _);
+                }
+            }
+        }
+
+        private void SaveDashboardTrackingConfiguration()
+        {
+            var ids =
+                new List<string>(
+                    _dashboardConfiguredTrackingSources);
+            ids.Sort(
+                StringComparer.OrdinalIgnoreCase);
+
+            PlayerPrefs.SetString(
+                TrackingInputsConfiguredKey,
+                string.Join(
+                    "\n",
+                    ids));
+            PlayerPrefs.Save();
+        }
+
+        private static string
+            GetDashboardTrackingSettingKey(
+                string controlId,
+                string settingKey)
+        {
+            return
+                TrackingInputSettingKeyPrefix +
+                controlId +
+                "." +
+                settingKey;
+        }
+
+        private void ApplyPersistedDashboardTrackingSettings(
+            ITrackingRuntimeControl control)
+        {
+            if (control is not
+                ITrackingRuntimeConfigurable configurable)
+            {
+                return;
+            }
+
+            var settings =
+                configurable.GetConfigurationSettings();
+
+            if (settings == null ||
+                settings.Count == 0)
+            {
+                return;
+            }
+
+            var values =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+            var hasPersistedValue = false;
+
+            for (var i = 0;
+                 i < settings.Count;
+                 i++)
+            {
+                var setting =
+                    settings[i];
+                var key =
+                    GetDashboardTrackingSettingKey(
+                        control.ControlId,
+                        setting.Key);
+
+                if (PlayerPrefs.HasKey(
+                        key))
+                {
+                    values[setting.Key] =
+                        PlayerPrefs.GetString(
+                            key,
+                            setting.Value);
+                    hasPersistedValue = true;
+                }
+                else
+                {
+                    values[setting.Key] =
+                        setting.Value;
+                }
+            }
+
+            if (hasPersistedValue)
+            {
+                configurable.TryApplyConfiguration(
+                    values,
+                    out _);
+            }
+        }
+
+        private void ToggleDashboardTrackingSourcePicker()
+        {
+            _dashboardTrackingSourcePickerOpen =
+                !_dashboardTrackingSourcePickerOpen;
+
+            if (_dashboardTrackingSourcePicker != null)
+            {
+                _dashboardTrackingSourcePicker.gameObject.SetActive(
+                    _dashboardTrackingSourcePickerOpen);
+            }
+
+            _dashboardTrackingSourceSignature = null;
+            RefreshDashboardTrackingSources();
+        }
+
         private void RefreshDashboardTrackingSources()
         {
             if (_dashboardTrackingSourceList == null)
             {
                 return;
             }
+
+            EnsureDashboardTrackingConfigurationLoaded();
 
             var signatureBuilder =
                 new System.Text.StringBuilder();
@@ -1830,8 +2080,18 @@ namespace VCR.Runtime.UI
                     .Append(control.ControlId)
                     .Append('\u001f')
                     .Append(control.DisplayName)
+                    .Append(
+                        _dashboardConfiguredTrackingSources.Contains(
+                            control.ControlId)
+                            ? '1'
+                            : '0')
                     .Append('\u001e');
             }
+
+            signatureBuilder.Append(
+                _dashboardTrackingSourcePickerOpen
+                    ? "picker:1"
+                    : "picker:0");
 
             var signature =
                 signatureBuilder.ToString();
@@ -1843,49 +2103,8 @@ namespace VCR.Runtime.UI
             {
                 _dashboardTrackingSourceSignature =
                     signature;
-                _dashboardTrackingSourceStatusTexts.Clear();
-                _dashboardTrackingSourceToggleButtons.Clear();
-
-                for (var index =
-                         _dashboardTrackingSourceList.childCount - 1;
-                     index >= 0;
-                     index--)
-                {
-                    Destroy(
-                        _dashboardTrackingSourceList
-                            .GetChild(index)
-                            .gameObject);
-                }
-
-                for (var i = 0;
-                     i < _trackingControls.Count;
-                     i++)
-                {
-                    var control =
-                        _trackingControls[i];
-
-                    if (control == null ||
-                        string.IsNullOrWhiteSpace(
-                            control.ControlId))
-                    {
-                        continue;
-                    }
-
-                    AddDashboardTrackingSourceRow(
-                        control);
-                }
-
-                var layoutElement =
-                    _dashboardTrackingSourceList
-                        .GetComponent<LayoutElement>();
-                if (layoutElement != null)
-                {
-                    layoutElement.preferredHeight =
-                        Mathf.Max(
-                            32f,
-                            _dashboardTrackingSourceStatusTexts.Count *
-                            30f);
-                }
+                RebuildDashboardTrackingSourceList();
+                RebuildDashboardTrackingSourcePicker();
             }
 
             foreach (var pair in
@@ -1921,6 +2140,279 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void RebuildDashboardTrackingSourceList()
+        {
+            _dashboardTrackingSourceStatusTexts.Clear();
+            _dashboardTrackingSourceToggleButtons.Clear();
+            _dashboardTrackingSourceLastClickTimes.Clear();
+
+            for (var index =
+                     _dashboardTrackingSourceList.childCount - 1;
+                 index >= 0;
+                 index--)
+            {
+                Destroy(
+                    _dashboardTrackingSourceList
+                        .GetChild(index)
+                        .gameObject);
+            }
+
+            var count = 0;
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
+                var control =
+                    _trackingControls[i];
+
+                if (control == null ||
+                    string.IsNullOrWhiteSpace(
+                        control.ControlId) ||
+                    !_dashboardConfiguredTrackingSources.Contains(
+                        control.ControlId))
+                {
+                    continue;
+                }
+
+                AddDashboardTrackingSourceRow(
+                    control);
+                count++;
+            }
+
+            if (count == 0)
+            {
+                var empty =
+                    CreateText(
+                        "Tracking Source Empty",
+                        _dashboardTrackingSourceList,
+                        11,
+                        TextAnchor.MiddleLeft);
+                empty.text =
+                    "추가된 입력 소스가 없습니다.  + 버튼을 눌러 추가하세요.";
+                empty.color =
+                    new Color(
+                        0.56f,
+                        0.62f,
+                        0.70f,
+                        1f);
+                empty.gameObject
+                    .AddComponent<LayoutElement>()
+                    .preferredHeight = 30f;
+            }
+
+            var layoutElement =
+                _dashboardTrackingSourceList
+                    .GetComponent<LayoutElement>();
+
+            if (layoutElement != null)
+            {
+                layoutElement.preferredHeight =
+                    Mathf.Max(
+                        34f,
+                        Mathf.Max(
+                            1,
+                            count) *
+                        32f);
+            }
+        }
+
+        private void RebuildDashboardTrackingSourcePicker()
+        {
+            if (_dashboardTrackingSourcePicker == null)
+            {
+                return;
+            }
+
+            for (var index =
+                     _dashboardTrackingSourcePicker.childCount - 1;
+                 index >= 0;
+                 index--)
+            {
+                Destroy(
+                    _dashboardTrackingSourcePicker
+                        .GetChild(index)
+                        .gameObject);
+            }
+
+            var count = 0;
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
+                var control =
+                    _trackingControls[i];
+
+                if (control == null ||
+                    string.IsNullOrWhiteSpace(
+                        control.ControlId) ||
+                    _dashboardConfiguredTrackingSources.Contains(
+                        control.ControlId))
+                {
+                    continue;
+                }
+
+                var controlId =
+                    control.ControlId;
+                var label =
+                    "+  " +
+                    GetDashboardTrackingSourceDisplayName(
+                        control) +
+                    "    " +
+                    GetDashboardTrackingSourceDescription(
+                        control);
+
+                var button =
+                    CreateButton(
+                        label,
+                        _dashboardTrackingSourcePicker,
+                        () =>
+                            AddDashboardTrackingSource(
+                                controlId));
+                AddPreferredHeight(
+                    button.gameObject,
+                    30f);
+
+                var text =
+                    button.GetComponentInChildren<Text>();
+                if (text != null)
+                {
+                    text.alignment =
+                        TextAnchor.MiddleLeft;
+                    text.fontSize = 11;
+                }
+
+                count++;
+            }
+
+            if (count == 0)
+            {
+                _dashboardTrackingSourcePickerEmptyText =
+                    CreateText(
+                        "Tracking Source Picker Empty",
+                        _dashboardTrackingSourcePicker,
+                        11,
+                        TextAnchor.MiddleLeft);
+                _dashboardTrackingSourcePickerEmptyText.text =
+                    "추가 가능한 입력 소스가 없습니다.";
+                _dashboardTrackingSourcePickerEmptyText.color =
+                    new Color(
+                        0.56f,
+                        0.62f,
+                        0.70f,
+                        1f);
+                _dashboardTrackingSourcePickerEmptyText.gameObject
+                    .AddComponent<LayoutElement>()
+                    .preferredHeight = 30f;
+            }
+
+            var layoutElement =
+                _dashboardTrackingSourcePicker
+                    .GetComponent<LayoutElement>();
+
+            if (layoutElement != null)
+            {
+                layoutElement.preferredHeight =
+                    _dashboardTrackingSourcePickerOpen
+                        ? Mathf.Max(
+                            32f,
+                            Mathf.Max(
+                                1,
+                                count) *
+                            32f)
+                        : 0f;
+            }
+        }
+
+        private void AddDashboardTrackingSource(
+            string controlId)
+        {
+            var control =
+                FindTrackingControl(
+                    controlId);
+
+            if (control == null)
+            {
+                SetDashboardNotice(
+                    "트래킹 입력 소스를 찾을 수 없습니다.");
+                return;
+            }
+
+            if (_dashboardConfiguredTrackingSources.Add(
+                    controlId))
+            {
+                control.TrySetControlEnabled(
+                    false,
+                    out _);
+                PlayerPrefs.SetInt(
+                    TrackingInputEnabledKeyPrefix +
+                    controlId,
+                    0);
+                SaveDashboardTrackingConfiguration();
+            }
+
+            _dashboardTrackingSourcePickerOpen = false;
+
+            if (_dashboardTrackingSourcePicker != null)
+            {
+                _dashboardTrackingSourcePicker.gameObject.SetActive(
+                    false);
+            }
+
+            _dashboardTrackingSourceSignature = null;
+            RefreshDashboardTrackingSources();
+
+            if (control is
+                    ITrackingRuntimeConfigurable configurable &&
+                configurable.OpenConfigurationOnAdd)
+            {
+                OpenDashboardTrackingSourceSettings(
+                    controlId);
+            }
+            else
+            {
+                SetDashboardNotice(
+                    GetDashboardTrackingSourceDisplayName(
+                        control) +
+                    " 입력 소스를 추가했습니다.");
+            }
+        }
+
+        private void RemoveDashboardTrackingSource(
+            string controlId)
+        {
+            var control =
+                FindTrackingControl(
+                    controlId);
+
+            if (control != null &&
+                control.ControlEnabled)
+            {
+                control.TrySetControlEnabled(
+                    false,
+                    out _);
+            }
+
+            _dashboardConfiguredTrackingSources.Remove(
+                controlId);
+            PlayerPrefs.SetInt(
+                TrackingInputEnabledKeyPrefix +
+                controlId,
+                0);
+            SaveDashboardTrackingConfiguration();
+
+            _dashboardTrackingSourceSignature = null;
+            RefreshDashboardTrackingSources();
+
+            SetDashboardNotice(
+                (control != null
+                    ? GetDashboardTrackingSourceDisplayName(
+                        control)
+                    : controlId) +
+                " 입력 소스를 제거했습니다.");
+        }
+
         private void AddDashboardTrackingSourceRow(
             ITrackingRuntimeControl control)
         {
@@ -1932,13 +2424,59 @@ namespace VCR.Runtime.UI
                     _dashboardTrackingSourceList,
                     "Tracking Source " +
                     controlId,
-                    28f);
+                    30f);
+
+            var details =
+                CreateRect(
+                    "Tracking Source Details " +
+                    controlId,
+                    row);
+            details.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            var detailsImage =
+                details.gameObject
+                    .AddComponent<Image>();
+            detailsImage.color =
+                new Color(
+                    0.07f,
+                    0.08f,
+                    0.10f,
+                    1f);
+
+            var detailsButton =
+                details.gameObject
+                    .AddComponent<Button>();
+            detailsButton.targetGraphic =
+                detailsImage;
+            detailsButton.onClick.AddListener(
+                () =>
+                    HandleDashboardTrackingSourceRowClick(
+                        controlId));
+
+            var detailsLayout =
+                details.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            detailsLayout.spacing = 6f;
+            detailsLayout.padding =
+                new RectOffset(
+                    7,
+                    7,
+                    0,
+                    0);
+            detailsLayout.childAlignment =
+                TextAnchor.MiddleLeft;
+            detailsLayout.childControlWidth = true;
+            detailsLayout.childControlHeight = true;
+            detailsLayout.childForceExpandWidth = false;
+            detailsLayout.childForceExpandHeight = true;
 
             var name =
                 CreateText(
                     "Tracking Source Name " +
                     controlId,
-                    row,
+                    details,
                     11,
                     TextAnchor.MiddleLeft);
             name.text =
@@ -1946,13 +2484,13 @@ namespace VCR.Runtime.UI
                     control);
             name.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 116f;
+                .preferredWidth = 82f;
 
             var status =
                 CreateText(
                     "Tracking Source Status " +
                     controlId,
-                    row,
+                    details,
                     11,
                     TextAnchor.MiddleLeft);
             status.color =
@@ -1965,6 +2503,21 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .flexibleWidth = 1f;
 
+            if (control is
+                ITrackingRuntimeConfigurable)
+            {
+                var settings =
+                    CreateButton(
+                        "⚙",
+                        row,
+                        () =>
+                            OpenDashboardTrackingSourceSettings(
+                                controlId));
+                settings.gameObject
+                    .AddComponent<LayoutElement>()
+                    .preferredWidth = 32f;
+            }
+
             var toggle =
                 CreateButton(
                     control.ControlEnabled
@@ -1976,7 +2529,18 @@ namespace VCR.Runtime.UI
                             controlId));
             toggle.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 54f;
+                .preferredWidth = 48f;
+
+            var remove =
+                CreateButton(
+                    "×",
+                    row,
+                    () =>
+                        RemoveDashboardTrackingSource(
+                            controlId));
+            remove.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 28f;
 
             _dashboardTrackingSourceStatusTexts[
                 controlId] =
@@ -1984,6 +2548,29 @@ namespace VCR.Runtime.UI
             _dashboardTrackingSourceToggleButtons[
                 controlId] =
                     toggle;
+        }
+
+        private void HandleDashboardTrackingSourceRowClick(
+            string controlId)
+        {
+            var now =
+                Time.unscaledTime;
+            _dashboardTrackingSourceLastClickTimes.TryGetValue(
+                controlId,
+                out var previous);
+            _dashboardTrackingSourceLastClickTimes[
+                controlId] =
+                    now;
+
+            if (previous > 0f &&
+                now - previous <= 0.35f)
+            {
+                _dashboardTrackingSourceLastClickTimes[
+                    controlId] =
+                        0f;
+                OpenDashboardTrackingSourceSettings(
+                    controlId);
+            }
         }
 
         private void ToggleDashboardTrackingSource(
@@ -2014,9 +2601,26 @@ namespace VCR.Runtime.UI
                         ? " 켜기 실패: "
                         : " 끄기 실패: ") +
                     (error ?? "알 수 없는 오류"));
+
+                if (targetEnabled &&
+                    control is
+                        ITrackingRuntimeConfigurable)
+                {
+                    OpenDashboardTrackingSourceSettings(
+                        controlId);
+                }
+
                 RefreshAll();
                 return;
             }
+
+            PlayerPrefs.SetInt(
+                TrackingInputEnabledKeyPrefix +
+                controlId,
+                targetEnabled
+                    ? 1
+                    : 0);
+            PlayerPrefs.Save();
 
             SetDashboardNotice(
                 GetDashboardTrackingSourceDisplayName(
@@ -2028,6 +2632,395 @@ namespace VCR.Runtime.UI
             ResolveTrackingControls(
                 force: true);
             RefreshAvailability();
+            RefreshAll();
+        }
+
+        private void BuildTrackingSourceSettingsModal()
+        {
+            if (_root == null ||
+                _dashboardTrackingSourceSettingsModal != null)
+            {
+                return;
+            }
+
+            _dashboardTrackingSourceSettingsModal =
+                CreateRect(
+                    "Tracking Source Settings Modal Overlay",
+                    _root);
+            Stretch(
+                _dashboardTrackingSourceSettingsModal,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
+
+            var blocker =
+                _dashboardTrackingSourceSettingsModal.gameObject
+                    .AddComponent<Image>();
+            blocker.color =
+                new Color(
+                    0.01f,
+                    0.015f,
+                    0.025f,
+                    0.82f);
+            blocker.raycastTarget = true;
+
+            var panel =
+                CreateRect(
+                    "Tracking Source Settings Modal",
+                    _dashboardTrackingSourceSettingsModal);
+            panel.anchorMin =
+                new Vector2(0.5f, 0.5f);
+            panel.anchorMax =
+                new Vector2(0.5f, 0.5f);
+            panel.pivot =
+                new Vector2(0.5f, 0.5f);
+            panel.sizeDelta =
+                new Vector2(560f, 440f);
+
+            var panelImage =
+                panel.gameObject
+                    .AddComponent<Image>();
+            panelImage.color =
+                new Color(
+                    0.055f,
+                    0.065f,
+                    0.085f,
+                    1f);
+
+            var outline =
+                panel.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.20f,
+                    0.28f,
+                    0.40f,
+                    0.9f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
+
+            _dashboardTrackingSourceSettingsTitle =
+                CreateText(
+                    "Tracking Source Settings Title",
+                    panel,
+                    18,
+                    TextAnchor.MiddleLeft);
+            _dashboardTrackingSourceSettingsTitle.font =
+                _dashboardFontSemiBold;
+            Stretch(
+                _dashboardTrackingSourceSettingsTitle.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(20f, -58f),
+                new Vector2(-64f, -14f));
+
+            var close =
+                CreateButton(
+                    "×",
+                    panel,
+                    CloseDashboardTrackingSourceSettings);
+            var closeRect =
+                close.GetComponent<RectTransform>();
+            closeRect.anchorMin =
+                new Vector2(1f, 1f);
+            closeRect.anchorMax =
+                new Vector2(1f, 1f);
+            closeRect.pivot =
+                new Vector2(1f, 1f);
+            closeRect.offsetMin =
+                new Vector2(-52f, -52f);
+            closeRect.offsetMax =
+                new Vector2(-12f, -12f);
+
+            _dashboardTrackingSourceSettingsBody =
+                CreateRect(
+                    "Tracking Source Settings Body",
+                    panel);
+            _dashboardTrackingSourceSettingsBody.anchorMin =
+                new Vector2(0f, 0f);
+            _dashboardTrackingSourceSettingsBody.anchorMax =
+                new Vector2(1f, 1f);
+            _dashboardTrackingSourceSettingsBody.offsetMin =
+                new Vector2(20f, 70f);
+            _dashboardTrackingSourceSettingsBody.offsetMax =
+                new Vector2(-20f, -68f);
+
+            var bodyLayout =
+                _dashboardTrackingSourceSettingsBody
+                    .gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            bodyLayout.spacing = 6f;
+            bodyLayout.childControlWidth = true;
+            bodyLayout.childControlHeight = true;
+            bodyLayout.childForceExpandWidth = true;
+            bodyLayout.childForceExpandHeight = false;
+
+            var footer =
+                CreateDashboardRow(
+                    panel,
+                    "Tracking Source Settings Footer",
+                    38f);
+            footer.anchorMin =
+                new Vector2(0f, 0f);
+            footer.anchorMax =
+                new Vector2(1f, 0f);
+            footer.pivot =
+                new Vector2(0.5f, 0f);
+            footer.offsetMin =
+                new Vector2(20f, 18f);
+            footer.offsetMax =
+                new Vector2(-20f, 56f);
+
+            var spacer =
+                CreateRect(
+                    "Tracking Source Settings Footer Spacer",
+                    footer);
+            spacer.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            var cancel =
+                CreateButton(
+                    "취소",
+                    footer,
+                    CloseDashboardTrackingSourceSettings);
+            cancel.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 88f;
+
+            var save =
+                CreateButton(
+                    "저장",
+                    footer,
+                    SaveDashboardTrackingSourceSettings);
+            save.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 88f;
+            SetPrimaryButtonStyle(
+                save);
+
+            _dashboardTrackingSourceSettingsModal.gameObject.SetActive(
+                false);
+        }
+
+        private void OpenDashboardTrackingSourceSettings(
+            string controlId)
+        {
+            var control =
+                FindTrackingControl(
+                    controlId);
+
+            if (control is not
+                ITrackingRuntimeConfigurable configurable)
+            {
+                SetDashboardNotice(
+                    control == null
+                        ? "트래킹 입력 소스를 찾을 수 없습니다."
+                        : GetDashboardTrackingSourceDisplayName(
+                              control) +
+                          "은 별도 설정이 필요하지 않습니다.");
+                return;
+            }
+
+            if (_dashboardTrackingSourceSettingsModal == null)
+            {
+                BuildTrackingSourceSettingsModal();
+            }
+
+            if (_dashboardTrackingSourceSettingsModal == null ||
+                _dashboardTrackingSourceSettingsBody == null)
+            {
+                return;
+            }
+
+            _dashboardTrackingSourceSettingsControlId =
+                controlId;
+            _dashboardTrackingSourceSettingsInputs.Clear();
+
+            for (var index =
+                     _dashboardTrackingSourceSettingsBody.childCount - 1;
+                 index >= 0;
+                 index--)
+            {
+                Destroy(
+                    _dashboardTrackingSourceSettingsBody
+                        .GetChild(index)
+                        .gameObject);
+            }
+
+            SetTextIfChanged(
+                _dashboardTrackingSourceSettingsTitle,
+                configurable.ConfigurationTitle);
+
+            var settings =
+                configurable.GetConfigurationSettings();
+
+            if (settings == null ||
+                settings.Count == 0)
+            {
+                var empty =
+                    CreateText(
+                        "Tracking Source Settings Empty",
+                        _dashboardTrackingSourceSettingsBody,
+                        12,
+                        TextAnchor.MiddleLeft);
+                empty.text =
+                    "이 입력 소스에는 변경 가능한 설정이 없습니다.";
+                empty.gameObject
+                    .AddComponent<LayoutElement>()
+                    .preferredHeight = 38f;
+            }
+            else
+            {
+                for (var i = 0;
+                     i < settings.Count;
+                     i++)
+                {
+                    var setting =
+                        settings[i];
+
+                    var row =
+                        CreateDashboardRow(
+                            _dashboardTrackingSourceSettingsBody,
+                            "Tracking Setting " +
+                            setting.Key,
+                            38f);
+
+                    var label =
+                        CreateText(
+                            "Tracking Setting Label " +
+                            setting.Key,
+                            row,
+                            12,
+                            TextAnchor.MiddleLeft);
+                    label.text =
+                        setting.Label;
+                    label.gameObject
+                        .AddComponent<LayoutElement>()
+                        .preferredWidth = 132f;
+
+                    var input =
+                        CreateInputField(
+                            "Tracking Setting Input " +
+                            setting.Key,
+                            row,
+                            setting.Placeholder);
+                    input.gameObject
+                        .AddComponent<LayoutElement>()
+                        .flexibleWidth = 1f;
+
+                    var persistedKey =
+                        GetDashboardTrackingSettingKey(
+                            controlId,
+                            setting.Key);
+                    input.text =
+                        PlayerPrefs.HasKey(
+                            persistedKey)
+                            ? PlayerPrefs.GetString(
+                                persistedKey,
+                                setting.Value)
+                            : setting.Value;
+
+                    _dashboardTrackingSourceSettingsInputs[
+                        setting.Key] =
+                            input;
+
+                    if (!string.IsNullOrWhiteSpace(
+                            setting.HelpText))
+                    {
+                        var help =
+                            CreateText(
+                                "Tracking Setting Help " +
+                                setting.Key,
+                                _dashboardTrackingSourceSettingsBody,
+                                10,
+                                TextAnchor.MiddleLeft);
+                        help.text =
+                            setting.HelpText;
+                        help.color =
+                            new Color(
+                                0.56f,
+                                0.62f,
+                                0.70f,
+                                1f);
+                        help.gameObject
+                            .AddComponent<LayoutElement>()
+                            .preferredHeight = 18f;
+                    }
+                }
+            }
+
+            _dashboardTrackingSourceSettingsModal.gameObject.SetActive(
+                true);
+            _dashboardTrackingSourceSettingsModal.SetAsLastSibling();
+        }
+
+        private void CloseDashboardTrackingSourceSettings()
+        {
+            if (_dashboardTrackingSourceSettingsModal != null)
+            {
+                _dashboardTrackingSourceSettingsModal.gameObject.SetActive(
+                    false);
+            }
+
+            _dashboardTrackingSourceSettingsControlId =
+                null;
+            _dashboardTrackingSourceSettingsInputs.Clear();
+        }
+
+        private void SaveDashboardTrackingSourceSettings()
+        {
+            var control =
+                FindTrackingControl(
+                    _dashboardTrackingSourceSettingsControlId);
+
+            if (control is not
+                ITrackingRuntimeConfigurable configurable)
+            {
+                SetDashboardNotice(
+                    "설정할 트래킹 입력 소스를 찾을 수 없습니다.");
+                return;
+            }
+
+            var values =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pair in
+                     _dashboardTrackingSourceSettingsInputs)
+            {
+                values[pair.Key] =
+                    pair.Value?.text ??
+                    string.Empty;
+            }
+
+            if (!configurable.TryApplyConfiguration(
+                    values,
+                    out var error))
+            {
+                SetDashboardNotice(
+                    "설정 저장 실패: " +
+                    (error ?? "알 수 없는 오류"));
+                return;
+            }
+
+            foreach (var pair in values)
+            {
+                PlayerPrefs.SetString(
+                    GetDashboardTrackingSettingKey(
+                        control.ControlId,
+                        pair.Key),
+                    pair.Value ?? string.Empty);
+            }
+
+            PlayerPrefs.Save();
+
+            CloseDashboardTrackingSourceSettings();
+            SetDashboardNotice(
+                GetDashboardTrackingSourceDisplayName(
+                    control) +
+                " 설정을 저장했습니다.");
             RefreshAll();
         }
 
@@ -2082,6 +3075,28 @@ namespace VCR.Runtime.UI
                         control.DisplayName)
                         ? control.ControlId
                         : control.DisplayName
+            };
+        }
+
+        private static string
+            GetDashboardTrackingSourceDescription(
+                ITrackingRuntimeControl control)
+        {
+            if (control == null)
+            {
+                return string.Empty;
+            }
+
+            return control.ControlId switch
+            {
+                "mediapipe-webcam" =>
+                    "웹캠 · 얼굴 / 손 / 상체",
+                "arkit-ifacialmocap" =>
+                    "iPhone/iPad · 얼굴 / 표정 / 머리",
+                "vmc-udp" =>
+                    "외부 VMC · 전신 / 표정",
+                _ =>
+                    control.DisplayName ?? string.Empty
             };
         }
 
