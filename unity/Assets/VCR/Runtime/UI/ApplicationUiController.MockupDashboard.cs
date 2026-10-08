@@ -62,6 +62,16 @@ namespace VCR.Runtime.UI
             "VCR.Dashboard.Panel.Visible.v1.";
         private const string DashboardPanelFloatingKeyPrefix =
             "VCR.Dashboard.Panel.Floating.v1.";
+        private const string DashboardPanelOrderKeyPrefix =
+            "VCR.Dashboard.Panel.Order.v1.";
+        private const string DashboardPanelPositionXKeyPrefix =
+            "VCR.Dashboard.Panel.PositionX.v1.";
+        private const string DashboardPanelPositionYKeyPrefix =
+            "VCR.Dashboard.Panel.PositionY.v1.";
+        private const string DashboardPanelWidthKeyPrefix =
+            "VCR.Dashboard.Panel.Width.v1.";
+        private const string DashboardPanelHeightKeyPrefix =
+            "VCR.Dashboard.Panel.Height.v1.";
 
         private RectTransform _dashboardMenuBar;
         private RectTransform _dashboardMenuPopup;
@@ -79,7 +89,14 @@ namespace VCR.Runtime.UI
         private readonly HashSet<string>
             _dashboardFloatingPanels =
                 new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, RectTransform>
+            _dashboardPanelResizeHandles =
+                new(StringComparer.OrdinalIgnoreCase);
+        private RectTransform _dashboardDockDropPreview;
         private string _dashboardDraggingPanelId;
+        private string _dashboardResizingPanelId;
+        private Vector2 _dashboardResizeStartPointer;
+        private Vector2 _dashboardResizeStartSize;
 
         private Text _dashboardEnvironmentStatusText;
         private Dropdown _dashboardResolutionDropdown;
@@ -1473,6 +1490,9 @@ namespace VCR.Runtime.UI
             _dashboardPanelTitles.Clear();
             _dashboardPanelHomeOrder.Clear();
             _dashboardFloatingPanels.Clear();
+            _dashboardPanelResizeHandles.Clear();
+
+            EnsureDashboardDockDropPreview();
 
             RegisterObsDockablePanel(
                 "tracking",
@@ -1532,6 +1552,19 @@ namespace VCR.Runtime.UI
             _dashboardPanelHomeOrder[
                 panelId] =
                     panel.GetSiblingIndex();
+
+            var savedOrder =
+                PlayerPrefs.GetInt(
+                    DashboardPanelOrderKeyPrefix +
+                    panelId,
+                    panel.GetSiblingIndex());
+            panel.SetSiblingIndex(
+                Mathf.Clamp(
+                    savedOrder,
+                    0,
+                    Mathf.Max(
+                        0,
+                        _bottomDashboard.childCount - 1)));
 
             var visibilityKey =
                 DashboardPanelVisibleKeyPrefix +
@@ -1624,6 +1657,71 @@ namespace VCR.Runtime.UI
                     EndDashboardPanelDrag(
                         panelId,
                         data as PointerEventData));
+            AddObsDragTrigger(
+                trigger,
+                EventTriggerType.PointerClick,
+                data =>
+                    HandleDashboardPanelHeaderClick(
+                        panelId,
+                        data as PointerEventData));
+
+            var resizeHandle =
+                CreateRect(
+                    "Floating Resize Handle " +
+                    panelId,
+                    panel);
+            resizeHandle.anchorMin =
+                new Vector2(1f, 0f);
+            resizeHandle.anchorMax =
+                new Vector2(1f, 0f);
+            resizeHandle.pivot =
+                new Vector2(1f, 0f);
+            resizeHandle.sizeDelta =
+                new Vector2(20f, 20f);
+            resizeHandle.anchoredPosition =
+                Vector2.zero;
+
+            var resizeImage =
+                resizeHandle.gameObject
+                    .AddComponent<Image>();
+            resizeImage.color =
+                new Color(
+                    0.28f,
+                    0.36f,
+                    0.50f,
+                    0.55f);
+            resizeImage.raycastTarget =
+                true;
+
+            var resizeTrigger =
+                resizeHandle.gameObject
+                    .AddComponent<EventTrigger>();
+            AddObsDragTrigger(
+                resizeTrigger,
+                EventTriggerType.BeginDrag,
+                data =>
+                    BeginDashboardPanelResize(
+                        panelId,
+                        data as PointerEventData));
+            AddObsDragTrigger(
+                resizeTrigger,
+                EventTriggerType.Drag,
+                data =>
+                    DragDashboardPanelResize(
+                        panelId,
+                        data as PointerEventData));
+            AddObsDragTrigger(
+                resizeTrigger,
+                EventTriggerType.EndDrag,
+                data =>
+                    EndDashboardPanelResize(
+                        panelId,
+                        data as PointerEventData));
+            resizeHandle.gameObject.SetActive(
+                false);
+            _dashboardPanelResizeHandles[
+                panelId] =
+                    resizeHandle;
 
             var floatButton =
                 CreateButton(
@@ -1684,6 +1782,20 @@ namespace VCR.Runtime.UI
                 entry);
         }
 
+        private void HandleDashboardPanelHeaderClick(
+            string panelId,
+            PointerEventData eventData)
+        {
+            if (eventData != null &&
+                eventData.button ==
+                    PointerEventData.InputButton.Left &&
+                eventData.clickCount >= 2)
+            {
+                ToggleDashboardPanelFloating(
+                    panelId);
+            }
+        }
+
         private void BeginDashboardPanelDrag(
             string panelId,
             PointerEventData eventData)
@@ -1740,6 +1852,9 @@ namespace VCR.Runtime.UI
                 panel.anchoredPosition =
                     local;
             }
+
+            UpdateDashboardDockDropPreview(
+                eventData.position);
         }
 
         private void EndDashboardPanelDrag(
@@ -1749,14 +1864,221 @@ namespace VCR.Runtime.UI
             _dashboardDraggingPanelId =
                 null;
 
-            if (eventData != null &&
-                eventData.position.y <=
-                    Screen.height * 0.34f)
+            var shouldDock =
+                eventData != null &&
+                IsDashboardBottomDockTarget(
+                    eventData.position);
+
+            HideDashboardDockDropPreview();
+
+            if (shouldDock)
             {
                 DockDashboardPanel(
                     panelId,
                     eventData.position.x);
+                return;
             }
+
+            SaveDashboardFloatingGeometry(
+                panelId);
+        }
+
+        private bool IsDashboardBottomDockTarget(
+            Vector2 screenPosition)
+        {
+            return
+                screenPosition.y <=
+                    Mathf.Max(
+                        300f,
+                        Screen.height *
+                        0.34f);
+        }
+
+        private void EnsureDashboardDockDropPreview()
+        {
+            if (_root == null ||
+                _dashboardDockDropPreview != null)
+            {
+                return;
+            }
+
+            _dashboardDockDropPreview =
+                CreateRect(
+                    "Bottom Dock Drop Preview",
+                    _root);
+            _dashboardDockDropPreview.anchorMin =
+                new Vector2(0f, 0f);
+            _dashboardDockDropPreview.anchorMax =
+                new Vector2(1f, 0f);
+            _dashboardDockDropPreview.pivot =
+                new Vector2(0.5f, 0f);
+            _dashboardDockDropPreview.offsetMin =
+                new Vector2(8f, 8f);
+            _dashboardDockDropPreview.offsetMax =
+                new Vector2(-8f, 310f);
+
+            var image =
+                _dashboardDockDropPreview.gameObject
+                    .AddComponent<Image>();
+            image.color =
+                new Color(
+                    0.18f,
+                    0.42f,
+                    0.72f,
+                    0.20f);
+            image.raycastTarget =
+                false;
+
+            var outline =
+                _dashboardDockDropPreview.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.35f,
+                    0.62f,
+                    0.96f,
+                    0.85f);
+            outline.effectDistance =
+                new Vector2(2f, -2f);
+
+            _dashboardDockDropPreview.gameObject.SetActive(
+                false);
+        }
+
+        private void UpdateDashboardDockDropPreview(
+            Vector2 screenPosition)
+        {
+            EnsureDashboardDockDropPreview();
+
+            if (_dashboardDockDropPreview == null)
+            {
+                return;
+            }
+
+            var visible =
+                IsDashboardBottomDockTarget(
+                    screenPosition);
+
+            if (_dashboardDockDropPreview.gameObject.activeSelf !=
+                visible)
+            {
+                _dashboardDockDropPreview.gameObject.SetActive(
+                    visible);
+            }
+
+            if (visible)
+            {
+                _dashboardDockDropPreview.SetAsLastSibling();
+            }
+        }
+
+        private void HideDashboardDockDropPreview()
+        {
+            if (_dashboardDockDropPreview != null)
+            {
+                _dashboardDockDropPreview.gameObject.SetActive(
+                    false);
+            }
+        }
+
+        private void BeginDashboardPanelResize(
+            string panelId,
+            PointerEventData eventData)
+        {
+            if (eventData == null ||
+                !_dashboardFloatingPanels.Contains(
+                    panelId) ||
+                !_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null ||
+                _root == null)
+            {
+                return;
+            }
+
+            if (!RectTransformUtility
+                .ScreenPointToLocalPointInRectangle(
+                    _root,
+                    eventData.position,
+                    _canvas != null
+                        ? _canvas.worldCamera
+                        : null,
+                    out _dashboardResizeStartPointer))
+            {
+                return;
+            }
+
+            _dashboardResizingPanelId =
+                panelId;
+            _dashboardResizeStartSize =
+                panel.sizeDelta;
+        }
+
+        private void DragDashboardPanelResize(
+            string panelId,
+            PointerEventData eventData)
+        {
+            if (eventData == null ||
+                !string.Equals(
+                    _dashboardResizingPanelId,
+                    panelId,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null ||
+                _root == null)
+            {
+                return;
+            }
+
+            if (!RectTransformUtility
+                .ScreenPointToLocalPointInRectangle(
+                    _root,
+                    eventData.position,
+                    _canvas != null
+                        ? _canvas.worldCamera
+                        : null,
+                    out var current))
+            {
+                return;
+            }
+
+            var delta =
+                current -
+                _dashboardResizeStartPointer;
+
+            panel.sizeDelta =
+                new Vector2(
+                    Mathf.Clamp(
+                        _dashboardResizeStartSize.x +
+                        delta.x,
+                        300f,
+                        760f),
+                    Mathf.Clamp(
+                        _dashboardResizeStartSize.y -
+                        delta.y,
+                        220f,
+                        680f));
+        }
+
+        private void EndDashboardPanelResize(
+            string panelId,
+            PointerEventData _)
+        {
+            if (!string.Equals(
+                    _dashboardResizingPanelId,
+                    panelId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _dashboardResizingPanelId =
+                null;
+            SaveDashboardFloatingGeometry(
+                panelId);
         }
 
         private void ToggleDashboardPanelFloating(
@@ -1813,16 +2135,33 @@ namespace VCR.Runtime.UI
                 new Vector2(0.5f, 0.5f);
             panel.pivot =
                 new Vector2(0.5f, 0.5f);
-            panel.sizeDelta =
-                new Vector2(
+            var savedWidth =
+                PlayerPrefs.GetFloat(
+                    DashboardPanelWidthKeyPrefix +
+                    panelId,
                     Mathf.Clamp(
                         size.x,
                         300f,
-                        520f),
+                        520f));
+            var savedHeight =
+                PlayerPrefs.GetFloat(
+                    DashboardPanelHeightKeyPrefix +
+                    panelId,
                     Mathf.Clamp(
                         size.y,
                         220f,
                         420f));
+
+            panel.sizeDelta =
+                new Vector2(
+                    Mathf.Clamp(
+                        savedWidth,
+                        300f,
+                        760f),
+                    Mathf.Clamp(
+                        savedHeight,
+                        220f,
+                        680f));
 
             var layout =
                 panel.GetComponent<LayoutElement>();
@@ -1847,7 +2186,24 @@ namespace VCR.Runtime.UI
             else
             {
                 panel.anchoredPosition =
-                    Vector2.zero;
+                    new Vector2(
+                        PlayerPrefs.GetFloat(
+                            DashboardPanelPositionXKeyPrefix +
+                            panelId,
+                            0f),
+                        PlayerPrefs.GetFloat(
+                            DashboardPanelPositionYKeyPrefix +
+                            panelId,
+                            0f));
+            }
+
+            if (_dashboardPanelResizeHandles.TryGetValue(
+                    panelId,
+                    out var resizeHandle) &&
+                resizeHandle != null)
+            {
+                resizeHandle.gameObject.SetActive(
+                    true);
             }
 
             _dashboardFloatingPanels.Add(
@@ -1918,13 +2274,59 @@ namespace VCR.Runtime.UI
 
             _dashboardFloatingPanels.Remove(
                 panelId);
+
+            if (_dashboardPanelResizeHandles.TryGetValue(
+                    panelId,
+                    out var resizeHandle) &&
+                resizeHandle != null)
+            {
+                resizeHandle.gameObject.SetActive(
+                    false);
+            }
+
             PlayerPrefs.SetInt(
                 DashboardPanelFloatingKeyPrefix +
                 panelId,
                 0);
+            PlayerPrefs.SetInt(
+                DashboardPanelOrderKeyPrefix +
+                panelId,
+                panel.GetSiblingIndex());
             PlayerPrefs.Save();
 
             RefreshDashboardDockHost();
+        }
+
+        private void SaveDashboardFloatingGeometry(
+            string panelId)
+        {
+            if (!_dashboardFloatingPanels.Contains(
+                    panelId) ||
+                !_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null)
+            {
+                return;
+            }
+
+            PlayerPrefs.SetFloat(
+                DashboardPanelPositionXKeyPrefix +
+                panelId,
+                panel.anchoredPosition.x);
+            PlayerPrefs.SetFloat(
+                DashboardPanelPositionYKeyPrefix +
+                panelId,
+                panel.anchoredPosition.y);
+            PlayerPrefs.SetFloat(
+                DashboardPanelWidthKeyPrefix +
+                panelId,
+                panel.sizeDelta.x);
+            PlayerPrefs.SetFloat(
+                DashboardPanelHeightKeyPrefix +
+                panelId,
+                panel.sizeDelta.y);
+            PlayerPrefs.Save();
         }
 
         private void ToggleDashboardPanelVisibility(
@@ -1957,6 +2359,25 @@ namespace VCR.Runtime.UI
 
             panel.gameObject.SetActive(
                 visible);
+
+            if (visible)
+            {
+                var shouldFloat =
+                    PlayerPrefs.GetInt(
+                        DashboardPanelFloatingKeyPrefix +
+                        panelId,
+                        0) != 0;
+
+                if (shouldFloat &&
+                    !_dashboardFloatingPanels.Contains(
+                        panelId))
+                {
+                    FloatDashboardPanel(
+                        panelId,
+                        null);
+                }
+            }
+
             PlayerPrefs.SetInt(
                 DashboardPanelVisibleKeyPrefix +
                 panelId,
