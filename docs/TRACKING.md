@@ -177,7 +177,7 @@ A short transition/cross-fade should avoid visible pose snapping.
 
 The P0 `PriorityTrackingRouter` implements this region priority. While ARKit face is stably present it stops the MediaPipe FaceLandmarker through `IFaceTrackingActivationControl`; Holistic hands/upper body remain active. When ARKit is unavailable, MediaPipe face inference restarts automatically.
 
-The router also has an optional preferred-hands slot. When Ultraleap is enabled and healthy, its left/right hand payloads override MediaPipe hand payloads independently while MediaPipe continues to own upper-body joints. If Ultraleap loses one hand, that side may fall back to the corresponding MediaPipe hand without dropping the upper body.
+The router also has an optional preferred-hands slot. When Ultraleap is enabled and healthy, its hand frame is exposed through the hand-only route while MediaPipe continues to own the allocation-free body/hands frame used by the current upper-body target. If Ultraleap becomes unavailable, the hand-only route falls back to the MediaPipe frame. This keeps the router hot path allocation-free and preserves child-frame identity.
 
 Frames carry `SourceId`, allowing the VRM target to recalibrate only the region whose source changed.
 
