@@ -2094,7 +2094,7 @@ namespace VCR.Runtime.UI
                     TextAnchor.MiddleLeft);
             _dashboardTrackingRouteText.text =
                 "<b>자동 혼합 (권장)</b>\n" +
-                "<size=11><color=#9EABBC>얼굴·눈·입·머리: ARKit 우선 / 손·상체: MediaPipe</color></size>";
+                "<size=11><color=#9EABBC>얼굴·표정: ARKit 우선 / 손·손가락: Ultraleap 우선 / 상체: MediaPipe</color></size>";
             _dashboardTrackingRouteText.supportRichText =
                 true;
             Stretch(
@@ -2189,7 +2189,7 @@ namespace VCR.Runtime.UI
                     11,
                     TextAnchor.MiddleLeft);
             sourceHelp.text =
-                "+ 버튼으로 필요한 입력 소스를 추가합니다. 추가된 소스는 켜기/끄기가 가능하며, 더블클릭 또는 ⚙ 버튼으로 설정을 다시 열 수 있습니다.";
+                "+ 버튼으로 필요한 입력 소스를 추가합니다. 여러 소스를 동시에 사용할 수 있으며, Ultraleap이 꺼지거나 손 입력을 잃으면 MediaPipe 손 추적으로 폴백합니다.";
             sourceHelp.color =
                 new Color(
                     0.58f,
@@ -4453,6 +4453,8 @@ namespace VCR.Runtime.UI
                     "ARKit",
                 "vmc-udp" =>
                     "VMC",
+                "ultraleap-hands" =>
+                    "Ultraleap",
                 _ =>
                     string.IsNullOrWhiteSpace(
                         control.DisplayName)
@@ -4478,6 +4480,8 @@ namespace VCR.Runtime.UI
                     "iPhone/iPad · 얼굴 / 표정 / 머리",
                 "vmc-udp" =>
                     "외부 VMC · 전신 / 표정",
+                "ultraleap-hands" =>
+                    "Leap Motion / Ultraleap · 손 / 손가락 / 손목",
                 _ =>
                     control.DisplayName ?? string.Empty
             };
