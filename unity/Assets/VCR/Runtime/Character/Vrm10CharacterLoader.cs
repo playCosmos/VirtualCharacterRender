@@ -461,6 +461,12 @@ namespace VCR.Runtime.Character
                 instance.gameObject.AddComponent<
                     Vrm10HumanoidPoseTarget>();
 
+            var handTarget =
+                instance.GetComponent<
+                    Vrm10HandTrackingTarget>() ??
+                instance.gameObject.AddComponent<
+                    Vrm10HandTrackingTarget>();
+
             var liveProvider =
                 IsServiceAlive(provider)
                     ? provider
@@ -469,6 +475,8 @@ namespace VCR.Runtime.Character
             faceTarget.SetTrackingProvider(
                 liveProvider);
             bodyTarget.SetTrackingProvider(
+                liveProvider);
+            handTarget.SetTrackingProvider(
                 liveProvider);
 
             if (attachMotionSnapshotProvider &&
