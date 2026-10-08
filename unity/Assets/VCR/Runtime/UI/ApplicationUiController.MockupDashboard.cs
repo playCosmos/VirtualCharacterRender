@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VCR.Runtime.Tracking;
 
@@ -56,6 +57,29 @@ namespace VCR.Runtime.UI
             _dashboardTrackingSourceSettingsInputs =
                 new(StringComparer.OrdinalIgnoreCase);
 
+        private const string DashboardPanelVisibleKeyPrefix =
+            "VCR.Dashboard.Panel.Visible.v1.";
+        private const string DashboardPanelFloatingKeyPrefix =
+            "VCR.Dashboard.Panel.Floating.v1.";
+
+        private RectTransform _dashboardMenuBar;
+        private RectTransform _dashboardMenuPopup;
+        private string _dashboardOpenMenuId;
+        private RectTransform _dashboardCameraPreviewContent;
+        private readonly Dictionary<string, RectTransform>
+            _dashboardPanels =
+                new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string>
+            _dashboardPanelTitles =
+                new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int>
+            _dashboardPanelHomeOrder =
+                new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string>
+            _dashboardFloatingPanels =
+                new(StringComparer.OrdinalIgnoreCase);
+        private string _dashboardDraggingPanelId;
+
         private Text _dashboardEnvironmentStatusText;
         private Button _dashboardResolutionButton;
         private Button _dashboardFpsButton;
@@ -81,6 +105,11 @@ namespace VCR.Runtime.UI
             UseNativeDesktopChrome(
                 titleBar,
                 windowChrome);
+            BuildObsMenuBar(
+                navigation);
+            ApplyObsWorkspaceGeometry(
+                navigation,
+                inspector);
             BuildMockupViewportToolbar(
                 windowChrome);
             BuildMockupInspector(
@@ -90,8 +119,8 @@ namespace VCR.Runtime.UI
             BuildMockupControlCard();
             BuildMockupEnvironmentCard();
             BuildMockupOutputCard();
-            BuildSettingsLauncher(
-                navigation);
+            BuildStandaloneCameraPreviewCard();
+            ConfigureObsDockablePanels();
             BuildSettingsModal();
             BuildTrackingSourceSettingsModal();
             ApplyPretendardTypography();
@@ -999,6 +1028,1099 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void BuildObsMenuBar(
+            RectTransform navigation)
+        {
+            if (_root == null ||
+                _dashboardMenuBar != null)
+            {
+                return;
+            }
+
+            if (navigation != null)
+            {
+                navigation.gameObject.SetActive(
+                    false);
+            }
+
+            _dashboardMenuBar =
+                CreateRect(
+                    "OBS Style Menu Bar",
+                    _root);
+            _dashboardMenuBar.anchorMin =
+                new Vector2(0f, 1f);
+            _dashboardMenuBar.anchorMax =
+                new Vector2(1f, 1f);
+            _dashboardMenuBar.pivot =
+                new Vector2(0.5f, 1f);
+            _dashboardMenuBar.offsetMin =
+                new Vector2(0f, -36f);
+            _dashboardMenuBar.offsetMax =
+                Vector2.zero;
+
+            var background =
+                _dashboardMenuBar.gameObject
+                    .AddComponent<Image>();
+            background.color =
+                new Color(
+                    0.045f,
+                    0.05f,
+                    0.062f,
+                    1f);
+
+            var layout =
+                _dashboardMenuBar.gameObject
+                    .AddComponent<HorizontalLayoutGroup>();
+            layout.padding =
+                new RectOffset(
+                    8,
+                    8,
+                    3,
+                    3);
+            layout.spacing = 2f;
+            layout.childAlignment =
+                TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = true;
+
+            AddObsMenuButton(
+                "파일",
+                54f,
+                () =>
+                    OpenObsMenu(
+                        "file",
+                        8f));
+            AddObsMenuButton(
+                "보기",
+                54f,
+                () =>
+                    OpenObsMenu(
+                        "view",
+                        64f));
+            AddObsMenuButton(
+                "패널",
+                54f,
+                () =>
+                    OpenObsMenu(
+                        "panels",
+                        120f));
+            AddObsMenuButton(
+                "설정",
+                54f,
+                () =>
+                    OpenObsMenu(
+                        "settings",
+                        176f));
+            AddObsMenuButton(
+                "도구",
+                54f,
+                () =>
+                    OpenObsMenu(
+                        "tools",
+                        232f));
+        }
+
+        private void AddObsMenuButton(
+            string label,
+            float width,
+            Action action)
+        {
+            var button =
+                CreateButton(
+                    label,
+                    _dashboardMenuBar,
+                    action);
+            var layout =
+                button.gameObject
+                    .AddComponent<LayoutElement>();
+            layout.preferredWidth = width;
+            layout.preferredHeight = 28f;
+
+            if (button.targetGraphic is
+                Image image)
+            {
+                image.color =
+                    new Color(
+                        0.045f,
+                        0.05f,
+                        0.062f,
+                        1f);
+            }
+        }
+
+        private void OpenObsMenu(
+            string menuId,
+            float left)
+        {
+            if (_dashboardMenuPopup != null)
+            {
+                Destroy(
+                    _dashboardMenuPopup.gameObject);
+                _dashboardMenuPopup = null;
+
+                if (string.Equals(
+                        _dashboardOpenMenuId,
+                        menuId,
+                        StringComparison.Ordinal))
+                {
+                    _dashboardOpenMenuId = null;
+                    return;
+                }
+            }
+
+            _dashboardOpenMenuId = menuId;
+
+            _dashboardMenuPopup =
+                CreateRect(
+                    "OBS Menu Popup " +
+                    menuId,
+                    _root);
+            _dashboardMenuPopup.anchorMin =
+                new Vector2(0f, 1f);
+            _dashboardMenuPopup.anchorMax =
+                new Vector2(0f, 1f);
+            _dashboardMenuPopup.pivot =
+                new Vector2(0f, 1f);
+            _dashboardMenuPopup.anchoredPosition =
+                new Vector2(
+                    left,
+                    -36f);
+            _dashboardMenuPopup.sizeDelta =
+                new Vector2(
+                    menuId == "panels"
+                        ? 260f
+                        : 230f,
+                    320f);
+            _dashboardMenuPopup.SetAsLastSibling();
+
+            var image =
+                _dashboardMenuPopup.gameObject
+                    .AddComponent<Image>();
+            image.color =
+                new Color(
+                    0.055f,
+                    0.06f,
+                    0.075f,
+                    1f);
+
+            var outline =
+                _dashboardMenuPopup.gameObject
+                    .AddComponent<Outline>();
+            outline.effectColor =
+                new Color(
+                    0.18f,
+                    0.22f,
+                    0.29f,
+                    1f);
+            outline.effectDistance =
+                new Vector2(1f, -1f);
+
+            var layout =
+                _dashboardMenuPopup.gameObject
+                    .AddComponent<VerticalLayoutGroup>();
+            layout.padding =
+                new RectOffset(
+                    6,
+                    6,
+                    6,
+                    6);
+            layout.spacing = 2f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            switch (menuId)
+            {
+                case "file":
+                    AddObsMenuItem(
+                        "VRM 모델 불러오기…",
+                        () =>
+                        {
+                            SelectSection(
+                                ApplicationUiSection.Character);
+                            BrowseCharacterFile();
+                        });
+                    AddObsMenuItem(
+                        "현재 설정 저장",
+                        SaveConfiguration);
+                    AddObsMenuItem(
+                        "종료",
+                        () =>
+                            UnityEngine.Application.Quit());
+                    break;
+
+                case "view":
+                    AddObsMenuItem(
+                        "캐릭터 인스펙터",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Character));
+                    AddObsMenuItem(
+                        "카메라 미리보기 패널",
+                        () =>
+                            SetDashboardPanelVisible(
+                                "camera",
+                                true));
+                    AddObsMenuItem(
+                        "기본 도킹 배치로 복원",
+                        RestoreDefaultDashboardPanelLayout);
+                    break;
+
+                case "panels":
+                    AddObsPanelMenuItem(
+                        "tracking",
+                        "트래킹");
+                    AddObsPanelMenuItem(
+                        "motion",
+                        "모션 & 표정");
+                    AddObsPanelMenuItem(
+                        "control",
+                        "조작");
+                    AddObsPanelMenuItem(
+                        "environment",
+                        "배경 & 카메라");
+                    AddObsPanelMenuItem(
+                        "output",
+                        "출력");
+                    AddObsPanelMenuItem(
+                        "camera",
+                        "카메라 미리보기");
+                    break;
+
+                case "settings":
+                    AddObsMenuItem(
+                        "캐릭터",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Character));
+                    AddObsMenuItem(
+                        "모션 & 애니메이션",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.MotionExpression));
+                    AddObsMenuItem(
+                        "트래킹",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Tracking));
+                    AddObsMenuItem(
+                        "표정",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Expression));
+                    AddObsMenuItem(
+                        "의상 & 액세서리",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Appearance));
+                    AddObsMenuItem(
+                        "배경 & 스테이지",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Environment));
+                    AddObsMenuItem(
+                        "출력",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.CameraOutput));
+                    AddObsMenuItem(
+                        "환경설정…",
+                        OpenSettingsModal);
+                    break;
+
+                case "tools":
+                    AddObsMenuItem(
+                        "재질 / 셰이더",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.MaterialShader));
+                    AddObsMenuItem(
+                        "이벤트",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Events));
+                    AddObsMenuItem(
+                        "진단",
+                        () =>
+                            SelectSection(
+                                ApplicationUiSection.Diagnostics));
+                    break;
+            }
+
+            var popupLayout =
+                _dashboardMenuPopup
+                    .GetComponent<LayoutElement>();
+            if (popupLayout == null)
+            {
+                popupLayout =
+                    _dashboardMenuPopup.gameObject
+                        .AddComponent<LayoutElement>();
+            }
+        }
+
+        private void AddObsMenuItem(
+            string label,
+            Action action)
+        {
+            var button =
+                CreateButton(
+                    label,
+                    _dashboardMenuPopup,
+                    () =>
+                    {
+                        CloseObsMenu();
+                        action?.Invoke();
+                    });
+            AddPreferredHeight(
+                button.gameObject,
+                30f);
+            var text =
+                button.GetComponentInChildren<Text>();
+            if (text != null)
+            {
+                text.alignment =
+                    TextAnchor.MiddleLeft;
+                text.fontSize = 11;
+            }
+        }
+
+        private void AddObsPanelMenuItem(
+            string panelId,
+            string title)
+        {
+            var panel =
+                _dashboardPanels.TryGetValue(
+                    panelId,
+                    out var value)
+                    ? value
+                    : null;
+            var visible =
+                panel != null &&
+                panel.gameObject.activeSelf;
+
+            AddObsMenuItem(
+                (visible
+                    ? "✓  "
+                    : "    ") +
+                title,
+                () =>
+                    ToggleDashboardPanelVisibility(
+                        panelId));
+        }
+
+        private void CloseObsMenu()
+        {
+            if (_dashboardMenuPopup != null)
+            {
+                Destroy(
+                    _dashboardMenuPopup.gameObject);
+                _dashboardMenuPopup = null;
+            }
+
+            _dashboardOpenMenuId = null;
+        }
+
+        private void ApplyObsWorkspaceGeometry(
+            RectTransform navigation,
+            RectTransform inspector)
+        {
+            if (navigation != null)
+            {
+                navigation.gameObject.SetActive(
+                    false);
+            }
+
+            if (_contextActions != null)
+            {
+                _contextActions.gameObject.SetActive(
+                    false);
+            }
+
+            if (_renderViewportFrame != null)
+            {
+                var min =
+                    _renderViewportFrame.offsetMin;
+                var max =
+                    _renderViewportFrame.offsetMax;
+                min.x = 8f;
+                max.y = -44f;
+                _renderViewportFrame.offsetMin =
+                    min;
+                _renderViewportFrame.offsetMax =
+                    max;
+            }
+
+            if (inspector != null)
+            {
+                var max =
+                    inspector.offsetMax;
+                max.y = -44f;
+                inspector.offsetMax =
+                    max;
+            }
+        }
+
+        private void BuildStandaloneCameraPreviewCard()
+        {
+            if (_bottomDashboard == null ||
+                _trackingCameraPreviewPanel == null ||
+                _dashboardCameraPreviewContent != null)
+            {
+                return;
+            }
+
+            CreateDashboardCard(
+                _bottomDashboard,
+                "카메라 미리보기",
+                300f,
+                out _dashboardCameraPreviewContent);
+
+            SetDashboardVerticalLayout(
+                _dashboardCameraPreviewContent);
+
+            _trackingCameraPrivacyPlaceholder =
+                CreateDashboardPanel(
+                    _dashboardCameraPreviewContent,
+                    "Camera Privacy Placeholder",
+                    150f);
+
+            var privacyText =
+                CreateText(
+                    "Camera Preview Privacy Message",
+                    _trackingCameraPrivacyPlaceholder,
+                    13,
+                    TextAnchor.MiddleCenter);
+            privacyText.text =
+                "◉̸\n카메라 미리보기 숨김\n" +
+                "<size=11><color=#A8B1C0>명시적으로 보기 버튼을 눌러야 영상이 표시됩니다.</color></size>";
+            privacyText.supportRichText = true;
+            Stretch(
+                privacyText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 8f),
+                new Vector2(-10f, -8f));
+
+            _trackingCameraPreviewPanel.SetParent(
+                _dashboardCameraPreviewContent,
+                false);
+            var previewLayout =
+                _trackingCameraPreviewPanel
+                    .GetComponent<LayoutElement>() ??
+                _trackingCameraPreviewPanel
+                    .gameObject
+                    .AddComponent<LayoutElement>();
+            previewLayout.preferredHeight = 150f;
+            _trackingCameraPreviewPanel.gameObject.SetActive(
+                false);
+
+            _trackingCameraPreviewButton =
+                CreateButton(
+                    "카메라 미리보기 보기",
+                    _dashboardCameraPreviewContent,
+                    ToggleTrackingCameraPreview);
+            AddPreferredHeight(
+                _trackingCameraPreviewButton.gameObject,
+                32f);
+            SetPrimaryButtonStyle(
+                _trackingCameraPreviewButton);
+        }
+
+        private void ConfigureObsDockablePanels()
+        {
+            _dashboardPanels.Clear();
+            _dashboardPanelTitles.Clear();
+            _dashboardPanelHomeOrder.Clear();
+            _dashboardFloatingPanels.Clear();
+
+            RegisterObsDockablePanel(
+                "tracking",
+                "트래킹",
+                _trackingDashboardContent,
+                defaultVisible: true);
+            RegisterObsDockablePanel(
+                "motion",
+                "모션 & 표정",
+                _motionDashboardContent,
+                defaultVisible: false);
+            RegisterObsDockablePanel(
+                "control",
+                "조작",
+                _controlDashboardContent,
+                defaultVisible: false);
+            RegisterObsDockablePanel(
+                "environment",
+                "배경 & 카메라",
+                _environmentDashboardContent,
+                defaultVisible: false);
+            RegisterObsDockablePanel(
+                "output",
+                "출력",
+                _outputDashboardContent,
+                defaultVisible: true);
+            RegisterObsDockablePanel(
+                "camera",
+                "카메라 미리보기",
+                _dashboardCameraPreviewContent,
+                defaultVisible: false);
+
+            RefreshDashboardDockHost();
+        }
+
+        private void RegisterObsDockablePanel(
+            string panelId,
+            string title,
+            RectTransform content,
+            bool defaultVisible)
+        {
+            var panel =
+                content?.parent as
+                    RectTransform;
+
+            if (panel == null)
+            {
+                return;
+            }
+
+            _dashboardPanels[
+                panelId] =
+                    panel;
+            _dashboardPanelTitles[
+                panelId] =
+                    title;
+            _dashboardPanelHomeOrder[
+                panelId] =
+                    panel.GetSiblingIndex();
+
+            var visibilityKey =
+                DashboardPanelVisibleKeyPrefix +
+                panelId;
+            var visible =
+                PlayerPrefs.HasKey(
+                    visibilityKey)
+                    ? PlayerPrefs.GetInt(
+                          visibilityKey,
+                          defaultVisible
+                              ? 1
+                              : 0) != 0
+                    : defaultVisible;
+
+            panel.gameObject.SetActive(
+                visible);
+
+            AddObsPanelChrome(
+                panelId,
+                panel);
+
+            var shouldFloat =
+                PlayerPrefs.GetInt(
+                    DashboardPanelFloatingKeyPrefix +
+                    panelId,
+                    0) != 0;
+
+            if (visible &&
+                shouldFloat)
+            {
+                FloatDashboardPanel(
+                    panelId,
+                    null);
+            }
+        }
+
+        private void AddObsPanelChrome(
+            string panelId,
+            RectTransform panel)
+        {
+            var dragHandle =
+                CreateRect(
+                    "Dock Drag Handle " +
+                    panelId,
+                    panel);
+            dragHandle.anchorMin =
+                new Vector2(0f, 1f);
+            dragHandle.anchorMax =
+                new Vector2(1f, 1f);
+            dragHandle.pivot =
+                new Vector2(0.5f, 1f);
+            dragHandle.offsetMin =
+                new Vector2(0f, -36f);
+            dragHandle.offsetMax =
+                new Vector2(-72f, 0f);
+
+            var dragImage =
+                dragHandle.gameObject
+                    .AddComponent<Image>();
+            dragImage.color =
+                new Color(
+                    0f,
+                    0f,
+                    0f,
+                    0f);
+            dragImage.raycastTarget = true;
+
+            var trigger =
+                dragHandle.gameObject
+                    .AddComponent<EventTrigger>();
+
+            AddObsDragTrigger(
+                trigger,
+                EventTriggerType.BeginDrag,
+                data =>
+                    BeginDashboardPanelDrag(
+                        panelId,
+                        data as PointerEventData));
+            AddObsDragTrigger(
+                trigger,
+                EventTriggerType.Drag,
+                data =>
+                    DragDashboardPanel(
+                        panelId,
+                        data as PointerEventData));
+            AddObsDragTrigger(
+                trigger,
+                EventTriggerType.EndDrag,
+                data =>
+                    EndDashboardPanelDrag(
+                        panelId,
+                        data as PointerEventData));
+
+            var floatButton =
+                CreateButton(
+                    "◇",
+                    panel,
+                    () =>
+                        ToggleDashboardPanelFloating(
+                            panelId));
+            var floatRect =
+                floatButton.GetComponent<RectTransform>();
+            floatRect.anchorMin =
+                new Vector2(1f, 1f);
+            floatRect.anchorMax =
+                new Vector2(1f, 1f);
+            floatRect.pivot =
+                new Vector2(1f, 1f);
+            floatRect.offsetMin =
+                new Vector2(-68f, -32f);
+            floatRect.offsetMax =
+                new Vector2(-38f, -4f);
+
+            var close =
+                CreateButton(
+                    "×",
+                    panel,
+                    () =>
+                        SetDashboardPanelVisible(
+                            panelId,
+                            false));
+            var closeRect =
+                close.GetComponent<RectTransform>();
+            closeRect.anchorMin =
+                new Vector2(1f, 1f);
+            closeRect.anchorMax =
+                new Vector2(1f, 1f);
+            closeRect.pivot =
+                new Vector2(1f, 1f);
+            closeRect.offsetMin =
+                new Vector2(-34f, -32f);
+            closeRect.offsetMax =
+                new Vector2(-4f, -4f);
+        }
+
+        private static void AddObsDragTrigger(
+            EventTrigger trigger,
+            EventTriggerType type,
+            Action<BaseEventData> callback)
+        {
+            var entry =
+                new EventTrigger.Entry
+                {
+                    eventID = type
+                };
+            entry.callback.AddListener(
+                data =>
+                    callback?.Invoke(data));
+            trigger.triggers.Add(
+                entry);
+        }
+
+        private void BeginDashboardPanelDrag(
+            string panelId,
+            PointerEventData eventData)
+        {
+            if (eventData == null ||
+                !_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null)
+            {
+                return;
+            }
+
+            _dashboardDraggingPanelId =
+                panelId;
+
+            if (!_dashboardFloatingPanels.Contains(
+                    panelId))
+            {
+                FloatDashboardPanel(
+                    panelId,
+                    eventData.position);
+            }
+
+            DragDashboardPanel(
+                panelId,
+                eventData);
+        }
+
+        private void DragDashboardPanel(
+            string panelId,
+            PointerEventData eventData)
+        {
+            if (eventData == null ||
+                !_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null ||
+                !_dashboardFloatingPanels.Contains(
+                    panelId))
+            {
+                return;
+            }
+
+            if (RectTransformUtility
+                .ScreenPointToLocalPointInRectangle(
+                    _root,
+                    eventData.position,
+                    _canvas != null
+                        ? _canvas.worldCamera
+                        : null,
+                    out var local))
+            {
+                panel.anchoredPosition =
+                    local;
+            }
+        }
+
+        private void EndDashboardPanelDrag(
+            string panelId,
+            PointerEventData eventData)
+        {
+            _dashboardDraggingPanelId =
+                null;
+
+            if (eventData != null &&
+                eventData.position.y <=
+                    Screen.height * 0.34f)
+            {
+                DockDashboardPanel(
+                    panelId,
+                    eventData.position.x);
+            }
+        }
+
+        private void ToggleDashboardPanelFloating(
+            string panelId)
+        {
+            if (_dashboardFloatingPanels.Contains(
+                    panelId))
+            {
+                DockDashboardPanel(
+                    panelId,
+                    null);
+            }
+            else
+            {
+                FloatDashboardPanel(
+                    panelId,
+                    null);
+            }
+        }
+
+        private void FloatDashboardPanel(
+            string panelId,
+            Vector2? screenPosition)
+        {
+            if (!_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null ||
+                _root == null)
+            {
+                return;
+            }
+
+            Canvas.ForceUpdateCanvases();
+
+            var size =
+                panel.rect.size;
+            if (size.x < 240f)
+            {
+                size.x = 320f;
+            }
+            if (size.y < 160f)
+            {
+                size.y = 280f;
+            }
+
+            panel.SetParent(
+                _root,
+                false);
+            panel.SetAsLastSibling();
+            panel.anchorMin =
+                new Vector2(0.5f, 0.5f);
+            panel.anchorMax =
+                new Vector2(0.5f, 0.5f);
+            panel.pivot =
+                new Vector2(0.5f, 0.5f);
+            panel.sizeDelta =
+                new Vector2(
+                    Mathf.Clamp(
+                        size.x,
+                        300f,
+                        520f),
+                    Mathf.Clamp(
+                        size.y,
+                        220f,
+                        420f));
+
+            var layout =
+                panel.GetComponent<LayoutElement>();
+            if (layout != null)
+            {
+                layout.ignoreLayout = true;
+            }
+
+            if (screenPosition.HasValue &&
+                RectTransformUtility
+                    .ScreenPointToLocalPointInRectangle(
+                        _root,
+                        screenPosition.Value,
+                        _canvas != null
+                            ? _canvas.worldCamera
+                            : null,
+                        out var local))
+            {
+                panel.anchoredPosition =
+                    local;
+            }
+            else
+            {
+                panel.anchoredPosition =
+                    Vector2.zero;
+            }
+
+            _dashboardFloatingPanels.Add(
+                panelId);
+            PlayerPrefs.SetInt(
+                DashboardPanelFloatingKeyPrefix +
+                panelId,
+                1);
+            PlayerPrefs.Save();
+
+            RefreshDashboardDockHost();
+        }
+
+        private void DockDashboardPanel(
+            string panelId,
+            float? screenX)
+        {
+            if (!_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null ||
+                _bottomDashboard == null)
+            {
+                return;
+            }
+
+            panel.SetParent(
+                _bottomDashboard,
+                false);
+
+            var layout =
+                panel.GetComponent<LayoutElement>();
+            if (layout != null)
+            {
+                layout.ignoreLayout = false;
+            }
+
+            var order =
+                _dashboardPanelHomeOrder.TryGetValue(
+                    panelId,
+                    out var home)
+                    ? home
+                    : _bottomDashboard.childCount - 1;
+
+            if (screenX.HasValue)
+            {
+                var normalized =
+                    Mathf.Clamp01(
+                        screenX.Value /
+                        Mathf.Max(
+                            1f,
+                            Screen.width));
+                order =
+                    Mathf.RoundToInt(
+                        normalized *
+                        Mathf.Max(
+                            0,
+                            _bottomDashboard.childCount - 1));
+            }
+
+            panel.SetSiblingIndex(
+                Mathf.Clamp(
+                    order,
+                    0,
+                    Mathf.Max(
+                        0,
+                        _bottomDashboard.childCount - 1)));
+
+            _dashboardFloatingPanels.Remove(
+                panelId);
+            PlayerPrefs.SetInt(
+                DashboardPanelFloatingKeyPrefix +
+                panelId,
+                0);
+            PlayerPrefs.Save();
+
+            RefreshDashboardDockHost();
+        }
+
+        private void ToggleDashboardPanelVisibility(
+            string panelId)
+        {
+            if (!_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null)
+            {
+                return;
+            }
+
+            SetDashboardPanelVisible(
+                panelId,
+                !panel.gameObject.activeSelf);
+        }
+
+        private void SetDashboardPanelVisible(
+            string panelId,
+            bool visible)
+        {
+            if (!_dashboardPanels.TryGetValue(
+                    panelId,
+                    out var panel) ||
+                panel == null)
+            {
+                return;
+            }
+
+            panel.gameObject.SetActive(
+                visible);
+            PlayerPrefs.SetInt(
+                DashboardPanelVisibleKeyPrefix +
+                panelId,
+                visible
+                    ? 1
+                    : 0);
+            PlayerPrefs.Save();
+
+            if (!visible &&
+                string.Equals(
+                    panelId,
+                    "camera",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _trackingCameraPreviewRequested =
+                    false;
+                RefreshTrackingCameraPreviewPrivacy(
+                    false);
+            }
+
+            RefreshDashboardDockHost();
+        }
+
+        private void RestoreDefaultDashboardPanelLayout()
+        {
+            foreach (var pair in
+                     _dashboardPanels)
+            {
+                if (_dashboardFloatingPanels.Contains(
+                        pair.Key))
+                {
+                    DockDashboardPanel(
+                        pair.Key,
+                        null);
+                }
+
+                var visible =
+                    string.Equals(
+                        pair.Key,
+                        "tracking",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        pair.Key,
+                        "output",
+                        StringComparison.OrdinalIgnoreCase);
+
+                pair.Value.gameObject.SetActive(
+                    visible);
+                PlayerPrefs.SetInt(
+                    DashboardPanelVisibleKeyPrefix +
+                    pair.Key,
+                    visible
+                        ? 1
+                        : 0);
+            }
+
+            PlayerPrefs.Save();
+            RefreshDashboardDockHost();
+        }
+
+        private void RefreshDashboardDockHost()
+        {
+            if (_bottomDashboard == null)
+            {
+                return;
+            }
+
+            var hasDockedVisible = false;
+
+            foreach (var pair in
+                     _dashboardPanels)
+            {
+                if (pair.Value != null &&
+                    pair.Value.gameObject.activeSelf &&
+                    pair.Value.parent ==
+                        _bottomDashboard)
+                {
+                    hasDockedVisible = true;
+                    break;
+                }
+            }
+
+            if (_bottomDashboard.gameObject.activeSelf !=
+                hasDockedVisible)
+            {
+                _bottomDashboard.gameObject.SetActive(
+                    hasDockedVisible);
+            }
+
+            RefreshDashboardGeometry(
+                _model.SelectedSection);
+        }
+
+        private float GetDashboardWorkspaceBottomInset()
+        {
+            return
+                _bottomDashboard != null &&
+                _bottomDashboard.gameObject.activeSelf
+                    ? 318f
+                    : 8f;
+        }
+
         private void BuildMockupTrackingCard()
         {
             if (_trackingDashboardContent == null)
@@ -1109,66 +2231,6 @@ namespace VCR.Runtime.UI
             sourceListLayout.childForceExpandHeight = false;
 
             RefreshDashboardTrackingSources();
-
-            var privacyFrame =
-                CreateDashboardPanel(
-                    _trackingDashboardContent,
-                    "Camera Privacy Frame",
-                    102f);
-
-            _trackingCameraPrivacyPlaceholder =
-                CreateRect(
-                    "Camera Privacy Placeholder",
-                    privacyFrame);
-            Stretch(
-                _trackingCameraPrivacyPlaceholder,
-                Vector2.zero,
-                Vector2.one,
-                new Vector2(8f, 8f),
-                new Vector2(-8f, -8f));
-
-            var privacyText =
-                CreateText(
-                    "Camera Privacy Message",
-                    _trackingCameraPrivacyPlaceholder,
-                    13,
-                    TextAnchor.MiddleCenter);
-            privacyText.text =
-                "◉̸\n카메라 미리보기 숨김\n<size=11><color=#A8B1C0>(버튼을 눌러서만 표시합니다)</color></size>";
-            privacyText.supportRichText =
-                true;
-            Stretch(
-                privacyText.rectTransform,
-                Vector2.zero,
-                Vector2.one,
-                new Vector2(8f, 4f),
-                new Vector2(-8f, -4f));
-
-            if (_trackingCameraPreviewPanel != null)
-            {
-                _trackingCameraPreviewPanel.SetParent(
-                    privacyFrame,
-                    false);
-                Stretch(
-                    _trackingCameraPreviewPanel,
-                    Vector2.zero,
-                    Vector2.one,
-                    new Vector2(4f, 4f),
-                    new Vector2(-4f, -4f));
-                _trackingCameraPreviewPanel.gameObject.SetActive(
-                    false);
-            }
-
-            _trackingCameraPreviewButton =
-                CreateButton(
-                    "카메라 미리보기 보기",
-                    _trackingDashboardContent,
-                    ToggleTrackingCameraPreview);
-            AddPreferredHeight(
-                _trackingCameraPreviewButton.gameObject,
-                32f);
-            SetPrimaryButtonStyle(
-                _trackingCameraPreviewButton);
 
             _dashboardTrackingStatusText =
                 CreateText(
