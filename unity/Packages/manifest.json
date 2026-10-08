@@ -9,6 +9,7 @@
     "com.vrmc.vrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.2",
     "com.unity.modules.assetbundle": "1.0.0",
     "com.unity.modules.physics2d": "1.0.0",
-    "com.unity.modules.video": "1.0.0"
+    "com.unity.modules.video": "1.0.0",
+    "com.ultraleap.tracking": "https://github.com/ultraleap/UnityPlugin.git?path=/Packages/Tracking#833d82e7333a5f37ebc0844d02431acf74f35d24"
   }
 }
