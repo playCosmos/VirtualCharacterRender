@@ -17,6 +17,9 @@ namespace VCR.Runtime.UI
         private RectTransform _dashboardSettingsModal;
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
+        private Text _dashboardTrackingRouteText;
+        private Text _dashboardMediaPipeStatusText;
+        private Text _dashboardArKitStatusText;
         private Text _dashboardEnvironmentStatusText;
         private Button _dashboardResolutionButton;
         private Button _dashboardFpsButton;
@@ -980,38 +983,75 @@ namespace VCR.Runtime.UI
             HideDashboardLegacyControl(
                 _trackingCameraPreviewButton);
 
-            var tabs =
+            var routePanel =
+                CreateDashboardPanel(
+                    _trackingDashboardContent,
+                    "Tracking Route Summary",
+                    58f);
+
+            _dashboardTrackingRouteText =
+                CreateText(
+                    "Tracking Route Summary Text",
+                    routePanel,
+                    12,
+                    TextAnchor.MiddleLeft);
+            _dashboardTrackingRouteText.text =
+                "<b>자동 혼합 (권장)</b>\n" +
+                "<size=11><color=#9EABBC>얼굴·눈·입·머리: ARKit 우선 / 손·상체: MediaPipe</color></size>";
+            _dashboardTrackingRouteText.supportRichText =
+                true;
+            Stretch(
+                _dashboardTrackingRouteText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(12f, 8f),
+                new Vector2(-12f, -8f));
+
+            var mediaPipeRow =
                 CreateDashboardRow(
                     _trackingDashboardContent,
-                    "Tracking Tabs",
-                    34f);
-            AddDashboardTab(
-                tabs,
-                "캠",
-                true,
-                () =>
-                    SelectTrackingSourceByKeyword(
-                        "webcam"));
-            AddDashboardTab(
-                tabs,
-                "ARKit (Mac)",
-                false,
-                () =>
-                    SelectTrackingSourceByKeyword(
-                        "arkit"));
-            AddDashboardTab(
-                tabs,
-                "MediaPipe",
-                false,
-                () =>
-                    SelectTrackingSourceByKeyword(
-                        "mediapipe"));
+                    "MediaPipe Source Status",
+                    26f);
+            _dashboardMediaPipeStatusText =
+                CreateText(
+                    "MediaPipe Source Status Text",
+                    mediaPipeRow,
+                    11,
+                    TextAnchor.MiddleLeft);
+            _dashboardMediaPipeStatusText.text =
+                "MediaPipe 웹캠   확인 중…";
+            Stretch(
+                _dashboardMediaPipeStatusText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(4f, 0f),
+                new Vector2(-4f, 0f));
+
+            var arKitRow =
+                CreateDashboardRow(
+                    _trackingDashboardContent,
+                    "ARKit Source Status",
+                    26f);
+            _dashboardArKitStatusText =
+                CreateText(
+                    "ARKit Source Status Text",
+                    arKitRow,
+                    11,
+                    TextAnchor.MiddleLeft);
+            _dashboardArKitStatusText.text =
+                "ARKit (iPhone/iPad)   확인 중…";
+            Stretch(
+                _dashboardArKitStatusText.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(4f, 0f),
+                new Vector2(-4f, 0f));
 
             var privacyFrame =
                 CreateDashboardPanel(
                     _trackingDashboardContent,
                     "Camera Privacy Frame",
-                    122f);
+                    102f);
 
             _trackingCameraPrivacyPlaceholder =
                 CreateRect(
@@ -1086,7 +1126,7 @@ namespace VCR.Runtime.UI
                     11,
                     TextAnchor.MiddleLeft);
             sourceHelp.text =
-                "사용할 수 있는 입력 소스만 활성화됩니다. 카메라 영상은 위 버튼을 눌렀을 때만 표시됩니다.";
+                "ARKit과 MediaPipe는 택일이 아닙니다. ARKit이 연결되면 얼굴을 우선 담당하고 MediaPipe는 손·상체를 계속 추적합니다.";
             sourceHelp.color =
                 new Color(
                     0.58f,
@@ -1776,6 +1816,56 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private string GetDashboardTrackingSourceStatus(
+            string controlId)
+        {
+            ITrackingRuntimeControl control = null;
+
+            for (var i = 0;
+                 i < _trackingControls.Count;
+                 i++)
+            {
+                var candidate =
+                    _trackingControls[i];
+
+                if (candidate != null &&
+                    string.Equals(
+                        candidate.ControlId,
+                        controlId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    control = candidate;
+                    break;
+                }
+            }
+
+            if (control == null)
+            {
+                return "사용 불가";
+            }
+
+            if (!control.ControlEnabled)
+            {
+                return "꺼짐";
+            }
+
+            return control.ControlHealthState switch
+            {
+                TrackingSourceHealthState.Healthy =>
+                    "연결됨",
+                TrackingSourceHealthState.Degraded =>
+                    "연결됨 · 품질 저하",
+                TrackingSourceHealthState.Starting =>
+                    "시작 중",
+                TrackingSourceHealthState.SourceLost =>
+                    "대기 중 · 신호 없음",
+                TrackingSourceHealthState.Faulted =>
+                    "오류",
+                _ =>
+                    "꺼짐"
+            };
+        }
+
         private void RefreshMockupDashboard()
         {
             if (_dashboardModelNameText != null)
@@ -1813,6 +1903,17 @@ namespace VCR.Runtime.UI
                         ? "트래킹 상태   ● 활성"
                         : "트래킹 상태   ● 비활성화");
             }
+
+            SetTextIfChanged(
+                _dashboardMediaPipeStatusText,
+                "MediaPipe 웹캠   " +
+                GetDashboardTrackingSourceStatus(
+                    "mediapipe-webcam"));
+            SetTextIfChanged(
+                _dashboardArKitStatusText,
+                "ARKit (iPhone/iPad)   " +
+                GetDashboardTrackingSourceStatus(
+                    "arkit-ifacialmocap"));
 
             if (_dashboardEnvironmentStatusText != null)
             {
