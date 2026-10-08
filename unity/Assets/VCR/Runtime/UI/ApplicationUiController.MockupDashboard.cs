@@ -4,6 +4,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using VCR.Runtime.Rendering;
 using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.UI
@@ -81,8 +82,11 @@ namespace VCR.Runtime.UI
         private string _dashboardDraggingPanelId;
 
         private Text _dashboardEnvironmentStatusText;
-        private Button _dashboardResolutionButton;
-        private Button _dashboardFpsButton;
+        private Dropdown _dashboardResolutionDropdown;
+        private Dropdown _dashboardFpsDropdown;
+        private Button _dashboardOutputApplyButton;
+        private bool _dashboardOutputSelectionDirty;
+        private bool _dashboardOutputDropdownSyncing;
         private Button _dashboardBackgroundModeButton;
         private Button _dashboardTopmostButton;
 
@@ -2407,16 +2411,42 @@ namespace VCR.Runtime.UI
             HideDashboardLegacyControl(
                 _outputClickThroughButton);
 
-            _dashboardResolutionButton =
-                AddOutputValueRow(
+            _dashboardResolutionDropdown =
+                AddOutputDropdownRow(
                     "해상도",
-                    "확인 중…",
-                    ToggleDashboardResolution);
-            _dashboardFpsButton =
-                AddOutputValueRow(
+                    new[]
+                    {
+                        "720p  ·  1280 × 720",
+                        "1080p  ·  1920 × 1080",
+                        "1440p  ·  2560 × 1440",
+                        "4K UHD  ·  3840 × 2160"
+                    },
+                    OnDashboardOutputSelectionChanged);
+
+            _dashboardFpsDropdown =
+                AddOutputDropdownRow(
                     "프레임",
-                    "확인 중…",
-                    ToggleDashboardResolution);
+                    new[]
+                    {
+                        "30 FPS",
+                        "60 FPS",
+                        "120 FPS"
+                    },
+                    OnDashboardOutputSelectionChanged);
+
+            _dashboardOutputApplyButton =
+                CreateButton(
+                    "출력 설정 적용",
+                    _outputDashboardContent,
+                    ApplyDashboardOutputSelection);
+            AddPreferredHeight(
+                _dashboardOutputApplyButton.gameObject,
+                34f);
+            SetPrimaryButtonStyle(
+                _dashboardOutputApplyButton);
+            _dashboardOutputApplyButton.interactable =
+                false;
+
             _dashboardBackgroundModeButton =
                 AddOutputValueRow(
                     "배경 모드",
@@ -2435,7 +2465,8 @@ namespace VCR.Runtime.UI
                     11,
                     TextAnchor.MiddleLeft);
             help.text =
-                "해상도/프레임은 720p60 ↔ 1080p60 프리셋을 전환합니다. 표시 값은 현재 런타임 상태를 그대로 반영합니다.";
+                "해상도와 프레임을 선택한 뒤 ‘출력 설정 적용’을 눌러 반영합니다. " +
+                "1440p/4K 항목도 미리 선택할 수 있으며 고해상도 성능 검증은 추후 진행합니다.";
             help.color =
                 new Color(
                     0.56f,
@@ -2444,12 +2475,242 @@ namespace VCR.Runtime.UI
                     1f);
             help.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredHeight = 42f;
+                .preferredHeight = 52f;
         }
 
-        private void ToggleDashboardResolution()
+        private Dropdown AddOutputDropdownRow(
+            string label,
+            IReadOnlyList<string> options,
+            Action<int> onChanged)
         {
-            if (sceneRuntime == null)
+            var row =
+                CreateDashboardRow(
+                    _outputDashboardContent,
+                    label + " Output Dropdown Row",
+                    36f);
+
+            var labelText =
+                CreateText(
+                    label + " Label",
+                    row,
+                    12,
+                    TextAnchor.MiddleLeft);
+            labelText.text = label;
+            labelText.gameObject
+                .AddComponent<LayoutElement>()
+                .preferredWidth = 88f;
+
+            var dropdown =
+                CreateDashboardDropdown(
+                    label + " Dropdown",
+                    row,
+                    options,
+                    onChanged);
+
+            dropdown.gameObject
+                .AddComponent<LayoutElement>()
+                .flexibleWidth = 1f;
+
+            return dropdown;
+        }
+
+        private Dropdown CreateDashboardDropdown(
+            string name,
+            Transform parent,
+            IReadOnlyList<string> options,
+            Action<int> onChanged)
+        {
+            var rect =
+                CreateRect(
+                    name,
+                    parent);
+
+            var background =
+                rect.gameObject
+                    .AddComponent<Image>();
+            background.color =
+                new Color(
+                    0.095f,
+                    0.115f,
+                    0.145f,
+                    1f);
+
+            var dropdown =
+                rect.gameObject
+                    .AddComponent<Dropdown>();
+            dropdown.targetGraphic =
+                background;
+
+            var caption =
+                CreateText(
+                    "Caption",
+                    rect,
+                    11,
+                    TextAnchor.MiddleLeft);
+            caption.color =
+                new Color(
+                    0.90f,
+                    0.92f,
+                    0.96f,
+                    1f);
+            caption.rectTransform.anchorMin =
+                Vector2.zero;
+            caption.rectTransform.anchorMax =
+                Vector2.one;
+            caption.rectTransform.offsetMin =
+                new Vector2(10f, 2f);
+            caption.rectTransform.offsetMax =
+                new Vector2(-30f, -2f);
+
+            var arrow =
+                CreateText(
+                    "Arrow",
+                    rect,
+                    12,
+                    TextAnchor.MiddleCenter);
+            arrow.text = "▾";
+            arrow.rectTransform.anchorMin =
+                new Vector2(1f, 0f);
+            arrow.rectTransform.anchorMax =
+                new Vector2(1f, 1f);
+            arrow.rectTransform.pivot =
+                new Vector2(1f, 0.5f);
+            arrow.rectTransform.offsetMin =
+                new Vector2(-28f, 2f);
+            arrow.rectTransform.offsetMax =
+                new Vector2(-4f, -2f);
+
+            var template =
+                CreateRect(
+                    "Template",
+                    rect);
+            template.anchorMin =
+                new Vector2(0f, 0f);
+            template.anchorMax =
+                new Vector2(1f, 0f);
+            template.pivot =
+                new Vector2(0.5f, 1f);
+            template.anchoredPosition =
+                new Vector2(0f, -2f);
+            template.sizeDelta =
+                new Vector2(0f, 132f);
+
+            var templateImage =
+                template.gameObject
+                    .AddComponent<Image>();
+            templateImage.color =
+                new Color(
+                    0.055f,
+                    0.065f,
+                    0.085f,
+                    1f);
+
+            var item =
+                CreateRect(
+                    "Item",
+                    template);
+            item.anchorMin =
+                new Vector2(0f, 1f);
+            item.anchorMax =
+                new Vector2(1f, 1f);
+            item.pivot =
+                new Vector2(0.5f, 1f);
+            item.offsetMin =
+                new Vector2(2f, -30f);
+            item.offsetMax =
+                new Vector2(-2f, 0f);
+
+            var itemBackground =
+                item.gameObject
+                    .AddComponent<Image>();
+            itemBackground.color =
+                new Color(
+                    0.075f,
+                    0.085f,
+                    0.105f,
+                    1f);
+
+            var toggle =
+                item.gameObject
+                    .AddComponent<Toggle>();
+            toggle.targetGraphic =
+                itemBackground;
+
+            var itemLabel =
+                CreateText(
+                    "Item Label",
+                    item,
+                    11,
+                    TextAnchor.MiddleLeft);
+            itemLabel.color =
+                new Color(
+                    0.90f,
+                    0.92f,
+                    0.96f,
+                    1f);
+            itemLabel.rectTransform.anchorMin =
+                Vector2.zero;
+            itemLabel.rectTransform.anchorMax =
+                Vector2.one;
+            itemLabel.rectTransform.offsetMin =
+                new Vector2(10f, 0f);
+            itemLabel.rectTransform.offsetMax =
+                new Vector2(-8f, 0f);
+
+            dropdown.captionText =
+                caption;
+            dropdown.template =
+                template;
+            dropdown.itemText =
+                itemLabel;
+
+            dropdown.options.Clear();
+            if (options != null)
+            {
+                for (var i = 0;
+                     i < options.Count;
+                     i++)
+                {
+                    dropdown.options.Add(
+                        new Dropdown.OptionData(
+                            options[i] ?? string.Empty));
+                }
+            }
+
+            dropdown.onValueChanged.AddListener(
+                value =>
+                    onChanged?.Invoke(
+                        value));
+
+            template.gameObject.SetActive(
+                false);
+            dropdown.RefreshShownValue();
+
+            return dropdown;
+        }
+
+        private void OnDashboardOutputSelectionChanged(
+            int _)
+        {
+            if (_dashboardOutputDropdownSyncing)
+            {
+                return;
+            }
+
+            _dashboardOutputSelectionDirty = true;
+
+            if (_dashboardOutputApplyButton != null)
+            {
+                _dashboardOutputApplyButton.interactable =
+                    sceneRuntime != null;
+            }
+        }
+
+        private void ApplyDashboardOutputSelection()
+        {
+            if (sceneRuntime == null ||
+                _dashboardResolutionDropdown == null ||
+                _dashboardFpsDropdown == null)
             {
                 SetDashboardNotice(
                     "렌더링 설정을 사용할 수 없습니다.");
@@ -2458,16 +2719,142 @@ namespace VCR.Runtime.UI
 
             var current =
                 sceneRuntime.CaptureRenderSettings();
+            var next =
+                current;
 
-            if (current.Width >= 1600 ||
-                current.Height >= 900)
+            GetDashboardResolutionSelection(
+                _dashboardResolutionDropdown.value,
+                out var width,
+                out var height,
+                out var preset);
+
+            next.ResolutionPreset =
+                preset;
+            next.Width =
+                width;
+            next.Height =
+                height;
+            next.TargetFrameRate =
+                GetDashboardFpsSelection(
+                    _dashboardFpsDropdown.value);
+
+            try
             {
-                Apply720p60();
+                sceneRuntime.ApplyRenderSettings(
+                    next);
+                _dashboardOutputSelectionDirty =
+                    false;
+                SetDashboardNotice(
+                    $"출력 설정 적용: {width} × {height}, {next.TargetFrameRate} FPS");
             }
-            else
+            catch (Exception exception)
             {
-                Apply1080p60();
+                try
+                {
+                    sceneRuntime.ApplyRenderSettings(
+                        current);
+                }
+                catch
+                {
+                    // Preserve the original apply failure in the user message.
+                }
+
+                SetDashboardNotice(
+                    "출력 설정 적용 실패: " +
+                    exception.Message);
             }
+
+            RefreshAll();
+        }
+
+        private static void GetDashboardResolutionSelection(
+            int index,
+            out int width,
+            out int height,
+            out RenderResolutionPreset preset)
+        {
+            switch (index)
+            {
+                case 0:
+                    width = 1280;
+                    height = 720;
+                    preset =
+                        RenderResolutionPreset.Minimum720p;
+                    return;
+
+                case 2:
+                    width = 2560;
+                    height = 1440;
+                    preset =
+                        RenderResolutionPreset.Custom;
+                    return;
+
+                case 3:
+                    width = 3840;
+                    height = 2160;
+                    preset =
+                        RenderResolutionPreset.Custom;
+                    return;
+
+                default:
+                    width = 1920;
+                    height = 1080;
+                    preset =
+                        RenderResolutionPreset.Recommended1080p;
+                    return;
+            }
+        }
+
+        private static int GetDashboardFpsSelection(
+            int index)
+        {
+            return index switch
+            {
+                0 => 30,
+                2 => 120,
+                _ => 60
+            };
+        }
+
+        private static int FindDashboardResolutionIndex(
+            int width,
+            int height)
+        {
+            if (width == 1280 &&
+                height == 720)
+            {
+                return 0;
+            }
+
+            if (width == 2560 &&
+                height == 1440)
+            {
+                return 2;
+            }
+
+            if (width == 3840 &&
+                height == 2160)
+            {
+                return 3;
+            }
+
+            return 1;
+        }
+
+        private static int FindDashboardFpsIndex(
+            int fps)
+        {
+            if (fps <= 30)
+            {
+                return 0;
+            }
+
+            if (fps >= 120)
+            {
+                return 2;
+            }
+
+            return 1;
         }
 
         private Button AddOutputValueRow(
@@ -4255,27 +4642,61 @@ namespace VCR.Runtime.UI
             if (TryGetRenderSettingsForUiRefresh(
                     out var renderSettings))
             {
-                SetButtonLabel(
-                    _dashboardResolutionButton,
-                    renderSettings.Width +
-                    " × " +
-                    renderSettings.Height +
-                    (renderSettings.Width >= 1600
-                        ? "  ·  720p로 전환"
-                        : "  ·  1080p로 전환"));
-                SetButtonLabel(
-                    _dashboardFpsButton,
-                    renderSettings.TargetFrameRate +
-                    " FPS  ·  프리셋 전환");
+                if (!_dashboardOutputSelectionDirty)
+                {
+                    _dashboardOutputDropdownSyncing =
+                        true;
+
+                    if (_dashboardResolutionDropdown != null)
+                    {
+                        _dashboardResolutionDropdown
+                            .SetValueWithoutNotify(
+                                FindDashboardResolutionIndex(
+                                    renderSettings.Width,
+                                    renderSettings.Height));
+                        _dashboardResolutionDropdown
+                            .RefreshShownValue();
+                    }
+
+                    if (_dashboardFpsDropdown != null)
+                    {
+                        _dashboardFpsDropdown
+                            .SetValueWithoutNotify(
+                                FindDashboardFpsIndex(
+                                    renderSettings.TargetFrameRate));
+                        _dashboardFpsDropdown
+                            .RefreshShownValue();
+                    }
+
+                    _dashboardOutputDropdownSyncing =
+                        false;
+                }
+
+                if (_dashboardOutputApplyButton != null)
+                {
+                    _dashboardOutputApplyButton.interactable =
+                        _dashboardOutputSelectionDirty;
+                }
             }
             else
             {
-                SetButtonLabel(
-                    _dashboardResolutionButton,
-                    "렌더링 설정 없음");
-                SetButtonLabel(
-                    _dashboardFpsButton,
-                    "렌더링 설정 없음");
+                if (_dashboardResolutionDropdown != null)
+                {
+                    _dashboardResolutionDropdown.interactable =
+                        false;
+                }
+
+                if (_dashboardFpsDropdown != null)
+                {
+                    _dashboardFpsDropdown.interactable =
+                        false;
+                }
+
+                if (_dashboardOutputApplyButton != null)
+                {
+                    _dashboardOutputApplyButton.interactable =
+                        false;
+                }
             }
 
             var overlayReadable =
