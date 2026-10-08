@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.Camera",
+  "rootNamespace": "VCR.Runtime.Camera",
+  "references": [
+    "VCR.Runtime.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
