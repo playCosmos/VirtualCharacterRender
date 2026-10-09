@@ -414,44 +414,61 @@ namespace VCR.Runtime.Application
             out string error)
         {
             error = null;
-
-            var firstShutdown =
-                !_quitting;
-            _quitting = true;
-
-            var succeeded = true;
-
-            if (firstShutdown &&
-                saveConfiguration &&
-                _started &&
-                !SaveConfiguration(
-                    out error))
+            if (_quitting)
             {
-                succeeded = false;
+                return true;
             }
 
-            if (sceneRuntime != null)
+            _quitting = true;
+            var succeeded = true;
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR shutdown: begin", this);
+            try
             {
-                sceneRuntime.Shutdown();
-
-                var sceneError =
-                    sceneRuntime.Status.LastError;
-
-                if (!string.IsNullOrWhiteSpace(
-                        sceneError))
+                if (saveConfiguration && _started)
                 {
-                    succeeded = false;
-                    error =
-                        string.IsNullOrWhiteSpace(
-                            error)
+                    var saved = SaveConfiguration(out error);
+                    Debug.Log("VCR shutdown: configuration save finished at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                    if (!saved)
+                    {
+                        succeeded = false;
+                    }
+                }
+
+                if (sceneRuntime != null)
+                {
+                    Debug.Log("VCR shutdown: scene teardown begin at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                    sceneRuntime.Shutdown();
+                    Debug.Log("VCR shutdown: scene teardown completed at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+
+                    var sceneError = sceneRuntime.Status.LastError;
+                    if (!string.IsNullOrWhiteSpace(sceneError))
+                    {
+                        succeeded = false;
+                        error = string.IsNullOrWhiteSpace(error)
                             ? sceneError
-                            : error +
-                              " | " +
-                              sceneError;
+                            : error + " | " + sceneError;
+                    }
                 }
             }
+            catch (Exception exception)
+            {
+                succeeded = false;
+                error = string.IsNullOrWhiteSpace(error)
+                    ? exception.ToString()
+                    : error + " | " + exception;
+                Debug.LogException(exception, this);
+            }
+            finally
+            {
+                _started = false;
+                Debug.Log("VCR shutdown: end at " +
+                          stopwatch.ElapsedMilliseconds + " ms", this);
+            }
 
-            _started = false;
             return succeeded;
         }
 
