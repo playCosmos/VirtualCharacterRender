@@ -1163,61 +1163,136 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private void CleanupRuntimeResources(
             bool stopStartupCoroutine)
         {
+            var cleanupTimer =
+                System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log(
+                "VCR MediaPipe cleanup begin: startupCoroutine=" +
+                (_startupCoroutine != null) +
+                ", faceCoroutine=" + (_faceCoroutine != null) +
+                ", holisticCoroutine=" + (_holisticCoroutine != null) +
+                ", faceSource=" + (_faceSource != null) +
+                ", holisticSource=" + (_holisticSource != null) +
+                ", webcamPlaying=" +
+                (_webcam != null && _webcam.isPlaying),
+                this);
+
             if (stopStartupCoroutine &&
                 _startupCoroutine != null)
             {
-                StopCoroutine(
-                    _startupCoroutine);
+                RunCleanupStep(
+                    "startup coroutine stop",
+                    () => StopCoroutine(_startupCoroutine));
             }
 
             _startupCoroutine = null;
 
             if (_faceCoroutine != null)
             {
-                StopCoroutine(
-                    _faceCoroutine);
+                RunCleanupStep(
+                    "face coroutine stop",
+                    () => StopCoroutine(_faceCoroutine));
                 _faceCoroutine = null;
             }
 
             if (_holisticCoroutine != null)
             {
-                StopCoroutine(
-                    _holisticCoroutine);
+                RunCleanupStep(
+                    "holistic coroutine stop",
+                    () => StopCoroutine(_holisticCoroutine));
                 _holisticCoroutine = null;
             }
 
-            _faceSource?.Dispose();
-            _faceSource = null;
+            if (_faceSource != null)
+            {
+                RunCleanupStep(
+                    "FaceLandmarker native dispose",
+                    _faceSource.Dispose);
+                _faceSource = null;
+            }
 
-            _holisticSource?.Dispose();
-            _holisticSource = null;
+            if (_holisticSource != null)
+            {
+                RunCleanupStep(
+                    "HolisticLandmarker native dispose",
+                    _holisticSource.Dispose);
+                _holisticSource = null;
+            }
 
-            _faceFramePool?.Dispose();
-            _faceFramePool = null;
+            if (_faceFramePool != null)
+            {
+                RunCleanupStep(
+                    "face frame pool dispose",
+                    _faceFramePool.Dispose);
+                _faceFramePool = null;
+            }
 
-            _holisticFramePool?.Dispose();
-            _holisticFramePool = null;
+            if (_holisticFramePool != null)
+            {
+                RunCleanupStep(
+                    "holistic frame pool dispose",
+                    _holisticFramePool.Dispose);
+                _holisticFramePool = null;
+            }
 
             if (_webcam != null)
             {
-                if (_webcam.isPlaying)
+                var webcam = _webcam;
+                if (webcam.isPlaying)
                 {
-                    _webcam.Stop();
+                    RunCleanupStep(
+                        "WebCamTexture stop",
+                        webcam.Stop);
                 }
 
-                Destroy(
-                    _webcam);
+                RunCleanupStep(
+                    "WebCamTexture destroy request",
+                    () => Destroy(webcam));
                 _webcam = null;
             }
 
-            _preprocessor?.Dispose();
-            _preprocessor = null;
+            if (_preprocessor != null)
+            {
+                RunCleanupStep(
+                    "webcam preprocessor dispose",
+                    _preprocessor.Dispose);
+                _preprocessor = null;
+            }
 
             _clock.Reset();
             _latestFaceFrame = null;
             _latestBodyHandsFrame = null;
             _presenceResolver = null;
             _presence = default;
+
+            Debug.Log(
+                "VCR MediaPipe cleanup completed (" +
+                cleanupTimer.ElapsedMilliseconds + " ms)",
+                this);
+        }
+
+        private void RunCleanupStep(
+            string label,
+            Action action)
+        {
+            var timer =
+                System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR MediaPipe cleanup step begin: " + label, this);
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                throw;
+            }
+            finally
+            {
+                Debug.Log(
+                    "VCR MediaPipe cleanup step end: " + label +
+                    " (" + timer.ElapsedMilliseconds + " ms)",
+                    this);
+            }
         }
 
         private static byte[] LoadModel(
