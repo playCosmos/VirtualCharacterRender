@@ -1385,7 +1385,6 @@ namespace VCR.Editor.P6
                     lightingFailures >= 1.0,
                     "environment diagnostics must retain deliberate failed lighting attempts instead of hiding them",
                     failures);
-                    failures);
 
                 Expect(
                     TryGetMetric(
