@@ -288,7 +288,12 @@ namespace VCR.Runtime.EventRuntime.Unity
                 }
             }
 
-            if (autoFindHandlers)
+            // Explicitly configured handlers form an authoritative scope.
+            // Mixing unrelated scene-wide handlers into that set makes
+            // otherwise unambiguous transition actions fail closed.
+            if (autoFindHandlers &&
+                (actionHandlerBehaviours == null ||
+                 actionHandlerBehaviours.Length == 0))
             {
                 var behaviours =
                     FindObjectsByType<MonoBehaviour>(
