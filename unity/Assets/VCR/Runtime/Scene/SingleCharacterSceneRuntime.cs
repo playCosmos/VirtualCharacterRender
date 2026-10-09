@@ -944,10 +944,9 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
-            if (_state == SceneRuntimeState.Stopped &&
-                _capabilities == null &&
-                string.IsNullOrWhiteSpace(
-                    _lastError))
+            // Cleanup must be at-most-once even when the prior shutdown
+            // recorded an error. OnApplicationQuit and OnDestroy both run.
+            if (_state == SceneRuntimeState.Stopped)
             {
                 return;
             }
@@ -962,32 +961,16 @@ namespace VCR.Runtime.Scene
                 CancelActiveOperation,
                 failures);
 
-            var capabilities =
-                _capabilities;
-
+            var capabilities = _capabilities;
+            // Detach before invoking user/plugin disposal. Even if it throws,
+            // OnDestroy must not dispose the same service a second time.
+            _capabilities = null;
             if (capabilities != null)
             {
-                try
-                {
-                    capabilities.Dispose();
-
-                    if (ReferenceEquals(
-                            _capabilities,
-                            capabilities))
-                    {
-                        _capabilities = null;
-                    }
-                }
-                catch (Exception exception)
-                {
-                    failures.Add(
-                        "capability disposal: " +
-                        exception.Message);
-
-                    Debug.LogException(
-                        exception,
-                        this);
-                }
+                RunShutdownStep(
+                    "capability disposal",
+                    capabilities.Dispose,
+                    failures);
             }
 
             if (unloadCharacterOnShutdown &&
