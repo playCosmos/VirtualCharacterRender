@@ -668,7 +668,7 @@ namespace VCR.Runtime.UI
             panel.pivot =
                 new Vector2(0.5f, 0.5f);
             panel.sizeDelta =
-                new Vector2(900f, 650f);
+                new Vector2(980f, 700f);
 
             var panelImage =
                 panel.gameObject
@@ -743,13 +743,22 @@ namespace VCR.Runtime.UI
                 new Vector2(20f, 20f),
                 new Vector2(-20f, -66f));
 
-            var categoryRow = CreateDashboardRow(
-                body, "Settings Categories", 40f);
-            categoryRow.anchorMin = new Vector2(0f, 1f);
-            categoryRow.anchorMax = new Vector2(1f, 1f);
-            categoryRow.pivot = new Vector2(0.5f, 1f);
-            categoryRow.offsetMin = new Vector2(0f, -40f);
-            categoryRow.offsetMax = Vector2.zero;
+            var categoryRow = CreateRect("Settings Sidebar", body);
+            categoryRow.anchorMin = new Vector2(0f, 0f);
+            categoryRow.anchorMax = new Vector2(0f, 1f);
+            categoryRow.pivot = new Vector2(0f, 1f);
+            categoryRow.offsetMin = new Vector2(0f, 0f);
+            categoryRow.offsetMax = new Vector2(180f, 0f);
+            var sidebarBackground = categoryRow.gameObject.AddComponent<Image>();
+            sidebarBackground.color = new Color(0.11f, 0.13f, 0.17f, 1f);
+            var sidebarLayout = categoryRow.gameObject.AddComponent<VerticalLayoutGroup>();
+            sidebarLayout.padding = new RectOffset(8, 8, 8, 8);
+            sidebarLayout.spacing = 6f;
+            sidebarLayout.childAlignment = TextAnchor.UpperLeft;
+            sidebarLayout.childControlWidth = true;
+            sidebarLayout.childControlHeight = true;
+            sidebarLayout.childForceExpandWidth = true;
+            sidebarLayout.childForceExpandHeight = false;
 
             AddSettingsCategoryButton(categoryRow, "일반",
                 () => ShowSettingsCategory("general"));
@@ -763,7 +772,7 @@ namespace VCR.Runtime.UI
             _settingsCategoryHost = CreateRect(
                 "Settings Category Content", body);
             Stretch(_settingsCategoryHost, Vector2.zero, Vector2.one,
-                new Vector2(0f, 0f), new Vector2(0f, -50f));
+                new Vector2(192f, 0f), Vector2.zero);
             _settingsGeneralBody = CreateRect(
                 "General Settings", _settingsCategoryHost);
             Stretch(_settingsGeneralBody, Vector2.zero, Vector2.one,
@@ -912,8 +921,8 @@ namespace VCR.Runtime.UI
         {
             var button = CreateButton(label, parent, action);
             var element = button.gameObject.AddComponent<LayoutElement>();
-            element.flexibleWidth = 1f;
-            element.preferredHeight = 36f;
+            element.preferredWidth = 164f;
+            element.preferredHeight = 38f;
         }
 
         private void RestoreSettingsEmbeddedPanel()
