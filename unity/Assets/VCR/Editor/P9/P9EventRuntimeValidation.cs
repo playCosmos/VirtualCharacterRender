@@ -1619,8 +1619,15 @@ namespace VCR.Editor.P9
                     "unknown application action types must be contained and reported instead of invoking scene objects directly",
                     failures);
 
+                // The handler disallows duplicates on the same object.
+                // A child provides a distinct handler for ambiguity tests.
+                var duplicateHandlerRoot =
+                    new GameObject(
+                        "P9 Duplicate Environment Handler");
+                duplicateHandlerRoot.transform.SetParent(
+                    root.transform, false);
                 var duplicateHandler =
-                    root.AddComponent<
+                    duplicateHandlerRoot.AddComponent<
                         EnvironmentStateEventActionHandler>();
                 duplicateHandler.SetEnvironmentRuntime(
                     environment);

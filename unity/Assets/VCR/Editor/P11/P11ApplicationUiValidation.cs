@@ -37,11 +37,15 @@ namespace VCR.Editor.P11
                 failures);
 
             Expect(
-                sections.Length == 9 &&
+                sections.Length == (int)ApplicationUiSection.Count &&
                 sections[0].Section ==
                     ApplicationUiSection.Character &&
                 sections[8].Section ==
-                    ApplicationUiSection.Diagnostics,
+                    ApplicationUiSection.Diagnostics &&
+                sections[9].Section ==
+                    ApplicationUiSection.Expression &&
+                sections[10].Section ==
+                    ApplicationUiSection.Appearance,
                 "application UI section order must remain stable from Character through Diagnostics",
                 failures);
 
@@ -91,11 +95,11 @@ namespace VCR.Editor.P11
                 ApplicationUiModel.GetTitle(
                     ApplicationUiSection
                         .MotionExpression) ==
-                    "Motion / Expression" &&
+                    "모션 & 애니메이션" &&
                 ApplicationUiModel.GetTitle(
                     ApplicationUiSection
                         .CameraOutput) ==
-                    "Camera / Output",
+                    "출력",
                 "section titles must use stable user-facing labels",
                 failures);
 

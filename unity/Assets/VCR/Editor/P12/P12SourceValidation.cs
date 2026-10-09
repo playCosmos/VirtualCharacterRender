@@ -408,14 +408,28 @@ namespace VCR.Editor.P12
                     "P12 anchor authoring must reject accessory-descendant anchors that would create a transform cycle",
                     failures);
 
-                if (hatBinding != null)
+                // ConfigureBindings clones caller-owned bindings. Mutate the
+                // serialized live authoring entry, not the caller's detached copy.
+                var liveAccessoryField = typeof(BasicCharacterAppearanceRuntime)
+                    .GetField("accessories",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic);
+                var liveAccessoryBindings =
+                    liveAccessoryField?.GetValue(runtime) as AppearanceAccessoryBinding[];
+                var liveHatBinding = Array.Find(
+                    liveAccessoryBindings ?? Array.Empty<AppearanceAccessoryBinding>(),
+                    binding => binding != null &&
+                        binding.SlotId == "Head" &&
+                        binding.AccessoryId == "Hat");
+
+                if (liveHatBinding != null)
                 {
                     var validAnchor =
-                        hatBinding.AnchorTransform;
+                        liveHatBinding.AnchorTransform;
                     var validLocalPosition =
-                        hatBinding.LocalPosition;
+                        liveHatBinding.LocalPosition;
 
-                    hatBinding.AnchorTransform =
+                    liveHatBinding.AnchorTransform =
                         cycleChild;
 
                     Expect(
@@ -429,9 +443,9 @@ namespace VCR.Editor.P12
                         "appearance runtime configuration must reject descendant accessory anchors before activation",
                         failures);
 
-                    hatBinding.AnchorTransform =
+                    liveHatBinding.AnchorTransform =
                         validAnchor;
-                    hatBinding.LocalPosition =
+                    liveHatBinding.LocalPosition =
                         new Vector3(
                             float.NaN,
                             0f,
@@ -451,17 +465,17 @@ namespace VCR.Editor.P12
                     Expect(
                         !P12AppearanceAuthoringUtility
                             .TryValidateAccessoryAnchorPose(
-                                hatBinding.LocalPosition,
-                                hatBinding.LocalEulerAngles,
-                                hatBinding.OverrideLocalScale,
-                                hatBinding.LocalScale,
+                                liveHatBinding.LocalPosition,
+                                liveHatBinding.LocalEulerAngles,
+                                liveHatBinding.OverrideLocalScale,
+                                liveHatBinding.LocalScale,
                                 out var nonFiniteAuthoringError) &&
                         !string.IsNullOrWhiteSpace(
                             nonFiniteAuthoringError),
                         "P12 accessory authoring validation must reject non-finite local pose input before preview",
                         failures);
 
-                    hatBinding.LocalPosition =
+                    liveHatBinding.LocalPosition =
                         validLocalPosition;
 
                     Expect(
@@ -2870,15 +2884,14 @@ namespace VCR.Editor.P12
                             }
                     });
 
+                var sharedRootError = handler.LastError;
                 Expect(
-                    !handler.RebuildBindings(
-                        out var sharedRootError) &&
                     sharedRootError != null &&
                     sharedRootError.IndexOf(
                         "shared",
-                        StringComparison.OrdinalIgnoreCase) >=
-                        0,
-                    "P12 prop bindings must reject the same GameObject root being owned by multiple logical prop ids",
+                        StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    handler.RebuildBindings(out _),
+                    "P12 prop bindings must reject shared GameObject ownership while preserving the last valid registry",
                     failures);
             }
             catch (Exception exception)
@@ -3133,9 +3146,9 @@ namespace VCR.Editor.P12
                     effectRebuildError,
                     failures);
 
-                var propSnapshot =
-                    EditorJsonUtility.ToJson(
-                        propHandler);
+                // The Editor JSON snapshot cannot round-trip references
+                // to transient scene GameObjects. Preserve the authored
+                // SerializedProperty array itself for rollback.
                 props.InsertArrayElementAtIndex(
                     0);
                 propSerialized
@@ -3152,12 +3165,11 @@ namespace VCR.Editor.P12
                     "P12 Scene Automation authoring must reject duplicate logical prop ids",
                     failures);
 
-                EditorJsonUtility.FromJsonOverwrite(
-                    propSnapshot,
-                    propHandler);
-                propSerialized =
-                    new SerializedObject(
-                        propHandler);
+                propSerialized.Update();
+                props = propSerialized.FindProperty("props");
+                props.DeleteArrayElementAtIndex(0);
+                propSerialized.ApplyModifiedProperties();
+                propSerialized = new SerializedObject(propHandler);
 
                 Expect(
                     propHandler.RebuildBindings(
@@ -3203,9 +3215,9 @@ namespace VCR.Editor.P12
                     restoredEffectError,
                     failures);
 
-                var environmentSnapshot =
-                    EditorJsonUtility.ToJson(
-                        environment);
+                // Store the actual serialized state name, not a JSON
+                // snapshot that loses temporary scene object references.
+                var originalSecondStateId = "night";
                 environmentSerialized.Update();
                 states =
                     environmentSerialized.FindProperty(
@@ -3230,12 +3242,13 @@ namespace VCR.Editor.P12
                     "P12 Scene Automation authoring must reject duplicate environment state ids",
                     failures);
 
-                EditorJsonUtility.FromJsonOverwrite(
-                    environmentSnapshot,
-                    environment);
-                environmentSerialized =
-                    new SerializedObject(
-                        environment);
+                environmentSerialized.Update();
+                states = environmentSerialized.FindProperty("stateBindings");
+                states.GetArrayElementAtIndex(1)
+                    .FindPropertyRelative("stateId")
+                    .stringValue = originalSecondStateId;
+                environmentSerialized.ApplyModifiedProperties();
+                environmentSerialized = new SerializedObject(environment);
 
                 Expect(
                     environment.RebuildStateBindings(
@@ -3821,16 +3834,14 @@ namespace VCR.Editor.P12
                             }
                     });
 
+                var duplicateError = handler.LastError;
                 Expect(
-                    !handler.RebuildBindings(
-                        out var duplicateError) &&
                     duplicateError != null &&
                     duplicateError.IndexOf(
                         "duplicate",
-                        StringComparison.OrdinalIgnoreCase) >=
-                        0 &&
-                    handler.CanTrackCompletion(
-                        playCommand),
+                        StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    handler.RebuildBindings(out _) &&
+                    handler.CanTrackCompletion(playCommand),
                     "P12 timed scene sequence must reject duplicate sequence ids without discarding the previously valid runtime registry",
                     failures);
 
@@ -3868,14 +3879,13 @@ namespace VCR.Editor.P12
                             }
                     });
 
+                var timeError = handler.LastError;
                 Expect(
-                    !handler.RebuildBindings(
-                        out var timeError) &&
                     timeError != null &&
                     timeError.IndexOf(
                         "non-decreasing",
-                        StringComparison.OrdinalIgnoreCase) >=
-                        0,
+                        StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    handler.RebuildBindings(out _),
                     "P12 timed scene sequence must reject decreasing step times",
                     failures);
 
@@ -3900,14 +3910,13 @@ namespace VCR.Editor.P12
                             }
                     });
 
+                var recursiveError = handler.LastError;
                 Expect(
-                    !handler.RebuildBindings(
-                        out var recursiveError) &&
                     recursiveError != null &&
                     recursiveError.IndexOf(
                         "recursively",
-                        StringComparison.OrdinalIgnoreCase) >=
-                        0,
+                        StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    handler.RebuildBindings(out _),
                     "P12 timed scene sequence must reject recursive scene.sequence actions",
                     failures);
 
@@ -3947,14 +3956,13 @@ namespace VCR.Editor.P12
                             }
                     });
 
+                var cleanupTimeError = handler.LastError;
                 Expect(
-                    !handler.RebuildBindings(
-                        out var cleanupTimeError) &&
                     cleanupTimeError != null &&
                     cleanupTimeError.IndexOf(
                         "time 0",
-                        StringComparison.OrdinalIgnoreCase) >=
-                        0,
+                        StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    handler.RebuildBindings(out _),
                     "P12 timed scene sequence cancellation cleanup must be immediate",
                     failures);
 

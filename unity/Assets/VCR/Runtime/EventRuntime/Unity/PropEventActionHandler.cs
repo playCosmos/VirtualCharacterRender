@@ -162,6 +162,15 @@ namespace VCR.Runtime.EventRuntime.Unity
 
                 var id =
                     binding.PropId.Trim();
+                // Duplicate logical IDs take precedence over shared-root
+                // diagnostics when a serialized array duplicates an entry.
+                // This preserves a deterministic editor validation error.
+                if (resolved.ContainsKey(id))
+                {
+                    error = $"Duplicate prop id '{id}'.";
+                    return false;
+                }
+
                 var roots =
                     binding.Roots;
 

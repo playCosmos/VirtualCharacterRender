@@ -1271,6 +1271,24 @@ namespace VCR.Runtime.Scene
             if (!CanRetryOptionalServiceDiscovery(
                     ref _nextEnvironmentRuntimeResolveAt))
             {
+                // A replacement on this GameObject is not a scene-wide
+                // discovery and should not wait for the backoff timer.
+                _optionalServiceBehaviourScratch.Clear();
+                GetComponents<MonoBehaviour>(
+                    _optionalServiceBehaviourScratch);
+                foreach (var behaviour in _optionalServiceBehaviourScratch)
+                {
+                    if (behaviour != null &&
+                        behaviour is IEnvironmentRuntime localRuntime)
+                    {
+                        environmentRuntimeBehaviour = behaviour;
+                        _environmentRuntime = localRuntime;
+                        _nextEnvironmentRuntimeResolveAt = 0d;
+                        break;
+                    }
+                }
+
+                _optionalServiceBehaviourScratch.Clear();
                 return;
             }
 
@@ -1326,6 +1344,25 @@ namespace VCR.Runtime.Scene
             if (!CanRetryOptionalServiceDiscovery(
                     ref _nextOverlayOutputResolveAt))
             {
+                // Locally replaced adapters must be visible immediately;
+                // the one-second backoff only throttles scene-wide searches.
+                _optionalServiceBehaviourScratch.Clear();
+                GetComponents<MonoBehaviour>(
+                    _optionalServiceBehaviourScratch);
+                foreach (var behaviour in _optionalServiceBehaviourScratch)
+                {
+                    if (behaviour != null &&
+                        behaviour is IOverlayOutputAdapter localAdapter)
+                    {
+                        overlayOutputBehaviour = behaviour;
+                        _overlayOutput = localAdapter;
+                        _nextOverlayOutputResolveAt = 0d;
+                        TrySyncOverlayConfiguration(localAdapter);
+                        break;
+                    }
+                }
+
+                _optionalServiceBehaviourScratch.Clear();
                 return;
             }
 

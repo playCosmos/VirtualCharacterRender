@@ -10,8 +10,10 @@ namespace VCR.Editor.P0
 {
     public static class P0PackageBaselineCheck
     {
+        // The reproducible baseline resolves the locally patched,
+        // commit-pinned UniWinC package installed by bootstrap-uniwinc.sh.
         private const string UniWinCManifestPin =
-            "https://github.com/kirurobo/UniWindowController.git?path=/UniWinC/Assets/Kirurobo/UniWindowController#v0.9.8";
+            "\"com.kirurobo.uniwinc\": \"file:LocalPackages/com.kirurobo.uniwinc\"";
         private static readonly IReadOnlyDictionary<string, string> Expected =
             new Dictionary<string, string>
             {
@@ -45,7 +47,7 @@ namespace VCR.Editor.P0
                 StringComparison.Ordinal))
             {
                 failures.Add(
-                    "UniWindowController must be pinned to the v0.9.8 UPM subfolder URL.");
+                    "UniWindowController must resolve through the pinned local package installed by tools/bootstrap-uniwinc.sh.");
             }
         }
 

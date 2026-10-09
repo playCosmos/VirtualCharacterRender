@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using VCR.Runtime.Output;
 
-namespace VCR.Editor.P1
+namespace VCR.Runtime.ValidationFixtures
 {
     public sealed class P1TestOverlayOutputAdapter :
         MonoBehaviour,

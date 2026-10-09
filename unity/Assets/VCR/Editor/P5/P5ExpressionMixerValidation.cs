@@ -460,6 +460,15 @@ namespace VCR.Editor.P5
                 positionWeight: 0.5f,
                 rotationWeight: 0f);
 
+            // Configure snapshots the caller mask into RuntimeMask.
+            // Reconfigure after mutation to exercise the intended root weights.
+            settings.Configure(
+                layerEnabled: true,
+                layerRole: MotionLayerRole.Additive,
+                mode: HumanoidPoseBlendMode.Additive,
+                layerWeight: 0.5f,
+                layerMask: mask);
+
             var rootLayerPose =
                 CreateTwoBonePose(
                     HumanoidPoseSpace.NormalizedLocal,

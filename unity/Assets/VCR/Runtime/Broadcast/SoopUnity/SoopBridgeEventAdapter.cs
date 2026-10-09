@@ -393,6 +393,24 @@ namespace VCR.Runtime.Broadcast.SoopUnity
                     0.1f,
                     autoFindRetrySeconds);
 
+            // An adapter with a destroyed explicitly configured sink
+            // must first recover to a replacement on its own GameObject,
+            // not an unrelated sink elsewhere in the Editor scene.
+            var localBehaviours =
+                GetComponents<MonoBehaviour>();
+            foreach (var behaviour in localBehaviours)
+            {
+                if (behaviour != null &&
+                    !ReferenceEquals(behaviour, this) &&
+                    behaviour is INormalizedEventSink localSink)
+                {
+                    _sink = localSink;
+                    eventSinkBehaviour = behaviour;
+                    _nextSinkResolveRealtime = 0f;
+                    return;
+                }
+            }
+
             var behaviours =
                 FindObjectsByType<MonoBehaviour>(
                     FindObjectsInactive.Exclude,

@@ -12,6 +12,7 @@ using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.ValidationFixtures;
 
 namespace VCR.Editor.P1
 {
@@ -43,6 +44,8 @@ namespace VCR.Editor.P1
             {
                 root = new GameObject(
                     "VCR P1 Renderer Core Validation");
+                // Assemble the fixture before any Awake-driven initialization.
+                root.SetActive(false);
 
                 var characterRoot =
                     new GameObject("Character");
@@ -758,6 +761,7 @@ namespace VCR.Editor.P1
                 configuration.EnvironmentStateId =
                     "configured";
 
+                var beforeSceneConfigApplyCount = outputAdapter.ApplyCount;
                 scene.ApplyConfiguration(
                     configuration);
 
@@ -807,7 +811,8 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    outputAdapter.ApplyCount == 1 &&
+                    outputAdapter.ApplyCount ==
+                        beforeSceneConfigApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
                     outputAdapter.LastSettings.Topmost &&
                     !outputAdapter.LastSettings.ClickThrough,
@@ -832,6 +837,7 @@ namespace VCR.Editor.P1
                         topmost: false,
                         clickThrough: true);
 
+                var beforeOverlayChangeApplyCount = outputAdapter.ApplyCount;
                 scene.ApplyOverlayOutput(
                     outputSettings);
 
@@ -839,7 +845,8 @@ namespace VCR.Editor.P1
                     scene.CaptureConfiguration().Overlay;
 
                 Expect(
-                    outputAdapter.ApplyCount == 2 &&
+                    outputAdapter.ApplyCount ==
+                        beforeOverlayChangeApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
                     !outputAdapter.LastSettings.Topmost &&
                     outputAdapter.LastSettings.ClickThrough &&
@@ -849,6 +856,7 @@ namespace VCR.Editor.P1
                     "individual overlay changes must update both adapter and configuration snapshot",
                     failures);
 
+                var beforeFailedOverlayApplyCount = outputAdapter.ApplyCount;
                 outputAdapter.ThrowOnApply =
                     true;
                 var overlayApplyFailed = false;
@@ -876,7 +884,8 @@ namespace VCR.Editor.P1
 
                 Expect(
                     overlayApplyFailed &&
-                    outputAdapter.ApplyCount == 2 &&
+                    outputAdapter.ApplyCount ==
+                        beforeFailedOverlayApplyCount &&
                     overlayAfterFailedApply.Transparent &&
                     !overlayAfterFailedApply.Topmost &&
                     overlayAfterFailedApply.ClickThrough,
@@ -1109,11 +1118,13 @@ namespace VCR.Editor.P1
                     "configuration store must reject unsupported future versions",
                     failures);
 
+                var beforeSuspendShutdownCount = outputAdapter.ShutdownCount;
                 Expect(
                     scene.Suspend() &&
                     scene.State ==
                     SceneRuntimeState.Suspended &&
-                    outputAdapter.ShutdownCount == 1 &&
+                    outputAdapter.ShutdownCount ==
+                        beforeSuspendShutdownCount + 1 &&
                     capabilityDisposeCount == 0 &&
                     capabilities != null &&
                     capabilities.EnabledCount == 3,
@@ -1168,11 +1179,13 @@ namespace VCR.Editor.P1
                     "TryApplyBroadcastCaptureTarget must report lifecycle rejection through false/error instead of throwing or mutating the suspended scene",
                     failures);
 
+                var beforeResumeApplyCount = outputAdapter.ApplyCount;
                 Expect(
                     scene.Resume() &&
                     scene.State ==
                     SceneRuntimeState.Ready &&
-                    outputAdapter.ApplyCount == 3 &&
+                    outputAdapter.ApplyCount ==
+                        beforeResumeApplyCount + 1 &&
                     capabilityDisposeCount == 0,
                     "resume must restore scene presentation without recreating capabilities",
                     failures);
@@ -1206,6 +1219,7 @@ namespace VCR.Editor.P1
                     "basic environment runtime",
                     failures);
 
+                var beforeShutdownOutputCount = outputAdapter.ShutdownCount;
                 scene.Shutdown();
 
                 Expect(
@@ -1215,7 +1229,8 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    outputAdapter.ShutdownCount == 2,
+                    outputAdapter.ShutdownCount ==
+                        beforeShutdownOutputCount + 1,
                     "scene shutdown must shut down the overlay output adapter after the earlier suspend cycle",
                     failures);
 
@@ -1973,14 +1988,21 @@ namespace VCR.Editor.P1
                 poseTarget.SetTrackingProvider(
                     staleProvider);
 
+                // Current target caches immutable frame identities, not
+                // the retired per-domain sequence counters.
                 SetPrivateField(
                     faceTarget,
-                    "_lastFaceSequence",
-                    7L);
-                SetPrivateField(
-                    faceTarget,
-                    "_lastBodySequence",
-                    11L);
+                    "_lastFaceFrame",
+                    new TrackingFrame(
+                        7L,
+                        10L,
+                        TrackingRegion.Face,
+                        1f,
+                        true,
+                        face: new NormalizedFaceState(
+                            TrackingQuaternion.Identity,
+                            TrackingVector3.Zero,
+                            new float[(int)FaceCoefficient.Count])));
 
                 UnityEngine.Object.DestroyImmediate(
                     provider);
@@ -1999,13 +2021,13 @@ namespace VCR.Editor.P1
                         NormalizedFaceState>(
                             faceTarget,
                             "_latestFace") == null &&
-                    GetPrivateField<long>(
+                    GetPrivateField<TrackingFrame>(
                         faceTarget,
-                        "_lastFaceSequence") == -1 &&
-                    GetPrivateField<long>(
+                        "_lastFaceFrame") == null &&
+                    GetPrivateField<TrackingFrame>(
                         faceTarget,
-                        "_lastBodySequence") == -1,
-                    "VRM face/body target must clear a destroyed tracking provider, stale snapshots, and child-sequence caches before bounded rediscovery",
+                        "_lastBodyFrame") == null,
+                    "VRM face/body target must clear a destroyed tracking provider, stale snapshots, and frame-identity caches before bounded rediscovery",
                     failures);
 
                 Expect(
@@ -2187,8 +2209,10 @@ namespace VCR.Editor.P1
                     return;
                 }
 
-                _disposed = true;
+                // A failed disposal must remain retryable by the registry.
+                // Mark success only after the callback completes.
                 _onDispose?.Invoke();
+                _disposed = true;
             }
         }
 
