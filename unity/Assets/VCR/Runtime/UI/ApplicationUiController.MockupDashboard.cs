@@ -930,6 +930,8 @@ namespace VCR.Runtime.UI
             var characterPage = _settingsPages["character"];
             var characterFileRow = CreateDashboardRow(
                 characterPage, "Settings VRM Path Row", 42f);
+            // Show the path before the load action, not beneath it.
+            characterFileRow.SetSiblingIndex(2);
             _settingsCharacterPathInput = CreateInputField(
                 "Settings VRM Path", characterFileRow, "VRM 파일 경로");
             _settingsCharacterPathInput.gameObject
