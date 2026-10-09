@@ -1,0 +1,87 @@
+name: Capture pinned Unity reproducibility baseline
+
+on:
+  push:
+    branches:
+      - fix/unity-reproducibility-baseline
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unity-baseline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Generate and commit Unity-owned project files
+    if: github.ref == 'refs/heads/fix/unity-reproducibility-baseline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout source without history truncation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Unity editor pin and source state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          test ! -e unity/Library
+      - name: Bootstrap verified MediaPipe and models
+        run: bash tools/bootstrap-mediapipe.sh
+      - name: Bootstrap UI font
+        run: bash tools/bootstrap-ui-fonts.sh
+      - name: Bootstrap pinned Ultraleap
+        run: bash tools/bootstrap-ultraleap.sh
+      - name: Bootstrap patched pinned UniWinC
+        run: bash tools/bootstrap-uniwinc.sh
+      - name: Open Unity and compile player to generate project evidence
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+          versioning: None
+          allowDirtyBuild: true
+      - name: Verify actual Unity-generated files and strict repository gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Packages/packages-lock.json
+          test -s unity/ProjectSettings/ProjectSettings.asset
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          git status --short
+      - name: Preserve generated files as review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-6000.3.25f1-generated-reproducibility-files
+          path: |
+            unity/Packages/packages-lock.json
+            unity/ProjectSettings/ProjectSettings.asset
+          if-no-files-found: error
+          retention-days: 30
+      - name: Commit only Unity-generated reproducibility files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset
+          if git diff --cached --quiet; then
+            echo "No reproducibility file drift; already committed."
+            exit 0
+          fi
+          test "$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)" = "$GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --cached --stat
+          git commit -m "chore(unity): commit Unity 6000.3.25f1 generated reproducibility baseline"
+          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
