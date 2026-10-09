@@ -10,7 +10,7 @@ namespace VCR.Editor.P11
     internal static class P11ExternalMotionImportValidation
     {
         private const string SourceAssetPath =
-            "Assets/VCR/Editor/P11/__ExternalMotionValidation.anim";
+            "Assets/VCR/Editor/P11/ExternalMotionValidation.anim";
         private const string ImportFolder =
             "Assets/VCR/Editor/P11/__ExternalMotionValidationImported";
         private const string RollbackFolder =
@@ -155,6 +155,7 @@ namespace VCR.Editor.P11
                         "external motion import must resolve normalized/seconds sidecar markers and apply them to the standalone clip: " +
                         markerError + "; count=" + (importResult == null ? -1 : importResult.ImportedMarkerCount) +
                         "; extracted=" + markersExtracted +
+                        "; sourceName=" + sourceClip.name + "; importedClipName=" + importResult.Clips[0].name +
                         "; actual=[" + string.Join(", ", Array.ConvertAll(importedMarkers, m => m.Name + "@" + m.TimeSeconds.ToString("0.###"))) + "]",
                         failures);
                 }
