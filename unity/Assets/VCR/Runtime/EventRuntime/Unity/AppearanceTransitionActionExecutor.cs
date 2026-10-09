@@ -293,8 +293,24 @@ namespace VCR.Runtime.EventRuntime.Unity
             // otherwise unambiguous transition actions fail closed.
             if (autoFindHandlers &&
                 (actionHandlerBehaviours == null ||
-                 actionHandlerBehaviours.Length == 0))
+                 actionHandlerBehaviours.Length == 0 ||
+                 list.Count == 0))
             {
+                // When explicitly configured handlers are destroyed, recover
+                // a live handler on this GameObject before searching the scene.
+                var localBehaviours = GetComponents<MonoBehaviour>();
+                foreach (var behaviour in localBehaviours)
+                {
+                    if (behaviour != null &&
+                        behaviour is IEventActionHandler localHandler &&
+                        !list.Contains(localHandler))
+                    {
+                        list.Add(localHandler);
+                    }
+                }
+
+                if (list.Count == 0)
+                {
                 var behaviours =
                     FindObjectsByType<MonoBehaviour>(
                         FindObjectsInactive.Exclude,
@@ -310,6 +326,7 @@ namespace VCR.Runtime.EventRuntime.Unity
                     }
 
                     list.Add(handler);
+                }
                 }
             }
 

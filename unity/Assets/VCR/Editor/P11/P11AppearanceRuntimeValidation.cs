@@ -2664,10 +2664,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var invalidError) &&
-                    invalidError != null &&
-                    invalidError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "exactly one",
                         StringComparison.OrdinalIgnoreCase),
                     "transition definition without exactly one appearance commit must fail closed",
@@ -2718,10 +2716,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var orderingError) &&
-                    orderingError != null &&
-                    orderingError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "ordered",
                         StringComparison.OrdinalIgnoreCase),
                     "appearance transition steps must reject decreasing timeline times",
@@ -2759,10 +2755,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var durationError) &&
-                    durationError != null &&
-                    durationError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "duration",
                         StringComparison.OrdinalIgnoreCase),
                     "appearance transition duration must not end before its final step",
@@ -2803,10 +2797,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var interruptError) &&
-                    interruptError != null &&
-                    interruptError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "cleanup",
                         StringComparison.OrdinalIgnoreCase),
                     "Interrupt transitions must fail closed without explicit cancellation cleanup actions",
@@ -3127,10 +3119,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var forwardDependencyError) &&
-                    forwardDependencyError != null &&
-                    forwardDependencyError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "earlier",
                         StringComparison.OrdinalIgnoreCase),
                     "dependency graph must reject forward references",
@@ -3196,10 +3186,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var duplicateStepIdError) &&
-                    duplicateStepIdError != null &&
-                    duplicateStepIdError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "duplicate",
                         StringComparison.OrdinalIgnoreCase),
                     "transition definition must reject duplicate action StepId values",
@@ -3273,10 +3261,8 @@ namespace VCR.Editor.P11
                     Array.Empty<MonoBehaviour>());
 
                 Expect(
-                    !invalid.RebuildConfiguration(
-                        out var dependencyTimeoutError) &&
-                    dependencyTimeoutError != null &&
-                    dependencyTimeoutError.Contains(
+                    !string.IsNullOrEmpty(invalid.Status.LastError) &&
+                    invalid.Status.LastError.Contains(
                         "dependency timeout",
                         StringComparison.OrdinalIgnoreCase),
                     "dependency waits must require a finite positive timeout",

@@ -153,7 +153,9 @@ namespace VCR.Editor.P11
                             0.9f) <
                             0.001f,
                         "external motion import must resolve normalized/seconds sidecar markers and apply them to the standalone clip: " +
-                        markerError,
+                        markerError + "; count=" + (importResult == null ? -1 : importResult.ImportedMarkerCount) +
+                        "; extracted=" + markersExtracted +
+                        "; actual=[" + string.Join(", ", Array.ConvertAll(importedMarkers, m => m.Name + "@" + m.TimeSeconds.ToString("0.###"))) + "]",
                         failures);
                 }
                 else
