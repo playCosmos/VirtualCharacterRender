@@ -1775,8 +1775,15 @@ namespace VCR.Editor.P11
                 var throwingAction =
                     root.AddComponent<
                         P11ThrowingTransitionActionHandler>();
+                // Separate object: the executor is a
+                // DisallowMultipleComponent MonoBehaviour.
+                var throwingExecutorRoot =
+                    new GameObject(
+                        "P11 Throwing Action Executor");
+                throwingExecutorRoot.transform.SetParent(
+                    root.transform, false);
                 var throwingActionExecutor =
-                    root.AddComponent<
+                    throwingExecutorRoot.AddComponent<
                         AppearanceTransitionActionExecutor>();
                 throwingActionExecutor.SetActionHandlers(
                     throwingAction);

@@ -1973,14 +1973,21 @@ namespace VCR.Editor.P1
                 poseTarget.SetTrackingProvider(
                     staleProvider);
 
+                // Current target caches immutable frame identities, not
+                // the retired per-domain sequence counters.
                 SetPrivateField(
                     faceTarget,
-                    "_lastFaceSequence",
-                    7L);
-                SetPrivateField(
-                    faceTarget,
-                    "_lastBodySequence",
-                    11L);
+                    "_lastFaceFrame",
+                    new TrackingFrame(
+                        7L,
+                        10L,
+                        TrackingRegion.Face,
+                        1f,
+                        true,
+                        face: new NormalizedFaceState(
+                            TrackingQuaternion.Identity,
+                            TrackingVector3.Zero,
+                            new float[(int)FaceCoefficient.Count])));
 
                 UnityEngine.Object.DestroyImmediate(
                     provider);
@@ -1999,13 +2006,13 @@ namespace VCR.Editor.P1
                         NormalizedFaceState>(
                             faceTarget,
                             "_latestFace") == null &&
-                    GetPrivateField<long>(
+                    GetPrivateField<TrackingFrame>(
                         faceTarget,
-                        "_lastFaceSequence") == -1 &&
-                    GetPrivateField<long>(
+                        "_lastFaceFrame") == null &&
+                    GetPrivateField<TrackingFrame>(
                         faceTarget,
-                        "_lastBodySequence") == -1,
-                    "VRM face/body target must clear a destroyed tracking provider, stale snapshots, and child-sequence caches before bounded rediscovery",
+                        "_lastBodyFrame") == null,
+                    "VRM face/body target must clear a destroyed tracking provider, stale snapshots, and frame-identity caches before bounded rediscovery",
                     failures);
 
                 Expect(
