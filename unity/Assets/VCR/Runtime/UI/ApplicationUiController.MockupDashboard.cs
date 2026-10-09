@@ -24,6 +24,7 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<string, RectTransform> _settingsPages =
             new(StringComparer.OrdinalIgnoreCase);
         private RectTransform _settingsTrackingDevices;
+        private InputField _settingsCharacterPathInput;
 
         private RectTransform _dashboardCharacterInspector;
         private Text _dashboardModelNameText;
@@ -922,17 +923,23 @@ namespace VCR.Runtime.UI
         private void BuildSettingsDetailPages()
         {
             AddSettingsDetailPage("character", "캐릭터 / 모델",
-                "마지막에 성공적으로 로드한 VRM은 다음 실행 시 자동 복원됩니다.",
-                "모델 선택 및 관리",
-                () =>
-                {
-                    CloseSettingsModal();
-                    if (_dashboardCharacterInspector != null &&
-                        !_dashboardCharacterInspector.gameObject.activeSelf)
-                    {
-                        ToggleDashboardCharacterInspector();
-                    }
-                });
+                "성공적으로 불러온 모델은 다음 실행에서 자동 복원됩니다. 모델 해제를 누르면 자동 복원 대상도 지워집니다.",
+                "선택한 VRM 불러오기",
+                ApplySettingsCharacterPath);
+
+            var characterPage = _settingsPages["character"];
+            var characterFileRow = CreateDashboardRow(
+                characterPage, "Settings VRM Path Row", 42f);
+            _settingsCharacterPathInput = CreateInputField(
+                "Settings VRM Path", characterFileRow, "VRM 파일 경로");
+            _settingsCharacterPathInput.gameObject
+                .AddComponent<LayoutElement>().flexibleWidth = 1f;
+            AddSettingsAction(characterPage, "파일 선택…",
+                BrowseCharacterFile);
+            AddSettingsAction(characterPage, "현재 모델 다시 불러오기",
+                ReloadCharacter);
+            AddSettingsAction(characterPage, "모델 해제 및 자동 복원 해제",
+                UnloadCharacter);
 
             AddSettingsDetailPage("tracking", "트래킹",
                 "입력 장치별 상세 설정입니다. 퀵패널의 연결 상태 및 소스 전환과 별도로 관리합니다.",
@@ -992,6 +999,19 @@ namespace VCR.Runtime.UI
             page.gameObject.SetActive(false);
         }
 
+        private void ApplySettingsCharacterPath()
+        {
+            if (_settingsCharacterPathInput == null ||
+                _characterPathInput == null)
+            {
+                return;
+            }
+
+            _characterPathInput.text =
+                _settingsCharacterPathInput.text;
+            LoadCharacterFromPath();
+        }
+
         private void AddSettingsAction(
             Transform parent, string title, Action action)
         {
@@ -1048,6 +1068,16 @@ namespace VCR.Runtime.UI
             if (category == "tracking")
             {
                 RebuildSettingsTrackingDevices();
+            }
+            else if (category == "character" &&
+                     _settingsCharacterPathInput != null)
+            {
+                _settingsCharacterPathInput.SetTextWithoutNotify(
+                    _characterPathInput != null
+                        ? _characterPathInput.text
+                        : PlayerPrefs.GetString(
+                            "VCR.Character.LastSuccessfulPath.v1",
+                            string.Empty));
             }
             _settingsGeneralBody.gameObject.SetActive(category == "general");
             foreach (var entry in _settingsPages)
