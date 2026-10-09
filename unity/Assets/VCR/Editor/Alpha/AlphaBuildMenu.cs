@@ -22,6 +22,18 @@ namespace VCR.Editor.Alpha
                     "VCR_RELEASE_VERSION");
                 if (string.IsNullOrEmpty(configured))
                 {
+                    // game-ci may start Unity in a nested container without
+                    // forwarding custom job environment variables.
+                    var versionFile = ResolveRepositoryOutputPath(
+                        "Builds/Alpha/release-version.txt");
+                    if (File.Exists(versionFile))
+                    {
+                        configured = File.ReadAllText(versionFile).Trim();
+                    }
+                }
+
+                if (string.IsNullOrEmpty(configured))
+                {
                     return DefaultVersion;
                 }
 

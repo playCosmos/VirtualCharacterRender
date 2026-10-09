@@ -20,6 +20,7 @@ checks = {
     "source-proof artifact verified": '.source-sha' in workflow,
     "provenance published": 'build-provenance.json' in workflow,
     "overwrite options forbidden": '--clobber' not in workflow and '-F force=true' not in workflow,
+    "version file survives Unity builder container boundary": "Builds/Alpha/release-version.txt" in workflow and "Builds/Alpha/release-version.txt" in builder,
     "version supplied by tag to Unity": 'VCR_RELEASE_VERSION:' in workflow and 'VCR_RELEASE_VERSION' in builder,
     "local build and run scripts support same version": "$env:VCR_RELEASE_VERSION = $AlphaVersion" in local_build and "[string]$AlphaVersion" in local_run,
     "release depends on both builds": 'needs: [preflight, build]' in workflow,

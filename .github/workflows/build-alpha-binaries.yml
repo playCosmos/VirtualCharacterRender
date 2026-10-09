@@ -76,6 +76,11 @@ jobs:
       - name: Verify source SHA
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Bind version for Unity runner, even when container env is filtered
+        shell: bash
+        run: |
+          mkdir -p Builds/Alpha
+          printf '%s\n' "$VCR_RELEASE_VERSION" > Builds/Alpha/release-version.txt
       - name: Bootstrap pinned MediaPipe package and models
         run: bash ./tools/bootstrap-mediapipe.sh
       - name: Bootstrap pinned Pretendard UI font
