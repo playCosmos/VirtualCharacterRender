@@ -8,6 +8,7 @@ namespace VCR.Runtime.Tracking
         Vmc = 3,
         AudioFallback = 4,
         MediaPipeFaceWebcam = 5,
+        UltraleapHands = 6,
         ExternalPlugin = 100
     }
 }

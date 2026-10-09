@@ -18,6 +18,7 @@ namespace VCR.Runtime.Tracking.Mixing
     public sealed class MotionExpressionMixer :
         MonoBehaviour,
         ITrackingMixProvider,
+        ITrackingHandFrameProvider,
         IRuntimeMetricsSource
     {
         [Header("Inputs")]
@@ -425,6 +426,21 @@ namespace VCR.Runtime.Tracking.Mixing
             return _routedProvider
                 .TryGetLatestBodyHands(
                     out frame);
+        }
+
+        public bool TryGetLatestHands(
+            out TrackingFrame frame)
+        {
+            if (!IsServiceAlive(_routedProvider) ||
+                _routedProvider is not
+                    ITrackingHandFrameProvider hands)
+            {
+                frame = null;
+                return false;
+            }
+
+            return hands.TryGetLatestHands(
+                out frame);
         }
 
         public bool TryGetLatestHumanoidPose(

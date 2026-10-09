@@ -40,10 +40,12 @@ Preferred mixed configuration:
 
 ```text
 Face / Eyes / Mouth / Head = ARKit
-Hands / Upper Body         = MediaPipe Holistic webcam path
+Hands / Fingers / Wrists   = Ultraleap when enabled and healthy
+Upper Body                 = MediaPipe Holistic webcam path
+Hand fallback              = MediaPipe Holistic webcam path
 ```
 
-Fallback without ARKit:
+Fallback without Ultraleap keeps hands on MediaPipe. Fallback without ARKit:
 
 ```text
 Face / Eyes / Mouth / Head = MediaPipe FaceLandmarker
@@ -175,7 +177,35 @@ A short transition/cross-fade should avoid visible pose snapping.
 
 The P0 `PriorityTrackingRouter` implements this region priority. While ARKit face is stably present it stops the MediaPipe FaceLandmarker through `IFaceTrackingActivationControl`; Holistic hands/upper body remain active. When ARKit is unavailable, MediaPipe face inference restarts automatically.
 
+The router also has an optional preferred-hands slot. When Ultraleap is enabled and healthy, its hand frame is exposed through the hand-only route while MediaPipe continues to own the allocation-free body/hands frame used by the current upper-body target. If Ultraleap becomes unavailable, the hand-only route falls back to the MediaPipe frame. This keeps the router hot path allocation-free and preserves child-frame identity.
+
 Frames carry `SourceId`, allowing the VRM target to recalibrate only the region whose source changed.
+
+## Ultraleap hand tracking
+
+Ultraleap is an optional hand-specialist input, not a replacement for the webcam/ARKit stack.
+
+The runtime path is:
+
+```text
+Leap Motion / Ultraleap hardware
+   ↓ Ultraleap Tracking Service
+LeapServiceProvider
+   ↓
+UltraleapTrackingRunner
+   ↓
+NormalizedHandState (21 joints per hand)
+   ↓
+PriorityTrackingRouter preferred-hands slot
+   ↓
+MediaPipe upper body + Ultraleap hands
+```
+
+The Unity dependency is pinned to Ultraleap Tracking 7.3.0. The adapter uses an explicit Tracking Service IP/port configuration; the default is `127.0.0.1:12345`, including on macOS, so the application does not depend on the package's platform-specific default service namespace/port behavior.
+
+The input-source UI exposes Ultraleap through the same add/enable/settings flow as MediaPipe, ARKit, and VMC. Configuration currently includes Desktop/Screentop tracking mode, Tracking Service endpoint, and device-space position/rotation offsets.
+
+Normalized hand landmarks are now independently routed with Ultraleap priority and MediaPipe fallback. Finger-bone retargeting remains a separate character-output stage; the current VRM target still preserves normalized hand data without applying finger bones.
 
 ## Audio fallback
 

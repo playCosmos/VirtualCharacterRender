@@ -27,6 +27,7 @@ namespace VCR.Runtime.Tracking.MediaPipe
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
         ITrackingRuntimeControl,
+        ITrackingRuntimeConfigurable,
         IFaceTrackingActivationControl,
         IRuntimeMetricsSource
     {
@@ -124,6 +125,134 @@ namespace VCR.Runtime.Tracking.MediaPipe
                     TrackingSourceHealthState.Stopped
             };
         public string ControlError => _lastError;
+
+        public string ConfigurationTitle =>
+            "MediaPipe 웹캠 설정";
+        public bool OpenConfigurationOnAdd => true;
+
+        public IReadOnlyList<TrackingRuntimeSetting>
+            GetConfigurationSettings()
+        {
+            return new[]
+            {
+                new TrackingRuntimeSetting(
+                    "device",
+                    "카메라",
+                    deviceName,
+                    "비우면 기본 카메라",
+                    "Unity 웹캠 장치 이름. 비워두면 첫 번째 사용 가능한 카메라를 사용합니다."),
+                new TrackingRuntimeSetting(
+                    "width",
+                    "입력 너비",
+                    requestedWidth.ToString(),
+                    "640"),
+                new TrackingRuntimeSetting(
+                    "height",
+                    "입력 높이",
+                    requestedHeight.ToString(),
+                    "480"),
+                new TrackingRuntimeSetting(
+                    "fps",
+                    "카메라 FPS",
+                    requestedFps.ToString(),
+                    "30")
+            };
+        }
+
+        public bool TryApplyConfiguration(
+            IReadOnlyDictionary<string, string> values,
+            out string error)
+        {
+            error = null;
+
+            if (values == null)
+            {
+                error = "MediaPipe 설정 값이 없습니다.";
+                return false;
+            }
+
+            values.TryGetValue(
+                "device",
+                out var nextDevice);
+
+            if (!TryReadBoundedInt(
+                    values,
+                    "width",
+                    requestedWidth,
+                    160,
+                    7680,
+                    out var nextWidth) ||
+                !TryReadBoundedInt(
+                    values,
+                    "height",
+                    requestedHeight,
+                    120,
+                    4320,
+                    out var nextHeight) ||
+                !TryReadBoundedInt(
+                    values,
+                    "fps",
+                    requestedFps,
+                    1,
+                    120,
+                    out var nextFps))
+            {
+                error =
+                    "카메라 해상도/FPS 값을 확인하세요. " +
+                    "너비 160~7680, 높이 120~4320, FPS 1~120 범위입니다.";
+                return false;
+            }
+
+            deviceName =
+                nextDevice?.Trim() ??
+                string.Empty;
+            requestedWidth = nextWidth;
+            requestedHeight = nextHeight;
+            requestedFps = nextFps;
+
+            if (enabled &&
+                Application.isPlaying)
+            {
+                Restart();
+
+                if (_state ==
+                    MediaPipeWebcamLifecycleState.Faulted)
+                {
+                    error =
+                        _lastError ??
+                        "MediaPipe 웹캠을 다시 시작하지 못했습니다.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryReadBoundedInt(
+            IReadOnlyDictionary<string, string> values,
+            string key,
+            int fallback,
+            int minimum,
+            int maximum,
+            out int value)
+        {
+            value = fallback;
+
+            if (!values.TryGetValue(
+                    key,
+                    out var text) ||
+                string.IsNullOrWhiteSpace(
+                    text))
+            {
+                return true;
+            }
+
+            return int.TryParse(
+                       text.Trim(),
+                       out value) &&
+                   value >= minimum &&
+                   value <= maximum;
+        }
 
         public ITrackingSource FaceTrackingSource => _faceSource;
         public ITrackingSource BodyHandTrackingSource => _holisticSource;
@@ -1034,61 +1163,136 @@ namespace VCR.Runtime.Tracking.MediaPipe
         private void CleanupRuntimeResources(
             bool stopStartupCoroutine)
         {
+            var cleanupTimer =
+                System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log(
+                "VCR MediaPipe cleanup begin: startupCoroutine=" +
+                (_startupCoroutine != null) +
+                ", faceCoroutine=" + (_faceCoroutine != null) +
+                ", holisticCoroutine=" + (_holisticCoroutine != null) +
+                ", faceSource=" + (_faceSource != null) +
+                ", holisticSource=" + (_holisticSource != null) +
+                ", webcamPlaying=" +
+                (_webcam != null && _webcam.isPlaying),
+                this);
+
             if (stopStartupCoroutine &&
                 _startupCoroutine != null)
             {
-                StopCoroutine(
-                    _startupCoroutine);
+                RunCleanupStep(
+                    "startup coroutine stop",
+                    () => StopCoroutine(_startupCoroutine));
             }
 
             _startupCoroutine = null;
 
             if (_faceCoroutine != null)
             {
-                StopCoroutine(
-                    _faceCoroutine);
+                RunCleanupStep(
+                    "face coroutine stop",
+                    () => StopCoroutine(_faceCoroutine));
                 _faceCoroutine = null;
             }
 
             if (_holisticCoroutine != null)
             {
-                StopCoroutine(
-                    _holisticCoroutine);
+                RunCleanupStep(
+                    "holistic coroutine stop",
+                    () => StopCoroutine(_holisticCoroutine));
                 _holisticCoroutine = null;
             }
 
-            _faceSource?.Dispose();
-            _faceSource = null;
+            if (_faceSource != null)
+            {
+                RunCleanupStep(
+                    "FaceLandmarker native dispose",
+                    _faceSource.Dispose);
+                _faceSource = null;
+            }
 
-            _holisticSource?.Dispose();
-            _holisticSource = null;
+            if (_holisticSource != null)
+            {
+                RunCleanupStep(
+                    "HolisticLandmarker native dispose",
+                    _holisticSource.Dispose);
+                _holisticSource = null;
+            }
 
-            _faceFramePool?.Dispose();
-            _faceFramePool = null;
+            if (_faceFramePool != null)
+            {
+                RunCleanupStep(
+                    "face frame pool dispose",
+                    _faceFramePool.Dispose);
+                _faceFramePool = null;
+            }
 
-            _holisticFramePool?.Dispose();
-            _holisticFramePool = null;
+            if (_holisticFramePool != null)
+            {
+                RunCleanupStep(
+                    "holistic frame pool dispose",
+                    _holisticFramePool.Dispose);
+                _holisticFramePool = null;
+            }
 
             if (_webcam != null)
             {
-                if (_webcam.isPlaying)
+                var webcam = _webcam;
+                if (webcam.isPlaying)
                 {
-                    _webcam.Stop();
+                    RunCleanupStep(
+                        "WebCamTexture stop",
+                        webcam.Stop);
                 }
 
-                Destroy(
-                    _webcam);
+                RunCleanupStep(
+                    "WebCamTexture destroy request",
+                    () => Destroy(webcam));
                 _webcam = null;
             }
 
-            _preprocessor?.Dispose();
-            _preprocessor = null;
+            if (_preprocessor != null)
+            {
+                RunCleanupStep(
+                    "webcam preprocessor dispose",
+                    _preprocessor.Dispose);
+                _preprocessor = null;
+            }
 
             _clock.Reset();
             _latestFaceFrame = null;
             _latestBodyHandsFrame = null;
             _presenceResolver = null;
             _presence = default;
+
+            Debug.Log(
+                "VCR MediaPipe cleanup completed (" +
+                cleanupTimer.ElapsedMilliseconds + " ms)",
+                this);
+        }
+
+        private void RunCleanupStep(
+            string label,
+            Action action)
+        {
+            var timer =
+                System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR MediaPipe cleanup step begin: " + label, this);
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                throw;
+            }
+            finally
+            {
+                Debug.Log(
+                    "VCR MediaPipe cleanup step end: " + label +
+                    " (" + timer.ElapsedMilliseconds + " ms)",
+                    this);
+            }
         }
 
         private static byte[] LoadModel(

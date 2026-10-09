@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using UniGLTF;
 using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Tracking;
@@ -34,6 +35,11 @@ namespace VCR.Runtime.Character
 
         [Header("Materials")]
         [SerializeField] private bool attachMaterialOverrideController = true;
+        [SerializeField] private Shader vrm10BuiltInMToonShader;
+        [SerializeField] private Shader builtInStandardShader;
+        [SerializeField] private Shader vrm10UrpMToonShader;
+        [SerializeField] private Shader urpLitShader;
+        [SerializeField] private Shader uniUnlitShader;
 
         [Header("Appearance")]
         [SerializeField] private bool attachAppearanceRuntime = true;
@@ -97,6 +103,9 @@ namespace VCR.Runtime.Character
 
             try
             {
+                var materialGenerator =
+                    CreateMaterialDescriptorGenerator();
+
                 loaded = await Vrm10.LoadPathAsync(
                     path,
                     canLoadVrm0X: true,
@@ -104,8 +113,7 @@ namespace VCR.Runtime.Character
                         ControlRigGenerationOption.Generate,
                     showMeshes: true,
                     materialGenerator:
-                        Vrm10MaterialDescriptorGeneratorUtility
-                            .GetValidVrm10MaterialDescriptorGenerator(),
+                        materialGenerator,
                     ct: loadCancellation.Token);
 
                 if (loaded == null)
@@ -205,6 +213,25 @@ namespace VCR.Runtime.Character
             cancellation.Cancel();
         }
 
+        public void ConfigureRuntimeImportShaders(
+            Shader builtInMToonShader,
+            Shader standardShader,
+            Shader urpMToonShader,
+            Shader litShader,
+            Shader unlitShader)
+        {
+            vrm10BuiltInMToonShader =
+                builtInMToonShader;
+            builtInStandardShader =
+                standardShader;
+            vrm10UrpMToonShader =
+                urpMToonShader;
+            urpLitShader =
+                litShader;
+            uniUnlitShader =
+                unlitShader;
+        }
+
         public void SetTrackingProvider(
             ITrackingFrameProvider provider)
         {
@@ -222,6 +249,149 @@ namespace VCR.Runtime.Character
                     Current,
                     liveProvider);
             }
+        }
+
+        private IMaterialDescriptorGenerator
+            CreateMaterialDescriptorGenerator()
+        {
+            var generator =
+                Vrm10MaterialDescriptorGeneratorUtility
+                    .GetValidVrm10MaterialDescriptorGenerator();
+
+            if (generator is
+                UrpVrm10MaterialDescriptorGenerator urp)
+            {
+                if (vrm10UrpMToonShader != null)
+                {
+                    urp.MToonMaterialImporter.Shader =
+                        vrm10UrpMToonShader;
+                }
+
+                if (urpLitShader != null)
+                {
+                    urp.PbrMaterialImporter.Shader =
+                        urpLitShader;
+                    urp.DefaultMaterialImporter.Shader =
+                        urpLitShader;
+                }
+
+                if (uniUnlitShader != null)
+                {
+                    urp.UnlitMaterialImporter.Shader =
+                        uniUnlitShader;
+                }
+
+                EnsureUrpImportShaders(
+                    urp);
+                return urp;
+            }
+
+            if (generator is
+                BuiltInVrm10MaterialDescriptorGenerator builtIn)
+            {
+                if (vrm10BuiltInMToonShader != null)
+                {
+                    builtIn.MToonMaterialImporter.Shader =
+                        vrm10BuiltInMToonShader;
+                }
+
+                if (builtInStandardShader != null)
+                {
+                    builtIn.PbrMaterialImporter.Shader =
+                        builtInStandardShader;
+                    builtIn.DefaultMaterialImporter.Shader =
+                        builtInStandardShader;
+                }
+
+                if (uniUnlitShader != null)
+                {
+                    builtIn.UnlitMaterialImporter.Shader =
+                        uniUnlitShader;
+                }
+
+                EnsureBuiltInImportShaders(
+                    builtIn);
+                return builtIn;
+            }
+
+            return generator;
+        }
+
+        private static void EnsureUrpImportShaders(
+            UrpVrm10MaterialDescriptorGenerator urp)
+        {
+            var missing =
+                new System.Collections.Generic.List<string>();
+
+            if (urp.MToonMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "VRM10/Universal Render Pipeline/MToon10");
+            }
+
+            if (urp.PbrMaterialImporter.Shader == null ||
+                urp.DefaultMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "Universal Render Pipeline/Lit");
+            }
+
+            if (urp.UnlitMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "UniGLTF/UniUnlit");
+            }
+
+            ThrowIfImportShadersMissing(
+                "URP",
+                missing);
+        }
+
+        private static void EnsureBuiltInImportShaders(
+            BuiltInVrm10MaterialDescriptorGenerator builtIn)
+        {
+            var missing =
+                new System.Collections.Generic.List<string>();
+
+            if (builtIn.MToonMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "VRM10/MToon10");
+            }
+
+            if (builtIn.PbrMaterialImporter.Shader == null ||
+                builtIn.DefaultMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "Standard");
+            }
+
+            if (builtIn.UnlitMaterialImporter.Shader == null)
+            {
+                missing.Add(
+                    "UniGLTF/UniUnlit");
+            }
+
+            ThrowIfImportShadersMissing(
+                "Built-in RP",
+                missing);
+        }
+
+        private static void ThrowIfImportShadersMissing(
+            string pipeline,
+            System.Collections.Generic.List<string> missing)
+        {
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                "VRM runtime shader dependency is missing " +
+                $"for {pipeline}: " +
+                string.Join(", ", missing) +
+                ". Rebuild the runtime scene/player so the UniVRM " +
+                "shader assets are serialized into the build.");
         }
 
         private void ConfigureLoadedCharacter(

@@ -43,6 +43,18 @@ jobs:
         shell: bash
         run: bash ./tools/bootstrap-mediapipe.sh
 
+      - name: Bootstrap pinned Pretendard UI font
+        shell: bash
+        run: bash ./tools/bootstrap-ui-fonts.sh
+
+      - name: Bootstrap pinned Ultraleap Unity 6 compatibility
+        shell: bash
+        run: bash ./tools/bootstrap-ultraleap.sh
+
+      - name: Bootstrap pinned UniWinC native teardown compatibility
+        shell: bash
+        run: bash ./tools/bootstrap-uniwinc.sh
+
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:

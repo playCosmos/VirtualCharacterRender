@@ -9,20 +9,25 @@ namespace VCR.Runtime.Tracking.Routing
     /// Region router for one performer.
     ///
     /// Face ownership is selected from explicit source-kind priority policy.
-    /// Body/hands remain on the MediaPipe fallback provider, while optional
-    /// full-body and expression sources route independently. When the selected
-    /// face policy favors ARKit, redundant MediaPipe face inference can sleep.
+    /// Upper body remains on the MediaPipe fallback provider while an optional
+    /// preferred hand provider (Ultraleap) can override left/right hands
+    /// independently. Full-body and expression sources route separately. When
+    /// the selected face policy favors ARKit, redundant MediaPipe face inference
+    /// can sleep.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(5000)]
     public sealed class PriorityTrackingRouter :
         MonoBehaviour,
         ITrackingRouteProvider,
+        ITrackingHandFrameProvider,
         ITrackingRouteStatusProvider,
         IRuntimeMetricsSource
     {
         [Header("Providers")]
         [SerializeField] private MonoBehaviour preferredFaceProviderBehaviour;
+        [Tooltip("Optional hands-only provider. When usable its left/right hand data overrides fallback-provider hands while the fallback upper body remains active.")]
+        [SerializeField] private MonoBehaviour preferredHandsProviderBehaviour;
         [SerializeField] private MonoBehaviour fallbackProviderBehaviour;
         [Tooltip("Optional VMC/full-body provider. Face source priority is controlled by the routing policy.")]
         [SerializeField] private MonoBehaviour externalPoseProviderBehaviour;
@@ -43,6 +48,10 @@ namespace VCR.Runtime.Tracking.Routing
         private ITrackingPresenceProvider _preferredPresence;
         private ITrackingSourceHealthProvider _preferredFaceHealth;
 
+        private ITrackingFrameProvider _preferredHandsProvider;
+        private ITrackingPresenceProvider _preferredHandsPresence;
+        private ITrackingSourceHealthProvider _preferredHandsHealth;
+
         private ITrackingFrameProvider _fallbackProvider;
         private ITrackingPresenceProvider _fallbackPresence;
         private ITrackingSourceHealthProvider _fallbackHealth;
@@ -62,6 +71,7 @@ namespace VCR.Runtime.Tracking.Routing
 
         private TrackingFrame _latestFace;
         private TrackingFrame _latestBodyHands;
+        private TrackingFrame _latestHands;
         private TrackingFrame _latestHumanoidPose;
         private TrackingFrame _latestExpressions;
 
@@ -69,7 +79,9 @@ namespace VCR.Runtime.Tracking.Routing
         private string _selectedFaceSourceId;
 
         private TrackingFrame _selectedBodyFrame;
+        private TrackingFrame _selectedHandsFrame;
         private string _selectedBodySourceId;
+        private string _selectedHandsSourceId;
 
         private TrackingFrame _selectedPoseFrame;
         private string _selectedPoseSourceId;
@@ -172,7 +184,9 @@ namespace VCR.Runtime.Tracking.Routing
             {
                 _providerFailureCount++;
                 _latestBodyHands = null;
+                _latestHands = null;
                 ResetBodySelection();
+                ResetHandsSelection();
             }
 
             try
@@ -214,6 +228,12 @@ namespace VCR.Runtime.Tracking.Routing
             return frame != null;
         }
 
+        public bool TryGetLatestHands(out TrackingFrame frame)
+        {
+            frame = _latestHands;
+            return frame != null;
+        }
+
         public bool TryGetLatestHumanoidPose(out TrackingFrame frame)
         {
             frame = _latestHumanoidPose;
@@ -243,6 +263,16 @@ namespace VCR.Runtime.Tracking.Routing
                     : null;
             AssignPreferredFaceProvider(
                 preferredFaceProviderBehaviour);
+        }
+
+        public void SetPreferredHandsProvider(MonoBehaviour provider)
+        {
+            preferredHandsProviderBehaviour =
+                provider != null
+                    ? provider
+                    : null;
+            AssignPreferredHandsProvider(
+                preferredHandsProviderBehaviour);
         }
 
         public void SetFallbackProvider(MonoBehaviour provider)
@@ -317,6 +347,38 @@ namespace VCR.Runtime.Tracking.Routing
                     ? behaviour as ITrackingSourceHealthProvider
                     : null;
             ResetFaceSelection();
+        }
+
+        private void AssignPreferredHandsProvider(
+            MonoBehaviour behaviour)
+        {
+            var next =
+                behaviour != null
+                    ? behaviour as ITrackingFrameProvider
+                    : null;
+
+            if (ReferenceEquals(
+                    _preferredHandsProvider,
+                    next) &&
+                (next == null ||
+                 IsServiceAlive(
+                     _preferredHandsProvider)))
+            {
+                return;
+            }
+
+            _preferredHandsProvider =
+                next;
+            _preferredHandsPresence =
+                behaviour != null
+                    ? behaviour as ITrackingPresenceProvider
+                    : null;
+            _preferredHandsHealth =
+                behaviour != null
+                    ? behaviour as ITrackingSourceHealthProvider
+                    : null;
+
+            ResetHandsSelection();
         }
 
         private void AssignFallbackProvider(
@@ -424,6 +486,10 @@ namespace VCR.Runtime.Tracking.Routing
             AssignPreferredFaceProvider(
                 preferredFaceProviderBehaviour != null
                     ? preferredFaceProviderBehaviour
+                    : null);
+            AssignPreferredHandsProvider(
+                preferredHandsProviderBehaviour != null
+                    ? preferredHandsProviderBehaviour
                     : null);
             AssignFallbackProvider(
                 fallbackProviderBehaviour != null
@@ -614,34 +680,96 @@ namespace VCR.Runtime.Tracking.Routing
 
         private void UpdateBodyHandsSnapshot()
         {
-            if (!IsServiceAlive(_fallbackProvider) ||
-                !IsSourceHealthUsable(
+            TrackingFrame selected = null;
+
+            if (IsServiceAlive(_fallbackProvider) &&
+                IsSourceHealthUsable(
                     _fallbackHealth,
-                    TrackingRegion.UpperBody) ||
-                !_fallbackProvider.TryGetLatestBodyHands(out var selected) ||
-                selected == null)
+                    TrackingRegion.UpperBody) &&
+                _fallbackProvider.TryGetLatestBodyHands(
+                    out var fallbackFrame) &&
+                fallbackFrame != null)
+            {
+                selected = fallbackFrame;
+            }
+
+            if (selected == null)
             {
                 _latestBodyHands = null;
                 ResetBodySelection();
+            }
+            else if (!ReferenceEquals(
+                         selected,
+                         _selectedBodyFrame))
+            {
+                CountSourceSwitch(
+                    _selectedBodySourceId,
+                    selected.SourceId,
+                    ref _bodySourceSwitches);
+
+                _selectedBodyFrame =
+                    selected;
+                _selectedBodySourceId =
+                    selected.SourceId;
+
+                // Preserve the immutable provider frame. The repository hot
+                // path contract deliberately forbids route-envelope allocation.
+                _latestBodyHands = selected;
+            }
+
+            UpdateHandsSnapshot(
+                selected);
+        }
+
+        private void UpdateHandsSnapshot(
+            TrackingFrame fallbackFrame)
+        {
+            TrackingFrame selected = null;
+
+            if (IsServiceAlive(
+                    _preferredHandsProvider) &&
+                IsSourceHealthUsable(
+                    _preferredHandsHealth,
+                    TrackingRegion.Hands) &&
+                _preferredHandsProvider
+                    .TryGetLatestBodyHands(
+                        out var preferredFrame) &&
+                preferredFrame != null &&
+                preferredFrame.SubjectDetected &&
+                (preferredFrame.LeftHand != null ||
+                 preferredFrame.RightHand != null))
+            {
+                selected =
+                    preferredFrame;
+            }
+            else if (fallbackFrame != null &&
+                     (fallbackFrame.LeftHand != null ||
+                      fallbackFrame.RightHand != null))
+            {
+                selected =
+                    fallbackFrame;
+            }
+
+            if (selected == null)
+            {
+                _latestHands = null;
+                ResetHandsSelection();
                 return;
             }
 
             if (ReferenceEquals(
                     selected,
-                    _selectedBodyFrame))
+                    _selectedHandsFrame))
             {
                 return;
             }
 
-            CountSourceSwitch(
-                _selectedBodySourceId,
-                selected.SourceId,
-                ref _bodySourceSwitches);
-
-            _selectedBodyFrame = selected;
-            _selectedBodySourceId = selected.SourceId;
-
-            _latestBodyHands = selected;
+            _selectedHandsFrame =
+                selected;
+            _selectedHandsSourceId =
+                selected.SourceId;
+            _latestHands =
+                selected;
         }
 
         private void UpdateExternalPoseSnapshots()
@@ -875,6 +1003,10 @@ namespace VCR.Runtime.Tracking.Routing
                 IsServiceAlive(_preferredPresence)
                     ? _preferredPresence.Presence
                     : null;
+            TrackingPresenceSnapshot? preferredHands =
+                IsServiceAlive(_preferredHandsPresence)
+                    ? _preferredHandsPresence.Presence
+                    : null;
             TrackingPresenceSnapshot? fallback =
                 IsServiceAlive(_fallbackPresence)
                     ? _fallbackPresence.Presence
@@ -902,14 +1034,25 @@ namespace VCR.Runtime.Tracking.Routing
                  fallback.Value.FaceSubjectEvidence);
 
             var bodyConfigured =
-                IsServiceAlive(_fallbackProvider);
-            var bodyAvailable =
+                IsServiceAlive(_fallbackProvider) ||
+                IsServiceAlive(_preferredHandsProvider);
+
+            var fallbackBodyAvailable =
                 fallback.HasValue &&
                 fallback.Value.BodyHandsSourceAvailable;
+            var preferredHandsAvailable =
+                preferredHands.HasValue &&
+                preferredHands.Value.BodyHandsSourceAvailable;
+
+            var bodyAvailable =
+                fallbackBodyAvailable ||
+                preferredHandsAvailable;
 
             var bodyEvidence =
-                bodyAvailable &&
-                fallback.Value.BodyHandsSubjectEvidence;
+                (fallbackBodyAvailable &&
+                 fallback.Value.BodyHandsSubjectEvidence) ||
+                (preferredHandsAvailable &&
+                 preferredHands.Value.BodyHandsSubjectEvidence);
 
             var faceConfigured =
                 IsServiceAlive(_preferredFaceProvider) ||
@@ -934,6 +1077,8 @@ namespace VCR.Runtime.Tracking.Routing
                  preferred.Value.SubjectState != SubjectPresenceState.Unknown) ||
                 (fallback.HasValue &&
                  fallback.Value.SubjectState != SubjectPresenceState.Unknown) ||
+                (preferredHands.HasValue &&
+                 preferredHands.Value.SubjectState != SubjectPresenceState.Unknown) ||
                 _latestFace != null ||
                 _latestBodyHands != null ||
                 _latestHumanoidPose != null ||
@@ -993,6 +1138,12 @@ namespace VCR.Runtime.Tracking.Routing
                 status.BodyHandsAgeMs);
             AddAgeMetric(
                 output,
+                "tracking.route.hands_age",
+                FrameAgeMs(
+                    _latestHands,
+                    MonotonicClock.NowMicroseconds()));
+            AddAgeMetric(
+                output,
                 "tracking.route.fullbody_age",
                 status.FullBodyAgeMs);
             AddAgeMetric(
@@ -1042,6 +1193,11 @@ namespace VCR.Runtime.Tracking.Routing
                 "tracking.route.body_health",
                 _fallbackHealth,
                 TrackingRegion.UpperBody);
+            AddHealthMetric(
+                output,
+                "tracking.route.preferred_hands_health",
+                _preferredHandsHealth,
+                TrackingRegion.Hands);
             AddHealthMetric(
                 output,
                 "tracking.route.fullbody_health",
@@ -1270,6 +1426,12 @@ namespace VCR.Runtime.Tracking.Routing
         {
             _selectedBodyFrame = null;
             _selectedBodySourceId = null;
+        }
+
+        private void ResetHandsSelection()
+        {
+            _selectedHandsFrame = null;
+            _selectedHandsSourceId = null;
         }
 
         private void ResetPoseSelection()

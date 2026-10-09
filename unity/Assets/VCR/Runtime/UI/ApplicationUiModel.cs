@@ -13,7 +13,9 @@ namespace VCR.Runtime.UI
         CameraOutput = 6,
         Settings = 7,
         Diagnostics = 8,
-        Count = 9
+        Expression = 9,
+        Appearance = 10,
+        Count = 11
     }
 
     public readonly struct ApplicationUiSectionState
@@ -146,23 +148,27 @@ namespace VCR.Runtime.UI
             return section switch
             {
                 ApplicationUiSection.Character =>
-                    "Character",
-                ApplicationUiSection.Tracking =>
-                    "Tracking",
+                    "캐릭터",
                 ApplicationUiSection.MotionExpression =>
-                    "Motion / Expression",
+                    "모션 & 애니메이션",
+                ApplicationUiSection.Tracking =>
+                    "트래킹",
+                ApplicationUiSection.Expression =>
+                    "표정",
+                ApplicationUiSection.Appearance =>
+                    "의상 & 액세서리",
                 ApplicationUiSection.Environment =>
-                    "Environment",
-                ApplicationUiSection.MaterialShader =>
-                    "Material / Shader",
-                ApplicationUiSection.Events =>
-                    "Events",
+                    "배경 & 스테이지",
                 ApplicationUiSection.CameraOutput =>
-                    "Camera / Output",
+                    "출력",
                 ApplicationUiSection.Settings =>
-                    "Settings",
+                    "설정",
+                ApplicationUiSection.MaterialShader =>
+                    "머티리얼 / 셰이더",
+                ApplicationUiSection.Events =>
+                    "이벤트",
                 ApplicationUiSection.Diagnostics =>
-                    "Diagnostics",
+                    "진단",
                 _ =>
                     "Unknown"
             };

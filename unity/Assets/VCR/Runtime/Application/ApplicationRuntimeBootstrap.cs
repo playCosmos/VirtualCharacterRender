@@ -258,6 +258,48 @@ namespace VCR.Runtime.Application
             }
         }
 
+        public bool ReloadSavedConfiguration(
+            out string error)
+        {
+            error = null;
+
+            ResolveSceneRuntime();
+
+            if (sceneRuntime == null)
+            {
+                error =
+                    "Scene runtime is unavailable.";
+                return false;
+            }
+
+            try
+            {
+                _configurationStore ??=
+                    new RuntimeConfigurationStore(
+                        ResolveConfigurationPath(
+                            ApplicationLaunchOptions.Parse(
+                                Environment.GetCommandLineArgs())));
+
+                if (!_configurationStore.TryLoad(
+                        out var configuration,
+                        out error))
+                {
+                    return false;
+                }
+
+                sceneRuntime.ApplyConfiguration(
+                    configuration);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Runtime configuration load/apply failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
         public bool SaveConfiguration(
             out string error)
         {
@@ -378,43 +420,84 @@ namespace VCR.Runtime.Application
             _quitting = true;
 
             var succeeded = true;
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR shutdown: begin (first=" + firstShutdown + ")", this);
 
+            // Save only once, but always retry scene cleanup if a preceding
+            // attempt reported failure. Cleanup errors must reach the caller.
             if (firstShutdown &&
                 saveConfiguration &&
-                _started &&
-                !SaveConfiguration(
-                    out error))
+                _started)
             {
-                succeeded = false;
+                try
+                {
+                    if (!SaveConfiguration(out error))
+                    {
+                        succeeded = false;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    error = "Shutdown configuration save: " + exception;
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown: save finished at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                }
             }
 
             if (sceneRuntime != null)
             {
-                sceneRuntime.Shutdown();
+                try
+                {
+                    Debug.Log("VCR shutdown: scene teardown begin at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                    sceneRuntime.Shutdown();
 
                 var sceneError =
                     sceneRuntime.Status.LastError;
-
-                if (!string.IsNullOrWhiteSpace(
-                        sceneError))
+                    if (!string.IsNullOrWhiteSpace(sceneError))
+                    {
+                        succeeded = false;
+                        error = string.IsNullOrWhiteSpace(error)
+                            ? sceneError
+                            : error + " | " + sceneError;
+                    }
+                }
+                catch (Exception exception)
                 {
                     succeeded = false;
-                    error =
-                        string.IsNullOrWhiteSpace(
-                            error)
-                            ? sceneError
-                            : error +
-                              " | " +
-                              sceneError;
+                    error = string.IsNullOrWhiteSpace(error)
+                        ? "Scene shutdown: " + exception
+                        : error + " | Scene shutdown: " + exception;
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown: scene teardown ended at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
                 }
             }
 
             _started = false;
+            Debug.Log("VCR shutdown: end at " +
+                      stopwatch.ElapsedMilliseconds + " ms, success=" +
+                      succeeded, this);
             return succeeded;
         }
 
         private void OnApplicationQuit()
         {
+            // Unity does not guarantee OnApplicationQuit ordering between
+            // this bootstrap and the scene runtime. Signal before teardown.
+            if (sceneRuntime != null)
+            {
+                sceneRuntime.PrepareForApplicationQuit();
+            }
+
             if (!Shutdown(
                     saveConfigurationOnQuit,
                     out var error) &&
