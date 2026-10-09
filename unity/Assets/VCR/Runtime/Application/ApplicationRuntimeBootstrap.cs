@@ -414,37 +414,51 @@ namespace VCR.Runtime.Application
             out string error)
         {
             error = null;
-            if (_quitting)
-            {
-                return true;
-            }
 
+            var firstShutdown =
+                !_quitting;
             _quitting = true;
+
             var succeeded = true;
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            Debug.Log("VCR shutdown: begin", this);
-            try
+            Debug.Log("VCR shutdown: begin (first=" + firstShutdown + ")", this);
+
+            // Save only once, but always retry scene cleanup if a preceding
+            // attempt reported failure. Cleanup errors must reach the caller.
+            if (firstShutdown &&
+                saveConfiguration &&
+                _started)
             {
-                if (saveConfiguration && _started)
+                try
                 {
-                    var saved = SaveConfiguration(out error);
-                    Debug.Log("VCR shutdown: configuration save finished at " +
-                              stopwatch.ElapsedMilliseconds + " ms", this);
-                    if (!saved)
+                    if (!SaveConfiguration(out error))
                     {
                         succeeded = false;
                     }
                 }
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    error = "Shutdown configuration save: " + exception;
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown: save finished at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                }
+            }
 
-                if (sceneRuntime != null)
+            if (sceneRuntime != null)
+            {
+                try
                 {
                     Debug.Log("VCR shutdown: scene teardown begin at " +
                               stopwatch.ElapsedMilliseconds + " ms", this);
                     sceneRuntime.Shutdown();
-                    Debug.Log("VCR shutdown: scene teardown completed at " +
-                              stopwatch.ElapsedMilliseconds + " ms", this);
 
-                    var sceneError = sceneRuntime.Status.LastError;
+                    var sceneError =
+                        sceneRuntime.Status.LastError;
                     if (!string.IsNullOrWhiteSpace(sceneError))
                     {
                         succeeded = false;
@@ -453,22 +467,25 @@ namespace VCR.Runtime.Application
                             : error + " | " + sceneError;
                     }
                 }
-            }
-            catch (Exception exception)
-            {
-                succeeded = false;
-                error = string.IsNullOrWhiteSpace(error)
-                    ? exception.ToString()
-                    : error + " | " + exception;
-                Debug.LogException(exception, this);
-            }
-            finally
-            {
-                _started = false;
-                Debug.Log("VCR shutdown: end at " +
-                          stopwatch.ElapsedMilliseconds + " ms", this);
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    error = string.IsNullOrWhiteSpace(error)
+                        ? "Scene shutdown: " + exception
+                        : error + " | Scene shutdown: " + exception;
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown: scene teardown ended at " +
+                              stopwatch.ElapsedMilliseconds + " ms", this);
+                }
             }
 
+            _started = false;
+            Debug.Log("VCR shutdown: end at " +
+                      stopwatch.ElapsedMilliseconds + " ms, success=" +
+                      succeeded, this);
             return succeeded;
         }
 
