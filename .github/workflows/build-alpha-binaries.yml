@@ -47,6 +47,10 @@ jobs:
         shell: bash
         run: bash ./tools/bootstrap-ui-fonts.sh
 
+      - name: Bootstrap pinned Ultraleap Unity 6 compatibility
+        shell: bash
+        run: bash ./tools/bootstrap-ultraleap.sh
+
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
