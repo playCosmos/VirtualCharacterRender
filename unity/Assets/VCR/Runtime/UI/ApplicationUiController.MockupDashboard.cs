@@ -23,6 +23,8 @@ namespace VCR.Runtime.UI
         private RectTransform _settingsGeneralBody;
         private readonly Dictionary<string, RectTransform> _settingsPages =
             new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button> _settingsSidebarButtons =
+            new(StringComparer.OrdinalIgnoreCase);
         private RectTransform _settingsTrackingDevices;
         private InputField _settingsCharacterPathInput;
 
@@ -754,14 +756,10 @@ namespace VCR.Runtime.UI
             sidebarLayout.childForceExpandWidth = true;
             sidebarLayout.childForceExpandHeight = false;
 
-            AddSettingsCategoryButton(categoryRow, "일반",
-                () => ShowSettingsCategory("general"));
-            AddSettingsCategoryButton(categoryRow, "캐릭터 / 모델",
-                () => ShowSettingsCategory("character"));
-            AddSettingsCategoryButton(categoryRow, "트래킹",
-                () => ShowSettingsCategory("tracking"));
-            AddSettingsCategoryButton(categoryRow, "출력",
-                () => ShowSettingsCategory("output"));
+            AddSettingsCategoryButton(categoryRow, "general", "일반");
+            AddSettingsCategoryButton(categoryRow, "character", "캐릭터 / 모델");
+            AddSettingsCategoryButton(categoryRow, "tracking", "트래킹");
+            AddSettingsCategoryButton(categoryRow, "output", "출력");
 
             _settingsCategoryHost = CreateRect(
                 "Settings Category Content", body);
@@ -912,12 +910,14 @@ namespace VCR.Runtime.UI
         }
 
         private void AddSettingsCategoryButton(Transform parent,
-            string label, Action action)
+            string category, string label)
         {
-            var button = CreateButton(label, parent, action);
+            var button = CreateButton(label, parent,
+                () => ShowSettingsCategory(category));
             var element = button.gameObject.AddComponent<LayoutElement>();
             element.preferredWidth = 164f;
             element.preferredHeight = 38f;
+            _settingsSidebarButtons[category] = button;
         }
 
         private void BuildSettingsDetailPages()
@@ -1082,6 +1082,17 @@ namespace VCR.Runtime.UI
                             string.Empty));
             }
             _settingsGeneralBody.gameObject.SetActive(category == "general");
+            foreach (var entry in _settingsSidebarButtons)
+            {
+                if (entry.Value != null &&
+                    entry.Value.targetGraphic is Image image)
+                {
+                    image.color = string.Equals(entry.Key, category,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? new Color(0.16f, 0.32f, 0.56f, 1f)
+                        : new Color(0.12f, 0.15f, 0.20f, 1f);
+                }
+            }
             foreach (var entry in _settingsPages)
             {
                 if (entry.Value != null)
