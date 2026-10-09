@@ -183,6 +183,16 @@ namespace VCR.Editor.P0
                     status.Health ==
                         MaterialOverrideHealth.Fallback;
 
+                // Invalid shader selection intentionally restores the
+                // source and disposes the runtime material override.
+                // Start a fresh valid override before testing fallback
+                // texture resolution on a destroyed resolver.
+                var overrideRestored =
+                    controller.TryApplyShaderId(
+                        slot.Id,
+                        shader.name,
+                        out var overrideRestoreError);
+
                 resolverTexture =
                     new Texture2D(1, 1)
                     {
@@ -216,6 +226,8 @@ namespace VCR.Editor.P0
 
                 string textureError = null;
                 var destroyedResolverFallback =
+                    overrideRestored &&
+                    string.IsNullOrWhiteSpace(overrideRestoreError) &&
                     source.HasProperty(
                         "_BaseMap") &&
                     controller.TrySetTextureId(
