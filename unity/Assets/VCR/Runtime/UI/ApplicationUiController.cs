@@ -406,6 +406,8 @@ namespace VCR.Runtime.UI
 
         private const string LastCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
         private bool _characterRestoreAttempted;
+        private const string AlwaysOnTopPreferenceKey = "VCR.Output.AlwaysOnTop.v1";
+        private bool _alwaysOnTopRestored;
 
         private void Awake()
         {
@@ -448,7 +450,52 @@ namespace VCR.Runtime.UI
             ResolveDependencies();
             RefreshAvailability();
             TryRestoreLastCharacter();
+            TryRestoreAlwaysOnTop();
             RefreshAll();
+        }
+
+        private void TryRestoreAlwaysOnTop()
+        {
+            if (_alwaysOnTopRestored ||
+                !PlayerPrefs.HasKey(AlwaysOnTopPreferenceKey) ||
+                sceneRuntime == null)
+            {
+                return;
+            }
+
+            if (!TryGetOverlayOutputForUiRefresh(
+                    out var present,
+                    out _,
+                    out var current,
+                    out _) ||
+                !present ||
+                !ApplicationUiActionPolicy.CanApplyOverlaySetting(
+                    true, sceneRuntime.State, true))
+            {
+                return;
+            }
+
+            var desired = PlayerPrefs.GetInt(
+                AlwaysOnTopPreferenceKey, current.Topmost ? 1 : 0) != 0;
+
+            if (desired == current.Topmost)
+            {
+                _alwaysOnTopRestored = true;
+                return;
+            }
+
+            try
+            {
+                sceneRuntime.ApplyOverlayOutput(new OverlayOutputSettings(
+                    current.Transparent, desired, current.ClickThrough));
+                _alwaysOnTopRestored = true;
+            }
+            catch (Exception exception)
+            {
+                _alwaysOnTopRestored = true;
+                _lastActionMessage =
+                    "Could not restore Always on Top: " + exception.Message;
+            }
         }
 
         private async void TryRestoreLastCharacter()
@@ -5699,6 +5746,14 @@ namespace VCR.Runtime.UI
             {
                 sceneRuntime.ApplyOverlayOutput(
                     next);
+                if (topmost)
+                {
+                    PlayerPrefs.SetInt(
+                        AlwaysOnTopPreferenceKey,
+                        next.Topmost ? 1 : 0);
+                    PlayerPrefs.Save();
+                    _alwaysOnTopRestored = true;
+                }
 
                 if (clickThrough &&
                     next.ClickThrough)
