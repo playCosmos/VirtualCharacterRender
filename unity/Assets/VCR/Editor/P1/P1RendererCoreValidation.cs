@@ -43,6 +43,8 @@ namespace VCR.Editor.P1
             {
                 root = new GameObject(
                     "VCR P1 Renderer Core Validation");
+                // Assemble the fixture before any Awake-driven initialization.
+                root.SetActive(false);
 
                 var characterRoot =
                     new GameObject("Character");

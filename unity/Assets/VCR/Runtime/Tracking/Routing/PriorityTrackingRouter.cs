@@ -252,7 +252,9 @@ namespace VCR.Runtime.Tracking.Routing
             routePolicy =
                 policy;
             EnsureRoutePolicy();
-            ResetFaceSelection();
+            // Preserve the selected source identity across a priority change.
+            // UpdateFaceSnapshot accounts for a real switch on the next tick;
+            // clearing it here silently loses the face_switches metric.
         }
 
         public void SetPreferredFaceProvider(MonoBehaviour provider)
