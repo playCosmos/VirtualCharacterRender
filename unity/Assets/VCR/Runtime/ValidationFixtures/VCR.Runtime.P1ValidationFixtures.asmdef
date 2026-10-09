@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.P1ValidationFixtures",
+  "rootNamespace": "VCR.Runtime.ValidationFixtures",
+  "references": [
+    "VCR.Runtime.Output"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

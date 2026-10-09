@@ -12,6 +12,7 @@ using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.ValidationFixtures;
 
 namespace VCR.Editor.P1
 {
