@@ -185,6 +185,17 @@ namespace VCR.Editor.P11
             var createdAssets =
                 new List<string>();
 
+            // Unity may re-import a project-local .anim under its filename,
+            // losing the authored AnimationClip.name. Preserve that original
+            // name when resolving per-clip marker sidecars.
+            var authoredClipName =
+                string.Equals(
+                    extension,
+                    ".anim",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? TryReadProjectSourceClipName(sourceFilePath)
+                    : null;
+
             try
             {
                 var sourceAssetPath =
@@ -332,7 +343,9 @@ namespace VCR.Editor.P11
                     {
                         if (!TryResolveMarkers(
                                 markerFile,
-                                outputClip.name,
+                                string.IsNullOrWhiteSpace(authoredClipName)
+                                    ? outputClip.name
+                                    : authoredClipName,
                                 outputClip.length,
                                 out var markers,
                                 out error))
@@ -725,6 +738,39 @@ namespace VCR.Editor.P11
                     "/" +
                     sourceName +
                     ".bytes");
+        }
+
+        private static string TryReadProjectSourceClipName(
+            string sourceFilePath)
+        {
+            // External files have no Unity asset identity: use the imported
+            // filename there rather than accessing out-of-project assets.
+            var assetsDirectory =
+                Path.GetFullPath(Application.dataPath)
+                    .TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            var fullPath =
+                Path.GetFullPath(sourceFilePath);
+
+            if (!fullPath.StartsWith(
+                    assetsDirectory,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var assetPath =
+                "Assets/" +
+                fullPath.Substring(assetsDirectory.Length)
+                    .Replace('\\', '/');
+            var clip =
+                AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                    assetPath);
+            return clip == null
+                ? null
+                : clip.name;
         }
 
         private static string BuildImportedSourceAssetPath(
