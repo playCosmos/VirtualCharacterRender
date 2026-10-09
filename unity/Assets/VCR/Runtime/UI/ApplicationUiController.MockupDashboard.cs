@@ -23,6 +23,7 @@ namespace VCR.Runtime.UI
         private RectTransform _settingsGeneralBody;
         private readonly Dictionary<string, RectTransform> _settingsPages =
             new(StringComparer.OrdinalIgnoreCase);
+        private RectTransform _settingsTrackingDevices;
 
         private RectTransform _dashboardCharacterInspector;
         private Text _dashboardModelNameText;
@@ -934,14 +935,33 @@ namespace VCR.Runtime.UI
                 });
 
             AddSettingsDetailPage("tracking", "트래킹",
-                "트래킹 소스별 상세 설정을 엽니다. 상태 확인 및 빠른 소스 전환은 독립된 퀵패널에서 수행합니다.",
-                "입력 장치 상세 설정",
-                OpenFirstTrackingSourceSettings);
+                "입력 장치별 상세 설정입니다. 퀵패널의 연결 상태 및 소스 전환과 별도로 관리합니다.",
+                "사용 가능한 장치 다시 확인",
+                RebuildSettingsTrackingDevices);
 
             AddSettingsDetailPage("output", "출력",
                 "출력 프리셋은 퀵패널에서 빠르게 전환합니다. 창 표시 방식은 이 설정 페이지에서 제어합니다.",
                 "항상 위 켜기 / 끄기",
                 ToggleOverlayTopmost);
+
+            var outputPage = _settingsPages["output"];
+            AddSettingsAction(outputPage, "투명 배경 켜기 / 끄기",
+                ToggleOverlayTransparent);
+            AddSettingsAction(outputPage, "클릭 통과 켜기 / 끄기",
+                ToggleOverlayClickThrough);
+            var trackingPage = _settingsPages["tracking"];
+            _settingsTrackingDevices = CreateRect(
+                "Tracking Device Settings", trackingPage);
+            var devicesLayout = _settingsTrackingDevices.gameObject
+                .AddComponent<VerticalLayoutGroup>();
+            devicesLayout.spacing = 5f;
+            devicesLayout.childControlWidth = true;
+            devicesLayout.childControlHeight = true;
+            devicesLayout.childForceExpandWidth = true;
+            devicesLayout.childForceExpandHeight = false;
+            _settingsTrackingDevices.gameObject
+                .AddComponent<LayoutElement>().preferredHeight = 260f;
+            RebuildSettingsTrackingDevices();
         }
 
         private void AddSettingsDetailPage(string id, string title,
@@ -972,17 +992,50 @@ namespace VCR.Runtime.UI
             page.gameObject.SetActive(false);
         }
 
-        private void OpenFirstTrackingSourceSettings()
+        private void AddSettingsAction(
+            Transform parent, string title, Action action)
         {
+            var button = CreateButton(title, parent, action);
+            AddPreferredHeight(button.gameObject, 38f);
+        }
+
+        private void RebuildSettingsTrackingDevices()
+        {
+            if (_settingsTrackingDevices == null)
+            {
+                return;
+            }
+
+            for (var index = _settingsTrackingDevices.childCount - 1;
+                 index >= 0; index--)
+            {
+                Destroy(_settingsTrackingDevices.GetChild(index).gameObject);
+            }
+
+            var count = 0;
             foreach (var control in _trackingControls)
             {
-                if (control is ITrackingRuntimeConfigurable)
+                if (control == null ||
+                    control is not ITrackingRuntimeConfigurable)
                 {
-                    OpenDashboardTrackingSourceSettings(control.ControlId);
-                    return;
+                    continue;
                 }
+
+                var sourceId = control.ControlId;
+                AddSettingsAction(_settingsTrackingDevices,
+                    control.DisplayName + " 설정",
+                    () => OpenDashboardTrackingSourceSettings(sourceId));
+                count++;
             }
-            SetDashboardNotice("설정 가능한 트래킹 입력 장치가 없습니다.");
+
+            if (count == 0)
+            {
+                var empty = CreateText("Tracking Empty",
+                    _settingsTrackingDevices, 12,
+                    TextAnchor.MiddleLeft);
+                empty.text = "설정 가능한 트래킹 장치가 없습니다.";
+                AddPreferredHeight(empty.gameObject, 30f);
+            }
         }
 
         private void ShowSettingsCategory(string category)
@@ -992,6 +1045,10 @@ namespace VCR.Runtime.UI
                 return;
             }
 
+            if (category == "tracking")
+            {
+                RebuildSettingsTrackingDevices();
+            }
             _settingsGeneralBody.gameObject.SetActive(category == "general");
             foreach (var entry in _settingsPages)
             {
