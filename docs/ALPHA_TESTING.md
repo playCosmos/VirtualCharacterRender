@@ -4,7 +4,7 @@
 
 Current alpha candidate: 0.1.0-alpha.1.
 
-Source snapshot branch: release/0.1.0-alpha.1.
+Immutable source snapshot: tag `v0.1.0-alpha.1` at `d739002abc99ac9c6adf5edfed0595aa4aa7878b`. The `release/0.1.0-alpha.1` branch is retained for historical reference; its branch-push release workflows have been retired. Do not move the existing tag or overwrite its archives.
 
 This alpha is a full-feature integration build of the current develop runtime. No existing camera, ARKit, VMC, rendering, UI, appearance, event, material, environment, diagnostics, or 2D-host implementation is compiled out for the alpha.
 
