@@ -10,14 +10,38 @@ namespace VCR.Editor.Alpha
 {
     public static class AlphaBuildMenu
     {
-        public const string Version =
-            "0.1.0-alpha.1";
+        private const string DefaultVersion = "0.1.0-alpha.1";
 
-        public const string WindowsOutput =
-            "Builds/Alpha/0.1.0-alpha.1/Windows/VirtualCharacterRender.exe";
+        // CI sets this from the immutable tag. The legacy local default remains
+        // available to run existing alpha.1 evidence builds.
+        public static string Version
+        {
+            get
+            {
+                var configured = Environment.GetEnvironmentVariable(
+                    "VCR_RELEASE_VERSION");
+                if (string.IsNullOrEmpty(configured))
+                {
+                    return DefaultVersion;
+                }
 
-        public const string MacOutput =
-            "Builds/Alpha/0.1.0-alpha.1/macOS/VirtualCharacterRender.app";
+                if (!System.Text.RegularExpressions.Regex.IsMatch(
+                    configured,
+                    @"^\d+\.\d+\.\d+-alpha\.\d+$"))
+                {
+                    throw new InvalidOperationException(
+                        "Invalid VCR_RELEASE_VERSION: " + configured);
+                }
+
+                return configured;
+            }
+        }
+
+        public static string WindowsOutput =>
+            "Builds/Alpha/" + Version + "/Windows/VirtualCharacterRender.exe";
+
+        public static string MacOutput =>
+            "Builds/Alpha/" + Version + "/macOS/VirtualCharacterRender.app";
 
         [MenuItem("VCR/Alpha/Validate Source-Free (No Physical Camera or ARKit Required)")]
         public static void ValidateSourceFreeFromMenu()

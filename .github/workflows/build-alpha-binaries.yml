@@ -1,21 +1,55 @@
-name: Build alpha binaries
+name: Build and publish immutable alpha
 
 on:
   push:
-    branches:
-      - "release/0.1.0-alpha.1"
-  workflow_dispatch:
+    tags:
+      - "v*-alpha.*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: build-alpha-0.1.0-alpha.1
-  cancel-in-progress: true
+  group: alpha-release-${ github.ref }
+  cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: Verify immutable tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${ steps.tag.outputs.version }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate tag and reject existing release
+        id: tag
+        env:
+          GH_TOKEN: ${ github.token }
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          [[ "$GITHUB_REF" == "refs/tags/$tag" ]]
+          if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+-alpha[.][0-9]+$ ]]; then
+            echo "Expected a new tag such as v0.1.0-alpha.2" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+          if [[ "$remote_sha" != "$GITHUB_SHA" ]]; then
+            echo "Tag moved or is annotated; release tags must be lightweight and unmodified." >&2
+            exit 1
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists. Create a NEW version instead of overwriting it." >&2
+            exit 1
+          fi
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
   build:
-    name: Build ${{ matrix.name }}
+    name: Build ${ matrix.name }
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -25,93 +59,157 @@ jobs:
           - name: Windows x64
             target: StandaloneWindows64
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
-            output_dir: Builds/Alpha/0.1.0-alpha.1/Windows
-            package: VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip
+            folder: Windows
+            suffix: Windows-x64
           - name: macOS
             target: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
-            output_dir: Builds/Alpha/0.1.0-alpha.1/macOS
-            package: VirtualCharacterRender-0.1.0-alpha.1-macOS.zip
-
+            folder: macOS
+            suffix: macOS
+    env:
+      VCR_RELEASE_VERSION: ${ needs.preflight.outputs.version }
     steps:
-      - name: Checkout alpha source
+      - name: Checkout exact tagged source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      - name: Verify source SHA
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Bootstrap pinned MediaPipe package and models
-        shell: bash
         run: bash ./tools/bootstrap-mediapipe.sh
-
       - name: Bootstrap pinned Pretendard UI font
-        shell: bash
         run: bash ./tools/bootstrap-ui-fonts.sh
-
       - name: Bootstrap pinned Ultraleap Unity 6 compatibility
-        shell: bash
         run: bash ./tools/bootstrap-ultraleap.sh
-
       - name: Bootstrap pinned UniWinC native teardown compatibility
-        shell: bash
         run: bash ./tools/bootstrap-uniwinc.sh
-
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${ secrets.UNITY_LICENSE }
+          UNITY_EMAIL: ${ secrets.UNITY_EMAIL }
+          UNITY_PASSWORD: ${ secrets.UNITY_PASSWORD }
         with:
           projectPath: unity
           unityVersion: 6000.3.25f1
-          targetPlatform: ${{ matrix.target }}
-          buildMethod: ${{ matrix.method }}
+          targetPlatform: ${ matrix.target }
+          buildMethod: ${ matrix.method }
           versioning: None
           allowDirtyBuild: true
-
-      - name: Verify player output
+      - name: Package player with source proof and checksum
+        env:
+          PLAYER_FOLDER: ${ matrix.folder }
+          PACKAGE_SUFFIX: ${ matrix.suffix }
         shell: bash
         run: |
           set -euo pipefail
-          test -d "${{ matrix.output_dir }}"
-          find "${{ matrix.output_dir }}" -maxdepth 3 -type f -print
-
-      - name: Package player
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f "${{ matrix.package }}"
-          (
-            cd "${{ matrix.output_dir }}"
-            zip -r -y "../../../../${{ matrix.package }}" .
-          )
-          test -s "${{ matrix.package }}"
-          ls -lh "${{ matrix.package }}"
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+          folder="Builds/Alpha/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          test -d "$folder"
+          if [[ "$PLAYER_FOLDER" == Windows ]]; then
+            test -f "$folder/VirtualCharacterRender.exe"
+          else
+            test -d "$folder/VirtualCharacterRender.app"
+          fi
+          mkdir -p release-assets
+          package="VirtualCharacterRender-$VCR_RELEASE_VERSION-$PACKAGE_SUFFIX.zip"
+          (cd "$folder" && zip -r -y "$GITHUB_WORKSPACE/release-assets/$package" .)
+          test -s "release-assets/$package"
+          (cd release-assets && sha256sum "$package" > "$package.sha256")
+          printf '%s\n' "$GITHUB_SHA" > "release-assets/$package.source-sha"
+          cat "release-assets/$package.sha256"
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.package }}
-          path: ${{ matrix.package }}
+          name: alpha-${ matrix.suffix }
+          path: release-assets/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
   publish:
-    name: Attach binaries to alpha release
-    needs: build
+    name: Publish once after both builds
+    needs: [preflight, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${ github.token }
+      VERSION: ${ needs.preflight.outputs.version }
     steps:
-      - name: Download built packages
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
-
-      - name: Attach binaries to v0.1.0-alpha.1
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Validate immutable source, both archives and SHA-256
         shell: bash
         run: |
           set -euo pipefail
-          ls -lh release-assets
-          gh release upload v0.1.0-alpha.1             release-assets/VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip             release-assets/VirtualCharacterRender-0.1.0-alpha.1-macOS.zip             --repo "${{ github.repository }}"             --clobber
+          tag="v$VERSION"
+          test "$GITHUB_REF" = "refs/tags/$tag"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to replace an existing release: $tag" >&2
+            exit 1
+          fi
+          for suffix in Windows-x64 macOS; do
+            package="VirtualCharacterRender-$VERSION-$suffix.zip"
+            test -s "release-assets/$package"
+            test "$(cat "release-assets/$package.source-sha")" = "$GITHUB_SHA"
+            (cd release-assets && sha256sum --check "$package.sha256")
+          done
+      - name: Publish immutable prerelease with provenance manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          windows="VirtualCharacterRender-$VERSION-Windows-x64.zip"
+          mac="VirtualCharacterRender-$VERSION-macOS.zip"
+          (cd release-assets && sha256sum "$windows" "$mac" > SHA256SUMS.txt)
+          jq -n \
+            --arg tag "$tag" \
+            --arg sha "$GITHUB_SHA" \
+            --arg unity "6000.3.25f1" \
+            --arg workflow "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg windows "$windows" \
+            --arg windows_sha "$(sha256sum "release-assets/$windows" | cut -d' ' -f1)" \
+            --arg mac "$mac" \
+            --arg mac_sha "$(sha256sum "release-assets/$mac" | cut -d' ' -f1)" \
+            '{tag:$tag,source_sha:$sha,unity_version:$unity,workflow_run:$workflow,assets:[{name:$windows,sha256:$windows_sha},{name:$mac,sha256:$mac_sha}]}' \
+            > release-assets/build-provenance.json
+          cat > release-notes.md <<EOF
+          ## VirtualCharacterRender $VERSION
+
+          Integrated desktop development alpha for Windows x64 and macOS (Unity 6000.3.25f1).
+
+          - Immutable source tag: \`$tag\`
+          - Source commit: [\`$GITHUB_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
+          - Build workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Checksums: \`SHA256SUMS.txt\`
+          - Machine-readable source-to-artifact mapping: \`build-provenance.json\`
+
+          This release demonstrates build/package success, not physical tracking, OBS, or performance validation. See \`docs/ALPHA_TESTING.md\`.
+          EOF
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to overwrite an existing release: $tag" >&2
+            exit 1
+          fi
+          gh release create "$tag" \
+            "release-assets/$windows" "release-assets/$mac" \
+            release-assets/SHA256SUMS.txt release-assets/build-provenance.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "VirtualCharacterRender $VERSION" \
+            --notes-file release-notes.md --prerelease
+      - name: Verify published assets and release target
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
+          test "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')" = "$GITHUB_SHA"
+          for file in "VirtualCharacterRender-$VERSION-Windows-x64.zip" "VirtualCharacterRender-$VERSION-macOS.zip" SHA256SUMS.txt build-provenance.json; do
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx -- "$file"
+          done
