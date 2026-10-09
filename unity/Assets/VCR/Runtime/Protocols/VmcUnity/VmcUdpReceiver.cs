@@ -23,6 +23,7 @@ namespace VCR.Runtime.Protocols.VmcUnity
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
         ITrackingRuntimeControl,
+        ITrackingRuntimeConfigurable,
         IRuntimeMetricsSource
     {
         private const int UdpReceiveBufferBytes =
@@ -73,6 +74,96 @@ namespace VCR.Runtime.Protocols.VmcUnity
         public string ControlError =>
             _source?.Health.Error ??
             _backgroundError;
+
+        public string ConfigurationTitle =>
+            "VMC 입력 설정";
+        public bool OpenConfigurationOnAdd => true;
+
+        public IReadOnlyList<TrackingRuntimeSetting>
+            GetConfigurationSettings()
+        {
+            return new[]
+            {
+                new TrackingRuntimeSetting(
+                    "local-port",
+                    "수신 포트",
+                    localPort.ToString(),
+                    "39539",
+                    "VMC OSC/UDP 패킷을 받을 로컬 포트"),
+                new TrackingRuntimeSetting(
+                    "sender-ip",
+                    "허용 송신자 IP",
+                    allowedSenderIPv4Address,
+                    "127.0.0.1",
+                    "비우면 모든 송신자를 허용합니다. 신뢰된 LAN에서만 사용하세요.")
+            };
+        }
+
+        public bool TryApplyConfiguration(
+            IReadOnlyDictionary<string, string> values,
+            out string error)
+        {
+            error = null;
+
+            if (values == null)
+            {
+                error = "VMC 설정 값이 없습니다.";
+                return false;
+            }
+
+            if (!values.TryGetValue(
+                    "local-port",
+                    out var portText) ||
+                !int.TryParse(
+                    portText?.Trim(),
+                    out var nextPort) ||
+                nextPort < 1 ||
+                nextPort > 65535)
+            {
+                error =
+                    "VMC 수신 포트는 1~65535 범위여야 합니다.";
+                return false;
+            }
+
+            values.TryGetValue(
+                "sender-ip",
+                out var senderText);
+            senderText =
+                senderText?.Trim() ??
+                string.Empty;
+
+            if (!string.IsNullOrEmpty(
+                    senderText) &&
+                (!IPAddress.TryParse(
+                     senderText,
+                     out var senderAddress) ||
+                 senderAddress.AddressFamily !=
+                     AddressFamily.InterNetwork))
+            {
+                error =
+                    "허용 송신자 IP는 IPv4 주소이거나 빈 값이어야 합니다.";
+                return false;
+            }
+
+            localPort = nextPort;
+            allowedSenderIPv4Address = senderText;
+
+            if (enabled &&
+                Application.isPlaying)
+            {
+                StartReceiver();
+
+                if (!enabled)
+                {
+                    error =
+                        ControlError ??
+                        "VMC 수신기를 다시 시작하지 못했습니다.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         public ITrackingSource TrackingSource => _source;
         public TrackingPresenceSnapshot Presence => _presence;

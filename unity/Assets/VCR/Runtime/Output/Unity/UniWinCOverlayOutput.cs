@@ -19,6 +19,7 @@ namespace VCR.Runtime.Output.Unity
     public sealed class UniWinCOverlayOutput :
         MonoBehaviour,
         IOverlayOutputAdapter,
+        IProcessExitOverlayOutputAdapter,
         IRuntimeMetricsSource
     {
         [Header("Camera")]
@@ -43,6 +44,7 @@ namespace VCR.Runtime.Output.Unity
         private Color _originalBackground;
         private bool _originalAllowHdr;
         private bool _cameraStateCaptured;
+        private bool _shutdownApplied;
 
         public OverlayOutputSettings Settings =>
             CurrentSettings();
@@ -152,6 +154,7 @@ namespace VCR.Runtime.Output.Unity
 
         public void Apply(OverlayOutputSettings settings)
         {
+            _shutdownApplied = false;
             _applyAttempts++;
 
             transparent = settings.Transparent;
@@ -386,19 +389,56 @@ namespace VCR.Runtime.Output.Unity
 
         public void Shutdown()
         {
+            if (_shutdownApplied)
+            {
+                return;
+            }
+
+            // Both scene shutdown and Unity OnDisable invoke this method.
+            // Native desktop window teardown must be idempotent.
+            _shutdownApplied = true;
             _pendingNativeApply = false;
             _nativeApplied = false;
             _nativeApplyStartedAt = 0f;
 
-            if (_controller != null &&
-                !Application.isEditor)
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            try
             {
-                _controller.isClickThrough = false;
-                _controller.isTopmost = false;
-                _controller.isTransparent = false;
+                if (_controller != null && !Application.isEditor)
+                {
+                    Debug.Log("VCR UniWinC shutdown: click-through off", this);
+                    _controller.isClickThrough = false;
+                    Debug.Log("VCR UniWinC shutdown: topmost off", this);
+                    _controller.isTopmost = false;
+                    Debug.Log("VCR UniWinC shutdown: transparency off", this);
+                    _controller.isTransparent = false;
+                }
+            }
+            finally
+            {
+                RestoreCameraState();
+                Debug.Log("VCR UniWinC shutdown: completed (" +
+                          timer.ElapsedMilliseconds + " ms)", this);
+            }
+        }
+
+        public void ShutdownForProcessExit()
+        {
+            if (_shutdownApplied)
+            {
+                return;
             }
 
+            // During actual application exit, native window styles will
+            // disappear with the OS window. Setting them while the native
+            // window is being destroyed can synchronously stall Win32/Cocoa.
+            // Keep regular Shutdown() for suspension and explicit stop.
+            _shutdownApplied = true;
+            _pendingNativeApply = false;
+            _nativeApplied = false;
+            _nativeApplyStartedAt = 0f;
             RestoreCameraState();
+            Debug.Log("VCR UniWinC shutdown: process exit, native window style reset skipped.", this);
         }
 
         private void OnDisable()

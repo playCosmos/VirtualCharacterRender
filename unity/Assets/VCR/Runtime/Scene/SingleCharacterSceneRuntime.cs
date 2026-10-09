@@ -937,6 +937,11 @@ namespace VCR.Runtime.Scene
             return true;
         }
 
+        public void PrepareForApplicationQuit()
+        {
+            _applicationQuitting = true;
+        }
+
         public void Shutdown()
         {
             if (_state == SceneRuntimeState.ShuttingDown)
@@ -944,6 +949,8 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
+            // A failed cleanup remains retryable; only a fully clean
+            // stopped state may return early.
             if (_state == SceneRuntimeState.Stopped &&
                 _capabilities == null &&
                 string.IsNullOrWhiteSpace(
@@ -967,6 +974,9 @@ namespace VCR.Runtime.Scene
 
             if (capabilities != null)
             {
+                var capabilityTimer =
+                    System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log("VCR shutdown step begin: capability disposal", this);
                 try
                 {
                     capabilities.Dispose();
@@ -983,10 +993,12 @@ namespace VCR.Runtime.Scene
                     failures.Add(
                         "capability disposal: " +
                         exception.Message);
-
-                    Debug.LogException(
-                        exception,
-                        this);
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown step end: capability disposal (" +
+                              capabilityTimer.ElapsedMilliseconds + " ms)", this);
                 }
             }
 
@@ -1003,7 +1015,18 @@ namespace VCR.Runtime.Scene
             {
                 RunShutdownStep(
                     "overlay output shutdown",
-                    _overlayOutput.Shutdown,
+                    () =>
+                    {
+                        if (_applicationQuitting &&
+                            _overlayOutput is IProcessExitOverlayOutputAdapter exitAdapter)
+                        {
+                            exitAdapter.ShutdownForProcessExit();
+                        }
+                        else
+                        {
+                            _overlayOutput.Shutdown();
+                        }
+                    },
                     failures);
             }
 
@@ -1493,25 +1516,27 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR shutdown step begin: " + label, this);
             try
             {
                 action();
             }
             catch (Exception exception)
             {
-                failures?.Add(
-                    label + ": " +
-                    exception.Message);
-
-                Debug.LogException(
-                    exception,
-                    this);
+                failures?.Add(label + ": " + exception.Message);
+                Debug.LogException(exception, this);
+            }
+            finally
+            {
+                Debug.Log("VCR shutdown step end: " + label +
+                          " (" + timer.ElapsedMilliseconds + " ms)", this);
             }
         }
 
         private void OnApplicationQuit()
         {
-            _applicationQuitting = true;
+            PrepareForApplicationQuit();
             Shutdown();
         }
 

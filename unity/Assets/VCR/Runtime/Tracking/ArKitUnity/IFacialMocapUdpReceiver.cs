@@ -25,6 +25,7 @@ namespace VCR.Runtime.Tracking.ArKitUnity
         ITrackingPresenceProvider,
         ITrackingSourceHealthProvider,
         ITrackingRuntimeControl,
+        ITrackingRuntimeConfigurable,
         IRuntimeMetricsSource
     {
         private const int MaxDatagramBytes =
@@ -110,6 +111,129 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                     TrackingSourceHealthState.Stopped
             };
         public string ControlError => _lastError;
+
+        public string ConfigurationTitle =>
+            "ARKit / iPhone·iPad 설정";
+        public bool OpenConfigurationOnAdd => true;
+
+        public IReadOnlyList<TrackingRuntimeSetting>
+            GetConfigurationSettings()
+        {
+            return new[]
+            {
+                new TrackingRuntimeSetting(
+                    "ios-ip",
+                    "iPhone / iPad IP",
+                    iosIPv4Address,
+                    "예: 192.168.0.25",
+                    "ARKit 송신 기기의 IPv4 주소"),
+                new TrackingRuntimeSetting(
+                    "remote-port",
+                    "송신 포트",
+                    remotePort.ToString(),
+                    IFacialMocapFrameParser.DefaultPort.ToString(),
+                    "iFacialMocap / FaceMotion3D 송신 포트"),
+                new TrackingRuntimeSetting(
+                    "local-port",
+                    "수신 포트",
+                    localPort.ToString(),
+                    IFacialMocapFrameParser.DefaultPort.ToString(),
+                    "이 PC/Mac에서 ARKit 패킷을 받을 UDP 포트")
+            };
+        }
+
+        public bool TryApplyConfiguration(
+            IReadOnlyDictionary<string, string> values,
+            out string error)
+        {
+            error = null;
+
+            if (values == null)
+            {
+                error = "ARKit 설정 값이 없습니다.";
+                return false;
+            }
+
+            values.TryGetValue(
+                "ios-ip",
+                out var addressText);
+            addressText =
+                addressText?.Trim() ??
+                string.Empty;
+
+            if (!IPAddress.TryParse(
+                    addressText,
+                    out var address) ||
+                address.AddressFamily !=
+                    AddressFamily.InterNetwork)
+            {
+                error =
+                    "iPhone/iPad의 올바른 IPv4 주소를 입력하세요.";
+                return false;
+            }
+
+            if (!TryReadPort(
+                    values,
+                    "remote-port",
+                    remotePort,
+                    out var nextRemotePort) ||
+                !TryReadPort(
+                    values,
+                    "local-port",
+                    localPort,
+                    out var nextLocalPort))
+            {
+                error =
+                    "포트는 1~65535 범위의 숫자여야 합니다.";
+                return false;
+            }
+
+            iosIPv4Address = addressText;
+            remotePort = nextRemotePort;
+            localPort = nextLocalPort;
+
+            if (enabled &&
+                Application.isPlaying)
+            {
+                StartReceiver();
+
+                if (!enabled ||
+                    _state ==
+                        ArKitReceiverLifecycleState.Faulted)
+                {
+                    error =
+                        _lastError ??
+                        "ARKit 수신기를 다시 시작하지 못했습니다.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryReadPort(
+            IReadOnlyDictionary<string, string> values,
+            string key,
+            int fallback,
+            out int value)
+        {
+            value = fallback;
+
+            if (!values.TryGetValue(
+                    key,
+                    out var text) ||
+                string.IsNullOrWhiteSpace(
+                    text))
+            {
+                return true;
+            }
+
+            return int.TryParse(
+                       text.Trim(),
+                       out value) &&
+                   value >= 1 &&
+                   value <= 65535;
+        }
 
         public TrackingPresenceSnapshot Presence => _presence;
         public long PacketCount => Interlocked.Read(ref _packetCount);
