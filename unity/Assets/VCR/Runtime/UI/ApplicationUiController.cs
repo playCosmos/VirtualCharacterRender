@@ -3077,6 +3077,10 @@ namespace VCR.Runtime.UI
                 _characterPathInput.text =
                     result.Path;
             }
+            if (_settingsCharacterPathInput != null)
+            {
+                _settingsCharacterPathInput.SetTextWithoutNotify(result.Path);
+            }
 
             _lastActionMessage =
                 $"Selected character file through '{_characterFileSelectionAdapter.AdapterId}'.";
