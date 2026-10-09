@@ -19,6 +19,19 @@ namespace VCR.Runtime.UI
         private Text _dashboardPresetEmptyText;
         private string _dashboardPresetSignature;
         private RectTransform _dashboardSettingsModal;
+        private RectTransform _settingsCategoryHost;
+        private RectTransform _settingsGeneralBody;
+        private RectTransform _settingsEmbeddedPanel;
+        private Transform _settingsEmbeddedOriginalParent;
+        private int _settingsEmbeddedOriginalSibling;
+        private bool _settingsEmbeddedOriginalActive;
+        private Vector2 _settingsEmbeddedOriginalAnchorMin;
+        private Vector2 _settingsEmbeddedOriginalAnchorMax;
+        private Vector2 _settingsEmbeddedOriginalOffsetMin;
+        private Vector2 _settingsEmbeddedOriginalOffsetMax;
+        private Vector2 _settingsEmbeddedOriginalPivot;
+        private bool _settingsEmbeddedIgnoreLayout;
+
         private RectTransform _dashboardCharacterInspector;
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
@@ -655,7 +668,7 @@ namespace VCR.Runtime.UI
             panel.pivot =
                 new Vector2(0.5f, 0.5f);
             panel.sizeDelta =
-                new Vector2(520f, 430f);
+                new Vector2(900f, 650f);
 
             var panelImage =
                 panel.gameObject
@@ -729,6 +742,33 @@ namespace VCR.Runtime.UI
                 Vector2.one,
                 new Vector2(20f, 20f),
                 new Vector2(-20f, -66f));
+
+            var categoryRow = CreateDashboardRow(
+                body, "Settings Categories", 40f);
+            categoryRow.anchorMin = new Vector2(0f, 1f);
+            categoryRow.anchorMax = new Vector2(1f, 1f);
+            categoryRow.pivot = new Vector2(0.5f, 1f);
+            categoryRow.offsetMin = new Vector2(0f, -40f);
+            categoryRow.offsetMax = Vector2.zero;
+
+            AddSettingsCategoryButton(categoryRow, "일반",
+                () => ShowSettingsCategory("general"));
+            AddSettingsCategoryButton(categoryRow, "캐릭터 / 모델",
+                () => ShowSettingsCategory("character"));
+            AddSettingsCategoryButton(categoryRow, "트래킹",
+                () => ShowSettingsCategory("tracking"));
+            AddSettingsCategoryButton(categoryRow, "출력",
+                () => ShowSettingsCategory("output"));
+
+            _settingsCategoryHost = CreateRect(
+                "Settings Category Content", body);
+            Stretch(_settingsCategoryHost, Vector2.zero, Vector2.one,
+                new Vector2(0f, 0f), new Vector2(0f, -50f));
+            _settingsGeneralBody = CreateRect(
+                "General Settings", _settingsCategoryHost);
+            Stretch(_settingsGeneralBody, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            body = _settingsGeneralBody;
 
             var layout =
                 body.gameObject
@@ -867,6 +907,97 @@ namespace VCR.Runtime.UI
                 false);
         }
 
+        private void AddSettingsCategoryButton(Transform parent,
+            string label, Action action)
+        {
+            var button = CreateButton(label, parent, action);
+            var element = button.gameObject.AddComponent<LayoutElement>();
+            element.flexibleWidth = 1f;
+            element.preferredHeight = 36f;
+        }
+
+        private void RestoreSettingsEmbeddedPanel()
+        {
+            if (_settingsEmbeddedPanel == null)
+            {
+                return;
+            }
+
+            var panel = _settingsEmbeddedPanel;
+            panel.SetParent(_settingsEmbeddedOriginalParent, false);
+            panel.SetSiblingIndex(_settingsEmbeddedOriginalSibling);
+            panel.anchorMin = _settingsEmbeddedOriginalAnchorMin;
+            panel.anchorMax = _settingsEmbeddedOriginalAnchorMax;
+            panel.pivot = _settingsEmbeddedOriginalPivot;
+            panel.offsetMin = _settingsEmbeddedOriginalOffsetMin;
+            panel.offsetMax = _settingsEmbeddedOriginalOffsetMax;
+            var layout = panel.GetComponent<LayoutElement>();
+            if (layout != null)
+            {
+                layout.ignoreLayout = _settingsEmbeddedIgnoreLayout;
+            }
+            panel.gameObject.SetActive(_settingsEmbeddedOriginalActive);
+            _settingsEmbeddedPanel = null;
+            RefreshDashboardDockHost();
+        }
+
+        private void ShowSettingsCategory(string category)
+        {
+            RestoreSettingsEmbeddedPanel();
+            if (_settingsGeneralBody == null ||
+                _settingsCategoryHost == null)
+            {
+                return;
+            }
+
+            bool general = category == "general";
+            _settingsGeneralBody.gameObject.SetActive(general);
+            if (general)
+            {
+                return;
+            }
+
+            RectTransform panel = null;
+            if (category == "character")
+            {
+                panel = _dashboardCharacterInspector;
+                SelectSection(ApplicationUiSection.Character);
+            }
+            else if (_dashboardPanels.TryGetValue(
+                         category, out var dockPanel))
+            {
+                panel = dockPanel;
+            }
+
+            if (panel == null)
+            {
+                return;
+            }
+
+            _settingsEmbeddedPanel = panel;
+            _settingsEmbeddedOriginalParent = panel.parent;
+            _settingsEmbeddedOriginalSibling = panel.GetSiblingIndex();
+            _settingsEmbeddedOriginalActive = panel.gameObject.activeSelf;
+            _settingsEmbeddedOriginalAnchorMin = panel.anchorMin;
+            _settingsEmbeddedOriginalAnchorMax = panel.anchorMax;
+            _settingsEmbeddedOriginalOffsetMin = panel.offsetMin;
+            _settingsEmbeddedOriginalOffsetMax = panel.offsetMax;
+            _settingsEmbeddedOriginalPivot = panel.pivot;
+            var element = panel.GetComponent<LayoutElement>();
+            _settingsEmbeddedIgnoreLayout =
+                element != null && element.ignoreLayout;
+
+            panel.SetParent(_settingsCategoryHost, false);
+            if (element != null)
+            {
+                element.ignoreLayout = true;
+            }
+            Stretch(panel, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            panel.gameObject.SetActive(true);
+            RefreshDashboardDockHost();
+        }
+
         private void ToggleDashboardCharacterInspector()
         {
             if (_dashboardCharacterInspector == null)
@@ -906,11 +1037,13 @@ namespace VCR.Runtime.UI
             _dashboardSettingsModal.gameObject.SetActive(
                 true);
             _dashboardSettingsModal.SetAsLastSibling();
+            ShowSettingsCategory("general");
             RefreshAll();
         }
 
         private void CloseSettingsModal()
         {
+            RestoreSettingsEmbeddedPanel();
             if (_dashboardSettingsModal != null)
             {
                 _dashboardSettingsModal.gameObject.SetActive(
@@ -1264,35 +1397,6 @@ namespace VCR.Runtime.UI
                     break;
 
                 case "settings":
-                    AddObsMenuItem(
-                        "캐릭터 / 모델",
-                        ToggleDashboardCharacterInspector);
-                    AddObsMenuItem(
-                        "모션 & 애니메이션",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.MotionExpression));
-                    AddObsMenuItem(
-                        "트래킹",
-                        () => ToggleDashboardPanelFromSettings("tracking"));
-                    AddObsMenuItem(
-                        "표정",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.Expression));
-                    AddObsMenuItem(
-                        "의상 & 액세서리",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.Appearance));
-                    AddObsMenuItem(
-                        "배경 & 스테이지",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.Environment));
-                    AddObsMenuItem(
-                        "출력",
-                        () => ToggleDashboardPanelFromSettings("output"));
                     AddObsMenuItem(
                         "환경설정…",
                         OpenSettingsModal);
