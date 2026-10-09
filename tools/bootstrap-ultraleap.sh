@@ -63,3 +63,24 @@ for original,changed in replacements.items():
 p.write_text(s)
 print("Patched Ultraleap legacy XRSettings/XRStats usage for Unity 6")
 PY
+
+# Ultraleap's optional settings asset may be absent in standalone releases.
+# Do not crash application startup while initializing optional hand hints.
+export ULTRALEAP_HINT_FILE="$DEST/Core/Runtime/Scripts/Utils/HandTrackingHintManager.cs"
+python3 - <<'PY'
+import os
+from pathlib import Path
+p=Path(os.environ["ULTRALEAP_HINT_FILE"])
+s=p.read_text()
+old="            currentHints = UltraleapSettings.Instance.startupHints.ToList();"
+new="""            var settings = UltraleapSettings.Instance;
+            currentHints = settings != null && settings.startupHints != null
+                ? settings.startupHints.ToList()
+                : new List<string>();"""
+if old not in s and new not in s:
+    raise SystemExit("Unexpected pinned Ultraleap hint manager source")
+if old in s:
+    s=s.replace(old,new)
+    p.write_text(s)
+print("Ultraleap standalone startup hints: null-safe")
+PY
