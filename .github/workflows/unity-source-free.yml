@@ -1,0 +1,80 @@
+name: Unity P0-P13 source-free validation
+
+on:
+  push:
+    branches:
+      - develop
+      - ci/unity-p0-p13-source-free
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unity-source-free-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unity-source-free:
+    name: P0-P13 inherited Unity Editor checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate pinned Unity project and store input fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/unity-reproducibility.sha256"
+          test ! -e unity/Library
+
+      - name: Bootstrap SHA-verified MediaPipe and models
+        run: bash tools/bootstrap-mediapipe.sh
+      - name: Bootstrap verified Pretendard UI font
+        run: bash tools/bootstrap-ui-fonts.sh
+      - name: Bootstrap pinned Ultraleap Unity 6 compatibility
+        run: bash tools/bootstrap-ultraleap.sh
+      - name: Bootstrap pinned UniWinC teardown compatibility
+        run: bash tools/bootstrap-uniwinc.sh
+
+      - name: Run Unity 6000.3.25f1 P0-P13 source-free validation
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P13.P13BatchValidation.RunSourceFreeAndExit
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require actual PASS report and unchanged lock/settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify-unity-source-free-report.py Builds/Validation/p0-p13-source-free.json
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "Unity P0-P13 source-free evidence: PASS for $GITHUB_SHA"
+
+      - name: Archive source-free validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-p0-p13-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/Validation/p0-p13-source-free.json
+          if-no-files-found: warn
+          retention-days: 30
