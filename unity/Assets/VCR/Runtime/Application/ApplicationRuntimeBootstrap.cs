@@ -474,6 +474,13 @@ namespace VCR.Runtime.Application
 
         private void OnApplicationQuit()
         {
+            // Unity does not guarantee OnApplicationQuit ordering between
+            // this bootstrap and the scene runtime. Signal before teardown.
+            if (sceneRuntime != null)
+            {
+                sceneRuntime.PrepareForApplicationQuit();
+            }
+
             if (!Shutdown(
                     saveConfigurationOnQuit,
                     out var error) &&
