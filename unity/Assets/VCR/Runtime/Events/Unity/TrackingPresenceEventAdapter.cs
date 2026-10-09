@@ -220,6 +220,21 @@ namespace VCR.Runtime.Events.Unity
             {
                 _sink = null;
 
+                // Prefer a replacement on our own GameObject. The old sink
+                // might have been destroyed while other scenes still contain
+                // valid, unrelated event hubs.
+                var localBehaviours = GetComponents<MonoBehaviour>();
+                foreach (var behaviour in localBehaviours)
+                {
+                    if (behaviour != null &&
+                        behaviour is INormalizedEventSink localSink)
+                    {
+                        _sink = localSink;
+                        eventSinkBehaviour = behaviour;
+                        return;
+                    }
+                }
+
                 var hub =
                     FindFirstObjectByType<
                         NormalizedEventHub>();
