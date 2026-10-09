@@ -810,7 +810,7 @@ namespace VCR.Runtime.Tracking.Ultraleap
                         ? SubjectPresenceState.Unknown
                         : subjectEvidence
                             ? SubjectPresenceState.Present
-                            : SubjectPresenceState.Absent,
+                            : SubjectPresenceState.Lost,
                     faceSourceAvailable:
                         false,
                     bodyHandsSourceAvailable:
