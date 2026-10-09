@@ -6,6 +6,8 @@ root = Path(__file__).resolve().parents[1]
 workflow = (root / ".github/workflows/build-alpha-binaries.yml").read_text(encoding="utf-8")
 builder = (root / "unity/Assets/VCR/Editor/Alpha/AlphaBuildMenu.cs").read_text(encoding="utf-8")
 obsolete = root / ".github/workflows/publish-alpha-release.yml"
+local_build = (root / "tools/build-alpha.ps1").read_text(encoding="utf-8")
+local_run = (root / "tools/run-alpha.ps1").read_text(encoding="utf-8")
 
 checks = {
     "legacy mutable release workflow removed": not obsolete.exists(),
@@ -19,6 +21,7 @@ checks = {
     "provenance published": 'build-provenance.json' in workflow,
     "overwrite options forbidden": '--clobber' not in workflow and '-F force=true' not in workflow,
     "version supplied by tag to Unity": 'VCR_RELEASE_VERSION:' in workflow and 'VCR_RELEASE_VERSION' in builder,
+    "local build and run scripts support same version": "$env:VCR_RELEASE_VERSION = $AlphaVersion" in local_build and "[string]$AlphaVersion" in local_run,
     "release depends on both builds": 'needs: [preflight, build]' in workflow,
 }
 for description, passed in checks.items():
