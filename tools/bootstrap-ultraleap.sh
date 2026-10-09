@@ -84,3 +84,40 @@ if old in s:
     p.write_text(s)
 print("Ultraleap standalone startup hints: null-safe")
 PY
+
+# In a standalone Player the upstream package cannot create the missing
+# Ultraleap Settings asset (CreateSettingsSO is UNITY_EDITOR-only). Provide
+# an in-memory default so every consumer of UltraleapSettings.Instance,
+# not only StartupHints, remains safe without hardware or asset setup.
+export ULTRALEAP_SETTINGS_FILE="$DEST/Core/Runtime/Scripts/UltraleapSettings.cs"
+python3 - <<'PY'
+import os
+from pathlib import Path
+p = Path(os.environ["ULTRALEAP_SETTINGS_FILE"])
+s = p.read_text()
+old = '''#if UNITY_EDITOR
+            newSO = ScriptableObject.CreateInstance<UltraleapSettings>();
+
+            Directory.CreateDirectory(Application.dataPath + "/Resources/");
+            AssetDatabase.CreateAsset(newSO, "Assets/Resources/Ultraleap Settings.asset");
+#endif
+            return newSO;'''
+new = '''#if UNITY_EDITOR
+            newSO = ScriptableObject.CreateInstance<UltraleapSettings>();
+
+            Directory.CreateDirectory(Application.dataPath + "/Resources/");
+            AssetDatabase.CreateAsset(newSO, "Assets/Resources/Ultraleap Settings.asset");
+#else
+            // VCR: A Player cannot write editor assets. Keep startup hints
+            // and other settings consumers safe with non-persistent defaults.
+            newSO = ScriptableObject.CreateInstance<UltraleapSettings>();
+            newSO.hideFlags = HideFlags.DontSave;
+#endif
+            return newSO;'''
+if old not in s and new not in s:
+    raise SystemExit("Unexpected upstream UltraleapSettings.CreateSettingsSO")
+if old in s:
+    s = s.replace(old, new)
+    p.write_text(s)
+print("Ultraleap standalone settings default: null-safe")
+PY
