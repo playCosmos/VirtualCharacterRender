@@ -198,11 +198,28 @@ namespace VCR.Runtime.Tracking.Ultraleap
 
         private void OnDisable()
         {
+            var shutdownTimer =
+                System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR Ultraleap shutdown begin", this);
+
+            var unsubscribeTimer =
+                System.Diagnostics.Stopwatch.StartNew();
             UnsubscribeProvider();
+            Debug.Log(
+                "VCR Ultraleap shutdown: unsubscribe (" +
+                unsubscribeTimer.ElapsedMilliseconds + " ms)",
+                this);
 
             if (provider != null)
             {
+                var providerTimer =
+                    System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log("VCR Ultraleap shutdown: provider disable begin", this);
                 provider.enabled = false;
+                Debug.Log(
+                    "VCR Ultraleap shutdown: provider disable end (" +
+                    providerTimer.ElapsedMilliseconds + " ms)",
+                    this);
             }
 
             _latestFrame = null;
@@ -215,6 +232,10 @@ namespace VCR.Runtime.Tracking.Ultraleap
                     float.NaN,
                     null);
             _presence = default;
+            Debug.Log(
+                "VCR Ultraleap shutdown completed (" +
+                shutdownTimer.ElapsedMilliseconds + " ms)",
+                this);
         }
 
         private void OnDestroy()
