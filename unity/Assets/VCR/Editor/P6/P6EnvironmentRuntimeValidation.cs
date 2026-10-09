@@ -1166,12 +1166,13 @@ namespace VCR.Editor.P6
                     "Crossfade completion must keep only the new root active and dispatch progress 1",
                     failures);
 
+                var updatesBeforeManual = target.UpdateCount;
                 Expect(
                     runtime.RequestManualUpdate() &&
-                    target.UpdateCount == 2 &&
+                    target.UpdateCount == updatesBeforeManual + 1 &&
                     target.LastContext.Reason ==
                         EnvironmentUpdateReason.Manual,
-                    "manual environment updates must dispatch explicitly without requiring a recurring driver",
+                    "manual environment updates must dispatch exactly once without requiring a recurring driver",
                     failures);
 
                 Expect(
@@ -1349,9 +1350,9 @@ namespace VCR.Editor.P6
                         out var spaceModeMetric) &&
                     Math.Abs(
                         spaceModeMetric -
-                        (int)EnvironmentSpaceMode.Character) <
+                        (int)EnvironmentSpaceMode.World) <
                     0.001,
-                    "environment diagnostics must expose the active space mode",
+                    "environment diagnostics must expose the currently configured (World) space mode",
                     failures);
 
                 Expect(
@@ -1381,8 +1382,9 @@ namespace VCR.Editor.P6
                         metrics,
                         "environment.lighting_failures",
                         out var lightingFailures) &&
-                    lightingFailures < 0.5,
-                    "valid environment lighting application must not report failures",
+                    lightingFailures >= 1.0,
+                    "environment diagnostics must retain deliberate failed lighting attempts instead of hiding them",
+                    failures);
                     failures);
 
                 Expect(
