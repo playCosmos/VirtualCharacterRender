@@ -19,6 +19,7 @@ namespace VCR.Runtime.UI
         private Text _dashboardPresetEmptyText;
         private string _dashboardPresetSignature;
         private RectTransform _dashboardSettingsModal;
+        private RectTransform _dashboardCharacterInspector;
         private Text _dashboardModelNameText;
         private Text _dashboardTrackingStatusText;
         private Text _dashboardTrackingRouteText;
@@ -117,6 +118,11 @@ namespace VCR.Runtime.UI
             BuildMockupViewportToolbar();
             BuildMockupInspector(
                 inspector);
+            _dashboardCharacterInspector = inspector;
+            if (_dashboardCharacterInspector != null)
+            {
+                _dashboardCharacterInspector.gameObject.SetActive(false);
+            }
             BuildMockupTrackingCard();
             BuildMockupMotionCard();
             BuildMockupControlCard();
@@ -861,6 +867,35 @@ namespace VCR.Runtime.UI
                 false);
         }
 
+        private void ToggleDashboardCharacterInspector()
+        {
+            if (_dashboardCharacterInspector == null)
+            {
+                return;
+            }
+
+            var visible = !_dashboardCharacterInspector.gameObject.activeSelf;
+            _dashboardCharacterInspector.gameObject.SetActive(visible);
+            if (visible)
+            {
+                SelectSection(ApplicationUiSection.Character);
+                _dashboardCharacterInspector.SetAsLastSibling();
+            }
+
+            RefreshAll();
+        }
+
+        private void ToggleDashboardPanelFromSettings(string panelId)
+        {
+            if (!_dashboardPanels.TryGetValue(panelId, out var panel) ||
+                panel == null)
+            {
+                return;
+            }
+
+            SetDashboardPanelVisible(panelId, !panel.gameObject.activeSelf);
+        }
+
         private void OpenSettingsModal()
         {
             if (_dashboardSettingsModal == null)
@@ -1230,10 +1265,8 @@ namespace VCR.Runtime.UI
 
                 case "settings":
                     AddObsMenuItem(
-                        "캐릭터",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.Character));
+                        "캐릭터 / 모델",
+                        ToggleDashboardCharacterInspector);
                     AddObsMenuItem(
                         "모션 & 애니메이션",
                         () =>
@@ -1241,9 +1274,7 @@ namespace VCR.Runtime.UI
                                 ApplicationUiSection.MotionExpression));
                     AddObsMenuItem(
                         "트래킹",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.Tracking));
+                        () => ToggleDashboardPanelFromSettings("tracking"));
                     AddObsMenuItem(
                         "표정",
                         () =>
@@ -1261,9 +1292,7 @@ namespace VCR.Runtime.UI
                                 ApplicationUiSection.Environment));
                     AddObsMenuItem(
                         "출력",
-                        () =>
-                            SelectSection(
-                                ApplicationUiSection.CameraOutput));
+                        () => ToggleDashboardPanelFromSettings("output"));
                     AddObsMenuItem(
                         "환경설정…",
                         OpenSettingsModal);
@@ -1384,6 +1413,7 @@ namespace VCR.Runtime.UI
                 var max =
                     _renderViewportFrame.offsetMax;
                 min.x = 8f;
+                max.x = -8f;
                 max.y = -44f;
                 _renderViewportFrame.offsetMin =
                     min;
@@ -1478,7 +1508,7 @@ namespace VCR.Runtime.UI
                 "tracking",
                 "트래킹",
                 _trackingDashboardContent,
-                defaultVisible: true);
+                defaultVisible: false);
             RegisterObsDockablePanel(
                 "motion",
                 "모션 & 표정",
@@ -1498,7 +1528,7 @@ namespace VCR.Runtime.UI
                 "output",
                 "출력",
                 _outputDashboardContent,
-                defaultVisible: true);
+                defaultVisible: false);
             RegisterObsDockablePanel(
                 "camera",
                 "카메라 미리보기",
@@ -1993,15 +2023,7 @@ namespace VCR.Runtime.UI
                         null);
                 }
 
-                var visible =
-                    string.Equals(
-                        pair.Key,
-                        "tracking",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(
-                        pair.Key,
-                        "output",
-                        StringComparison.OrdinalIgnoreCase);
+                var visible = false;
 
                 pair.Value.gameObject.SetActive(
                     visible);
