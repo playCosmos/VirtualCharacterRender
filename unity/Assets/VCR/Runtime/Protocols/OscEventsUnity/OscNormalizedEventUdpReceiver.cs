@@ -666,6 +666,26 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 return;
             }
 
+            // A destroyed configured sink may be replaced on our own
+            // GameObject immediately. Discover locally before applying the
+            // scene-wide retry delay, and never select an unrelated sink
+            // elsewhere ahead of the replacement.
+            var localBehaviours =
+                GetComponents<MonoBehaviour>();
+
+            foreach (var behaviour in localBehaviours)
+            {
+                if (behaviour != null &&
+                    !ReferenceEquals(behaviour, this) &&
+                    behaviour is INormalizedEventSink localSink)
+                {
+                    _sink = localSink;
+                    eventSinkBehaviour = behaviour;
+                    _nextSinkResolveRealtime = 0f;
+                    return;
+                }
+            }
+
             var now =
                 Time.realtimeSinceStartup;
 
