@@ -3558,7 +3558,9 @@ namespace VCR.Editor.P11
                     firstResult &&
                     secondResult &&
                     cache != null &&
-                    decoyCallsAfterFirst == 1 &&
+                    // A decoy without IAppearanceTransitionStepCompletionProbe
+                    // must not be probed at all, even on the first scan.
+                    decoyCallsAfterFirst == 0 &&
                     decoy.CanExecuteCount ==
                         decoyCallsAfterFirst &&
                     probeCallsAfterFirst == 1 &&
