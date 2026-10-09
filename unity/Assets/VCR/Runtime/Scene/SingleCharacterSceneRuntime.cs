@@ -1493,19 +1493,21 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log("VCR shutdown step begin: " + label, this);
             try
             {
                 action();
             }
             catch (Exception exception)
             {
-                failures?.Add(
-                    label + ": " +
-                    exception.Message);
-
-                Debug.LogException(
-                    exception,
-                    this);
+                failures?.Add(label + ": " + exception.Message);
+                Debug.LogException(exception, this);
+            }
+            finally
+            {
+                Debug.Log("VCR shutdown step end: " + label +
+                          " (" + timer.ElapsedMilliseconds + " ms)", this);
             }
         }
 
