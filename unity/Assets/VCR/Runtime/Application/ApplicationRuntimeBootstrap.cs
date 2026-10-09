@@ -457,8 +457,8 @@ namespace VCR.Runtime.Application
                               stopwatch.ElapsedMilliseconds + " ms", this);
                     sceneRuntime.Shutdown();
 
-                    var sceneError =
-                        sceneRuntime.Status.LastError;
+                var sceneError =
+                    sceneRuntime.Status.LastError;
                     if (!string.IsNullOrWhiteSpace(sceneError))
                     {
                         succeeded = false;
