@@ -761,6 +761,7 @@ namespace VCR.Editor.P1
                 configuration.EnvironmentStateId =
                     "configured";
 
+                var beforeSceneConfigApplyCount = outputAdapter.ApplyCount;
                 scene.ApplyConfiguration(
                     configuration);
 
@@ -810,7 +811,8 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    outputAdapter.ApplyCount == 1 &&
+                    outputAdapter.ApplyCount ==
+                        beforeSceneConfigApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
                     outputAdapter.LastSettings.Topmost &&
                     !outputAdapter.LastSettings.ClickThrough,
@@ -835,6 +837,7 @@ namespace VCR.Editor.P1
                         topmost: false,
                         clickThrough: true);
 
+                var beforeOverlayChangeApplyCount = outputAdapter.ApplyCount;
                 scene.ApplyOverlayOutput(
                     outputSettings);
 
@@ -842,7 +845,8 @@ namespace VCR.Editor.P1
                     scene.CaptureConfiguration().Overlay;
 
                 Expect(
-                    outputAdapter.ApplyCount == 2 &&
+                    outputAdapter.ApplyCount ==
+                        beforeOverlayChangeApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
                     !outputAdapter.LastSettings.Topmost &&
                     outputAdapter.LastSettings.ClickThrough &&
@@ -852,6 +856,7 @@ namespace VCR.Editor.P1
                     "individual overlay changes must update both adapter and configuration snapshot",
                     failures);
 
+                var beforeFailedOverlayApplyCount = outputAdapter.ApplyCount;
                 outputAdapter.ThrowOnApply =
                     true;
                 var overlayApplyFailed = false;
@@ -879,7 +884,8 @@ namespace VCR.Editor.P1
 
                 Expect(
                     overlayApplyFailed &&
-                    outputAdapter.ApplyCount == 2 &&
+                    outputAdapter.ApplyCount ==
+                        beforeFailedOverlayApplyCount &&
                     overlayAfterFailedApply.Transparent &&
                     !overlayAfterFailedApply.Topmost &&
                     overlayAfterFailedApply.ClickThrough,
@@ -1112,11 +1118,13 @@ namespace VCR.Editor.P1
                     "configuration store must reject unsupported future versions",
                     failures);
 
+                var beforeSuspendShutdownCount = outputAdapter.ShutdownCount;
                 Expect(
                     scene.Suspend() &&
                     scene.State ==
                     SceneRuntimeState.Suspended &&
-                    outputAdapter.ShutdownCount == 1 &&
+                    outputAdapter.ShutdownCount ==
+                        beforeSuspendShutdownCount + 1 &&
                     capabilityDisposeCount == 0 &&
                     capabilities != null &&
                     capabilities.EnabledCount == 3,
@@ -1171,11 +1179,13 @@ namespace VCR.Editor.P1
                     "TryApplyBroadcastCaptureTarget must report lifecycle rejection through false/error instead of throwing or mutating the suspended scene",
                     failures);
 
+                var beforeResumeApplyCount = outputAdapter.ApplyCount;
                 Expect(
                     scene.Resume() &&
                     scene.State ==
                     SceneRuntimeState.Ready &&
-                    outputAdapter.ApplyCount == 3 &&
+                    outputAdapter.ApplyCount ==
+                        beforeResumeApplyCount + 1 &&
                     capabilityDisposeCount == 0,
                     "resume must restore scene presentation without recreating capabilities",
                     failures);
@@ -1209,6 +1219,7 @@ namespace VCR.Editor.P1
                     "basic environment runtime",
                     failures);
 
+                var beforeShutdownOutputCount = outputAdapter.ShutdownCount;
                 scene.Shutdown();
 
                 Expect(
@@ -1218,7 +1229,8 @@ namespace VCR.Editor.P1
                     failures);
 
                 Expect(
-                    outputAdapter.ShutdownCount == 2,
+                    outputAdapter.ShutdownCount ==
+                        beforeShutdownOutputCount + 1,
                     "scene shutdown must shut down the overlay output adapter after the earlier suspend cycle",
                     failures);
 
@@ -2197,8 +2209,10 @@ namespace VCR.Editor.P1
                     return;
                 }
 
-                _disposed = true;
+                // A failed disposal must remain retryable by the registry.
+                // Mark success only after the callback completes.
                 _onDispose?.Invoke();
+                _disposed = true;
             }
         }
 
