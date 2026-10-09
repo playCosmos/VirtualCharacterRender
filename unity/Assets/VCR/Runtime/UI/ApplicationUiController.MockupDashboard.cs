@@ -21,16 +21,8 @@ namespace VCR.Runtime.UI
         private RectTransform _dashboardSettingsModal;
         private RectTransform _settingsCategoryHost;
         private RectTransform _settingsGeneralBody;
-        private RectTransform _settingsEmbeddedPanel;
-        private Transform _settingsEmbeddedOriginalParent;
-        private int _settingsEmbeddedOriginalSibling;
-        private bool _settingsEmbeddedOriginalActive;
-        private Vector2 _settingsEmbeddedOriginalAnchorMin;
-        private Vector2 _settingsEmbeddedOriginalAnchorMax;
-        private Vector2 _settingsEmbeddedOriginalOffsetMin;
-        private Vector2 _settingsEmbeddedOriginalOffsetMax;
-        private Vector2 _settingsEmbeddedOriginalPivot;
-        private bool _settingsEmbeddedIgnoreLayout;
+        private readonly Dictionary<string, RectTransform> _settingsPages =
+            new(StringComparer.OrdinalIgnoreCase);
 
         private RectTransform _dashboardCharacterInspector;
         private Text _dashboardModelNameText;
@@ -668,7 +660,7 @@ namespace VCR.Runtime.UI
             panel.pivot =
                 new Vector2(0.5f, 0.5f);
             panel.sizeDelta =
-                new Vector2(980f, 700f);
+                new Vector2(900f, 620f);
 
             var panelImage =
                 panel.gameObject
@@ -912,6 +904,7 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .flexibleWidth = 1f;
 
+            BuildSettingsDetailPages();
             _dashboardSettingsModal.gameObject.SetActive(
                 false);
         }
@@ -925,86 +918,88 @@ namespace VCR.Runtime.UI
             element.preferredHeight = 38f;
         }
 
-        private void RestoreSettingsEmbeddedPanel()
+        private void BuildSettingsDetailPages()
         {
-            if (_settingsEmbeddedPanel == null)
-            {
-                return;
-            }
+            AddSettingsDetailPage("character", "캐릭터 / 모델",
+                "마지막에 성공적으로 로드한 VRM은 다음 실행 시 자동 복원됩니다.",
+                "모델 선택 및 관리",
+                () =>
+                {
+                    CloseSettingsModal();
+                    if (_dashboardCharacterInspector != null &&
+                        !_dashboardCharacterInspector.gameObject.activeSelf)
+                    {
+                        ToggleDashboardCharacterInspector();
+                    }
+                });
 
-            var panel = _settingsEmbeddedPanel;
-            panel.SetParent(_settingsEmbeddedOriginalParent, false);
-            panel.SetSiblingIndex(_settingsEmbeddedOriginalSibling);
-            panel.anchorMin = _settingsEmbeddedOriginalAnchorMin;
-            panel.anchorMax = _settingsEmbeddedOriginalAnchorMax;
-            panel.pivot = _settingsEmbeddedOriginalPivot;
-            panel.offsetMin = _settingsEmbeddedOriginalOffsetMin;
-            panel.offsetMax = _settingsEmbeddedOriginalOffsetMax;
-            var layout = panel.GetComponent<LayoutElement>();
-            if (layout != null)
+            AddSettingsDetailPage("tracking", "트래킹",
+                "트래킹 소스별 상세 설정을 엽니다. 상태 확인 및 빠른 소스 전환은 독립된 퀵패널에서 수행합니다.",
+                "입력 장치 상세 설정",
+                OpenFirstTrackingSourceSettings);
+
+            AddSettingsDetailPage("output", "출력",
+                "출력 프리셋은 퀵패널에서 빠르게 전환합니다. 창 표시 방식은 이 설정 페이지에서 제어합니다.",
+                "항상 위 켜기 / 끄기",
+                ToggleOverlayTopmost);
+        }
+
+        private void AddSettingsDetailPage(string id, string title,
+            string description, string actionLabel, Action action)
+        {
+            var page = CreateRect("Settings " + title, _settingsCategoryHost);
+            Stretch(page, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            var layout = page.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(18, 18, 18, 18);
+            layout.spacing = 14f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            var heading = CreateText(title + " Heading", page, 17,
+                TextAnchor.MiddleLeft);
+            heading.text = title;
+            AddPreferredHeight(heading.gameObject, 36f);
+            var help = CreateText(title + " Help", page, 13,
+                TextAnchor.UpperLeft);
+            help.text = description;
+            AddPreferredHeight(help.gameObject, 70f);
+            var button = CreateButton(actionLabel, page, action);
+            AddPreferredHeight(button.gameObject, 38f);
+            _settingsPages[id] = page;
+            page.gameObject.SetActive(false);
+        }
+
+        private void OpenFirstTrackingSourceSettings()
+        {
+            foreach (var control in _trackingControls)
             {
-                layout.ignoreLayout = _settingsEmbeddedIgnoreLayout;
+                if (control is ITrackingRuntimeConfigurable)
+                {
+                    OpenDashboardTrackingSourceSettings(control.ControlId);
+                    return;
+                }
             }
-            panel.gameObject.SetActive(_settingsEmbeddedOriginalActive);
-            _settingsEmbeddedPanel = null;
-            RefreshDashboardDockHost();
+            SetDashboardNotice("설정 가능한 트래킹 입력 장치가 없습니다.");
         }
 
         private void ShowSettingsCategory(string category)
         {
-            RestoreSettingsEmbeddedPanel();
-            if (_settingsGeneralBody == null ||
-                _settingsCategoryHost == null)
+            if (_settingsGeneralBody == null)
             {
                 return;
             }
 
-            bool general = category == "general";
-            _settingsGeneralBody.gameObject.SetActive(general);
-            if (general)
+            _settingsGeneralBody.gameObject.SetActive(category == "general");
+            foreach (var entry in _settingsPages)
             {
-                return;
+                if (entry.Value != null)
+                {
+                    entry.Value.gameObject.SetActive(entry.Key == category);
+                }
             }
-
-            RectTransform panel = null;
-            if (category == "character")
-            {
-                panel = _dashboardCharacterInspector;
-                SelectSection(ApplicationUiSection.Character);
-            }
-            else if (_dashboardPanels.TryGetValue(
-                         category, out var dockPanel))
-            {
-                panel = dockPanel;
-            }
-
-            if (panel == null)
-            {
-                return;
-            }
-
-            _settingsEmbeddedPanel = panel;
-            _settingsEmbeddedOriginalParent = panel.parent;
-            _settingsEmbeddedOriginalSibling = panel.GetSiblingIndex();
-            _settingsEmbeddedOriginalActive = panel.gameObject.activeSelf;
-            _settingsEmbeddedOriginalAnchorMin = panel.anchorMin;
-            _settingsEmbeddedOriginalAnchorMax = panel.anchorMax;
-            _settingsEmbeddedOriginalOffsetMin = panel.offsetMin;
-            _settingsEmbeddedOriginalOffsetMax = panel.offsetMax;
-            _settingsEmbeddedOriginalPivot = panel.pivot;
-            var element = panel.GetComponent<LayoutElement>();
-            _settingsEmbeddedIgnoreLayout =
-                element != null && element.ignoreLayout;
-
-            panel.SetParent(_settingsCategoryHost, false);
-            if (element != null)
-            {
-                element.ignoreLayout = true;
-            }
-            Stretch(panel, Vector2.zero, Vector2.one,
-                Vector2.zero, Vector2.zero);
-            panel.gameObject.SetActive(true);
-            RefreshDashboardDockHost();
         }
 
         private void ToggleDashboardCharacterInspector()
@@ -1052,7 +1047,6 @@ namespace VCR.Runtime.UI
 
         private void CloseSettingsModal()
         {
-            RestoreSettingsEmbeddedPanel();
             if (_dashboardSettingsModal != null)
             {
                 _dashboardSettingsModal.gameObject.SetActive(
