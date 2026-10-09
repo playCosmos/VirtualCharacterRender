@@ -665,8 +665,9 @@ namespace VCR.Runtime.UI
                 new Vector2(0.5f, 0.5f);
             panel.pivot =
                 new Vector2(0.5f, 0.5f);
+            // Fixed OBS-style dialog size; pages scroll within their own area.
             panel.sizeDelta =
-                new Vector2(520f, 430f);
+                new Vector2(760f, 540f);
 
             var panelImage =
                 panel.gameObject
@@ -741,15 +742,89 @@ namespace VCR.Runtime.UI
                 new Vector2(20f, 20f),
                 new Vector2(-20f, -66f));
 
-            var layout =
-                body.gameObject
-                    .AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 10f;
-            layout.childControlWidth = true;
-            layout.childControlHeight = true;
-            layout.childForceExpandWidth = true;
-            layout.childForceExpandHeight = false;
+            // Navigation and pages are independent: selecting a page does not
+            // resize the dialog or reuse the compact dashboard cards.
+            var navigation = CreateRect("Settings Navigation", body);
+            navigation.anchorMin = new Vector2(0f, 0f);
+            navigation.anchorMax = new Vector2(0f, 1f);
+            navigation.pivot = new Vector2(0f, 0.5f);
+            navigation.offsetMin = Vector2.zero;
+            navigation.offsetMax = new Vector2(174f, 0f);
+            var navLayout = navigation.gameObject.AddComponent<VerticalLayoutGroup>();
+            navLayout.padding = new RectOffset(0, 8, 4, 0);
+            navLayout.spacing = 6f;
+            navLayout.childControlWidth = true;
+            navLayout.childControlHeight = true;
+            navLayout.childForceExpandHeight = false;
 
+            var contentRegion = CreateRect("Settings Page Region", body);
+            Stretch(contentRegion, Vector2.zero, Vector2.one,
+                new Vector2(184f, 0f), Vector2.zero);
+
+            var pages = new RectTransform[4];
+            var pageNames = new[] { "일반", "캐릭터 / 모델", "트래킹", "출력" };
+            for (var i = 0; i < pages.Length; i++)
+            {
+                var page = CreateRect("Settings Page " + pageNames[i], contentRegion);
+                Stretch(page, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                pages[i] = page;
+            }
+
+            // General controls retain their previous apply/save actions.
+            var bodyScroll = pages[0].gameObject.AddComponent<ScrollRect>();
+            bodyScroll.horizontal = false;
+            bodyScroll.vertical = true;
+            var generalContent = CreateRect("General Settings Content", pages[0]);
+            Stretch(generalContent, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                Vector2.zero, Vector2.zero);
+            generalContent.pivot = new Vector2(0.5f, 1f);
+            generalContent.anchorMin = new Vector2(0f, 1f);
+            generalContent.anchorMax = new Vector2(1f, 1f);
+            var generalLayout = generalContent.gameObject.AddComponent<VerticalLayoutGroup>();
+            generalLayout.spacing = 10f;
+            generalLayout.childControlWidth = true;
+            generalLayout.childControlHeight = true;
+            generalLayout.childForceExpandWidth = true;
+            generalLayout.childForceExpandHeight = false;
+            var generalFitter = generalContent.gameObject.AddComponent<ContentSizeFitter>();
+            generalFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            bodyScroll.content = generalContent;
+            bodyScroll.viewport = pages[0];
+            bodyScroll.scrollSensitivity = 22f;
+
+            for (var i = 0; i < pages.Length; i++)
+            {
+                var selected = i;
+                var button = CreateButton(pageNames[i], navigation, () =>
+                {
+                    for (var j = 0; j < pages.Length; j++)
+                    {
+                        pages[j].gameObject.SetActive(j == selected);
+                    }
+                });
+                AddPreferredHeight(button.gameObject, 40f);
+                pages[i].gameObject.SetActive(i == 0);
+            }
+
+            var modelHint = CreateText("Model Settings Description", pages[1], 14,
+                TextAnchor.UpperLeft);
+            modelHint.text = "캐릭터 / 모델\\n\\nVRM 불러오기 및 현재 모델 관리는 메인 모델 기능과 연결됩니다.";
+            Stretch(modelHint.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(16f, 16f), new Vector2(-16f, -16f));
+
+            var trackingHint = CreateText("Tracking Settings Description", pages[2], 14,
+                TextAnchor.UpperLeft);
+            trackingHint.text = "트래킹 상세 설정\\n\\n대시보드는 연결 상태와 빠른 제어만 표시합니다. 입력 소스별 상세 설정은 별도 편집창에서 관리합니다.";
+            Stretch(trackingHint.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(16f, 80f), new Vector2(-16f, -16f));
+
+            var outputHint = CreateText("Output Settings Description", pages[3], 14,
+                TextAnchor.UpperLeft);
+            outputHint.text = "출력 상세 설정\\n\\n해상도 및 FPS 변경은 선택 후 적용해야 합니다. 1440p/4K는 성능 검증 전까지 실험적 선택지입니다.";
+            Stretch(outputHint.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(16f, 16f), new Vector2(-16f, -16f));
+
+            body = generalContent;
             var help =
                 CreateText(
                     "Settings Help",
