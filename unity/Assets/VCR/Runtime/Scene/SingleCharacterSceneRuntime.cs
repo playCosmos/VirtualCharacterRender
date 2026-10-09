@@ -937,6 +937,11 @@ namespace VCR.Runtime.Scene
             return true;
         }
 
+        public void PrepareForApplicationQuit()
+        {
+            _applicationQuitting = true;
+        }
+
         public void Shutdown()
         {
             if (_state == SceneRuntimeState.ShuttingDown)
@@ -986,7 +991,18 @@ namespace VCR.Runtime.Scene
             {
                 RunShutdownStep(
                     "overlay output shutdown",
-                    _overlayOutput.Shutdown,
+                    () =>
+                    {
+                        if (_applicationQuitting &&
+                            _overlayOutput is IProcessExitOverlayOutputAdapter exitAdapter)
+                        {
+                            exitAdapter.ShutdownForProcessExit();
+                        }
+                        else
+                        {
+                            _overlayOutput.Shutdown();
+                        }
+                    },
                     failures);
             }
 
@@ -1496,7 +1512,7 @@ namespace VCR.Runtime.Scene
 
         private void OnApplicationQuit()
         {
-            _applicationQuitting = true;
+            PrepareForApplicationQuit();
             Shutdown();
         }
 
