@@ -85,8 +85,8 @@ namespace VCR.Runtime.UI
         private Button _loadCharacterButton;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
-        private Button _apply720p60Button;
-        private Button _apply1080p60Button;
+        private Dropdown _outputResolutionDropdown;
+        private Button _applyOutputResolutionButton;
         private Button _outputTransparentButton;
         private Button _outputTopmostButton;
         private Button _outputClickThroughButton;
@@ -466,8 +466,8 @@ namespace VCR.Runtime.UI
             _loadCharacterButton = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
-            _apply720p60Button = null;
-            _apply1080p60Button = null;
+            _outputResolutionDropdown = null;
+            _applyOutputResolutionButton = null;
             _outputTransparentButton = null;
             _outputTopmostButton = null;
             _outputClickThroughButton = null;
@@ -1199,23 +1199,21 @@ namespace VCR.Runtime.UI
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 120f;
 
-            _apply720p60Button =
-                CreateButton(
-                    "Apply 720p60",
-                    _contextActions,
-                    Apply720p60);
-            _apply720p60Button.gameObject
+            _outputResolutionDropdown =
+                CreateOutputResolutionDropdown(
+                    _contextActions);
+            _outputResolutionDropdown.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 140f;
+                .preferredWidth = 200f;
 
-            _apply1080p60Button =
+            _applyOutputResolutionButton =
                 CreateButton(
-                    "Apply 1080p60",
+                    "Apply Resolution",
                     _contextActions,
-                    Apply1080p60);
-            _apply1080p60Button.gameObject
+                    ApplySelectedOutputResolution);
+            _applyOutputResolutionButton.gameObject
                 .AddComponent<LayoutElement>()
-                .preferredWidth = 150f;
+                .preferredWidth = 160f;
 
             _outputTransparentButton =
                 CreateButton(
@@ -4801,6 +4799,28 @@ namespace VCR.Runtime.UI
             RefreshAll();
         }
 
+        private void ApplySelectedOutputResolution()
+        {
+            var selection = _outputResolutionDropdown != null
+                ? _outputResolutionDropdown.value
+                : -1;
+
+            switch (selection)
+            {
+                case 0:
+                    Apply720p60();
+                    return;
+                case 1:
+                    Apply1080p60();
+                    return;
+                default:
+                    _lastActionMessage =
+                        "Selected resolution is planned but not yet supported.";
+                    RefreshAll();
+                    return;
+            }
+        }
+
         private void Apply720p60()
         {
             ApplyBroadcastTarget(
@@ -5615,16 +5635,19 @@ namespace VCR.Runtime.UI
                             true,
                             sceneRuntime.State);
 
-                if (_apply720p60Button != null)
+                if (_outputResolutionDropdown != null)
                 {
-                    _apply720p60Button.interactable =
+                    _outputResolutionDropdown.interactable =
                         canApply;
                 }
 
-                if (_apply1080p60Button != null)
+                if (_applyOutputResolutionButton != null)
                 {
-                    _apply1080p60Button.interactable =
-                        canApply;
+                    var index = _outputResolutionDropdown != null
+                        ? _outputResolutionDropdown.value
+                        : -1;
+                    _applyOutputResolutionButton.interactable =
+                        canApply && index >= 0 && index <= 1;
                 }
             }
         }
@@ -5721,10 +5744,10 @@ namespace VCR.Runtime.UI
                 trackingSelected);
 
             SetActive(
-                _apply720p60Button,
+                _outputResolutionDropdown,
                 outputSelected);
             SetActive(
-                _apply1080p60Button,
+                _applyOutputResolutionButton,
                 outputSelected);
             SetActive(
                 _outputTransparentButton,
@@ -8583,6 +8606,79 @@ namespace VCR.Runtime.UI
                             ? "Console Log: On"
                             : "Console Log: Off");
             }
+        }
+
+        private Dropdown CreateOutputResolutionDropdown(
+            Transform parent)
+        {
+            var root = CreateRect("Output Resolution", parent);
+            var background = root.gameObject.AddComponent<Image>();
+            background.color = new Color(0.10f, 0.11f, 0.13f, 1f);
+
+            var dropdown = root.gameObject.AddComponent<Dropdown>();
+            dropdown.targetGraphic = background;
+
+            var caption = CreateText(
+                "Selected Resolution", root, 16, TextAnchor.MiddleLeft);
+            Stretch(caption.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(10f, 2f), new Vector2(-24f, -2f));
+            dropdown.captionText = caption;
+
+            var template = CreateRect("Template", root);
+            template.anchorMin = new Vector2(0f, 0f);
+            template.anchorMax = new Vector2(1f, 0f);
+            template.pivot = new Vector2(0.5f, 1f);
+            template.anchoredPosition = Vector2.zero;
+            template.sizeDelta = new Vector2(0f, 144f);
+            template.gameObject.AddComponent<Image>().color =
+                new Color(0.11f, 0.12f, 0.15f, 1f);
+
+            var scroll = template.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            var viewport = CreateRect("Viewport", template);
+            Stretch(viewport, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            viewport.gameObject.AddComponent<Image>().color =
+                new Color(1f, 1f, 1f, 0.01f);
+            viewport.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+
+            var content = CreateRect("Content", viewport);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new Vector2(0f, 144f);
+
+            var item = CreateRect("Item", content);
+            item.anchorMin = new Vector2(0f, 1f);
+            item.anchorMax = new Vector2(1f, 1f);
+            item.pivot = new Vector2(0.5f, 1f);
+            item.anchoredPosition = Vector2.zero;
+            item.sizeDelta = new Vector2(0f, 36f);
+            var itemImage = item.gameObject.AddComponent<Image>();
+            itemImage.color = new Color(0.15f, 0.17f, 0.20f, 1f);
+            var toggle = item.gameObject.AddComponent<Toggle>();
+            toggle.targetGraphic = itemImage;
+            var label = CreateText(
+                "Item Label", item, 16, TextAnchor.MiddleLeft);
+            Stretch(label.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(10f, 2f), new Vector2(-10f, -2f));
+
+            scroll.viewport = viewport;
+            scroll.content = content;
+            dropdown.template = template;
+            dropdown.itemText = label;
+            dropdown.AddOptions(new List<string>
+            {
+                "720p / 60 FPS",
+                "1080p / 60 FPS",
+                "1440p / 60 FPS (planned)",
+                "4K / 60 FPS (planned)"
+            });
+            dropdown.value = 1;
+            dropdown.onValueChanged.AddListener(_ => RefreshAll());
+            template.gameObject.SetActive(false);
+            return dropdown;
         }
 
         private Button CreateButton(
