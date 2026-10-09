@@ -789,6 +789,7 @@ namespace VCR.Runtime.UI
             var generalFitter = generalContent.gameObject.AddComponent<ContentSizeFitter>();
             generalFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             bodyScroll.content = generalContent;
+            pages[0].gameObject.AddComponent<RectMask2D>();
             bodyScroll.viewport = pages[0];
             bodyScroll.scrollSensitivity = 22f;
 
