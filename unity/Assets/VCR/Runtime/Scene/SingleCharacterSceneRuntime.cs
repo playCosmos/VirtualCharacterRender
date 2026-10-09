@@ -949,9 +949,12 @@ namespace VCR.Runtime.Scene
                 return;
             }
 
-            // Cleanup must be at-most-once even when the prior shutdown
-            // recorded an error. OnApplicationQuit and OnDestroy both run.
-            if (_state == SceneRuntimeState.Stopped)
+            // A failed cleanup remains retryable; only a fully clean
+            // stopped state may return early.
+            if (_state == SceneRuntimeState.Stopped &&
+                _capabilities == null &&
+                string.IsNullOrWhiteSpace(
+                    _lastError))
             {
                 return;
             }
@@ -966,16 +969,37 @@ namespace VCR.Runtime.Scene
                 CancelActiveOperation,
                 failures);
 
-            var capabilities = _capabilities;
-            // Detach before invoking user/plugin disposal. Even if it throws,
-            // OnDestroy must not dispose the same service a second time.
-            _capabilities = null;
+            var capabilities =
+                _capabilities;
+
             if (capabilities != null)
             {
-                RunShutdownStep(
-                    "capability disposal",
-                    capabilities.Dispose,
-                    failures);
+                var capabilityTimer =
+                    System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log("VCR shutdown step begin: capability disposal", this);
+                try
+                {
+                    capabilities.Dispose();
+
+                    if (ReferenceEquals(
+                            _capabilities,
+                            capabilities))
+                    {
+                        _capabilities = null;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(
+                        "capability disposal: " +
+                        exception.Message);
+                    Debug.LogException(exception, this);
+                }
+                finally
+                {
+                    Debug.Log("VCR shutdown step end: capability disposal (" +
+                              capabilityTimer.ElapsedMilliseconds + " ms)", this);
+                }
             }
 
             if (unloadCharacterOnShutdown &&
