@@ -19,6 +19,7 @@ namespace VCR.Runtime.Output.Unity
     public sealed class UniWinCOverlayOutput :
         MonoBehaviour,
         IOverlayOutputAdapter,
+        IProcessExitOverlayOutputAdapter,
         IRuntimeMetricsSource
     {
         [Header("Camera")]
@@ -419,6 +420,25 @@ namespace VCR.Runtime.Output.Unity
                 Debug.Log("VCR UniWinC shutdown: completed (" +
                           timer.ElapsedMilliseconds + " ms)", this);
             }
+        }
+
+        public void ShutdownForProcessExit()
+        {
+            if (_shutdownApplied)
+            {
+                return;
+            }
+
+            // During actual application exit, native window styles will
+            // disappear with the OS window. Setting them while the native
+            // window is being destroyed can synchronously stall Win32/Cocoa.
+            // Keep regular Shutdown() for suspension and explicit stop.
+            _shutdownApplied = true;
+            _pendingNativeApply = false;
+            _nativeApplied = false;
+            _nativeApplyStartedAt = 0f;
+            RestoreCameraState();
+            Debug.Log("VCR UniWinC shutdown: process exit, native window style reset skipped.", this);
         }
 
         private void OnDisable()
