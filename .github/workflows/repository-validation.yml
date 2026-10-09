@@ -32,6 +32,9 @@ jobs:
       - name: Validate repository structure
         run: python3 tools/validate-repository-structure.py
 
+      - name: Validate immutable alpha release policy
+        run: python3 tools/validate-alpha-release-policy.py
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{

@@ -4,7 +4,7 @@
 
 Current alpha candidate: 0.1.0-alpha.1.
 
-Source snapshot branch: release/0.1.0-alpha.1.
+Immutable source snapshot: tag `v0.1.0-alpha.1` at commit `d739002abc99ac9c6adf5edfed0595aa4aa7878b`. The historical `release/0.1.0-alpha.1` branch may contain later workflow-retirement commits; build provenance follows the tag, not a mutable branch tip.
 
 This alpha is a full-feature integration build of the current develop runtime. No existing camera, ARKit, VMC, rendering, UI, appearance, event, material, environment, diagnostics, or 2D-host implementation is compiled out for the alpha.
 
@@ -12,17 +12,16 @@ The first validation pass intentionally does not require physical webcam or ARKi
 
 ## Build evidence
 
-Alpha binary workflow run `37583662055` completed successfully against release snapshot `7b3ca49639fe203adbabc278cc65ef5b9d5777d9` with Unity `6000.3.25f1`.
+The most recent successful complete alpha binary workflow is [run 37933298925](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/37933298925), with Unity `6000.3.25f1` at tagged source commit `d739002abc99ac9c6adf5edfed0595aa4aa7878b`.
 
-Both target jobs passed the Unity player build, output verification, ZIP packaging, artifact upload, and release-attachment stages:
+Both platform builds, ZIP packaging, and release attachment succeeded:
 
-- Windows x64 Development build: `VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip` (86,620,269 bytes)
-- macOS Development build: `VirtualCharacterRender-0.1.0-alpha.1-macOS.zip` (94,086,025 bytes)
+- Windows x64 Development build: `VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip` (94,912,033 bytes; SHA-256 `fa35c62520fe399fb2561c75fdee193675eecf6d631300b33b67fe824c8f7631`)
+- macOS Development build: `VirtualCharacterRender-0.1.0-alpha.1-macOS.zip` (105,031,040 bytes; SHA-256 `c3bfc5daf590367b19163d53dc2e1e0f7ad690b954cfc81d4f6619dec58beb3b`)
 
-The release-attachment job also passed, so both archives are published on the `v0.1.0-alpha.1` GitHub prerelease.
+The earlier successful run `37583662055` remains historical evidence, not evidence that its exact archives are still the ones published. The SHA-256 values above are GitHub's published asset digest fields; independent download/re-hash and player runtime testing remain separate evidence.
 
-This closes compile/package-resolution and standalone binary-generation evidence for the current alpha source snapshot. It does not close runtime behavior, hardware tracking, OBS, signing/notarization, or performance evidence.
-
+This closes compile/package-resolution and standalone binary-generation evidence for the tagged alpha snapshot. It does not close runtime behavior, hardware tracking, OBS, signing/notarization, or performance evidence. New alpha versions follow `docs/RELEASE_PROVENANCE.md`.
 
 ## Startup policy
 
