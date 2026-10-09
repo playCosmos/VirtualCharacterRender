@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: alpha-release-${ github.ref }
+  group: alpha-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
     name: Verify immutable tag
     runs-on: ubuntu-latest
     outputs:
-      version: ${ steps.tag.outputs.version }
+      version: ${{ steps.tag.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
       - name: Validate tag and reject existing release
         id: tag
         env:
-          GH_TOKEN: ${ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -48,7 +48,7 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build ${ matrix.name }
+    name: Build ${{ matrix.name }}
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -67,7 +67,7 @@ jobs:
             folder: macOS
             suffix: macOS
     env:
-      VCR_RELEASE_VERSION: ${ needs.preflight.outputs.version }
+      VCR_RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
     steps:
       - name: Checkout exact tagged source
         uses: actions/checkout@v4
@@ -87,20 +87,20 @@ jobs:
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${ secrets.UNITY_LICENSE }
-          UNITY_EMAIL: ${ secrets.UNITY_EMAIL }
-          UNITY_PASSWORD: ${ secrets.UNITY_PASSWORD }
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: unity
           unityVersion: 6000.3.25f1
-          targetPlatform: ${ matrix.target }
-          buildMethod: ${ matrix.method }
+          targetPlatform: ${{ matrix.target }}
+          buildMethod: ${{ matrix.method }}
           versioning: None
           allowDirtyBuild: true
       - name: Package player with source proof and checksum
         env:
-          PLAYER_FOLDER: ${ matrix.folder }
-          PACKAGE_SUFFIX: ${ matrix.suffix }
+          PLAYER_FOLDER: ${{ matrix.folder }}
+          PACKAGE_SUFFIX: ${{ matrix.suffix }}
         shell: bash
         run: |
           set -euo pipefail
@@ -120,7 +120,7 @@ jobs:
           cat "release-assets/$package.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: alpha-${ matrix.suffix }
+          name: alpha-${{ matrix.suffix }}
           path: release-assets/
           if-no-files-found: error
           retention-days: 30
@@ -132,8 +132,8 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${ github.token }
-      VERSION: ${ needs.preflight.outputs.version }
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.preflight.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
