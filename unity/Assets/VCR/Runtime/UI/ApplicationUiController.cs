@@ -404,6 +404,9 @@ namespace VCR.Runtime.UI
 
         public ApplicationUiModel Model => _model;
 
+        private const string LastCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
+        private bool _characterRestoreAttempted;
+
         private void Awake()
         {
             ResolveDependencies(
@@ -444,6 +447,66 @@ namespace VCR.Runtime.UI
 
             ResolveDependencies();
             RefreshAvailability();
+            TryRestoreLastCharacter();
+            RefreshAll();
+        }
+
+        private async void TryRestoreLastCharacter()
+        {
+            if (_characterRestoreAttempted ||
+                sceneRuntime == null ||
+                sceneRuntime.Status.HasCharacter)
+            {
+                return;
+            }
+
+            var path = PlayerPrefs.GetString(LastCharacterPathKey, string.Empty);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                _characterRestoreAttempted = true;
+                return;
+            }
+
+            if (!File.Exists(path))
+            {
+                _characterRestoreAttempted = true;
+                _lastActionMessage = "Previous VRM file was not found. Select a model.";
+                return;
+            }
+
+            var runtime = sceneRuntime;
+            if (!ApplicationUiActionPolicy.CanLoadCharacter(true, runtime.State, path))
+            {
+                return;
+            }
+
+            _characterRestoreAttempted = true;
+            var generation = ++_characterUiOperationGeneration;
+            if (_characterPathInput != null)
+            {
+                _characterPathInput.SetTextWithoutNotify(path);
+            }
+
+            try
+            {
+                var loaded = await runtime.LoadCharacterAsync(path);
+                if (!IsCurrentCharacterUiOperation(generation, runtime))
+                {
+                    return;
+                }
+
+                _lastActionMessage = loaded != null
+                    ? "Previous character restored."
+                    : "Previous character could not be restored.";
+            }
+            catch (Exception exception)
+            {
+                if (IsCurrentCharacterUiOperation(generation, runtime))
+                {
+                    _lastActionMessage = "Previous character restore failed: " + exception.Message;
+                }
+            }
+
             RefreshAll();
         }
 
@@ -3023,6 +3086,12 @@ namespace VCR.Runtime.UI
                     return;
                 }
 
+                if (loaded != null)
+                {
+                    PlayerPrefs.SetString(LastCharacterPathKey, path);
+                    PlayerPrefs.Save();
+                }
+
                 _lastActionMessage =
                     loaded != null
                         ? "Character loaded."
@@ -3145,6 +3214,8 @@ namespace VCR.Runtime.UI
             try
             {
                 sceneRuntime.UnloadCharacter();
+                PlayerPrefs.DeleteKey(LastCharacterPathKey);
+                PlayerPrefs.Save();
                 _lastActionMessage =
                     "Character unloaded.";
             }
