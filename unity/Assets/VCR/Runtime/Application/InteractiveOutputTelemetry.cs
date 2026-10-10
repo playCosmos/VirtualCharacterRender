@@ -83,7 +83,7 @@ namespace VCR.Runtime.Application
 
         private IEnumerator Start()
         {
-            if (Application.isEditor)
+            if (UnityEngine.Application.isEditor)
             {
                 yield break;
             }
@@ -97,11 +97,11 @@ namespace VCR.Runtime.Application
             // Do not create native output, start tracking or alter UI state.
             _bootstrap = GetComponent<ApplicationRuntimeBootstrap>();
             _diagnostics = GetComponent<RuntimeDiagnostics>();
-            _focused = Application.isFocused;
+            _focused = UnityEngine.Application.isFocused;
             _report = new Report
             {
-                unityVersion = Application.unityVersion,
-                platform = Application.platform.ToString(),
+                unityVersion = UnityEngine.Application.unityVersion,
+                platform = UnityEngine.Application.platform.ToString(),
                 osVersion = SystemInfo.operatingSystem,
                 processor = SystemInfo.processorType,
                 graphicsDevice = SystemInfo.graphicsDeviceName,
