@@ -5,6 +5,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import plistlib
 import platform
 from pathlib import Path
 import subprocess
@@ -53,7 +54,8 @@ def execute(args):
         if recorded != actual:
             raise RuntimeError("Player artifact SHA-256 mismatch")
 
-        unpacked = output / "player"
+        # Preserve only logs and hashes as smoke artifacts, not the Player.
+        unpacked = output.parent / ("unpacked-" + args.platform)
         unpacked.mkdir(exist_ok=True)
         if args.platform == "macos":
             subprocess.run(
@@ -61,13 +63,19 @@ def execute(args):
                 check=True,
                 timeout=90,
             )
-            executable = (
-                unpacked / "VirtualCharacterRender.app" /
-                "Contents" / "MacOS" / "VirtualCharacterRender"
-            )
+            bundle = unpacked / "VirtualCharacterRender.app"
+            info_path = bundle / "Contents" / "Info.plist"
+            if not info_path.is_file():
+                raise RuntimeError("macOS Player Info.plist missing")
+            with info_path.open("rb") as info:
+                executable_name = plistlib.load(info).get("CFBundleExecutable")
+            if not isinstance(executable_name, str) or not executable_name:
+                raise RuntimeError("macOS Player CFBundleExecutable missing")
+            executable = bundle / "Contents" / "MacOS" / executable_name
             if not executable.is_file():
-                raise RuntimeError("macOS .app Player executable missing")
+                raise RuntimeError("macOS .app executable missing: " + str(executable))
             executable.chmod(executable.stat().st_mode | 0o111)
+            summary["bundleExecutable"] = executable_name
         else:
             with zipfile.ZipFile(archive) as package:
                 package.extractall(unpacked)
