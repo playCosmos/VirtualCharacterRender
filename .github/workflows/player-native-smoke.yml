@@ -1,0 +1,145 @@
+name: Native Windows and macOS Player startup smoke
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-player-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build native ${{ matrix.platform }} Player
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            unityTarget: StandaloneWindows64
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+            outputFolder: Windows
+          - platform: macos
+            unityTarget: StandaloneOSX
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
+            outputFolder: macOS
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require exact Unity source baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/project-inputs.sha256"
+          test ! -e unity/Library
+          mkdir -p Builds/Alpha
+          printf '%s\n' '0.0.0-alpha.0' > Builds/Alpha/release-version.txt
+      - name: Bootstrap pinned MediaPipe and models
+        run: bash tools/bootstrap-mediapipe.sh
+      - name: Bootstrap verified Pretendard UI font
+        run: bash tools/bootstrap-ui-fonts.sh
+      - name: Bootstrap pinned Ultraleap compatibility
+        run: bash tools/bootstrap-ultraleap.sh
+      - name: Bootstrap pinned UniWinC compatibility
+        run: bash tools/bootstrap-uniwinc.sh
+      - name: Build actual Unity standalone Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: ${{ matrix.unityTarget }}
+          buildMethod: ${{ matrix.method }}
+          versioning: None
+          allowDirtyBuild: true
+      - name: Verify built Player and package immutable input evidence
+        shell: bash
+        env:
+          PLAYER_PLATFORM: ${{ matrix.platform }}
+          OUTPUT_FOLDER: ${{ matrix.outputFolder }}
+        run: |
+          set -euo pipefail
+          sha256sum --check "$RUNNER_TEMP/project-inputs.sha256"
+          folder="Builds/Alpha/0.0.0-alpha.0/$OUTPUT_FOLDER"
+          test -d "$folder"
+          if [[ "$PLAYER_PLATFORM" == windows ]]; then
+            test -s "$folder/VirtualCharacterRender.exe"
+            test -d "$folder/VirtualCharacterRender_Data"
+          else
+            test -d "$folder/VirtualCharacterRender.app/Contents/MacOS"
+          fi
+          mkdir -p player-artifacts
+          target="$GITHUB_WORKSPACE/player-artifacts/$PLAYER_PLATFORM.zip"
+          (cd "$folder" && zip -q -r -y "$target" .)
+          test -s "$target"
+          sha256sum "$target" > "player-artifacts/$PLAYER_PLATFORM.sha256"
+          printf '%s\n' "$GITHUB_SHA" > "player-artifacts/$PLAYER_PLATFORM.source-sha"
+      - name: Upload Player ZIP and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-${{ matrix.platform }}-${{ github.sha }}
+          path: player-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    name: Execute ${{ matrix.platform }} Player on ${{ matrix.runner }}
+    needs: build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+          - platform: macos
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout evidence verifier
+        uses: actions/checkout@v4
+      - name: Download this commit's built Player
+        uses: actions/download-artifact@v4
+        with:
+          name: player-${{ matrix.platform }}-${{ github.sha }}
+          path: player-artifacts
+      - name: Use pinned Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Launch native Player, require runtime startup and clean shutdown
+        shell: bash
+        env:
+          PLAYER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          python tools/run-player-smoke.py \
+            --platform "$PLAYER_PLATFORM" \
+            --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
+            --source "$GITHUB_SHA" \
+            --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/$PLAYER_PLATFORM"
+      - name: Preserve native runtime logs and machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/PlayerSmoke/${{ matrix.platform }}/
+          if-no-files-found: warn
+          retention-days: 30
