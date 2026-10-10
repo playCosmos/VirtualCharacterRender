@@ -31,6 +31,25 @@ jobs:
 
       - name: Validate repository structure
         run: python3 tools/validate-repository-structure.py
+      - name: Parse PowerShell tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          foreach ($scriptFile in Get-ChildItem -Path tools -Filter '*.ps1' -File) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $scriptFile.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $failed = $true
+              foreach ($parseError in $parseErrors) {
+                Write-Error -ErrorAction Continue "$($scriptFile.Name):$($parseError.Extent.StartLineNumber): $($parseError.Message)"
+              }
+            }
+          }
+          if ($failed) { exit 1 }
+
       - name: Validate Unity pinned dependency graph (when baseline is captured)
         if: ${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectSettings.asset') != '' }}
         run: python3 tools/validate-unity-reproducibility.py
