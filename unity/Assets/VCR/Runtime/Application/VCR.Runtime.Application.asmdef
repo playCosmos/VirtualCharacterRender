@@ -6,7 +6,9 @@
     "VCR.Runtime.Scene",
     "VCR.Runtime.Appearance",
     "VRM10",
-    "VCR.Runtime.Rendering"
+    "VCR.Runtime.Rendering",
+    "VCR.Runtime.Diagnostics",
+    "VCR.Runtime.Output"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
