@@ -153,6 +153,14 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    -screen-fullscreen 0 -logFile <LOG_FILE>`.
    In both cases, **do not** pass `-batchmode`, `-nographics` or
    `--vcr-smoke-report`; these belong exclusively to the previous CI gate.
+   Append `--vcr-interactive-evidence=<ABSOLUTE_TELEMETRY_JSON_PATH>` to
+   each GUI launch (e.g. `attachments/windows-720p60-runtime.json`).
+   Use distinct output paths for each target/resolution and keep the
+   Player open for at least two diagnostics report intervals before
+   closing it normally. This opt-in recorder observes scene startup,
+   overlay state/readiness, native client dimensions, render settings,
+   and diagnostics frame average/P95/P99 when available. It never
+   enables capture, changes UI/output settings or exits the process.
    Launch without a VRM first; then exercise VRM0/VRM1 and the output
    behavior separately. Keep logs for each target/resolution.
 3. Run a real OBS capture session for 1280x720@60 and 1920x1080@60 on
@@ -162,6 +170,10 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    P95/P99, and OBS dropped/skipped frame counts. Store a real screenshot or
    recording per platform/resolution along with the matching Player log.
    Capture the display/OS, GPU, driver, OBS version and display scale.
+   Retain the generated runtime telemetry JSON alongside the Player log
+   and visual capture. Runtime-readiness flags and frame percentiles
+   are observations, **not** proof of correct alpha, OBS composition,
+   acceptable motion or an independently verified GUI PASS.
 4. Create *empty, non-passing* templates with
    `python3 tools/verify-p10-interactive-evidence.py --init evidence/p10/<SESSION>`.
    Each JSON file represents one of
