@@ -63,6 +63,9 @@ jobs:
       - name: Test interactive P10 evidence format verifier
         run: python3 tools/verify-p10-interactive-evidence.py --self-test
 
+      - name: Test P10 interactive desktop launcher safety and CLI
+        run: python3 tools/run-p10-interactive.py --self-test
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{
