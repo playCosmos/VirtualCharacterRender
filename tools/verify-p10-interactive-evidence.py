@@ -449,7 +449,7 @@ def self_test():
             elif mutation == "missingFrames":
                 bad_report["samples"][-1]["hasFrameMeasurements"] = False
             elif mutation == "wrongTarget":
-                bad_report["samples"][-1]["requestedWidth"] = 1280
+                bad_report["samples"][-1]["requestedWidth"] = 1920
             elif mutation == "notQuit":
                 bad_report["quitCallbackObserved"] = False
             elif mutation == "metricMismatch":
