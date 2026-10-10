@@ -221,5 +221,47 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    Real visual review and validation that these artifacts came from the
    nominated successful CI run are still mandatory before P10 PASS.
 
+## Guided graphical Player session (opt-in helper)
+
+Instead of manually extracting the downloaded CI ZIP and assembling Unity
+command-line arguments, an operator can use the helper below on a **logged-in
+native graphical desktop**. It reuses the verified archives and their two CI
+sidecars, rejects unsafe ZIP member paths, unpacks the Player to a temporary
+directory, launches the visible Player without headless flags and collects
+a per-case log plus telemetry. The temporary Player extraction is deleted
+when the application exits.
+
+First create templates with `python3 tools/verify-p10-interactive-evidence.py
+--init evidence/p10/<SESSION>`. Download the correct **source-matched**
+CI artifact with `gh run download` and keep its `.zip`, `.sha256` and
+`.source-sha` sidecars together in `player-artifacts/`.
+
+Windows x64 PowerShell (use an installed Python 3.11+ interpreter):
+
+```powershell
+python tools/run-p10-interactive.py --platform windows --target 720p60 --source <40_CHARACTER_COMMIT_SHA> --artifacts player-artifacts --evidence evidence/p10/<SESSION>
+```
+
+Apple Silicon macOS with native arm64 Python:
+
+```sh
+python3 tools/run-p10-interactive.py --platform macos --target 1080p60 --source <40_CHARACTER_COMMIT_SHA> --artifacts player-artifacts --evidence evidence/p10/<SESSION>
+```
+
+Run **both targets on both operating systems**; the two commands above
+illustrate one target each. `--target` selects the evidence filenames,
+**not** the render resolution. Configure the actual size/FPS in the Player
+UI, then leave it running long enough for at least two steady diagnostics
+samples, do the real OBS capture and window/recovery tests, and close
+the Player normally. Add `--vrm <PRIVATE_MODEL.vrm>` only for a separate
+character-loaded test. Keep the model local.
+
+The helper **never** marks visual/OBS checks as passed, fills operator
+assertions, modifies your saved configuration, or uploads evidence.
+Populate each case's `playerLog` and `runtimeTelemetry` paths from
+the helper's `attachments/` output. Collect a real OBS screenshot/video
+and set all remaining operator evidence fields yourself. Existing evidence
+files are never overwritten; use a new session for retests.
+
 Do not commit personal VRMs, Player binaries, raw logs, or captured desktop
 media to the source repository. Store private test evidence separately.
