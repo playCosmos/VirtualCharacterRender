@@ -1,5 +1,6 @@
 # Private operator capture sessions: screenshots, logs, native diagnostic data
 /evidence/p10/
+/player-artifacts/
 
 # Unity generated
 /Builds/
