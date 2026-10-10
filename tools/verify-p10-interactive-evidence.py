@@ -221,7 +221,7 @@ def inspect_runtime_telemetry(directory, item, platform, target):
             if name == "sceneState":
                 if sample.get(name) not in ("Ready", "CharacterReady"):
                     errors.append(label + " invalid sceneState")
-            elif sample.get(name) != value or (isinstance(value, int) and type(sample.get(name)) is bool):
+            elif sample.get(name) != value or (type(value) is int and type(sample.get(name)) is bool):
                 errors.append(label + " unexpected " + name)
         if sample.get("sceneError") not in (None, "") or sample.get("overlayError") not in (None, ""):
             errors.append(label + " contains runtime/overlay error")
