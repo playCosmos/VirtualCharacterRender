@@ -41,8 +41,8 @@ namespace VCR.Runtime.Application
 
             var evidence = new SmokeReport
             {
-                unityVersion = Application.unityVersion,
-                platform = Application.platform.ToString(),
+                unityVersion = UnityEngine.Application.unityVersion,
+                platform = UnityEngine.Application.platform.ToString(),
                 timestampUtc = DateTime.UtcNow.ToString("o"),
                 error = string.Empty
             };
@@ -131,7 +131,7 @@ namespace VCR.Runtime.Application
                 Debug.LogError(
                     "VCR PLAYER SMOKE evidence write failed: " +
                     exception);
-                Application.Quit(1);
+                UnityEngine.Application.Quit(1);
                 yield break;
             }
 
@@ -139,7 +139,7 @@ namespace VCR.Runtime.Application
                 "VCR PLAYER SMOKE " +
                 (evidence.passed ? "PASS" : "FAIL") +
                 ": " + evidence.error);
-            Application.Quit(evidence.passed ? 0 : 1);
+            UnityEngine.Application.Quit(evidence.passed ? 0 : 1);
         }
 
         private static string GetReportPath()
