@@ -60,6 +60,9 @@ jobs:
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
 
+      - name: Test interactive P10 evidence format verifier
+        run: python3 tools/verify-p10-interactive-evidence.py --self-test
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{

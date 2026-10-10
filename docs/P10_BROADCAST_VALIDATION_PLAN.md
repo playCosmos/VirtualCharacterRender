@@ -120,3 +120,56 @@ P10 does not create a performance PASS from configured target FPS alone.
 P10 platform/OBS evidence is PASS only when both supported platforms have standalone-player evidence for the required alpha/capture path and the recorded result can be reproduced from this plan.
 
 Until then the P10 source checkpoint remains implementation-complete but evidence-deferred.
+
+
+## Operator-driven GUI/OBS evidence package
+
+Automated native Player CI only verifies headless startup/shutdown. The following
+must be performed on a **real Windows x64 desktop** and an **Apple Silicon macOS
+desktop with a logged-in graphical session**, using builds from the *same tested
+source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
+
+1. Find a successful `.github/workflows/player-native-smoke.yml` run for the
+   chosen source commit using `gh run list --workflow player-native-smoke.yml`.
+   Download the exact `player-windows-<SHA>` and `player-macos-<SHA>`
+   artifacts with `gh run download <RUN_ID> --name <ARTIFACT_NAME> -D <DIR>`.
+   Verify each archive's SHA-256 against its adjacent `.sha256` file, and
+   each `.source-sha` against the chosen 40-character Git commit SHA.
+   Reject any missing/mismatched evidence; do not use a different tag's alpha
+   zip simply because its version string appears similar.
+2. On Windows, extract the Windows ZIP, launch
+   `VirtualCharacterRender.exe -screen-fullscreen 0 -logFile <LOG_FILE>`.
+   On Apple Silicon macOS, `unzip` the macOS ZIP and launch the
+   `VirtualCharacterRender.app` through `open -W -a <APP_PATH> --args
+   -screen-fullscreen 0 -logFile <LOG_FILE>`.
+   In both cases, **do not** pass `-batchmode`, `-nographics` or
+   `--vcr-smoke-report`; these belong exclusively to the previous CI gate.
+   Launch without a VRM first; then exercise VRM0/VRM1 and the output
+   behavior separately. Keep logs for each target/resolution.
+3. Run a real OBS capture session for 1280x720@60 and 1920x1080@60 on
+   **each** platform. Record the capture method, alpha/edge result on a
+   contrasting composite, output readiness, resize/DPI, topmost, click-through,
+   focus/minimize/restore, recovery, clean shutdown, observed frame average,
+   P95/P99, and OBS dropped/skipped frame counts. Store a real screenshot or
+   recording per platform/resolution along with the matching Player log.
+   Capture the display/OS, GPU, driver, OBS version and display scale.
+4. Create *empty, non-passing* templates with
+   `python3 tools/verify-p10-interactive-evidence.py --init evidence/p10/<SESSION>`.
+   Each JSON file represents one of
+   `windows-720p60`, `windows-1080p60`, `macos-720p60`,
+   and `macos-1080p60`. Fill the observed data manually.
+   Reference the real screenshot and player log using paths within the
+   evidence directory (e.g. `attachments/windows-720p60.png`).
+   Every check must be explicitly confirmed; a failure or untested item
+   remains `false`/`null` and cannot be reported as complete.
+5. Inspect evidence with
+   `python3 tools/verify-p10-interactive-evidence.py --verify evidence/p10/<SESSION> --source <40_CHARACTER_COMMIT_SHA>`.
+   This only checks **operator-supplied record completeness**, platform,
+   provenance fields, metrics sanity and attachment presence/path safety.
+   It does **not** evaluate screenshots, prove that alpha is correct,
+   verify the reported SHA against a downloaded artifact or independently
+   confirm device behavior. Real visual review and source-archive hash
+   verification remain required before P10 is marked PASS.
+
+Do not commit personal VRMs, Player binaries, raw logs, or captured desktop
+media to the source repository. Store private test evidence separately.
