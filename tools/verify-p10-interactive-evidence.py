@@ -46,10 +46,15 @@ def check_archive(directory, platform, source):
     if source_path.read_text(encoding="utf-8").strip() != source:
         raise ValueError(platform + " artifact source does not match tested commit")
     digest_tokens = digest_path.read_text(encoding="utf-8").split()
-    allowed_names = {platform + ".zip", "player-artifacts/" + platform + ".zip"}
+    # GitHub Actions sha256sum records the original runner's absolute workspace
+    # path. Only the expected artifact basename/suffix is portable.
+    recorded_path = digest_tokens[1].lstrip("*").replace("\\", "/") if len(digest_tokens) == 2 else ""
+    expected_suffix = "player-artifacts/" + platform + ".zip"
     if (len(digest_tokens) != 2
             or not SHA64.fullmatch(digest_tokens[0])
-            or digest_tokens[1].lstrip("*") not in allowed_names):
+            or not (recorded_path == platform + ".zip"
+                    or recorded_path == expected_suffix
+                    or recorded_path.endswith("/" + expected_suffix))):
         raise ValueError(platform + " artifact .sha256 sidecar is invalid")
     actual = sha256_file(archive)
     if actual != digest_tokens[0]:
@@ -246,6 +251,11 @@ def self_test():
             (artifacts / (platform + ".sha256")).write_text(
                 digests[platform] + "  player-artifacts/" + platform + ".zip\n", encoding="utf-8")
             (artifacts / (platform + ".source-sha")).write_text(source + "\n", encoding="utf-8")
+        # Match the absolute path format emitted by GitHub Actions sha256sum.
+        win_digest = artifacts / "windows.sha256"
+        win_digest.write_text(digests["windows"] + "  /home/runner/work/project/player-artifacts/windows.zip\n", encoding="utf-8")
+        if check_archive(artifacts, "windows", source) != digests["windows"]:
+            raise AssertionError("GitHub absolute-path checksum format must pass")
         if verify(directory, source, artifacts) == 0:
             raise AssertionError("empty operator templates must fail with valid archives")
         for platform in PLATFORMS:
