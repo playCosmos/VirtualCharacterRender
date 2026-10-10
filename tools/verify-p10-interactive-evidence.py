@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import zipfile
 
 TARGETS = {"720p60": (1280, 720), "1080p60": (1920, 1080)}
 PLATFORMS = ("windows", "macos")
@@ -21,6 +22,61 @@ CHECKS = (
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 MEDIA_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"}
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def check_archive(directory, platform, source):
+    """Verify the actual CI-produced ZIP against both SHA-256 and source sidecars."""
+    if platform not in PLATFORMS:
+        raise ValueError("unsupported artifact platform: " + str(platform))
+    directory = directory.resolve()
+    archive = directory / (platform + ".zip")
+    digest_path = directory / (platform + ".sha256")
+    source_path = directory / (platform + ".source-sha")
+    for path in (archive, digest_path, source_path):
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError("missing/empty artifact: " + str(path))
+    if source_path.read_text(encoding="utf-8").strip() != source:
+        raise ValueError(platform + " artifact source does not match tested commit")
+    digest_tokens = digest_path.read_text(encoding="utf-8").split()
+    # GitHub Actions sha256sum records the original runner's absolute workspace
+    # path. Only the expected artifact basename/suffix is portable.
+    recorded_path = digest_tokens[1].lstrip("*").replace("\\", "/") if len(digest_tokens) == 2 else ""
+    expected_suffix = "player-artifacts/" + platform + ".zip"
+    if (len(digest_tokens) != 2
+            or not SHA64.fullmatch(digest_tokens[0])
+            or not (recorded_path == platform + ".zip"
+                    or recorded_path == expected_suffix
+                    or recorded_path.endswith("/" + expected_suffix))):
+        raise ValueError(platform + " artifact .sha256 sidecar is invalid")
+    actual = sha256_file(archive)
+    if actual != digest_tokens[0]:
+        raise ValueError(platform + " archive digest mismatch")
+    try:
+        with zipfile.ZipFile(archive) as package:
+            names = {name.removeprefix("./") for name in package.namelist()}
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError(platform + " archive is not a readable ZIP") from exc
+    if platform == "windows":
+        expected = "VirtualCharacterRender.exe"
+        additional = any(name.startswith("VirtualCharacterRender_Data/") and not name.endswith("/")
+                         for name in names)
+        if expected not in names or not additional:
+            raise ValueError("Windows archive lacks Player executable/data")
+    else:
+        info = "VirtualCharacterRender.app/Contents/Info.plist"
+        executable = any(name.startswith("VirtualCharacterRender.app/Contents/MacOS/")
+                         and not name.endswith("/") for name in names)
+        if info not in names or not executable:
+            raise ValueError("macOS archive lacks app Info.plist/executable")
+    return actual
 
 
 def empty_case(platform, target):
@@ -79,7 +135,7 @@ def artifact(directory, value, allowed_ext=None):
     return None
 
 
-def inspect_case(directory, platform, target, source):
+def inspect_case(directory, platform, target, source, archive_sha):
     path = directory / (platform + "-" + target + ".json")
     errors = []
     try:
@@ -102,8 +158,8 @@ def inspect_case(directory, platform, target, source):
     if not isinstance(sha, str) or not SHA40.fullmatch(sha) or sha != source:
         errors.append("sourceSha missing, invalid or not the specified source commit")
     digest = item.get("playerArchiveSha256")
-    if not isinstance(digest, str) or not SHA64.fullmatch(digest):
-        errors.append("playerArchiveSha256 must be a full lowercase SHA-256")
+    if not isinstance(digest, str) or digest != archive_sha:
+        errors.append("playerArchiveSha256 must equal the independently hashed " + platform + " archive")
     for key in ("osVersion", "cpu", "gpu", "displayScale", "obsVersion", "captureMethod"):
         if not isinstance(item.get(key), str) or not item[key].strip():
             errors.append(key + " is not recorded")
@@ -140,14 +196,26 @@ def inspect_case(directory, platform, target, source):
     return errors
 
 
-def verify(directory, source):
+def verify(directory, source, artifacts):
     if not SHA40.fullmatch(source):
         raise ValueError("--source must be an exact lowercase 40-digit commit SHA")
+    if not artifacts.is_dir():
+        raise ValueError("--artifacts must contain downloaded CI Player packages")
+    hashes = {}
+    for platform in PLATFORMS:
+        try:
+            hashes[platform] = check_archive(artifacts, platform, source)
+            print(platform + " CI Player artifact: VERIFIED SHA-256 " + hashes[platform])
+        except (OSError, UnicodeError, ValueError) as exc:
+            print(platform + " CI Player artifact: FAIL - " + str(exc))
+    if len(hashes) != len(PLATFORMS):
+        print("P10 provenance NOT ACCEPTED; operator records cannot override artifact failure.")
+        return 1
     total = 0
     for platform in PLATFORMS:
         for target in TARGETS:
             case = platform + "-" + target
-            problems = inspect_case(directory, platform, target, source)
+            problems = inspect_case(directory, platform, target, source, hashes[platform])
             if problems:
                 total += len(problems)
                 print(case + ": INCOMPLETE/FAILED")
@@ -158,24 +226,45 @@ def verify(directory, source):
     if total:
         print("P10 evidence NOT ACCEPTED: " + str(total) + " issue(s)")
         return 1
-    print("P10 evidence FORMAT COMPLETE; separate visual/hardware review required before P10 PASS.")
+    print("P10 artifact provenance and evidence FORMAT COMPLETE; separate visual/hardware review required.")
     return 0
 
 
 def self_test():
     source = "a" * 40
     with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
+        directory = Path(tmp) / "evidence"
+        artifacts = Path(tmp) / "player-artifacts"
+        artifacts.mkdir()
         init(directory)
-        if verify(directory, source) == 0:
-            raise AssertionError("empty templates must fail")
+        digests = {}
+        for platform in PLATFORMS:
+            archive = artifacts / (platform + ".zip")
+            with zipfile.ZipFile(archive, "w") as package:
+                if platform == "windows":
+                    package.writestr("VirtualCharacterRender.exe", b"synthetic player fixture")
+                    package.writestr("VirtualCharacterRender_Data/boot.config", b"test")
+                else:
+                    package.writestr("VirtualCharacterRender.app/Contents/Info.plist", b"synthetic plist")
+                    package.writestr("VirtualCharacterRender.app/Contents/MacOS/VCR", b"test")
+            digests[platform] = sha256_file(archive)
+            (artifacts / (platform + ".sha256")).write_text(
+                digests[platform] + "  player-artifacts/" + platform + ".zip\n", encoding="utf-8")
+            (artifacts / (platform + ".source-sha")).write_text(source + "\n", encoding="utf-8")
+        # Match the absolute path format emitted by GitHub Actions sha256sum.
+        win_digest = artifacts / "windows.sha256"
+        win_digest.write_text(digests["windows"] + "  /home/runner/work/project/player-artifacts/windows.zip\n", encoding="utf-8")
+        if check_archive(artifacts, "windows", source) != digests["windows"]:
+            raise AssertionError("GitHub absolute-path checksum format must pass")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("empty operator templates must fail with valid archives")
         for platform in PLATFORMS:
             for target in TARGETS:
                 case = platform + "-" + target
                 path = directory / (case + ".json")
                 data = json.loads(path.read_text(encoding="utf-8"))
                 data.update({
-                    "sourceSha": source, "playerArchiveSha256": "b" * 64,
+                    "sourceSha": source, "playerArchiveSha256": digests[platform],
                     "osVersion": "test-os", "architecture": "arm64" if platform == "macos" else "AMD64",
                     "cpu": "test-cpu", "gpu": "test-gpu", "displayScale": "100%",
                     "obsVersion": "test-obs", "captureMethod": "test-method",
@@ -185,23 +274,43 @@ def self_test():
                     "playerLog": "attachments/" + case + ".log",
                     "visualEvidence": "attachments/" + case + ".png",
                 })
-                for asset in ("playerLog", "visualEvidence"):
-                    (directory / data[asset]).write_bytes(b"synthetic-self-test-fixture")
+                for field in ("playerLog", "visualEvidence"):
+                    (directory / data[field]).write_bytes(b"synthetic-self-test-fixture")
                 path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        if verify(directory, source) != 0:
-            raise AssertionError("synthetic complete fixture must satisfy format checker")
+        if verify(directory, source, artifacts) != 0:
+            raise AssertionError("synthetic fixture with matching real ZIP digest must pass format check")
         path = directory / "macos-720p60.json"
-        bad = json.loads(path.read_text())
-        bad["checks"]["obsAlphaRetained"] = False
+        good = json.loads(path.read_text())
+        for field, wrong in (
+            ("playerArchiveSha256", "b" * 64),
+            ("visualEvidence", "../escape.png"),
+        ):
+            bad = dict(good)
+            bad[field] = wrong
+            path.write_text(json.dumps(bad), encoding="utf-8")
+            if verify(directory, source, artifacts) == 0:
+                raise AssertionError(field + " negative case must fail")
+        bad = dict(good)
+        bad["checks"] = dict(good["checks"], obsAlphaRetained=False)
         path.write_text(json.dumps(bad), encoding="utf-8")
-        if verify(directory, source) == 0:
-            raise AssertionError("negative visual check must fail")
-        bad["checks"]["obsAlphaRetained"] = True
-        bad["visualEvidence"] = "../escape.png"
-        path.write_text(json.dumps(bad), encoding="utf-8")
-        if verify(directory, source) == 0:
-            raise AssertionError("evidence path escaping directory must fail")
-    print("P10 evidence schema self-test PASS")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("negative operator check must fail")
+        path.write_text(json.dumps(good), encoding="utf-8")
+        mac_digest = artifacts / "macos.sha256"
+        mac_digest.write_text("b" * 64 + "  player-artifacts/macos.zip\n", encoding="utf-8")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("tampered archive hash sidecar must fail")
+        mac_digest.write_text(digests["macos"] + "  player-artifacts/macos.zip\n", encoding="utf-8")
+        mac_source = artifacts / "macos.source-sha"
+        mac_source.write_text("b" * 40 + "\n", encoding="utf-8")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("wrong source commit must fail")
+        mac_source.write_text(source + "\n", encoding="utf-8")
+        with (artifacts / "macos.zip").open("ab") as file:
+            file.write(b"altered-binary")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("modified archive bytes must fail")
+    print("P10 archive provenance and evidence schema self-test PASS")
 
 
 def main():
@@ -209,8 +318,11 @@ def main():
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--init", type=Path, metavar="DIR")
     group.add_argument("--verify", type=Path, metavar="DIR")
+    group.add_argument("--check-archive", action="store_true", help="Verify a single downloaded Player ZIP")
     group.add_argument("--self-test", action="store_true")
-    p.add_argument("--source", help="40-character source SHA for --verify")
+    p.add_argument("--source", help="Exact 40-character source commit SHA")
+    p.add_argument("--artifacts", type=Path, help="Directory with windows.zip/macos.zip and original CI sidecars")
+    p.add_argument("--platform", choices=PLATFORMS, help="Required with --check-archive")
     args = p.parse_args()
     try:
         if args.self_test:
@@ -219,9 +331,17 @@ def main():
         if args.init:
             init(args.init)
             return 0
-        if not args.source:
-            p.error("--source is required with --verify")
-        return verify(args.verify, args.source)
+        if not args.source or not SHA40.fullmatch(args.source):
+            p.error("--source must be an exact lowercase 40-character SHA")
+        if not args.artifacts:
+            p.error("--artifacts is required with --verify and --check-archive")
+        if args.check_archive:
+            if not args.platform:
+                p.error("--platform is required with --check-archive")
+            digest = check_archive(args.artifacts, args.platform, args.source)
+            print(args.platform + " Player archive VERIFIED: " + digest)
+            return 0
+        return verify(args.verify, args.source, args.artifacts)
     except (OSError, ValueError) as exc:
         print("P10 evidence error: " + str(exc), file=sys.stderr)
         return 2
