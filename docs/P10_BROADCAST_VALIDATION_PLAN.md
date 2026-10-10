@@ -179,10 +179,22 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    Each JSON file represents one of
    `windows-720p60`, `windows-1080p60`, `macos-720p60`,
    and `macos-1080p60`. Fill the observed data manually.
-   Reference the real screenshot and player log using paths within the
-   evidence directory (e.g. `attachments/windows-720p60.png`).
-   Every check must be explicitly confirmed; a failure or untested item
-   remains `false`/`null` and cannot be reported as complete.
+   Reference the real screenshot, player log and opt-in runtime telemetry
+   JSON using paths within the evidence directory (e.g.
+   `attachments/windows-720p60.png`,
+   `attachments/windows-720p60-runtime.json`).
+   The JSON field for the latter is `runtimeTelemetry`. Use the **same**
+   requested resolution and 60 FPS target for the last two samples. After
+   closing the Player normally, copy the **last reported diagnostics snapshot**
+   frame average/P95/P99 into the matching case JSON (round to one decimal
+   place). Set `gpu` to the exact telemetry `graphicsDevice` value.
+   Do not fabricate missing measurements or force readiness flags to true.
+   The verifier requires two stable, capture-ready Player samples with positive
+   measured frame times and a normal quit callback. Non-ready or missing
+   samples mean the test evidence is incomplete, not successful.
+   Every manually observed check must still be explicitly confirmed; a
+   failure or untested item remains `false`/`null` and cannot be reported
+   as complete.
 5. Gather the two original CI artifact packages in a single
    `player-artifacts/` directory. Keep each `windows.zip`, `windows.sha256`,
    `windows.source-sha`, `macos.zip`, `macos.sha256`,
@@ -197,9 +209,15 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    digest and source sidecars, checks basic Player package structure, and
    verifies that all four operator records contain that same platform's
    independently recomputed archive hash. It also checks record completeness,
-   measured-value sanity, and attachment existence/path containment.
-   It does **not** inspect screenshots, judge OBS alpha, independently
-   establish the source archive's GitHub origin, or confirm device behavior.
+   attachment existence/path containment, and the supplied runtime telemetry's
+   Unity/platform identity, normal quit flag, two final stable 60 FPS target
+   samples, output readiness, native client size, and presence of measured
+   frame-time statistics. It rejects manual frame average/P95/P99 values that
+   differ from the last runtime sample by more than 0.11 ms.
+   **Ready flags are internal software-state reports, not observed OBS
+   pixels.** The verifier does **not** inspect screenshots, judge OBS alpha,
+   independently establish the source archive's GitHub origin, or confirm
+   that attached desktop media matches the telemetry session.
    Real visual review and validation that these artifacts came from the
    nominated successful CI run are still mandatory before P10 PASS.
 
