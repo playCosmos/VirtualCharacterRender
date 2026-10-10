@@ -5,6 +5,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using VCR.Editor.P0;
 using VCR.Runtime.Appearance.Unity;
+using VCR.Runtime.Application;
 using VCR.Runtime.Character;
 using VCR.Runtime.Diagnostics;
 using VCR.Runtime.EventRuntime.Unity;
@@ -220,6 +221,10 @@ namespace VCR.Editor.Alpha
                 DesktopCharacterFileSelectionAdapter>();
             root.AddComponent<
                 ApplicationUiController>();
+
+            // Inert during normal launches; activated only by the explicit
+            // --vcr-smoke-report=... standalone CI command-line option.
+            root.AddComponent<PlayerStartupSmoke>();
 
             var presentation2D =
                 new GameObject(
