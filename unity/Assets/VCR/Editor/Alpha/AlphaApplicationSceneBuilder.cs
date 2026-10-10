@@ -226,6 +226,10 @@ namespace VCR.Editor.Alpha
             // --vcr-smoke-report=... standalone CI command-line option.
             root.AddComponent<PlayerStartupSmoke>();
 
+            // P10 GUI evidence is operator-triggered and never runs in a
+            // normal Player or headless smoke invocation.
+            root.AddComponent<InteractiveOutputTelemetry>();
+
             var presentation2D =
                 new GameObject(
                     "Presentation2D");
