@@ -185,9 +185,25 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    `attachments/windows-720p60-runtime.json`).
    The JSON field for the latter is `runtimeTelemetry`. Use the **same**
    requested resolution and 60 FPS target for the last two samples. After
-   closing the Player normally, copy the **last reported diagnostics snapshot**
-   frame average/P95/P99 into the matching case JSON (round to one decimal
-   place). Set `gpu` to the exact telemetry `graphicsDevice` value.
+   the native Player closes normally, the verified machine-measured fields
+   can be imported into that *existing incomplete* case JSON:
+
+   ```sh
+   python3 tools/verify-p10-interactive-evidence.py --import-telemetry evidence/p10/<SESSION> --platform windows --target 720p60 --artifacts player-artifacts --source <40_CHARACTER_COMMIT_SHA>
+   # On macOS use --platform macos and choose either --target 720p60 or 1080p60.
+   ```
+
+   The importer recalculates the CI ZIP SHA-256 and checks native Player
+   metadata and the final two stable capture-ready samples. It imports
+   `sourceSha`, `playerArchiveSha256`, `osVersion`, `cpu`,
+   `gpu`, the last sampled frame average/P95/P99 and the existing
+   `runtimeTelemetry` and `playerLog` attachment paths. Conflicting
+   existing records are never overwritten. The operator must **still**
+   record architecture, display scale, OBS capture parameters/counters,
+   real screenshot/video and every observed check manually. The importer
+   leaves them unchanged. Without the importer, copy the last measured frame
+   average/P95/P99 into the case JSON and copy exact runtime `graphicsDevice`
+   to the case `gpu` field.
    Do not fabricate missing measurements or force readiness flags to true.
    The verifier requires two stable, capture-ready Player samples with positive
    measured frame times and a normal quit callback. Non-ready or missing
