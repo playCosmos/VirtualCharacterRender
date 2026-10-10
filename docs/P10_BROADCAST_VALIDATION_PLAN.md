@@ -130,8 +130,12 @@ desktop with a logged-in graphical session**, using builds from the *same tested
 source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
 
 1. Find a successful `.github/workflows/player-native-smoke.yml` run for
-   the chosen source commit using `gh run list --workflow
-   player-native-smoke.yml --limit 20`. Prefer the provenance-checked
+   the chosen source commit from a **develop branch push** using
+   `gh run list --workflow player-native-smoke.yml --branch develop
+   --event push --limit 20`. PR runs are deliberately excluded: GitHub
+   builds a synthetic PR merge ref, which is not the same SHA as the PR
+   head, and its artifact filename/source sidecar records that merge SHA.
+   Prefer the provenance-checked
    **two-platform downloader**, requiring GitHub CLI `gh` authenticated
    for the repository, instead of manually choosing artifact names:
 
