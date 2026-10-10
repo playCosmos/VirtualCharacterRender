@@ -1,3 +1,6 @@
+# Private operator capture sessions: screenshots, logs, native diagnostic data
+/evidence/p10/
+
 # Unity generated
 /Builds/
 unity/[Ll]ibrary/
