@@ -49,10 +49,12 @@ def check_run(data, run_id, source):
         raise ValueError("Workflow response is not a JSON object")
     if (type(data.get("id")) is not int or data["id"] != run_id
             or data.get("name") != WORKFLOW
+            or data.get("event") != "push"
+            or data.get("head_branch") != "develop"
             or data.get("head_sha") != source
             or data.get("status") != "completed"
             or data.get("conclusion") != "success"):
-        raise ValueError("Selected run is not the successful native smoke for exact source SHA")
+        raise ValueError("Require a successful develop push native smoke run at the exact source SHA (PR merge-ref builds use a different SHA)")
     location = data.get("repository")
     if not isinstance(location, dict) or location.get("full_name") != REPO:
         raise ValueError("Selected run belongs to a different repository")
@@ -159,6 +161,7 @@ def self_test():
     run = {
         "id": run_id, "name": WORKFLOW, "head_sha": sha,
         "status": "completed", "conclusion": "success",
+        "event": "push", "head_branch": "develop",
         "repository": {"full_name": REPO},
     }
     jobs = {
@@ -177,6 +180,8 @@ def self_test():
     check_artifacts(artifacts, sha)
     for bad in [
         dict(run, head_sha="b" * 40),
+        dict(run, event="pull_request"),
+        dict(run, head_branch="feature/my-pr"),
         dict(run, conclusion="failure"),
         dict(run, repository={"full_name": "someone/else"}),
     ]:
