@@ -129,12 +129,30 @@ must be performed on a **real Windows x64 desktop** and an **Apple Silicon macOS
 desktop with a logged-in graphical session**, using builds from the *same tested
 source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
 
-1. Find a successful `.github/workflows/player-native-smoke.yml` run for the
-   chosen source commit using `gh run list --workflow player-native-smoke.yml`.
-   Download the exact `player-windows-<SHA>` and `player-macos-<SHA>`
-   artifacts with `gh run download <RUN_ID> --name <ARTIFACT_NAME> -D <DIR>`.
-   On **each** testing desktop download the relevant named CI artifact
-   to a local folder (for example `player-artifacts/`). Run the following
+1. Find a successful `.github/workflows/player-native-smoke.yml` run for
+   the chosen source commit using `gh run list --workflow
+   player-native-smoke.yml --limit 20`. Prefer the provenance-checked
+   **two-platform downloader**, requiring GitHub CLI `gh` authenticated
+   for the repository, instead of manually choosing artifact names:
+
+   ```sh
+   python3 tools/download-p10-tested-players.py --run-id <SUCCESSFUL_SMOKE_RUN_ID> --source <40_CHARACTER_COMMIT_SHA> --output player-artifacts
+   ```
+
+   The downloader verifies the run's exact source SHA, repository, completed
+   success conclusion, **both** platform build jobs and **both** native Player
+   startup/shutdown jobs, unexpired exact-named CI artifacts, ZIP digests,
+   source sidecars and binary package structure. It refuses to overwrite
+   an existing `player-artifacts/` directory. A mismatch fails closed; it
+   never downgrades to an unverified tag, prior build or manual PASS.
+   Download on one connected machine and transfer the **original** verified
+   ZIPs and sidecars unchanged to Windows and Apple Silicon test desktops.
+   If `gh` is unavailable, manually download the exact two artifact names
+   from that same successful run, but then independently check the GitHub
+   run/commit provenance as well as the local ZIP bytes.
+
+   On **each** testing desktop keep the relevant named CI artifact
+   in `player-artifacts/` and run the following
    before unzipping or launching it; this checks the **actual ZIP bytes**
    against the CI `.sha256` sidecar, matches the `.source-sha` against
    the expected commit, and confirms the package contains a Player:
