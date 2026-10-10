@@ -133,8 +133,17 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    chosen source commit using `gh run list --workflow player-native-smoke.yml`.
    Download the exact `player-windows-<SHA>` and `player-macos-<SHA>`
    artifacts with `gh run download <RUN_ID> --name <ARTIFACT_NAME> -D <DIR>`.
-   Verify each archive's SHA-256 against its adjacent `.sha256` file, and
-   each `.source-sha` against the chosen 40-character Git commit SHA.
+   On **each** testing desktop download the relevant named CI artifact
+   to a local folder (for example `player-artifacts/`). Run the following
+   before unzipping or launching it; this checks the **actual ZIP bytes**
+   against the CI `.sha256` sidecar, matches the `.source-sha` against
+   the expected commit, and confirms the package contains a Player:
+
+   ```sh
+   python3 tools/verify-p10-interactive-evidence.py --check-archive --platform windows --artifacts player-artifacts --source <40_CHARACTER_COMMIT_SHA>
+   # On Apple Silicon macOS use --platform macos instead.
+   ```
+
    Reject any missing/mismatched evidence; do not use a different tag's alpha
    zip simply because its version string appears similar.
 2. On Windows, extract the Windows ZIP, launch
@@ -162,14 +171,25 @@ source commit*. GitHub-hosted headless execution never counts as GUI/OBS PASS.
    evidence directory (e.g. `attachments/windows-720p60.png`).
    Every check must be explicitly confirmed; a failure or untested item
    remains `false`/`null` and cannot be reported as complete.
-5. Inspect evidence with
-   `python3 tools/verify-p10-interactive-evidence.py --verify evidence/p10/<SESSION> --source <40_CHARACTER_COMMIT_SHA>`.
-   This only checks **operator-supplied record completeness**, platform,
-   provenance fields, metrics sanity and attachment presence/path safety.
-   It does **not** evaluate screenshots, prove that alpha is correct,
-   verify the reported SHA against a downloaded artifact or independently
-   confirm device behavior. Real visual review and source-archive hash
-   verification remain required before P10 is marked PASS.
+5. Gather the two original CI artifact packages in a single
+   `player-artifacts/` directory. Keep each `windows.zip`, `windows.sha256`,
+   `windows.source-sha`, `macos.zip`, `macos.sha256`,
+   and `macos.source-sha`. Copy the **verified** ZIP SHA-256 into the
+   corresponding case's `playerArchiveSha256` field. Inspect evidence with:
+
+   ```sh
+   python3 tools/verify-p10-interactive-evidence.py --verify evidence/p10/<SESSION> --artifacts player-artifacts --source <40_CHARACTER_COMMIT_SHA>
+   ```
+
+   The verifier recomputes each original ZIP's actual SHA-256, matches CI
+   digest and source sidecars, checks basic Player package structure, and
+   verifies that all four operator records contain that same platform's
+   independently recomputed archive hash. It also checks record completeness,
+   measured-value sanity, and attachment existence/path containment.
+   It does **not** inspect screenshots, judge OBS alpha, independently
+   establish the source archive's GitHub origin, or confirm device behavior.
+   Real visual review and validation that these artifacts came from the
+   nominated successful CI run are still mandatory before P10 PASS.
 
 Do not commit personal VRMs, Player binaries, raw logs, or captured desktop
 media to the source repository. Store private test evidence separately.
