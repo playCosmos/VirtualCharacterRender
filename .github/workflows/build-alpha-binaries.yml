@@ -232,8 +232,8 @@ jobs:
 
           ### Run (Unity is not required)
 
-          - Windows x64: extract the Windows ZIP and double-click `VirtualCharacterRender.exe`.
-          - Apple Silicon macOS: extract the macOS ZIP and open `VirtualCharacterRender.app`. If macOS blocks an unsigned app, review it under System Settings > Privacy & Security.
+          - Windows x64: extract the Windows ZIP and double-click \`VirtualCharacterRender.exe\`.
+          - Apple Silicon macOS: extract the macOS ZIP and open \`VirtualCharacterRender.app\`. If macOS blocks an unsigned app, review it under System Settings > Privacy & Security.
           - You can launch without a VRM model, camera or OBS; enable those features separately after startup.
 
           This release demonstrates build/package success, not physical tracking, OBS, or performance validation. See \`docs/ALPHA_TESTING.md\`.
