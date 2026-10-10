@@ -1,21 +1,29 @@
 # P10 Status
 
-Updated: 2026-10-03
+Updated: 2026-10-11
 
-## Active branch
+## Current integration state
 
-```text
-feature/p10-broadcast-output
-```
+P10 source and evidence tooling have been integrated into `develop` across
+[PR #10](https://github.com/playCosmos/VirtualCharacterRender/pull/10) through
+[PR #14](https://github.com/playCosmos/VirtualCharacterRender/pull/14).
+The last integrated merge commit as of this update is
+[`268b0030`](https://github.com/playCosmos/VirtualCharacterRender/commit/268b0030fd5eb70986e59ded766c976fe8e43092).
+The original architecture branched from the preserved P9 checkpoint
+(`checkpoint/p9-source-implementation`, `296265c9`).
 
-P10 starts from the preserved P9 source checkpoint:
+The **PR #14 source commit** `67f3627` passed all three CI workflows:
+[repository validation](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/38060889621),
+[Unity P0–P13 source-free validation](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/38060889622),
+and [Windows/macOS native Player build and headless startup/shutdown smoke](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/38060889596).
+The **separate post-merge `develop` run** for `268b0030` must be
+independently checked; the above passing runs refer to the PR source commit.
 
-```text
-checkpoint/p9-source-implementation
-296265c9b3d67a1ac6897dc9b5b78d329836eeab
-```
-
-P0-P9 runtime/device/network/service evidence remains deferred where previously documented. A source checkpoint is not a validation PASS.
+These results verify compilation, inherited source-free checks and headless
+Player startup/shutdown, **not** on-screen alpha, actual OBS compatibility,
+sustained 60 FPS, webcam/ARKit operation, or device behavior.
+P0–P9 runtime/device/network/service evidence remains deferred wherever
+previously documented.
 
 ## Source implementation checkpoint
 
@@ -93,22 +101,54 @@ The P10 batch entry runs P0-P9 source-free suites first and then checks:
 - minimum 720p60 and recommended 1080p60 capture-target configuration
 - resolution/FPS/background-execution mismatch reporting
 
-These validation paths are implemented but have not been executed in this environment because a Unity Editor/runtime is not available here.
+The P0–P13 inherited source-free validation has now **passed in the pinned
+Unity 6000.3.25f1 GitHub Actions environment** on the PR #14 source commit,
+as linked above. This does not imply a local Unity Editor or physical camera/
+desktop session was exercised.
 
-The source implementation is complete enough for a checkpoint. See `P10_BROADCAST_VALIDATION_PLAN.md` for the standalone/OBS evidence protocol.
+P10 now includes an opt-in standalone Player telemetry recorder
+(`InteractiveOutputTelemetry`) and operator evidence tooling:
 
-## Deferred P10 evidence
+- `tools/verify-p10-interactive-evidence.py`: validates downloaded CI ZIP
+  bytes against SHA-256/source sidecars, operator evidence completeness,
+  and actual Player telemetry data consistency. Never judges screenshot pixels.
+- `tools/run-p10-interactive.py`: verifies, extracts and launches the native
+  GUI Player on Windows x64 or Apple Silicon macOS. Captures the per-case
+  Player log and opt-in JSON without marking OBS results as passed.
+- `--import-telemetry`: imports measured hardware identification, ZIP/source
+  SHA and last frame average/P95/P99 without changing operator yes/no checks.
+- Repository CI executes deterministic self-tests for the evidence verifier and
+  desktop runner without asserting GUI or OBS PASS.
 
-- execute the P0-P10 Unity source-free batch suite
-- Windows standalone native transparency and timeout behavior
-- macOS Apple-Silicon standalone native transparency
-- OBS window/game capture with alpha on Windows
-- OBS-compatible capture path on macOS
-- resize and high-DPI behavior
-- click-through/topmost behavior in standalone players
-- 720p60 and 1080p60 frame-time/capture stability with the overlay active
-- recovery after native output/capture failures
+See `P10_BROADCAST_VALIDATION_PLAN.md` for the desktop procedure and the
+acceptance criteria.
 
-P10 must not convert these platform/OBS evidence gates into PASS without real standalone-player validation.
+## Next gate — real desktop and OBS evidence
 
-The P10 source architecture is checkpoint-ready; platform/OBS/performance evidence remains deferred.
+The next P10 step requires **four manually observed sessions** using Players
+built from the same source commit as the verified CI packages:
+
+| Platform | 1280×720 / 60 FPS | 1920×1080 / 60 FPS |
+| --- | --- | --- |
+| Windows x64 | Required, unverified | Required, unverified |
+| Apple Silicon macOS | Required, unverified | Required, unverified |
+
+For each session the operator must confirm:
+
+1. A real desktop GUI starts and native overlay output reaches `Active`;
+   its transparent background and edges look correct in an OBS composite.
+2. Client dimensions, requested frame target and native output readiness are
+   recorded alongside Player logs and the opt-in telemetry JSON.
+3. The application is moved/resized, DPI changes are exercised, topmost and
+   click-through are toggled, focus/minimize/restore works, and recovery works
+   after an output failure — without reloading the character.
+4. Measured frame average/P95/P99 plus OBS dropped/skipped-frame counters,
+   capture method/version and real screenshot/video are retained.
+5. `tools/verify-p10-interactive-evidence.py --verify` validates the
+   *completeness and numerical consistency* of all four cases against both
+   original CI archives. A human independently reviews capture quality and
+   real device behavior; the verifier cannot prove those observations.
+
+**P10 status: source/CI gates satisfied on the referenced PR head; GUI/OBS/
+performance acceptance remains unverified.** Do not classify P10 as fully
+passed solely because the automated evidence schema accepts operator records.
