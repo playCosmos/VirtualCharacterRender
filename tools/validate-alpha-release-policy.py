@@ -24,6 +24,9 @@ checks = {
     "version supplied by tag to Unity": 'VCR_RELEASE_VERSION:' in workflow and 'VCR_RELEASE_VERSION' in builder,
     "local build and run scripts support same version": "$env:VCR_RELEASE_VERSION = $AlphaVersion" in local_build and "[string]$AlphaVersion" in local_run,
     "release depends on both builds": 'needs: [preflight, build]' in workflow,
+    "explicit alpha.2 intent is limited to develop": '"refs/heads/develop"' in workflow and '.github/release-intents/v0.1.0-alpha.2' in workflow and (root / ".github/release-intents/v0.1.0-alpha.2").read_text(encoding="utf-8").strip() == "0.1.0-alpha.2",
+    "new tag is created only after both builds pass": workflow.index('needs: [preflight, build]') < workflow.index('Create immutable alpha tag after both builds passed') < workflow.index('Publish immutable prerelease with provenance manifest'),
+    "alpha.2 build refuses source SHA mismatch": '-f "sha=$GITHUB_SHA"' in workflow and 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"' in workflow,
 }
 for description, passed in checks.items():
     print(f"{'PASS' if passed else 'FAIL'}: {description}")
