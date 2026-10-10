@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -104,6 +105,7 @@ def empty_case(platform, target):
         "obsSkippedFrames": None,
         "checks": {key: None for key in CHECKS},
         "playerLog": "",
+        "runtimeTelemetry": "",
         "visualEvidence": "",
         "notes": "",
     }
@@ -133,6 +135,114 @@ def artifact(directory, value, allowed_ext=None):
     if not file.is_file() or file.stat().st_size == 0:
         return "evidence file is missing or empty"
     return None
+
+
+
+def finite_positive(value):
+    return (type(value) in (int, float) and math.isfinite(value)
+            and 0 < value < 100000)
+
+
+def inspect_runtime_telemetry(directory, item, platform, target):
+    """Cross-check operator observations with opt-in real Player output.
+
+    This is a data-consistency check, not a visual/OBS PASS and not an
+    independent attestation that a screenshot came from this Player.
+    """
+    errors = []
+    fault = artifact(directory, item.get("runtimeTelemetry"))
+    if fault:
+        return ["runtimeTelemetry: " + fault]
+    path = (directory.resolve() / item["runtimeTelemetry"]).resolve()
+    if path.stat().st_size > 4 * 1024 * 1024:
+        return ["runtimeTelemetry: file exceeds 4 MiB limit"]
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        return ["runtimeTelemetry: invalid JSON: " + str(exc)]
+    if not isinstance(report, dict):
+        return ["runtimeTelemetry: JSON root must be an object"]
+
+    expected_platform = "WindowsPlayer" if platform == "windows" else "OSXPlayer"
+    required = {
+        "suite": "p10-interactive-runtime-telemetry-v1",
+        "unityVersion": "6000.3.25f1",
+        "platform": expected_platform,
+        "assurance": "runtime-status-only; not GUI/OBS alpha proof",
+        "quitCallbackObserved": True,
+    }
+    for key, expected in required.items():
+        if report.get(key) != expected or (key == "quitCallbackObserved" and type(report.get(key)) is not bool):
+            errors.append("runtimeTelemetry: " + key + " does not match expected Player report")
+    for key in ("osVersion", "processor", "graphicsDevice", "graphicsApi", "startedAtUtc", "updatedAtUtc"):
+        if not isinstance(report.get(key), str) or not report[key].strip():
+            errors.append("runtimeTelemetry: " + key + " is missing")
+    # GPU info is taken from SystemInfo.graphicsDeviceName in the Player.
+    if report.get("graphicsDevice") != item.get("gpu"):
+        errors.append("runtimeTelemetry: GPU must match the operator record")
+
+    samples = report.get("samples")
+    if not isinstance(samples, list) or len(samples) < 2 or len(samples) > 360:
+        return errors + ["runtimeTelemetry: at least two and at most 360 samples required"]
+    total = report.get("totalSamples")
+    if type(total) is not int or total < len(samples):
+        errors.append("runtimeTelemetry: totalSamples must cover every retained sample")
+    for i, sample in enumerate(samples):
+        if not isinstance(sample, dict) or not finite_positive(sample.get("uptimeSeconds")):
+            errors.append("runtimeTelemetry: malformed sample at index " + str(i))
+            return errors
+        if i and sample["uptimeSeconds"] <= samples[i - 1]["uptimeSeconds"]:
+            errors.append("runtimeTelemetry: sample uptimes are not increasing")
+            break
+
+    width, height = TARGETS[target]
+    tier = "Minimum720p60" if target == "720p60" else "Recommended1080p60"
+    # Last two samples must be stable at the requested target and capture-ready.
+    # No assumption about real OBS composition, capture quality or hardware.
+    for i, sample in enumerate(samples[-2:]):
+        label = "runtimeTelemetry: stable sample " + str(i + 1)
+        for name, value in (
+            ("runtimeStarted", True),
+            ("sceneState", "Ready"),
+            ("overlayStatusAvailable", True),
+            ("overlayState", "Active"),
+            ("transparentRequested", True),
+            ("overlayCaptureReady", True),
+            ("overlayCaptureFailure", "None"),
+            ("broadcastTarget", tier),
+            ("broadcastCaptureReady", True),
+            ("broadcastCaptureFailure", "None"),
+            ("runInBackground", True),
+            ("requestedWidth", width),
+            ("requestedHeight", height),
+            ("targetFrameRate", 60),
+            ("hasFrameMeasurements", True),
+        ):
+            if name == "sceneState":
+                if sample.get(name) not in ("Ready", "CharacterReady"):
+                    errors.append(label + " invalid sceneState")
+            elif sample.get(name) != value or (isinstance(value, int) and type(sample.get(name)) is bool):
+                errors.append(label + " unexpected " + name)
+        if sample.get("sceneError") not in (None, "") or sample.get("overlayError") not in (None, ""):
+            errors.append(label + " contains runtime/overlay error")
+        if type(sample.get("overlayClientWidth")) is not int or sample["overlayClientWidth"] <= 0:
+            errors.append(label + " missing positive overlayClientWidth")
+        if type(sample.get("overlayClientHeight")) is not int or sample["overlayClientHeight"] <= 0:
+            errors.append(label + " missing positive overlayClientHeight")
+        if not isinstance(sample.get("timestampUtc"), str) or not sample["timestampUtc"].strip():
+            errors.append(label + " has no timestampUtc")
+        times = (sample.get("frameAverageMs"), sample.get("frameP95Ms"), sample.get("frameP99Ms"))
+        if not all(finite_positive(v) for v in times) or not times[0] <= times[1] <= times[2]:
+            errors.append(label + " invalid frame measurements")
+    # Operator must transcribe the LAST stable diagnostics snapshot, rounded
+    # to at most one decimal place; compare within floating-point tolerance.
+    last = samples[-1]
+    for name in ("frameAverageMs", "frameP95Ms", "frameP99Ms"):
+        observation = item.get(name)
+        native = last.get(name)
+        if finite_positive(native) and finite_positive(observation) and abs(native - observation) > 0.11:
+            errors.append("runtimeTelemetry: " + name + " differs from latest Player sample")
+    return errors
 
 
 def inspect_case(directory, platform, target, source, archive_sha):
@@ -193,6 +303,7 @@ def inspect_case(directory, platform, target, source, archive_sha):
         fault = artifact(directory, item.get(key), extensions)
         if fault:
             errors.append(key + ": " + fault)
+    errors.extend(inspect_runtime_telemetry(directory, item, platform, target))
     return errors
 
 
@@ -273,7 +384,38 @@ def self_test():
                     "checks": dict.fromkeys(CHECKS, True),
                     "playerLog": "attachments/" + case + ".log",
                     "visualEvidence": "attachments/" + case + ".png",
+                    "runtimeTelemetry": "attachments/" + case + "-runtime.json",
                 })
+                w, h = TARGETS[target]
+                kind = "Minimum720p60" if target == "720p60" else "Recommended1080p60"
+                def sample(uptime):
+                    return {
+                        "timestampUtc": "2026-10-10T10:00:00Z",
+                        "uptimeSeconds": uptime,
+                        "runtimeStarted": True, "sceneState": "Ready",
+                        "sceneError": "", "overlayStatusAvailable": True,
+                        "overlayState": "Active", "overlayError": "",
+                        "overlayClientWidth": w, "overlayClientHeight": h,
+                        "transparentRequested": True, "overlayCaptureReady": True,
+                        "overlayCaptureFailure": "None", "broadcastTarget": kind,
+                        "broadcastCaptureReady": True, "broadcastCaptureFailure": "None",
+                        "runInBackground": True, "requestedWidth": w,
+                        "requestedHeight": h, "targetFrameRate": 60,
+                        "hasFrameMeasurements": True, "frameAverageMs": 10.0,
+                        "frameP95Ms": 12.0, "frameP99Ms": 15.0,
+                    }
+                telemetry = {
+                    "suite": "p10-interactive-runtime-telemetry-v1",
+                    "assurance": "runtime-status-only; not GUI/OBS alpha proof",
+                    "platform": "WindowsPlayer" if platform == "windows" else "OSXPlayer",
+                    "unityVersion": "6000.3.25f1", "osVersion": "test-os",
+                    "processor": "test-cpu", "graphicsDevice": "test-gpu",
+                    "graphicsApi": "test-api", "startedAtUtc": "test-start",
+                    "updatedAtUtc": "test-end", "quitCallbackObserved": True,
+                    "totalSamples": 2, "samples": [sample(7.0), sample(12.0)],
+                }
+                (directory / data["runtimeTelemetry"]).write_text(
+                    json.dumps(telemetry), encoding="utf-8")
                 for field in ("playerLog", "visualEvidence"):
                     (directory / data[field]).write_bytes(b"synthetic-self-test-fixture")
                 path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -296,6 +438,28 @@ def self_test():
         if verify(directory, source, artifacts) == 0:
             raise AssertionError("negative operator check must fail")
         path.write_text(json.dumps(good), encoding="utf-8")
+        telemetry_path = directory / good["runtimeTelemetry"]
+        original_telemetry = json.loads(telemetry_path.read_text(encoding="utf-8"))
+        for mutation in ("wrongPlatform", "overlayNotReady", "missingFrames", "wrongTarget", "notQuit", "metricMismatch"):
+            bad_report = json.loads(json.dumps(original_telemetry))
+            if mutation == "wrongPlatform":
+                bad_report["platform"] = "WindowsPlayer"
+            elif mutation == "overlayNotReady":
+                bad_report["samples"][-1]["overlayCaptureReady"] = False
+            elif mutation == "missingFrames":
+                bad_report["samples"][-1]["hasFrameMeasurements"] = False
+            elif mutation == "wrongTarget":
+                bad_report["samples"][-1]["requestedWidth"] = 1280
+            elif mutation == "notQuit":
+                bad_report["quitCallbackObserved"] = False
+            elif mutation == "metricMismatch":
+                bad_report["samples"][-1]["frameAverageMs"] = 8.0
+            telemetry_path.write_text(json.dumps(bad_report), encoding="utf-8")
+            if verify(directory, source, artifacts) == 0:
+                raise AssertionError("runtime telemetry mutation must fail: " + mutation)
+        telemetry_path.write_text(json.dumps(original_telemetry), encoding="utf-8")
+        if verify(directory, source, artifacts) != 0:
+            raise AssertionError("restored runtime telemetry must pass")
         mac_digest = artifacts / "macos.sha256"
         mac_digest.write_text("b" * 64 + "  player-artifacts/macos.zip\n", encoding="utf-8")
         if verify(directory, source, artifacts) == 0:
