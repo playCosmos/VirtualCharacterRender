@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*-alpha.*"
+    # One version-bound develop commit can publish alpha.2; tag pushes ignore path filters.
+    branches:
+      - develop
+    paths:
+      - ".github/release-intents/v0.1.0-alpha.2"
 
 permissions:
   contents: read
@@ -14,7 +19,7 @@ concurrency:
 
 jobs:
   preflight:
-    name: Verify immutable tag
+    name: Verify immutable source and release intent
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.tag.outputs.version }}
@@ -29,15 +34,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
-          [[ "$GITHUB_REF" == "refs/tags/$tag" ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          if [[ "$GITHUB_REF" == "refs/heads/develop" ]]; then
+            intent="$(cat .github/release-intents/v0.1.0-alpha.2)"
+            test "$intent" = "0.1.0-alpha.2"
+            tag="v$intent"
+          else
+            tag="$GITHUB_REF_NAME"
+            [[ "$GITHUB_REF" == "refs/tags/$tag" ]]
+          fi
           if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+-alpha[.][0-9]+$ ]]; then
             echo "Expected a new tag such as v0.1.0-alpha.2" >&2
             exit 1
           fi
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
-          if [[ "$remote_sha" != "$GITHUB_SHA" ]]; then
+          remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+          if [[ "$GITHUB_REF" != "refs/heads/develop" && -z "$remote_sha" ]]; then
+            echo "Tagged release must have an existing immutable source tag." >&2
+            exit 1
+          fi
+          if [[ -n "$remote_sha" && "$remote_sha" != "$GITHUB_SHA" ]]; then
             echo "Tag moved or is annotated; release tags must be lightweight and unmodified." >&2
             exit 1
           fi
@@ -69,7 +84,7 @@ jobs:
     env:
       VCR_RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
     steps:
-      - name: Checkout exact tagged source
+      - name: Checkout exact release source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -152,9 +167,14 @@ jobs:
         run: |
           set -euo pipefail
           tag="v$VERSION"
-          test "$GITHUB_REF" = "refs/tags/$tag"
+          if [[ "$GITHUB_REF" != "refs/heads/develop" ]]; then
+            test "$GITHUB_REF" = "refs/tags/$tag"
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
+          else
+            test "$VERSION" = "0.1.0-alpha.2"
+            test "$(cat .github/release-intents/v0.1.0-alpha.2)" = "$VERSION"
+          fi
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Refusing to replace an existing release: $tag" >&2
             exit 1
@@ -165,6 +185,21 @@ jobs:
             test "$(cat "release-assets/$package.source-sha")" = "$GITHUB_SHA"
             (cd release-assets && sha256sum --check "$package.sha256")
           done
+      - name: Create immutable alpha tag after both builds passed
+        if: ${{ github.ref == 'refs/heads/develop' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$VERSION" = "0.1.0-alpha.2"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          tag="v$VERSION"
+          if remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null)"; then
+            test "$remote_sha" = "$GITHUB_SHA"
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" >/dev/null
+          fi
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
       - name: Publish immutable prerelease with provenance manifest
         shell: bash
         run: |
