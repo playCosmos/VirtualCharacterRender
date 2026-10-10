@@ -307,6 +307,79 @@ def inspect_case(directory, platform, target, source, archive_sha):
     return errors
 
 
+
+def import_measured_case(directory, platform, target, source, artifacts):
+    """Import measured Player fields without modifying operator/OBS decisions."""
+    if not SHA40.fullmatch(source):
+        raise ValueError("exact lowercase 40-character source SHA required")
+    archive_sha = check_archive(artifacts, platform, source)
+    case = platform + "-" + target
+    case_path = directory / (case + ".json")
+    if not case_path.is_file() or case_path.is_symlink():
+        raise ValueError("missing or unsafe operator template: " + str(case_path))
+    item = json.loads(case_path.read_text(encoding="utf-8"))
+    if not isinstance(item, dict):
+        raise ValueError("operator template must be a JSON object")
+    expected = empty_case(platform, target)
+    for field in ("suite", "platform", "target", "unityVersion", "resolution", "targetFps"):
+        if item.get(field) != expected[field] or isinstance(item.get(field), bool):
+            raise ValueError("case template baseline mismatch: " + field)
+
+    telemetry_path = "attachments/" + case + "-runtime.json"
+    player_log = "attachments/" + case + ".log"
+    for label, name in (("runtimeTelemetry", telemetry_path), ("playerLog", player_log)):
+        error = artifact(directory, name)
+        if error:
+            raise ValueError(label + ": " + error)
+    path = (directory.resolve() / telemetry_path).resolve()
+    if path.stat().st_size > 4 * 1024 * 1024:
+        raise ValueError("runtimeTelemetry is larger than 4 MiB")
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict) or not isinstance(report.get("samples"), list) or not report["samples"]:
+        raise ValueError("runtimeTelemetry has no sampled measurements")
+    last = report["samples"][-1]
+    if not isinstance(last, dict):
+        raise ValueError("runtimeTelemetry last sample is invalid")
+    measured = {
+        "sourceSha": source,
+        "playerArchiveSha256": archive_sha,
+        "osVersion": report.get("osVersion"),
+        "cpu": report.get("processor"),
+        "gpu": report.get("graphicsDevice"),
+        "frameAverageMs": last.get("frameAverageMs"),
+        "frameP95Ms": last.get("frameP95Ms"),
+        "frameP99Ms": last.get("frameP99Ms"),
+        "runtimeTelemetry": telemetry_path,
+        "playerLog": player_log,
+    }
+    probe = dict(item)
+    probe.update(measured)
+    errors = inspect_runtime_telemetry(directory, probe, platform, target)
+    if errors:
+        raise ValueError("runtimeTelemetry is not valid/stable: " + "; ".join(errors))
+    for field, value in measured.items():
+        existing = item.get(field)
+        if existing is not None and existing != "":
+            if type(existing) is not type(value) or existing != value:
+                raise ValueError("refusing to overwrite conflicting recorded field: " + field)
+    item.update(measured)
+    # Never auto-fill OBS results, architecture, display scale, or operator checks.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=directory,
+                prefix="." + case + "-", suffix=".tmp", delete=False) as output:
+            temporary = Path(output.name)
+            json.dump(item, output, indent=2, ensure_ascii=False)
+            output.write("\n")
+        temporary.replace(case_path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+    print(case + ": measured runtime fields imported; operator checks and OBS evidence UNCHANGED")
+    return 0
+
+
 def verify(directory, source, artifacts):
     if not SHA40.fullmatch(source):
         raise ValueError("--source must be an exact lowercase 40-digit commit SHA")
@@ -421,6 +494,22 @@ def self_test():
                 path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         if verify(directory, source, artifacts) != 0:
             raise AssertionError("synthetic fixture with matching real ZIP digest must pass format check")
+        # Import only native measured fields into an incomplete operator case.
+        sample_case = directory / "windows-720p60.json"
+        recorded_case = json.loads(sample_case.read_text(encoding="utf-8"))
+        sample_case.write_text(json.dumps(empty_case("windows", "720p60")), encoding="utf-8")
+        import_measured_case(directory, "windows", "720p60", source, artifacts)
+        imported = json.loads(sample_case.read_text(encoding="utf-8"))
+        if (imported["sourceSha"] != source
+                or imported["playerArchiveSha256"] != digests["windows"]
+                or imported["frameP99Ms"] != 15.0
+                or any(check is not None for check in imported["checks"].values())
+                or imported["visualEvidence"]
+                or imported["obsDroppedFrames"] is not None):
+            raise AssertionError("import must fill only native measurements, never operator/OBS checks")
+        if verify(directory, source, artifacts) == 0:
+            raise AssertionError("import alone must not make operator evidence PASS")
+        sample_case.write_text(json.dumps(recorded_case), encoding="utf-8")
         path = directory / "macos-720p60.json"
         good = json.loads(path.read_text())
         for field, wrong in (
@@ -483,10 +572,13 @@ def main():
     group.add_argument("--init", type=Path, metavar="DIR")
     group.add_argument("--verify", type=Path, metavar="DIR")
     group.add_argument("--check-archive", action="store_true", help="Verify a single downloaded Player ZIP")
+    group.add_argument("--import-telemetry", type=Path, metavar="DIR",
+                       help="Import only measured fields into one incomplete case template")
     group.add_argument("--self-test", action="store_true")
     p.add_argument("--source", help="Exact 40-character source commit SHA")
     p.add_argument("--artifacts", type=Path, help="Directory with windows.zip/macos.zip and original CI sidecars")
-    p.add_argument("--platform", choices=PLATFORMS, help="Required with --check-archive")
+    p.add_argument("--platform", choices=PLATFORMS, help="Required with --check-archive/--import-telemetry")
+    p.add_argument("--target", choices=tuple(TARGETS), help="Required with --import-telemetry")
     args = p.parse_args()
     try:
         if args.self_test:
@@ -505,6 +597,11 @@ def main():
             digest = check_archive(args.artifacts, args.platform, args.source)
             print(args.platform + " Player archive VERIFIED: " + digest)
             return 0
+        if args.import_telemetry:
+            if not args.platform or not args.target:
+                p.error("--platform and --target are required with --import-telemetry")
+            return import_measured_case(
+                args.import_telemetry, args.platform, args.target, args.source, args.artifacts)
         return verify(args.verify, args.source, args.artifacts)
     except (OSError, ValueError) as exc:
         print("P10 evidence error: " + str(exc), file=sys.stderr)
