@@ -67,3 +67,58 @@ if s.count(old) != 1:
 p.write_text(s.replace(old, new), encoding="utf-8")
 print("Patched UniWinC native disposal to at-most-once")
 PY
+
+# Preserve UniWinC in native Player builds, but never attach a desktop
+# window during the opt-in -batchmode -nographics startup smoke. macOS
+# libUniWinC can crash inside AttachMyWindow when no GUI window exists.
+export UNIWINC_CONTROLLER_FILE="$DEST/Runtime/Scripts/UniWindowController.cs"
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+p = Path(os.environ["UNIWINC_CONTROLLER_FILE"])
+s = p.read_text(encoding="utf-8-sig")
+marker = "VCR_UNIWINC_HEADLESS_SMOKE"
+if marker in s:
+    print("UniWinC headless smoke guard already applied")
+    raise SystemExit(0)
+
+helper = """        // VCR_UNIWINC_HEADLESS_SMOKE: this CI-only process has no desktop
+        // window. Retain the native implementation for normal launches.
+        private static bool IsVcrHeadlessSmoke()
+        {
+#if UNITY_EDITOR
+            return false;
+#else
+            bool report = false;
+            bool batch = false;
+            bool noGraphics = false;
+            foreach (var arg in Environment.GetCommandLineArgs())
+            {
+                if (arg != null && arg.StartsWith("--vcr-smoke-report=", StringComparison.Ordinal))
+                    report = true;
+                else if (string.Equals(arg, "-batchmode", StringComparison.OrdinalIgnoreCase))
+                    batch = true;
+                else if (string.Equals(arg, "-nographics", StringComparison.OrdinalIgnoreCase))
+                    noGraphics = true;
+            }
+            return report && batch && noGraphics;
+#endif
+        }
+
+"""
+replacements = [
+    ("        // Use this for initialization\n        void Awake()\n        {",
+     helper + "        // Use this for initialization\n        void Awake()\n        {\n            if (IsVcrHeadlessSmoke())\n            {\n                enabled = false;\n                return;\n            }"),
+    ("        void Update()\n        {\n            // 自ウィンドウ取得ができていなければ、取得",
+     "        void Update()\n        {\n            if (IsVcrHeadlessSmoke()) return;\n            // 自ウィンドウ取得ができていなければ、取得"),
+    ("        private void OnApplicationFocus(bool focus)\n        {",
+     "        private void OnApplicationFocus(bool focus)\n        {\n            if (IsVcrHeadlessSmoke()) return;"),
+]
+for old, new in replacements:
+    if s.count(old) != 1:
+        raise SystemExit("Unexpected pinned UniWindowController.cs source for " + old[:55])
+    s = s.replace(old, new, 1)
+p.write_text(s, encoding="utf-8")
+print("Patched UniWinC native window attach to skip only explicit headless Player smoke")
+PY
