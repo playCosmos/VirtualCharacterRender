@@ -64,9 +64,27 @@ jobs:
           fi
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
+  native-macos-settings:
+    name: Compile AppKit settings window (arm64)
+    needs: preflight
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile project-owned AppKit plugin (no new dependency)
+        run: bash tools/build-native-settings-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vcr-settings-appkit
+          path: |
+            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib
+            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib.meta
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: Build ${{ matrix.name }}
-    needs: preflight
+    needs: [preflight, native-macos-settings]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -106,6 +124,11 @@ jobs:
         run: bash ./tools/bootstrap-ultraleap.sh
       - name: Bootstrap pinned UniWinC native teardown compatibility
         run: bash ./tools/bootstrap-uniwinc.sh
+      - name: Download compiled AppKit settings host
+        uses: actions/download-artifact@v4
+        with:
+          name: vcr-settings-appkit
+          path: unity/Assets/Plugins/macOS/
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
