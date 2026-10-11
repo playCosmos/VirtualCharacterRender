@@ -1035,7 +1035,7 @@ namespace VCR.Runtime.Scene
             // graphics teardown has no consumer and can trigger extra
             // rendering/compositor work. Preserve full restoration for a
             // non-exit Shutdown() (restart or explicit runtime stop).
-            if (!_applicationQuitting)
+            if (!_applicationQuitting || Application.isEditor)
             {
                 if (lightController != null)
                 {
