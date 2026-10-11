@@ -1030,28 +1030,42 @@ namespace VCR.Runtime.Scene
                     failures);
             }
 
-            if (lightController != null)
+            // Unity is destroying this process's entire scene. Restoring
+            // renderer, light and camera values immediately before native
+            // graphics teardown has no consumer and can trigger extra
+            // rendering/compositor work. Preserve full restoration for a
+            // non-exit Shutdown() (restart or explicit runtime stop).
+            if (!_applicationQuitting || Application.isEditor)
             {
-                RunShutdownStep(
-                    "light restore",
-                    lightController.Restore,
-                    failures);
-            }
+                if (lightController != null)
+                {
+                    RunShutdownStep(
+                        "light restore",
+                        lightController.Restore,
+                        failures);
+                }
 
-            if (cameraController != null)
-            {
-                RunShutdownStep(
-                    "camera restore",
-                    cameraController.Restore,
-                    failures);
-            }
+                if (cameraController != null)
+                {
+                    RunShutdownStep(
+                        "camera restore",
+                        cameraController.Restore,
+                        failures);
+                }
 
-            if (renderBootstrap != null)
+                if (renderBootstrap != null)
+                {
+                    RunShutdownStep(
+                        "render override restore",
+                        renderBootstrap.RestoreRuntimeOverrides,
+                        failures);
+                }
+            }
+            else
             {
-                RunShutdownStep(
-                    "render override restore",
-                    renderBootstrap.RestoreRuntimeOverrides,
-                    failures);
+                Debug.Log(
+                    "VCR shutdown: final process exit - transient " +
+                    "render/camera/light restore skipped.", this);
             }
 
             _lastError =

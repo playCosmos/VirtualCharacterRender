@@ -1,7 +1,9 @@
 param(
     [string]$Vrm = "",
     [string]$Config = "",
-    [string]$AlphaVersion = $env:VCR_RELEASE_VERSION
+    [string]$AlphaVersion = $env:VCR_RELEASE_VERSION,
+    [string]$PlayerPath = "",
+    [switch]$ProfileExit
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,7 +15,11 @@ if ($AlphaVersion -notmatch '^\d+\.\d+\.\d+-alpha\.\d+$') {
     throw "Invalid alpha version: $AlphaVersion"
 }
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$Exe = Join-Path $RepoRoot "Builds/Alpha/$AlphaVersion/Windows/VirtualCharacterRender.exe"
+$Exe = if ([string]::IsNullOrWhiteSpace($PlayerPath)) {
+    Join-Path $RepoRoot "Builds/Alpha/$AlphaVersion/Windows/VirtualCharacterRender.exe"
+} else {
+    [System.IO.Path]::GetFullPath($PlayerPath)
+}
 
 if (-not (Test-Path $Exe -PathType Leaf)) {
     throw "Alpha player not found: $Exe. Run tools/build-alpha.ps1 first."
@@ -43,5 +49,30 @@ if ($Config) {
     Write-Host "Config: $ConfigPath"
 }
 
+$Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+if ($ProfileExit) {
+    # Existing public alpha binaries can be profiled without rebuilding.
+    $LogPath = Join-Path ([System.IO.Path]::GetTempPath()) (
+        "vcr-exit-" + [System.Guid]::NewGuid().ToString("N") + ".log")
+    $ArgsList += "-logFile"
+    $ArgsList += $LogPath
+    Write-Host "Exit diagnostic log: $LogPath"
+}
+
 & $Exe @ArgsList
-exit $LASTEXITCODE
+$ExitCode = $LASTEXITCODE
+$Stopwatch.Stop()
+
+if ($ProfileExit) {
+    Write-Host ("Native process lifetime (startup + shutdown): {0} ms" -f $Stopwatch.ElapsedMilliseconds)
+    if (Test-Path $LogPath -PathType Leaf) {
+        $Recorded = Select-String -Path $LogPath -Pattern (
+            'VCR (exit:|shutdown:|shutdown step end:|MediaPipe cleanup step end:|UniWinC shutdown:)')
+        $Recorded | Select-Object -Last 80 | ForEach-Object { Write-Host $_.Line }
+        Write-Host "Measure request-to-cleanup with the VCR exit markers above."
+        Write-Host "Process lifetime includes startup, not just shutdown."
+    } else {
+        Write-Warning "Unity did not produce the requested diagnostic log."
+    }
+}
+exit $ExitCode

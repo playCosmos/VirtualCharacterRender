@@ -35,6 +35,30 @@ namespace VCR.Runtime.Application
         private Task<bool> _startupTask;
         private bool _started;
         private bool _quitting;
+        private System.Diagnostics.Stopwatch _processExitTimer;
+
+        private void Awake()
+        {
+            if (!UnityEngine.Application.isEditor)
+            {
+                UnityEngine.Application.wantsToQuit += OnQuitRequested;
+            }
+        }
+
+        private bool OnQuitRequested()
+        {
+            if (_processExitTimer == null)
+            {
+                _processExitTimer =
+                    System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log("VCR exit: quit requested (t=0 ms)", this);
+            }
+
+            // Observation only: another wantsToQuit subscriber may still
+            // veto this request. Mark the scene as actually quitting only
+            // from OnApplicationQuit, never from this cancelable event.
+            return true;
+        }
 
         public SingleCharacterSceneRuntime SceneRuntime =>
             sceneRuntime != null
@@ -491,6 +515,22 @@ namespace VCR.Runtime.Application
 
         private void OnApplicationQuit()
         {
+            if (_processExitTimer == null)
+            {
+                _processExitTimer =
+                    System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log(
+                    "VCR exit: OnApplicationQuit without wantsToQuit " +
+                    "(t=0 ms)", this);
+            }
+            else
+            {
+                Debug.Log(
+                    "VCR exit: OnApplicationQuit at " +
+                    _processExitTimer.ElapsedMilliseconds +
+                    " ms", this);
+            }
+
             // Unity does not guarantee OnApplicationQuit ordering between
             // this bootstrap and the scene runtime. Signal before teardown.
             if (sceneRuntime != null)
@@ -498,16 +538,39 @@ namespace VCR.Runtime.Application
                 sceneRuntime.PrepareForApplicationQuit();
             }
 
-            if (!Shutdown(
-                    saveConfigurationOnQuit,
-                    out var error) &&
-                !string.IsNullOrWhiteSpace(
-                    error))
+            try
             {
-                Debug.LogWarning(
-                    "VCR application shutdown completed with errors: " +
-                    error,
-                    this);
+                if (!Shutdown(
+                        saveConfigurationOnQuit,
+                        out var error) &&
+                    !string.IsNullOrWhiteSpace(
+                        error))
+                {
+                    Debug.LogWarning(
+                        "VCR application shutdown completed with errors: " +
+                        error,
+                        this);
+                }
+            }
+            finally
+            {
+                Debug.Log(
+                    "VCR exit: OnApplicationQuit finished at " +
+                    _processExitTimer.ElapsedMilliseconds +
+                    " ms", this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            UnityEngine.Application.wantsToQuit -= OnQuitRequested;
+
+            if (_processExitTimer != null)
+            {
+                Debug.Log(
+                    "VCR exit: runtime bootstrap destroyed at " +
+                    _processExitTimer.ElapsedMilliseconds +
+                    " ms", this);
             }
         }
     }
