@@ -47,7 +47,9 @@ jobs:
             echo "Expected a new tag such as v0.1.0-alpha.2" >&2
             exit 1
           fi
-          remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+          # gh api /git/ref can return a non-empty 'null' sentinel for a
+          # non-existent ref. Match the full tag ref using git, not a prefix.
+          remote_sha="$(git ls-remote --refs origin "refs/tags/$tag" | awk -v ref="refs/tags/$tag" '$2 == ref {print $1}')"
           if [[ "$GITHUB_REF" != "refs/heads/develop" && -z "$remote_sha" ]]; then
             echo "Tagged release must have an existing immutable source tag." >&2
             exit 1
@@ -193,7 +195,8 @@ jobs:
           test "$VERSION" = "0.1.0-alpha.2"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           tag="v$VERSION"
-          if remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null)"; then
+          remote_sha="$(git ls-remote --refs origin "refs/tags/$tag" | awk -v ref="refs/tags/$tag" '$2 == ref {print $1}')"
+          if [[ -n "$remote_sha" ]]; then
             test "$remote_sha" = "$GITHUB_SHA"
           else
             gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
