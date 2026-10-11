@@ -54,13 +54,9 @@ namespace VCR.Runtime.Application
                 Debug.Log("VCR exit: quit requested (t=0 ms)", this);
             }
 
-            // Mark this before any OnApplicationQuit handlers. Native style
-            // restoration during process destruction can stall Win32/Cocoa.
-            if (sceneRuntime != null)
-            {
-                sceneRuntime.PrepareForApplicationQuit();
-            }
-
+            // Observation only: another wantsToQuit subscriber may still
+            // veto this request. Mark the scene as actually quitting only
+            // from OnApplicationQuit, never from this cancelable event.
             return true;
         }
 
