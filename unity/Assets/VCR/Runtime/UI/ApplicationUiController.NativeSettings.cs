@@ -43,13 +43,13 @@ namespace VCR.Runtime.UI
             if (!_nativeSettings.IsVisible)
             {
                 _nativeSettingsRunInBackgroundBeforeOpen =
-                    Application.runInBackground;
+                    UnityEngine.Application.runInBackground;
             }
 
             // The Settings window has its own OS focus. Even when the user's
             // render preference disables background execution, Settings input
             // still needs Unity's main-thread Update to process and save.
-            Application.runInBackground = true;
+            UnityEngine.Application.runInBackground = true;
             _nativeSettings.Open();
             _nativeSettingsWasVisible = _nativeSettings.IsVisible;
         }
@@ -233,7 +233,7 @@ namespace VCR.Runtime.UI
 
             if (!_nativeSettings.IsVisible && _nativeSettingsWasVisible)
             {
-                Application.runInBackground =
+                UnityEngine.Application.runInBackground =
                     sceneRuntime != null
                         ? sceneRuntime.CaptureRenderSettings().RunInBackground
                         : _nativeSettingsRunInBackgroundBeforeOpen;
@@ -267,7 +267,7 @@ namespace VCR.Runtime.UI
             // can change the property while this window still has focus.
             if (_nativeSettings.IsVisible)
             {
-                Application.runInBackground = true;
+                UnityEngine.Application.runInBackground = true;
                 _nativeSettingsWasVisible = true;
             }
         }
