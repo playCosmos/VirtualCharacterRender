@@ -16,6 +16,8 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, string> _nativeTrackingSourceIds =
             new Dictionary<int, string>();
         private string _nativeActiveTrackingSource;
+        private bool _nativeSettingsWasVisible;
+        private bool _nativeSettingsRunInBackgroundBeforeOpen;
 
         private void OpenNativeSettings()
         {
@@ -38,7 +40,18 @@ namespace VCR.Runtime.UI
                 }
             }
 
+            if (!_nativeSettings.IsVisible)
+            {
+                _nativeSettingsRunInBackgroundBeforeOpen =
+                    Application.runInBackground;
+            }
+
+            // The Settings window has its own OS focus. Even when the user's
+            // render preference disables background execution, Settings input
+            // still needs Unity's main-thread Update to process and save.
+            Application.runInBackground = true;
             _nativeSettings.Open();
+            _nativeSettingsWasVisible = _nativeSettings.IsVisible;
         }
 
         private void AddNativeAction(int category, int id, string label, Action action)
@@ -217,6 +230,16 @@ namespace VCR.Runtime.UI
         private void PumpNativeSettings()
         {
             if (_nativeSettings == null) return;
+
+            if (!_nativeSettings.IsVisible && _nativeSettingsWasVisible)
+            {
+                Application.runInBackground =
+                    sceneRuntime != null
+                        ? sceneRuntime.CaptureRenderSettings().RunInBackground
+                        : _nativeSettingsRunInBackgroundBeforeOpen;
+                _nativeSettingsWasVisible = false;
+            }
+
             for (var i = 0; i < 48; ++i)
             {
                 var id = _nativeSettings.PollAction();
@@ -238,6 +261,14 @@ namespace VCR.Runtime.UI
                 {
                     Debug.LogException(exception, this);
                 }
+            }
+
+            // Reassert this after actions; toggling the background preference
+            // can change the property while this window still has focus.
+            if (_nativeSettings.IsVisible)
+            {
+                Application.runInBackground = true;
+                _nativeSettingsWasVisible = true;
             }
         }
 
