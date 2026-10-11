@@ -75,6 +75,7 @@ namespace VCR.Runtime.UI
             IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool UpdateWindow(IntPtr hwnd);
@@ -159,6 +160,8 @@ namespace VCR.Runtime.UI
         private static extern void MacCreate();
         [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsShow")]
         private static extern void MacShow();
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsIsVisible")]
+        private static extern int MacIsVisible();
         [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsSelectCategory")]
         private static extern void MacSelectCategory(int category);
         [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsAddControl")]
@@ -276,6 +279,20 @@ namespace VCR.Runtime.UI
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacSetText(id, value ?? "");
 #endif
+        }
+
+        public bool IsVisible
+        {
+            get
+            {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+                return hwnd != IntPtr.Zero && IsWindow(hwnd) && IsWindowVisible(hwnd);
+#elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
+                return MacIsVisible() != 0;
+#else
+                return false;
+#endif
+            }
         }
 
         public void Open()
