@@ -69,6 +69,9 @@ jobs:
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
+      - name: Test desktop shutdown latency attribution
+        run: python3 tools/analyze-shutdown-log.py --self-test
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{
