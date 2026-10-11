@@ -15,7 +15,7 @@ clang++ -std=c++17 -fobjc-arc -dynamiclib -arch arm64 \
 test -s "$output"
 cp "$root/native/macos/VcrSettingsWindow.dylib.meta" "$output.meta"
 file "$output"
-lipo -verify_arch arm64 "$output"
+lipo "$output" -verify_arch arm64
 nm -gU "$output" | grep -F '_VCR_SettingsCreate'
 nm -gU "$output" | grep -F '_VCR_SettingsPollAction'
 echo "AppKit Settings native dylib built and symbols verified"
