@@ -10,6 +10,7 @@ import platform
 from pathlib import Path
 import subprocess
 import sys
+import time
 import zipfile
 
 
@@ -94,6 +95,7 @@ def execute(args):
         ]
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
         with runnerlog.open("w", encoding="utf-8") as output_log:
+            started_at = time.monotonic()
             try:
                 completed = subprocess.run(
                     command,
@@ -107,6 +109,15 @@ def execute(args):
             except subprocess.TimeoutExpired as exception:
                 summary["exitCode"] = None
                 raise RuntimeError("Player did not exit within 100 seconds") from exception
+            finally:
+                # End-to-end subprocess lifetime is a useful CI baseline,
+                # but includes startup and does not prove GUI quit latency.
+                summary["playerProcessLifetimeMs"] = round(
+                    (time.monotonic() - started_at) * 1000, 1)
+                print(
+                    "Player process lifetime (startup + shutdown): " +
+                    str(summary["playerProcessLifetimeMs"]) + " ms",
+                    flush=True)
 
         if not result_path.is_file():
             raise RuntimeError("Player did not write its runtime smoke evidence")
