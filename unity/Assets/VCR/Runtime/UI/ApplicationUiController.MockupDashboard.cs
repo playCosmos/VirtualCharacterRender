@@ -625,6 +625,11 @@ namespace VCR.Runtime.UI
 
         private void BuildSettingsModal()
         {
+            // Standalone desktop uses an actual OS settings window. Unity
+            // Canvas settings are retained only for Editor preview.
+            if (DesktopNativeSettingsWindow.Supported)
+                return;
+
             if (_root == null ||
                 _dashboardSettingsModal != null)
             {
@@ -1133,6 +1138,12 @@ namespace VCR.Runtime.UI
 
         private void OpenSettingsModal()
         {
+            if (DesktopNativeSettingsWindow.Supported)
+            {
+                OpenNativeSettings();
+                return;
+            }
+
             if (_dashboardSettingsModal == null)
             {
                 return;
@@ -4249,6 +4260,9 @@ namespace VCR.Runtime.UI
 
         private void BuildTrackingSourceSettingsModal()
         {
+            if (DesktopNativeSettingsWindow.Supported)
+                return;
+
             if (_root == null ||
                 _dashboardTrackingSourceSettingsModal != null)
             {
@@ -4419,6 +4433,12 @@ namespace VCR.Runtime.UI
         private void OpenDashboardTrackingSourceSettings(
             string controlId)
         {
+            if (DesktopNativeSettingsWindow.Supported)
+            {
+                OpenNativeTrackingDevice(controlId);
+                return;
+            }
+
             var control =
                 FindTrackingControl(
                     controlId);
