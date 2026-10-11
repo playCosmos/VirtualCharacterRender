@@ -13,6 +13,7 @@ clang++ -std=c++17 -fobjc-arc -dynamiclib -arch arm64 \
   -framework AppKit -framework Foundation \
   "$source" -o "$output"
 test -s "$output"
+cp "$root/native/macos/VcrSettingsWindow.dylib.meta" "$output.meta"
 file "$output"
 lipo -verify_arch arm64 "$output"
 nm -gU "$output" | grep -F '_VCR_SettingsCreate'
