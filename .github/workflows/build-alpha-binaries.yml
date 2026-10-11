@@ -8,7 +8,7 @@ on:
     branches:
       - develop
     paths:
-      - ".github/release-intents/v0.1.0-alpha.2"
+      - ".github/release-intents/v0.1.0-alpha.3"
 
 permissions:
   contents: read
@@ -36,15 +36,15 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           if [[ "$GITHUB_REF" == "refs/heads/develop" ]]; then
-            intent="$(cat .github/release-intents/v0.1.0-alpha.2)"
-            test "$intent" = "0.1.0-alpha.2"
+            intent="$(cat .github/release-intents/v0.1.0-alpha.3)"
+            test "$intent" = "0.1.0-alpha.3"
             tag="v$intent"
           else
             tag="$GITHUB_REF_NAME"
             [[ "$GITHUB_REF" == "refs/tags/$tag" ]]
           fi
           if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+-alpha[.][0-9]+$ ]]; then
-            echo "Expected a new tag such as v0.1.0-alpha.2" >&2
+            echo "Expected a new tag such as v0.1.0-alpha.3" >&2
             exit 1
           fi
           # gh api /git/ref can return a non-empty 'null' sentinel for a
@@ -196,8 +196,8 @@ jobs:
             test "$GITHUB_REF" = "refs/tags/$tag"
             test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
           else
-            test "$VERSION" = "0.1.0-alpha.2"
-            test "$(cat .github/release-intents/v0.1.0-alpha.2)" = "$VERSION"
+            test "$VERSION" = "0.1.0-alpha.3"
+            test "$(cat .github/release-intents/v0.1.0-alpha.3)" = "$VERSION"
           fi
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -215,7 +215,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$VERSION" = "0.1.0-alpha.2"
+          test "$VERSION" = "0.1.0-alpha.3"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           tag="v$VERSION"
           remote_sha="$(git ls-remote --refs origin "refs/tags/$tag" | awk -v ref="refs/tags/$tag" '$2 == ref {print $1}')"
