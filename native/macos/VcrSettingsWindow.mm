@@ -89,6 +89,10 @@ __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
     selectCategory(0);
 }
 
+__attribute__((visibility("default"))) int VCR_SettingsIsVisible(void) {
+    return settingsWindow && [settingsWindow isVisible] ? 1 : 0;
+}
+
 __attribute__((visibility("default"))) void VCR_SettingsShow(void) {
     if (!settingsWindow) VCR_SettingsCreate();
     [settingsWindow makeKeyAndOrderFront:nil];
