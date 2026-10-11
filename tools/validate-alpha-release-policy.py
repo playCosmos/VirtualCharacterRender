@@ -27,7 +27,7 @@ checks = {
     "explicit alpha.2 intent is limited to develop": '"refs/heads/develop"' in workflow and '.github/release-intents/v0.1.0-alpha.2' in workflow and (root / ".github/release-intents/v0.1.0-alpha.2").read_text(encoding="utf-8").strip() == "0.1.0-alpha.2",
     "new tag is created only after both builds pass": workflow.index('needs: [preflight, build]') < workflow.index('Create immutable alpha tag after both builds passed') < workflow.index('Publish immutable prerelease with provenance manifest'),
     "alpha.2 build refuses source SHA mismatch": '-f "sha=$GITHUB_SHA"' in workflow and 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"' in workflow,
-    "tag lookup uses exact full ref": 'git ls-remote --refs origin "refs/tags/$tag"' in workflow and 'awk -v ref="refs/tags/$tag"\' in workflow,
+    "tag lookup uses exact full ref": 'git ls-remote --refs origin "refs/tags/$tag"' in workflow and 'awk -v ref="refs/tags/$tag"' in workflow,
 }
 for description, passed in checks.items():
     print(f"{'PASS' if passed else 'FAIL'}: {description}")
