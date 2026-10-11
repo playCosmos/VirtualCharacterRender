@@ -433,8 +433,15 @@ namespace VCR.Runtime.UI
             Unsubscribe();
         }
 
+        private void OnDestroy()
+        {
+            DisposeNativeSettings();
+        }
+
         private void Update()
         {
+            PumpNativeSettings();
+
             if (Time.unscaledTime <
                 _nextRefreshTime)
             {

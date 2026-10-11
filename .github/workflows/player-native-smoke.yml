@@ -15,7 +15,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native-macos-settings:
+    name: Compile AppKit settings window (arm64)
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile project-owned AppKit plugin (no new dependency)
+        run: bash tools/build-native-settings-macos.sh
+      - name: Upload native plugin and Unity importer metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcr-settings-appkit
+          path: |
+            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib
+            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib.meta
+          if-no-files-found: error
+          retention-days: 7
+
   build:
+    needs: native-macos-settings
     name: Build native ${{ matrix.platform }} Player
     runs-on: ubuntu-latest
     timeout-minutes: 70
@@ -56,6 +75,11 @@ jobs:
         run: bash tools/bootstrap-ultraleap.sh
       - name: Bootstrap pinned UniWinC compatibility
         run: bash tools/bootstrap-uniwinc.sh
+      - name: Download compiled AppKit settings host
+        uses: actions/download-artifact@v4
+        with:
+          name: vcr-settings-appkit
+          path: unity/Assets/Plugins/macOS/
       - name: Build actual Unity standalone Player
         uses: game-ci/unity-builder@v4
         env:
