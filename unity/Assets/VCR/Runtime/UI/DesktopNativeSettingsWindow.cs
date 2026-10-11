@@ -155,25 +155,25 @@ namespace VCR.Runtime.UI
             }
         }
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsCreate")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsCreate")]
         private static extern void MacCreate();
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsShow")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsShow")]
         private static extern void MacShow();
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsSelectCategory")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsSelectCategory")]
         private static extern void MacSelectCategory(int category);
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsAddControl")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsAddControl")]
         private static extern void MacAddControl(int category, int id, int kind,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string label,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsClearCategory")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsClearCategory")]
         private static extern void MacClearCategory(int category);
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsSetText")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsSetText")]
         private static extern void MacSetText(int id, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsGetText")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsGetText")]
         private static extern void MacGetText(int id, StringBuilder value, int capacity);
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsPollAction")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsPollAction")]
         private static extern int MacPollAction();
-        [DllImport("__Internal", EntryPoint = "VCR_SettingsDestroy")]
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsDestroy")]
         private static extern void MacDestroy();
 
         public DesktopNativeSettingsWindow() { MacCreate(); }
