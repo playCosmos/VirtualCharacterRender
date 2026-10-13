@@ -20,8 +20,6 @@ EXIT = re.compile(
 UNIW = re.compile(
     r"VCR UniWinC shutdown: completed \((\d+) ms\)")
 
-HIDE = re.compile(
-    r"VCR exit: native window hidden=(True|False) \((\d+) ms\)")
 
 def analyze(contents):
     records = []
@@ -34,10 +32,6 @@ def analyze(contents):
         match = UNIW.search(line)
         if match:
             records.append((int(match.group(1)), "native", "UniWinC state reset"))
-        match = HIDE.search(line)
-        if match:
-            records.append((int(match.group(2)), "presentation",
-                            "OS window hide (success=" + match.group(1) + ")"))
         match = SUMMARY.search(line)
         if match:
             timeline.append(("runtime " + match.group(1), int(match.group(2))))
@@ -72,8 +66,7 @@ def format_report(contents, minimum_ms=0):
 
 
 def self_test():
-    sample = """VCR exit: native window hidden=True (3 ms)
-VCR exit: quit requested (t=0 ms)
+    sample = """VCR exit: quit requested (t=0 ms)
 VCR exit: OnApplicationQuit at 12 ms
 VCR MediaPipe cleanup step end: webcam stop (220 ms)
 VCR shutdown step end: active operation cancellation (5 ms)
@@ -85,7 +78,6 @@ VCR exit: runtime bootstrap destroyed at 319 ms
 """
     records, timeline = analyze(sample)
     assert records[0] == (275, "scene", "capability disposal")
-    assert (3, "presentation", "OS window hide (success=True)") in records
     assert records[1] == (220, "mediapipe", "webcam stop")
     assert ("OnApplicationQuit finished", 315) in timeline
     assert "t=319 ms" in format_report(sample)
