@@ -77,6 +77,8 @@ namespace VCR.Runtime.Application
         // nevertheless failed to save its configuration or release resources.
         public bool LastShutdownSucceeded => _lastShutdownSucceeded;
         public string LastShutdownError => _lastShutdownError;
+        public long ExitElapsedMilliseconds =>
+            _processExitTimer?.ElapsedMilliseconds ?? -1;
 
         private async void Start()
         {
