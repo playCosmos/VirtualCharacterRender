@@ -116,13 +116,15 @@ namespace VCR.Runtime.Application
             // reaches this callback; CI treats missing evidence as failure.
             var scene = _bootstrap != null ? _bootstrap.SceneRuntime : null;
             _evidence.stopped = _bootstrap != null &&
+                _bootstrap.LastShutdownSucceeded &&
                 !_bootstrap.IsStarted &&
                 scene != null &&
                 scene.State == SceneRuntimeState.Stopped &&
                 string.IsNullOrWhiteSpace(scene.Status.LastError);
             if (!_evidence.stopped && string.IsNullOrWhiteSpace(_evidence.error))
                 _evidence.error = "Normal OnApplicationQuit did not stop runtime: " +
-                    (scene?.Status.LastError ?? "runtime still active");
+                    (_bootstrap?.LastShutdownError ??
+                     scene?.Status.LastError ?? "runtime still active");
 
             _evidence.quitManagedMilliseconds =
                 _quitTimer?.ElapsedMilliseconds ?? -1;
