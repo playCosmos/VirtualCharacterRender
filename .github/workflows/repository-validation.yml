@@ -72,6 +72,9 @@ jobs:
       - name: Test desktop shutdown latency attribution
         run: python3 tools/analyze-shutdown-log.py --self-test
 
+      - name: Test real desktop quit evidence observer
+        run: python3 tools/diagnose-gui-shutdown.py --self-test
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{
