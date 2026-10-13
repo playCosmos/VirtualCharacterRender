@@ -22,6 +22,8 @@ UNIW = re.compile(
 
 LATE = re.compile(
     r"VCR exit: late managed quit callback at (\d+) ms")
+UDP_JOIN = re.compile(
+    r"VCR exit: (ARKit|VMC|OSC) UDP receive worker join=(\d+) ms, stillAlive=(True|False)")
 
 def analyze(contents):
     records = []
@@ -31,6 +33,11 @@ def analyze(contents):
             match = regex.search(line)
             if match:
                 records.append((int(match.group(2)), category, match.group(1).strip()))
+        match = UDP_JOIN.search(line)
+        if match:
+            records.append((int(match.group(2)), "udp",
+                            match.group(1) + " worker join (alive=" +
+                            match.group(3) + ")"))
         match = LATE.search(line)
         if match:
             timeline.append(("late managed quit callback", int(match.group(1))))
@@ -80,6 +87,7 @@ VCR shutdown: scene teardown ended at 298 ms
 VCR shutdown: end at 302 ms, success=True
 VCR exit: OnApplicationQuit finished at 315 ms
 VCR exit: late managed quit callback at 320 ms
+VCR exit: VMC UDP receive worker join=750 ms, stillAlive=True
 VCR exit: runtime bootstrap destroyed at 319 ms
 """
     records, timeline = analyze(sample)
@@ -87,6 +95,7 @@ VCR exit: runtime bootstrap destroyed at 319 ms
     assert records[1] == (220, "mediapipe", "webcam stop")
     assert ("OnApplicationQuit finished", 315) in timeline
     assert ("late managed quit callback", 320) in timeline
+    assert (750, "udp", "VMC worker join (alive=True)") in records
     assert "t=319 ms" in format_report(sample)
     assert "No VCR shutdown measurements" in format_report("Unrelated line")
     print("VCR shutdown log analyzer self-test PASS")
