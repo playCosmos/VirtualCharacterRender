@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using UnityEngine;
 
 namespace VCR.Runtime.UI
@@ -13,7 +14,7 @@ namespace VCR.Runtime.UI
     /// managed assembly.
     /// </summary>
     [DisallowMultipleComponent]
-    [DefaultExecutionOrder(200)]
+    [DefaultExecutionOrder(-2000)]
     public sealed class DesktopWindowChromeController :
         MonoBehaviour
     {
@@ -25,6 +26,7 @@ namespace VCR.Runtime.UI
         private bool _borderlessConfirmed;
         private bool _nativeChromeRequested;
         private float _nextBorderlessRetryAt;
+        private bool _quitWindowHidden;
 
         public bool CanMinimize =>
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -90,6 +92,9 @@ namespace VCR.Runtime.UI
         private void Awake()
         {
 #if !UNITY_EDITOR
+            UnityEngine.Application.wantsToQuit += OnQuitRequested;
+#endif
+#if !UNITY_EDITOR
             if (Screen.fullScreen)
             {
                 Screen.fullScreen = false;
@@ -112,6 +117,27 @@ namespace VCR.Runtime.UI
             {
                 DragToCursor();
             }
+        }
+
+        private void OnDestroy()
+        {
+#if !UNITY_EDITOR
+            UnityEngine.Application.wantsToQuit -= OnQuitRequested;
+#endif
+        }
+
+        private void OnApplicationQuit()
+        {
+            HideWindowForShutdown();
+        }
+
+        private bool OnQuitRequested()
+        {
+            // Hide the visible desktop surface before synchronous Unity cleanup.
+            // This does not skip camera disposal, configuration persistence,
+            // or Unity resource ownership. The process still exits normally.
+            HideWindowForShutdown();
+            return true;
         }
 
         private void OnApplicationFocus(
@@ -237,9 +263,112 @@ namespace VCR.Runtime.UI
 #if UNITY_EDITOR
             return;
 #else
+            HideWindowForShutdown();
             UnityEngine.Application.Quit();
 #endif
         }
+
+
+        private void HideWindowForShutdown()
+        {
+#if UNITY_EDITOR
+            return;
+#else
+            if (_quitWindowHidden)
+                return;
+
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+#if UNITY_STANDALONE_WIN
+                var window = FindUnityMainWindow();
+                if (window != IntPtr.Zero)
+                {
+                    ShowWindow(window, ShowWindowHide);
+                    _quitWindowHidden = true;
+                }
+#elif UNITY_STANDALONE_OSX
+                HideMacAppWindows();
+                _quitWindowHidden = true;
+#endif
+                Debug.Log("VCR exit: native window hidden=" + _quitWindowHidden +
+                          " (" + timer.ElapsedMilliseconds + " ms)", this);
+            }
+            catch (DllNotFoundException exception)
+            {
+                Debug.LogWarning("VCR exit: native window hide unavailable: " +
+                                 exception.Message, this);
+            }
+            catch (EntryPointNotFoundException exception)
+            {
+                Debug.LogWarning("VCR exit: native window hide unavailable: " +
+                                 exception.Message, this);
+            }
+            catch (Exception exception)
+            {
+                // Visibility optimization must never prevent normal termination.
+                Debug.LogWarning("VCR exit: native window hide failed: " +
+                                 exception.Message, this);
+            }
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private const int ShowWindowHide = 0;
+        private delegate bool EnumerateWindows(IntPtr hwnd, IntPtr param);
+
+        private static IntPtr FindUnityMainWindow()
+        {
+            var pid = GetCurrentProcessId();
+            IntPtr matchingWindow = IntPtr.Zero;
+            IntPtr fallback = IntPtr.Zero;
+            // A separately focused Settings top-level window must never
+            // accidentally be selected as the renderer window.
+            EnumWindows((window, param) =>
+            {
+                if (!IsWindowVisible(window))
+                    return true;
+                GetWindowThreadProcessId(window, out var owner);
+                if (owner != pid)
+                    return true;
+                var buffer = new StringBuilder(256);
+                GetClassNameW(window, buffer, buffer.Capacity);
+                var type = buffer.ToString();
+                if (type == "VCR.NativeSettings.Window.1")
+                    return true;
+                if (type.IndexOf("UnityWndClass", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    matchingWindow = window;
+                    return false;
+                }
+
+                // Fall back only to a matching application title; do not
+                // hide arbitrary windows created by other native libraries.
+                buffer.Clear();
+                GetWindowTextW(window, buffer, buffer.Capacity);
+                var title = buffer.ToString();
+                if (title.IndexOf("VirtualCharacterRender", StringComparison.OrdinalIgnoreCase) >= 0
+                    && title.IndexOf("환경설정", StringComparison.Ordinal) < 0)
+                    fallback = window;
+                return true;
+            }, IntPtr.Zero);
+            return matchingWindow != IntPtr.Zero ? matchingWindow : fallback;
+        }
+
+        [DllImport("user32.dll")] private static extern bool EnumWindows(
+            EnumerateWindows callback, IntPtr param);
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(
+            IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassNameW(
+            IntPtr hwnd, StringBuilder name, int capacity);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(
+            IntPtr hwnd, StringBuilder text, int capacity);
+        [DllImport("kernel32.dll")] private static extern uint GetCurrentProcessId();
+#elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
+        [DllImport("VcrSettingsWindow", EntryPoint = "VCR_SettingsHideAppWindowsForQuit")]
+        private static extern void HideMacAppWindows();
+#endif
 
         private void ApplyRequestedChromeMode(
             bool force)
