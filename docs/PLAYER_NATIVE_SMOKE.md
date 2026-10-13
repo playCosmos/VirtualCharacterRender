@@ -28,8 +28,17 @@ With `-batchmode -nographics`, the built Player must:
 1. Start the real `ApplicationRuntimeBootstrap`, reaching `IsStarted`.
 2. Expose an initialized `SingleCharacterSceneRuntime` in `Ready` state.
 3. Start with no VRM loaded and without physical tracking hardware.
-4. Shutdown the application and reach `Stopped` without a cleanup error.
-5. Write a JSON report with all checks true and exit 0 before timeout.
+4. Call **`Application.Quit()` without first calling `Shutdown()`**. Allow
+   the application's genuine `OnApplicationQuit` callbacks to save the
+   configuration and clean up scene resources.
+5. In the ordered smoke `OnApplicationQuit` callback, verify `Stopped`
+   and write a JSON report with `quitManagedMilliseconds`. The launcher
+   independently records process lifetime and best-effort quit-marker-to-PID-exit
+   duration. Missing, prewritten or failed evidence is FAIL.
+
+Previously, smoke explicitly called `bootstrap.Shutdown(false)` first and
+then `Application.Quit()`. That bypassed the actual normal-exit cleanup
+path, so the historical headless CI runs cannot prove it works.
 
 `tools/run-player-smoke.py` verifies the ZIP source SHA, package digest,
 native executable SHA, exact Unity version, runtime report, platform,
@@ -47,3 +56,42 @@ Ultraleap, Apple Silicon architecture, or frame-rate targets work.
 Those require a later interactive hardware-equipped Windows/macOS
 validation pass. A Windows/macOS build alone never counts as a runtime
 PASS.
+
+## Diagnosing a slow **visible desktop** close
+
+The headless smoke proves only source-bound native process/managed cleanup.
+It cannot reproduce GPU compositor teardown, actual webcam/MediaPipe disposal,
+a loaded VRM, a second native Settings window, or the user's desktop session.
+
+Use the same newly built Player executable from the current PR on the affected
+Windows or macOS computer and launch the **normal GUI** with the stdlib-only
+observer:
+
+```shell
+python3 tools/diagnose-gui-shutdown.py "/absolute/path/to/VirtualCharacterRender.exe"
+```
+
+On macOS pass the actual executable inside
+`VirtualCharacterRender.app/Contents/MacOS/` rather than the .app directory.
+Close the application normally; **do not minimize, hide, or kill it**.
+The tool collects a `Player.log`, PID lifetime and
+`exit-diagnosis.json` in a session folder. On Windows it also samples,
+read-only, when Unity/Settings windows cease to be visible.
+
+Interpret the evidence in this order:
+
+- Large time **before** the `quit requested` marker: Unity/UI/native window
+  quit dispatch may be blocked before managed shutdown.
+- Large gap from marker to `OnApplicationQuit finished`: locate the slow
+  `VCR shutdown step end` / MediaPipe native dispose markers with
+  `python3 tools/analyze-shutdown-log.py <Player.log>`.
+- Small managed shutdown but large marker-to-PID-exit: inspect native Unity
+  graphics/audio/input teardown and third-party plugin callbacks/threads.
+  Do not attribute such a delay to `sceneRuntime.Shutdown()` without proof.
+- If the windows remain visible after managed shutdown, inspect the render
+  window lifecycle and compositor instead of hiding them as a workaround.
+
+Repeat unloaded/idle, loaded VRM, active webcam, and Settings-open cases. This
+tool **only observes** the process and OS windows. It never hides a window or
+intentionally short-circuits application cleanup. Source edits and tests are
+development-only; no GitHub Release or version tag is required.
