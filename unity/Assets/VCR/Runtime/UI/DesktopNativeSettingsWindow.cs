@@ -41,7 +41,6 @@ namespace VCR.Runtime.UI
         private const uint MouseWheelMessage = 0x020Au;
         private const uint GetMinMaxInfoMessage = 0x0024u;
         private const uint WindowVerticalScroll = 0x00200000u;
-        private const uint ScrollAll = 0x0017u;
         private const uint ScrollRange = 0x0001u | 0x0002u | 0x0004u | 0x0010u;
         private const int ScrollBarVertical = 1;
         private const uint SetFontMessage = 0x0030u;
@@ -214,7 +213,10 @@ namespace VCR.Runtime.UI
                 if (msg == CommandMessage)
                 {
                     var id = unchecked((int)((long)wParam & 0xffff));
-                    if (id >= 100)
+                    var notification = unchecked((int)(((long)wParam >> 16) & 0xffff));
+                    // BN_CLICKED only: tracker Edit fields have IDs >= 6000,
+                    // and their EN_CHANGE must not enqueue spurious actions.
+                    if (id >= 100 && notification == 0 && lParam != IntPtr.Zero)
                     {
                         owner.events.Enqueue(id);
                         return IntPtr.Zero;
