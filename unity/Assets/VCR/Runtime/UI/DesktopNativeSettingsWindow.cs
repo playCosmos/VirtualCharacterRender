@@ -479,6 +479,7 @@ namespace VCR.Runtime.UI
         }
 
         private int selectedCategory;
+        public int SelectedCategory => selectedCategory;
         public void SelectCategory(int category)
         {
             if (category < 0 || category > 3) return;
