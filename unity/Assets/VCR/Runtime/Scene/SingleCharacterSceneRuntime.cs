@@ -713,7 +713,9 @@ namespace VCR.Runtime.Scene
                 OverlayOutputConfiguration
                     .FromSettings(settings);
 
-            _overlayOutput.Apply(settings);
+            // Apply the sanitized settings instead of the caller's legacy
+            // Topmost flag, including for custom/fake output adapters.
+            _overlayOutput.Apply(nextConfiguration.ToSettings());
             _overlayConfiguration =
                 nextConfiguration;
         }
