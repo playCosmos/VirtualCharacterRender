@@ -30,7 +30,24 @@ namespace VCR.Runtime.UI
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
         private const uint Overlapped = 0x00CF0000u;
         private const uint ChildVisible = 0x50000000u;
-        private const uint ButtonStyle = 0x00000000u;
+        private const uint ButtonStyle = 0x0000000Bu; // BS_OWNERDRAW
+        private const uint NormalTextStyle = 0u;
+        private const uint StaticColor = 0x0138u;
+        private const uint EditColor = 0x0133u;
+        private const uint DrawItemMessage = 0x002Bu;
+        private const uint EraseBackgroundMessage = 0x0014u;
+        private const uint SizeMessage = 0x0005u;
+        private const uint SetFontMessage = 0x0030u;
+        private const uint NoBackground = 1u;
+        private const uint TextSingleLine = 0x00000020u | 0x00000004u | 0x00008000u;
+        private const uint TextLeft = 0x00000000u;
+        // Main Unity UI: charcoal surfaces, light text and saturated blue selection.
+        private const uint BackgroundColor = 0x00251F1Bu;
+        private const uint SidebarColor = 0x00312A24u;
+        private const uint ButtonColor = 0x003B302Au;
+        private const uint SelectedColor = 0x00AA591Bu;
+        private const uint ForegroundColor = 0x00EFE8E2u;
+        private const uint MutedColor = 0x00B8ABA0u;
         private const uint EditStyle = 0x00800080u;
         private const int ShowNormal = 5;
         private const int Hide = 0;
@@ -52,6 +69,24 @@ namespace VCR.Runtime.UI
             public IntPtr instance, icon, cursor, brush;
             [MarshalAs(UnmanagedType.LPWStr)] public string menuName;
             [MarshalAs(UnmanagedType.LPWStr)] public string className;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect
+        {
+            public int left, top, right, bottom;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DrawItem
+        {
+            public uint controlType, controlId, itemId, itemAction, itemState;
+            public IntPtr hwndItem, hdc;
+            public Rect rect;
+            public IntPtr itemData;
+        }
+        private struct ControlLayout
+        {
+            public int Left, Top, Width, Height;
+            public bool Expand;
         }
         [StructLayout(LayoutKind.Sequential)]
         private struct Point { public int x, y; }
@@ -89,6 +124,32 @@ namespace VCR.Runtime.UI
             out NativeMessage msg, IntPtr hwnd, uint min, uint max, uint remove);
         [DllImport("user32.dll")] private static extern bool TranslateMessage(ref NativeMessage msg);
         [DllImport("user32.dll")] private static extern IntPtr DispatchMessageW(ref NativeMessage msg);
+        [DllImport("user32.dll")] private static extern bool GetClientRect(
+            IntPtr hwnd, out Rect rect);
+        [DllImport("user32.dll")] private static extern int FillRect(
+            IntPtr hdc, ref Rect rect, IntPtr brush);
+        [DllImport("user32.dll")] private static extern bool MoveWindow(
+            IntPtr hwnd, int x, int y, int width, int height, bool repaint);
+        [DllImport("user32.dll")] private static extern bool InvalidateRect(
+            IntPtr hwnd, IntPtr rect, bool erase);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int DrawTextW(IntPtr hdc, string text, int length,
+            ref Rect rect, uint format);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessageW(
+            IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateSolidBrush(uint color);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
+        [DllImport("gdi32.dll")] private static extern uint SetTextColor(IntPtr dc, uint color);
+        [DllImport("gdi32.dll")] private static extern uint SetBkColor(IntPtr dc, uint color);
+        [DllImport("gdi32.dll")] private static extern int SetBkMode(IntPtr dc, int mode);
+        [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+        [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr CreateFontW(int height, int width, int escapement,
+            int orientation, int weight, uint italic, uint underline, uint strikeout,
+            uint charset, uint outputPrecision, uint clipPrecision, uint quality,
+            uint pitchFamily, string family);
+        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd, int attribute, ref int value, int size);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandleW(string name);
 
@@ -99,12 +160,22 @@ namespace VCR.Runtime.UI
             new Dictionary<int, List<IntPtr>>();
         private readonly int[] rows = new int[4];
         private readonly Queue<int> events = new Queue<int>();
+        private readonly Dictionary<IntPtr, ControlLayout> controlLayouts =
+            new Dictionary<IntPtr, ControlLayout>();
+        private readonly IntPtr[] navigation = new IntPtr[4];
+        private readonly IntPtr baseBrush = CreateSolidBrush(BackgroundColor);
+        private readonly IntPtr sidebarBrush = CreateSolidBrush(SidebarColor);
+        private readonly IntPtr buttonBrush = CreateSolidBrush(ButtonColor);
+        private readonly IntPtr activeBrush = CreateSolidBrush(SelectedColor);
+        private readonly IntPtr editBrush = CreateSolidBrush(ButtonColor);
+        private IntPtr uiFont;
         private IntPtr hwnd;
         private readonly IntPtr instance;
 
         private static IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
-            if (current != null && current.hwnd == hwnd)
+            var owner = current;
+            if (owner != null && owner.hwnd == hwnd)
             {
                 if (msg == CloseMessage)
                 {
@@ -116,12 +187,94 @@ namespace VCR.Runtime.UI
                     var id = unchecked((int)((long)wParam & 0xffff));
                     if (id >= 100)
                     {
-                        current.events.Enqueue(id);
+                        owner.events.Enqueue(id);
                         return IntPtr.Zero;
                     }
                 }
+                if (msg == SizeMessage)
+                {
+                    owner.ResizeControls();
+                }
+                if (msg == EraseBackgroundMessage)
+                {
+                    if (GetClientRect(hwnd, out var background))
+                    {
+                        FillRect(wParam, ref background, owner.baseBrush);
+                        background.right = Math.Min(background.right, 244);
+                        FillRect(wParam, ref background, owner.sidebarBrush);
+                        return new IntPtr(1);
+                    }
+                }
+                if (msg == StaticColor || msg == EditColor)
+                {
+                    SetBkMode(wParam, (int)NoBackground);
+                    SetTextColor(wParam, ForegroundColor);
+                    if (msg == EditColor)
+                    {
+                        SetBkColor(wParam, ButtonColor);
+                        return owner.editBrush;
+                    }
+                    SetBkColor(wParam, BackgroundColor);
+                    return owner.baseBrush;
+                }
+                if (msg == DrawItemMessage && lParam != IntPtr.Zero)
+                {
+                    owner.DrawButton(Marshal.PtrToStructure<DrawItem>(lParam));
+                    return new IntPtr(1);
+                }
             }
             return DefWindowProcW(hwnd, msg, wParam, lParam);
+        }
+
+        private void DrawButton(DrawItem item)
+        {
+            var id = (int)item.controlId;
+            var nav = id >= 100 && id < 104;
+            var active = nav && selectedCategory == id - 100;
+            var brush = active ? activeBrush : nav ? sidebarBrush : buttonBrush;
+            var rect = item.rect;
+            FillRect(item.hdc, ref rect, brush);
+            SetBkMode(item.hdc, (int)NoBackground);
+            SetTextColor(item.hdc, active ? ForegroundColor : nav ? MutedColor : ForegroundColor);
+            var prior = uiFont != IntPtr.Zero ? SelectObject(item.hdc, uiFont) : IntPtr.Zero;
+            var text = new StringBuilder(Math.Max(1, GetWindowTextLengthW(item.hwndItem) + 1));
+            GetWindowTextW(item.hwndItem, text, text.Capacity);
+            rect.left += 14;
+            rect.right -= 8;
+            DrawTextW(item.hdc, text.ToString(), -1, ref rect, TextSingleLine | TextLeft);
+            if (prior != IntPtr.Zero) SelectObject(item.hdc, prior);
+        }
+
+        private IntPtr NewControl(string type, string label, uint style, int id,
+            int x, int y, int width, int height, bool expandable = false)
+        {
+            var control = CreateWindowExW(0, type, label ?? "", ChildVisible | style,
+                x, y, width, height, hwnd, id == 0 ? IntPtr.Zero : new IntPtr(id),
+                instance, IntPtr.Zero);
+            if (control == IntPtr.Zero)
+                throw new InvalidOperationException("Cannot create Settings control.");
+            if (uiFont != IntPtr.Zero)
+                SendMessageW(control, SetFontMessage, uiFont, new IntPtr(1));
+            controlLayouts[control] = new ControlLayout
+            {
+                Left = x, Top = y, Width = width, Height = height, Expand = expandable
+            };
+            return control;
+        }
+
+        private void ResizeControls()
+        {
+            if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
+                return;
+            var contentWidth = Math.Max(200, area.right - 300);
+            foreach (var entry in controlLayouts)
+            {
+                var layout = entry.Value;
+                if (IsWindow(entry.Key))
+                    MoveWindow(entry.Key, layout.Left, layout.Top,
+                        layout.Expand ? Math.Max(120, contentWidth - (layout.Left - 270)) : layout.Width,
+                        layout.Height, true);
+            }
         }
 
         public DesktopNativeSettingsWindow()
@@ -132,6 +285,7 @@ namespace VCR.Runtime.UI
                 callback = Procedure,
                 instance = instance,
                 className = ClassName,
+                brush = baseBrush,
             };
             if (RegisterClassW(ref spec) == 0 &&
                 Marshal.GetLastWin32Error() != ClassAlreadyExists)
@@ -147,12 +301,19 @@ namespace VCR.Runtime.UI
                 current = null;
                 throw new InvalidOperationException("Cannot create native Win32 Settings window.");
             }
+            uiFont = CreateFontW(-18, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Segoe UI");
+            try
+            {
+                var dark = 1;
+                DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
+            }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
             var labels = new[] { "일반", "캐릭터 / 모델", "트래킹", "출력" };
             for (var i = 0; i < labels.Length; i++)
             {
-                CreateWindowExW(0, "BUTTON", labels[i], ChildVisible | ButtonStyle,
-                    20 + i * 220, 18, 200, 36, hwnd, new IntPtr(100 + i),
-                    instance, IntPtr.Zero);
+                navigation[i] = NewControl("BUTTON", labels[i], ButtonStyle,
+                    100 + i, 18, 84 + i * 49, 208, 40);
             }
         }
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
@@ -191,25 +352,25 @@ namespace VCR.Runtime.UI
                 return;
             if (!categoryControls.TryGetValue(category, out var handles))
                 categoryControls[category] = handles = new List<IntPtr>();
-            var top = 84 + 48 * rows[category]++;
+            var top = 82 + 48 * rows[category]++;
             if (kind == ControlKind.Edit)
             {
-                handles.Add(CreateWindowExW(0, "STATIC", label, ChildVisible,
-                    220, top + 7, 230, 26, hwnd, IntPtr.Zero, instance, IntPtr.Zero));
-                var input = CreateWindowExW(0, "EDIT", value ?? "", ChildVisible | EditStyle,
-                    460, top, 390, 32, hwnd, new IntPtr(id), instance, IntPtr.Zero);
+                handles.Add(NewControl("STATIC", label, NormalTextStyle,
+                    0, 270, top + 6, 206, 26));
+                var input = NewControl("EDIT", value ?? "", EditStyle, id,
+                    490, top, 380, 32, expandable: true);
                 handles.Add(input);
                 editHandles[id] = input;
             }
             else
             {
-                handles.Add(CreateWindowExW(0,
+                handles.Add(NewControl(
                     kind == ControlKind.Button ? "BUTTON" : "STATIC",
-                    label ?? "", ChildVisible,
-                    220, top, 630, 34, hwnd,
-                    kind == ControlKind.Button ? new IntPtr(id) : IntPtr.Zero,
-                    instance, IntPtr.Zero));
+                    label ?? "", kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
+                    kind == ControlKind.Button ? id : 0,
+                    270, top, 600, 36, expandable: true));
             }
+            ResizeControls();
             if (category != selectedCategory)
                 foreach (var handle in handles) ShowWindow(handle, Hide);
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
@@ -223,6 +384,8 @@ namespace VCR.Runtime.UI
             if (category < 0 || category > 3) return;
             selectedCategory = category;
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            foreach (var handle in navigation)
+                if (handle != IntPtr.Zero) InvalidateRect(handle, IntPtr.Zero, true);
             foreach (var entry in categoryControls)
                 foreach (var handle in entry.Value)
                     if (handle != IntPtr.Zero)
@@ -244,6 +407,7 @@ namespace VCR.Runtime.UI
                             editHandles.Remove(entry.Key);
                     if (control != IntPtr.Zero && IsWindow(control))
                         DestroyWindow(control);
+                    controlLayouts.Remove(control);
                 }
                 handles.Clear();
             }
@@ -340,7 +504,14 @@ namespace VCR.Runtime.UI
             if (current == this) current = null;
             editHandles.Clear();
             categoryControls.Clear();
+            controlLayouts.Clear();
             events.Clear();
+            if (uiFont != IntPtr.Zero) DeleteObject(uiFont);
+            DeleteObject(editBrush);
+            DeleteObject(activeBrush);
+            DeleteObject(buttonBrush);
+            DeleteObject(sidebarBrush);
+            DeleteObject(baseBrush);
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacDestroy();
 #endif
