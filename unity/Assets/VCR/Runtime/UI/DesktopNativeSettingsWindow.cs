@@ -181,6 +181,7 @@ namespace VCR.Runtime.UI
         private static readonly WindowProcedure Procedure = WindowProc;
         private static DesktopNativeSettingsWindow current;
         private readonly Dictionary<int, IntPtr> editHandles = new Dictionary<int, IntPtr>();
+        private readonly Dictionary<int, IntPtr> textHandles = new Dictionary<int, IntPtr>();
         private readonly Dictionary<int, List<IntPtr>> categoryControls =
             new Dictionary<int, List<IntPtr>>();
         private readonly int[] rows = new int[4];
@@ -458,11 +459,14 @@ namespace VCR.Runtime.UI
             }
             else
             {
-                handles.Add(NewControl(
+                var textHandle = NewControl(
                     kind == ControlKind.Button ? "BUTTON" : "STATIC",
                     label ?? "", kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
-                    kind == ControlKind.Button ? id : 0,
-                    270, top, 600, 36, expandable: true));
+                    id,
+                    270, top, 600, 36, expandable: true);
+                handles.Add(textHandle);
+                if (kind == ControlKind.Label && id != 0)
+                    textHandles[id] = textHandle;
             }
             foreach (var control in handles)
                 controlCategories[control] = category;
@@ -502,6 +506,9 @@ namespace VCR.Runtime.UI
                     foreach (var entry in new List<KeyValuePair<int, IntPtr>>(editHandles))
                         if (entry.Value == control)
                             editHandles.Remove(entry.Key);
+                    foreach (var entry in new List<KeyValuePair<int, IntPtr>>(textHandles))
+                        if (entry.Value == control)
+                            textHandles.Remove(entry.Key);
                     if (control != IntPtr.Zero && IsWindow(control))
                         DestroyWindow(control);
                     controlLayouts.Remove(control);
@@ -536,7 +543,8 @@ namespace VCR.Runtime.UI
         public void SetText(int id, string value)
         {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-            if (editHandles.TryGetValue(id, out var handle) && handle != IntPtr.Zero)
+            if ((editHandles.TryGetValue(id, out var handle) ||
+                 textHandles.TryGetValue(id, out handle)) && handle != IntPtr.Zero)
                 SetWindowTextW(handle, value ?? "");
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacSetText(id, value ?? "");
@@ -601,6 +609,7 @@ namespace VCR.Runtime.UI
             hwnd = IntPtr.Zero;
             if (current == this) current = null;
             editHandles.Clear();
+            textHandles.Clear();
             categoryControls.Clear();
             controlLayouts.Clear();
             controlCategories.Clear();
