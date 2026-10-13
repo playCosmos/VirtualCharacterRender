@@ -47,9 +47,10 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
                             chunk = source.read()
                             offset = source.tell()
                         if chunk:
-                            carry = (carry + chunk)[-512:]
-                            if marker in carry:
+                            combined = carry + chunk
+                            if marker in combined:
                                 marker_at = time.monotonic()
+                            carry = combined[-(len(marker) - 1):]
                     except OSError:
                         # Windows may briefly hold the Unity log exclusively.
                         pass
