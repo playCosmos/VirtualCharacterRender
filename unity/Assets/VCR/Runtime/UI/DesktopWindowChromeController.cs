@@ -92,9 +92,6 @@ namespace VCR.Runtime.UI
         private void Awake()
         {
 #if !UNITY_EDITOR
-            UnityEngine.Application.wantsToQuit += OnQuitRequested;
-#endif
-#if !UNITY_EDITOR
             if (Screen.fullScreen)
             {
                 Screen.fullScreen = false;
@@ -119,25 +116,11 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private void OnDestroy()
-        {
-#if !UNITY_EDITOR
-            UnityEngine.Application.wantsToQuit -= OnQuitRequested;
-#endif
-        }
-
         private void OnApplicationQuit()
         {
+            // Runs before the runtime bootstrap (-1000) at execution order -2000.
+            // Unlike wantsToQuit this event cannot be vetoed by a subscriber.
             HideWindowForShutdown();
-        }
-
-        private bool OnQuitRequested()
-        {
-            // Hide the visible desktop surface before synchronous Unity cleanup.
-            // This does not skip camera disposal, configuration persistence,
-            // or Unity resource ownership. The process still exits normally.
-            HideWindowForShutdown();
-            return true;
         }
 
         private void OnApplicationFocus(
