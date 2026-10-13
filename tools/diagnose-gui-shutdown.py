@@ -48,13 +48,15 @@ def windows_visible_windows(pid):
     return visible
 
 
-def observe(executable, args, output, limit_seconds=180):
+def observe(executable, args, output, limit_seconds=180, script_first=False):
     output.mkdir(parents=True, exist_ok=True)
     log = output / "Player.log"
     result = output / "exit-diagnosis.json"
     if log.exists():
         log.unlink()
-    command = [str(executable), "-logFile", str(log), *args]
+    command = ([str(executable), args[0], "-logFile", str(log), *args[1:]]
+               if script_first else
+               [str(executable), "-logFile", str(log), *args])
     started = time.monotonic()
     events = {}
     processed = 0
@@ -133,7 +135,7 @@ def self_test():
         stub = root / "test-player.py"
         stub.write_text(code, encoding="utf-8")
         output = root / "out"
-        assert observe(Path(sys.executable), [str(stub)], output, 5) == 0
+        assert observe(Path(sys.executable), [str(stub)], output, 5, script_first=True) == 0
         data = json.loads((output / "exit-diagnosis.json").read_text())
         assert data["quitToProcessExitMs"] >= 100
         assert data["quitToManagedFinishMs"] >= 100
