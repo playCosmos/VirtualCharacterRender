@@ -273,6 +273,14 @@ namespace VCR.Runtime.UI
                     ShowWindow(window, ShowWindowHide);
                     _quitWindowHidden = true;
                 }
+                // Settings is an independent top-level window. Hide it as
+                // well so no visible VCR window survives lengthy cleanup.
+                var settings = FindNativeSettingsWindow();
+                if (settings != IntPtr.Zero)
+                {
+                    ShowWindow(settings, ShowWindowHide);
+                    _quitWindowHidden = true;
+                }
 #elif UNITY_STANDALONE_OSX
                 HideMacAppWindows();
                 _quitWindowHidden = true;
@@ -302,6 +310,30 @@ namespace VCR.Runtime.UI
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
         private const int ShowWindowHide = 0;
         private delegate bool EnumerateWindows(IntPtr hwnd, IntPtr param);
+
+        private static IntPtr FindNativeSettingsWindow()
+        {
+            var pid = GetCurrentProcessId();
+            IntPtr result = IntPtr.Zero;
+            EnumWindows((window, param) =>
+            {
+                if (!IsWindowVisible(window))
+                    return true;
+                GetWindowThreadProcessId(window, out var owner);
+                if (owner != pid)
+                    return true;
+                var className = new StringBuilder(256);
+                GetClassNameW(window, className, className.Capacity);
+                if (string.Equals(className.ToString(), "VCR.NativeSettings.Window.1",
+                    StringComparison.Ordinal))
+                {
+                    result = window;
+                    return false;
+                }
+                return true;
+            }, IntPtr.Zero);
+            return result;
+        }
 
         private static IntPtr FindUnityMainWindow()
         {
