@@ -297,7 +297,6 @@ namespace VCR.Runtime.UI
         private int _outputSummaryClientWidth;
         private int _outputSummaryClientHeight;
         private bool _outputSummaryTransparent;
-        private bool _outputSummaryTopmost;
         private bool _outputSummaryClickThrough;
         private bool _outputSummaryRenderAvailable;
         private int _outputSummaryRenderWidth;
@@ -8925,12 +8924,6 @@ namespace VCR.Runtime.UI
                 settings.Transparent
                     ? "On"
                     : "Off");
-            builder.Append("\nAlways on top  ");
-            builder.Append(
-                hasAdapter &&
-                settings.Topmost
-                    ? "On"
-                    : "Off");
             builder.Append("\nClick-through  ");
             builder.Append(
                 hasAdapter &&
@@ -8997,8 +8990,6 @@ namespace VCR.Runtime.UI
                       status.ClientHeight &&
                   _outputSummaryTransparent ==
                       settings.Transparent &&
-                  _outputSummaryTopmost ==
-                      settings.Topmost &&
                   _outputSummaryClickThrough ==
                       settings.ClickThrough)) &&
                 _outputSummaryRenderAvailable ==
@@ -9041,9 +9032,6 @@ namespace VCR.Runtime.UI
             _outputSummaryTransparent =
                 hasAdapter &&
                 settings.Transparent;
-            _outputSummaryTopmost =
-                hasAdapter &&
-                settings.Topmost;
             _outputSummaryClickThrough =
                 hasAdapter &&
                 settings.ClickThrough;
