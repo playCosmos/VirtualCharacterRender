@@ -54,6 +54,16 @@ namespace {
 }
 
 extern "C" {
+// Close the visible application surface before Unity's synchronous quit
+// callbacks dispose inference/capture resources. Never force process exit.
+__attribute__((visibility("default"))) void VCR_SettingsHideAppWindowsForQuit(void) {
+    if (![NSThread isMainThread]) return;
+    for (NSWindow *window in [NSApp windows]) {
+        if ([window isVisible])
+            [window orderOut:nil];
+    }
+}
+
 __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
     if (settingsWindow) return;
     delegate = [[VcrSettingsWindowDelegate alloc] init];
