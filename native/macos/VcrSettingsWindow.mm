@@ -229,6 +229,7 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
         [page addSubview:text];
         [views addObject:text];
         [row addObject:text];
+        if (ident != 0) fields[@(ident)] = text;
     }
     [rowGroups[@(category)] addObject:row];
     layoutRows(category);
