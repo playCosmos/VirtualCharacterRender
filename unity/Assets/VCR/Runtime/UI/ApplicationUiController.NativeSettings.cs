@@ -90,7 +90,6 @@ namespace VCR.Runtime.UI
 
             _nativeSettings.Add(3, 3, DesktopNativeSettingsWindow.ControlKind.Label,
                 "OS 창 표시 및 투명 합성");
-            AddNativeAction(3, 400, "항상 위 켜기 / 끄기", ToggleOverlayTopmost);
             AddNativeAction(3, 401, "투명 배경 켜기 / 끄기", ToggleOverlayTransparent);
             AddNativeAction(3, 402, "클릭 통과 켜기 / 끄기", ToggleOverlayClickThrough);
             AddNativeAction(3, 403, "출력 복구", RecoverOutput);
