@@ -47,3 +47,34 @@ Ultraleap, Apple Silicon architecture, or frame-rate targets work.
 Those require a later interactive hardware-equipped Windows/macOS
 validation pass. A Windows/macOS build alone never counts as a runtime
 PASS.
+
+## GUI exit latency acceptance (interactive only)
+
+Headless startup/shutdown smoke does **not** prove that the renderer and
+Settings window disappear promptly after a desktop close request.
+
+For Windows x64 and Apple Silicon macOS, measure all three independent times:
+
+1. **Close-to-hidden:** click the app's Close button (and separately the OS
+   title-bar close control); record the wall-clock delay until both the
+   main renderer and any open native Settings window are no longer visible.
+2. **Close-to-process-exit:** record how long until the Player PID exits,
+   including OS/Unity graphics-runtime teardown after the last managed log.
+3. **Cleanup phases:** launch with `-logFile <absolute-path>`, then run
+   `python3 tools/analyze-shutdown-log.py <Player.log>` to see configuration
+   save, capability disposal, webcam/MediaPipe native dispose, VRM unload,
+   native hide, and managed shutdown phase durations.
+
+Repeat with (a) an unloaded model and no camera, (b) a loaded real VRM and
+active webcam tracking, and (c) native Settings open while quitting. Exercise
+background-run preference both enabled and disabled. Repeat 3 times to
+differentiate reliable latency from one-time native initialization.
+
+The early window-hide path is a **presentation latency fix**; the normal
+resource cleanup still runs and remains measured. Do not use forced
+process termination, skip device disposal, or claim the underlying slowest
+cleanup stage was fixed unless real-device logs establish it. If the GUI
+disappears promptly but the PID remains for many seconds, analyze the
+phase timings and external process-exit interval separately.
+
+No GitHub Release or version tag is produced by this validation.
