@@ -21,7 +21,7 @@ UNIW = re.compile(
     r"VCR UniWinC shutdown: completed \((\d+) ms\)")
 
 HIDE = re.compile(
-    r"VCR exit: native window hidden=(True|False) \\((\\d+) ms\\)")
+    r"VCR exit: native window hidden=(True|False) \((\d+) ms\)")
 
 def analyze(contents):
     records = []
