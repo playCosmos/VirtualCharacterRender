@@ -42,6 +42,11 @@ namespace VCR.Runtime.Application
         private System.Diagnostics.Stopwatch _quitTimer;
         private bool _quitRequested;
 
+        private void Awake()
+        {
+            _bootstrap = GetComponent<ApplicationRuntimeBootstrap>();
+        }
+
         private IEnumerator Start()
         {
             var reportPath = GetReportPath();
@@ -108,6 +113,14 @@ namespace VCR.Runtime.Application
 
         private void OnApplicationQuit()
         {
+            // This component exists in regular GUI Players too. Even without
+            // smoke arguments, measure how long other components spent in
+            // their OnApplicationQuit callbacks after the bootstrap finished.
+            // A late timestamp distinguishes plugin/script callback delays
+            // from the native Unity shutdown that follows this callback.
+            Debug.Log("VCR exit: late managed quit callback at " +
+                (_bootstrap?.ExitElapsedMilliseconds ?? -1) + " ms");
+
             if (!_quitRequested || _evidence == null)
                 return;
 
