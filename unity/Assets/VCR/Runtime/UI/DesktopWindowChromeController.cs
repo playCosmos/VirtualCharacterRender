@@ -277,6 +277,9 @@ namespace VCR.Runtime.UI
             if (_quitWindowHidden)
                 return;
 
+            // Hidden Unity windows must keep processing the remaining quit
+            // callbacks even when the persisted preference was background-off.
+            UnityEngine.Application.runInBackground = true;
             var timer = System.Diagnostics.Stopwatch.StartNew();
             try
             {
