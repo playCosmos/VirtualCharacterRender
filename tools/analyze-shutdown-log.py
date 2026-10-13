@@ -91,8 +91,9 @@ VCR exit: VMC UDP receive worker join=750 ms, stillAlive=True
 VCR exit: runtime bootstrap destroyed at 319 ms
 """
     records, timeline = analyze(sample)
-    assert records[0] == (275, "scene", "capability disposal")
-    assert records[1] == (220, "mediapipe", "webcam stop")
+    assert (275, "scene", "capability disposal") in records
+    assert (220, "mediapipe", "webcam stop") in records
+    assert records[0][0] == 750  # Sort by latency, including UDP joins.
     assert ("OnApplicationQuit finished", 315) in timeline
     assert ("late managed quit callback", 320) in timeline
     assert (750, "udp", "VMC worker join (alive=True)") in records
