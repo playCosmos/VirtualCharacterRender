@@ -76,11 +76,12 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
                         incoming = stream.read()
                         processed = stream.tell()
                     if incoming:
-                        tail = (tail + incoming)[-4096:]
-                        if "quitRequestedAtMs" not in events and QUIT in tail:
+                        combined = tail + incoming
+                        if "quitRequestedAtMs" not in events and QUIT in combined:
                             events["quitRequestedAtMs"] = round((now - started) * 1000)
-                        if "managedQuitFinishedAtMs" not in events and MANAGED_END in tail:
+                        if "managedQuitFinishedAtMs" not in events and MANAGED_END in combined:
                             events["managedQuitFinishedAtMs"] = round((now - started) * 1000)
+                        tail = combined[-(max(len(QUIT), len(MANAGED_END)) - 1):]
                 except OSError:
                     pass
             try:
