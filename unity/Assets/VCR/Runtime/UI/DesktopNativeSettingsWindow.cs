@@ -37,6 +37,13 @@ namespace VCR.Runtime.UI
         private const uint DrawItemMessage = 0x002Bu;
         private const uint EraseBackgroundMessage = 0x0014u;
         private const uint SizeMessage = 0x0005u;
+        private const uint VScrollMessage = 0x0115u;
+        private const uint MouseWheelMessage = 0x020Au;
+        private const uint GetMinMaxInfoMessage = 0x0024u;
+        private const uint WindowVerticalScroll = 0x00200000u;
+        private const uint ScrollAll = 0x0017u;
+        private const uint ScrollRange = 0x0001u | 0x0002u | 0x0004u | 0x0010u;
+        private const int ScrollBarVertical = 1;
         private const uint SetFontMessage = 0x0030u;
         private const uint NoBackground = 1u;
         private const uint TextSingleLine = 0x00000020u | 0x00000004u | 0x00008000u;
@@ -74,6 +81,19 @@ namespace VCR.Runtime.UI
         private struct Rect
         {
             public int left, top, right, bottom;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ScrollInfo
+        {
+            public uint cbSize, fMask;
+            public int nMin, nMax;
+            public uint nPage;
+            public int nPos, nTrackPos;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MinMaxInfo
+        {
+            public Point reserved, maxSize, maxPosition, minTrackSize, maxTrackSize;
         }
         [StructLayout(LayoutKind.Sequential)]
         private struct DrawItem
@@ -124,6 +144,10 @@ namespace VCR.Runtime.UI
             out NativeMessage msg, IntPtr hwnd, uint min, uint max, uint remove);
         [DllImport("user32.dll")] private static extern bool TranslateMessage(ref NativeMessage msg);
         [DllImport("user32.dll")] private static extern IntPtr DispatchMessageW(ref NativeMessage msg);
+        [DllImport("user32.dll")] private static extern int SetScrollInfo(
+            IntPtr hwnd, int scrollBar, ref ScrollInfo info, bool redraw);
+        [DllImport("user32.dll")] private static extern bool GetScrollInfo(
+            IntPtr hwnd, int scrollBar, ref ScrollInfo info);
         [DllImport("user32.dll")] private static extern bool GetClientRect(
             IntPtr hwnd, out Rect rect);
         [DllImport("user32.dll")] private static extern int FillRect(
@@ -150,6 +174,8 @@ namespace VCR.Runtime.UI
             uint pitchFamily, string family);
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(
             IntPtr hwnd, int attribute, ref int value, int size);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool UnregisterClassW(string name, IntPtr instance);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandleW(string name);
 
@@ -159,6 +185,9 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, List<IntPtr>> categoryControls =
             new Dictionary<int, List<IntPtr>>();
         private readonly int[] rows = new int[4];
+        private readonly int[] scrollOffsets = new int[4];
+        private readonly Dictionary<IntPtr, int> controlCategories =
+            new Dictionary<IntPtr, int>();
         private readonly Queue<int> events = new Queue<int>();
         private readonly Dictionary<IntPtr, ControlLayout> controlLayouts =
             new Dictionary<IntPtr, ControlLayout>();
@@ -194,6 +223,18 @@ namespace VCR.Runtime.UI
                 if (msg == SizeMessage)
                 {
                     owner.ResizeControls();
+                }
+                if (msg == GetMinMaxInfoMessage && lParam != IntPtr.Zero)
+                {
+                    var limits = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+                    limits.minTrackSize = new Point { x = 800, y = 560 };
+                    Marshal.StructureToPtr(limits, lParam, false);
+                    return IntPtr.Zero;
+                }
+                if (msg == VScrollMessage || msg == MouseWheelMessage)
+                {
+                    owner.ScrollDetail(msg, wParam);
+                    return IntPtr.Zero;
                 }
                 if (msg == EraseBackgroundMessage)
                 {
@@ -262,16 +303,67 @@ namespace VCR.Runtime.UI
             return control;
         }
 
+        private void ScrollDetail(uint message, IntPtr value)
+        {
+            if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
+                return;
+            var page = selectedCategory;
+            var max = Math.Max(0, rows[page] * 48 + 120 - area.bottom);
+            var position = scrollOffsets[page];
+            if (message == MouseWheelMessage)
+            {
+                var delta = unchecked((short)(((long)value >> 16) & 0xffff));
+                position -= Math.Sign(delta) * 48;
+            }
+            else
+            {
+                var code = (int)((long)value & 0xffff);
+                switch (code)
+                {
+                    case 0: position -= 48; break; // SB_LINEUP
+                    case 1: position += 48; break; // SB_LINEDOWN
+                    case 2: position -= Math.Max(48, area.bottom - 120); break;
+                    case 3: position += Math.Max(48, area.bottom - 120); break;
+                    case 4:
+                    case 5:
+                        var info = new ScrollInfo
+                        {
+                            cbSize = (uint)Marshal.SizeOf<ScrollInfo>(),
+                            fMask = ScrollRange
+                        };
+                        if (GetScrollInfo(hwnd, ScrollBarVertical, ref info))
+                            position = info.nTrackPos;
+                        break;
+                    default: return;
+                }
+            }
+            scrollOffsets[page] = Math.Max(0, Math.Min(max, position));
+            ResizeControls();
+        }
+
         private void ResizeControls()
         {
             if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
                 return;
             var contentWidth = Math.Max(200, area.right - 300);
+            var max = Math.Max(0, rows[selectedCategory] * 48 + 120 - area.bottom);
+            scrollOffsets[selectedCategory] = Math.Min(scrollOffsets[selectedCategory], max);
+            var scroll = new ScrollInfo
+            {
+                cbSize = (uint)Marshal.SizeOf<ScrollInfo>(),
+                fMask = ScrollRange,
+                nMin = 0, nMax = rows[selectedCategory] * 48 + 120,
+                nPage = (uint)Math.Max(1, area.bottom),
+                nPos = scrollOffsets[selectedCategory]
+            };
+            SetScrollInfo(hwnd, ScrollBarVertical, ref scroll, true);
             foreach (var entry in controlLayouts)
             {
                 var layout = entry.Value;
                 if (IsWindow(entry.Key))
-                    MoveWindow(entry.Key, layout.Left, layout.Top,
+                    MoveWindow(entry.Key, layout.Left,
+                        layout.Top - (controlCategories.TryGetValue(entry.Key, out var category)
+                            && category == selectedCategory ? scrollOffsets[category] : 0),
                         layout.Expand ? Math.Max(120, contentWidth - (layout.Left - 270)) : layout.Width,
                         layout.Height, true);
             }
@@ -294,7 +386,7 @@ namespace VCR.Runtime.UI
             }
             current = this;
             hwnd = CreateWindowExW(0, ClassName, "VirtualCharacterRender - 환경설정",
-                Overlapped, 160, 120, 940, 720, IntPtr.Zero, IntPtr.Zero,
+                Overlapped | WindowVerticalScroll, 160, 120, 940, 720, IntPtr.Zero, IntPtr.Zero,
                 instance, IntPtr.Zero);
             if (hwnd == IntPtr.Zero)
             {
@@ -370,6 +462,8 @@ namespace VCR.Runtime.UI
                     kind == ControlKind.Button ? id : 0,
                     270, top, 600, 36, expandable: true));
             }
+            foreach (var control in handles)
+                controlCategories[control] = category;
             ResizeControls();
             if (category != selectedCategory)
                 foreach (var handle in handles) ShowWindow(handle, Hide);
@@ -386,6 +480,7 @@ namespace VCR.Runtime.UI
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             foreach (var handle in navigation)
                 if (handle != IntPtr.Zero) InvalidateRect(handle, IntPtr.Zero, true);
+            ResizeControls();
             foreach (var entry in categoryControls)
                 foreach (var handle in entry.Value)
                     if (handle != IntPtr.Zero)
@@ -408,6 +503,7 @@ namespace VCR.Runtime.UI
                     if (control != IntPtr.Zero && IsWindow(control))
                         DestroyWindow(control);
                     controlLayouts.Remove(control);
+                    controlCategories.Remove(control);
                 }
                 handles.Clear();
             }
@@ -505,7 +601,9 @@ namespace VCR.Runtime.UI
             editHandles.Clear();
             categoryControls.Clear();
             controlLayouts.Clear();
+            controlCategories.Clear();
             events.Clear();
+            UnregisterClassW(ClassName, instance);
             if (uiFont != IntPtr.Zero) DeleteObject(uiFont);
             DeleteObject(editBrush);
             DeleteObject(activeBrush);
