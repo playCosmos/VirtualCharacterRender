@@ -20,6 +20,7 @@ EXIT = re.compile(
 UNIW = re.compile(
     r"VCR UniWinC shutdown: completed \((\d+) ms\)")
 
+LATE = re.compile(\n    r"VCR exit: late managed quit callback at (\\d+) ms")
 
 def analyze(contents):
     records = []
@@ -29,6 +30,9 @@ def analyze(contents):
             match = regex.search(line)
             if match:
                 records.append((int(match.group(2)), category, match.group(1).strip()))
+        match = LATE.search(line)
+        if match:
+            timeline.append(("late managed quit callback", int(match.group(1))))
         match = UNIW.search(line)
         if match:
             records.append((int(match.group(1)), "native", "UniWinC state reset"))
@@ -74,12 +78,14 @@ VCR shutdown step end: capability disposal (275 ms)
 VCR shutdown: scene teardown ended at 298 ms
 VCR shutdown: end at 302 ms, success=True
 VCR exit: OnApplicationQuit finished at 315 ms
+VCR exit: late managed quit callback at 320 ms
 VCR exit: runtime bootstrap destroyed at 319 ms
 """
     records, timeline = analyze(sample)
     assert records[0] == (275, "scene", "capability disposal")
     assert records[1] == (220, "mediapipe", "webcam stop")
     assert ("OnApplicationQuit finished", 315) in timeline
+    assert ("late managed quit callback", 320) in timeline
     assert "t=319 ms" in format_report(sample)
     assert "No VCR shutdown measurements" in format_report("Unrelated line")
     print("VCR shutdown log analyzer self-test PASS")
