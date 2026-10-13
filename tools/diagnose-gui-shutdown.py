@@ -15,6 +15,7 @@ import uuid
 
 QUIT = b"VCR exit: quit requested (t=0 ms)"
 MANAGED_END = b"VCR exit: OnApplicationQuit finished at "
+LATE_MANAGED_END = b"VCR exit: late managed quit callback at "
 
 
 def windows_visible_windows(pid):
@@ -81,7 +82,10 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
                             events["quitRequestedAtMs"] = round((now - started) * 1000)
                         if "managedQuitFinishedAtMs" not in events and MANAGED_END in combined:
                             events["managedQuitFinishedAtMs"] = round((now - started) * 1000)
-                        tail = combined[-(max(len(QUIT), len(MANAGED_END)) - 1):]
+                        if "lateManagedQuitAtMs" not in events and LATE_MANAGED_END in combined:
+                            events["lateManagedQuitAtMs"] = round((now - started) * 1000)
+                        tail = combined[-(max(len(QUIT), len(MANAGED_END),
+                                              len(LATE_MANAGED_END)) - 1):]
                 except OSError:
                     pass
             try:
@@ -111,6 +115,9 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
         if "managedQuitFinishedAtMs" in events:
             events["quitToManagedFinishMs"] = (events["managedQuitFinishedAtMs"] -
                                                  events["quitRequestedAtMs"])
+        if "lateManagedQuitAtMs" in events:
+            events["quitToLateManagedMs"] = (events["lateManagedQuitAtMs"] -
+                                              events["quitRequestedAtMs"])
         if "windowsGoneAtMs" in events:
             events["quitToWindowsGoneMs"] = (events["windowsGoneAtMs"] -
                                               events["quitRequestedAtMs"])
