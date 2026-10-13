@@ -27,7 +27,6 @@ namespace VCR.Runtime.Output.Unity
 
         [Header("Overlay")]
         [SerializeField] private bool transparent = true;
-        [SerializeField] private bool topmost = true;
         [SerializeField] private bool clickThrough = false;
         [SerializeField, Min(0.5f)] private float nativeApplyTimeoutSeconds = 5f;
 
@@ -148,7 +147,6 @@ namespace VCR.Runtime.Output.Unity
         {
             targetCamera = camera;
             transparent = true;
-            topmost = true;
             clickThrough = false;
         }
 
@@ -158,7 +156,6 @@ namespace VCR.Runtime.Output.Unity
             _applyAttempts++;
 
             transparent = settings.Transparent;
-            topmost = settings.Topmost;
             clickThrough = settings.ClickThrough;
 
             if (transparent)
@@ -216,18 +213,16 @@ namespace VCR.Runtime.Output.Unity
 
         private void ApplyNativeSettings()
         {
-            // UniWindowController may not have attached the native window yet.
-            // Transparent/click-through retain requested state before attach,
-            // while topmost requires the native core. Reapply until topmost
-            // reports the requested value.
+            // Main rendering window is always a normal OS window. Never
+            // restore persisted topmost state or obscure Settings/other apps.
             _controller.transparentType =
                 UniWindowController.TransparentType.Alpha;
             _controller.isTransparent = transparent;
             _controller.isClickThrough = clickThrough;
-            _controller.isTopmost = topmost;
+            _controller.isTopmost = false;
 
             var topmostApplied =
-                _controller.isTopmost == topmost;
+                !_controller.isTopmost;
 
             if (!topmostApplied)
             {
@@ -285,7 +280,7 @@ namespace VCR.Runtime.Output.Unity
 
             output.Add(new RuntimeMetric(
                 "output.overlay.topmost",
-                topmost ? 1 : 0,
+                0,
                 "bool"));
 
             output.Add(new RuntimeMetric(
@@ -313,7 +308,7 @@ namespace VCR.Runtime.Output.Unity
         {
             return new OverlayOutputSettings(
                 transparent,
-                topmost,
+                false,
                 clickThrough);
         }
 
