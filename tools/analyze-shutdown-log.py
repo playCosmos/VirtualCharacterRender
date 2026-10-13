@@ -20,7 +20,8 @@ EXIT = re.compile(
 UNIW = re.compile(
     r"VCR UniWinC shutdown: completed \((\d+) ms\)")
 
-LATE = re.compile(\n    r"VCR exit: late managed quit callback at (\\d+) ms")
+LATE = re.compile(
+    r"VCR exit: late managed quit callback at (\d+) ms")
 
 def analyze(contents):
     records = []
