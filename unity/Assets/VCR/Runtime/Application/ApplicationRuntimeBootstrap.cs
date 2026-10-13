@@ -35,6 +35,8 @@ namespace VCR.Runtime.Application
         private Task<bool> _startupTask;
         private bool _started;
         private bool _quitting;
+        private bool _lastShutdownSucceeded;
+        private string _lastShutdownError;
         private System.Diagnostics.Stopwatch _processExitTimer;
 
         private void Awake()
@@ -70,6 +72,11 @@ namespace VCR.Runtime.Application
 
         public bool IsStarted =>
             _started;
+
+        // Distinguish a successful normal quit from a Stopped scene that
+        // nevertheless failed to save its configuration or release resources.
+        public bool LastShutdownSucceeded => _lastShutdownSucceeded;
+        public string LastShutdownError => _lastShutdownError;
 
         private async void Start()
         {
@@ -507,6 +514,8 @@ namespace VCR.Runtime.Application
             }
 
             _started = false;
+            _lastShutdownSucceeded = succeeded;
+            _lastShutdownError = error;
             Debug.Log("VCR shutdown: end at " +
                       stopwatch.ElapsedMilliseconds + " ms, success=" +
                       succeeded, this);
