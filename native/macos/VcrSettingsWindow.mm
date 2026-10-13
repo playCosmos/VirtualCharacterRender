@@ -77,6 +77,8 @@ namespace {
     const int button = (int)[sender tag];
     if (button >= 100 && button < 104) {
         selectCategory(button - 100);
+        // Keep the managed selection in sync with the native sidebar.
+        actions.push_back(button);
     } else {
         actions.push_back(button);
     }
