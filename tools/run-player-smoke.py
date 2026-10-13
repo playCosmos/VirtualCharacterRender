@@ -22,6 +22,55 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
+    """Time the real subprocess exit from the Unity wantsToQuit marker.
+
+    This does not hide any window, alter shutdown sequencing, or force
+    termination except on the existing CI timeout. The marker comes from
+    the normal Unity Player.log; the read is best-effort until exit.
+    """
+    started = time.monotonic()
+    marker_at = None
+    offset = 0
+    carry = b""
+    marker = b"VCR exit: quit requested (t=0 ms)"
+    with output_log.open("w", encoding="utf-8") as output_stream:
+        process = subprocess.Popen(
+            command, cwd=cwd, stdout=output_stream,
+            stderr=subprocess.STDOUT)
+        try:
+            while process.poll() is None:
+                if marker_at is None and logfile.exists():
+                    try:
+                        with logfile.open("rb") as source:
+                            source.seek(offset)
+                            chunk = source.read()
+                            offset = source.tell()
+                        if chunk:
+                            carry = (carry + chunk)[-512:]
+                            if marker in carry:
+                                marker_at = time.monotonic()
+                    except OSError:
+                        # Windows may briefly hold the Unity log exclusively.
+                        pass
+                if time.monotonic() - started > timeout:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                time.sleep(0.05)
+            return_code = process.returncode
+        except BaseException:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            raise
+    finished = time.monotonic()
+    return (
+        return_code,
+        round((finished - started) * 1000, 1),
+        round((finished - marker_at) * 1000, 1)
+        if marker_at is not None else None,
+    )
+
+
 def execute(args):
     archive = Path(args.archive).resolve()
     digest_file = archive.with_suffix(".sha256")
@@ -94,30 +143,19 @@ def execute(args):
             "--vcr-smoke-report=" + str(result_path),
         ]
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
-        with runnerlog.open("w", encoding="utf-8") as output_log:
-            started_at = time.monotonic()
-            try:
-                completed = subprocess.run(
-                    command,
-                    cwd=unpacked,
-                    stdout=output_log,
-                    stderr=subprocess.STDOUT,
-                    timeout=100,
-                    check=False,
-                )
-                summary["exitCode"] = completed.returncode
-            except subprocess.TimeoutExpired as exception:
-                summary["exitCode"] = None
-                raise RuntimeError("Player did not exit within 100 seconds") from exception
-            finally:
-                # End-to-end subprocess lifetime is a useful CI baseline,
-                # but includes startup and does not prove GUI quit latency.
-                summary["playerProcessLifetimeMs"] = round(
-                    (time.monotonic() - started_at) * 1000, 1)
-                print(
-                    "Player process lifetime (startup + shutdown): " +
-                    str(summary["playerProcessLifetimeMs"]) + " ms",
-                    flush=True)
+        try:
+            code, lifetime_ms, exit_ms = run_player_with_exit_trace(
+                command, unpacked, logfile, runnerlog, timeout=100)
+            summary["exitCode"] = code
+            summary["playerProcessLifetimeMs"] = lifetime_ms
+            summary["quitToProcessExitMs"] = exit_ms
+            print("Player process lifetime (startup + shutdown): " +
+                  str(lifetime_ms) + " ms", flush=True)
+            print("Quit marker to process exit (best-effort): " +
+                  str(exit_ms) + " ms", flush=True)
+        except subprocess.TimeoutExpired as exception:
+            summary["exitCode"] = None
+            raise RuntimeError("Player did not exit within 100 seconds") from exception
 
         if not result_path.is_file():
             raise RuntimeError("Player did not write its runtime smoke evidence")
@@ -126,6 +164,13 @@ def execute(args):
         for field in ("started", "sceneReady", "noCharacter", "stopped", "passed"):
             if evidence.get(field) is not True:
                 raise RuntimeError("Player did not confirm " + field + ": " + str(evidence.get("error")))
+        # Prevent regressions to the former smoke test which called
+        # bootstrap.Shutdown() before Application.Quit().
+        managed_ms = evidence.get("quitManagedMilliseconds")
+        if (not isinstance(managed_ms, int) or isinstance(managed_ms, bool)
+                or managed_ms < 0):
+            raise RuntimeError("Normal Unity quit cleanup evidence missing")
+        summary["quitManagedMilliseconds"] = managed_ms
         if evidence.get("suite") != "player-startup-shutdown":
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
