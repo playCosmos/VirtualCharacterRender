@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Kirurobo;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -211,6 +212,13 @@ namespace VCR.Runtime.Output.Unity
             }
         }
 
+        // UniWinC buffers requested styles before the native window exists.
+        // A default false topmost value is NOT proof of successful attachment.
+        [DllImport("LibUniWinC", EntryPoint = "IsActive",
+            CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsNativeWindowAttached();
+
         private void ApplyNativeSettings()
         {
             // Main rendering window is always a normal OS window. Never
@@ -220,6 +228,11 @@ namespace VCR.Runtime.Output.Unity
             _controller.isTransparent = transparent;
             _controller.isClickThrough = clickThrough;
             _controller.isTopmost = false;
+
+            // Do not signal Active until UniWinC has attached the actual
+            // desktop window. Keep retrying (with the existing timeout).
+            if (!IsNativeWindowAttached())
+                return;
 
             var topmostApplied =
                 !_controller.isTopmost;
