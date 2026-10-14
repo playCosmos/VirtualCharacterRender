@@ -201,7 +201,7 @@ def execute(args):
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
             raise RuntimeError("Player Unity version mismatch")
-        if args.platform == "windows" and evidence.get("platform") != "WindowsPlayer":
+        if args.platform.startswith("windows") and evidence.get("platform") != "WindowsPlayer":
             raise RuntimeError("Expected a native Windows Player")
         if args.platform == "macos" and evidence.get("platform") != "OSXPlayer":
             raise RuntimeError("Expected a native macOS Player")
@@ -227,7 +227,7 @@ def execute(args):
 
 if __name__ == "__main__":
     cli = argparse.ArgumentParser()
-    cli.add_argument("--platform", choices=("windows", "macos"), required=True)
+    cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos"), required=True)
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
     cli.add_argument("--output", required=True)
