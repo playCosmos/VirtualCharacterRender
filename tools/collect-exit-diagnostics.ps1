@@ -81,7 +81,7 @@ function Read-VcrLog {
     param([bool]$AfterExit = $false)
     if (-not [IO.File]::Exists($log)) { return }
     try {
-        $stream = New-Object IO.FileStream($log, [IO.FileMode]::Open,
+        $stream = [IO.File]::Open($log, [IO.FileMode]::Open,
             [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
         try {
             if ($stream.Length -lt $script:offset) {
@@ -89,7 +89,7 @@ function Read-VcrLog {
                 $script:carry = ''
             }
             [void]$stream.Seek($script:offset, [IO.SeekOrigin]::Begin)
-            $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::UTF8, $true)
+            $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
             $incoming = $reader.ReadToEnd()
             $script:offset = $stream.Position
             # Do not dispose the reader separately: it owns the same stream.
