@@ -225,7 +225,44 @@ def execute(args):
     return 0 if summary["passed"] else 1
 
 
+
+def self_test():
+    """Prove a fast natural exit and a slow forced CI timeout both keep evidence."""
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as dirname:
+        root = Path(dirname)
+        stub = root / "fake-player.py"
+        stub.write_text(
+            "import pathlib, sys, time\n"
+            "log = pathlib.Path(sys.argv[sys.argv.index('-logFile') + 1])\n"
+            "log.write_text('VCR exit: quit requested (t=0 ms)\\n')\n"
+            "if '--hang' in sys.argv: time.sleep(5)\n"
+            "else: log.write_text(log.read_text() + "
+            "'VCR exit: OnApplicationQuit finished at 7 ms\\n')\n",
+            encoding="utf-8",
+        )
+        command = [sys.executable, str(stub), "-logFile", str(root / "fast.log")]
+        code, lifetime, quit_ms = run_player_with_exit_trace(
+            command, root, root / "fast.log", root / "fast.out", timeout=4)
+        assert code == 0 and lifetime >= 0 and quit_ms is not None
+
+        log = root / "hung.log"
+        command = [sys.executable, str(stub), "-logFile", str(log), "--hang"]
+        try:
+            run_player_with_exit_trace(
+                command, root, log, root / "hung.out", timeout=0.75)
+            raise AssertionError("Expected CI timeout with preserved evidence")
+        except subprocess.TimeoutExpired as exception:
+            assert exception.player_process_lifetime_ms >= 700
+            assert exception.quit_marker_observed is True
+            assert exception.quit_to_timeout_ms is not None
+    print("Native Player smoke exit timer self-test PASS")
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        self_test()
+        sys.exit(0)
     cli = argparse.ArgumentParser()
     cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos"), required=True)
     cli.add_argument("--archive", required=True)
