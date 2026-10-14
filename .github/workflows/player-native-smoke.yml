@@ -46,6 +46,10 @@ jobs:
             unityTarget: StandaloneWindows64
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
             outputFolder: Windows
+          - platform: windows-nodebug
+            unityTarget: StandaloneWindows64
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsWithoutDebuggingFromMenu
+            outputFolder: WindowsNoDebug
           - platform: macos
             unityTarget: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
@@ -103,7 +107,7 @@ jobs:
           sha256sum --check "$RUNNER_TEMP/project-inputs.sha256"
           folder="Builds/Alpha/0.0.0-alpha.0/$OUTPUT_FOLDER"
           test -d "$folder"
-          if [[ "$PLAYER_PLATFORM" == windows ]]; then
+          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
             test -s "$folder/VirtualCharacterRender.exe"
             test -d "$folder/VirtualCharacterRender_Data"
           else
@@ -132,6 +136,8 @@ jobs:
       matrix:
         include:
           - platform: windows
+            runner: windows-latest
+          - platform: windows-nodebug
             runner: windows-latest
           - platform: macos
             runner: macos-15
