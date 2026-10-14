@@ -34,33 +34,49 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
     offset = 0
     carry = b""
     marker = b"VCR exit: quit requested (t=0 ms)"
+    def drain_marker():
+        nonlocal marker_at, offset, carry
+        if marker_at is not None or not logfile.exists():
+            return
+        try:
+            with logfile.open("rb") as source:
+                source.seek(offset)
+                chunk = source.read()
+                offset = source.tell()
+            if chunk:
+                combined = carry + chunk
+                if marker in combined:
+                    marker_at = time.monotonic()
+                carry = combined[-(len(marker) - 1):]
+        except OSError:
+            # Unity log is best-effort while it is held by another process.
+            pass
+
     with output_log.open("w", encoding="utf-8") as output_stream:
         process = subprocess.Popen(
             command, cwd=cwd, stdout=output_stream,
             stderr=subprocess.STDOUT)
         try:
             while process.poll() is None:
-                if marker_at is None and logfile.exists():
-                    try:
-                        with logfile.open("rb") as source:
-                            source.seek(offset)
-                            chunk = source.read()
-                            offset = source.tell()
-                        if chunk:
-                            combined = carry + chunk
-                            if marker in combined:
-                                marker_at = time.monotonic()
-                            carry = combined[-(len(marker) - 1):]
-                    except OSError:
-                        # Windows may briefly hold the Unity log exclusively.
-                        pass
+                drain_marker()
                 if time.monotonic() - started > timeout:
                     raise subprocess.TimeoutExpired(command, timeout)
                 time.sleep(0.05)
             return_code = process.returncode
-        except BaseException:
+            # Do not lose buffered quit markers from fast processes.
+            drain_marker()
+        except BaseException as exception:
+            drain_marker()
+            elapsed = round((time.monotonic() - started) * 1000, 1)
+            # These durations describe the process BEFORE timeout/kill. They
+            # are not a successful quit-to-process-exit measurement.
+            exception.player_process_lifetime_ms = elapsed
+            exception.quit_to_timeout_ms = (
+                round((time.monotonic() - marker_at) * 1000, 1)
+                if marker_at is not None else None)
+            exception.quit_marker_observed = marker_at is not None
             if process.poll() is None:
-                process.kill()
+                process.kill()  # CI-only bound, never the interactive observer.
             process.wait()
             raise
     finished = time.monotonic()
@@ -156,7 +172,16 @@ def execute(args):
                   str(exit_ms) + " ms", flush=True)
         except subprocess.TimeoutExpired as exception:
             summary["exitCode"] = None
-            raise RuntimeError("Player did not exit within 100 seconds") from exception
+            summary["timedOut"] = True
+            summary["playerProcessLifetimeMs"] = getattr(
+                exception, "player_process_lifetime_ms", 100000)
+            summary["quitToTimeoutMs"] = getattr(
+                exception, "quit_to_timeout_ms", None)
+            summary["quitMarkerObserved"] = getattr(
+                exception, "quit_marker_observed", False)
+            summary["quitToProcessExitMs"] = None
+            raise RuntimeError("Player did not exit within 100 seconds; " +
+                               "timing evidence retained") from exception
 
         if not result_path.is_file():
             raise RuntimeError("Player did not write its runtime smoke evidence")
