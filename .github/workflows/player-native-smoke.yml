@@ -113,6 +113,11 @@ jobs:
           else
             test -d "$folder/VirtualCharacterRender.app/Contents/MacOS"
           fi
+          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
+            # Bundle a zero-install real-PC trace launcher with the ZIP.
+            # This is a development artifact, NOT a tag/GitHub Release.
+            cp tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1 "$folder/"
+          fi
           mkdir -p player-artifacts
           target="$GITHUB_WORKSPACE/player-artifacts/$PLAYER_PLATFORM.zip"
           (cd "$folder" && zip -q -r -y "$target" .)
