@@ -95,3 +95,55 @@ Repeat unloaded/idle, loaded VRM, active webcam, and Settings-open cases. This
 tool **only observes** the process and OS windows. It never hides a window or
 intentionally short-circuits application cleanup. Source edits and tests are
 development-only; no GitHub Release or version tag is required.
+
+## Windows real-PC evidence — no additional software required
+
+Both Windows native smoke ZIPs now include two scripts alongside the Player:
+
+- `start-exit-diagnostics.cmd` — double-click to launch the GUI Player
+  with logging, then exit normally from the program/window control.
+- `collect-exit-diagnostics.ps1` — built-in Windows PowerShell 5.1+ collector.
+  Does not need Python, an external package, administrator rights, or
+  a network service. The optional first argument to the CMD file is an
+  absolute path to a different `VirtualCharacterRender.exe`.
+
+The collector launches the **actual visible GUI** using
+`-logFile <absolute path>`, records the exit request marker, normal
+`OnApplicationQuit` completion, final managed quit callback, process lifetime,
+and the moment that its visible Unity/Settings windows disappear. Windows
+process termination is observed by `HasExited`, not inferred from a log line.
+It captures GPU driver/OS information and matching local Application Error/
+Windows Error Reporting events. It never calls ShowWindow to hide a window,
+kills the Player, or bypasses native cleanup.
+
+Each session produces `exit-diagnosis.json`, `Player.log`, extracted
+`shutdown-events.txt`, `system-summary.txt` and optional
+`application-errors.txt`. The generated ZIP is saved under:
+
+```text
+%LOCALAPPDATA%\VirtualCharacterRender\ExitDiagnostics\exit-diagnostics-<session>.zip
+```
+
+**The ZIP remains on the user's machine and is never uploaded
+automatically.** Review it before sharing, since Player.log and crash
+reports can include paths, model filenames, or machine information. If the
+application does not exit within 180 seconds, the collector records a timeout
+and retains the evidence but **does not kill the process**.
+
+Repeat at least three scenarios: (1) cold startup with no character/tracking,
+(2) VRM loaded, (3) MediaPipe webcam/tracking active with native Settings open.
+The comparison establishes which environment causes the delay.
+
+## Windows native teardown A/B validation
+
+The native CI matrix additionally builds `windows-nodebug` via
+`BuildOptions.None`: same source/scene, but no
+`BuildOptions.Development` or `BuildOptions.AllowDebugging`.
+It runs the same real `Application.Quit` native smoke on a Windows runner.
+Compare `quitToProcessExitMs` for `windows` and `windows-nodebug`
+inside their respective `runner-evidence.json` files.
+
+This is a diagnostic control to test whether debugger/PlayerConnection
+build flags materially affect Windows process termination. It is **not a
+replacement for testing the interactive Player on the actual PC**, and it
+does not change the existing alpha release packaging or create a release.
