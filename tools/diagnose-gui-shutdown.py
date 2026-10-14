@@ -12,6 +12,8 @@ import subprocess
 import sys
 import time
 import uuid
+import zipfile
+import platform
 
 QUIT = b"VCR exit: quit requested (t=0 ms)"
 MANAGED_END = b"VCR exit: OnApplicationQuit finished at "
@@ -50,6 +52,7 @@ def windows_visible_windows(pid):
 
 
 def observe(executable, args, output, limit_seconds=180, script_first=False):
+    output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     log = output / "Player.log"
     result = output / "exit-diagnosis.json"
@@ -59,10 +62,39 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
                if script_first else
                [str(executable), "-logFile", str(log), *args])
     started = time.monotonic()
-    events = {}
+    events = {
+        "platform": platform.platform(),
+        "diagnosticVersion": 2,
+        "pollIntervalMs": 50,
+    }
     processed = 0
     tail = b""
     timeouts = False
+
+    def read_player_log(after_exit=False):
+        nonlocal processed, tail
+        if not log.exists():
+            return
+        try:
+            with log.open("rb") as stream:
+                stream.seek(processed)
+                incoming = stream.read()
+                processed = stream.tell()
+        except OSError:
+            return
+        if not incoming:
+            return
+        combined = tail + incoming
+        now_ms = round((time.monotonic() - started) * 1000)
+        if "quitRequestedAtMs" not in events and QUIT in combined:
+            events["quitRequestedAtMs"] = now_ms
+            events["quitMarkerObservedAfterExit"] = after_exit
+        if "managedQuitFinishedAtMs" not in events and MANAGED_END in combined:
+            events["managedQuitFinishedAtMs"] = now_ms
+        if "lateManagedQuitAtMs" not in events and LATE_MANAGED_END in combined:
+            events["lateManagedQuitAtMs"] = now_ms
+        tail = combined[-(max(len(QUIT), len(MANAGED_END),
+                              len(LATE_MANAGED_END)) - 1):]
     with (output / "process-stdout.log").open("wb") as out:
         process = subprocess.Popen(command, stdout=out, stderr=subprocess.STDOUT,
                                    cwd=executable.parent)
@@ -70,24 +102,7 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
         last_visible = None
         while process.poll() is None:
             now = time.monotonic()
-            if log.exists():
-                try:
-                    with log.open("rb") as stream:
-                        stream.seek(processed)
-                        incoming = stream.read()
-                        processed = stream.tell()
-                    if incoming:
-                        combined = tail + incoming
-                        if "quitRequestedAtMs" not in events and QUIT in combined:
-                            events["quitRequestedAtMs"] = round((now - started) * 1000)
-                        if "managedQuitFinishedAtMs" not in events and MANAGED_END in combined:
-                            events["managedQuitFinishedAtMs"] = round((now - started) * 1000)
-                        if "lateManagedQuitAtMs" not in events and LATE_MANAGED_END in combined:
-                            events["lateManagedQuitAtMs"] = round((now - started) * 1000)
-                        tail = combined[-(max(len(QUIT), len(MANAGED_END),
-                                              len(LATE_MANAGED_END)) - 1):]
-                except OSError:
-                    pass
+            read_player_log()
             try:
                 windows = windows_visible_windows(process.pid)
                 if windows is not None:
@@ -103,6 +118,10 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
                 break  # Do not kill a still-running Player just to collect evidence.
             time.sleep(0.05)
 
+    # A Player can write its complete quit log and terminate before the first
+    # poll. Always drain after exit; report the marker as late-observed rather
+    # than pretending a precise quit timestamp was sampled while alive.
+    read_player_log(after_exit=process.poll() is not None)
     finished = time.monotonic()
     events["processLifetimeMs"] = round((finished - started) * 1000)
     events["processExited"] = process.poll() is not None
@@ -110,8 +129,12 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
     events["timedOut"] = timeouts
     if "quitRequestedAtMs" in events:
         if events["processExited"]:
-            events["quitToProcessExitMs"] = (events["processLifetimeMs"] -
-                                               events["quitRequestedAtMs"])
+            if not events.get("quitMarkerObservedAfterExit"):
+                events["quitToProcessExitMs"] = (
+                    events["processLifetimeMs"] - events["quitRequestedAtMs"])
+            else:
+                events["quitToProcessExitMs"] = None
+                events["quitToProcessExitLowerBoundMs"] = 0
         if "managedQuitFinishedAtMs" in events:
             events["quitToManagedFinishMs"] = (events["managedQuitFinishedAtMs"] -
                                                  events["quitRequestedAtMs"])
@@ -121,9 +144,33 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
         if "windowsGoneAtMs" in events:
             events["quitToWindowsGoneMs"] = (events["windowsGoneAtMs"] -
                                               events["quitRequestedAtMs"])
+    # Standalone Windows users can upload exactly one local evidence ZIP.
+    # Never upload or transmit diagnostics automatically; paths, usernames,
+    # model filenames, and native logs may contain private information.
+    analysis = output / "shutdown-phases.txt"
+    if log.exists():
+        try:
+            from importlib.util import module_from_spec, spec_from_file_location
+            helper = Path(__file__).with_name("analyze-shutdown-log.py")
+            if helper.exists():
+                spec = spec_from_file_location("vcr_shutdown_analyzer", helper)
+                module = module_from_spec(spec)
+                spec.loader.exec_module(module)
+                analysis.write_text(
+                    module.format_report(
+                        log.read_text(encoding="utf-8", errors="replace")),
+                    encoding="utf-8")
+        except Exception as exception:
+            analysis.write_text("Shutdown analysis unavailable: " +
+                                str(exception) + "\n", encoding="utf-8")
     result.write_text(json.dumps(events, indent=2) + "\n", encoding="utf-8")
+    bundle = output / "exit-evidence.zip"
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as package:
+        for item in (result, log, analysis, output / "process-stdout.log"):
+            if item.is_file():
+                package.write(item, item.name)
     print(json.dumps(events, ensure_ascii=False, indent=2))
-    print("Evidence:", output)
+    print("Diagnostic ZIP (review before sharing):", bundle)
     return 0 if events["processExited"] and "quitRequestedAtMs" in events else 1
 
 
@@ -147,6 +194,17 @@ def self_test():
         data = json.loads((output / "exit-diagnosis.json").read_text())
         assert data["quitToProcessExitMs"] >= 100
         assert data["quitToManagedFinishMs"] >= 100
+        assert (output / "exit-evidence.zip").is_file()
+        # A fast Player may terminate before our first poll. Final log
+        # draining must still detect its quit request and pass.
+        stub.write_text(code.replace("time.sleep(0.2);", "time.sleep(0);")
+                             .replace("time.sleep(0.2)", "time.sleep(0)"),
+                        encoding="utf-8")
+        rapid = root / "rapid"
+        assert observe(Path(sys.executable), [str(stub)], rapid, 5,
+                       script_first=True) == 0
+        assert json.loads((rapid / "exit-diagnosis.json").read_text())[
+            "processExited"] is True
     print("GUI shutdown diagnosis harness self-test PASS")
 
 
