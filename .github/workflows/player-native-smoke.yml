@@ -113,14 +113,18 @@ jobs:
           else
             test -d "$folder/VirtualCharacterRender.app/Contents/MacOS"
           fi
-          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
-            # Bundle a zero-install real-PC trace launcher with the ZIP.
-            # This is a development artifact, NOT a tag/GitHub Release.
-            cp tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1 "$folder/"
-          fi
           mkdir -p player-artifacts
           target="$GITHUB_WORKSPACE/player-artifacts/$PLAYER_PLATFORM.zip"
           (cd "$folder" && zip -q -r -y "$target" .)
+          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
+            # Unity's Docker builder may leave its output root-owned.
+            # Do not mutate/chown the built Player. Append the diagnostic
+            # scripts directly to the runner-owned ZIP at archive root.
+            # This is a development artifact, NOT a GitHub Release.
+            zip -q -j "$target" tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1
+            unzip -Z1 "$target" | grep -Fx 'start-exit-diagnostics.cmd'
+            unzip -Z1 "$target" | grep -Fx 'collect-exit-diagnostics.ps1'
+          fi
           test -s "$target"
           sha256sum "$target" > "player-artifacts/$PLAYER_PLATFORM.sha256"
           printf '%s\n' "$GITHUB_SHA" > "player-artifacts/$PLAYER_PLATFORM.source-sha"
