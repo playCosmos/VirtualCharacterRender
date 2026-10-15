@@ -91,7 +91,7 @@ function Record-ThreadSample {
 
 function Start-NativeDump {
     if (-not $NativeDump -or $dumpStarted) { return }
-    $dumpStarted = $true
+    $script:dumpStarted = $true
     $events.nativeDumpTriggeredAtMs = [long]$watch.ElapsedMilliseconds
     $worker = Join-Path $PSScriptRoot 'capture-exit-dump.ps1'
     if (-not (Test-Path -LiteralPath $worker)) {
