@@ -121,9 +121,10 @@ jobs:
             # Do not mutate/chown the built Player. Append the diagnostic
             # scripts directly to the runner-owned ZIP at archive root.
             # This is a development artifact, NOT a GitHub Release.
-            zip -q -j "$target" tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1
-            unzip -Z1 "$target" | grep -Fx 'start-exit-diagnostics.cmd'
-            unzip -Z1 "$target" | grep -Fx 'collect-exit-diagnostics.ps1'
+            zip -q -j "$target" tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1 tools/start-exit-diagnostics-native.cmd tools/capture-exit-dump.ps1
+            for required in start-exit-diagnostics.cmd collect-exit-diagnostics.ps1 start-exit-diagnostics-native.cmd capture-exit-dump.ps1; do
+              unzip -Z1 "$target" | grep -Fx "$required"
+            done
           fi
           test -s "$target"
           sha256sum "$target" > "player-artifacts/$PLAYER_PLATFORM.sha256"
