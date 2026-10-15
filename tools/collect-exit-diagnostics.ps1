@@ -44,7 +44,7 @@ $script:carry = ''
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $threadSamples = Join-Path $session 'thread-states.jsonl'
 $dumpDestination = Join-Path $session 'native-exit-threads.dmp'
-$dumpJob = $null
+$dumpTask = $null
 $dumpStarted = $false
 $sampled = @{}
 
@@ -93,22 +93,17 @@ function Start-NativeDump {
     if (-not $NativeDump -or $dumpStarted) { return }
     $script:dumpStarted = $true
     $events.nativeDumpTriggeredAtMs = [long]$watch.ElapsedMilliseconds
-    $worker = Join-Path $PSScriptRoot 'capture-exit-dump.ps1'
-    if (-not (Test-Path -LiteralPath $worker)) {
-        $events.nativeDumpStatus = 'worker-script-missing'
-        return
-    }
+    if ($events.nativeDumpStatus -ne 'ready') { return }
     try {
-        # A separate built-in PowerShell worker prevents MiniDumpWriteDump
-        # from pausing the observer's clock or changing Player shutdown order.
-        $script:dumpJob = Start-Job -ArgumentList $worker, $process.Id, $dumpDestination -ScriptBlock {
-            param($scriptFile, $targetId, $destination)
-            & $scriptFile -TargetPid $targetId -OutputPath $destination
-        } -ErrorAction Stop
+        # Native helper was compiled before launching the GUI Player.
+        # This CLR worker captures the stack while this PowerShell observer
+        # continues polling windows and timestamps without blocking.
+        $script:dumpTask = [VcrNativeShutdownDump]::CaptureAsync(
+            $process.Id, $dumpDestination)
         $events.nativeDumpStatus = 'running'
     } catch {
         $events.nativeDumpStatus = 'launch-failed'
-        $events.nativeDumpError = $_.Exception.Message
+        $events.nativeDumpError = $_.Exception.ToString()
     }
 }
 
@@ -191,11 +186,29 @@ function Read-VcrLog {
     }
 }
 
+if ($NativeDump) {
+    $helper = Join-Path $PSScriptRoot 'capture-exit-dump.ps1'
+    try {
+        if (-not (Test-Path -LiteralPath $helper)) {
+            throw "Native capture helper missing: $helper"
+        }
+        # Compilation is completed BEFORE process launch / timed quit path.
+        . $helper -LoadOnly
+        $events.nativeDumpStatus = 'ready'
+    } catch {
+        $events.nativeDumpStatus = 'preparation-failed'
+        $events.nativeDumpError = $_.Exception.ToString()
+    }
+}
+
 Write-Host "Starting GUI Player: $PlayerPath"
 Write-Host 'Close the Player normally; do not force quit or minimize it.'
 Write-Host "Evidence directory: $session"
 $process = $null
 try {
+    $launchedAt = Get-Date
+    $events.launchedAt = $launchedAt.ToString('o')
+    $watch.Restart()
     $process = Start-Process -FilePath $PlayerPath -WorkingDirectory (
         [IO.Path]::GetDirectoryName($PlayerPath)) -ArgumentList @(
         '-logFile', ('"' + $log + '"')) -PassThru
@@ -257,25 +270,16 @@ try {
 } catch {
     $events['observerError'] = $_.Exception.ToString()
 } finally {
-    if ($null -ne $dumpJob) {
-        # Wait only for the diagnostic worker, never for a hung Player.
-        # The PowerShell job does not control or terminate the target.
+    if ($null -ne $dumpTask) {
         try {
-            Wait-Job -Job $dumpJob -Timeout 15 -ErrorAction SilentlyContinue | Out-Null
-            $dumpWorkerErrors = @()
-            $messages = @($dumpJob | Receive-Job -ErrorVariable +dumpWorkerErrors -ErrorAction SilentlyContinue |
-                ForEach-Object { [string]$_ })
-            $detail = @($messages) + @($dumpWorkerErrors | ForEach-Object { [string]$_ })
-            if ($detail.Count -gt 0) {
-                $detail | Set-Content -Path (Join-Path $session 'native-dump-worker.txt') -Encoding UTF8
-                $events.nativeDumpWorkerMessageCount = $detail.Count
+            if (-not $dumpTask.Wait(15000)) {
+                $events.nativeDumpStatus = 'still-writing'
             }
-            $events.nativeDumpWorkerState = [string]$dumpJob.State
         } catch {
-            $events.nativeDumpError = $_.Exception.Message
-        }
-        if ($dumpJob.State -ne 'Running') {
-            Remove-Job -Job $dumpJob -Force -ErrorAction SilentlyContinue
+            $events.nativeDumpStatus = 'failed'
+            $events.nativeDumpError = $_.Exception.ToString()
+            $events.nativeDumpError |
+                Set-Content -Path (Join-Path $session 'native-dump-worker.txt') -Encoding UTF8
         }
     }
     if ($NativeDump -and $dumpStarted) {
@@ -283,12 +287,11 @@ try {
             (Get-Item -LiteralPath $dumpDestination).Length -gt 4096) {
             $events.nativeDumpStatus = 'captured'
             $events.nativeDumpBytes = (Get-Item -LiteralPath $dumpDestination).Length
-        } elseif ($null -ne $dumpJob -and $dumpJob.State -eq 'Running') {
-            $events.nativeDumpStatus = 'still-writing'
         } elseif ($events.nativeDumpStatus -eq 'running') {
             $events.nativeDumpStatus = 'failed'
         }
-    } elseif ($NativeDump -and -not $dumpStarted) {
+    } elseif ($NativeDump -and -not $dumpStarted -and
+              $events.nativeDumpStatus -eq 'ready') {
         $events.nativeDumpStatus = 'no-slow-quit-observed'
     }
     $events['observationEndedAt'] = (Get-Date).ToString('o')
