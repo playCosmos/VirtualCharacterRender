@@ -166,8 +166,8 @@ For an **explicitly requested native stack snapshot**, double-click
 `start-exit-diagnostics-native.cmd` in the Windows Player ZIP instead.
 This calls `collect-exit-diagnostics.ps1 -NativeDump -DumpDelaySeconds 5`,
 recording the same lightweight data. If the Player is still alive 5 seconds
-after its normal quit marker, a separate built-in PowerShell worker invokes
-Windows `dbghelp.dll!MiniDumpWriteDump` to capture one
+after its normal quit marker, the precompiled Windows helper runs
+`dbghelp.dll!MiniDumpWriteDump` on a CLR worker thread to capture one
 `native-exit-threads.dmp`. The dump uses `MiniDumpWithThreadInfo` and
 `MiniDumpWithUnloadedModules`, **not** full-process-memory flags.
 The observer continues polling while capture runs; the actual quit code
