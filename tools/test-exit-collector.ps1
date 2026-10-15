@@ -14,12 +14,13 @@ class ExitTestPlayer {
         if (i < 0 || i + 1 >= args.Length) return 2;
         string log = args[i + 1];
         File.WriteAllText(log, "VCR exit: quit requested (t=0 ms)\n");
-        Thread.Sleep(450);
+        bool slow = Environment.GetEnvironmentVariable("VCR_EXIT_TEST_SLOW") == "1";
+        Thread.Sleep(slow ? 3200 : 450);
         File.AppendAllText(log,
             "VCR shutdown: end at 6 ms, success=True\n" +
             "VCR exit: OnApplicationQuit finished at 7 ms\n" +
             "VCR exit: late managed quit callback at 9 ms\n");
-        Thread.Sleep(250);
+        Thread.Sleep(slow ? 2800 : 250);
         return 0;
     }
 }
@@ -60,7 +61,53 @@ class ExitTestPlayer {
     } finally {
         $zip.Dispose()
     }
-    Write-Host 'Real Windows exit collector end-to-end PASS'
+    # Reproduce a slow native exit and verify the optional user-consented
+    # minidump. This uses only Windows dbghelp.dll on the hosted runner.
+    $env:VCR_EXIT_TEST_SLOW = '1'
+    try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $collector `
+            -PlayerPath $exe -OutputRoot $output -TimeoutSeconds 15 `
+            -NativeDump -DumpDelaySeconds 1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Native dump collector exit code $LASTEXITCODE"
+        }
+    } finally {
+        Remove-Item Env:\VCR_EXIT_TEST_SLOW -ErrorAction SilentlyContinue
+    }
+    $sessions = @(Get-ChildItem -Path $output -Directory | Sort-Object Name)
+    if ($sessions.Count -ne 2) {
+        throw "Expected two evidence sessions, saw $($sessions.Count)"
+    }
+    $nativeFolder = $sessions[1].FullName
+    $nativeResult = Get-Content (Join-Path $nativeFolder 'exit-diagnosis.json') -Raw |
+        ConvertFrom-Json
+    $minidump = Join-Path $nativeFolder 'native-exit-threads.dmp'
+    if ($nativeResult.processExited -ne $true -or
+        $nativeResult.nativeDumpStatus -ne 'captured' -or
+        $nativeResult.nativeDumpBytes -le 4096 -or
+        $nativeResult.threadSampleCount -lt 1 -or
+        -not (Test-Path $minidump) -or
+        -not (Test-Path (Join-Path $nativeFolder 'thread-states.jsonl'))) {
+        throw ("Native dump evidence missing: " +
+            (Get-Content (Join-Path $nativeFolder 'exit-diagnosis.json') -Raw))
+    }
+    $magic = [IO.File]::ReadAllBytes($minidump)
+    if ([Text.Encoding]::ASCII.GetString($magic, 0, 4) -ne 'MDMP') {
+        throw 'Expected Windows minidump MDMP header'
+    }
+    $nativeArchive = @(Get-ChildItem -Path $output -Filter '*.zip' -File |
+        Sort-Object Name)[1]
+    $zip2 = [IO.Compression.ZipFile]::OpenRead($nativeArchive.FullName)
+    try {
+        $names2 = @($zip2.Entries | ForEach-Object { $_.FullName })
+        if ('native-exit-threads.dmp' -notin $names2 -or
+            'thread-states.jsonl' -notin $names2) {
+            throw "Missing native snapshot files in ZIP: $names2"
+        }
+    } finally {
+        $zip2.Dispose()
+    }
+    Write-Host 'Real Windows exit collector and opt-in native minidump PASS'
 } finally {
     if (Test-Path $root) {
         Remove-Item -Path $root -Force -Recurse -ErrorAction SilentlyContinue
