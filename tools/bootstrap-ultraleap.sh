@@ -8,10 +8,18 @@ DEST="$ROOT/unity/Packages/LocalPackages/com.ultraleap.tracking"
 if [[ ! -f "$DEST/package.json" ]]; then
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
-  git clone --quiet --filter=blob:none --no-checkout https://github.com/ultraleap/UnityPlugin.git "$TMP/repo"
+  # Ultraleap's upstream Git LFS budget is exhausted. Checkout the EXACT
+  # pinned source without smudging, then restore only byte-identical LFS
+  # objects whose SHA-256 and length match upstream pointers.
+  GIT_LFS_SKIP_SMUDGE=1 git clone --quiet --filter=blob:none --no-checkout https://github.com/ultraleap/UnityPlugin.git "$TMP/repo"
   git -C "$TMP/repo" sparse-checkout init --cone
   git -C "$TMP/repo" sparse-checkout set Packages/Tracking
-  git -C "$TMP/repo" checkout --quiet "$PIN"
+  GIT_LFS_SKIP_SMUDGE=1 git -C "$TMP/repo" checkout --quiet "$PIN"
+  if [[ "$(git -C "$TMP/repo" rev-parse HEAD)" != "$PIN" ]]; then
+    echo "Ultraleap immutable source commit mismatch" >&2
+    exit 1
+  fi
+  python3 "$ROOT/tools/restore-ultraleap-lfs.py" "$TMP/repo/Packages/Tracking"
   mkdir -p "$(dirname "$DEST")"
   cp -a "$TMP/repo/Packages/Tracking" "$DEST"
 fi
