@@ -5,7 +5,9 @@
 param(
     [string]$PlayerPath = (Join-Path $PSScriptRoot 'VirtualCharacterRender.exe'),
     [string]$OutputRoot = (Join-Path $env:LOCALAPPDATA 'VirtualCharacterRender\ExitDiagnostics'),
-    [ValidateRange(10,3600)][int]$TimeoutSeconds = 180
+    [ValidateRange(10,3600)][int]$TimeoutSeconds = 180,
+    [switch]$NativeDump,
+    [ValidateRange(1,60)][int]$DumpDelaySeconds = 5
 )
 $ErrorActionPreference = 'Stop'
 $PlayerPath = [IO.Path]::GetFullPath($PlayerPath)
@@ -32,10 +34,84 @@ $events = [ordered]@{
     windowsGoneAtMs = $null
     quitToProcessExitMs = $null
     quitMarkerObservedAfterExit = $false
+    nativeDumpRequested = [bool]$NativeDump
+    nativeDumpStatus = 'not-requested'
+    nativeDumpBytes = $null
+    threadSampleCount = 0
 }
 $script:offset = [long]0
 $script:carry = ''
 $watch = [Diagnostics.Stopwatch]::StartNew()
+$threadSamples = Join-Path $session 'thread-states.jsonl'
+$dumpDestination = Join-Path $session 'native-exit-threads.dmp'
+$dumpJob = $null
+$dumpStarted = $false
+$sampled = @{}
+
+function Record-ThreadSample {
+    param([int]$CheckpointSeconds)
+    # Observe all target process threads; no thread is suspended or modified.
+    try {
+        $target = Get-Process -Id $process.Id -ErrorAction Stop
+        $threads = @()
+        foreach ($thread in $target.Threads) {
+            try {
+                $state = [string]$thread.ThreadState
+                $wait = if ($state -eq 'Wait') { [string]$thread.WaitReason } else { $null }
+                $threads += [ordered]@{
+                    id = $thread.Id
+                    state = $state
+                    waitReason = $wait
+                    cpuMs = [math]::Round($thread.TotalProcessorTime.TotalMilliseconds, 1)
+                    startAddress = ('0x{0:X}' -f $thread.StartAddress.ToInt64())
+                }
+            } catch {
+                $threads += [ordered]@{ id = $thread.Id; observationError = $_.Exception.Message }
+            }
+        }
+        $snapshot = [ordered]@{
+            elapsedMs = [long]$watch.ElapsedMilliseconds
+            sinceQuitMs = [long]($watch.ElapsedMilliseconds - $events.quitRequestedAtMs)
+            checkpointSeconds = $CheckpointSeconds
+            totalProcessCpuMs = [math]::Round($target.TotalProcessorTime.TotalMilliseconds, 1)
+            processThreadCount = $threads.Count
+            threads = $threads
+        }
+        [IO.File]::AppendAllText($threadSamples,
+            (($snapshot | ConvertTo-Json -Depth 6 -Compress) + "`n"),
+            [Text.Encoding]::UTF8)
+        $events.threadSampleCount = [int]$events.threadSampleCount + 1
+    } catch {
+        [IO.File]::AppendAllText($threadSamples,
+            ('{"checkpointSeconds":' + $CheckpointSeconds +
+             ',"error":"' + $_.Exception.GetType().Name + '"}' + "`n"),
+            [Text.Encoding]::UTF8)
+    }
+}
+
+function Start-NativeDump {
+    if (-not $NativeDump -or $dumpStarted) { return }
+    $dumpStarted = $true
+    $events.nativeDumpTriggeredAtMs = [long]$watch.ElapsedMilliseconds
+    $worker = Join-Path $PSScriptRoot 'capture-exit-dump.ps1'
+    if (-not (Test-Path -LiteralPath $worker)) {
+        $events.nativeDumpStatus = 'worker-script-missing'
+        return
+    }
+    try {
+        # A separate built-in PowerShell worker prevents MiniDumpWriteDump
+        # from pausing the observer's clock or changing Player shutdown order.
+        $script:dumpJob = Start-Job -ArgumentList $worker, $process.Id, $dumpDestination -ScriptBlock {
+            param($scriptFile, $targetId, $destination)
+            & $scriptFile -TargetPid $targetId -OutputPath $destination
+        } -ErrorAction Stop
+        $events.nativeDumpStatus = 'running'
+    } catch {
+        $events.nativeDumpStatus = 'launch-failed'
+        $events.nativeDumpError = $_.Exception.Message
+    }
+}
+
 
 # All native calls below only OBSERVE window state.
 $nativeWindowCount = $null
@@ -127,6 +203,21 @@ try {
     $everVisible = $false
     while (-not $process.HasExited) {
         Read-VcrLog
+        if ($null -ne $events.quitRequestedAtMs -and
+            -not $events.quitMarkerObservedAfterExit) {
+            $elapsedSinceQuit = ($watch.ElapsedMilliseconds - $events.quitRequestedAtMs) / 1000.0
+            foreach ($checkpoint in @(1, 5, 10, 15)) {
+                if ($elapsedSinceQuit -ge $checkpoint -and
+                    -not $sampled.ContainsKey($checkpoint)) {
+                    $sampled[$checkpoint] = $true
+                    Record-ThreadSample -CheckpointSeconds $checkpoint
+                }
+            }
+            if ($NativeDump -and -not $dumpStarted -and
+                $elapsedSinceQuit -ge $DumpDelaySeconds) {
+                Start-NativeDump
+            }
+        }
         if ($null -ne $nativeWindowCount) {
             try {
                 $visible = & $nativeWindowCount $process.Id
@@ -166,6 +257,37 @@ try {
 } catch {
     $events['observerError'] = $_.Exception.ToString()
 } finally {
+    if ($null -ne $dumpJob) {
+        # Wait only for the diagnostic worker, never for a hung Player.
+        # The PowerShell job does not control or terminate the target.
+        try {
+            Wait-Job -Job $dumpJob -Timeout 15 -ErrorAction SilentlyContinue | Out-Null
+            $messages = @($dumpJob | Receive-Job -ErrorAction SilentlyContinue |
+                ForEach-Object { [string]$_ })
+            if ($messages.Count -gt 0) {
+                $messages | Set-Content -Path (Join-Path $session 'native-dump-worker.txt') -Encoding UTF8
+            }
+            $events.nativeDumpWorkerState = [string]$dumpJob.State
+        } catch {
+            $events.nativeDumpError = $_.Exception.Message
+        }
+        if ($dumpJob.State -ne 'Running') {
+            Remove-Job -Job $dumpJob -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($NativeDump -and $dumpStarted) {
+        if ((Test-Path -LiteralPath $dumpDestination) -and
+            (Get-Item -LiteralPath $dumpDestination).Length -gt 4096) {
+            $events.nativeDumpStatus = 'captured'
+            $events.nativeDumpBytes = (Get-Item -LiteralPath $dumpDestination).Length
+        } elseif ($null -ne $dumpJob -and $dumpJob.State -eq 'Running') {
+            $events.nativeDumpStatus = 'still-writing'
+        } elseif ($events.nativeDumpStatus -eq 'running') {
+            $events.nativeDumpStatus = 'failed'
+        }
+    } elseif ($NativeDump -and -not $dumpStarted) {
+        $events.nativeDumpStatus = 'no-slow-quit-observed'
+    }
     $events['observationEndedAt'] = (Get-Date).ToString('o')
     $events['observationDurationMs'] = [long]$watch.ElapsedMilliseconds
     if ($null -ne $events.quitRequestedAtMs -and $events.processExited -and
@@ -208,4 +330,8 @@ try {
     Compress-Archive -Path (Join-Path $session '*') -DestinationPath $zip -Force
     Write-Host "Exit diagnostics saved: $zip"
     Write-Host 'Review the ZIP for local paths and model names before sharing.'
+    if ($NativeDump) {
+        Write-Host 'The native .dmp may contain passwords, file paths and private process data.'
+        Write-Host 'Do NOT share it publicly; inspect/restrict sharing separately.'
+    }
 }
