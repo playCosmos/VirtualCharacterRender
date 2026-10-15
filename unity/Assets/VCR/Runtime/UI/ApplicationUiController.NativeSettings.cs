@@ -44,6 +44,10 @@ namespace VCR.Runtime.UI
             {
                 _nativeSettingsRunInBackgroundBeforeOpen =
                     UnityEngine.Application.runInBackground;
+                // Reopening a Settings window should reflect changes made in
+                // the main dashboard while it was closed. Never overwrite
+                // native text inputs while the user is editing them.
+                RefreshNativeSettingsValues();
             }
 
             // The Settings window has its own OS focus. Even when the user's
@@ -52,6 +56,29 @@ namespace VCR.Runtime.UI
             UnityEngine.Application.runInBackground = true;
             _nativeSettings.Open();
             _nativeSettingsWasVisible = _nativeSettings.IsVisible;
+        }
+
+        private void RefreshNativeSettingsValues()
+        {
+            if (_nativeSettings == null)
+                return;
+            if (sceneRuntime != null)
+            {
+                var current = sceneRuntime.CaptureRenderSettings();
+                _nativeSettings.SetText(10,
+                    current.RenderScale.ToString("0.###", CultureInfo.InvariantCulture));
+                _nativeSettings.SetText(11,
+                    current.TargetFrameRate.ToString(CultureInfo.InvariantCulture));
+            }
+            if (_characterPathInput != null)
+                _nativeSettings.SetText(12, _characterPathInput.text ?? "");
+        }
+
+        private void AddNativeFeedback(int category)
+        {
+            _nativeSettings.Add(category, 90 + category,
+                DesktopNativeSettingsWindow.ControlKind.Label,
+                "설정을 선택하거나 변경할 수 있습니다.");
         }
 
         private void AddNativeAction(int category, int id, string label, Action action)
@@ -76,6 +103,7 @@ namespace VCR.Runtime.UI
             AddNativeAction(0, 203, "백그라운드 실행 변경", ToggleSettingsRunInBackground);
             AddNativeAction(0, 204, "저장된 설정 불러오기", ShowProfileLoadUnavailable);
             AddNativeAction(0, 205, "현재 설정 저장", SaveConfiguration);
+            AddNativeFeedback(0);
 
             _nativeSettings.Add(1, 2, DesktopNativeSettingsWindow.ControlKind.Label,
                 "모델 경로 및 자동 복원");
@@ -87,13 +115,14 @@ namespace VCR.Runtime.UI
             AddNativeAction(1, 301, "파일 선택…", BrowseNativeCharacter);
             AddNativeAction(1, 302, "현재 모델 다시 불러오기", ReloadCharacter);
             AddNativeAction(1, 303, "모델 해제 및 자동 복원 해제", UnloadCharacter);
+            AddNativeFeedback(1);
 
             _nativeSettings.Add(3, 3, DesktopNativeSettingsWindow.ControlKind.Label,
                 "OS 창 표시 및 투명 합성");
-            AddNativeAction(3, 400, "항상 위 켜기 / 끄기", ToggleOverlayTopmost);
             AddNativeAction(3, 401, "투명 배경 켜기 / 끄기", ToggleOverlayTransparent);
             AddNativeAction(3, 402, "클릭 통과 켜기 / 끄기", ToggleOverlayClickThrough);
             AddNativeAction(3, 403, "출력 복구", RecoverOutput);
+            AddNativeFeedback(3);
 
             RebuildNativeTrackingSources();
             _nativeSettings.SelectCategory(0);
@@ -174,6 +203,7 @@ namespace VCR.Runtime.UI
             if (offset == 0)
                 _nativeSettings.Add(2, 5, DesktopNativeSettingsWindow.ControlKind.Label,
                     "설정 가능한 트래킹 장치 없음");
+            AddNativeFeedback(2);
         }
 
         private void ShowNativeTrackingDetails(string controlId)
@@ -194,6 +224,7 @@ namespace VCR.Runtime.UI
             }
             AddNativeAction(2, 6900, "설정 저장 및 적용", SaveNativeTrackingDetails);
             AddNativeAction(2, 6901, "장치 목록으로", RebuildNativeTrackingSources);
+            AddNativeFeedback(2);
             _nativeSettings.SelectCategory(2);
         }
 
@@ -255,11 +286,20 @@ namespace VCR.Runtime.UI
                     else if (_nativeSettingsActions.TryGetValue(id, out var action))
                     {
                         action?.Invoke();
+                        // Actions historically report to the dashboard only.
+                        // Also surface the result within the native window.
+                        var message = _lastActionMessage;
+                        if (string.IsNullOrWhiteSpace(message))
+                            message = "설정 작업이 처리되었습니다.";
+                        _nativeSettings.SetText(
+                            90 + _nativeSettings.SelectedCategory, message);
                     }
                 }
                 catch (Exception exception)
                 {
                     Debug.LogException(exception, this);
+                    _nativeSettings.SetText(90 + _nativeSettings.SelectedCategory,
+                        "작업 오류: " + exception.Message);
                 }
             }
 

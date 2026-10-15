@@ -109,7 +109,6 @@ namespace VCR.Runtime.UI
         private Button _apply720p60Button;
         private Button _apply1080p60Button;
         private Button _outputTransparentButton;
-        private Button _outputTopmostButton;
         private Button _outputClickThroughButton;
         private Text _motionPoseWeightLabel;
         private Slider _motionPoseWeightSlider;
@@ -298,7 +297,6 @@ namespace VCR.Runtime.UI
         private int _outputSummaryClientWidth;
         private int _outputSummaryClientHeight;
         private bool _outputSummaryTransparent;
-        private bool _outputSummaryTopmost;
         private bool _outputSummaryClickThrough;
         private bool _outputSummaryRenderAvailable;
         private int _outputSummaryRenderWidth;
@@ -406,8 +404,6 @@ namespace VCR.Runtime.UI
 
         private const string LastCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
         private bool _characterRestoreAttempted;
-        private const string AlwaysOnTopPreferenceKey = "VCR.Output.AlwaysOnTop.v1";
-        private bool _alwaysOnTopRestored;
 
         private void Awake()
         {
@@ -457,52 +453,7 @@ namespace VCR.Runtime.UI
             ResolveDependencies();
             RefreshAvailability();
             TryRestoreLastCharacter();
-            TryRestoreAlwaysOnTop();
             RefreshAll();
-        }
-
-        private void TryRestoreAlwaysOnTop()
-        {
-            if (_alwaysOnTopRestored ||
-                !PlayerPrefs.HasKey(AlwaysOnTopPreferenceKey) ||
-                sceneRuntime == null)
-            {
-                return;
-            }
-
-            if (!TryGetOverlayOutputForUiRefresh(
-                    out var present,
-                    out _,
-                    out var current,
-                    out _) ||
-                !present ||
-                !ApplicationUiActionPolicy.CanApplyOverlaySetting(
-                    true, sceneRuntime.State, true))
-            {
-                return;
-            }
-
-            var desired = PlayerPrefs.GetInt(
-                AlwaysOnTopPreferenceKey, current.Topmost ? 1 : 0) != 0;
-
-            if (desired == current.Topmost)
-            {
-                _alwaysOnTopRestored = true;
-                return;
-            }
-
-            try
-            {
-                sceneRuntime.ApplyOverlayOutput(new OverlayOutputSettings(
-                    current.Transparent, desired, current.ClickThrough));
-                _alwaysOnTopRestored = true;
-            }
-            catch (Exception exception)
-            {
-                _alwaysOnTopRestored = true;
-                _lastActionMessage =
-                    "Could not restore Always on Top: " + exception.Message;
-            }
         }
 
         private async void TryRestoreLastCharacter()
@@ -630,7 +581,6 @@ namespace VCR.Runtime.UI
             _apply720p60Button = null;
             _apply1080p60Button = null;
             _outputTransparentButton = null;
-            _outputTopmostButton = null;
             _outputClickThroughButton = null;
             _motionPoseWeightLabel = null;
             _motionPoseWeightSlider = null;
@@ -2037,15 +1987,6 @@ namespace VCR.Runtime.UI
             _outputTransparentButton.gameObject
                 .AddComponent<LayoutElement>()
                 .preferredWidth = 150f;
-
-            _outputTopmostButton =
-                CreateButton(
-                    "항상 위",
-                    _outputDashboardContent,
-                    ToggleOverlayTopmost);
-            _outputTopmostButton.gameObject
-                .AddComponent<LayoutElement>()
-                .preferredWidth = 135f;
 
             _outputClickThroughButton =
                 CreateButton(
@@ -5675,19 +5616,6 @@ namespace VCR.Runtime.UI
             ToggleOverlaySetting(
                 transparent:
                     true,
-                topmost:
-                    false,
-                clickThrough:
-                    false);
-        }
-
-        private void ToggleOverlayTopmost()
-        {
-            ToggleOverlaySetting(
-                transparent:
-                    false,
-                topmost:
-                    true,
                 clickThrough:
                     false);
         }
@@ -5697,15 +5625,12 @@ namespace VCR.Runtime.UI
             ToggleOverlaySetting(
                 transparent:
                     false,
-                topmost:
-                    false,
                 clickThrough:
                     true);
         }
 
         private void ToggleOverlaySetting(
             bool transparent,
-            bool topmost,
             bool clickThrough)
         {
             if (sceneRuntime == null)
@@ -5746,9 +5671,7 @@ namespace VCR.Runtime.UI
                     transparent
                         ? !current.Transparent
                         : current.Transparent,
-                    topmost
-                        ? !current.Topmost
-                        : current.Topmost,
+                    false,
                     clickThrough
                         ? !current.ClickThrough
                         : current.ClickThrough);
@@ -5757,15 +5680,6 @@ namespace VCR.Runtime.UI
             {
                 sceneRuntime.ApplyOverlayOutput(
                     next);
-                if (topmost)
-                {
-                    PlayerPrefs.SetInt(
-                        AlwaysOnTopPreferenceKey,
-                        next.Topmost ? 1 : 0);
-                    PlayerPrefs.Save();
-                    _alwaysOnTopRestored = true;
-                }
-
                 if (clickThrough &&
                     next.ClickThrough)
                 {
@@ -5775,7 +5689,7 @@ namespace VCR.Runtime.UI
                 else
                 {
                     _lastActionMessage =
-                        $"Overlay settings applied: transparent={next.Transparent}, topmost={next.Topmost}, click-through={next.ClickThrough}.";
+                        $"Overlay settings applied: transparent={next.Transparent}, click-through={next.ClickThrough}.";
                 }
             }
             catch (Exception exception)
@@ -6258,18 +6172,6 @@ namespace VCR.Runtime.UI
                                 : "Transparent: Off");
                 }
 
-                if (_outputTopmostButton != null)
-                {
-                    _outputTopmostButton.interactable =
-                        canApplyOverlay;
-                    SetButtonLabel(
-                        _outputTopmostButton,
-                        !outputReadable
-                            ? "Topmost: n/a"
-                            : outputSettings.Topmost
-                                ? "Topmost: On"
-                                : "Topmost: Off");
-                }
 
                 if (_outputClickThroughButton != null)
                 {
@@ -6798,9 +6700,6 @@ namespace VCR.Runtime.UI
                 false);
             SetActive(
                 _outputTransparentButton,
-                false);
-            SetActive(
-                _outputTopmostButton,
                 false);
             SetActive(
                 _outputClickThroughButton,
@@ -9025,12 +8924,6 @@ namespace VCR.Runtime.UI
                 settings.Transparent
                     ? "On"
                     : "Off");
-            builder.Append("\nAlways on top  ");
-            builder.Append(
-                hasAdapter &&
-                settings.Topmost
-                    ? "On"
-                    : "Off");
             builder.Append("\nClick-through  ");
             builder.Append(
                 hasAdapter &&
@@ -9097,8 +8990,6 @@ namespace VCR.Runtime.UI
                       status.ClientHeight &&
                   _outputSummaryTransparent ==
                       settings.Transparent &&
-                  _outputSummaryTopmost ==
-                      settings.Topmost &&
                   _outputSummaryClickThrough ==
                       settings.ClickThrough)) &&
                 _outputSummaryRenderAvailable ==
@@ -9141,9 +9032,6 @@ namespace VCR.Runtime.UI
             _outputSummaryTransparent =
                 hasAdapter &&
                 settings.Transparent;
-            _outputSummaryTopmost =
-                hasAdapter &&
-                settings.Topmost;
             _outputSummaryClickThrough =
                 hasAdapter &&
                 settings.ClickThrough;
