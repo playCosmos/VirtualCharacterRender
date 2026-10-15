@@ -262,10 +262,13 @@ try {
         # The PowerShell job does not control or terminate the target.
         try {
             Wait-Job -Job $dumpJob -Timeout 15 -ErrorAction SilentlyContinue | Out-Null
-            $messages = @($dumpJob | Receive-Job -ErrorAction SilentlyContinue |
+            $dumpWorkerErrors = @()
+            $messages = @($dumpJob | Receive-Job -ErrorVariable +dumpWorkerErrors -ErrorAction SilentlyContinue |
                 ForEach-Object { [string]$_ })
-            if ($messages.Count -gt 0) {
-                $messages | Set-Content -Path (Join-Path $session 'native-dump-worker.txt') -Encoding UTF8
+            $detail = @($messages) + @($dumpWorkerErrors | ForEach-Object { [string]$_ })
+            if ($detail.Count -gt 0) {
+                $detail | Set-Content -Path (Join-Path $session 'native-dump-worker.txt') -Encoding UTF8
+                $events.nativeDumpWorkerMessageCount = $detail.Count
             }
             $events.nativeDumpWorkerState = [string]$dumpJob.State
         } catch {
