@@ -29,6 +29,9 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
     termination except on the existing CI timeout. The marker comes from
     the normal Unity Player.log; the read is best-effort until exit.
     """
+    # Never attribute a marker from a previous failed/retried CI run to
+    # the newly launched subprocess. Windows sharing violations must FAIL.
+    logfile.unlink(missing_ok=True)
     started = time.monotonic()
     marker_at = None
     offset = 0
@@ -151,6 +154,8 @@ def execute(args):
                 raise RuntimeError("Windows .exe Player executable missing")
 
         summary["playerExecutableSha256"] = sha256(executable)
+        # Do not accept smoke evidence left behind by a prior job attempt.
+        result_path.unlink(missing_ok=True)
         command = [
             str(executable),
             "-batchmode",
@@ -242,9 +247,12 @@ def self_test():
             encoding="utf-8",
         )
         command = [sys.executable, str(stub), "-logFile", str(root / "fast.log")]
+        (root / "fast.log").write_text(
+            "VCR exit: quit requested (t=0 ms)\\nSTALE RUN\\n", encoding="utf-8")
         code, lifetime, quit_ms = run_player_with_exit_trace(
             command, root, root / "fast.log", root / "fast.out", timeout=4)
         assert code == 0 and lifetime >= 0 and quit_ms is not None
+        assert "STALE RUN" not in (root / "fast.log").read_text()
 
         log = root / "hung.log"
         command = [sys.executable, str(stub), "-logFile", str(log), "--hang"]
