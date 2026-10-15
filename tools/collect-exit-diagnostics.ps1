@@ -146,6 +146,19 @@ try {
         $process.Refresh()
     }
     Read-VcrLog -AfterExit ($process.HasExited)
+    # The last 100ms poll may miss the exact window-disappearance event
+    # because the process has already exited. This final read-only probe
+    # records that it is gone, without pretending to know an earlier time.
+    if ($everVisible -and $null -eq $events.windowsGoneAtMs -and
+        $null -ne $nativeWindowCount) {
+        try {
+            $visible = & $nativeWindowCount $process.Id
+            if ($visible -eq 0) {
+                $events.windowsGoneAtMs = [long]$watch.ElapsedMilliseconds
+                $events['windowsGoneObservedAfterExit'] = [bool]$process.HasExited
+            }
+        } catch { }
+    }
     $events.processExited = [bool]$process.HasExited
     if ($process.HasExited) {
         $events.exitCode = $process.ExitCode
