@@ -88,8 +88,13 @@ class ExitTestPlayer {
         $nativeResult.threadSampleCount -lt 1 -or
         -not (Test-Path $minidump) -or
         -not (Test-Path (Join-Path $nativeFolder 'thread-states.jsonl'))) {
+        $workerPath = Join-Path $nativeFolder 'native-dump-worker.txt'
+        $workerDetail = if (Test-Path $workerPath) {
+            Get-Content $workerPath -Raw
+        } else { 'No worker log recorded' }
         throw ("Native dump evidence missing: " +
-            (Get-Content (Join-Path $nativeFolder 'exit-diagnosis.json') -Raw))
+            (Get-Content (Join-Path $nativeFolder 'exit-diagnosis.json') -Raw) +
+            " worker: " + $workerDetail)
     }
     $magic = [IO.File]::ReadAllBytes($minidump)
     if ([Text.Encoding]::ASCII.GetString($magic, 0, 4) -ne 'MDMP') {
