@@ -147,3 +147,52 @@ This is a diagnostic control to test whether debugger/PlayerConnection
 build flags materially affect Windows process termination. It is **not a
 replacement for testing the interactive Player on the actual PC**, and it
 does not change the existing alpha release packaging or create a release.
+
+## Windows native shutdown stack capture (opt-in)
+
+The 2026-10-16 affected-PC evidence confirmed that runtime shutdown finishes
+within tens of milliseconds while the Windows Player remains open for roughly
+16.7 seconds. Text logs do not contain the native thread call stack, so they
+cannot establish whether Input System, PlayerConnection, DLL unloading,
+graphics, or a Unity worker owns that latency.
+
+For **lightweight** diagnostics, run `start-exit-diagnostics.cmd` as before.
+It now writes `thread-states.jsonl` at approximately 1, 5, 10 and 15
+seconds after the normal quit marker. For every thread, this includes thread
+ID, wait state/reason, CPU time and start address where available. It is
+observational; it never changes a thread state, hides a window, or kills Unity.
+
+For an **explicitly requested native stack snapshot**, double-click
+`start-exit-diagnostics-native.cmd` in the Windows Player ZIP instead.
+This calls `collect-exit-diagnostics.ps1 -NativeDump -DumpDelaySeconds 5`,
+recording the same lightweight data. If the Player is still alive 5 seconds
+after its normal quit marker, a separate built-in PowerShell worker invokes
+Windows `dbghelp.dll!MiniDumpWriteDump` to capture one
+`native-exit-threads.dmp`. The dump uses `MiniDumpWithThreadInfo` and
+`MiniDumpWithUnloadedModules`, **not** full-process-memory flags.
+The observer continues polling while capture runs; the actual quit code
+and window visibility are unchanged. The dump status and size are recorded
+in `exit-diagnosis.json`; absent/failed captures are reported explicitly,
+not mistaken for evidence of a fast shutdown.
+
+```powershell
+# Equivalent explicit command for an executable in another directory:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\collect-exit-diagnostics.ps1 -PlayerPath "C:\path\to\VirtualCharacterRender.exe" -NativeDump -DumpDelaySeconds 5
+```
+
+The minidump is added to the local ZIP only when successfully captured.
+**A minidump contains some process stack memory**, which may contain paths,
+identifiers, private configuration/model text, or credentials. Do not post
+the native ZIP in a public issue or attach it to a public pull request.
+Review it and transmit only through an approved private channel.
+Ordinary `Player.log` and thread-state metadata may also contain system
+paths and should be reviewed before sharing.
+
+The `.dmp` can be opened locally with Microsoft WinDbg. If symbols are
+available, `~* kb` lists every native thread stack; `lm` lists loaded
+modules. Compare the last steady waiting stack across slow-quit runs,
+along with `thread-states.jsonl`. A single stack snapshot is not proof
+of the exact duration of an individual native call, and unavailable
+third-party symbols may prevent function-level attribution. If the dump
+cannot be obtained, retain the timeout/error metadata and do not claim
+the root cause has been found.
