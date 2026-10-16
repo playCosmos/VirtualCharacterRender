@@ -6,10 +6,10 @@ Never patch source for normal app builds. Fails closed on upstream differences.
 """
 from pathlib import Path
 
-p = Path("unity/Packages/LocalPackages/com.ultraleap.tracking/Runtime/Scripts/Utils/HandTrackingHintManager.cs")
+p = Path("unity/Packages/LocalPackages/com.ultraleap.tracking/Core/Runtime/Scripts/Utils/HandTrackingHintManager.cs")
 if not p.is_file():
     matches = list(Path("unity/Packages/LocalPackages").glob(
-        "*/Runtime/Scripts/Utils/HandTrackingHintManager.cs"))
+        "*/Core/Runtime/Scripts/Utils/HandTrackingHintManager.cs"))
     if len(matches) != 1:
         raise SystemExit(f"Expected one pinned hint manager, found {len(matches)}: {matches}")
     p = matches[0]
