@@ -19,8 +19,8 @@ if "VCR_ULTRALEAP_LAZY_HINT_CONNECTION" in source:
     # The full application bootstrap now includes the isolated E fix.
     # E and A intentionally become equivalent at this source revision.
     required = (
-        "if (currentHints.Count != 0)\n                    SetupDeviceCallbacks();",
-        "if (hints.Length != 0)\n                    SetupDeviceCallbacks();",
+        "if (currentHints.Count != 0 && _leapController == null)\n                    SetupDeviceCallbacks();",
+        "if (hints.Length != 0 && _leapController == null)\n                    SetupDeviceCallbacks();",
         "if (hints.Length != 0 || _leapController != null)",
     )
     if not all(fragment in source for fragment in required):
