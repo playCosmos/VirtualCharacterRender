@@ -89,6 +89,9 @@ jobs:
       - name: Test native Player quit timer including timeout preservation
         run: python3 tools/run-player-smoke.py --self-test
 
+      - name: Verify lazy Ultraleap hints create no idle LeapC connection
+        run: python3 tools/test-ultraleap-lazy-hints.py
+
       - name: Verify Ultraleap LFS restoration rejects corrupt or incomplete assets
         run: python3 tools/restore-ultraleap-lfs.py --self-test
 
