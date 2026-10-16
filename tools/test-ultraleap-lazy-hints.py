@@ -65,11 +65,14 @@ def main():
         assert first.returncode == 0, first.stderr + first.stdout
         patched = target.read_text(encoding="utf-8")
         # Startup no longer creates an unused native controller.
-        assert "if (currentHints.Count != 0)\n                    SetupDeviceCallbacks();" in patched
+        assert "if (currentHints.Count != 0 && _leapController == null)\n                    SetupDeviceCallbacks();" in patched
         # Explicit nonempty hints still register native callbacks later.
-        assert "if (hints.Length != 0)\n                    SetupDeviceCallbacks();" in patched
+        assert "if (hints.Length != 0 && _leapController == null)\n                    SetupDeviceCallbacks();" in patched
         # Clearing a never-created hint set must not instantiate Controller.
         assert "if (hints.Length != 0 || _leapController != null)\n                    RequestHintsOnAllDevices(hints);" in patched
+        # No startup or runtime hint update may register duplicate callbacks.
+        assert patched.count("&& _leapController == null") == 2
+        assert patched.count("SetupDeviceCallbacks();") == 2
         assert patched.count("VCR_ULTRALEAP_LAZY_HINT_CONNECTION") == 1
 
         second = run_patch()
