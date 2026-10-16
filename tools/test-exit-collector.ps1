@@ -155,14 +155,23 @@ class ExitTestPlayer {
         if (-not $collectorProcess.WaitForExit(20000)) {
             throw 'Locked-partial collector timed out'
         }
-        if ($collectorProcess.ExitCode -ne 0) {
-            throw ("Locked-partial collector failed (exit $($collectorProcess.ExitCode)):" +
+        # Start-Process may return a Process wrapper with a null ExitCode even
+        # after WaitForExit. In that case verify the produced evidence instead.
+        $collectorProcess.Refresh()
+        $subprocessCode = $collectorProcess.ExitCode
+        if ($null -ne $subprocessCode -and $subprocessCode -ne 0) {
+            throw ("Locked-partial collector failed (exit $subprocessCode):" +
                 " stdout=" + (Get-Content $stdOutPath -Raw) +
                 " stderr=" + (Get-Content $stdErrPath -Raw))
         }
         $lockedArchives = @(Get-ChildItem -LiteralPath $lockedOutput -File -Filter '*.zip')
         if ($lockedArchives.Count -ne 1) {
             throw 'Expected one ZIP despite locked partial minidump'
+        }
+        $lockedData = Get-Content (Join-Path $lockedSessions[0].FullName 'exit-diagnosis.json') -Raw |
+            ConvertFrom-Json
+        if ($lockedData.processExited -ne $true -or $lockedData.exitCode -ne 0) {
+            throw "Locked-partial run did not exit normally: $($lockedData | ConvertTo-Json)"
         }
         $lockedZip = [IO.Compression.ZipFile]::OpenRead($lockedArchives[0].FullName)
         try {
