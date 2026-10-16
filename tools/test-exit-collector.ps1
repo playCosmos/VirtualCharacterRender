@@ -156,8 +156,9 @@ class ExitTestPlayer {
             throw 'Locked-partial collector timed out'
         }
         if ($collectorProcess.ExitCode -ne 0) {
-            throw ('Locked-partial collector failed: ' +
-                (Get-Content $stdErrPath -Raw))
+            throw ("Locked-partial collector failed (exit $($collectorProcess.ExitCode)):" +
+                " stdout=" + (Get-Content $stdOutPath -Raw) +
+                " stderr=" + (Get-Content $stdErrPath -Raw))
         }
         $lockedArchives = @(Get-ChildItem -LiteralPath $lockedOutput -File -Filter '*.zip')
         if ($lockedArchives.Count -ne 1) {
