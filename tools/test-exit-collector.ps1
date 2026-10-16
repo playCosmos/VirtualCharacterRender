@@ -44,6 +44,12 @@ class ExitTestPlayer {
         $null -eq $data.lateManagedQuitAtMs) {
         throw "Incomplete normal desktop evidence: $(Get-Content $dataFile -Raw)"
     }
+    if ($null -eq $data.processExitObservedAtMs -or
+        $data.quitToProcessExitMs -ne
+            ($data.processExitObservedAtMs - $data.quitRequestedAtMs) -or
+        $data.observationDurationMs -lt $data.processExitObservedAtMs) {
+        throw "Incorrect normal process-exit timing: $(Get-Content $dataFile -Raw)"
+    }
     if (-not (Test-Path (Join-Path $sessions[0].FullName 'Player.log'))) {
         throw 'Player.log not collected'
     }
@@ -96,6 +102,12 @@ class ExitTestPlayer {
             (Get-Content (Join-Path $nativeFolder 'exit-diagnosis.json') -Raw) +
             " worker: " + $workerDetail)
     }
+    if ($null -eq $nativeResult.processExitObservedAtMs -or
+        $nativeResult.quitToProcessExitMs -ne
+            ($nativeResult.processExitObservedAtMs - $nativeResult.quitRequestedAtMs) -or
+        $nativeResult.observationDurationMs -lt $nativeResult.processExitObservedAtMs) {
+        throw "Dump finalization corrupted quit timing: $($nativeResult | ConvertTo-Json)"
+    }
     $magic = [IO.File]::ReadAllBytes($minidump)
     if ([Text.Encoding]::ASCII.GetString($magic, 0, 4) -ne 'MDMP') {
         throw 'Expected Windows minidump MDMP header'
@@ -112,7 +124,65 @@ class ExitTestPlayer {
     } finally {
         $zip2.Dispose()
     }
-    Write-Host 'Real Windows exit collector and opt-in native minidump PASS'
+    # An unfinished native dump is held with FileShare.None. The evidence
+    # collector must succeed without trying to ZIP that live .partial file.
+    $lockedOutput = Join-Path $root 'locked-evidence'
+    $stdOutPath = Join-Path $root 'locked-collector-stdout.txt'
+    $stdErrPath = Join-Path $root 'locked-collector-stderr.txt'
+    $collectorArgs = '-NoProfile -ExecutionPolicy Bypass -File "' + $collector +
+        '" -PlayerPath "' + $exe + '" -OutputRoot "' + $lockedOutput +
+        '" -TimeoutSeconds 15'
+    $collectorProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList $collectorArgs `
+        -PassThru -RedirectStandardOutput $stdOutPath -RedirectStandardError $stdErrPath
+    $partialHandle = $null
+    try {
+        $deadline = [Diagnostics.Stopwatch]::StartNew()
+        $lockedSessions = @()
+        while ($deadline.Elapsed.TotalSeconds -lt 10) {
+            $lockedSessions = @(Get-ChildItem -LiteralPath $lockedOutput -Directory `
+                -ErrorAction SilentlyContinue)
+            if ($lockedSessions.Count -eq 1 -or $collectorProcess.HasExited) { break }
+            Start-Sleep -Milliseconds 20
+        }
+        if ($lockedSessions.Count -ne 1) {
+            throw 'Locked-partial collector did not create an evidence directory'
+        }
+        $partialPath = Join-Path $lockedSessions[0].FullName 'native-exit-threads.dmp.partial'
+        $partialHandle = [IO.File]::Open($partialPath, [IO.FileMode]::CreateNew,
+            [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $partialHandle.WriteByte(42)
+        $partialHandle.Flush()
+        if (-not $collectorProcess.WaitForExit(20000)) {
+            throw 'Locked-partial collector timed out'
+        }
+        if ($collectorProcess.ExitCode -ne 0) {
+            throw ('Locked-partial collector failed: ' +
+                (Get-Content $stdErrPath -Raw))
+        }
+        $lockedArchives = @(Get-ChildItem -LiteralPath $lockedOutput -File -Filter '*.zip')
+        if ($lockedArchives.Count -ne 1) {
+            throw 'Expected one ZIP despite locked partial minidump'
+        }
+        $lockedZip = [IO.Compression.ZipFile]::OpenRead($lockedArchives[0].FullName)
+        try {
+            $lockedNames = @($lockedZip.Entries | ForEach-Object { $_.FullName })
+            if ('native-exit-threads.dmp.partial' -in $lockedNames -or
+                'exit-diagnosis.json' -notin $lockedNames -or
+                'Player.log' -notin $lockedNames) {
+                throw "Incomplete ZIP or partial dump archived: $lockedNames"
+            }
+        } finally {
+            $lockedZip.Dispose()
+        }
+    } finally {
+        if ($null -ne $partialHandle) { $partialHandle.Dispose() }
+        if (-not $collectorProcess.HasExited) {
+            $collectorProcess.Kill()
+            $collectorProcess.WaitForExit()
+        }
+        $collectorProcess.Dispose()
+    }
+    Write-Host 'Real Windows exit collector, minidump and locked-partial ZIP PASS'
 } finally {
     if (Test-Path $root) {
         Remove-Item -Path $root -Force -Recurse -ErrorAction SilentlyContinue
