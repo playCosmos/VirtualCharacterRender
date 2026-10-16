@@ -27,6 +27,7 @@ $events = [ordered]@{
     executable = $PlayerPath
     timedOut = $false
     processExited = $false
+    processExitObservedAtMs = $null
     exitCode = $null
     quitRequestedAtMs = $null
     managedQuitFinishedAtMs = $null
@@ -249,7 +250,14 @@ try {
         Start-Sleep -Milliseconds 100
         $process.Refresh()
     }
-    Read-VcrLog -AfterExit ($process.HasExited)
+    # Record PID exit as soon as the poll completes. Subsequent log reads,
+    # window probes and the optional dump worker must not inflate this time.
+    $process.Refresh()
+    $exitObserved = [bool]$process.HasExited
+    if ($exitObserved) {
+        $events.processExitObservedAtMs = [long]$watch.ElapsedMilliseconds
+    }
+    Read-VcrLog -AfterExit $exitObserved
     # The last 100ms poll may miss the exact window-disappearance event
     # because the process has already exited. This final read-only probe
     # records that it is gone, without pretending to know an earlier time.
@@ -263,8 +271,8 @@ try {
             }
         } catch { }
     }
-    $events.processExited = [bool]$process.HasExited
-    if ($process.HasExited) {
+    $events.processExited = $exitObserved
+    if ($exitObserved) {
         $events.exitCode = $process.ExitCode
     }
 } catch {
@@ -296,10 +304,13 @@ try {
     }
     $events['observationEndedAt'] = (Get-Date).ToString('o')
     $events['observationDurationMs'] = [long]$watch.ElapsedMilliseconds
-    if ($null -ne $events.quitRequestedAtMs -and $events.processExited -and
+    # Observation duration also includes dump finalization. Never use it
+    # as the process-exit timestamp, especially when the dump remains busy.
+    if ($null -ne $events.quitRequestedAtMs -and
+        $null -ne $events.processExitObservedAtMs -and
         -not $events.quitMarkerObservedAfterExit) {
         $events.quitToProcessExitMs = (
-            $events.observationDurationMs - $events.quitRequestedAtMs)
+            $events.processExitObservedAtMs - $events.quitRequestedAtMs)
     }
     if ([IO.File]::Exists($log)) {
         Select-String -Path $log -Pattern 'VCR exit:', 'VCR shutdown:', 'VCR shutdown step',
@@ -333,7 +344,15 @@ try {
     } catch { }
 
     $zip = Join-Path $OutputRoot ("exit-diagnostics-" + $id + ".zip")
-    Compress-Archive -Path (Join-Path $session '*') -DestinationPath $zip -Force
+    # The native dump worker may still hold .partial exclusively after the
+    # bounded wait. Archive only completed files; never open a live dump.
+    $archiveFiles = @(Get-ChildItem -LiteralPath $session -File |
+        Where-Object { $_.Name -ne 'native-exit-threads.dmp.partial' })
+    if ($archiveFiles.Count -eq 0) {
+        throw 'No completed exit diagnostics to archive'
+    }
+    Compress-Archive -LiteralPath ($archiveFiles | ForEach-Object { $_.FullName }) `
+        -DestinationPath $zip -Force
     Write-Host "Exit diagnostics saved: $zip"
     Write-Host 'Review the ZIP for local paths and model names before sharing.'
     if ($NativeDump) {
