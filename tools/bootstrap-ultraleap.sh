@@ -112,15 +112,15 @@ old_start = """                // Use a LeapC connection for Hints
 new_start = """                // VCR_ULTRALEAP_LAZY_HINT_CONNECTION:
                 // Avoid starting an unused Controller and LeapC worker on
                 // every Player launch. Hints configured for startup are
-                // still registered as before.
-                if (currentHints.Count != 0)
+                // still registered, but never subscribed twice.
+                if (currentHints.Count != 0 && _leapController == null)
                     SetupDeviceCallbacks();"""
 old_update = """                // Use a LeapC connection for Hints
                 RequestHintsOnAllDevices(hints);"""
 new_update = """                // Explicit hints added after startup must still attach the
-                // device callback. Clearing a never-started empty hint set
-                // must not create a connection either.
-                if (hints.Length != 0)
+                // device callback only once. Clearing a never-started
+                // empty hint set must not create a connection either.
+                if (hints.Length != 0 && _leapController == null)
                     SetupDeviceCallbacks();
                 if (hints.Length != 0 || _leapController != null)
                     RequestHintsOnAllDevices(hints);"""
