@@ -19,6 +19,17 @@ and source commit, and verifies committed Unity lock/settings files
 have not changed during the build. Neither package is published as a
 tag/release.
 
+On a GitHub `pull_request` event, `GITHUB_SHA` is normally the **temporary
+merge commit used for CI**, not the PR branch's head SHA. The Player package
+therefore records both `*.source-sha` (the **exact tested/compiled merge
+tree**) and `*.pr-head-sha` (the submitted PR head). The native runner
+checks both values against the workflow event and emits
+`testedSourceSha`, `pullRequestHeadSha`, and
+`testedSourceIsPullRequestMerge`. For a direct `develop` push the two
+identifiers are the same. This distinction prevents an unrelated PR-head
+hash from being presented as proof of the binary's compiled source.
+The tested merge tree must be revalidated if `develop` changes.
+
 ## Native runtime contract
 
 The generated alpha scene includes `PlayerStartupSmoke`. During ordinary
