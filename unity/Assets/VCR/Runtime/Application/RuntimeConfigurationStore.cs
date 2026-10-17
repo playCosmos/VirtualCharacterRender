@@ -165,6 +165,25 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
+                if (!string.IsNullOrWhiteSpace(LastLoadWarning))
+                {
+                    // The primary file was unreadable before this explicit
+                    // save, so File.Replace just moved bad bytes to .bak.
+                    // Refresh the backup atomically from the newly saved,
+                    // valid JSON rather than leaving future recovery broken.
+                    if (!BoundedTextFile.TryWriteUtf8Atomic(
+                            _path + ".bak",
+                            json,
+                            MaxFileBytes,
+                            out var backupError))
+                    {
+                        Debug.LogWarning(
+                            "VCR configuration saved but recovery backup " +
+                            "refresh failed: " + backupError);
+                    }
+                    LastLoadWarning = null;
+                }
+
                 return true;
             }
             catch (Exception exception)
