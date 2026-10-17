@@ -358,6 +358,8 @@ namespace VCR.Runtime.Application
                 error =
                     "Runtime configuration load/apply failed: " +
                     exception.Message;
+                _suppressAutomaticConfigurationSave = true;
+                _configurationLoadError = error;
                 return false;
             }
         }
