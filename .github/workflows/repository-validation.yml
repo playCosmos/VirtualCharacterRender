@@ -22,6 +22,17 @@ permissions:
   contents: read
 
 jobs:
+  windows-exit-diagnostics:
+    name: Validate Windows real-PC evidence collector
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Launch native mock Player and inspect diagnostic ZIP
+        shell: powershell
+        run: .\\tools\\test-exit-collector.ps1
+
   repository-structure:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -71,6 +82,18 @@ jobs:
 
       - name: Test desktop shutdown latency attribution
         run: python3 tools/analyze-shutdown-log.py --self-test
+
+      - name: Test real desktop quit evidence observer
+        run: python3 tools/diagnose-gui-shutdown.py --self-test
+
+      - name: Test native Player quit timer including timeout preservation
+        run: python3 tools/run-player-smoke.py --self-test
+
+      - name: Verify lazy Ultraleap hints create no idle LeapC connection
+        run: python3 tools/test-ultraleap-lazy-hints.py
+
+      - name: Verify Ultraleap LFS restoration rejects corrupt or incomplete assets
+        run: python3 tools/restore-ultraleap-lfs.py --self-test
 
       - name: Validate strict Unity reproducibility
         if: >-

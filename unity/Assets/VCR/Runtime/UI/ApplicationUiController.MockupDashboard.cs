@@ -98,7 +98,6 @@ namespace VCR.Runtime.UI
         private bool _dashboardOutputSelectionDirty;
         private bool _dashboardOutputDropdownSyncing;
         private Button _dashboardBackgroundModeButton;
-        private Button _dashboardTopmostButton;
 
         private void FinalizeMockupDashboard(
             RectTransform titleBar,
@@ -954,9 +953,9 @@ namespace VCR.Runtime.UI
                 RebuildSettingsTrackingDevices);
 
             AddSettingsDetailPage("output", "출력",
-                "출력 프리셋은 퀵패널에서 빠르게 전환합니다. 창 표시 방식은 이 설정 페이지에서 제어합니다.",
-                "항상 위 켜기 / 끄기",
-                ToggleOverlayTopmost);
+                "출력 프리셋은 퀵패널에서 빠르게 전환합니다. 프로그램 창은 일반 창으로 동작합니다.",
+                "출력 복구",
+                RecoverOutput);
 
             var outputPage = _settingsPages["output"];
             AddSettingsAction(outputPage, "투명 배경 켜기 / 끄기",
@@ -2581,8 +2580,6 @@ namespace VCR.Runtime.UI
             HideDashboardLegacyControl(
                 _outputTransparentButton);
             HideDashboardLegacyControl(
-                _outputTopmostButton);
-            HideDashboardLegacyControl(
                 _outputClickThroughButton);
 
             _dashboardResolutionDropdown =
@@ -2626,11 +2623,6 @@ namespace VCR.Runtime.UI
                     "배경 모드",
                     "확인 중…",
                     ToggleOverlayTransparent);
-            _dashboardTopmostButton =
-                AddOutputValueRow(
-                    "창 표시",
-                    "확인 중…",
-                    ToggleOverlayTopmost);
 
             var help =
                 CreateText(
@@ -4900,14 +4892,6 @@ namespace VCR.Runtime.UI
                     ? overlaySettings.Transparent
                         ? "투명 배경 (Alpha)"
                         : "불투명 배경"
-                    : "출력 어댑터 없음");
-            SetButtonLabel(
-                _dashboardTopmostButton,
-                overlayPresent &&
-                overlayReadable
-                    ? overlaySettings.Topmost
-                        ? "항상 위: 켜짐"
-                        : "항상 위: 꺼짐"
                     : "출력 어댑터 없음");
 
             RefreshDashboardPresetGallery();

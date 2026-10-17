@@ -814,8 +814,9 @@ namespace VCR.Editor.P1
                     outputAdapter.ApplyCount ==
                         beforeSceneConfigApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
-                    outputAdapter.LastSettings.Topmost &&
-                    !outputAdapter.LastSettings.ClickThrough,
+                    !outputAdapter.LastSettings.Topmost &&
+                    !outputAdapter.LastSettings.ClickThrough &&
+                    !captured.Overlay.Topmost,
                     "scene configuration must apply overlay settings through the adapter",
                     failures);
 

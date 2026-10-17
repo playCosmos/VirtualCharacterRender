@@ -754,8 +754,11 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 thread.IsAlive &&
                 Thread.CurrentThread != thread)
             {
-                thread.Join(
-                    750);
+                var wait = System.Diagnostics.Stopwatch.StartNew();
+                thread.Join(750);
+                Debug.Log("VCR exit: OSC UDP receive worker join=" +
+                    wait.ElapsedMilliseconds + " ms, stillAlive=" +
+                    thread.IsAlive, this);
             }
 
             if (thread != null &&

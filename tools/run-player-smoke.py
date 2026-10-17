@@ -14,12 +14,98 @@ import time
 import zipfile
 
 
+# Generous headless regression budget: the no-debug Windows baseline may
+# spend ~2 s in Unity's native teardown even with trivial managed cleanup.
+# A 10-second quit tail indicates a severe regression, not ordinary jitter.
+MAX_HEADLESS_QUIT_TO_EXIT_MS = 10_000
+
+
+def require_headless_quit_budget(exit_ms):
+    if exit_ms is not None and exit_ms > MAX_HEADLESS_QUIT_TO_EXIT_MS:
+        raise RuntimeError(
+            "Headless quit-to-PID-exit latency regression: " +
+            str(exit_ms) + " ms exceeds " +
+            str(MAX_HEADLESS_QUIT_TO_EXIT_MS) + " ms")
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
+    """Time the real subprocess exit from the Unity wantsToQuit marker.
+
+    This does not hide any window, alter shutdown sequencing, or force
+    termination except on the existing CI timeout. The marker comes from
+    the normal Unity Player.log; the read is best-effort until exit.
+    """
+    # Never attribute a marker from a previous failed/retried CI run to
+    # the newly launched subprocess. Windows sharing violations must FAIL.
+    logfile.unlink(missing_ok=True)
+    started = time.monotonic()
+    marker_at = None
+    marker_observed_after_exit = False
+    offset = 0
+    carry = b""
+    marker = b"VCR exit: quit requested (t=0 ms)"
+    def drain_marker(after_exit=False):
+        nonlocal marker_at, marker_observed_after_exit, offset, carry
+        if marker_at is not None or not logfile.exists():
+            return
+        try:
+            with logfile.open("rb") as source:
+                source.seek(offset)
+                chunk = source.read()
+                offset = source.tell()
+            if chunk:
+                combined = carry + chunk
+                if marker in combined:
+                    marker_at = time.monotonic()
+                    marker_observed_after_exit = after_exit
+                carry = combined[-(len(marker) - 1):]
+        except OSError:
+            # Unity log is best-effort while it is held by another process.
+            pass
+
+    with output_log.open("w", encoding="utf-8") as output_stream:
+        process = subprocess.Popen(
+            command, cwd=cwd, stdout=output_stream,
+            stderr=subprocess.STDOUT)
+        try:
+            while process.poll() is None:
+                drain_marker()
+                if time.monotonic() - started > timeout:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                time.sleep(0.05)
+            return_code = process.returncode
+            # Do not lose buffered quit markers from fast processes.
+            drain_marker(after_exit=True)
+        except BaseException as exception:
+            drain_marker()
+            elapsed = round((time.monotonic() - started) * 1000, 1)
+            # These durations describe the process BEFORE timeout/kill. They
+            # are not a successful quit-to-process-exit measurement.
+            exception.player_process_lifetime_ms = elapsed
+            exception.quit_to_timeout_ms = (
+                round((time.monotonic() - marker_at) * 1000, 1)
+                if marker_at is not None else None)
+            exception.quit_marker_observed = marker_at is not None
+            if process.poll() is None:
+                process.kill()  # CI-only bound, never the interactive observer.
+            process.wait()
+            raise
+    finished = time.monotonic()
+    return (
+        return_code,
+        round((finished - started) * 1000, 1),
+        round((finished - marker_at) * 1000, 1)
+        if marker_at is not None and not marker_observed_after_exit else None,
+        marker_observed_after_exit,
+    )
 
 
 def execute(args):
@@ -85,6 +171,8 @@ def execute(args):
                 raise RuntimeError("Windows .exe Player executable missing")
 
         summary["playerExecutableSha256"] = sha256(executable)
+        # Do not accept smoke evidence left behind by a prior job attempt.
+        result_path.unlink(missing_ok=True)
         command = [
             str(executable),
             "-batchmode",
@@ -94,30 +182,31 @@ def execute(args):
             "--vcr-smoke-report=" + str(result_path),
         ]
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
-        with runnerlog.open("w", encoding="utf-8") as output_log:
-            started_at = time.monotonic()
-            try:
-                completed = subprocess.run(
-                    command,
-                    cwd=unpacked,
-                    stdout=output_log,
-                    stderr=subprocess.STDOUT,
-                    timeout=100,
-                    check=False,
-                )
-                summary["exitCode"] = completed.returncode
-            except subprocess.TimeoutExpired as exception:
-                summary["exitCode"] = None
-                raise RuntimeError("Player did not exit within 100 seconds") from exception
-            finally:
-                # End-to-end subprocess lifetime is a useful CI baseline,
-                # but includes startup and does not prove GUI quit latency.
-                summary["playerProcessLifetimeMs"] = round(
-                    (time.monotonic() - started_at) * 1000, 1)
-                print(
-                    "Player process lifetime (startup + shutdown): " +
-                    str(summary["playerProcessLifetimeMs"]) + " ms",
-                    flush=True)
+        try:
+            code, lifetime_ms, exit_ms, marker_after_exit = run_player_with_exit_trace(
+                command, unpacked, logfile, runnerlog, timeout=100)
+            summary["exitCode"] = code
+            summary["playerProcessLifetimeMs"] = lifetime_ms
+            summary["quitToProcessExitMs"] = exit_ms
+            summary["quitMarkerObservedAfterExit"] = marker_after_exit
+            if marker_after_exit:
+                summary["quitToProcessExitLowerBoundMs"] = 0
+            print("Player process lifetime (startup + shutdown): " +
+                  str(lifetime_ms) + " ms", flush=True)
+            print("Quit marker to process exit (best-effort): " +
+                  str(exit_ms) + " ms", flush=True)
+        except subprocess.TimeoutExpired as exception:
+            summary["exitCode"] = None
+            summary["timedOut"] = True
+            summary["playerProcessLifetimeMs"] = getattr(
+                exception, "player_process_lifetime_ms", 100000)
+            summary["quitToTimeoutMs"] = getattr(
+                exception, "quit_to_timeout_ms", None)
+            summary["quitMarkerObserved"] = getattr(
+                exception, "quit_marker_observed", False)
+            summary["quitToProcessExitMs"] = None
+            raise RuntimeError("Player did not exit within 100 seconds; " +
+                               "timing evidence retained") from exception
 
         if not result_path.is_file():
             raise RuntimeError("Player did not write its runtime smoke evidence")
@@ -126,11 +215,40 @@ def execute(args):
         for field in ("started", "sceneReady", "noCharacter", "stopped", "passed"):
             if evidence.get(field) is not True:
                 raise RuntimeError("Player did not confirm " + field + ": " + str(evidence.get("error")))
+        # Require two distinct clocks: Application.Quit() can block before
+        # wantsToQuit dispatch, while the bootstrap timer starts at the
+        # actual Unity exit marker. Never call the first one cleanup time.
+        call_to_callback = evidence.get("quitCallToManagedCallbackMs")
+        marker_to_callback = evidence.get("quitMarkerToManagedCallbackMs")
+        if any(not isinstance(value, int) or isinstance(value, bool) or
+               value < 0 for value in (call_to_callback, marker_to_callback)):
+            raise RuntimeError("Normal Unity quit timing evidence missing")
+        if marker_to_callback > call_to_callback:
+            raise RuntimeError("Unity quit marker elapsed beyond initial quit call")
+        summary["quitCallToManagedCallbackMs"] = call_to_callback
+        summary["quitMarkerToManagedCallbackMs"] = marker_to_callback
+        summary["quitDispatchBeforeMarkerMs"] = call_to_callback - marker_to_callback
+        # The OS process timer observes a Player.log marker during polling.
+        # This subtraction is an approximation (up to one poll interval),
+        # NOT a precise native stack/teardown measurement.
+        exit_ms = summary.get("quitToProcessExitMs")
+        summary["postManagedToProcessExitEstimateMs"] = (
+            round(max(0, exit_ms - marker_to_callback), 1)
+            if exit_ms is not None else None
+        )
+        summary["maxHeadlessQuitToExitMs"] = MAX_HEADLESS_QUIT_TO_EXIT_MS
+        require_headless_quit_budget(exit_ms)
+        if (summary["postManagedToProcessExitEstimateMs"] is not None and
+                summary["postManagedToProcessExitEstimateMs"] >= 2_000):
+            print("Native teardown estimate exceeds 2000 ms: " +
+                  str(summary["postManagedToProcessExitEstimateMs"]) +
+                  " ms (poll-resolution estimate; not a managed cleanup delay)",
+                  flush=True)
         if evidence.get("suite") != "player-startup-shutdown":
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
             raise RuntimeError("Player Unity version mismatch")
-        if args.platform == "windows" and evidence.get("platform") != "WindowsPlayer":
+        if args.platform.startswith("windows") and evidence.get("platform") != "WindowsPlayer":
             raise RuntimeError("Expected a native Windows Player")
         if args.platform == "macos" and evidence.get("platform") != "OSXPlayer":
             raise RuntimeError("Expected a native macOS Player")
@@ -154,9 +272,72 @@ def execute(args):
     return 0 if summary["passed"] else 1
 
 
+
+def self_test():
+    """Prove a fast natural exit and a slow forced CI timeout both keep evidence."""
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as dirname:
+        root = Path(dirname)
+        stub = root / "fake-player.py"
+        stub.write_text(
+            "import pathlib, sys, time\n"
+            "log = pathlib.Path(sys.argv[sys.argv.index('-logFile') + 1])\n"
+            "log.write_text('VCR exit: quit requested (t=0 ms)\\n')\n"
+            "if '--hang' in sys.argv: time.sleep(5)\n"
+            "else: log.write_text(log.read_text() + "
+            "'VCR exit: OnApplicationQuit finished at 7 ms\\n')\n",
+            encoding="utf-8",
+        )
+        command = [sys.executable, str(stub), "-logFile", str(root / "fast.log")]
+        (root / "fast.log").write_text(
+            "VCR exit: quit requested (t=0 ms)\\nSTALE RUN\\n", encoding="utf-8")
+        code, lifetime, quit_ms, late = run_player_with_exit_trace(
+            command, root, root / "fast.log", root / "fast.out", timeout=4)
+        assert code == 0 and lifetime >= 0
+        assert (late and quit_ms is None) or (not late and quit_ms is not None)
+        assert "STALE RUN" not in (root / "fast.log").read_text()
+
+        # Force a post-exit first drain: never turn it into a fabricated
+        # near-zero marker-to-PID interval.
+        from unittest.mock import patch
+        real_sleep = time.sleep
+        def wait_past_quick_exit(seconds):
+            real_sleep(max(seconds, 0.15))
+        with patch.object(time, "sleep", wait_past_quick_exit):
+            code, lifetime, quit_ms, late = run_player_with_exit_trace(
+                command, root, root / "fast.log", root / "fast-late.out", timeout=4)
+        assert code == 0 and late and quit_ms is None
+
+        log = root / "hung.log"
+        command = [sys.executable, str(stub), "-logFile", str(log), "--hang"]
+        try:
+            run_player_with_exit_trace(
+                command, root, log, root / "hung.out", timeout=0.75)
+            raise AssertionError("Expected CI timeout with preserved evidence")
+        except subprocess.TimeoutExpired as exception:
+            assert exception.player_process_lifetime_ms >= 700
+            assert exception.quit_marker_observed is True
+            assert exception.quit_to_timeout_ms is not None
+    # Smoke latency budget must be visible and stable; a 2-second native
+    # teardown is diagnostic, while a >10-second headless hang is a failure.
+    assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
+    for allowed in (None, 0, 2_125.0, 10_000.0):
+        require_headless_quit_budget(allowed)
+    try:
+        require_headless_quit_budget(10_001.0)
+    except RuntimeError as exc:
+        assert "latency regression" in str(exc)
+    else:
+        raise AssertionError("Expected severe quit latency to fail smoke")
+    print("Native Player smoke exit timer self-test PASS")
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        self_test()
+        sys.exit(0)
     cli = argparse.ArgumentParser()
-    cli.add_argument("--platform", choices=("windows", "macos"), required=True)
+    cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos"), required=True)
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
     cli.add_argument("--output", required=True)

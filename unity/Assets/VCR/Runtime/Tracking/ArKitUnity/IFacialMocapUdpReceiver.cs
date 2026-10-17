@@ -865,7 +865,11 @@ namespace VCR.Runtime.Tracking.ArKitUnity
                 thread.IsAlive &&
                 Thread.CurrentThread != thread)
             {
+                var wait = System.Diagnostics.Stopwatch.StartNew();
                 thread.Join(750);
+                Debug.Log("VCR exit: ARKit UDP receive worker join=" +
+                    wait.ElapsedMilliseconds + " ms, stillAlive=" +
+                    thread.IsAlive, this);
             }
 
             if (thread != null &&

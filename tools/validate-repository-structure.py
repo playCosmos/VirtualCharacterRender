@@ -1364,7 +1364,7 @@ require_source_contains(
 )
 require_source_order(
     single_character_scene_runtime,
-    "_overlayOutput.Apply(settings);",
+    "_overlayOutput.Apply(nextConfiguration.ToSettings());",
     "_overlayConfiguration =\n                nextConfiguration;",
     "scene overlay configuration must commit only after the adapter apply succeeds",
 )
