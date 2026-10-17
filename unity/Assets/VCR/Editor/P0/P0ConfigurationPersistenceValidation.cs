@@ -95,6 +95,36 @@ namespace VCR.Editor.P0
                         path + ".bak").Contains(
                             "bounded-test");
 
+                // A third and fourth atomic save must work while a
+                // recovery backup already exists, with the backup always
+                // describing the previous complete valid generation.
+                var nextGeneration = configuration;
+                nextGeneration.EnvironmentStateId = "next-generation";
+                var upgradedSaved =
+                    store.TrySave(
+                        nextGeneration,
+                        out var upgradedSaveError);
+                pass =
+                    pass &&
+                    upgradedSaved &&
+                    string.IsNullOrEmpty(upgradedSaveError) &&
+                    File.ReadAllText(path).Contains(
+                        "next-generation") &&
+                    File.ReadAllText(path + ".bak").Contains(
+                        "bounded-test");
+                var restoredSaved =
+                    store.TrySave(
+                        configuration,
+                        out var restoredSaveError);
+                pass =
+                    pass &&
+                    restoredSaved &&
+                    string.IsNullOrEmpty(restoredSaveError) &&
+                    File.ReadAllText(path).Contains(
+                        "bounded-test") &&
+                    File.ReadAllText(path + ".bak").Contains(
+                        "next-generation");
+
                 var original =
                     pass
                         ? File.ReadAllText(
@@ -153,7 +183,7 @@ namespace VCR.Editor.P0
                         store.LastLoadWarning) &&
                     recoveredOversizedConfiguration
                         .EnvironmentStateId ==
-                        "bounded-test" &&
+                        "next-generation" &&
                     new FileInfo(path).Length >
                         ConfigurationLimitBytes;
 
@@ -179,7 +209,7 @@ namespace VCR.Editor.P0
                     !string.IsNullOrWhiteSpace(
                         store.LastLoadWarning) &&
                     recoveredInvalidUtf8.EnvironmentStateId ==
-                        "bounded-test" &&
+                        "next-generation" &&
                     File.ReadAllBytes(path)[0] == 0xff;
 
                 // Invalid backup must not mask a corrupt primary.
@@ -214,7 +244,8 @@ namespace VCR.Editor.P0
                         $"oversized-save='{oversizedSaveError}', " +
                         $"oversized-load='{oversizedLoadError}', " +
                         $"invalid-utf8='{invalidUtf8Error}', " +
-                        $"invalid-both='{invalidBothError}'");
+                        $"invalid-both='{invalidBothError}', " +
+                        $"replace-existing-backup='{upgradedSaveError}|{restoredSaveError}'");
                 }
             }
             catch (Exception exception)
