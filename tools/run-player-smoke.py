@@ -100,6 +100,12 @@ def require_build_variant(platform_name, development_build):
             ", reported " + str(development_build))
 
 
+def require_commit_sha(value, label):
+    if (not isinstance(value, str) or len(value) != 40 or
+            any(c not in "0123456789abcdef" for c in value)):
+        raise RuntimeError(label + " is not an exact 40-hex Git commit")
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -231,6 +237,7 @@ def execute(args):
     archive = Path(args.archive).resolve()
     digest_file = archive.with_suffix(".sha256")
     source_file = archive.with_suffix(".source-sha")
+    head_file = archive.with_suffix(".pr-head-sha")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     result_path = output / "player-smoke.json"
@@ -242,6 +249,9 @@ def execute(args):
         "platform": args.platform,
         "runnerPlatform": platform.platform(),
         "sourceSha": args.source,
+        "testedSourceSha": args.source,
+        "pullRequestHeadSha": args.pr_head,
+        "testedSourceIsPullRequestMerge": args.source != args.pr_head,
         "unityVersion": "6000.3.25f1",
         "timestampUtc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "passed": False,
@@ -249,10 +259,15 @@ def execute(args):
     }
 
     try:
-        if not archive.is_file() or not digest_file.is_file() or not source_file.is_file():
-            raise RuntimeError("Missing Player archive, SHA-256 or source provenance")
+        require_commit_sha(args.source, "Tested source SHA")
+        require_commit_sha(args.pr_head, "Pull-request head SHA")
+        if (not archive.is_file() or not digest_file.is_file() or
+                not source_file.is_file() or not head_file.is_file()):
+            raise RuntimeError("Missing Player archive, SHA-256 or source/head provenance")
         if source_file.read_text(encoding="utf-8").strip() != args.source:
-            raise RuntimeError("Artifact source SHA does not match the tested checkout")
+            raise RuntimeError("Artifact tested-source SHA does not match the runner")
+        if head_file.read_text(encoding="utf-8").strip() != args.pr_head:
+            raise RuntimeError("Artifact PR-head SHA does not match the runner")
 
         recorded = digest_file.read_text(encoding="utf-8").split()[0].lower()
         actual = sha256(archive)
@@ -601,6 +616,14 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Invalid native configuration accepted")
+    require_commit_sha("a" * 40, "test")
+    for value in ("a" * 39, "g" * 40, "", None):
+        try:
+            require_commit_sha(value, "test")
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Invalid commit identifier accepted")
     # Smoke latency budget must be visible and stable; a 2-second native
     # teardown is diagnostic, while a >10-second headless hang is a failure.
     assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
@@ -623,5 +646,6 @@ if __name__ == "__main__":
     cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos", "macos-nodebug"), required=True)
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
+    cli.add_argument("--pr-head", required=True)
     cli.add_argument("--output", required=True)
     sys.exit(execute(cli.parse_args()))
