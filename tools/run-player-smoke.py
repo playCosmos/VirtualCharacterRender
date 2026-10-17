@@ -201,13 +201,18 @@ def execute(args):
         for field in ("started", "sceneReady", "noCharacter", "stopped", "passed"):
             if evidence.get(field) is not True:
                 raise RuntimeError("Player did not confirm " + field + ": " + str(evidence.get("error")))
-        # Prevent regressions to the former smoke test which called
-        # bootstrap.Shutdown() before Application.Quit().
-        managed_ms = evidence.get("quitManagedMilliseconds")
-        if (not isinstance(managed_ms, int) or isinstance(managed_ms, bool)
-                or managed_ms < 0):
-            raise RuntimeError("Normal Unity quit cleanup evidence missing")
-        summary["quitManagedMilliseconds"] = managed_ms
+        # Require two distinct clocks: Application.Quit() can block before
+        # wantsToQuit dispatch, while the bootstrap timer starts at the
+        # actual Unity exit marker. Never call the first one cleanup time.
+        call_to_callback = evidence.get("quitCallToManagedCallbackMs")
+        marker_to_callback = evidence.get("quitMarkerToManagedCallbackMs")
+        if any(not isinstance(value, int) or isinstance(value, bool) or
+               value < 0 for value in (call_to_callback, marker_to_callback)):
+            raise RuntimeError("Normal Unity quit timing evidence missing")
+        if marker_to_callback > call_to_callback:
+            raise RuntimeError("Unity quit marker elapsed beyond initial quit call")
+        summary["quitCallToManagedCallbackMs"] = call_to_callback
+        summary["quitMarkerToManagedCallbackMs"] = marker_to_callback
         if evidence.get("suite") != "player-startup-shutdown":
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
