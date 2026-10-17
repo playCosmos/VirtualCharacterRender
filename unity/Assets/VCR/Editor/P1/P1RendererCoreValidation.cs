@@ -1630,14 +1630,25 @@ namespace VCR.Editor.P1
 
                 // An explicit operator save is allowed to commit the current
                 // running configuration and clears only the automatic guard.
-                Expect(
+                var explicitRecoverySaved =
                     applicationBootstrap.SaveConfiguration(
-                        out var explicitRecoverySaveError) &&
+                        out var explicitRecoverySaveError);
+                var backupAfterFailedLoad =
+                    new RuntimeConfigurationStore(
+                        applicationConfigurationPath + ".bak");
+                Expect(
+                    explicitRecoverySaved &&
                     string.IsNullOrEmpty(explicitRecoverySaveError) &&
                     !applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
                     string.IsNullOrEmpty(
-                        applicationBootstrap.LastConfigurationLoadError),
-                    "explicit settings save must re-enable automatic persistence after a failed reload",
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    backupAfterFailedLoad.TryLoad(
+                        out var repairedFallback,
+                        out var repairedFallbackError) &&
+                    string.IsNullOrEmpty(repairedFallbackError) &&
+                    repairedFallback.Rendering.Width ==
+                        applicationScene.CaptureConfiguration().Rendering.Width,
+                    "explicit settings save must restore a valid backup even when both previous generations were unreadable",
                     failures);
 
                 // A usable backup also requires an explicit confirmation
