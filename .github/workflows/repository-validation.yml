@@ -95,6 +95,19 @@ jobs:
       - name: Verify Ultraleap LFS restoration rejects corrupt or incomplete assets
         run: python3 tools/restore-ultraleap-lfs.py --self-test
 
+      - name: Verify third-party source pins and inventory contract
+        run: |
+          python3 tools/audit-third-party-dependencies.py --self-test
+          python3 tools/audit-third-party-dependencies.py --output dependency-inventory.json
+
+      - name: Preserve non-approved dependency inventory for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-inventory-${{ github.sha }}
+          path: dependency-inventory.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Validate strict Unity reproducibility
         if: >-
           ${{
