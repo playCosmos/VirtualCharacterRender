@@ -8,6 +8,7 @@ import os
 import posixpath
 import plistlib
 import platform
+import shutil
 from pathlib import Path
 import stat
 import subprocess
@@ -202,7 +203,11 @@ def execute(args):
 
         # Preserve only logs and hashes as smoke artifacts, not the Player.
         unpacked = output.parent / ("unpacked-" + args.platform)
-        unpacked.mkdir(exist_ok=True)
+        if unpacked.is_symlink():
+            raise RuntimeError("Refusing symlink extraction directory")
+        if unpacked.exists():
+            shutil.rmtree(unpacked)
+        unpacked.mkdir(exist_ok=False)
         if args.platform.startswith("macos"):
             subprocess.run(
                 ["unzip", "-q", str(archive), "-d", str(unpacked)],
@@ -215,8 +220,10 @@ def execute(args):
                 raise RuntimeError("macOS Player Info.plist missing")
             with info_path.open("rb") as info:
                 executable_name = plistlib.load(info).get("CFBundleExecutable")
-            if not isinstance(executable_name, str) or not executable_name:
-                raise RuntimeError("macOS Player CFBundleExecutable missing")
+            if (not isinstance(executable_name, str) or not executable_name or
+                    executable_name in (".", "..") or
+                    any(ch in executable_name for ch in ("/", "\\", ":", "\x00"))):
+                raise RuntimeError("Unsafe macOS Player CFBundleExecutable")
             executable = bundle / "Contents" / "MacOS" / executable_name
             if not executable.is_file():
                 raise RuntimeError("macOS .app executable missing: " + str(executable))
