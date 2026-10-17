@@ -550,6 +550,57 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Wrong Player build mode accepted")
+    # Configuration relaunch must prove an observed runtime value, not
+    # merely the presence of a JSON file in the CI extraction directory.
+    with TemporaryDirectory() as cdir:
+        path = Path(cdir) / "runtime.json"
+        valid = {
+            "Version": 1,
+            "Scene": {"Camera": {"FieldOfView": NATIVE_CONFIG_PROBE_FOV}},
+        }
+        path.write_text(json.dumps(valid), encoding="utf-8")
+        assert read_smoke_configuration(path)["Version"] == 1
+        sample = {
+            "suite": "player-startup-shutdown",
+            "unityVersion": "6000.3.25f1",
+            "platform": "WindowsPlayer",
+            "developmentBuild": True,
+            "observedCameraFieldOfView": NATIVE_CONFIG_PROBE_FOV,
+            "quitCallToManagedCallbackMs": 11,
+            "quitMarkerToManagedCallbackMs": 8,
+            "started": True,
+            "sceneReady": True,
+            "noCharacter": True,
+            "stopped": True,
+            "passed": True,
+        }
+        require_smoke_relaunch_evidence(sample, "windows", NATIVE_CONFIG_PROBE_FOV)
+        for changes in (
+            {"observedCameraFieldOfView": 35.0},
+            {"developmentBuild": False},
+            {"passed": False},
+            {"platform": "OSXPlayer"},
+            {"quitMarkerToManagedCallbackMs": None},
+        ):
+            invalid = dict(sample, **changes)
+            try:
+                require_smoke_relaunch_evidence(invalid, "windows", NATIVE_CONFIG_PROBE_FOV)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("Invalid native relaunch evidence accepted")
+        for invalid in (
+            {"Version": 2, "Scene": {"Camera": {"FieldOfView": 35}}},
+            {"Version": 1, "Scene": {"Camera": {"FieldOfView": False}}},
+            {"Version": 1, "Scene": {"Camera": {"FieldOfView": 0}}},
+        ):
+            path.write_text(json.dumps(invalid), encoding="utf-8")
+            try:
+                read_smoke_configuration(path)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("Invalid native configuration accepted")
     # Smoke latency budget must be visible and stable; a 2-second native
     # teardown is diagnostic, while a >10-second headless hang is a failure.
     assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
