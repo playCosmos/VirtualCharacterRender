@@ -42,6 +42,26 @@ namespace VCR.Runtime.Application
 
             if (!File.Exists(_path))
             {
+                // Recovery also covers a missing primary (for example a
+                // stopped first-run replacement or manual file movement).
+                // Do not discard a valid prior user configuration.
+                if (!File.Exists(_path + ".bak"))
+                {
+                    return true;
+                }
+                if (!TryLoadDocument(
+                        _path + ".bak",
+                        out configuration,
+                        out error,
+                        out _))
+                {
+                    return false;
+                }
+                LastLoadWarning =
+                    "Configuration primary file is missing; a previous " +
+                    ".bak generation was loaded. Save explicitly to restore " +
+                    "the primary configuration.";
+                Debug.LogWarning("VCR: " + LastLoadWarning);
                 return true;
             }
 
