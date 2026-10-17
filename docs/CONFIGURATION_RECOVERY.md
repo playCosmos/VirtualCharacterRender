@@ -42,7 +42,9 @@ claiming recovery; startup can continue with baseline defaults subject to
 the scene's existing failure handling. **Automatic save on quit remains
 disabled** after an unrecoverable load failure or failed user-initiated
 configuration reload/apply. Explicitly saving valid running settings clears
-this guard; merely exiting the program cannot overwrite recovery evidence.
+this guard and recreates a valid recovery backup even if both prior files
+were unreadable; merely exiting the program cannot overwrite recovery
+evidence.
 
 ## Operator procedure
 
