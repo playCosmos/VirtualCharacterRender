@@ -26,6 +26,7 @@ namespace VCR.Runtime.Application
             public string suite = "player-startup-shutdown";
             public string unityVersion;
             public string platform;
+            public bool developmentBuild;
             public string timestampUtc;
             public bool started;
             public bool sceneReady;
@@ -62,6 +63,7 @@ namespace VCR.Runtime.Application
             {
                 unityVersion = UnityEngine.Application.unityVersion,
                 platform = UnityEngine.Application.platform.ToString(),
+                developmentBuild = Debug.isDebugBuild,
                 timestampUtc = DateTime.UtcNow.ToString("o"),
                 error = string.Empty
             };
