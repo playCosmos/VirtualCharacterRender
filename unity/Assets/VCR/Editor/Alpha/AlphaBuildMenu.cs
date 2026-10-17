@@ -129,6 +129,22 @@ namespace VCR.Editor.Alpha
                 MacOutput);
         }
 
+        // Commercial readiness control: macOS must also run a Player built
+        // without Development/AllowDebugging. This creates a test artifact
+        // only; signing, notarization and distribution remain separate gates.
+        public static void BuildMacWithoutDebuggingFromMenu()
+        {
+            if (!Build(
+                    BuildTarget.StandaloneOSX,
+                    "Builds/Alpha/" + Version +
+                    "/macOSNoDebug/VirtualCharacterRender.app",
+                    BuildOptions.None))
+            {
+                throw new InvalidOperationException(
+                    "VCR macOS non-development verification build failed.");
+            }
+        }
+
         public static bool Build(
             BuildTarget target,
             string location,
