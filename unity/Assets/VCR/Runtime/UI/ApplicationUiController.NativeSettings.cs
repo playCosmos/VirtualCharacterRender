@@ -18,6 +18,8 @@ namespace VCR.Runtime.UI
         private string _nativeActiveTrackingSource;
         private bool _nativeSettingsWasVisible;
         private bool _nativeSettingsRunInBackgroundBeforeOpen;
+        private int _nativeFeedbackCategory = -1;
+        private string _nativeFeedbackMessage;
 
         private void OpenNativeSettings()
         {
@@ -285,14 +287,16 @@ namespace VCR.Runtime.UI
                     }
                     else if (_nativeSettingsActions.TryGetValue(id, out var action))
                     {
+                        // Remember the source page: an async model load may
+                        // complete after the operator switches categories.
+                        _nativeFeedbackCategory = _nativeSettings.SelectedCategory;
                         action?.Invoke();
-                        // Actions historically report to the dashboard only.
-                        // Also surface the result within the native window.
                         var message = _lastActionMessage;
                         if (string.IsNullOrWhiteSpace(message))
                             message = "설정 작업이 처리되었습니다.";
+                        _nativeFeedbackMessage = message;
                         _nativeSettings.SetText(
-                            90 + _nativeSettings.SelectedCategory, message);
+                            90 + _nativeFeedbackCategory, message);
                     }
                 }
                 catch (Exception exception)
@@ -301,6 +305,21 @@ namespace VCR.Runtime.UI
                     _nativeSettings.SetText(90 + _nativeSettings.SelectedCategory,
                         "작업 오류: " + exception.Message);
                 }
+            }
+
+            // Async character loading reports its final result through
+            // _lastActionMessage after this action callback has returned.
+            // Preserve the initiating page and update only when it changes;
+            // do not refresh editable fields or interfere with typing.
+            if (_nativeFeedbackCategory >= 0 &&
+                _nativeFeedbackCategory < 4 &&
+                !string.IsNullOrWhiteSpace(_lastActionMessage) &&
+                !string.Equals(_lastActionMessage, _nativeFeedbackMessage,
+                    StringComparison.Ordinal))
+            {
+                _nativeFeedbackMessage = _lastActionMessage;
+                _nativeSettings.SetText(
+                    90 + _nativeFeedbackCategory, _nativeFeedbackMessage);
             }
 
             // Reassert this after actions; toggling the background preference
@@ -317,6 +336,8 @@ namespace VCR.Runtime.UI
             _nativeSettings?.Dispose();
             _nativeSettings = null;
             _nativeSettingsActions.Clear();
+            _nativeFeedbackCategory = -1;
+            _nativeFeedbackMessage = null;
             _nativeTrackingFieldKeys.Clear();
             _nativeTrackingSourceIds.Clear();
             _nativeActiveTrackingSource = null;
