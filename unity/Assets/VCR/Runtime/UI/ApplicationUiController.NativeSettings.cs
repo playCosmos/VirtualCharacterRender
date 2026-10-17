@@ -19,7 +19,7 @@ namespace VCR.Runtime.UI
         private bool _nativeSettingsWasVisible;
         private bool _nativeSettingsRunInBackgroundBeforeOpen;
         private int _nativeFeedbackCategory = -1;
-        private string _nativeFeedbackMessage;
+        private int _nativePendingCharacterGeneration = -1;
 
         private void OpenNativeSettings()
         {
@@ -287,14 +287,25 @@ namespace VCR.Runtime.UI
                     }
                     else if (_nativeSettingsActions.TryGetValue(id, out var action))
                     {
-                        // Remember the source page: an async model load may
-                        // complete after the operator switches categories.
+                        // Associate async character completion with its
+                        // initiating action, never with arbitrary dashboard
+                        // messages that may change while Settings stays open.
                         _nativeFeedbackCategory = _nativeSettings.SelectedCategory;
+                        var beforeCharacterGeneration = _characterUiOperationGeneration;
+                        _nativePendingCharacterGeneration =
+                            id == 300 || id == 302
+                                ? beforeCharacterGeneration + 1
+                                : -1;
                         action?.Invoke();
+                        if (_nativePendingCharacterGeneration > 0 &&
+                            _characterUiOperationGeneration == beforeCharacterGeneration)
+                        {
+                            // Validation rejected the action synchronously.
+                            _nativePendingCharacterGeneration = -1;
+                        }
                         var message = _lastActionMessage;
                         if (string.IsNullOrWhiteSpace(message))
                             message = "설정 작업이 처리되었습니다.";
-                        _nativeFeedbackMessage = message;
                         _nativeSettings.SetText(
                             90 + _nativeFeedbackCategory, message);
                     }
@@ -307,21 +318,6 @@ namespace VCR.Runtime.UI
                 }
             }
 
-            // Async character loading reports its final result through
-            // _lastActionMessage after this action callback has returned.
-            // Preserve the initiating page and update only when it changes;
-            // do not refresh editable fields or interfere with typing.
-            if (_nativeFeedbackCategory >= 0 &&
-                _nativeFeedbackCategory < 4 &&
-                !string.IsNullOrWhiteSpace(_lastActionMessage) &&
-                !string.Equals(_lastActionMessage, _nativeFeedbackMessage,
-                    StringComparison.Ordinal))
-            {
-                _nativeFeedbackMessage = _lastActionMessage;
-                _nativeSettings.SetText(
-                    90 + _nativeFeedbackCategory, _nativeFeedbackMessage);
-            }
-
             // Reassert this after actions; toggling the background preference
             // can change the property while this window still has focus.
             if (_nativeSettings.IsVisible)
@@ -331,13 +327,27 @@ namespace VCR.Runtime.UI
             }
         }
 
+        // Invoked only from the corresponding completed async load/reload.
+        // Unlike polling _lastActionMessage, this cannot misattribute an
+        // unrelated dashboard message to an earlier native Settings action.
+        private void CompleteNativeCharacterActionFeedback(int generation)
+        {
+            if (_nativePendingCharacterGeneration != generation)
+                return;
+            _nativePendingCharacterGeneration = -1;
+            if (_nativeSettings == null ||
+                string.IsNullOrWhiteSpace(_lastActionMessage))
+                return;
+            _nativeSettings.SetText(91, _lastActionMessage);
+        }
+
         private void DisposeNativeSettings()
         {
             _nativeSettings?.Dispose();
             _nativeSettings = null;
             _nativeSettingsActions.Clear();
             _nativeFeedbackCategory = -1;
-            _nativeFeedbackMessage = null;
+            _nativePendingCharacterGeneration = -1;
             _nativeTrackingFieldKeys.Clear();
             _nativeTrackingSourceIds.Clear();
             _nativeActiveTrackingSource = null;
