@@ -51,6 +51,17 @@ native executable SHA, exact Unity version, runtime report, platform,
 exit status, and runtime time limit. On failure it uploads the log and
 runner diagnosis; missing JSON is **FAIL**, not an assumed PASS.
 
+The runner also records `quitDispatchBeforeMarkerMs` (the difference
+between the two managed clocks) and
+`postManagedToProcessExitEstimateMs` (externally observed marker-to-PID-exit
+minus the Unity managed callback marker). The latter is an **estimate**:
+50 ms log polling and Unity/OS clock differences prevent stack-level
+attribution. Values at or above 2 seconds are explicitly called out in
+the runner log, and a headless marker-to-PID-exit delay **over 10 seconds**
+fails CI as a severe shutdown regression. A passing headless run does not
+establish acceptable latency on an actual visible desktop with tracking
+hardware.
+
 ## Evidence and exclusions
 
 CI outputs an archive per platform and separate startup/shutdown JSON
