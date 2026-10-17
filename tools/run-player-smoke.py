@@ -5,9 +5,11 @@ import datetime as dt
 import hashlib
 import json
 import os
+import posixpath
 import plistlib
 import platform
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import time
@@ -26,6 +28,61 @@ def require_headless_quit_budget(exit_ms):
             "Headless quit-to-PID-exit latency regression: " +
             str(exit_ms) + " ms exceeds " +
             str(MAX_HEADLESS_QUIT_TO_EXIT_MS) + " ms")
+
+
+# CI artifacts are produced from pull-request source and extracted on native
+# operating systems. Digest matching does not make archive member paths safe.
+MAX_ARCHIVE_MEMBERS = 100_000
+MAX_ARCHIVE_EXPANDED_BYTES = 8 * 1024 * 1024 * 1024
+
+
+def validate_player_archive(archive):
+    """Reject archive traversal, escaping links, duplicates and ZIP bombs.
+
+    Native macOS Players legitimately contain in-bundle symlinks; allow only
+    relative links whose normalized targets stay under the extraction root.
+    The archive is checked *before* invoking macOS unzip or Windows extractall.
+    """
+    seen = set()
+    total = 0
+    with zipfile.ZipFile(archive) as package:
+        members = package.infolist()
+        if not members or len(members) > MAX_ARCHIVE_MEMBERS:
+            raise RuntimeError("Invalid Player archive entry count")
+        for entry in members:
+            raw = entry.filename
+            if (not raw or "\\\\" in raw or "\\x00" in raw or
+                    raw.startswith("/") or raw.startswith("\\\\") or
+                    any(":" in part or part == ".."
+                        for part in raw.split("/"))):
+                raise RuntimeError("Unsafe Player archive path: " + repr(raw))
+            name = posixpath.normpath(raw)
+            if name == ".":
+                if not entry.is_dir():
+                    raise RuntimeError("Invalid Player archive root member")
+                continue
+            if name in seen:
+                raise RuntimeError("Duplicate Player archive path: " + name)
+            seen.add(name)
+            if name == ".." or name.startswith("../"):
+                raise RuntimeError("Escaping Player archive path: " + name)
+            total += entry.file_size
+            if (entry.file_size < 0 or entry.file_size > MAX_ARCHIVE_EXPANDED_BYTES or
+                    total > MAX_ARCHIVE_EXPANDED_BYTES):
+                raise RuntimeError("Oversized Player archive expansion")
+            mode = (entry.external_attr >> 16) & 0o170000
+            if mode == stat.S_IFLNK:
+                if entry.file_size > 4096:
+                    raise RuntimeError("Oversized Player archive link target")
+                target = package.read(entry).decode("utf-8", errors="strict")
+                if (not target or target.startswith("/") or
+                        "\\\\" in target or "\\x00" in target or
+                        any(":" in part for part in target.split("/"))):
+                    raise RuntimeError("Unsafe Player archive symlink: " + name)
+                destination = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(name), target))
+                if destination == ".." or destination.startswith("../"):
+                    raise RuntimeError("Escaping Player archive symlink: " + name)
 
 
 def sha256(path):
@@ -140,6 +197,8 @@ def execute(args):
         summary["archiveSha256"] = actual
         if recorded != actual:
             raise RuntimeError("Player artifact SHA-256 mismatch")
+        validate_player_archive(archive)
+        summary["archiveSafetyValidated"] = True
 
         # Preserve only logs and hashes as smoke artifacts, not the Player.
         unpacked = output.parent / ("unpacked-" + args.platform)
@@ -318,6 +377,41 @@ def self_test():
             assert exception.player_process_lifetime_ms >= 700
             assert exception.quit_marker_observed is True
             assert exception.quit_to_timeout_ms is not None
+    # Native ZIP extraction must reject escaping members/links *before*
+    # invoking Windows ZipFile.extractall or the macOS unzip subprocess.
+    with TemporaryDirectory() as zdir:
+        folder = Path(zdir)
+        zip_path = folder / "player.zip"
+        def write_archive(entries):
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                for name, data, is_symlink in entries:
+                    entry = zipfile.ZipInfo(name)
+                    if is_symlink:
+                        entry.create_system = 3
+                        entry.external_attr = (stat.S_IFLNK | 0o777) << 16
+                    archive.writestr(entry, data)
+        write_archive([
+            ("VirtualCharacterRender.app/Contents/MacOS/player", b"player", False),
+            ("VirtualCharacterRender.app/Contents/Frameworks/link",
+             b"../MacOS/player", True),
+        ])
+        validate_player_archive(zip_path)
+        for bad in (
+            [("../outside", b"unsafe", False)],
+            [("/absolute/file", b"unsafe", False)],
+            [("C:/windows.exe", b"unsafe", False)],
+            [("app/Contents/../../outside", b"unsafe", False)],
+            [("safe/file", b"a", False), ("safe/file", b"b", False)],
+            [("app/Contents/link", b"../../../outside", True)],
+            [("app/Contents/link", b"/etc/passwd", True)],
+        ):
+            write_archive(bad)
+            try:
+                validate_player_archive(zip_path)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("Unsafe Player archive unexpectedly accepted")
     # Smoke latency budget must be visible and stable; a 2-second native
     # teardown is diagnostic, while a >10-second headless hang is a failure.
     assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
