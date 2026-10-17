@@ -32,7 +32,10 @@ namespace VCR.Runtime.Application
             public bool noCharacter;
             public bool stopped;
             public bool passed;
-            public long quitManagedMilliseconds;
+            // Application.Quit() invocation can wait for Unity/native dispatch.
+            // Neither field claims to be the runtime's cleanup-only duration.
+            public long quitCallToManagedCallbackMs;
+            public long quitMarkerToManagedCallbackMs;
             public string error;
         }
 
@@ -139,8 +142,10 @@ namespace VCR.Runtime.Application
                     (_bootstrap?.LastShutdownError ??
                      scene?.Status.LastError ?? "runtime still active");
 
-            _evidence.quitManagedMilliseconds =
+            _evidence.quitCallToManagedCallbackMs =
                 _quitTimer?.ElapsedMilliseconds ?? -1;
+            _evidence.quitMarkerToManagedCallbackMs =
+                _bootstrap?.ExitElapsedMilliseconds ?? -1;
             _evidence.passed = _evidence.started &&
                 _evidence.sceneReady &&
                 _evidence.noCharacter &&
@@ -163,8 +168,11 @@ namespace VCR.Runtime.Application
 
             Debug.Log("VCR PLAYER SMOKE " +
                 (_evidence.passed ? "PASS" : "FAIL") +
-                ", normal quit cleanup " +
-                _evidence.quitManagedMilliseconds + " ms: " + _evidence.error);
+                ", Application.Quit call to callback " +
+                _evidence.quitCallToManagedCallbackMs +
+                " ms, wantsToQuit to callback " +
+                _evidence.quitMarkerToManagedCallbackMs +
+                " ms: " + _evidence.error);
         }
 
         private static string GetReportPath()
