@@ -3110,6 +3110,7 @@ namespace VCR.Runtime.UI
                     exception.Message;
             }
 
+            CompleteNativeCharacterActionFeedback(operationGeneration);
             RefreshAll();
         }
 
@@ -3180,6 +3181,7 @@ namespace VCR.Runtime.UI
                     exception.Message;
             }
 
+            CompleteNativeCharacterActionFeedback(operationGeneration);
             RefreshAll();
         }
 
