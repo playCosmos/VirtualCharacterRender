@@ -31,6 +31,9 @@ namespace VCR.Runtime.Application
             public bool started;
             public bool sceneReady;
             public bool noCharacter;
+            // Capture the *applied* camera field of view, not just config JSON:
+            // native relaunch evidence must prove settings reached the scene.
+            public float observedCameraFieldOfView;
             public bool stopped;
             public bool passed;
             // Application.Quit() invocation can wait for Unity/native dispatch.
@@ -92,6 +95,11 @@ namespace VCR.Runtime.Application
                     scene.State == SceneRuntimeState.Ready;
                 evidence.noCharacter = scene != null &&
                     scene.CurrentCharacter == null;
+                if (evidence.sceneReady)
+                {
+                    evidence.observedCameraFieldOfView =
+                        scene.CaptureConfiguration().Camera.FieldOfView;
+                }
 
                 if (!evidence.started ||
                     !evidence.sceneReady ||
