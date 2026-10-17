@@ -14,6 +14,7 @@ namespace VCR.Runtime.Application
             4L * 1024L * 1024L;
 
         private readonly string _path;
+        private bool _backupRequiresRepair;
 
         public RuntimeConfigurationStore(
             string path)
@@ -37,6 +38,7 @@ namespace VCR.Runtime.Application
             out string error)
         {
             LastLoadWarning = null;
+            _backupRequiresRepair = false;
             configuration = SceneRuntimeConfiguration.Default;
             error = null;
 
@@ -55,8 +57,10 @@ namespace VCR.Runtime.Application
                         out error,
                         out _))
                 {
+                    _backupRequiresRepair = true;
                     return false;
                 }
+                _backupRequiresRepair = true;
                 LastLoadWarning =
                     "Configuration primary file is missing; a previous " +
                     ".bak generation was loaded. Save explicitly to restore " +
@@ -73,6 +77,7 @@ namespace VCR.Runtime.Application
             {
                 return true;
             }
+            _backupRequiresRepair = true;
 
             // A future-version configuration must remain untouched. Do not
             // silently downgrade it by loading an old backup.
@@ -185,12 +190,13 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
-                if (!string.IsNullOrWhiteSpace(LastLoadWarning))
+                if (_backupRequiresRepair ||
+                    !string.IsNullOrWhiteSpace(LastLoadWarning))
                 {
-                    // The primary file was unreadable before this explicit
-                    // save, so File.Replace just moved bad bytes to .bak.
-                    // Refresh the backup atomically from the newly saved,
-                    // valid JSON rather than leaving future recovery broken.
+                    // Explicitly accepting the current settings after a
+                    // failed load can rotate invalid primary bytes into
+                    // .bak even when no fallback was possible. Refresh the
+                    // recovery slot with known-valid JSON in both cases.
                     if (!BoundedTextFile.TryWriteUtf8Atomic(
                             _path + ".bak",
                             json,
@@ -200,6 +206,12 @@ namespace VCR.Runtime.Application
                         Debug.LogWarning(
                             "VCR configuration saved but recovery backup " +
                             "refresh failed: " + backupError);
+                        // Keep trying to repair the backup on future saves.
+                        _backupRequiresRepair = true;
+                    }
+                    else
+                    {
+                        _backupRequiresRepair = false;
                     }
                     LastLoadWarning = null;
                 }
