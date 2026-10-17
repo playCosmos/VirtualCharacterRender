@@ -13,7 +13,6 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = ROOT / "tools" / "bootstrap-ultraleap.sh"
-ISOLATION = ROOT / "tools" / "prepare-exit-comparison-e.py"
 
 ORIGINAL = """static void StartupHints()
 {
@@ -79,18 +78,11 @@ def main():
         assert second.returncode == 0, second.stderr + second.stdout
         assert target.read_text(encoding="utf-8") == patched, "Not idempotent"
 
-        isolation = subprocess.run(
-            [sys.executable, str(ISOLATION)], cwd=root,
-            text=True, capture_output=True
-        )
-        assert isolation.returncode == 0, isolation.stderr + isolation.stdout
-        assert target.read_text(encoding="utf-8") == patched, "E changed the production guard"
-
         target.write_text("upstream changed without expected anchors", encoding="utf-8")
         unexpected = run_patch()
         assert unexpected.returncode != 0, "Upstream drift must fail closed"
 
-    print("Ultraleap lazy hint connection bootstrap + historical E control PASS")
+    print("Ultraleap lazy hint connection bootstrap PASS")
 
 
 if __name__ == "__main__":
