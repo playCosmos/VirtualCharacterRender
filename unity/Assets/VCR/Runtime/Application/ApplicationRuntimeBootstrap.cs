@@ -70,6 +70,11 @@ namespace VCR.Runtime.Application
         public string ConfigurationPath =>
             _configurationStore?.Path;
 
+        // Surfaces a successful fallback to a prior configuration without
+        // treating recovery as an error or hiding it from the operator.
+        public string LastConfigurationLoadWarning =>
+            _configurationStore?.LastLoadWarning;
+
         public bool IsStarted =>
             _started;
 
