@@ -58,6 +58,17 @@ traversal, duplicate members, external/escaping symlinks and excessive
 expanded size; every invocation uses a freshly unpacked directory and
 macOS bundle executable names must be simple filenames. This protects the
 native CI runner; the digest alone is not an extraction-safety guarantee.
+The runner overrides `--vcr-config` to a fresh, isolated file rather
+than using the host account's persistent settings. After the first normal
+quit it validates schema version 1 and bounded JSON size, edits an allowed
+camera field-of-view to a non-default test value, and launches the **same
+native executable a second time**. The second Player must report that the
+new value reached the running scene and that normal quit produced both
+a valid primary and a valid atomic backup. Neither report can PASS based
+on file existence alone. The runner preserves the first-run and
+`relaunch-*` logs plus JSON with the build provenance. These tests exercise
+real native save/load and scene-apply behavior on each CI platform, but
+do not establish user-profile migration or power-loss durability.
 On failure it uploads the log and runner diagnosis; missing JSON is
 **FAIL**, not an assumed PASS.
 
