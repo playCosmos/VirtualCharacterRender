@@ -1094,6 +1094,35 @@ namespace VCR.Editor.P1
                     "configuration store must round-trip the current version",
                     failures);
 
+                // The second atomic save retains exactly one prior
+                // config generation. Corruption must recover that generation
+                // without overwriting the unreadable primary on disk.
+                Expect(
+                    configurationStore.TrySave(
+                        scene.CaptureConfiguration(),
+                        out var backupSeedError) &&
+                    string.IsNullOrEmpty(backupSeedError) &&
+                    File.Exists(configurationPath + ".bak"),
+                    "configuration store must retain a previous generation",
+                    failures);
+
+                File.WriteAllText(
+                    configurationPath,
+                    "{ invalid JSON");
+                Expect(
+                    configurationStore.TryLoad(
+                        out var recoveredConfiguration,
+                        out var recoveredError) &&
+                    string.IsNullOrWhiteSpace(recoveredError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    recoveredConfiguration.Rendering.Width ==
+                        captured.Rendering.Width &&
+                    File.ReadAllText(configurationPath) ==
+                        "{ invalid JSON",
+                    "corrupt current configuration must recover the last good backup without silently overwriting the source",
+                    failures);
+
                 var futureEnvelope =
                     new RuntimeConfigurationEnvelope
                     {
@@ -1115,8 +1144,10 @@ namespace VCR.Editor.P1
                         out _,
                         out var futureVersionError) &&
                     !string.IsNullOrWhiteSpace(
-                        futureVersionError),
-                    "configuration store must reject unsupported future versions",
+                        futureVersionError) &&
+                    string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning),
+                    "configuration store must reject unsupported future versions without recovering a stale backup",
                     failures);
 
                 var beforeSuspendShutdownCount = outputAdapter.ShutdownCount;
