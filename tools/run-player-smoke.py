@@ -20,6 +20,14 @@ import zipfile
 MAX_HEADLESS_QUIT_TO_EXIT_MS = 10_000
 
 
+def require_headless_quit_budget(exit_ms):
+    if exit_ms is not None and exit_ms > MAX_HEADLESS_QUIT_TO_EXIT_MS:
+        raise RuntimeError(
+            "Headless quit-to-PID-exit latency regression: " +
+            str(exit_ms) + " ms exceeds " +
+            str(MAX_HEADLESS_QUIT_TO_EXIT_MS) + " ms")
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -229,11 +237,7 @@ def execute(args):
             if exit_ms is not None else None
         )
         summary["maxHeadlessQuitToExitMs"] = MAX_HEADLESS_QUIT_TO_EXIT_MS
-        if exit_ms is not None and exit_ms > MAX_HEADLESS_QUIT_TO_EXIT_MS:
-            raise RuntimeError(
-                "Headless quit-to-PID-exit latency regression: " +
-                str(exit_ms) + " ms exceeds " +
-                str(MAX_HEADLESS_QUIT_TO_EXIT_MS) + " ms")
+        require_headless_quit_budget(exit_ms)
         if (summary["postManagedToProcessExitEstimateMs"] is not None and
                 summary["postManagedToProcessExitEstimateMs"] >= 2_000):
             print("Native teardown estimate exceeds 2000 ms: " +
@@ -317,6 +321,14 @@ def self_test():
     # Smoke latency budget must be visible and stable; a 2-second native
     # teardown is diagnostic, while a >10-second headless hang is a failure.
     assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
+    for allowed in (None, 0, 2_125.0, 10_000.0):
+        require_headless_quit_budget(allowed)
+    try:
+        require_headless_quit_budget(10_001.0)
+    except RuntimeError as exc:
+        assert "latency regression" in str(exc)
+    else:
+        raise AssertionError("Expected severe quit latency to fail smoke")
     print("Native Player smoke exit timer self-test PASS")
 
 
