@@ -2902,7 +2902,11 @@ namespace VCR.Runtime.UI
                     out var error))
             {
                 _lastActionMessage =
-                    "프로파일을 불러왔습니다.";
+                    string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadWarning)
+                        ? "프로파일을 불러왔습니다."
+                        : "현재 설정 파일이 손상되어 이전 백업에서 복구했습니다. " +
+                          "원본 설정 파일은 보존되었습니다.";
             }
             else
             {
