@@ -34,11 +34,12 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
     logfile.unlink(missing_ok=True)
     started = time.monotonic()
     marker_at = None
+    marker_observed_after_exit = False
     offset = 0
     carry = b""
     marker = b"VCR exit: quit requested (t=0 ms)"
-    def drain_marker():
-        nonlocal marker_at, offset, carry
+    def drain_marker(after_exit=False):
+        nonlocal marker_at, marker_observed_after_exit, offset, carry
         if marker_at is not None or not logfile.exists():
             return
         try:
@@ -50,6 +51,7 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
                 combined = carry + chunk
                 if marker in combined:
                     marker_at = time.monotonic()
+                    marker_observed_after_exit = after_exit
                 carry = combined[-(len(marker) - 1):]
         except OSError:
             # Unity log is best-effort while it is held by another process.
@@ -67,7 +69,7 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
                 time.sleep(0.05)
             return_code = process.returncode
             # Do not lose buffered quit markers from fast processes.
-            drain_marker()
+            drain_marker(after_exit=True)
         except BaseException as exception:
             drain_marker()
             elapsed = round((time.monotonic() - started) * 1000, 1)
@@ -87,7 +89,8 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
         return_code,
         round((finished - started) * 1000, 1),
         round((finished - marker_at) * 1000, 1)
-        if marker_at is not None else None,
+        if marker_at is not None and not marker_observed_after_exit else None,
+        marker_observed_after_exit,
     )
 
 
@@ -166,11 +169,14 @@ def execute(args):
         ]
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
         try:
-            code, lifetime_ms, exit_ms = run_player_with_exit_trace(
+            code, lifetime_ms, exit_ms, marker_after_exit = run_player_with_exit_trace(
                 command, unpacked, logfile, runnerlog, timeout=100)
             summary["exitCode"] = code
             summary["playerProcessLifetimeMs"] = lifetime_ms
             summary["quitToProcessExitMs"] = exit_ms
+            summary["quitMarkerObservedAfterExit"] = marker_after_exit
+            if marker_after_exit:
+                summary["quitToProcessExitLowerBoundMs"] = 0
             print("Player process lifetime (startup + shutdown): " +
                   str(lifetime_ms) + " ms", flush=True)
             print("Quit marker to process exit (best-effort): " +
@@ -249,10 +255,22 @@ def self_test():
         command = [sys.executable, str(stub), "-logFile", str(root / "fast.log")]
         (root / "fast.log").write_text(
             "VCR exit: quit requested (t=0 ms)\\nSTALE RUN\\n", encoding="utf-8")
-        code, lifetime, quit_ms = run_player_with_exit_trace(
+        code, lifetime, quit_ms, late = run_player_with_exit_trace(
             command, root, root / "fast.log", root / "fast.out", timeout=4)
-        assert code == 0 and lifetime >= 0 and quit_ms is not None
+        assert code == 0 and lifetime >= 0
+        assert (late and quit_ms is None) or (not late and quit_ms is not None)
         assert "STALE RUN" not in (root / "fast.log").read_text()
+
+        # Force a post-exit first drain: never turn it into a fabricated
+        # near-zero marker-to-PID interval.
+        from unittest.mock import patch
+        real_sleep = time.sleep
+        def wait_past_quick_exit(seconds):
+            real_sleep(max(seconds, 0.15))
+        with patch.object(time, "sleep", wait_past_quick_exit):
+            code, lifetime, quit_ms, late = run_player_with_exit_trace(
+                command, root, root / "fast.log", root / "fast-late.out", timeout=4)
+        assert code == 0 and late and quit_ms is None
 
         log = root / "hung.log"
         command = [sys.executable, str(stub), "-logFile", str(log), "--hang"]
