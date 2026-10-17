@@ -14,6 +14,12 @@ import time
 import zipfile
 
 
+# Generous headless regression budget: the no-debug Windows baseline may
+# spend ~2 s in Unity's native teardown even with trivial managed cleanup.
+# A 10-second quit tail indicates a severe regression, not ordinary jitter.
+MAX_HEADLESS_QUIT_TO_EXIT_MS = 10_000
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -213,6 +219,27 @@ def execute(args):
             raise RuntimeError("Unity quit marker elapsed beyond initial quit call")
         summary["quitCallToManagedCallbackMs"] = call_to_callback
         summary["quitMarkerToManagedCallbackMs"] = marker_to_callback
+        summary["quitDispatchBeforeMarkerMs"] = call_to_callback - marker_to_callback
+        # The OS process timer observes a Player.log marker during polling.
+        # This subtraction is an approximation (up to one poll interval),
+        # NOT a precise native stack/teardown measurement.
+        exit_ms = summary.get("quitToProcessExitMs")
+        summary["postManagedToProcessExitEstimateMs"] = (
+            round(max(0, exit_ms - marker_to_callback), 1)
+            if exit_ms is not None else None
+        )
+        summary["maxHeadlessQuitToExitMs"] = MAX_HEADLESS_QUIT_TO_EXIT_MS
+        if exit_ms is not None and exit_ms > MAX_HEADLESS_QUIT_TO_EXIT_MS:
+            raise RuntimeError(
+                "Headless quit-to-PID-exit latency regression: " +
+                str(exit_ms) + " ms exceeds " +
+                str(MAX_HEADLESS_QUIT_TO_EXIT_MS) + " ms")
+        if (summary["postManagedToProcessExitEstimateMs"] is not None and
+                summary["postManagedToProcessExitEstimateMs"] >= 2_000):
+            print("Native teardown estimate exceeds 2000 ms: " +
+                  str(summary["postManagedToProcessExitEstimateMs"]) +
+                  " ms (poll-resolution estimate; not a managed cleanup delay)",
+                  flush=True)
         if evidence.get("suite") != "player-startup-shutdown":
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
@@ -287,6 +314,9 @@ def self_test():
             assert exception.player_process_lifetime_ms >= 700
             assert exception.quit_marker_observed is True
             assert exception.quit_to_timeout_ms is not None
+    # Smoke latency budget must be visible and stable; a 2-second native
+    # teardown is diagnostic, while a >10-second headless hang is a failure.
+    assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
     print("Native Player smoke exit timer self-test PASS")
 
 
