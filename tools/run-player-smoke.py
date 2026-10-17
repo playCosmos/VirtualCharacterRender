@@ -51,7 +51,7 @@ def validate_player_archive(archive):
             raise RuntimeError("Invalid Player archive entry count")
         for entry in members:
             raw = entry.filename
-            if (not raw or "\\\\" in raw or "\\x00" in raw or
+            if (not raw or "\\" in raw or "\x00" in raw or
                     raw.startswith("/") or raw.startswith("\\\\") or
                     any(":" in part or part == ".."
                         for part in raw.split("/"))):
@@ -76,7 +76,7 @@ def validate_player_archive(archive):
                     raise RuntimeError("Oversized Player archive link target")
                 target = package.read(entry).decode("utf-8", errors="strict")
                 if (not target or target.startswith("/") or
-                        "\\\\" in target or "\\x00" in target or
+                        "\\" in target or "\x00" in target or
                         any(":" in part for part in target.split("/"))):
                     raise RuntimeError("Unsafe Player archive symlink: " + name)
                 destination = posixpath.normpath(
