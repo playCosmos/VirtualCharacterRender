@@ -164,7 +164,8 @@ namespace VCR.Runtime.Core
             string path,
             string text,
             long maxBytes,
-            out string error)
+            out string error,
+            bool preserveBackup = false)
         {
             error = null;
 
@@ -227,8 +228,14 @@ namespace VCR.Runtime.Core
                         fullPath,
                         backupPath);
 
-                    TryDelete(
-                        backupPath);
+                    // Configuration files opt in to preserving exactly one
+                    // last-known-good generation for crash/corruption recovery.
+                    // Other bounded-text users retain historical behavior.
+                    if (!preserveBackup)
+                    {
+                        TryDelete(
+                            backupPath);
+                    }
                 }
                 else
                 {
