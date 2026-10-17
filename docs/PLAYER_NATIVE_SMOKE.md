@@ -50,8 +50,13 @@ path, so the historical headless CI runs cannot prove it works.
 
 `tools/run-player-smoke.py` verifies the ZIP source SHA, package digest,
 native executable SHA, exact Unity version, runtime report, platform,
-exit status, and runtime time limit. On failure it uploads the log and
-runner diagnosis; missing JSON is **FAIL**, not an assumed PASS.
+exit status, and runtime time limit. Before extraction, it rejects archive
+traversal, duplicate members, external/escaping symlinks and excessive
+expanded size; every invocation uses a freshly unpacked directory and
+macOS bundle executable names must be simple filenames. This protects the
+native CI runner; the digest alone is not an extraction-safety guarantee.
+On failure it uploads the log and runner diagnosis; missing JSON is
+**FAIL**, not an assumed PASS.
 
 The runner also records `quitDispatchBeforeMarkerMs` (the difference
 between the two managed clocks) and
