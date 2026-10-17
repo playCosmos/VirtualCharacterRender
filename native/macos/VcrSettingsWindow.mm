@@ -106,6 +106,9 @@ __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
                     backing:NSBackingStoreBuffered
                       defer:NO];
     [settingsWindow setTitle:@"VirtualCharacterRender - 환경설정"];
+    // The detail document is 660pt wide and horizontal scrolling is disabled.
+    // Do not allow a narrower content area to clip its text fields/buttons.
+    [settingsWindow setContentMinSize:NSMakeSize(940, 480)];
     [settingsWindow setDelegate:delegate];
     [settingsWindow center];
     settingsWindow.level = NSNormalWindowLevel;
