@@ -14,6 +14,7 @@ import time
 import uuid
 import zipfile
 import platform
+import re
 
 QUIT = b"VCR exit: quit requested (t=0 ms)"
 MANAGED_END = b"VCR exit: OnApplicationQuit finished at "
@@ -89,10 +90,16 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
         if "quitRequestedAtMs" not in events and QUIT in combined:
             events["quitRequestedAtMs"] = now_ms
             events["quitMarkerObservedAfterExit"] = after_exit
-        if "managedQuitFinishedAtMs" not in events and MANAGED_END in combined:
-            events["managedQuitFinishedAtMs"] = now_ms
-        if "lateManagedQuitAtMs" not in events and LATE_MANAGED_END in combined:
-            events["lateManagedQuitAtMs"] = now_ms
+        if "managedQuitFinishedAtMs" not in events:
+            match = re.search(rb"VCR exit: OnApplicationQuit finished at (\d+) ms", combined)
+            if match:
+                events["managedQuitFinishedAtMs"] = now_ms
+                events["managedQuitFinishedElapsedMs"] = int(match.group(1))
+        if "lateManagedQuitAtMs" not in events:
+            match = re.search(rb"VCR exit: late managed quit callback at (\d+) ms", combined)
+            if match:
+                events["lateManagedQuitAtMs"] = now_ms
+                events["lateManagedQuitElapsedMs"] = int(match.group(1))
         tail = combined[-(max(len(QUIT), len(MANAGED_END),
                               len(LATE_MANAGED_END)) - 1):]
     with (output / "process-stdout.log").open("wb") as out:
@@ -121,7 +128,19 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
     # A Player can write its complete quit log and terminate before the first
     # poll. Always drain after exit; report the marker as late-observed rather
     # than pretending a precise quit timestamp was sampled while alive.
-    read_player_log(after_exit=process.poll() is not None)
+    exited = process.poll() is not None
+    read_player_log(after_exit=exited)
+    # The last visible-window observation may precede PID exit. Observe
+    # disappearance one final time, without claiming an exact earlier time.
+    if last_visible is not None and "windowsGoneAtMs" not in events:
+        try:
+            windows = windows_visible_windows(process.pid)
+            if windows is not None and not windows:
+                events["windowsGoneAtMs"] = round(
+                    (time.monotonic() - started) * 1000)
+                events["windowsGoneObservedAfterExit"] = exited
+        except (OSError, AttributeError):
+            pass
     finished = time.monotonic()
     events["processLifetimeMs"] = round((finished - started) * 1000)
     events["processExited"] = process.poll() is not None
@@ -135,10 +154,16 @@ def observe(executable, args, output, limit_seconds=180, script_first=False):
             else:
                 events["quitToProcessExitMs"] = None
                 events["quitToProcessExitLowerBoundMs"] = 0
-        if "managedQuitFinishedAtMs" in events:
+        if "managedQuitFinishedElapsedMs" in events:
+            # Unity's internal elapsed marker is more precise than two
+            # log-read observations, especially when both arrive post-exit.
+            events["quitToManagedFinishMs"] = events["managedQuitFinishedElapsedMs"]
+        elif "managedQuitFinishedAtMs" in events and not events.get("quitMarkerObservedAfterExit"):
             events["quitToManagedFinishMs"] = (events["managedQuitFinishedAtMs"] -
                                                  events["quitRequestedAtMs"])
-        if "lateManagedQuitAtMs" in events:
+        if "lateManagedQuitElapsedMs" in events:
+            events["quitToLateManagedMs"] = events["lateManagedQuitElapsedMs"]
+        elif "lateManagedQuitAtMs" in events and not events.get("quitMarkerObservedAfterExit"):
             events["quitToLateManagedMs"] = (events["lateManagedQuitAtMs"] -
                                               events["quitRequestedAtMs"])
         if "windowsGoneAtMs" in events:
@@ -193,7 +218,9 @@ def self_test():
         assert observe(Path(sys.executable), [str(stub)], output, 5, script_first=True) == 0
         data = json.loads((output / "exit-diagnosis.json").read_text())
         assert data["quitToProcessExitMs"] >= 100
-        assert data["quitToManagedFinishMs"] >= 100
+        # Do not mistake polling latency for Unity managed cleanup duration.
+        assert data["quitToManagedFinishMs"] == 8
+        assert data["managedQuitFinishedElapsedMs"] == 8
         assert (output / "exit-evidence.zip").is_file()
         # A fast Player may terminate before our first poll. Final log
         # draining must still detect its quit request and pass.
@@ -203,8 +230,33 @@ def self_test():
         rapid = root / "rapid"
         assert observe(Path(sys.executable), [str(stub)], rapid, 5,
                        script_first=True) == 0
-        assert json.loads((rapid / "exit-diagnosis.json").read_text())[
-            "processExited"] is True
+        rapid_data = json.loads((rapid / "exit-diagnosis.json").read_text())
+        assert rapid_data["processExited"] is True
+        assert rapid_data["managedQuitFinishedElapsedMs"] == 8
+        assert rapid_data["quitToManagedFinishMs"] == 8
+        if rapid_data.get("quitMarkerObservedAfterExit"):
+            assert rapid_data["quitToProcessExitMs"] is None
+        # Simulate a window surviving every live probe, then disappearing
+        # at process exit. The final read-only probe must record it.
+        from unittest.mock import patch
+        import os
+        def visible_until_exit(pid):
+            try:
+                os.kill(pid, 0)
+                return ["UnityWndClass"]
+            except ProcessLookupError:
+                return []
+        stub.write_text(code, encoding="utf-8")
+        window_test = root / "window-after-exit"
+        with patch.dict(observe.__globals__, {
+            "windows_visible_windows": visible_until_exit
+        }):
+            assert observe(Path(sys.executable), [str(stub)], window_test, 5,
+                           script_first=True) == 0
+        window_data = json.loads(
+            (window_test / "exit-diagnosis.json").read_text())
+        assert window_data.get("windowsGoneAtMs") is not None
+        assert window_data.get("windowsGoneObservedAfterExit") is True
     print("GUI shutdown diagnosis harness self-test PASS")
 
 
