@@ -179,6 +179,12 @@ namespace VCR.Runtime.Application
                     {
                         sceneRuntime.ApplyConfiguration(
                             configuration);
+                        // Even when a backup loaded successfully, the
+                        // unreadable primary remains on disk. A normal quit
+                        // must not overwrite it or rotate a corrupt .bak.
+                        _suppressAutomaticConfigurationSave =
+                            !string.IsNullOrWhiteSpace(
+                                startupConfigurationStore.LastLoadWarning);
                     }
                     else
                     {
@@ -341,7 +347,9 @@ namespace VCR.Runtime.Application
 
                 sceneRuntime.ApplyConfiguration(
                     configuration);
-                _suppressAutomaticConfigurationSave = false;
+                _suppressAutomaticConfigurationSave =
+                    !string.IsNullOrWhiteSpace(
+                        _configurationStore.LastLoadWarning);
                 _configurationLoadError = null;
                 return true;
             }
@@ -496,9 +504,15 @@ namespace VCR.Runtime.Application
                 {
                     succeeded = false;
                     error =
-                        "Automatic configuration save suppressed because " +
-                        "the previous configuration could not be loaded. " +
-                        "The original file and backup were not overwritten.";
+                        !string.IsNullOrWhiteSpace(
+                            _configurationStore?.LastLoadWarning)
+                            ? "Automatic configuration save suppressed " +
+                              "because settings were recovered from a " +
+                              "previous backup. Explicitly save to accept " +
+                              "the recovered settings; original files were preserved."
+                            : "Automatic configuration save suppressed because " +
+                              "the previous configuration could not be loaded. " +
+                              "The original file and backup were not overwritten.";
                     Debug.LogWarning("VCR: " + error, this);
                 }
                 else
