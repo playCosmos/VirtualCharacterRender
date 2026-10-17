@@ -86,6 +86,18 @@ def validate_player_archive(archive):
                     raise RuntimeError("Escaping Player archive symlink: " + name)
 
 
+def require_build_variant(platform_name, development_build):
+    """Verify that 'nodebug' artifacts are actually built without Dev flags."""
+    if type(development_build) is not bool:
+        raise RuntimeError("Native Player omitted development-build evidence")
+    expected = not platform_name.endswith("-nodebug")
+    if development_build is not expected:
+        raise RuntimeError(
+            "Player development mode mismatch: expected " +
+            str(expected) + " for " + platform_name +
+            ", reported " + str(development_build))
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -314,6 +326,8 @@ def execute(args):
             raise RuntimeError("Unexpected Player smoke suite")
         if evidence.get("unityVersion") != "6000.3.25f1":
             raise RuntimeError("Player Unity version mismatch")
+        require_build_variant(args.platform, evidence.get("developmentBuild"))
+        summary["developmentBuild"] = evidence["developmentBuild"]
         if args.platform.startswith("windows") and evidence.get("platform") != "WindowsPlayer":
             raise RuntimeError("Expected a native Windows Player")
         if args.platform.startswith("macos") and evidence.get("platform") != "OSXPlayer":
@@ -419,6 +433,16 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Unsafe Player archive unexpectedly accepted")
+    for variant in ("windows", "windows-nodebug", "macos", "macos-nodebug"):
+        expected = not variant.endswith("-nodebug")
+        require_build_variant(variant, expected)
+        for wrong in (not expected, None, "false", 0):
+            try:
+                require_build_variant(variant, wrong)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("Wrong Player build mode accepted")
     # Smoke latency budget must be visible and stable; a 2-second native
     # teardown is diagnostic, while a >10-second headless hang is a failure.
     assert MAX_HEADLESS_QUIT_TO_EXIT_MS == 10_000
