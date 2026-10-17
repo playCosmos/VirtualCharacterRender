@@ -92,6 +92,14 @@ def generate(root):
     manifest = json.loads((root / "unity/Packages/manifest.json").read_text(encoding="utf-8"))
     lock = json.loads((root / "unity/Packages/packages-lock.json").read_text(encoding="utf-8"))
     entries = inspect_lock(manifest, lock)
+    # Include every transitive as well as direct package in the audit
+    # artifact. Unity registry/builtin dependencies can carry notices too.
+    resolved_entries = inspect_lock(
+        {"dependencies": {
+            name: record.get("version") if isinstance(record, dict) else None
+            for name, record in lock["dependencies"].items()
+        }},
+        lock)
     pins = bootstrap_pins(root)
     requested = {x["name"]: x["requested"] for x in entries}
     require(requested.get("com.github.homuler.mediapipe") ==
@@ -109,7 +117,8 @@ def generate(root):
         "distributionApproved": False,
         "disclaimer": "Pin verification only. Not SPDX SBOM, license clearance or distribution approval.",
         "directUnityPackages": entries,
-        "lockedPackageCount": len(lock["dependencies"]),
+        "resolvedUnityPackages": resolved_entries,
+        "lockedPackageCount": len(resolved_entries),
         "bootstrapInputs": pins,
         "outstandingCommercialChecks": [
             "Verify redistribution licenses and required notices per dependency",
@@ -124,6 +133,8 @@ def self_test():
     inventory = generate(ROOT)
     assert inventory["licenseAuditApproved"] is False
     assert len(inventory["directUnityPackages"]) >= 5
+    assert len(inventory["resolvedUnityPackages"]) >= len(inventory["directUnityPackages"])
+    assert inventory["lockedPackageCount"] == len(inventory["resolvedUnityPackages"])
     manifest = json.loads((ROOT / "unity/Packages/manifest.json").read_text(encoding="utf-8"))
     lock = json.loads((ROOT / "unity/Packages/packages-lock.json").read_text(encoding="utf-8"))
     bad = json.loads(json.dumps(manifest))
