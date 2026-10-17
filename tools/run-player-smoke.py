@@ -144,7 +144,7 @@ def execute(args):
         # Preserve only logs and hashes as smoke artifacts, not the Player.
         unpacked = output.parent / ("unpacked-" + args.platform)
         unpacked.mkdir(exist_ok=True)
-        if args.platform == "macos":
+        if args.platform.startswith("macos"):
             subprocess.run(
                 ["unzip", "-q", str(archive), "-d", str(unpacked)],
                 check=True,
@@ -250,7 +250,7 @@ def execute(args):
             raise RuntimeError("Player Unity version mismatch")
         if args.platform.startswith("windows") and evidence.get("platform") != "WindowsPlayer":
             raise RuntimeError("Expected a native Windows Player")
-        if args.platform == "macos" and evidence.get("platform") != "OSXPlayer":
+        if args.platform.startswith("macos") and evidence.get("platform") != "OSXPlayer":
             raise RuntimeError("Expected a native macOS Player")
         if summary["exitCode"] != 0:
             raise RuntimeError("Player failed with exit code " + str(summary["exitCode"]))
@@ -337,7 +337,7 @@ if __name__ == "__main__":
         self_test()
         sys.exit(0)
     cli = argparse.ArgumentParser()
-    cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos"), required=True)
+    cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos", "macos-nodebug"), required=True)
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
     cli.add_argument("--output", required=True)
