@@ -1144,6 +1144,21 @@ namespace VCR.Editor.P1
                     "backup must remain recoverable after saving a previously damaged config",
                     failures);
 
+                // Losing the primary must not discard a valid backup.
+                File.Delete(configurationPath);
+                Expect(
+                    configurationStore.TryLoad(
+                        out var recoveredMissingPrimary,
+                        out var missingPrimaryError) &&
+                    string.IsNullOrEmpty(missingPrimaryError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    recoveredMissingPrimary.Rendering.Width ==
+                        captured.Rendering.Width &&
+                    !File.Exists(configurationPath),
+                    "missing primary configuration must recover a valid backup without silently recreating the file",
+                    failures);
+
                 var futureEnvelope =
                     new RuntimeConfigurationEnvelope
                     {
