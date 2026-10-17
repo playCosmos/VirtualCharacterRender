@@ -50,7 +50,10 @@ path, so the historical headless CI runs cannot prove it works.
 
 `tools/run-player-smoke.py` verifies the ZIP source SHA, package digest,
 native executable SHA, exact Unity version, runtime report, platform,
-exit status, and runtime time limit. Before extraction, it rejects archive
+exit status, runtime time limit and the Player's actual
+`Debug.isDebugBuild` flag. The flag must be true for development builds and
+false for `windows-nodebug` / `macos-nodebug`; workflow labels alone are not
+proof of the compiler mode. Before extraction, it rejects archive
 traversal, duplicate members, external/escaping symlinks and excessive
 expanded size; every invocation uses a freshly unpacked directory and
 macOS bundle executable names must be simple filenames. This protects the
