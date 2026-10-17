@@ -54,6 +54,10 @@ jobs:
             unityTarget: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
             outputFolder: macOS
+          - platform: macos-nodebug
+            unityTarget: StandaloneOSX
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacWithoutDebuggingFromMenu
+            outputFolder: macOSNoDebug
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
@@ -150,6 +154,8 @@ jobs:
           - platform: windows-nodebug
             runner: windows-latest
           - platform: macos
+            runner: macos-15
+          - platform: macos-nodebug
             runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
