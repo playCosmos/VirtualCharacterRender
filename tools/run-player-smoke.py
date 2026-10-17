@@ -21,6 +21,8 @@ import zipfile
 # spend ~2 s in Unity's native teardown even with trivial managed cleanup.
 # A 10-second quit tail indicates a severe regression, not ordinary jitter.
 MAX_HEADLESS_QUIT_TO_EXIT_MS = 10_000
+NATIVE_CONFIG_PROBE_FOV = 42.5
+MAX_NATIVE_CONFIG_BYTES = 4 * 1024 * 1024
 
 
 def require_headless_quit_budget(exit_ms):
@@ -104,6 +106,53 @@ def sha256(path):
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def smoke_command(executable, logfile, report_path, config_path):
+    return [
+        str(executable), "-batchmode", "-nographics",
+        "-screen-fullscreen", "0", "-logFile", str(logfile),
+        "--vcr-smoke-report=" + str(report_path),
+        "--vcr-config=" + str(config_path),
+    ]
+
+
+def read_smoke_configuration(path):
+    if not path.is_file() or path.stat().st_size > MAX_NATIVE_CONFIG_BYTES:
+        raise RuntimeError("Native Player did not save a bounded runtime configuration")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if type(payload) is not dict or type(payload.get("Version")) is not int or payload["Version"] != 1:
+        raise RuntimeError("Native Player configuration version is missing or unexpected")
+    scene = payload.get("Scene")
+    camera = scene.get("Camera") if type(scene) is dict else None
+    fov = camera.get("FieldOfView") if type(camera) is dict else None
+    if type(fov) not in (int, float) or not 1 <= fov <= 179:
+        raise RuntimeError("Native Player configuration camera FOV is invalid")
+    return payload
+
+
+def require_smoke_relaunch_evidence(report, platform_name, expected_fov):
+    if report.get("suite") != "player-startup-shutdown":
+        raise RuntimeError("Relaunch smoke suite mismatch")
+    if report.get("unityVersion") != "6000.3.25f1":
+        raise RuntimeError("Relaunch Unity version mismatch")
+    expected_platform = ("WindowsPlayer" if platform_name.startswith("windows")
+                         else "OSXPlayer")
+    if report.get("platform") != expected_platform:
+        raise RuntimeError("Relaunch native platform mismatch")
+    require_build_variant(platform_name, report.get("developmentBuild"))
+    for field in ("started", "sceneReady", "noCharacter", "stopped", "passed"):
+        if report.get(field) is not True:
+            raise RuntimeError("Relaunch failed runtime evidence: " + field)
+    observed = report.get("observedCameraFieldOfView")
+    if type(observed) not in (float, int) or abs(observed - expected_fov) > 0.05:
+        raise RuntimeError(
+            "Native Player did not reapply saved configuration; camera FOV " +
+            repr(observed) + " vs expected " + repr(expected_fov))
+    for field in ("quitCallToManagedCallbackMs", "quitMarkerToManagedCallbackMs"):
+        value = report.get(field)
+        if type(value) is not int or value < 0:
+            raise RuntimeError("Relaunch quit timing evidence missing: " + field)
 
 
 def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
@@ -249,16 +298,19 @@ def execute(args):
                 raise RuntimeError("Windows .exe Player executable missing")
 
         summary["playerExecutableSha256"] = sha256(executable)
+        # Isolation is essential: the smoke must not read a developer/runner's
+        # real persistentDataPath or create user-facing Unity preferences.
+        config_dir = output / "isolated-runtime-config"
+        if config_dir.is_symlink():
+            raise RuntimeError("Refusing symlink smoke configuration directory")
+        if config_dir.exists():
+            shutil.rmtree(config_dir)
+        config_dir.mkdir()
+        config_path = config_dir / "runtime-config.json"
+        summary["configurationIsolated"] = True
         # Do not accept smoke evidence left behind by a prior job attempt.
         result_path.unlink(missing_ok=True)
-        command = [
-            str(executable),
-            "-batchmode",
-            "-nographics",
-            "-screen-fullscreen", "0",
-            "-logFile", str(logfile),
-            "--vcr-smoke-report=" + str(result_path),
-        ]
+        command = smoke_command(executable, logfile, result_path, config_path)
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
         try:
             code, lifetime_ms, exit_ms, marker_after_exit = run_player_with_exit_trace(
@@ -335,8 +387,63 @@ def execute(args):
         if summary["exitCode"] != 0:
             raise RuntimeError("Player failed with exit code " + str(summary["exitCode"]))
 
+        # Prove real normal quit persisted bounded, schema-valid settings.
+        # A second process must load a deliberately non-default camera FOV:
+        # checking file existence alone would not prove configuration restore.
+        first_config = read_smoke_configuration(config_path)
+        backup_path = config_path.with_name(config_path.name + ".bak")
+        if backup_path.exists():
+            raise RuntimeError("Fresh first-run configuration unexpectedly has a backup")
+        first_fov = first_config["Scene"]["Camera"]["FieldOfView"]
+        if abs(first_fov - NATIVE_CONFIG_PROBE_FOV) < 0.05:
+            raise RuntimeError("Config probe FOV is not distinct from scene default")
+        summary["firstRunSavedConfiguration"] = True
+        summary["firstRunCameraFieldOfView"] = first_fov
+        first_config["Scene"]["Camera"]["FieldOfView"] = NATIVE_CONFIG_PROBE_FOV
+        config_path.write_text(json.dumps(first_config, ensure_ascii=False), encoding="utf-8")
+        if abs(read_smoke_configuration(config_path)["Scene"]["Camera"]["FieldOfView"] -
+               NATIVE_CONFIG_PROBE_FOV) > 0.05:
+            raise RuntimeError("Could not write smoke config restore marker")
+
+        relaunch_report_path = output / "relaunch-player-smoke.json"
+        relaunch_log = output / "relaunch-player.log"
+        relaunch_runnerlog = output / "relaunch-runner.log"
+        relaunch_report_path.unlink(missing_ok=True)
+        relaunch_command = smoke_command(
+            executable, relaunch_log, relaunch_report_path, config_path)
+        print("Relaunching native Player with isolated persisted config", flush=True)
+        relaunch_code, relaunch_lifetime, relaunch_exit, relaunch_marker_late = (
+            run_player_with_exit_trace(
+                relaunch_command, unpacked, relaunch_log, relaunch_runnerlog,
+                timeout=100))
+        summary["relaunch"] = {
+            "exitCode": relaunch_code,
+            "playerProcessLifetimeMs": relaunch_lifetime,
+            "quitToProcessExitMs": relaunch_exit,
+            "quitMarkerObservedAfterExit": relaunch_marker_late,
+            "expectedCameraFieldOfView": NATIVE_CONFIG_PROBE_FOV,
+            "passed": False,
+        }
+        if relaunch_code != 0 or not relaunch_report_path.is_file():
+            raise RuntimeError("Native Player relaunch failed before runtime report")
+        relaunch_report = json.loads(relaunch_report_path.read_text(encoding="utf-8"))
+        require_smoke_relaunch_evidence(
+            relaunch_report, args.platform, NATIVE_CONFIG_PROBE_FOV)
+        require_headless_quit_budget(relaunch_exit)
+        saved_fov = read_smoke_configuration(config_path)["Scene"]["Camera"]["FieldOfView"]
+        if not backup_path.is_file():
+            raise RuntimeError("Native Player relaunch did not rotate a saved backup")
+        backup_fov = read_smoke_configuration(backup_path)["Scene"]["Camera"]["FieldOfView"]
+        if (abs(saved_fov - NATIVE_CONFIG_PROBE_FOV) > 0.05 or
+                abs(backup_fov - NATIVE_CONFIG_PROBE_FOV) > 0.05):
+            raise RuntimeError("Native Player persisted or backup FOV differs after relaunch")
+        summary["relaunch"]["observedCameraFieldOfView"] = (
+            relaunch_report["observedCameraFieldOfView"])
+        summary["relaunch"]["backupVerified"] = True
+        summary["relaunch"]["passed"] = True
         summary["passed"] = True
-        print("Native Player startup/shutdown: PASS", flush=True)
+        print("Native Player first-run + persisted-configuration relaunch: PASS",
+              flush=True)
     except Exception as exception:
         summary["error"] = str(exception)
         print("Native Player startup/shutdown: FAIL: " + str(exception), file=sys.stderr)
