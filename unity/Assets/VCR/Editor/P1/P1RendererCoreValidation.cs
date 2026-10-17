@@ -814,8 +814,9 @@ namespace VCR.Editor.P1
                     outputAdapter.ApplyCount ==
                         beforeSceneConfigApplyCount + 1 &&
                     outputAdapter.LastSettings.Transparent &&
-                    outputAdapter.LastSettings.Topmost &&
-                    !outputAdapter.LastSettings.ClickThrough,
+                    !outputAdapter.LastSettings.Topmost &&
+                    !outputAdapter.LastSettings.ClickThrough &&
+                    !captured.Overlay.Topmost,
                     "scene configuration must apply overlay settings through the adapter",
                     failures);
 
@@ -1093,6 +1094,71 @@ namespace VCR.Editor.P1
                     "configuration store must round-trip the current version",
                     failures);
 
+                // The second atomic save retains exactly one prior
+                // config generation. Corruption must recover that generation
+                // without overwriting the unreadable primary on disk.
+                Expect(
+                    configurationStore.TrySave(
+                        scene.CaptureConfiguration(),
+                        out var backupSeedError) &&
+                    string.IsNullOrEmpty(backupSeedError) &&
+                    File.Exists(configurationPath + ".bak"),
+                    "configuration store must retain a previous generation",
+                    failures);
+
+                File.WriteAllText(
+                    configurationPath,
+                    "{ invalid JSON");
+                Expect(
+                    configurationStore.TryLoad(
+                        out var recoveredConfiguration,
+                        out var recoveredError) &&
+                    string.IsNullOrWhiteSpace(recoveredError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    recoveredConfiguration.Rendering.Width ==
+                        captured.Rendering.Width &&
+                    File.ReadAllText(configurationPath) ==
+                        "{ invalid JSON",
+                    "corrupt current configuration must recover the last good backup without silently overwriting the source",
+                    failures);
+
+                Expect(
+                    configurationStore.TrySave(
+                        recoveredConfiguration,
+                        out var postRecoverySaveError) &&
+                    string.IsNullOrEmpty(postRecoverySaveError),
+                    "explicit save of a recovered config must succeed",
+                    failures);
+
+                File.WriteAllText(configurationPath, "{ second corruption");
+                Expect(
+                    configurationStore.TryLoad(
+                        out var secondRecovery,
+                        out var secondRecoveryError) &&
+                    string.IsNullOrWhiteSpace(secondRecoveryError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    secondRecovery.Rendering.Width ==
+                        captured.Rendering.Width,
+                    "backup must remain recoverable after saving a previously damaged config",
+                    failures);
+
+                // Losing the primary must not discard a valid backup.
+                File.Delete(configurationPath);
+                Expect(
+                    configurationStore.TryLoad(
+                        out var recoveredMissingPrimary,
+                        out var missingPrimaryError) &&
+                    string.IsNullOrEmpty(missingPrimaryError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    recoveredMissingPrimary.Rendering.Width ==
+                        captured.Rendering.Width &&
+                    !File.Exists(configurationPath),
+                    "missing primary configuration must recover a valid backup without silently recreating the file",
+                    failures);
+
                 var futureEnvelope =
                     new RuntimeConfigurationEnvelope
                     {
@@ -1114,8 +1180,10 @@ namespace VCR.Editor.P1
                         out _,
                         out var futureVersionError) &&
                     !string.IsNullOrWhiteSpace(
-                        futureVersionError),
-                    "configuration store must reject unsupported future versions",
+                        futureVersionError) &&
+                    string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning),
+                    "configuration store must reject unsupported future versions without recovering a stale backup",
                     failures);
 
                 var beforeSuspendShutdownCount = outputAdapter.ShutdownCount;
@@ -1538,6 +1606,86 @@ namespace VCR.Editor.P1
                     string.IsNullOrEmpty(
                         applicationSaveError),
                     "application bootstrap must save the current scene configuration",
+                    failures);
+
+                // A failed reload must inhibit implicit exit persistence:
+                // the user may still need to recover both original files.
+                File.WriteAllText(applicationConfigurationPath, "{ bad config");
+                File.WriteAllBytes(
+                    applicationConfigurationPath + ".bak",
+                    new byte[] { 0xff, 0xfe });
+                var failedReload = applicationBootstrap.ReloadSavedConfiguration(
+                    out var failedReloadError);
+                Expect(
+                    !failedReload &&
+                    !string.IsNullOrWhiteSpace(failedReloadError) &&
+                    applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    !string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    File.ReadAllText(applicationConfigurationPath) ==
+                        "{ bad config" &&
+                    applicationScene.State == SceneRuntimeState.Ready,
+                    "unrecoverable settings reload must preserve disk data and inhibit automatic save without stopping the scene",
+                    failures);
+
+                // An explicit operator save is allowed to commit the current
+                // running configuration and clears only the automatic guard.
+                var explicitRecoverySaved =
+                    applicationBootstrap.SaveConfiguration(
+                        out var explicitRecoverySaveError);
+                var backupAfterFailedLoad =
+                    new RuntimeConfigurationStore(
+                        applicationConfigurationPath + ".bak");
+                Expect(
+                    explicitRecoverySaved &&
+                    string.IsNullOrEmpty(explicitRecoverySaveError) &&
+                    !applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    string.IsNullOrEmpty(
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    backupAfterFailedLoad.TryLoad(
+                        out var repairedFallback,
+                        out var repairedFallbackError) &&
+                    string.IsNullOrEmpty(repairedFallbackError) &&
+                    repairedFallback.Rendering.Width ==
+                        applicationScene.CaptureConfiguration().Rendering.Width,
+                    "explicit settings save must restore a valid backup even when both previous generations were unreadable",
+                    failures);
+
+                // A usable backup also requires an explicit confirmation
+                // before a normal quit rotates away the unreadable primary.
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var healthyBackupSaveError) &&
+                    string.IsNullOrEmpty(healthyBackupSaveError) &&
+                    File.Exists(applicationConfigurationPath + ".bak"),
+                    "setup for backup-recovery automatic-save guard",
+                    failures);
+                File.WriteAllText(
+                    applicationConfigurationPath,
+                    "{ damaged primary after backup");
+                var recoveredReload =
+                    applicationBootstrap.ReloadSavedConfiguration(
+                        out var recoveredReloadError);
+                Expect(
+                    recoveredReload &&
+                    string.IsNullOrWhiteSpace(recoveredReloadError) &&
+                    applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    !string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadWarning) &&
+                    string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    File.ReadAllText(applicationConfigurationPath) ==
+                        "{ damaged primary after backup",
+                    "successful backup recovery must not enable exit autosave before user confirmation",
+                    failures);
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var confirmedRecoverySaveError) &&
+                    string.IsNullOrWhiteSpace(confirmedRecoverySaveError) &&
+                    !applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadWarning),
+                    "explicitly saving recovered settings must clear pending recovery warning and autosave guard",
                     failures);
 
                 applicationOverlay.ThrowOnSettingsRead =

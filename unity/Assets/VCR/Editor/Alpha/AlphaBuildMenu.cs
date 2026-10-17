@@ -96,6 +96,22 @@ namespace VCR.Editor.Alpha
                 WindowsOutput);
         }
 
+        // Diagnostic A/B control: build the same Windows application without
+        // Development/AllowDebugging to isolate PlayerConnection teardown.
+        // This is a CI-only artifact, not an alpha release or version tag.
+        public static void BuildWindowsWithoutDebuggingFromMenu()
+        {
+            if (!Build(
+                    BuildTarget.StandaloneWindows64,
+                    "Builds/Alpha/" + Version +
+                    "/WindowsNoDebug/VirtualCharacterRender.exe",
+                    BuildOptions.None))
+            {
+                throw new InvalidOperationException(
+                    "VCR Windows non-development diagnostic build failed.");
+            }
+        }
+
         [MenuItem("VCR/Alpha/Build/macOS Development Alpha")]
         public static void BuildMacFromMenu()
         {
@@ -113,9 +129,27 @@ namespace VCR.Editor.Alpha
                 MacOutput);
         }
 
+        // Commercial readiness control: macOS must also run a Player built
+        // without Development/AllowDebugging. This creates a test artifact
+        // only; signing, notarization and distribution remain separate gates.
+        public static void BuildMacWithoutDebuggingFromMenu()
+        {
+            if (!Build(
+                    BuildTarget.StandaloneOSX,
+                    "Builds/Alpha/" + Version +
+                    "/macOSNoDebug/VirtualCharacterRender.app",
+                    BuildOptions.None))
+            {
+                throw new InvalidOperationException(
+                    "VCR macOS non-development verification build failed.");
+            }
+        }
+
         public static bool Build(
             BuildTarget target,
-            string location)
+            string location,
+            BuildOptions options = BuildOptions.Development |
+                                   BuildOptions.AllowDebugging)
         {
             Debug.Log(
                 "VCR Alpha build: source-free validation is a separate evidence pass and does not block alpha binary generation. " +
@@ -161,9 +195,7 @@ namespace VCR.Editor.Alpha
                             absoluteLocation,
                         target =
                             target,
-                        options =
-                            BuildOptions.Development |
-                            BuildOptions.AllowDebugging
+                        options = options
                     });
 
             var summary =

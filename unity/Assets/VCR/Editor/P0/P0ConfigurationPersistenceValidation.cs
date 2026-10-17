@@ -89,8 +89,41 @@ namespace VCR.Editor.P0
                     staleBackupSaved &&
                     string.IsNullOrEmpty(
                         staleBackupError) &&
-                    !File.Exists(
-                        path + ".bak");
+                    File.Exists(
+                        path + ".bak") &&
+                    File.ReadAllText(
+                        path + ".bak").Contains(
+                            "bounded-test");
+
+                // A third and fourth atomic save must work while a
+                // recovery backup already exists, with the backup always
+                // describing the previous complete valid generation.
+                var nextGeneration = configuration;
+                nextGeneration.EnvironmentStateId = "next-generation";
+                var upgradedSaved =
+                    store.TrySave(
+                        nextGeneration,
+                        out var upgradedSaveError);
+                pass =
+                    pass &&
+                    upgradedSaved &&
+                    string.IsNullOrEmpty(upgradedSaveError) &&
+                    File.ReadAllText(path).Contains(
+                        "next-generation") &&
+                    File.ReadAllText(path + ".bak").Contains(
+                        "bounded-test");
+                var restoredSaved =
+                    store.TrySave(
+                        configuration,
+                        out var restoredSaveError);
+                pass =
+                    pass &&
+                    restoredSaved &&
+                    string.IsNullOrEmpty(restoredSaveError) &&
+                    File.ReadAllText(path).Contains(
+                        "bounded-test") &&
+                    File.ReadAllText(path + ".bak").Contains(
+                        "next-generation");
 
                 var original =
                     pass
@@ -138,19 +171,21 @@ namespace VCR.Editor.P0
 
                 var oversizedLoaded =
                     store.TryLoad(
-                        out var rejectedConfiguration,
+                        out var recoveredOversizedConfiguration,
                         out var oversizedLoadError);
 
                 pass =
                     pass &&
-                    !oversizedLoaded &&
-                    !string.IsNullOrWhiteSpace(
+                    oversizedLoaded &&
+                    string.IsNullOrEmpty(
                         oversizedLoadError) &&
-                    rejectedConfiguration
+                    !string.IsNullOrWhiteSpace(
+                        store.LastLoadWarning) &&
+                    recoveredOversizedConfiguration
                         .EnvironmentStateId ==
-                        SceneRuntimeConfiguration
-                            .Default
-                            .EnvironmentStateId;
+                        "next-generation" &&
+                    new FileInfo(path).Length >
+                        ConfigurationLimitBytes;
 
                 File.WriteAllBytes(
                     path,
@@ -163,14 +198,37 @@ namespace VCR.Editor.P0
 
                 var invalidUtf8Loaded =
                     store.TryLoad(
-                        out _,
+                        out var recoveredInvalidUtf8,
                         out var invalidUtf8Error);
 
                 pass =
                     pass &&
-                    !invalidUtf8Loaded &&
+                    invalidUtf8Loaded &&
+                    string.IsNullOrEmpty(
+                        invalidUtf8Error) &&
                     !string.IsNullOrWhiteSpace(
-                        invalidUtf8Error);
+                        store.LastLoadWarning) &&
+                    recoveredInvalidUtf8.EnvironmentStateId ==
+                        "next-generation" &&
+                    File.ReadAllBytes(path)[0] == 0xff;
+
+                // Invalid backup must not mask a corrupt primary.
+                File.WriteAllBytes(
+                    path + ".bak",
+                    new byte[] { 0xff, 0xfe, 0xff });
+                var invalidBothLoaded =
+                    store.TryLoad(
+                        out var rejectedBoth,
+                        out var invalidBothError);
+                pass =
+                    pass &&
+                    !invalidBothLoaded &&
+                    !string.IsNullOrWhiteSpace(
+                        invalidBothError) &&
+                    string.IsNullOrWhiteSpace(
+                        store.LastLoadWarning) &&
+                    rejectedBoth.EnvironmentStateId ==
+                        SceneRuntimeConfiguration.Default.EnvironmentStateId;
 
                 if (pass)
                 {
@@ -185,7 +243,9 @@ namespace VCR.Editor.P0
                         $"stale-backup-save='{staleBackupError}', " +
                         $"oversized-save='{oversizedSaveError}', " +
                         $"oversized-load='{oversizedLoadError}', " +
-                        $"invalid-utf8='{invalidUtf8Error}'");
+                        $"invalid-utf8='{invalidUtf8Error}', " +
+                        $"invalid-both='{invalidBothError}', " +
+                        $"replace-existing-backup='{upgradedSaveError}|{restoredSaveError}'");
                 }
             }
             catch (Exception exception)

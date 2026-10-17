@@ -91,6 +91,8 @@ The source implementation has progressed through the P11 Application UI and P12 
 - [P12 status](docs/P12_STATUS.md)
 - [P13 status](docs/P13_STATUS.md)
 - [Alpha testing](docs/ALPHA_TESTING.md)
+- [Commercial readiness / release-blocking evidence plan](docs/COMMERCIAL_READINESS_PLAN.md)
+- [Runtime configuration recovery](docs/CONFIGURATION_RECOVERY.md)
 - [2D backend adapter contract](docs/PRESENTATION2D_ADAPTERS.md)
 - [P0 validation plan](docs/P0_VALIDATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
