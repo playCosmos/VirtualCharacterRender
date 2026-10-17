@@ -1608,6 +1608,38 @@ namespace VCR.Editor.P1
                     "application bootstrap must save the current scene configuration",
                     failures);
 
+                // A failed reload must inhibit implicit exit persistence:
+                // the user may still need to recover both original files.
+                File.WriteAllText(applicationConfigurationPath, "{ bad config");
+                File.WriteAllBytes(
+                    applicationConfigurationPath + ".bak",
+                    new byte[] { 0xff, 0xfe });
+                var failedReload = applicationBootstrap.ReloadSavedConfiguration(
+                    out var failedReloadError);
+                Expect(
+                    !failedReload &&
+                    !string.IsNullOrWhiteSpace(failedReloadError) &&
+                    applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    !string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    File.ReadAllText(applicationConfigurationPath) ==
+                        "{ bad config" &&
+                    applicationScene.State == SceneRuntimeState.Ready,
+                    "unrecoverable settings reload must preserve disk data and inhibit automatic save without stopping the scene",
+                    failures);
+
+                // An explicit operator save is allowed to commit the current
+                // running configuration and clears only the automatic guard.
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var explicitRecoverySaveError) &&
+                    string.IsNullOrEmpty(explicitRecoverySaveError) &&
+                    !applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    string.IsNullOrEmpty(
+                        applicationBootstrap.LastConfigurationLoadError),
+                    "explicit settings save must re-enable automatic persistence after a failed reload",
+                    failures);
+
                 applicationOverlay.ThrowOnSettingsRead =
                     true;
 
