@@ -37,6 +37,8 @@ namespace VCR.Runtime.Application
         private bool _quitting;
         private bool _lastShutdownSucceeded;
         private string _lastShutdownError;
+        private bool _suppressAutomaticConfigurationSave;
+        private string _configurationLoadError;
         private System.Diagnostics.Stopwatch _processExitTimer;
 
         private void Awake()
@@ -74,6 +76,9 @@ namespace VCR.Runtime.Application
         // treating recovery as an error or hiding it from the operator.
         public string LastConfigurationLoadWarning =>
             _configurationStore?.LastLoadWarning;
+        public string LastConfigurationLoadError => _configurationLoadError;
+        public bool AutomaticConfigurationSaveSuppressed =>
+            _suppressAutomaticConfigurationSave;
 
         public bool IsStarted =>
             _started;
@@ -152,6 +157,8 @@ namespace VCR.Runtime.Application
             var startupConfigurationStore =
                 new RuntimeConfigurationStore(
                     ResolveConfigurationPath(options));
+            _suppressAutomaticConfigurationSave = false;
+            _configurationLoadError = null;
 
             if (!sceneRuntime.Initialize())
             {
@@ -175,9 +182,14 @@ namespace VCR.Runtime.Application
                     }
                     else
                     {
+                        _suppressAutomaticConfigurationSave = true;
+                        _configurationLoadError = loadError;
                         Debug.LogWarning(
                             "VCR configuration was not applied: " +
-                            loadError,
+                            loadError +
+                            ". Automatic save is disabled until the user " +
+                            "explicitly saves or successfully reloads " +
+                            "configuration; existing recovery files are preserved.",
                             this);
                     }
                 }
@@ -322,11 +334,15 @@ namespace VCR.Runtime.Application
                         out var configuration,
                         out error))
                 {
+                    _suppressAutomaticConfigurationSave = true;
+                    _configurationLoadError = error;
                     return false;
                 }
 
                 sceneRuntime.ApplyConfiguration(
                     configuration);
+                _suppressAutomaticConfigurationSave = false;
+                _configurationLoadError = null;
                 return true;
             }
             catch (Exception exception)
@@ -361,9 +377,18 @@ namespace VCR.Runtime.Application
                 var configuration =
                     sceneRuntime.CaptureConfiguration();
 
-                return _configurationStore.TrySave(
-                    configuration,
-                    out error);
+                if (!_configurationStore.TrySave(
+                        configuration,
+                        out error))
+                {
+                    return false;
+                }
+
+                // This is an explicit save command; the operator has chosen
+                // to commit current values after any failed disk recovery.
+                _suppressAutomaticConfigurationSave = false;
+                _configurationLoadError = null;
+                return true;
             }
             catch (Exception exception)
             {
@@ -467,24 +492,33 @@ namespace VCR.Runtime.Application
                 saveConfiguration &&
                 _started)
             {
-                try
-                {
-                    if (!SaveConfiguration(out error))
-                    {
-                        succeeded = false;
-                    }
-                }
-                catch (Exception exception)
+                if (_suppressAutomaticConfigurationSave)
                 {
                     succeeded = false;
-                    error = "Shutdown configuration save: " + exception;
-                    Debug.LogException(exception, this);
+                    error =
+                        "Automatic configuration save suppressed because " +
+                        "the previous configuration could not be loaded. " +
+                        "The original file and backup were not overwritten.";
+                    Debug.LogWarning("VCR: " + error, this);
                 }
-                finally
+                else
                 {
-                    Debug.Log("VCR shutdown: save finished at " +
-                              stopwatch.ElapsedMilliseconds + " ms", this);
+                    try
+                    {
+                        if (!SaveConfiguration(out error))
+                        {
+                            succeeded = false;
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        succeeded = false;
+                        error = "Shutdown configuration save: " + exception;
+                        Debug.LogException(exception, this);
+                    }
                 }
+                Debug.Log("VCR shutdown: save finished at " +
+                          stopwatch.ElapsedMilliseconds + " ms", this);
             }
 
             if (sceneRuntime != null)
