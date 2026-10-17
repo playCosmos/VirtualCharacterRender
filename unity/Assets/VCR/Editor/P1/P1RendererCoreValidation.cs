@@ -1640,6 +1640,43 @@ namespace VCR.Editor.P1
                     "explicit settings save must re-enable automatic persistence after a failed reload",
                     failures);
 
+                // A usable backup also requires an explicit confirmation
+                // before a normal quit rotates away the unreadable primary.
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var healthyBackupSaveError) &&
+                    string.IsNullOrEmpty(healthyBackupSaveError) &&
+                    File.Exists(applicationConfigurationPath + ".bak"),
+                    "setup for backup-recovery automatic-save guard",
+                    failures);
+                File.WriteAllText(
+                    applicationConfigurationPath,
+                    "{ damaged primary after backup");
+                var recoveredReload =
+                    applicationBootstrap.ReloadSavedConfiguration(
+                        out var recoveredReloadError);
+                Expect(
+                    recoveredReload &&
+                    string.IsNullOrWhiteSpace(recoveredReloadError) &&
+                    applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    !string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadWarning) &&
+                    string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadError) &&
+                    File.ReadAllText(applicationConfigurationPath) ==
+                        "{ damaged primary after backup",
+                    "successful backup recovery must not enable exit autosave before user confirmation",
+                    failures);
+                Expect(
+                    applicationBootstrap.SaveConfiguration(
+                        out var confirmedRecoverySaveError) &&
+                    string.IsNullOrWhiteSpace(confirmedRecoverySaveError) &&
+                    !applicationBootstrap.AutomaticConfigurationSaveSuppressed &&
+                    string.IsNullOrWhiteSpace(
+                        applicationBootstrap.LastConfigurationLoadWarning),
+                    "explicitly saving recovered settings must clear pending recovery warning and autosave guard",
+                    failures);
+
                 applicationOverlay.ThrowOnSettingsRead =
                     true;
 
