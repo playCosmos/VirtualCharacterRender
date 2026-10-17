@@ -1123,6 +1123,27 @@ namespace VCR.Editor.P1
                     "corrupt current configuration must recover the last good backup without silently overwriting the source",
                     failures);
 
+                Expect(
+                    configurationStore.TrySave(
+                        recoveredConfiguration,
+                        out var postRecoverySaveError) &&
+                    string.IsNullOrEmpty(postRecoverySaveError),
+                    "explicit save of a recovered config must succeed",
+                    failures);
+
+                File.WriteAllText(configurationPath, "{ second corruption");
+                Expect(
+                    configurationStore.TryLoad(
+                        out var secondRecovery,
+                        out var secondRecoveryError) &&
+                    string.IsNullOrWhiteSpace(secondRecoveryError) &&
+                    !string.IsNullOrWhiteSpace(
+                        configurationStore.LastLoadWarning) &&
+                    secondRecovery.Rendering.Width ==
+                        captured.Rendering.Width,
+                    "backup must remain recoverable after saving a previously damaged config",
+                    failures);
+
                 var futureEnvelope =
                     new RuntimeConfigurationEnvelope
                     {
