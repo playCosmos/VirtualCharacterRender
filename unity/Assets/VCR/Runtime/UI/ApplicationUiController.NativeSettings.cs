@@ -50,6 +50,17 @@ namespace VCR.Runtime.UI
                 // the main dashboard while it was closed. Never overwrite
                 // native text inputs while the user is editing them.
                 RefreshNativeSettingsValues();
+                if (applicationBootstrap != null &&
+                    applicationBootstrap.AutomaticConfigurationSaveSuppressed)
+                {
+                    _nativeSettings.SetText(
+                        90,
+                        string.IsNullOrWhiteSpace(
+                            applicationBootstrap.LastConfigurationLoadError)
+                            ? "이전 설정 백업으로 복구했습니다. 확인 후 수동 저장하세요."
+                            : "설정 로드 실패: 자동 저장이 중지되었습니다. " +
+                              "원본을 보존한 뒤 수동으로 복구하세요.");
+                }
             }
 
             // The Settings window has its own OS focus. Even when the user's
