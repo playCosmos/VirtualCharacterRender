@@ -216,11 +216,14 @@ namespace VCR.Runtime.Core
                 if (File.Exists(
                         fullPath))
                 {
-                    if (File.Exists(
-                            backupPath))
+                    // File.Replace can atomically replace an existing
+                    // backup. Deleting the previous recovery generation
+                    // before replacement creates a crash/power-loss window
+                    // with no usable backup; preserve it for opt-in users.
+                    if (!preserveBackup &&
+                        File.Exists(backupPath))
                     {
-                        File.Delete(
-                            backupPath);
+                        File.Delete(backupPath);
                     }
 
                     File.Replace(
