@@ -32,9 +32,15 @@ With `-batchmode -nographics`, the built Player must:
    the application's genuine `OnApplicationQuit` callbacks to save the
    configuration and clean up scene resources.
 5. In the ordered smoke `OnApplicationQuit` callback, verify `Stopped`
-   and write a JSON report with `quitManagedMilliseconds`. The launcher
-   independently records process lifetime and best-effort quit-marker-to-PID-exit
-   duration. Missing, prewritten or failed evidence is FAIL.
+   and report two separate clocks:
+   `quitCallToManagedCallbackMs` (time since the `Application.Quit()` call,
+   **including possible Unity dispatch delays**) and
+   `quitMarkerToManagedCallbackMs` (time since `wantsToQuit` / the exit
+   marker, including the runtime's managed quit callbacks). Neither is a
+   cleanup-only CPU duration. The launcher independently records process
+   lifetime and a best-effort quit-marker-to-PID-exit duration; if the marker
+   is first observed after PID exit this duration is **unknown**, not zero.
+   Missing, prewritten or failed evidence is FAIL.
 
 Previously, smoke explicitly called `bootstrap.Shutdown(false)` first and
 then `Application.Quit()`. That bypassed the actual normal-exit cleanup
@@ -147,6 +153,12 @@ This is a diagnostic control to test whether debugger/PlayerConnection
 build flags materially affect Windows process termination. It is **not a
 replacement for testing the interactive Player on the actual PC**, and it
 does not change the existing alpha release packaging or create a release.
+
+The earlier Ultraleap comparison variant E (empty-hints lazy LeapC control)
+has been **retired**: its fix is now applied to every production bootstrap,
+making E identical to A. Historical A/E evidence remains useful, but future
+builds must not publish a separate E artifact claiming a nonexistent
+differential.
 
 ## Windows native shutdown stack capture (opt-in)
 
