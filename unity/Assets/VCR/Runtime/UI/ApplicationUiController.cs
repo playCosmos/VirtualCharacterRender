@@ -404,6 +404,7 @@ namespace VCR.Runtime.UI
 
         private const string LastCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
         private bool _characterRestoreAttempted;
+        private bool _configurationStartupNoticeDelivered;
 
         private void Awake()
         {
@@ -452,6 +453,25 @@ namespace VCR.Runtime.UI
 
             ResolveDependencies();
             RefreshAvailability();
+            // Surface startup recovery state even when the user has not
+            // explicitly opened Settings. Leave unrelated dashboard
+            // messages intact on normal startup.
+            if (!_configurationStartupNoticeDelivered &&
+                applicationBootstrap != null &&
+                applicationBootstrap.IsStarted)
+            {
+                _configurationStartupNoticeDelivered = true;
+                if (applicationBootstrap.AutomaticConfigurationSaveSuppressed)
+                {
+                    _lastActionMessage =
+                        string.IsNullOrWhiteSpace(
+                            applicationBootstrap.LastConfigurationLoadError)
+                            ? "설정 파일을 이전 백업으로 복구했습니다. " +
+                              "확인 후 설정 저장을 눌러 자동 저장을 다시 활성화하세요."
+                            : "설정 파일을 읽지 못해 기본 설정으로 실행 중입니다. " +
+                              "기존 파일을 보존하기 위해 자동 저장이 중지되었습니다.";
+                }
+            }
             TryRestoreLastCharacter();
             RefreshAll();
         }
