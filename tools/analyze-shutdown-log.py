@@ -28,13 +28,19 @@ UDP_JOIN = re.compile(
 def analyze(contents):
     records = []
     timeline = []
+    quit_started = False
     for line in contents.splitlines():
+        # Receivers may stop/restart during normal operation. Their join
+        # times belong to exit attribution only after a real quit marker.
+        if ("VCR exit: quit requested (t=0 ms)" in line or
+                "VCR exit: OnApplicationQuit without wantsToQuit" in line):
+            quit_started = True
         for regex, category in ((PHASE, "scene"), (MEDIAPIPE, "mediapipe")):
             match = regex.search(line)
             if match:
                 records.append((int(match.group(2)), category, match.group(1).strip()))
         match = UDP_JOIN.search(line)
-        if match:
+        if match and quit_started:
             records.append((int(match.group(2)), "udp",
                             match.group(1) + " worker join (alive=" +
                             match.group(3) + ")"))
@@ -98,6 +104,21 @@ VCR exit: runtime bootstrap destroyed at 319 ms
     assert ("late managed quit callback", 320) in timeline
     assert (750, "udp", "VMC worker join (alive=True)") in records
     assert "t=319 ms" in format_report(sample)
+    # A slow join from runtime reconfiguration MUST NOT look like a
+    # stalled application shutdown.
+    mixed = (
+        "VCR exit: VMC UDP receive worker join=9000 ms, stillAlive=False\n" +
+        sample
+    )
+    mixed_records, _ = analyze(mixed)
+    assert (9000, "udp", "VMC worker join (alive=False)") not in mixed_records
+    assert mixed_records[0][0] == 750
+    # Native quit without the cancelable wantsToQuit event is still a quit.
+    unannounced = (
+        "VCR exit: OnApplicationQuit without wantsToQuit (t=0 ms)\n"
+        "VCR exit: OSC UDP receive worker join=45 ms, stillAlive=False\n"
+    )
+    assert (45, "udp", "OSC worker join (alive=False)") in analyze(unannounced)[0]
     assert "No VCR shutdown measurements" in format_report("Unrelated line")
     print("VCR shutdown log analyzer self-test PASS")
 
