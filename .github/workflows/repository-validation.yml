@@ -80,6 +80,9 @@ jobs:
       - name: Test M2 real-desktop performance evidence verifier
         run: python3 tools/verify-m2-performance.py --self-test
 
+      - name: Test M3 offline distribution provenance checks
+        run: python3 tools/verify-m3-distribution.py --self-test
+
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
