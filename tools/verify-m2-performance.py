@@ -238,8 +238,8 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
         "platform": platform,
         "target": target,
         "nativeArchitecture": metadata["architecture"],
-        "appleSilicon": (platform != "macos" or
-                         metadata["architecture"].lower() == "arm64"),
+        "macosAppleSilicon": (platform == "macos" and
+                              metadata["architecture"].lower() == "arm64"),
         "sessionSamples": len(rows),
         "durationSeconds": round(total_seconds, 3),
         "totalFrames": last["total_frames"],
