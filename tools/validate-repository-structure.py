@@ -68,6 +68,7 @@ required_latest_chain = [
     ROOT / "tools" / "verify-m3-distribution.py",
     ROOT / "tools" / "verify-m3-native-signatures.py",
     ROOT / "tools" / "generate-m3-sbom.py",
+    ROOT / "tools" / "generate-m3-payload-inventory.py",
     ROOT / "docs" / "M3_DISTRIBUTION_PLAN.md",
     ROOT / "docs" / "M3_DISTRIBUTION_OPERATIONS.md",
     ROOT / "docs" / "M3_PRIVACY_SUPPORT.md",
@@ -196,6 +197,8 @@ require_source_contains(
 m3_archive = ROOT / "tools" / "verify-m3-distribution.py"
 m3_native = ROOT / "tools" / "verify-m3-native-signatures.py"
 m3_sbom = ROOT / "tools" / "generate-m3-sbom.py"
+m3_payload = ROOT / "tools" / "generate-m3-payload-inventory.py"
+m3_alpha = ROOT / ".github" / "workflows" / "build-alpha-binaries.yml"
 for source, symbol, label in (
     (m3_archive, '"distributionAcceptance": False',
      "M3 archive validation must not claim distribution signoff"),
@@ -205,6 +208,10 @@ for source, symbol, label in (
      "M3 signature-check outcome must not claim distribution approval"),
     (m3_sbom, "PENDING_MANUAL_APPROVAL",
      "M3 partial SBOM must require manual license clearance"),
+    (m3_payload, '"commercialRedistributionApproved": False',
+     "M3 shipped-file inventory must never auto-approve redistribution"),
+    (m3_alpha, "generate-m3-payload-inventory.py",
+     "M3 alpha workflow must preserve shipped-file inventory for review"),
 ):
     require_source_contains(source, symbol, label)
 
