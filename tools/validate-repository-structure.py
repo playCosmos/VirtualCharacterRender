@@ -150,6 +150,31 @@ require_source_contains(
     m2_alpha, "root.AddComponent<M2PerformanceRecorder>();",
     "M2 evidence component must be part of the generated native Player scene",
 )
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterLoaded += OnCharacterLoaded;",
+    "M2 must record actual VRM loader success callbacks, not sampled character state",
+)
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterUnloaded += OnCharacterUnloaded;",
+    "M2 must record actual VRM loader unload callbacks",
+)
+require_source_contains(
+    m2_recorder, "character_unloaded_shutdown",
+    "M2 must separate automatic shutdown cleanup from measured VRM cycles",
+)
+require_source_contains(
+    m2_recorder, "TrackingPresenceEvents.TrackingSourceLost",
+    "M2 tracking evidence must retain normalized source-loss typing",
+)
+m2_verifier = ROOT / "tools" / "verify-m2-performance.py"
+require_source_contains(
+    m2_verifier, "min_character_cycles",
+    "M2 verifier must retain optional real loader callback cycle checks",
+)
+require_source_contains(
+    m2_verifier, "shutdownUnloadEventsExcluded",
+    "M2 verifier must explicitly exclude process-shutdown unloads",
+)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
