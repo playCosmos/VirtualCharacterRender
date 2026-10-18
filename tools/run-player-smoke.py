@@ -306,6 +306,77 @@ def run_configuration_recovery_case(
     return result
 
 
+def run_configuration_acceptance_case(
+        executable, unpacked, output, config_path, platform_name,
+        case_name, mode, expected_fov):
+    """Verify explicit operator save repairs bad settings and backup on disk.
+
+    This launches an actual Player and asks the runtime bootstrap to save.
+    The Python runner never fabricates successful configuration contents.
+    """
+    report_path = output / (case_name + "-player-smoke.json")
+    log_path = output / (case_name + "-player.log")
+    runnerlog = output / (case_name + "-runner.log")
+    evidence_path = output / (case_name + "-runner-evidence.json")
+    backup_path = config_path.with_name(config_path.name + ".bak")
+    report_path.unlink(missing_ok=True)
+    result = {
+        "mode": mode,
+        "passed": False,
+        "expectedCameraFieldOfView": expected_fov,
+    }
+    try:
+        command = smoke_command(
+            executable, log_path, report_path, config_path)
+        command.append("--vcr-smoke-recovery=" + mode)
+        code, lifetime_ms, exit_ms, late_marker = run_player_with_exit_trace(
+            command, unpacked, log_path, runnerlog, timeout=100)
+        result.update({
+            "exitCode": code,
+            "playerProcessLifetimeMs": lifetime_ms,
+            "quitToProcessExitMs": exit_ms,
+            "quitMarkerObservedAfterExit": late_marker,
+        })
+        if code != 0 or not report_path.is_file():
+            raise RuntimeError("Native recovery acceptance Player did not exit normally")
+        evidence = json.loads(report_path.read_text(encoding="utf-8"))
+        require_smoke_relaunch_evidence(
+            evidence, platform_name, expected_fov)
+        if evidence.get("recoveryMode") != mode:
+            raise RuntimeError("Wrong native recovery acceptance mode")
+        if (evidence.get("automaticSaveSuppressed") is not True or
+                evidence.get("explicitSaveSucceeded") is not True or
+                evidence.get("automaticSaveReenabled") is not True or
+                evidence.get("quitSaveSuppressed") is not False):
+            raise RuntimeError(
+                "Explicit recovery did not re-enable native automatic save")
+        backup_mode = mode == "accept-backup"
+        if (evidence.get("usedBackupRecovery") is not backup_mode or
+                evidence.get("configurationLoadRejected") is backup_mode):
+            raise RuntimeError("Incorrect initial native recovery acceptance state")
+        require_headless_quit_budget(exit_ms)
+        primary = read_smoke_configuration(config_path)
+        backup = read_smoke_configuration(backup_path)
+        for label, payload in (("primary", primary), ("backup", backup)):
+            value = payload["Scene"]["Camera"]["FieldOfView"]
+            if abs(value - expected_fov) > 0.05:
+                raise RuntimeError(
+                    "Explicit native recovery left incorrect " + label + " FOV")
+        result["primaryAndBackupRepaired"] = True
+        result["automaticSaveReenabled"] = True
+        result["passed"] = True
+        print("Native configuration acceptance " + case_name + ": PASS",
+              flush=True)
+    except Exception as exception:
+        result["error"] = str(exception)
+        raise
+    finally:
+        evidence_path.write_text(
+            json.dumps(result, indent=2) + "\n",
+            encoding="utf-8")
+    return result
+
+
 def execute(args):
     archive = Path(args.archive).resolve()
     digest_file = archive.with_suffix(".sha256")
@@ -570,9 +641,27 @@ def execute(args):
             executable, unpacked, output, config_path, args.platform,
             "missing-primary", "backup", NATIVE_CONFIG_PROBE_FOV))
 
+        # The automatic-save guard must have a reversible, explicit
+        # confirmation path. Drive the public bootstrap SaveConfiguration
+        # API from the real Player and verify its *own* persisted files.
+        summary["acceptedRecoveryCases"] = []
+        config_path.write_bytes(bad_primary)
+        summary["acceptedRecoveryCases"].append(
+            run_configuration_acceptance_case(
+                executable, unpacked, output, config_path, args.platform,
+                "accept-corrupt-primary", "accept-backup",
+                NATIVE_CONFIG_PROBE_FOV))
+
+        config_path.write_bytes(bad_primary)
+        backup_path.write_bytes(bad_backup)
+        summary["acceptedRecoveryCases"].append(
+            run_configuration_acceptance_case(
+                executable, unpacked, output, config_path, args.platform,
+                "accept-corrupt-both", "accept-unrecoverable", first_fov))
+
         summary["passed"] = True
-        print("Native Player initial/relaunch and four config recovery cases: PASS",
-              flush=True)
+        print("Native Player initial/relaunch, four guarded recoveries, " +
+              "and two explicit confirmations: PASS", flush=True)
     except Exception as exception:
         summary["error"] = str(exception)
         print("Native Player startup/shutdown: FAIL: " + str(exception), file=sys.stderr)
