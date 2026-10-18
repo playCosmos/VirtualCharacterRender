@@ -196,9 +196,12 @@ def self_test():
         root = Path(temp)
         win = root / "missing.exe"
         app = root / "missing.app"
-        for verifier, target in ((verify_windows, win), (verify_macos, app)):
+        for verifier, target, expected_identity in (
+            (verify_windows, win, "a" * 40),
+            (verify_macos, app, "ABCDE12345"),
+        ):
             try:
-                verifier(target)
+                verifier(target, expected_identity)
             except (ValueError, FileNotFoundError):
                 pass
             else:
