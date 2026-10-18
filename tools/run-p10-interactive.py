@@ -55,7 +55,8 @@ def require_desktop(platform_name):
         raise ValueError("A logged-in macOS desktop session is required")
 
 
-def make_command(platform_name, unpacked, log_file, telemetry_file, vrm):
+def make_command(platform_name, unpacked, log_file, telemetry_file, vrm,
+                 m2_performance_file=None):
     args = [
         "-screen-fullscreen", "0",
         "-logFile", str(log_file),
@@ -63,6 +64,8 @@ def make_command(platform_name, unpacked, log_file, telemetry_file, vrm):
     ]
     if vrm:
         args.append("--vcr-vrm=" + str(vrm))
+    if m2_performance_file is not None:
+        args.append("--vcr-m2-perf-csv=" + str(m2_performance_file))
     if platform_name == "windows":
         binary = unpacked / "VirtualCharacterRender.exe"
         if not binary.is_file():
@@ -93,7 +96,10 @@ def run(args):
     attachments.mkdir(exist_ok=True)
     log_file = attachments / (label + ".log")
     telemetry_file = attachments / (label + "-runtime.json")
-    if log_file.exists() or telemetry_file.exists():
+    performance_file = attachments / (label + "-m2-performance.csv")
+    if log_file.exists() or telemetry_file.exists() or (
+            args.m2_performance and (performance_file.exists() or
+                                     Path(str(performance_file) + ".session.json").exists())):
         raise ValueError("Refusing to overwrite existing session evidence for " + label)
 
     vrm = args.vrm.resolve() if args.vrm else None
@@ -104,6 +110,9 @@ def run(args):
     print("Target label:", args.target, "(configure resolution and FPS in the GUI)", flush=True)
     print("Player log:", log_file, flush=True)
     print("Native telemetry:", telemetry_file, flush=True)
+    if args.m2_performance:
+        print("Optional M2 performance CSV:", performance_file, flush=True)
+        print("M2 evidence is measurement-only, NOT proof of OBS frames.", flush=True)
     print("Use OBS manually; no screenshot or transparency result is inferred.", flush=True)
     print("Close the Player normally after recording and stable sampling.", flush=True)
     with tempfile.TemporaryDirectory(prefix="vcr-p10-player-") as tmp:
@@ -113,7 +122,9 @@ def run(args):
         else:
             with zipfile.ZipFile(archive) as package:
                 package.extractall(unpacked)
-        command = make_command(args.platform, unpacked, log_file, telemetry_file, vrm)
+        command = make_command(
+            args.platform, unpacked, log_file, telemetry_file, vrm,
+            performance_file if args.m2_performance else None)
         completed = subprocess.run(command, cwd=unpacked, check=False)
     if completed.returncode != 0:
         raise ValueError("GUI launcher/player exited nonzero: " + str(completed.returncode))
@@ -130,6 +141,13 @@ def run(args):
             or not isinstance(telemetry.get("samples"), list)
             or len(telemetry["samples"]) < 2):
         raise ValueError("Telemetry identity, normal quit or sample count is incomplete")
+    if args.m2_performance:
+        if not performance_file.is_file() or not performance_file.stat().st_size:
+            raise ValueError("M2 performance CSV missing/empty")
+        if not Path(str(performance_file) + ".session.json").is_file():
+            raise ValueError("M2 performance session metadata missing")
+        print("M2 frame/memory data written; verify it separately with " +
+              "tools/verify-m2-performance.py. No automatic GUI/OBS PASS.")
     print("Native session files recorded. GUI/OBS observations STILL REQUIRE MANUAL REVIEW.")
     print("Operator JSON must reference the log and runtime telemetry files; no PASS auto-written.")
     return 0
@@ -166,10 +184,12 @@ def self_test():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("test", encoding="utf-8")
             command = make_command(name, unpacked, root / "case.log",
-                                   root / "case-runtime.json", None)
+                                   root / "case-runtime.json", None,
+                                   root / "case-m2.csv")
             assembled = " ".join(command)
             if ("--vcr-interactive-evidence=" not in assembled
                     or "-screen-fullscreen 0" not in assembled
+                    or "--vcr-m2-perf-csv=" not in assembled
                     or "-batchmode" in assembled or "-nographics" in assembled):
                 raise AssertionError("invalid interactive Player command: " + assembled)
     print("P10 desktop Player runner self-test PASS (no GUI/OBS claim)")
@@ -184,6 +204,9 @@ def main():
     parser.add_argument("--artifacts", type=Path)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--vrm", type=Path, help="Optional private model, never uploaded")
+    parser.add_argument(
+        "--m2-performance", action="store_true",
+        help="Record optional real-desktop frame/memory CSV with no automatic OBS pass")
     options = parser.parse_args()
     try:
         if options.self_test:
