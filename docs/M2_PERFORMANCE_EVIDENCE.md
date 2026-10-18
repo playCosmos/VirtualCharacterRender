@@ -94,8 +94,10 @@ lifecycle evidence (not only the five-second samples), add:
 ~~~
 
 `--min-character-cycles` counts only successful **load-then-unload**
-pairs recorded by loader callbacks. Consecutive successful loads/replacements
-without a matching unload do not increment the count. Previously loaded
+pairs recorded by loader callbacks. Automatic unload performed during
+scene shutdown is logged as `character_unloaded_shutdown` and is excluded
+from the count. Consecutive successful loads/replacements without a matching
+normal unload do not increment the count. Previously loaded
 models at recorder startup cannot be used to fabricate completed pairs.
 These flags validate only the in-process lifecycle event log, not the actual
 visual fidelity or independently observed device connection cycles.
