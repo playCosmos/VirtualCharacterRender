@@ -21,7 +21,8 @@ and P10 real capture
   component does no frame sampling, ProfilerRecorder startup or filesystem
   writes unless explicitly activated. It rejects -batchmode and refuses to
   overwrite an existing session file, its .session.json metadata or its
-  .events.csv lifecycle sidecar.
+  .events.csv lifecycle sidecar. The P10 GUI launcher independently checks
+  all three outputs and refuses to overwrite any existing M2 sidecar.
   Files remain local. Review files before sharing; nothing uploads them.
 - **Durability:** one CSV line is appended approximately every five seconds.
   Existing lines may remain after a crash. A final quit_observed=1 row is
@@ -57,7 +58,7 @@ python3 tools/run-p10-interactive.py \
 
 Use --platform macos on an Apple Silicon machine. --vrm is optional for
 idle runs. This launcher verifies the actual archive and runs a *visible*
-Player, never -nographics or -batchmode. It records two additional files
+Player, never -nographics or -batchmode. It records three additional files
 in the P10 attachments folder:
 
 - windows-1080p60-m2-performance.csv — cumulative frame/resource samples
@@ -67,6 +68,12 @@ in the P10 attachments folder:
   callbacks, failure markers, normalized tracking source/subject loss and
   restoration, distinct automatic scene-shutdown unloads, and explicit
   session start/end. Not an independent device log.
+
+The launcher checks that all three M2 files were created and nonempty,
+but does **not** interpret file existence as proof that the lifecycle
+events, frame data, model cycles or real OBS/device tests passed. Run the
+strict M2 verifier separately; incomplete, crashed or interrupted sessions
+remain invalid even when some files are present.
 
 The launcher deliberately does not configure the GUI, press OBS controls,
 evaluate transparency or create fake screenshots. Record the actual OBS
