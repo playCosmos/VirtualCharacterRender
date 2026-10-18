@@ -90,10 +90,19 @@ def inspect_zip(path, platform):
         for entry in infos:
             name = validate_member_name(entry.filename)
             require(name not in found, "duplicated ZIP member: " + name)
+            # Default Windows NTFS and macOS APFS/HFS installations may be
+            # case-insensitive. A ZIP that stores both variants cannot have a
+            # stable extracted meaning even if its own SHA-256 matches.
+            require(name.casefold() not in folded,
+                    "Case-colliding desktop ZIP member: " + name)
+            folded.add(name.casefold())
             if platform == "windows":
-                require(name.casefold() not in folded,
-                        "Case-colliding Windows ZIP member: " + name)
-                folded.add(name.casefold())
+                for component in name.split("/"):
+                    require(not component.endswith((".", " ")) and
+                            re.fullmatch(
+                                r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?",
+                                component) is None,
+                            "Windows reserved/ambiguous ZIP filename: " + name)
             found[name] = entry
             require(not (entry.flag_bits & 1), "encrypted ZIP entry")
             unix_type = stat.S_IFMT(entry.external_attr >> 16)
@@ -103,6 +112,8 @@ def inspect_zip(path, platform):
             require(total_bytes <= MAX_UNCOMPRESSED_BYTES,
                     "ZIP uncompressed content too large")
             if unix_type == stat.S_IFLNK:
+                require(platform == "macos",
+                        "Windows ZIPs must not contain filesystem symlinks")
                 require(entry.file_size <= 4096, "oversized ZIP symlink")
                 link = archive.read(entry).decode("utf-8")
                 require(link and not link.startswith("/") and "\\" not in link and
@@ -303,6 +314,19 @@ def self_test():
             z.writestr("VirtualCharacterRender_Data/evil:ads", b"stream")
         write_manifests()
         must_fail("Windows NTFS alternate data stream path")
+        create_archives()
+        with zipfile.ZipFile(root / names[0], "w") as z:
+            z.writestr("VirtualCharacterRender.exe", b"MZtest")
+            z.writestr("VirtualCharacterRender_Data/con.txt", b"device")
+        write_manifests()
+        must_fail("reserved Windows device name")
+        create_archives()
+        with zipfile.ZipFile(root / names[1], "w") as z:
+            z.writestr("VirtualCharacterRender.app/Contents/Info.plist", b"plist")
+            z.writestr("VirtualCharacterRender.app/Contents/MacOS/VirtualCharacterRender", b"app")
+            z.writestr("VirtualCharacterRender.app/Contents/Info.PLIST", b"collision")
+        write_manifests()
+        must_fail("case-colliding macOS bundle file")
         create_archives()
         write_manifests()
         metadata = json.loads((root / "build-provenance.json").read_text())
