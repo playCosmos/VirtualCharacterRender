@@ -535,7 +535,7 @@ def execute(args):
         # suppressed save is expected only in these explicitly tagged probes.
         original_backup = backup_path.read_bytes()
         bad_primary = b"{ broken primary configuration"
-        bad_backup = b"\\xff\\xfe not UTF-8 backup"
+        bad_backup = b"\xff\xfe not UTF-8 backup"
         summary["recoveryCases"] = []
         config_path.write_bytes(bad_primary)
         print("Testing native backup fallback without overwriting bad primary",
