@@ -8,10 +8,18 @@ DEST="$ROOT/unity/Packages/LocalPackages/com.ultraleap.tracking"
 if [[ ! -f "$DEST/package.json" ]]; then
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
-  git clone --quiet --filter=blob:none --no-checkout https://github.com/ultraleap/UnityPlugin.git "$TMP/repo"
+  # Ultraleap's upstream Git LFS budget is exhausted. Checkout the EXACT
+  # pinned source without smudging, then restore only byte-identical LFS
+  # objects whose SHA-256 and length match upstream pointers.
+  GIT_LFS_SKIP_SMUDGE=1 git clone --quiet --filter=blob:none --no-checkout https://github.com/ultraleap/UnityPlugin.git "$TMP/repo"
   git -C "$TMP/repo" sparse-checkout init --cone
   git -C "$TMP/repo" sparse-checkout set Packages/Tracking
-  git -C "$TMP/repo" checkout --quiet "$PIN"
+  GIT_LFS_SKIP_SMUDGE=1 git -C "$TMP/repo" checkout --quiet "$PIN"
+  if [[ "$(git -C "$TMP/repo" rev-parse HEAD)" != "$PIN" ]]; then
+    echo "Ultraleap immutable source commit mismatch" >&2
+    exit 1
+  fi
+  python3 "$ROOT/tools/restore-ultraleap-lfs.py" "$TMP/repo/Packages/Tracking"
   mkdir -p "$(dirname "$DEST")"
   cp -a "$TMP/repo/Packages/Tracking" "$DEST"
 fi
@@ -83,6 +91,50 @@ if old in s:
     s=s.replace(old,new)
     p.write_text(s)
 print("Ultraleap standalone startup hints: null-safe")
+PY
+
+# VCR_ULTRALEAP_LAZY_HINT_CONNECTION:
+# Ultraleap 7.3 automatically invokes StartupHints after scene load even
+# when there is no LeapServiceProvider and no startup hand-tracking hints.
+# SetupDeviceCallbacks() dereferences LeapController, creating a hidden
+# Controller(0) + LeapC Worker that can delay native shutdown ~17 seconds.
+# Defer creation until startup hints actually exist OR hints are requested
+# later by the user. Do not eagerly start an empty connection.
+export ULTRALEAP_HINT_FILE="$DEST/Core/Runtime/Scripts/Utils/HandTrackingHintManager.cs"
+python3 - <<'PY'
+import os
+from pathlib import Path
+p = Path(os.environ["ULTRALEAP_HINT_FILE"])
+s = p.read_text(encoding="utf-8-sig")
+marker = "VCR_ULTRALEAP_LAZY_HINT_CONNECTION"
+old_start = """                // Use a LeapC connection for Hints
+                SetupDeviceCallbacks();"""
+new_start = """                // VCR_ULTRALEAP_LAZY_HINT_CONNECTION:
+                // Avoid starting an unused Controller and LeapC worker on
+                // every Player launch. Hints configured for startup are
+                // still registered, but never subscribed twice.
+                if (currentHints.Count != 0 && _leapController == null)
+                    SetupDeviceCallbacks();"""
+old_update = """                // Use a LeapC connection for Hints
+                RequestHintsOnAllDevices(hints);"""
+new_update = """                // Explicit hints added after startup must still attach the
+                // device callback only once. Clearing a never-started
+                // empty hint set must not create a connection either.
+                if (hints.Length != 0 && _leapController == null)
+                    SetupDeviceCallbacks();
+                if (hints.Length != 0 || _leapController != null)
+                    RequestHintsOnAllDevices(hints);"""
+if marker in s:
+    if s.count(new_start) != 1 or s.count(new_update) != 1:
+        raise SystemExit("Partially patched Ultraleap lazy hint source")
+    print("Ultraleap lazy hand-hint connection already applied")
+else:
+    if s.count(old_start) != 1 or s.count(old_update) != 1:
+        raise SystemExit(
+            "Unexpected pinned Ultraleap hint source: refuse unsafe patch")
+    s = s.replace(old_start, new_start, 1).replace(old_update, new_update, 1)
+    p.write_text(s, encoding="utf-8")
+    print("Ultraleap lazy hand-hint connection: startup and dynamic hints guarded")
 PY
 
 # In a standalone Player the upstream package cannot create the missing
