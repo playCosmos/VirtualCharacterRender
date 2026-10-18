@@ -55,8 +55,15 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
     root = final_path.parent
     seen = set()
     checked = 0
+    total_uncompressed_bytes = 0
     with zipfile.ZipFile(archive_path) as package:
-        for item in package.infolist():
+        members = package.infolist()
+        require(0 < len(members) <= 100000,
+                "Unreasonable final signed ZIP member count")
+        for item in members:
+            total_uncompressed_bytes += item.file_size
+            require(total_uncompressed_bytes <= 16 * 1024**3,
+                    "Final signed ZIP uncompressed content too large")
             name = item.filename
             while name.startswith("./"):
                 name = name[2:]
