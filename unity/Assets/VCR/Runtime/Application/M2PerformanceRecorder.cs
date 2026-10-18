@@ -35,6 +35,7 @@ namespace VCR.Runtime.Application
         private long _saturatedFrameCount;
         private ProfilerRecorder _gcRecorder;
         private bool _gcRecorderStarted;
+        private bool _gcRecorderOwned;
         private bool _writeFailed;
 
         [Serializable]
@@ -133,6 +134,7 @@ namespace VCR.Runtime.Application
                 {
                     _gcRecorder = ProfilerRecorder.StartNew(
                         ProfilerCategory.Memory, "GC Allocated In Frame", 1);
+                    _gcRecorderOwned = true;
                     _gcRecorderStarted = _gcRecorder.Valid;
                 }
                 catch (Exception exception)
@@ -183,15 +185,17 @@ namespace VCR.Runtime.Application
             if (_path == null || _writeFailed)
                 return;
             Record(Time.realtimeSinceStartupAsDouble, true);
-            if (_gcRecorderStarted)
+            if (_gcRecorderOwned)
                 _gcRecorder.Dispose();
+            _gcRecorderOwned = false;
             _gcRecorderStarted = false;
         }
 
         private void OnDestroy()
         {
-            if (_gcRecorderStarted)
+            if (_gcRecorderOwned)
                 _gcRecorder.Dispose();
+            _gcRecorderOwned = false;
             _gcRecorderStarted = false;
         }
 
@@ -236,7 +240,8 @@ namespace VCR.Runtime.Application
 
             // Current-frame allocation marker is optional: unsupported retail
             // recorders must report unavailable, never invent a zero reading.
-            var gcAvailable = _gcRecorderStarted && _gcRecorder.Valid;
+            var gcAvailable = _gcRecorderStarted &&
+                _gcRecorder.Valid && _gcRecorder.Count > 0;
             var gcBytes = gcAvailable ? _gcRecorder.LastValue : -1L;
             gcAvailable &= gcBytes >= 0;
             _line.Clear();
