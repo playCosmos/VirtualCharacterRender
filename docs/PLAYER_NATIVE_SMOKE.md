@@ -106,6 +106,19 @@ touches the operator's persistent profile or a real tracking device.
 They establish native/headless data-preservation evidence **N**, not a
 physical GUI/permission/device acceptance **G**.
 
+Two additional runs exercise the **explicit recovery confirmation** path:
+corrupt current/valid backup and both generations damaged. The smoke-only
+`accept-backup` and `accept-unrecoverable` modes first require the normal
+autosave guard, then invoke the real bootstrap `SaveConfiguration` method.
+The Player must report successful save, guard removal and a clean subsequent
+`OnApplicationQuit`. The external runner checks that both the primary and
+`.bak` have been repaired to valid schema-1 JSON containing the **observed
+scene camera FOV**. Those confirmed settings are allowed to overwrite the
+previously unreadable files, unlike the unattended exit tests. Logs and
+machine-readable evidence are retained separately for each acceptance run.
+This demonstrates a tested operator-command equivalent, not a graphical
+confirmation dialog or real user interaction.
+
 On failure the CI runner uploads the log and diagnosis; missing JSON is
 **FAIL**, not an assumed PASS.
 
