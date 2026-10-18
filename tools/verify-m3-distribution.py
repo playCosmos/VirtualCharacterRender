@@ -100,7 +100,7 @@ def inspect_zip(path, platform):
                 for component in name.split("/"):
                     require(not component.endswith((".", " ")) and
                             re.fullmatch(
-                                r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?",
+                                r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?",
                                 component) is None,
                             "Windows reserved/ambiguous ZIP filename: " + name)
             found[name] = entry
