@@ -62,7 +62,16 @@ signtool verify /pa /v "VirtualCharacterRender.exe"
 python tools/verify-m3-native-signatures.py --platform windows --path "VirtualCharacterRender.exe" --archive "final-signed-windows.zip" --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256 --expected-windows-thumbprint YOUR_APPROVED_CERT_SHA1_THUMBPRINT
 ~~~
 
-3. The approved Windows certificate thumbprint and Apple Developer Team ID must
+3. Run signature verification against a **fresh, isolated extraction folder**
+containing only the actual release payload, with the final ZIP kept outside
+that folder. The verifier checks both directions: every ZIP file must match
+the extracted file, and every extracted file/symlink must be present in the
+ZIP. This prevents a fully signed local app from appearing to validate an
+incomplete ZIP missing, for example, UnityPlayer.dll or macOS code-signature
+resources. Reject any unexplained extra files rather than deleting them
+silently to make the gate pass.
+
+The approved Windows certificate thumbprint and Apple Developer Team ID must
 be obtained from the publisher's independently reviewed signing policy,
 not copied from a potentially untrusted downloaded binary.
 
