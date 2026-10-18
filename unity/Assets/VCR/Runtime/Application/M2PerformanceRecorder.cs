@@ -220,7 +220,12 @@ namespace VCR.Runtime.Application
             if (_frameCount == 0)
                 return;
 
-            var scene = _bootstrap != null ? _bootstrap.SceneRuntime : null;
+            // Quit may have already disposed the overlay/window adapter.
+            // An evidence footer must not rediscover native services or
+            // re-enter a shutdown scene to read capture status.
+            var scene = !quit && _bootstrap != null
+                ? _bootstrap.SceneRuntime
+                : null;
             var width = 0;
             var height = 0;
             var targetFps = 0;
