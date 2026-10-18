@@ -61,6 +61,10 @@ required_latest_chain = [
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
     ROOT / "tools" / "validate-p13-source-free.ps1",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs.meta",
+    ROOT / "tools" / "verify-m2-performance.py",
+    ROOT / "docs" / "M2_PERFORMANCE_EVIDENCE.md",
 ]
 for path in required_latest_chain:
     require(path)
@@ -126,6 +130,26 @@ def require_source_order(
         errors.append(
             f"source ordering contract missing: {label}: {path.relative_to(ROOT)}"
         )
+
+
+m2_recorder = VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs"
+m2_alpha = VCR / "Editor" / "Alpha" / "AlphaApplicationSceneBuilder.cs"
+require_source_contains(
+    m2_recorder, "--vcr-m2-perf-csv=",
+    "M2 recording must remain explicit opt-in",
+)
+require_source_contains(
+    m2_recorder, "Application.isBatchMode",
+    "M2 must refuse simulated headless GUI evidence",
+)
+require_source_contains(
+    m2_recorder, "FileMode.CreateNew",
+    "M2 must not silently overwrite prior evidence",
+)
+require_source_contains(
+    m2_alpha, "root.AddComponent<M2PerformanceRecorder>();",
+    "M2 evidence component must be part of the generated native Player scene",
+)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
