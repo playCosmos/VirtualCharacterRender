@@ -59,10 +59,14 @@ On the designated Windows signing workstation/runner:
 ~~~powershell
 signtool sign /fd SHA256 /tr https://YOUR-APPROVED-RFC3161-SERVICE /td SHA256 /a "VirtualCharacterRender.exe"
 signtool verify /pa /v "VirtualCharacterRender.exe"
-python tools/verify-m3-native-signatures.py --platform windows --path "VirtualCharacterRender.exe" --archive "final-signed-windows.zip" --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256
+python tools/verify-m3-native-signatures.py --platform windows --path "VirtualCharacterRender.exe" --archive "final-signed-windows.zip" --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256 --expected-windows-thumbprint YOUR_APPROVED_CERT_SHA1_THUMBPRINT
 ~~~
 
-3. The native verifier requires a `Valid` Authenticode signature and observed
+3. The approved Windows certificate thumbprint and Apple Developer Team ID must
+be obtained from the publisher's independently reviewed signing policy,
+not copied from a potentially untrusted downloaded binary.
+
+The native verifier requires a `Valid` Authenticode signature and observed
    timestamp certificate, plus an exact member-by-member match against the
    final **already signed** distribution ZIP specified by `--archive`.
    The example ZIP must actually exist and contain the signed EXE; use
@@ -102,7 +106,8 @@ xcrun stapler staple "VirtualCharacterRender.app"
 python3 tools/verify-m3-native-signatures.py \
   --platform macos --path "VirtualCharacterRender.app" \
   --archive "final-stapled-macos.zip" \
-  --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256
+  --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256 \
+  --expected-macos-team-id YOUR_TEAM_ID
 ~~~
 
 The verifier independently checks that each member in the final ZIP matches
