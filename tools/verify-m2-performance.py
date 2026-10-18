@@ -43,6 +43,7 @@ EVENT_TYPES = {
     "session_end": "recorder",
     "character_loaded": "character.loader",
     "character_unloaded": "character.loader",
+    "character_unloaded_shutdown": "character.loader",
     "character_initially_loaded": "character.loader",
     "character_load_failed": "character.loader",
     "tracking_source_lost": "tracking.presence",
@@ -241,6 +242,8 @@ def inspect_transitions(csv_path, session_started, last_elapsed,
                     if loaded:
                         complete_cycles += 1
                     loaded = False
+                elif event == "character_unloaded_shutdown":
+                    loaded = False
                 elif event == "tracking_source_lost":
                     source_lost = True
                 elif event == "tracking_source_restored":
@@ -262,6 +265,7 @@ def inspect_transitions(csv_path, session_started, last_elapsed,
         "eventRows": len(rows),
         "characterLoadedEvents": counts["character_loaded"],
         "characterUnloadedEvents": counts["character_unloaded"],
+        "shutdownUnloadEventsExcluded": counts["character_unloaded_shutdown"],
         "characterLoadFailedEvents": counts["character_load_failed"],
         "characterInitiallyLoadedAtRecorderStart": (
             counts["character_initially_loaded"] > 0),
@@ -431,6 +435,7 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
             "Visual alpha, OBS capture latency, VRM fidelity and physical-device behavior need separate real evidence.",
             "Five-second scene samples cannot count VRM load/unload or tracking connect/disconnect cycles.",
             "Transition events can count successful loader callbacks; a reload or replacement without unload is not a completed cycle.",
+            "Automatic scene shutdown unloads are excluded from successful manual load/unload pairs.",
             "Normalized tracking presence loss/return is NOT independently proven physical/protocol disconnect/reconnect.",
         ],
     }
@@ -522,6 +527,24 @@ def self_test():
         assert transitions["characterUnloadedEvents"] == 1
         assert transitions["trackingSourceLossReturnPairs"] == 1
         assert transitions["physicalDeviceReconnectCyclesVerified"] is False
+        shutdown_events = [
+            events[0],
+            events[1],
+            ("2026-10-18T10:00:08Z", "8.000", "3",
+             "character_unloaded_shutdown", "character.loader"),
+            ("2026-10-18T10:00:15Z", "15.000", "4", "session_end", "recorder"),
+        ]
+        write_events(shutdown_events)
+        excluded = inspect(csv_path, "windows", "720p60", require_events=True)
+        assert excluded["lifecycleTransitionEvidence"]["successfulLoadUnloadPairs"] == 0
+        assert excluded["lifecycleTransitionEvidence"]["shutdownUnloadEventsExcluded"] == 1
+        try:
+            inspect(csv_path, "windows", "720p60", min_character_cycles=1)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Automatic shutdown unload incorrectly counted as user cycle")
+        write_events(events)
         for broken in (
             events[:-1],
             [*events, events[-1]],
