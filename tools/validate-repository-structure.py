@@ -61,6 +61,10 @@ required_latest_chain = [
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
     ROOT / "tools" / "validate-p13-source-free.ps1",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs.meta",
+    ROOT / "tools" / "verify-m2-performance.py",
+    ROOT / "docs" / "M2_PERFORMANCE_EVIDENCE.md",
 ]
 for path in required_latest_chain:
     require(path)
@@ -126,6 +130,60 @@ def require_source_order(
         errors.append(
             f"source ordering contract missing: {label}: {path.relative_to(ROOT)}"
         )
+
+
+m2_recorder = VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs"
+m2_alpha = VCR / "Editor" / "Alpha" / "AlphaApplicationSceneBuilder.cs"
+require_source_contains(
+    m2_recorder, "--vcr-m2-perf-csv=",
+    "M2 recording must remain explicit opt-in",
+)
+require_source_contains(
+    m2_recorder, "Application.isBatchMode",
+    "M2 must refuse simulated headless GUI evidence",
+)
+require_source_contains(
+    m2_recorder, "FileMode.CreateNew",
+    "M2 must not silently overwrite prior evidence",
+)
+require_source_contains(
+    m2_alpha, "root.AddComponent<M2PerformanceRecorder>();",
+    "M2 evidence component must be part of the generated native Player scene",
+)
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterLoaded += OnCharacterLoaded;",
+    "M2 must record actual VRM loader success callbacks, not sampled character state",
+)
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterUnloaded += OnCharacterUnloaded;",
+    "M2 must record actual VRM loader unload callbacks",
+)
+require_source_contains(
+    m2_recorder, "character_unloaded_shutdown",
+    "M2 must separate automatic shutdown cleanup from measured VRM cycles",
+)
+require_source_contains(
+    m2_recorder, "TrackingPresenceEvents.TrackingSourceLost",
+    "M2 tracking evidence must retain normalized source-loss typing",
+)
+m2_verifier = ROOT / "tools" / "verify-m2-performance.py"
+require_source_contains(
+    m2_verifier, "min_character_cycles",
+    "M2 verifier must retain optional real loader callback cycle checks",
+)
+require_source_contains(
+    m2_verifier, "shutdownUnloadEventsExcluded",
+    "M2 verifier must explicitly exclude process-shutdown unloads",
+)
+m2_launcher = ROOT / "tools" / "run-p10-interactive.py"
+require_source_contains(
+    m2_launcher, "check_m2_outputs(performance_file)",
+    "P10 GUI launcher must detect missing M2 event sidecar",
+)
+require_source_contains(
+    m2_launcher, "refuse_prior_evidence(",
+    "P10 GUI launcher must refuse overwrite of pre-existing event evidence",
+)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
