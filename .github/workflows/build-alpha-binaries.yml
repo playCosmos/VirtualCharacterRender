@@ -251,6 +251,10 @@ jobs:
           python3 tools/verify-m3-distribution.py \
             --artifacts release-assets --version "$VERSION" \
             --source "$GITHUB_SHA" > release-assets/m3-source-preflight.json
+          python3 tools/generate-m3-payload-inventory.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" \
+            --output release-assets/m3-payload-inventory.json
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
@@ -281,6 +285,15 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "VirtualCharacterRender $VERSION" \
             --notes-file release-notes.md --prerelease
+      - name: Preserve complete shipped-file inventory for restricted release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3-inventory-${{ needs.preflight.outputs.version }}
+          path: |
+            release-assets/m3-source-preflight.json
+            release-assets/m3-payload-inventory.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Verify published assets and release target
         shell: bash
         run: |
