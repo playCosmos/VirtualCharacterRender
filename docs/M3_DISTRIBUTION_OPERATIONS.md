@@ -59,11 +59,14 @@ On the designated Windows signing workstation/runner:
 ~~~powershell
 signtool sign /fd SHA256 /tr https://YOUR-APPROVED-RFC3161-SERVICE /td SHA256 /a "VirtualCharacterRender.exe"
 signtool verify /pa /v "VirtualCharacterRender.exe"
-python tools/verify-m3-native-signatures.py --platform windows --path "VirtualCharacterRender.exe"
+python tools/verify-m3-native-signatures.py --platform windows --path "VirtualCharacterRender.exe" --archive "final-signed-windows.zip" --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256
 ~~~
 
 3. The native verifier requires a `Valid` Authenticode signature and observed
-   timestamp certificate; record the expected publisher and certificate
+   timestamp certificate, plus an exact member-by-member match against the
+   final **already signed** distribution ZIP specified by `--archive`.
+   The example ZIP must actually exist and contain the signed EXE; use
+   fresh final-archive hashes, not unsigned-alpha hashes. Record the expected publisher and certificate
    thumbprint separately in private release approval. A valid signature
    does **not** guarantee Microsoft SmartScreen reputation.
 4. Repackage the **signed** ZIP/installer, hash the final bytes, install on a
@@ -97,11 +100,17 @@ xcrun notarytool submit "VCR-notarization.zip" --keychain-profile "VCR_NOTARY_PR
 # Only if notarization returned Accepted:
 xcrun stapler staple "VirtualCharacterRender.app"
 python3 tools/verify-m3-native-signatures.py \
-  --platform macos --path "VirtualCharacterRender.app"
+  --platform macos --path "VirtualCharacterRender.app" \
+  --archive "final-stapled-macos.zip" \
+  --archive-sha256 YOUR_INDEPENDENTLY_REHASHED_FINAL_ZIP_SHA256
 ~~~
 
-The verifier independently invokes `codesign`, `lipo`, `stapler validate`
-and `spctl --assess` on the **final stapled app**, requires arm64,
+The verifier independently checks that each member in the final ZIP matches
+the final stapled app's files or symlink targets, then invokes `codesign`,
+`lipo`, `stapler validate` and `spctl --assess` on that same app.
+**Create the final ZIP after stapling, before running this command**; do not
+reuse the intermediate notarization-upload ZIP.
+The verifier requires arm64,
 Developer ID Application and hardened runtime. A notarization ticket is
 not equivalent to a verified GUI application launch or correct camera/OBS
 permission prompts. Repackage the **stapled** app (preserving bundle symlinks
