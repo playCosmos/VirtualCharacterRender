@@ -65,7 +65,8 @@ in the P10 attachments folder:
   graphics API/driver, Unity version, histogram/GC method, start time
 - windows-1080p60-m2-performance.csv.events.csv — successful VRM load/unload
   callbacks, failure markers, normalized tracking source/subject loss and
-  restoration, and explicit session start/end. Not an independent device log.
+  restoration, distinct automatic scene-shutdown unloads, and explicit
+  session start/end. Not an independent device log.
 
 The launcher deliberately does not configure the GUI, press OBS controls,
 evaluate transparency or create fake screenshots. Record the actual OBS
@@ -130,7 +131,8 @@ metadata, is rejected rather than counted as a valid soak. It computes:
   sidecar invalidates the measurement rather than being ignored. Missing
   sidecars are permitted for historical M2 recordings unless
   `--require-events` or `--min-character-cycles` is requested.
-  `lifecycleTransitionEvidence` reports counted observations but keeps
+  `lifecycleTransitionEvidence` reports counted observations and the number
+  of excluded automatic shutdown unloads, but keeps
   `physicalDeviceReconnectCyclesVerified=false`.
 
 Frames >=256ms overflow the final histogram bin. Nonzero overflow is
