@@ -65,6 +65,13 @@ required_latest_chain = [
     VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs.meta",
     ROOT / "tools" / "verify-m2-performance.py",
     ROOT / "docs" / "M2_PERFORMANCE_EVIDENCE.md",
+    ROOT / "tools" / "verify-m3-distribution.py",
+    ROOT / "tools" / "verify-m3-native-signatures.py",
+    ROOT / "tools" / "generate-m3-sbom.py",
+    ROOT / "docs" / "M3_DISTRIBUTION_PLAN.md",
+    ROOT / "docs" / "M3_DISTRIBUTION_OPERATIONS.md",
+    ROOT / "docs" / "M3_PRIVACY_SUPPORT.md",
+    ROOT / "docs" / "M3_LICENSE_SECURITY_REVIEW.md",
 ]
 for path in required_latest_chain:
     require(path)
@@ -184,6 +191,22 @@ require_source_contains(
     m2_launcher, "refuse_prior_evidence(",
     "P10 GUI launcher must refuse overwrite of pre-existing event evidence",
 )
+
+
+m3_archive = ROOT / "tools" / "verify-m3-distribution.py"
+m3_native = ROOT / "tools" / "verify-m3-native-signatures.py"
+m3_sbom = ROOT / "tools" / "generate-m3-sbom.py"
+for source, symbol, label in (
+    (m3_archive, '"distributionAcceptance": False',
+     "M3 archive validation must not claim distribution signoff"),
+    (m3_archive, "archive.testzip()",
+     "M3 archive validation must verify ZIP member CRC"),
+    (m3_native, '"distributionAcceptance": False',
+     "M3 signature-check outcome must not claim distribution approval"),
+    (m3_sbom, "PENDING_MANUAL_APPROVAL",
+     "M3 partial SBOM must require manual license clearance"),
+):
+    require_source_contains(source, symbol, label)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
