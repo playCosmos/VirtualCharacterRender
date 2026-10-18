@@ -248,6 +248,10 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
     require(rows[-2]["scene_state"] in ("Ready", "CharacterReady"),
             "Native scene not ready before normal quit")
     total_seconds = last["elapsed_seconds"]
+    # Sampled scene state is not a lifecycle event log: a five-second
+    # interval can miss arbitrarily many short load/connection transitions.
+    # Surface anomalies without pretending these are 50 completed cycles.
+    interior = rows[1:-1]
     summary = {
         "suite": "m2-native-performance-verification-v1",
         "status": "NATIVE_RUNTIME_MEASUREMENTS_VALIDATED",
@@ -262,6 +266,16 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
                               metadata["architecture"].lower() == "arm64"),
         "sessionSamples": len(rows),
         "durationSeconds": round(total_seconds, 3),
+        "interiorRuntimeSamples": len(interior),
+        "sceneFaultedSamples": sum(r["scene_state"] == "Faulted"
+                                   for r in interior),
+        "sceneNonReadySamples": sum(
+            r["scene_state"] not in ("Ready", "CharacterReady")
+            for r in interior),
+        "characterLoadedSamples": sum(r["character_loaded"]
+                                      for r in interior),
+        "overlayCaptureReadySamples": sum(r["overlay_capture_ready"]
+                                          for r in interior),
         "totalFrames": last["total_frames"],
         "measuredAverageFps": round(last["total_frames"] / total_seconds, 3),
         "frameMeanMs": last["frame_average_ms"],
@@ -291,6 +305,7 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
             "Slow frames are >16.667ms application frames, NOT OBS dropped frames.",
             "Profiler counters exclude independent OS compositor/OBS/GPU allocation.",
             "Visual alpha, OBS capture latency, VRM fidelity and physical-device behavior need separate real evidence.",
+            "Five-second scene samples cannot count VRM load/unload or tracking connect/disconnect cycles.",
         ],
     }
     return summary
@@ -351,6 +366,16 @@ def self_test():
         assert result["releaseAcceptance"] is False
         assert result["visualObsCaptureVerified"] is False
         assert result["gcAllocPerFrameAvailableSamples"] == 0
+        assert result["interiorRuntimeSamples"] == 2
+        assert result["characterLoadedSamples"] == 2
+        assert result["overlayCaptureReadySamples"] == 2
+        assert result["sceneFaultedSamples"] == 0
+        assert result["sceneNonReadySamples"] == 0
+        write([rows[0], dict(rows[1], scene_state="Faulted"), *rows[2:]])
+        with_fault = inspect(csv_path, "windows", "720p60")
+        assert with_fault["sceneFaultedSamples"] == 1
+        assert with_fault["sceneNonReadySamples"] == 1
+        write(rows)
         for broken in (
             [*rows[:-1], dict(rows[-1], quit_observed="0")],
             [*rows[:-1], dict(rows[-1], total_frames="1")],
