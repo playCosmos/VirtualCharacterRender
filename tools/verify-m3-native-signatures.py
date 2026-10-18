@@ -290,8 +290,8 @@ def main():
     if args.platform is None or args.path is None:
         parser.error("--platform and --path are required")
     try:
-        require((args.archive is None) == (args.archive_sha256 is None),
-                "Provide both final --archive and --archive-sha256 together")
+        require(args.archive is not None and args.archive_sha256 is not None,
+                "A final distribution signature check requires both --archive and --archive-sha256")
         # Bind the actual signed/notarized local payload to the distribution
         # bytes *before* trusting the host OS signature check. This prevents
         # verifying a signed staging EXE/app but shipping different ZIP files.
