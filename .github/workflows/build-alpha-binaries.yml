@@ -245,6 +245,12 @@ jobs:
             --arg mac_sha "$(sha256sum "release-assets/$mac" | cut -d' ' -f1)" \
             '{tag:$tag,source_sha:$sha,unity_version:$unity,workflow_run:$workflow,assets:[{name:$windows,sha256:$windows_sha},{name:$mac,sha256:$mac_sha}]}' \
             > release-assets/build-provenance.json
+          # Verify the exact signed-off source assertion, independent hashes
+          # and safe archive shape before posting an immutable alpha release.
+          # This does NOT attest developer signing or M3 distribution approval.
+          python3 tools/verify-m3-distribution.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" > release-assets/m3-source-preflight.json
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
