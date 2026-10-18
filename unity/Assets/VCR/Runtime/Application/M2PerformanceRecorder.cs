@@ -23,8 +23,8 @@ namespace VCR.Runtime.Application
         private const double BinWidthMs = 0.25;
         private const int HistogramBins = 1025;
         private const double FrameBudgetMs = 1000.0 / 60.0;
-        private readonly long[] _frameHistogram = new long[HistogramBins];
-        private readonly StringBuilder _line = new StringBuilder(384);
+        private long[] _frameHistogram;
+        private StringBuilder _line;
         private ApplicationRuntimeBootstrap _bootstrap;
         private string _path;
         private double _startedAt;
@@ -121,6 +121,11 @@ namespace VCR.Runtime.Application
                         "mono_used_bytes,total_allocated_bytes,gc_gen0_collections," +
                         "gc_gen1_collections,gc_gen2_collections,render_width,render_height," +
                         "target_fps,character_loaded,scene_state,overlay_capture_ready,quit_observed");
+                // Defer heap storage until an explicitly requested
+                // measuring session; normal launches incur no profiler
+                // histogram allocation or repeated Update work.
+                _frameHistogram = new long[HistogramBins];
+                _line = new StringBuilder(384);
                 _bootstrap = GetComponent<ApplicationRuntimeBootstrap>();
                 _startedAt = Time.realtimeSinceStartupAsDouble;
                 _nextSampleAt = _startedAt + IntervalSeconds;
