@@ -39,11 +39,12 @@ def sha256_stream(stream):
 
 
 def validate_archive_binding(final_path, archive_path, expected_sha, platform):
-    """Prove that the signed host-checked files are exactly those in the ZIP.
+    """Bind both directions of an isolated extracted release and its final ZIP.
 
-    This compares every ZIP member to the on-disk extracted distribution,
-    including macOS framework symlink targets. It is read-only and does not
-    certify any source manifest or signature by itself.
+    ZIP members must match the extracted files/symlinks, and *every* local
+    release payload file/symlink must appear in the ZIP. Merely checking ZIP
+    members can falsely validate a signed app that will ship without its
+    _CodeSignature folder, UnityPlayer DLL or other necessary contents.
     """
     require(re.fullmatch(r"[0-9a-f]{64}", expected_sha or "") is not None,
             "Exact final archive SHA256 required for native binding")
@@ -52,8 +53,16 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
     with archive_path.open("rb") as source:
         actual = sha256_stream(source)
     require(actual == expected_sha, "Final signed ZIP does not match expected SHA256")
+    require(platform in ("windows", "macos"), "Unsupported release platform")
     root = final_path.parent
+    require(root.is_dir() and not root.is_symlink() and
+            final_path.exists() and not final_path.is_symlink(),
+            "Extracted release root must exist and not be a symlink")
+    root = root.resolve()
+    require(not archive_path.resolve().is_relative_to(root),
+            "Final ZIP must be outside the isolated unpacked release directory")
     seen = set()
+    folded = set()
     checked = 0
     total_uncompressed_bytes = 0
     with zipfile.ZipFile(archive_path) as package:
@@ -69,6 +78,7 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
                 name = name[2:]
             require(name and not name.startswith("/") and
                     "\\" not in name and ":" not in name and
+                    not any(ord(char) < 32 for char in name) and
                     ".." not in name.split("/") and
                     posixpath.normpath(name) not in ("..", "."),
                     "Unsafe ZIP distribution member")
@@ -77,6 +87,10 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
                     normalized not in seen,
                     "ZIP distribution traversal or duplicate")
             seen.add(normalized)
+            if platform == "windows":
+                require(normalized.casefold() not in folded,
+                        "Windows release ZIP has case-colliding files")
+                folded.add(normalized.casefold())
             if item.is_dir():
                 continue
             target = root.joinpath(*normalized.split("/"))
@@ -84,13 +98,19 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
             require(kind in (0, stat.S_IFREG, stat.S_IFLNK),
                     "Unsupported signed archive special file")
             if kind == stat.S_IFLNK:
-                require(target.is_symlink() and item.file_size <= 4096,
-                        "Packaged symlink absent from signed app")
+                require(platform == "macos" and target.is_symlink() and
+                        item.file_size <= 4096,
+                        "Unexpected ZIP symlink or packaged symlink missing")
                 link = package.read(item).decode("utf-8")
-                require(target.readlink().as_posix() == link,
+                require(link and not link.startswith("/") and
+                        "\\" not in link and
+                        target.readlink().as_posix() == link,
                         "Signed bundle symlink disagrees with ZIP")
+                require(target.resolve(strict=True).is_relative_to(root),
+                        "Packaged symlink resolves outside release root")
             else:
                 require(target.is_file() and not target.is_symlink() and
+                        target.resolve(strict=True).is_relative_to(root) and
                         target.stat().st_size == item.file_size,
                         "Packaged payload not equal to signed local distribution")
                 with package.open(item) as stream:
@@ -101,6 +121,18 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
                         "ZIP payload does not match locally signed file: " + normalized)
             checked += 1
     require(checked > 0, "No signed archive members matched")
+    # Reverse mapping: a signed local bundle with files excluded from its
+    # advertised ZIP is not the delivered signed bundle. This includes
+    # code-signature metadata, UnityPlayer DLLs and platform native plugins.
+    release_payload = (root if platform == "windows" else final_path)
+    for local in release_payload.rglob("*"):
+        if local.is_file() or local.is_symlink():
+            relative = local.relative_to(root).as_posix()
+            require(relative in seen,
+                    "Signed local payload omitted from final ZIP: " + relative)
+            if local.is_symlink():
+                require(local.resolve(strict=True).is_relative_to(root),
+                        "Local release symlink resolves outside release root")
     if platform == "windows":
         require("VirtualCharacterRender.exe" in seen,
                 "Bound ZIP lacks the signed Windows EXE")
@@ -206,7 +238,9 @@ def self_test():
                 pass
             else:
                 raise AssertionError("M3 trust checker accepted absent unsigned artifact")
-        signed = root / "VirtualCharacterRender.exe"
+        extracted = root / "extracted"
+        extracted.mkdir()
+        signed = extracted / "VirtualCharacterRender.exe"
         signed.write_bytes(b"MZ synthetic unsigned")
         zpath = root / "final.zip"
         with zipfile.ZipFile(zpath, "w") as package:
@@ -229,6 +263,13 @@ def self_test():
             pass
         else:
             raise AssertionError("Final signed ZIP SHA mismatch accepted")
+        (extracted / "UnityPlayer.dll").write_bytes(b"unpacked but not distributed")
+        try:
+            validate_archive_binding(signed, zpath, digest, "windows")
+        except ValueError as exc:
+            assert "omitted from final ZIP" in str(exc)
+        else:
+            raise AssertionError("Signed but undelivered Unity DLL accepted")
     print("M3 native signing verifier negative self-test PASS; real signing not exercised")
 
 
