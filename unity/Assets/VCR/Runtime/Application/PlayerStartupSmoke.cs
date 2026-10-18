@@ -18,6 +18,9 @@ namespace VCR.Runtime.Application
     public sealed class PlayerStartupSmoke : MonoBehaviour
     {
         private const string ReportOption = "--vcr-smoke-report=";
+        // Opt-in only when a smoke report is requested. A production launch
+        // does not use these test assertions or change its quit behavior.
+        private const string RecoveryOption = "--vcr-smoke-recovery=";
         private const float StartupTimeoutSeconds = 25f;
 
         [Serializable]
@@ -31,6 +34,11 @@ namespace VCR.Runtime.Application
             public bool started;
             public bool sceneReady;
             public bool noCharacter;
+            public string recoveryMode;
+            public bool automaticSaveSuppressed;
+            public bool usedBackupRecovery;
+            public bool configurationLoadRejected;
+            public bool quitSaveSuppressed;
             // Capture the *applied* camera field of view, not just config JSON:
             // native relaunch evidence must prove settings reached the scene.
             public float observedCameraFieldOfView;
@@ -48,6 +56,7 @@ namespace VCR.Runtime.Application
         private ApplicationRuntimeBootstrap _bootstrap;
         private System.Diagnostics.Stopwatch _quitTimer;
         private bool _quitRequested;
+        private string _recoveryMode;
 
         private void Awake()
         {
@@ -72,6 +81,14 @@ namespace VCR.Runtime.Application
             };
 
             _reportPath = Path.GetFullPath(reportPath);
+            _recoveryMode = GetRecoveryMode();
+            evidence.recoveryMode = _recoveryMode ?? string.Empty;
+            if (_recoveryMode != null &&
+                _recoveryMode != "backup" &&
+                _recoveryMode != "unrecoverable")
+            {
+                evidence.error = "Unknown recovery smoke mode.";
+            }
             _evidence = evidence;
             _bootstrap = GetComponent<ApplicationRuntimeBootstrap>();
             var bootstrap = _bootstrap;
@@ -95,6 +112,14 @@ namespace VCR.Runtime.Application
                     scene.State == SceneRuntimeState.Ready;
                 evidence.noCharacter = scene != null &&
                     scene.CurrentCharacter == null;
+                evidence.automaticSaveSuppressed =
+                    bootstrap.AutomaticConfigurationSaveSuppressed;
+                evidence.usedBackupRecovery =
+                    !string.IsNullOrWhiteSpace(
+                        bootstrap.LastConfigurationLoadWarning);
+                evidence.configurationLoadRejected =
+                    !string.IsNullOrWhiteSpace(
+                        bootstrap.LastConfigurationLoadError);
                 if (evidence.sceneReady)
                 {
                     evidence.observedCameraFieldOfView =
@@ -111,6 +136,25 @@ namespace VCR.Runtime.Application
                         evidence.sceneReady + ", noCharacter=" +
                         evidence.noCharacter +
                         ", sceneError=" + (scene?.Status.LastError ?? "none");
+                }
+                else if (string.IsNullOrEmpty(evidence.error))
+                {
+                    bool guard = evidence.automaticSaveSuppressed;
+                    bool recovered = evidence.usedBackupRecovery;
+                    bool rejected = evidence.configurationLoadRejected;
+                    bool expected = _recoveryMode == "backup"
+                        ? guard && recovered && !rejected
+                        : _recoveryMode == "unrecoverable"
+                            ? guard && !recovered && rejected
+                            : !guard && !recovered && !rejected;
+                    if (!expected)
+                    {
+                        evidence.error =
+                            "Configuration load/guard state mismatch: " +
+                            "mode=" + (_recoveryMode ?? "normal") +
+                            ", guard=" + guard + ", recovered=" +
+                            recovered + ", rejected=" + rejected;
+                    }
                 }
             }
 
@@ -141,12 +185,25 @@ namespace VCR.Runtime.Application
             // The report is intentionally missing if normal shutdown never
             // reaches this callback; CI treats missing evidence as failure.
             var scene = _bootstrap != null ? _bootstrap.SceneRuntime : null;
+            var shutdownError = _bootstrap?.LastShutdownError;
+            _evidence.quitSaveSuppressed =
+                _bootstrap != null &&
+                !_bootstrap.LastShutdownSucceeded &&
+                !string.IsNullOrWhiteSpace(shutdownError) &&
+                shutdownError.StartsWith(
+                    "Automatic configuration save suppressed",
+                    StringComparison.Ordinal) &&
+                !shutdownError.Contains(" | ");
+            bool expectedGuardedQuit = !string.IsNullOrEmpty(_recoveryMode);
             _evidence.stopped = _bootstrap != null &&
-                _bootstrap.LastShutdownSucceeded &&
                 !_bootstrap.IsStarted &&
                 scene != null &&
                 scene.State == SceneRuntimeState.Stopped &&
-                string.IsNullOrWhiteSpace(scene.Status.LastError);
+                string.IsNullOrWhiteSpace(scene.Status.LastError) &&
+                (expectedGuardedQuit
+                    ? _evidence.quitSaveSuppressed
+                    : _bootstrap.LastShutdownSucceeded &&
+                      !_evidence.quitSaveSuppressed);
             if (!_evidence.stopped && string.IsNullOrWhiteSpace(_evidence.error))
                 _evidence.error = "Normal OnApplicationQuit did not stop runtime: " +
                     (_bootstrap?.LastShutdownError ??
@@ -183,6 +240,21 @@ namespace VCR.Runtime.Application
                 " ms, wantsToQuit to callback " +
                 _evidence.quitMarkerToManagedCallbackMs +
                 " ms: " + _evidence.error);
+        }
+
+        private static string GetRecoveryMode()
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+            {
+                if (argument != null &&
+                    argument.StartsWith(
+                        RecoveryOption,
+                        StringComparison.Ordinal))
+                {
+                    return argument.Substring(RecoveryOption.Length);
+                }
+            }
+            return null;
         }
 
         private static string GetReportPath()
