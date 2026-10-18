@@ -197,6 +197,22 @@ namespace VCR.Runtime.Application
 
         private void Record(double now, bool quit)
         {
+            try
+            {
+                RecordCore(now, quit);
+            }
+            catch (Exception exception)
+            {
+                // Opt-in diagnostics must never abort a normal Unity quit
+                // or interfere with the rendering/runtime lifecycle.
+                _writeFailed = true;
+                Debug.LogError("VCR M2: performance sampling stopped: " +
+                    exception.Message, this);
+            }
+        }
+
+        private void RecordCore(double now, bool quit)
+        {
             if (_frameCount == 0)
                 return;
 
