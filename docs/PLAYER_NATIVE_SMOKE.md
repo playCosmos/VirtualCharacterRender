@@ -80,7 +80,33 @@ on file existence alone. The runner preserves the first-run and
 `relaunch-*` logs plus JSON with the build provenance. These tests exercise
 real native save/load and scene-apply behavior on each CI platform, but
 do not establish user-profile migration or power-loss durability.
-On failure it uploads the log and runner diagnosis; missing JSON is
+
+After a successful normal relaunch, the same tested executable runs four
+additional M1 fail-closed scenarios against its isolated settings:
+
+1. **Corrupt primary / valid backup:** load the backup value into the actual
+   scene, report the recovery warning, and retain both byte-for-byte on quit.
+2. **Corrupt primary and backup:** start with the scene baseline, surface a
+   load rejection, and retain both unreadable originals on quit.
+3. **Future schema with valid backup:** reject the unsupported newer primary
+   without silently loading the old backup; preserve both files.
+4. **Missing primary / valid backup:** recover the backup into the running
+   scene without creating a new primary on unattended quit.
+
+These four invocations opt into `--vcr-smoke-recovery=backup` or
+`unrecoverable` **only alongside the smoke report option**. They still
+take the real `Application.Quit` → `OnApplicationQuit` path. In those
+specific cases an intentionally **suppressed automatic settings save** is
+an expected protective outcome, not a silently ignored shutdown error.
+The smoke report demands that the scene stopped, exactly that known guard
+was triggered and no other teardown error occurred; source/backup bytes
+must remain unchanged. All four scenarios retain distinct `*-player.log`,
+`*-player-smoke.json`, and `*-runner-evidence.json` artifacts. Nothing
+touches the operator's persistent profile or a real tracking device.
+They establish native/headless data-preservation evidence **N**, not a
+physical GUI/permission/device acceptance **G**.
+
+On failure the CI runner uploads the log and diagnosis; missing JSON is
 **FAIL**, not an assumed PASS.
 
 The runner also records `quitDispatchBeforeMarkerMs` (the difference
