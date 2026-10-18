@@ -86,6 +86,9 @@ jobs:
       - name: Test M3 native-signature verifier rejects missing unsigned binaries
         run: python3 tools/verify-m3-native-signatures.py --self-test
 
+      - name: Test M3 complete ZIP payload inventory and hash mismatch rejection
+        run: python3 tools/generate-m3-payload-inventory.py --self-test
+
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
