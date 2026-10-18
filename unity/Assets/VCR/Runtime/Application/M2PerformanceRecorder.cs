@@ -99,7 +99,8 @@ namespace VCR.Runtime.Application
                     startedUtc = DateTime.UtcNow.ToString("O"),
                     platform = Application.platform.ToString(),
                     operatingSystem = SystemInfo.operatingSystem,
-                    architecture = SystemInfo.processorType,
+                    architecture = System.Runtime.InteropServices
+                        .RuntimeInformation.ProcessArchitecture.ToString(),
                     cpu = SystemInfo.processorType,
                     gpu = SystemInfo.graphicsDeviceName,
                     graphicsApi = SystemInfo.graphicsDeviceType.ToString(),
