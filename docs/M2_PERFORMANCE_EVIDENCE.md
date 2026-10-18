@@ -86,7 +86,17 @@ python3 tools/verify-m2-performance.py \
 ~~~
 
 For a genuinely **continuous four-hour** session, also require
---min-duration-seconds 14400. To explicitly require and validate recorded
+--min-duration-seconds 14400. **Do not include `--require-character` for
+a mixed idle/model/load-unload soak:** this strict option requires a character
+in *every interior five-second sample*, so a legitimate unload or idle phase
+would be rejected. Reserve `--require-character --require-overlay` for a
+separate sustained character+capture performance session. For the continuous
+mixed-mode soak, use `--require-events --min-character-cycles 50`, plus
+independent operator OBS/device event logs and timestamps. A single-file
+performance report must never be interpreted as proof of those external
+stages.
+
+To explicitly require and validate recorded
 lifecycle evidence (not only the five-second samples), add:
 
 ~~~bash
