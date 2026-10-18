@@ -175,6 +175,15 @@ require_source_contains(
     m2_verifier, "shutdownUnloadEventsExcluded",
     "M2 verifier must explicitly exclude process-shutdown unloads",
 )
+m2_launcher = ROOT / "tools" / "run-p10-interactive.py"
+require_source_contains(
+    m2_launcher, "check_m2_outputs(performance_file)",
+    "P10 GUI launcher must detect missing M2 event sidecar",
+)
+require_source_contains(
+    m2_launcher, "refuse_prior_evidence(",
+    "P10 GUI launcher must refuse overwrite of pre-existing event evidence",
+)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
