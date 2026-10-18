@@ -8,14 +8,32 @@ but this document is not an assertion that redistribution is permitted.
 ~~~bash
 python3 tools/audit-third-party-dependencies.py --output dependency-inventory.json
 python3 tools/generate-m3-sbom.py --output m3-source-sbom.cdx.json
+# Also inspect final shipped binaries from the exact SOURCE-MATCHED,
+# independently downloaded ZIPs and build-provenance.json:
+python3 tools/generate-m3-payload-inventory.py \
+  --artifacts /path/to/final-release-archives \
+  --version 0.1.0-alpha.3 \
+  --source EXACT_40_HEX_REVIEWED_COMMIT \
+  --output m3-shipped-payload-inventory.json
 ~~~
 
 The first report records direct and transitive Unity packages and pinned
 MediaPipe/Ultraleap/UniWinC/Pretendard download inputs. The second report is a
 **partial CycloneDX 1.6** inventory, explicitly labeled
 `PARTIAL_SOURCE_PIN_INVENTORY_ONLY` and `license-audit=NOT_APPROVED`.
-CI retains both reports as review artifacts. They are not a binary
+CI retains both source reports as review artifacts. They are not a binary
 software bill of materials and contain **no guessed SPDX license IDs**.
+
+The separate shipped-payload inventory enumerates and hashes **every file
+and symlink inside the two verified ZIPs**. Its raw path, SHA-256, size,
+file category and `PENDING_MANUAL_REVIEW` license metadata allow a reviewer
+to match the exact final release to a vendor/license and required notice.
+It still cannot infer ownership or grant a redistribution license. For
+new development-alpha releases the CI publishing workflow preserves this
+report as a separate restricted-review Actions artifact rather than adding
+unsupported certification claims to the publicly distributed ZIPs.
+**Regenerate after final signing/stapling**, because bytes and signatures
+change from the unsigned development alpha.
 
 ## Redistribution review checklist — all entries require approval
 
