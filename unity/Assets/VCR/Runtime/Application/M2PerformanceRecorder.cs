@@ -5,7 +5,9 @@ using System.Text;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Profiling;
+using VCR.Runtime.Character;
 using VCR.Runtime.Scene;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.Application
 {
@@ -37,6 +39,13 @@ namespace VCR.Runtime.Application
         private bool _gcRecorderStarted;
         private bool _gcRecorderOwned;
         private bool _writeFailed;
+        private const int MaxTransitionEvents = 100000;
+        private string _eventPath;
+        private Vrm10CharacterLoader _characterLoader;
+        private ITrackingPresenceProvider _trackingPresence;
+        private MonoBehaviour _trackingPresenceBehaviour;
+        private long _lastPresenceSequence = -1;
+        private long _eventSequence;
 
         [Serializable]
         private sealed class Session
@@ -93,7 +102,8 @@ namespace VCR.Runtime.Application
                 // Fail closed: never append a second session to old evidence
                 // or overwrite files left behind by a crash.
                 var metadata = _path + ".session.json";
-                if (File.Exists(_path) || File.Exists(metadata))
+                var transitions = _path + ".events.csv";
+                if (File.Exists(_path) || File.Exists(metadata) || File.Exists(transitions))
                     throw new IOException("An M2 evidence session already exists at this path.");
                 var session = new Session
                 {
@@ -125,11 +135,17 @@ namespace VCR.Runtime.Application
                 // Defer heap storage until an explicitly requested
                 // measuring session; normal launches incur no profiler
                 // histogram allocation or repeated Update work.
+                using (var file = new FileStream(transitions, FileMode.CreateNew, FileAccess.Write))
+                using (var writer = new StreamWriter(file, new UTF8Encoding(false)))
+                    writer.WriteLine("utc,elapsed_seconds,sequence,event,origin");
+                _eventPath = transitions;
                 _frameHistogram = new long[HistogramBins];
                 _line = new StringBuilder(384);
                 _bootstrap = GetComponent<ApplicationRuntimeBootstrap>();
                 _startedAt = Time.realtimeSinceStartupAsDouble;
                 _nextSampleAt = _startedAt + IntervalSeconds;
+                WriteTransition("session_started", "recorder");
+                AttachTransitionSources();
                 try
                 {
                     _gcRecorder = ProfilerRecorder.StartNew(
@@ -158,6 +174,8 @@ namespace VCR.Runtime.Application
             if (_path == null || _writeFailed)
                 return;
 
+            ObserveTrackingPresence();
+
             var deltaMs = Time.unscaledDeltaTime * 1000.0;
             if (deltaMs > 0 && !double.IsInfinity(deltaMs) && !double.IsNaN(deltaMs))
             {
@@ -185,6 +203,8 @@ namespace VCR.Runtime.Application
             if (_path == null || _writeFailed)
                 return;
             Record(Time.realtimeSinceStartupAsDouble, true);
+            WriteTransition("session_end", "recorder");
+            DetachTransitionSources();
             if (_gcRecorderOwned)
                 _gcRecorder.Dispose();
             _gcRecorderOwned = false;
@@ -193,10 +213,131 @@ namespace VCR.Runtime.Application
 
         private void OnDestroy()
         {
+            DetachTransitionSources();
             if (_gcRecorderOwned)
                 _gcRecorder.Dispose();
             _gcRecorderOwned = false;
             _gcRecorderStarted = false;
+        }
+
+        // The scene uses one active character. Hook the loader's actual
+        // successful lifecycle events rather than guessing from five-second
+        // samples. Model replacement fires CharacterLoaded but NOT Unloaded.
+        private void AttachTransitionSources()
+        {
+            _characterLoader = GetComponentInChildren<Vrm10CharacterLoader>(true);
+            if (_characterLoader != null)
+            {
+                _characterLoader.CharacterLoaded += OnCharacterLoaded;
+                _characterLoader.CharacterUnloaded += OnCharacterUnloaded;
+                _characterLoader.LoadFailed += OnCharacterLoadFailed;
+                if (_characterLoader.Current != null)
+                    WriteTransition("character_initially_loaded", "character.loader");
+            }
+
+            // Only resolves during opt-in evidence recording; the normal
+            // desktop Player performs no extra discovery or tracking polling.
+            var behaviours = GetComponentsInChildren<MonoBehaviour>(true);
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour is ITrackingRouteProvider route)
+                {
+                    _trackingPresence = route;
+                    _trackingPresenceBehaviour = behaviour;
+                    break;
+                }
+            }
+
+            if (_trackingPresence == null)
+            {
+                foreach (var behaviour in behaviours)
+                {
+                    if (behaviour is ITrackingPresenceProvider presence)
+                    {
+                        _trackingPresence = presence;
+                        _trackingPresenceBehaviour = behaviour;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void DetachTransitionSources()
+        {
+            if (_characterLoader != null)
+            {
+                _characterLoader.CharacterLoaded -= OnCharacterLoaded;
+                _characterLoader.CharacterUnloaded -= OnCharacterUnloaded;
+                _characterLoader.LoadFailed -= OnCharacterLoadFailed;
+                _characterLoader = null;
+            }
+            _trackingPresence = null;
+            _trackingPresenceBehaviour = null;
+        }
+
+        private void OnCharacterLoaded(UniVRM10.Vrm10Instance character)
+        {
+            WriteTransition("character_loaded", "character.loader");
+        }
+
+        private void OnCharacterUnloaded()
+        {
+            WriteTransition("character_unloaded", "character.loader");
+        }
+
+        private void OnCharacterLoadFailed(Exception error)
+        {
+            WriteTransition("character_load_failed", "character.loader");
+        }
+
+        private void ObserveTrackingPresence()
+        {
+            // Tracking presence is a normalized router state, NOT a physical
+            // device connection. The external operator must independently
+            // demonstrate real disconnect/reconnect or protocol handshakes.
+            if (_trackingPresence == null || _trackingPresenceBehaviour == null)
+                return;
+
+            var snapshot = _trackingPresence.Presence;
+            if (snapshot.Sequence == _lastPresenceSequence)
+                return;
+            _lastPresenceSequence = snapshot.Sequence;
+            if (snapshot.HasEvent(TrackingPresenceEvents.TrackingSourceLost))
+                WriteTransition("tracking_source_lost", "tracking.presence");
+            if (snapshot.HasEvent(TrackingPresenceEvents.TrackingSourceRestored))
+                WriteTransition("tracking_source_restored", "tracking.presence");
+            if (snapshot.HasEvent(TrackingPresenceEvents.SubjectLost))
+                WriteTransition("tracking_subject_lost", "tracking.presence");
+            if (snapshot.HasEvent(TrackingPresenceEvents.SubjectRestored))
+                WriteTransition("tracking_subject_restored", "tracking.presence");
+        }
+
+        private void WriteTransition(string eventName, string origin)
+        {
+            if (_eventPath == null || _writeFailed)
+                return;
+            if (_eventSequence >= MaxTransitionEvents)
+            {
+                _writeFailed = true;
+                Debug.LogError("VCR M2: transition event safety limit reached; recording invalid.", this);
+                return;
+            }
+
+            try
+            {
+                var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+                var elapsed = Math.Max(0, Time.realtimeSinceStartupAsDouble - _startedAt)
+                    .ToString("F3", CultureInfo.InvariantCulture);
+                var line = now + "," + elapsed + "," + (++_eventSequence) +
+                    "," + eventName + "," + origin + "\n";
+                File.AppendAllText(_eventPath, line, new UTF8Encoding(false));
+            }
+            catch (Exception exception)
+            {
+                _writeFailed = true;
+                Debug.LogError("VCR M2: transition recording failed: " +
+                    exception.Message, this);
+            }
         }
 
         private void Record(double now, bool quit)
