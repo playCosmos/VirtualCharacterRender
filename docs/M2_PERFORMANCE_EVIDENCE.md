@@ -78,7 +78,11 @@ For a genuinely **continuous four-hour** session, also require
 The verifier checks metadata, format/version, UTC/monotonic timestamps
 (without gaps over 60 seconds), monotonic frame/GC counters, positive frame
 statistics, requested render target and operating mode, normal Unity quit
-marker and measured duration. It computes:
+marker and measured duration. Duration is anchored to the UTC session start:
+the first sample must arrive within 60 seconds of recording activation and
+sample timestamps must agree with elapsed time. A late first sample claiming
+an already elapsed four hours, or a CSV paired with unrelated session
+metadata, is rejected rather than counted as a valid soak. It computes:
 
 - **Whole-session** frame mean and approximate P95/P99 from cumulative
   0.25ms histogram bins, slow frame count/rate above 16.667ms and
