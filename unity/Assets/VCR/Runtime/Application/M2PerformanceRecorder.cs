@@ -63,7 +63,7 @@ namespace VCR.Runtime.Application
 
         private void Start()
         {
-            if (Application.isEditor)
+            if (UnityEngine.Application.isEditor)
             {
                 return;
             }
@@ -75,7 +75,7 @@ namespace VCR.Runtime.Application
             }
 
             // Headless CI must never promote itself to physical/GUI evidence.
-            if (Application.isBatchMode || !Path.IsPathRooted(requested))
+            if (UnityEngine.Application.isBatchMode || !Path.IsPathRooted(requested))
             {
                 Debug.LogError("VCR M2: evidence requires a visible standalone Player and an absolute file path.");
                 return;
@@ -97,7 +97,7 @@ namespace VCR.Runtime.Application
                 var session = new Session
                 {
                     startedUtc = DateTime.UtcNow.ToString("O"),
-                    platform = Application.platform.ToString(),
+                    platform = UnityEngine.Application.platform.ToString(),
                     operatingSystem = SystemInfo.operatingSystem,
                     architecture = System.Runtime.InteropServices
                         .RuntimeInformation.ProcessArchitecture.ToString(),
@@ -106,7 +106,7 @@ namespace VCR.Runtime.Application
                     graphicsApi = SystemInfo.graphicsDeviceType.ToString(),
                     graphicsDriver = SystemInfo.graphicsDeviceVersion,
                     graphicsMemoryCapacityMb = SystemInfo.graphicsMemorySize,
-                    unityVersion = Application.unityVersion,
+                    unityVersion = UnityEngine.Application.unityVersion,
                     developmentBuild = Debug.isDebugBuild
                 };
                 using (var file = new FileStream(metadata, FileMode.CreateNew, FileAccess.Write))
