@@ -98,6 +98,18 @@ def check_m2_outputs(performance_file):
                              str(path))
 
 
+def refuse_prior_evidence(label, log_file, telemetry_file,
+                          m2_performance_file=None):
+    paths = [log_file, telemetry_file]
+    if m2_performance_file is not None:
+        paths.extend(m2_file_set(m2_performance_file))
+    # A dangling symlink must not bypass the preflight. Never overwrite
+    # partial evidence left after a crash, including M2 lifecycle events.
+    if any(path.exists() or path.is_symlink() for path in paths):
+        raise ValueError("Refusing to overwrite existing session evidence for " +
+                         label)
+
+
 def run(args):
     verifier = load_verifier()
     if not verifier.SHA40.fullmatch(args.source):
@@ -118,12 +130,9 @@ def run(args):
     log_file = attachments / (label + ".log")
     telemetry_file = attachments / (label + "-runtime.json")
     performance_file = attachments / (label + "-m2-performance.csv")
-    if (log_file.exists() or log_file.is_symlink() or
-            telemetry_file.exists() or telemetry_file.is_symlink() or
-            (args.m2_performance and any(
-                path.exists() or path.is_symlink()
-                for path in m2_file_set(performance_file)))):
-        raise ValueError("Refusing to overwrite existing session evidence for " + label)
+    refuse_prior_evidence(
+        label, log_file, telemetry_file,
+        performance_file if args.m2_performance else None)
 
     vrm = args.vrm.resolve() if args.vrm else None
     if vrm and (not vrm.is_file() or vrm.suffix.lower() != ".vrm"):
@@ -215,6 +224,18 @@ def self_test():
                 raise AssertionError("invalid interactive Player command: " + assembled)
         perf = root / "case-m2.csv"
         expected = m2_file_set(perf)
+        player_log, native_telemetry = root / "session.log", root / "session-runtime.json"
+        for prior_file in (player_log, native_telemetry, *expected):
+            prior_file.write_text("previous evidence", encoding="utf-8")
+            try:
+                refuse_prior_evidence("windows-720p60", player_log,
+                                      native_telemetry, perf)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Refusing old M2 evidence failed: " + str(prior_file))
+            prior_file.unlink()
+        refuse_prior_evidence("windows-720p60", player_log, native_telemetry, perf)
         for path in expected:
             path.write_text("self-test\n", encoding="utf-8")
         check_m2_outputs(perf)
