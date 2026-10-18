@@ -233,6 +233,79 @@ def run_player_with_exit_trace(command, cwd, logfile, output_log, timeout=100):
     )
 
 
+def run_configuration_recovery_case(
+        executable, unpacked, output, config_path, platform_name,
+        case_name, mode, expected_fov):
+    """Run the real Player against corrupted/missing config, fail closed.
+
+    Only the test's isolated --vcr-config files are touched. This calls
+    normal Application.Quit rather than injecting a fake shutdown path.
+    An intentionally suppressed autosave is an *expected* shutdown result
+    only when the Player explicitly reports the matching recovery mode.
+    """
+    report_path = output / (case_name + "-player-smoke.json")
+    log_path = output / (case_name + "-player.log")
+    runnerlog = output / (case_name + "-runner.log")
+    backup_path = config_path.with_name(config_path.name + ".bak")
+    original_primary = config_path.read_bytes() if config_path.exists() else None
+    original_backup = backup_path.read_bytes() if backup_path.exists() else None
+    if original_primary is None and original_backup is None:
+        raise RuntimeError("Recovery probe lacks both primary and backup")
+    report_path.unlink(missing_ok=True)
+    command = smoke_command(executable, log_path, report_path, config_path)
+    command.append("--vcr-smoke-recovery=" + mode)
+    result = {
+        "mode": mode,
+        "passed": False,
+        "expectedCameraFieldOfView": expected_fov,
+        "primaryPresentBefore": original_primary is not None,
+        "backupPresentBefore": original_backup is not None,
+    }
+    try:
+        code, lifetime_ms, exit_ms, late_marker = run_player_with_exit_trace(
+            command, unpacked, log_path, runnerlog, timeout=100)
+        result.update({
+            "exitCode": code,
+            "playerProcessLifetimeMs": lifetime_ms,
+            "quitToProcessExitMs": exit_ms,
+            "quitMarkerObservedAfterExit": late_marker,
+        })
+        if code != 0 or not report_path.is_file():
+            raise RuntimeError("Native recovery Player failed before normal quit report")
+        evidence = json.loads(report_path.read_text(encoding="utf-8"))
+        require_smoke_relaunch_evidence(evidence, platform_name, expected_fov)
+        require_headless_quit_budget(exit_ms)
+        if evidence.get("recoveryMode") != mode:
+            raise RuntimeError("Native recovery mode was not echoed correctly")
+        if evidence.get("automaticSaveSuppressed") is not True:
+            raise RuntimeError("Configuration recovery did not inhibit automatic save")
+        if evidence.get("quitSaveSuppressed") is not True:
+            raise RuntimeError("Normal native quit unexpectedly saved recovered config")
+        if evidence.get("usedBackupRecovery") is not (mode == "backup"):
+            raise RuntimeError("Native backup recovery state mismatch")
+        if evidence.get("configurationLoadRejected") is not (mode == "unrecoverable"):
+            raise RuntimeError("Native rejected configuration state mismatch")
+        final_primary = config_path.read_bytes() if config_path.exists() else None
+        final_backup = backup_path.read_bytes() if backup_path.exists() else None
+        if final_primary != original_primary or final_backup != original_backup:
+            raise RuntimeError(
+                "Normal native quit overwrote corrupt/missing configuration evidence")
+        result["observedCameraFieldOfView"] = evidence["observedCameraFieldOfView"]
+        result["primaryPreserved"] = True
+        result["backupPreserved"] = True
+        result["passed"] = True
+        print("Native configuration " + case_name + ": PASS", flush=True)
+    except Exception as exception:
+        result["error"] = str(exception)
+        raise
+    finally:
+        # The caller attaches each case's dict to the main summary BEFORE
+        # running so evidence is retained even when this probe raises.
+        result_path = output / (case_name + "-runner-evidence.json")
+        result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return result
+
+
 def execute(args):
     archive = Path(args.archive).resolve()
     digest_file = archive.with_suffix(".sha256")
@@ -456,8 +529,49 @@ def execute(args):
             relaunch_report["observedCameraFieldOfView"])
         summary["relaunch"]["backupVerified"] = True
         summary["relaunch"]["passed"] = True
+
+        # M1 native recovery regressions: exercise actual Player startup
+        # and normal Unity quit against broken/missing configurations. A
+        # suppressed save is expected only in these explicitly tagged probes.
+        original_backup = backup_path.read_bytes()
+        bad_primary = b"{ broken primary configuration"
+        bad_backup = b"\\xff\\xfe not UTF-8 backup"
+        summary["recoveryCases"] = []
+        config_path.write_bytes(bad_primary)
+        print("Testing native backup fallback without overwriting bad primary",
+              flush=True)
+        summary["recoveryCases"].append(run_configuration_recovery_case(
+            executable, unpacked, output, config_path, args.platform,
+            "corrupt-primary", "backup", NATIVE_CONFIG_PROBE_FOV))
+
+        backup_path.write_bytes(bad_backup)
+        print("Testing native fail-closed startup with both generations damaged",
+              flush=True)
+        summary["recoveryCases"].append(run_configuration_recovery_case(
+            executable, unpacked, output, config_path, args.platform,
+            "corrupt-both", "unrecoverable", first_fov))
+
+        backup_path.write_bytes(original_backup)
+        future_config = json.loads(json.dumps(first_config))
+        future_config["Version"] = 2
+        config_path.write_text(
+            json.dumps(future_config, ensure_ascii=False),
+            encoding="utf-8")
+        print("Testing future schema cannot silently downgrade from backup",
+              flush=True)
+        summary["recoveryCases"].append(run_configuration_recovery_case(
+            executable, unpacked, output, config_path, args.platform,
+            "future-schema", "unrecoverable", first_fov))
+
+        config_path.unlink()
+        print("Testing recovery from missing primary while backup is valid",
+              flush=True)
+        summary["recoveryCases"].append(run_configuration_recovery_case(
+            executable, unpacked, output, config_path, args.platform,
+            "missing-primary", "backup", NATIVE_CONFIG_PROBE_FOV))
+
         summary["passed"] = True
-        print("Native Player first-run + persisted-configuration relaunch: PASS",
+        print("Native Player initial/relaunch and four config recovery cases: PASS",
               flush=True)
     except Exception as exception:
         summary["error"] = str(exception)
