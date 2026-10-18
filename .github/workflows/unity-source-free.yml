@@ -8,6 +8,8 @@ on:
   pull_request:
     branches:
       - develop
+      # Stacked M2 PR validates its exact source on the M1 integration base.
+      - feature/commercial-readiness-phase1
   workflow_dispatch:
 
 permissions:
