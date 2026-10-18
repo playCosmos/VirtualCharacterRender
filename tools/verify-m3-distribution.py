@@ -67,8 +67,8 @@ def validate_member_name(name):
     while trimmed.startswith("./"):
         trimmed = trimmed[2:]
     require(trimmed and not trimmed.startswith("/") and
-            not re.match(r"^[A-Za-z]:", trimmed),
-            "absolute/drive ZIP member path")
+            ":" not in trimmed and not re.match(r"^[A-Za-z]:", trimmed),
+            "absolute/drive/alternate-data-stream ZIP member path")
     parts = PurePosixPath(trimmed).parts
     require(".." not in parts and
             posixpath.normpath(trimmed).lstrip("/") != ".." and
@@ -81,6 +81,7 @@ def inspect_zip(path, platform):
     require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
             "missing/unsafe/empty release archive: " + str(path))
     found = {}
+    folded = set()
     total_bytes = 0
     with zipfile.ZipFile(path, "r") as archive:
         infos = archive.infolist()
@@ -89,12 +90,18 @@ def inspect_zip(path, platform):
         for entry in infos:
             name = validate_member_name(entry.filename)
             require(name not in found, "duplicated ZIP member: " + name)
+            if platform == "windows":
+                require(name.casefold() not in folded,
+                        "Case-colliding Windows ZIP member: " + name)
+                folded.add(name.casefold())
             found[name] = entry
             require(not (entry.flag_bits & 1), "encrypted ZIP entry")
+            unix_type = stat.S_IFMT(entry.external_attr >> 16)
+            require(unix_type in (0, stat.S_IFREG, stat.S_IFDIR, stat.S_IFLNK),
+                    "Unsupported special-file ZIP entry")
             total_bytes += entry.file_size
             require(total_bytes <= MAX_UNCOMPRESSED_BYTES,
                     "ZIP uncompressed content too large")
-            unix_type = stat.S_IFMT(entry.external_attr >> 16)
             if unix_type == stat.S_IFLNK:
                 require(entry.file_size <= 4096, "oversized ZIP symlink")
                 link = archive.read(entry).decode("utf-8")
@@ -105,6 +112,9 @@ def inspect_zip(path, platform):
                     posixpath.join(posixpath.dirname(name), link))
                 require(target != ".." and not target.startswith("../"),
                         "ZIP symlink escapes archive")
+        # ZIP CRC integrity is distinct from the compressed-file checksum:
+        # reject even a correctly hashed producer ZIP with broken members.
+        require(archive.testzip() is None, "Corrupt ZIP member CRC")
         if platform == "windows":
             exe = "VirtualCharacterRender.exe"
             require(exe in found and not found[exe].is_dir() and
@@ -280,6 +290,19 @@ def self_test():
             z.writestr("VirtualCharacterRender_Data/boot.config", b"config")
         write_manifests()
         must_fail("duplicate normalized ZIP paths")
+        create_archives()
+        with zipfile.ZipFile(root / names[0], "w") as z:
+            z.writestr("VirtualCharacterRender.exe", b"MZtest")
+            z.writestr("VirtualCharacterRender_Data/boot.config", b"config")
+            z.writestr("virtualcharacterrender.exe", b"MZduplicate-case")
+        write_manifests()
+        must_fail("case-insensitive Windows archive collision")
+        create_archives()
+        with zipfile.ZipFile(root / names[0], "w") as z:
+            z.writestr("VirtualCharacterRender.exe", b"MZtest")
+            z.writestr("VirtualCharacterRender_Data/evil:ads", b"stream")
+        write_manifests()
+        must_fail("Windows NTFS alternate data stream path")
         create_archives()
         write_manifests()
         metadata = json.loads((root / "build-provenance.json").read_text())
