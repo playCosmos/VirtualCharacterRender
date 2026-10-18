@@ -6,12 +6,15 @@ run only verifies this path on this OS at this time; it cannot stand for
 clean-account installation, OS prompts, license approval or M3 acceptance.
 """
 import argparse
+import hashlib
 import json
-import os
 from pathlib import Path
+import posixpath
 import re
+import stat
 import subprocess
 import sys
+import zipfile
 
 
 def require(condition, reason):
@@ -26,6 +29,81 @@ def command(argv, timeout=120):
             "Native verification failed (" + argv[0] + "): " +
             (result.stderr or result.stdout).strip()[:650])
     return result.stdout + "\n" + result.stderr
+
+
+def sha256_stream(stream):
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_archive_binding(final_path, archive_path, expected_sha, platform):
+    """Prove that the signed host-checked files are exactly those in the ZIP.
+
+    This compares every ZIP member to the on-disk extracted distribution,
+    including macOS framework symlink targets. It is read-only and does not
+    certify any source manifest or signature by itself.
+    """
+    require(re.fullmatch(r"[0-9a-f]{64}", expected_sha or "") is not None,
+            "Exact final archive SHA256 required for native binding")
+    require(archive_path.is_file() and not archive_path.is_symlink(),
+            "Final signed ZIP missing/unsafe")
+    with archive_path.open("rb") as source:
+        actual = sha256_stream(source)
+    require(actual == expected_sha, "Final signed ZIP does not match expected SHA256")
+    root = final_path.parent
+    seen = set()
+    checked = 0
+    with zipfile.ZipFile(archive_path) as package:
+        for item in package.infolist():
+            name = item.filename
+            while name.startswith("./"):
+                name = name[2:]
+            require(name and not name.startswith("/") and
+                    "\\" not in name and ":" not in name and
+                    ".." not in name.split("/") and
+                    posixpath.normpath(name) not in ("..", "."),
+                    "Unsafe ZIP distribution member")
+            normalized = posixpath.normpath(name)
+            require(not normalized.startswith("../") and
+                    normalized not in seen,
+                    "ZIP distribution traversal or duplicate")
+            seen.add(normalized)
+            if item.is_dir():
+                continue
+            target = root.joinpath(*normalized.split("/"))
+            kind = stat.S_IFMT(item.external_attr >> 16)
+            require(kind in (0, stat.S_IFREG, stat.S_IFLNK),
+                    "Unsupported signed archive special file")
+            if kind == stat.S_IFLNK:
+                require(target.is_symlink() and item.file_size <= 4096,
+                        "Packaged symlink absent from signed app")
+                link = package.read(item).decode("utf-8")
+                require(target.readlink().as_posix() == link,
+                        "Signed bundle symlink disagrees with ZIP")
+            else:
+                require(target.is_file() and not target.is_symlink() and
+                        target.stat().st_size == item.file_size,
+                        "Packaged payload not equal to signed local distribution")
+                with package.open(item) as stream:
+                    zip_hash = sha256_stream(stream)
+                with target.open("rb") as stream:
+                    disk_hash = sha256_stream(stream)
+                require(zip_hash == disk_hash,
+                        "ZIP payload does not match locally signed file: " + normalized)
+            checked += 1
+    require(checked > 0, "No signed archive members matched")
+    if platform == "windows":
+        require("VirtualCharacterRender.exe" in seen,
+                "Bound ZIP lacks the signed Windows EXE")
+    else:
+        require(final_path.name + "/Contents/Info.plist" in seen and
+                final_path.name + "/Contents/MacOS/VirtualCharacterRender" in seen,
+                "Bound ZIP lacks required signed macOS app entries")
+    return {"finalZipSha256": actual,
+            "matchingArchiveMembers": checked,
+            "archiveBindingVerified": True}
 
 
 def verify_windows(executable):
@@ -110,6 +188,29 @@ def self_test():
                 pass
             else:
                 raise AssertionError("M3 trust checker accepted absent unsigned artifact")
+        signed = root / "VirtualCharacterRender.exe"
+        signed.write_bytes(b"MZ synthetic unsigned")
+        zpath = root / "final.zip"
+        with zipfile.ZipFile(zpath, "w") as package:
+            package.writestr(signed.name, signed.read_bytes())
+        with zpath.open("rb") as stream:
+            digest = sha256_stream(stream)
+        bound = validate_archive_binding(signed, zpath, digest, "windows")
+        assert bound["archiveBindingVerified"] is True
+        signed.write_bytes(b"MZ replaced payload")
+        try:
+            validate_archive_binding(signed, zpath, digest, "windows")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Substituted unsigned binary matched final ZIP")
+        signed.write_bytes(b"MZ synthetic unsigned")
+        try:
+            validate_archive_binding(signed, zpath, "0" * 64, "windows")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Final signed ZIP SHA mismatch accepted")
     print("M3 native signing verifier negative self-test PASS; real signing not exercised")
 
 
@@ -119,6 +220,8 @@ def main():
     parser.add_argument("--platform", choices=("windows", "macos"))
     parser.add_argument("--path", type=Path, help="Final unpacked EXE or stapled .app")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--archive", type=Path, help="Final signed ZIP distributed to users")
+    parser.add_argument("--archive-sha256", help="Expected independently rehashed final ZIP SHA256")
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -126,8 +229,17 @@ def main():
     if args.platform is None or args.path is None:
         parser.error("--platform and --path are required")
     try:
+        require((args.archive is None) == (args.archive_sha256 is None),
+                "Provide both final --archive and --archive-sha256 together")
+        # Bind the actual signed/notarized local payload to the distribution
+        # bytes *before* trusting the host OS signature check. This prevents
+        # verifying a signed staging EXE/app but shipping different ZIP files.
+        binding = (validate_archive_binding(args.path, args.archive,
+                                            args.archive_sha256, args.platform)
+                   if args.archive is not None else {"archiveBindingVerified": False})
         result = (verify_windows(args.path) if args.platform == "windows"
                   else verify_macos(args.path))
+        result.update(binding)
         data = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.report is not None:
             with args.report.open("x", encoding="utf-8") as output:
