@@ -77,6 +77,27 @@ def make_command(platform_name, unpacked, log_file, telemetry_file, vrm,
     return ["open", "-W", "-n", "-a", str(bundle), "--args", *args]
 
 
+def m2_file_set(performance_file):
+    """The opt-in recorder always owns all three mutually bound local files."""
+    return (
+        performance_file,
+        Path(str(performance_file) + ".session.json"),
+        Path(str(performance_file) + ".events.csv"),
+    )
+
+
+def check_m2_outputs(performance_file):
+    # Presence is a launcher sanity check, NOT acceptance of contents.
+    # The separate strict M2 verifier checks clocks, shutdown markers and
+    # complete VRM callbacks; OBS evidence remains independent.
+    maximum_bytes = (24 * 1024 * 1024, 32 * 1024, 24 * 1024 * 1024)
+    for path, limit in zip(m2_file_set(performance_file), maximum_bytes):
+        if (path.is_symlink() or not path.is_file() or
+                not 0 < path.stat().st_size <= limit):
+            raise ValueError("M2 evidence output missing/unsafe/empty/excessive: " +
+                             str(path))
+
+
 def run(args):
     verifier = load_verifier()
     if not verifier.SHA40.fullmatch(args.source):
@@ -97,9 +118,11 @@ def run(args):
     log_file = attachments / (label + ".log")
     telemetry_file = attachments / (label + "-runtime.json")
     performance_file = attachments / (label + "-m2-performance.csv")
-    if log_file.exists() or telemetry_file.exists() or (
-            args.m2_performance and (performance_file.exists() or
-                                     Path(str(performance_file) + ".session.json").exists())):
+    if (log_file.exists() or log_file.is_symlink() or
+            telemetry_file.exists() or telemetry_file.is_symlink() or
+            (args.m2_performance and any(
+                path.exists() or path.is_symlink()
+                for path in m2_file_set(performance_file)))):
         raise ValueError("Refusing to overwrite existing session evidence for " + label)
 
     vrm = args.vrm.resolve() if args.vrm else None
@@ -142,12 +165,10 @@ def run(args):
             or len(telemetry["samples"]) < 2):
         raise ValueError("Telemetry identity, normal quit or sample count is incomplete")
     if args.m2_performance:
-        if not performance_file.is_file() or not performance_file.stat().st_size:
-            raise ValueError("M2 performance CSV missing/empty")
-        if not Path(str(performance_file) + ".session.json").is_file():
-            raise ValueError("M2 performance session metadata missing")
-        print("M2 frame/memory data written; verify it separately with " +
-              "tools/verify-m2-performance.py. No automatic GUI/OBS PASS.")
+        check_m2_outputs(performance_file)
+        print("M2 CSV, session metadata and lifecycle events written; verify " +
+              "contents separately with tools/verify-m2-performance.py. " +
+              "No automatic model/device/OBS PASS.")
     print("Native session files recorded. GUI/OBS observations STILL REQUIRE MANUAL REVIEW.")
     print("Operator JSON must reference the log and runtime telemetry files; no PASS auto-written.")
     return 0
@@ -192,6 +213,27 @@ def self_test():
                     or "--vcr-m2-perf-csv=" not in assembled
                     or "-batchmode" in assembled or "-nographics" in assembled):
                 raise AssertionError("invalid interactive Player command: " + assembled)
+        perf = root / "case-m2.csv"
+        expected = m2_file_set(perf)
+        for path in expected:
+            path.write_text("self-test\n", encoding="utf-8")
+        check_m2_outputs(perf)
+        for path in expected:
+            path.unlink()
+            try:
+                check_m2_outputs(perf)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Missing M2 sidecar incorrectly accepted: " + str(path))
+            path.write_text("self-test\\n", encoding="utf-8")
+        expected[-1].write_bytes(b"")
+        try:
+            check_m2_outputs(perf)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Empty M2 events CSV incorrectly accepted")
     print("P10 desktop Player runner self-test PASS (no GUI/OBS claim)")
 
 
