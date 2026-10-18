@@ -178,6 +178,8 @@ def inspect_transitions(csv_path, session_started, last_elapsed,
                         require_events=False, min_character_cycles=0):
     events_path = Path(str(csv_path) + ".events.csv")
     if not events_path.exists():
+        require(not events_path.is_symlink(),
+                "M2 events sidecar cannot be a dangling symlink")
         require(not require_events and min_character_cycles == 0,
                 "M2 lifecycle event evidence is required but missing")
         return None
@@ -522,15 +524,15 @@ def self_test():
         assert transitions["physicalDeviceReconnectCyclesVerified"] is False
         for broken in (
             events[:-1],
-            [events[0], dict(zip(EVENT_HEADER, events[1])).get("event"), *events[2:]],
-        )[:1]:
+            [*events, events[-1]],
+        ):
             write_events(broken)
             try:
                 inspect(csv_path, "windows", "720p60", require_events=True)
             except ValueError:
                 pass
             else:
-                raise AssertionError("Incomplete M2 transition event log accepted")
+                raise AssertionError("Incomplete or duplicated M2 event footer accepted")
         for broken in (
             [*events[:2], (events[2][0], events[2][1], "20",
                            events[2][3], events[2][4]), *events[3:]],
