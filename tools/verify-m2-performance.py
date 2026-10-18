@@ -37,6 +37,21 @@ FLOAT_FIELDS = ("elapsed_seconds", "frame_average_ms",
                 "frame_p95_ms", "frame_p99_ms")
 MAX_CSV_BYTES = 24 * 1024 * 1024
 MAX_ROWS = 50_000
+EVENT_HEADER = ("utc", "elapsed_seconds", "sequence", "event", "origin")
+EVENT_TYPES = {
+    "session_started": "recorder",
+    "session_end": "recorder",
+    "character_loaded": "character.loader",
+    "character_unloaded": "character.loader",
+    "character_initially_loaded": "character.loader",
+    "character_load_failed": "character.loader",
+    "tracking_source_lost": "tracking.presence",
+    "tracking_source_restored": "tracking.presence",
+    "tracking_subject_lost": "tracking.presence",
+    "tracking_subject_restored": "tracking.presence",
+}
+MAX_EVENT_ROWS = 100_000
+MAX_EVENT_CSV_BYTES = 24 * 1024 * 1024
 
 
 def require(condition, message):
@@ -158,9 +173,112 @@ def regression_slope(rows, field):
     return round(numerator / denominator * 3600 / (1024 * 1024), 3)
 
 
+
+def inspect_transitions(csv_path, session_started, last_elapsed,
+                        require_events=False, min_character_cycles=0):
+    events_path = Path(str(csv_path) + ".events.csv")
+    if not events_path.exists():
+        require(not require_events and min_character_cycles == 0,
+                "M2 lifecycle event evidence is required but missing")
+        return None
+
+    require(events_path.is_file() and not events_path.is_symlink() and
+            0 < events_path.stat().st_size <= MAX_EVENT_CSV_BYTES,
+            "M2 events CSV is empty, unsafe or excessive")
+    rows = []
+    previous_utc = None
+    previous_elapsed = -1.0
+    counts = {event_type: 0 for event_type in EVENT_TYPES}
+    loaded = False
+    complete_cycles = 0
+    source_lost = False
+    source_return_pairs = 0
+    try:
+        with events_path.open("r", encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            require(tuple(reader.fieldnames or ()) == EVENT_HEADER,
+                    "M2 transition event schema/header mismatch")
+            for raw in reader:
+                require(len(rows) < MAX_EVENT_ROWS, "M2 event row safety limit exceeded")
+                require(None not in raw and all(v is not None for v in raw.values()),
+                        "Malformed M2 transition event row")
+                event = raw["event"]
+                require(event in EVENT_TYPES and raw["origin"] == EVENT_TYPES[event],
+                        "Unrecognized or misattributed M2 transition event")
+                elapsed = measured_float(raw["elapsed_seconds"], "event elapsed")
+                sequence = measured_integer(raw["sequence"], "event sequence")
+                require(sequence == len(rows) + 1, "M2 event sequence gap/replay")
+                try:
+                    timestamp = dt.datetime.fromisoformat(
+                        raw["utc"].replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise ValueError("Malformed transition event UTC") from exc
+                require(timestamp.tzinfo is not None and
+                        timestamp.utcoffset() == dt.timedelta(0),
+                        "M2 event UTC must be timezone-aware")
+                require(elapsed >= previous_elapsed and
+                        (previous_utc is None or timestamp >= previous_utc),
+                        "M2 event monotonic chronology reversed")
+                require(elapsed <= last_elapsed + 10.0,
+                        "Transition event outside completed M2 runtime")
+                require(abs((timestamp - session_started).total_seconds() -
+                            elapsed) <= 120.0,
+                        "M2 transition event disagrees with session start UTC")
+                if not rows:
+                    require(event == "session_started" and elapsed <= 60.0,
+                            "M2 transition log missing timely start event")
+                else:
+                    require(event != "session_started",
+                            "M2 event log has duplicate session start")
+                    require(rows[-1] != "session_end",
+                            "Transition event follows session_end")
+                counts[event] += 1
+                if event == "character_loaded":
+                    loaded = True
+                elif event == "character_unloaded":
+                    if loaded:
+                        complete_cycles += 1
+                    loaded = False
+                elif event == "tracking_source_lost":
+                    source_lost = True
+                elif event == "tracking_source_restored":
+                    if source_lost:
+                        source_return_pairs += 1
+                    source_lost = False
+                rows.append(event)
+                previous_utc = timestamp
+                previous_elapsed = elapsed
+    except UnicodeError as exc:
+        raise ValueError("M2 event CSV must be UTF-8") from exc
+    require(len(rows) >= 2 and rows[-1] == "session_end" and
+            counts["session_end"] == 1,
+            "M2 transition event log missing normal session_end")
+    require(complete_cycles >= min_character_cycles,
+            "Insufficient observed successful VRM load/unload cycles")
+    return {
+        "source": "actual-character-loader-callbacks-and-normalized-tracking-presence",
+        "eventRows": len(rows),
+        "characterLoadedEvents": counts["character_loaded"],
+        "characterUnloadedEvents": counts["character_unloaded"],
+        "characterLoadFailedEvents": counts["character_load_failed"],
+        "characterInitiallyLoadedAtRecorderStart": (
+            counts["character_initially_loaded"] > 0),
+        "successfulLoadUnloadPairs": complete_cycles,
+        "trackingSourceLostEvents": counts["tracking_source_lost"],
+        "trackingSourceRestoredEvents": counts["tracking_source_restored"],
+        "trackingSourceLossReturnPairs": source_return_pairs,
+        "trackingSubjectLostEvents": counts["tracking_subject_lost"],
+        "trackingSubjectRestoredEvents": counts["tracking_subject_restored"],
+        "physicalDeviceReconnectCyclesVerified": False,
+    }
+
+
 def inspect(csv_path, platform, target, min_duration_seconds=0,
-            require_character=False, require_overlay=False):
+            require_character=False, require_overlay=False,
+            require_events=False, min_character_cycles=0):
     require(platform in ("windows", "macos"), "Unsupported M2 platform")
+    require(0 <= min_character_cycles <= MAX_EVENT_ROWS,
+            "Invalid minimum recorded VRM cycle requirement")
     require(target in TARGETS, "Unsupported M2 target")
     require(csv_path.is_file() and not csv_path.is_symlink(),
             "Missing/unsafe local M2 CSV")
@@ -248,6 +366,8 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
     require(rows[-2]["scene_state"] in ("Ready", "CharacterReady"),
             "Native scene not ready before normal quit")
     total_seconds = last["elapsed_seconds"]
+    transitions = inspect_transitions(csv_path, session_started, total_seconds,
+                                      require_events, min_character_cycles)
     # Sampled scene state is not a lifecycle event log: a five-second
     # interval can miss arbitrarily many short load/connection transitions.
     # Surface anomalies without pretending these are 50 completed cycles.
@@ -265,6 +385,8 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
         "macosAppleSilicon": (platform == "macos" and
                               metadata["architecture"].lower() == "arm64"),
         "sessionSamples": len(rows),
+        "lifecycleTransitionEvidence": transitions,
+        "realTrackingReconnectCyclesVerified": False,
         "durationSeconds": round(total_seconds, 3),
         "interiorRuntimeSamples": len(interior),
         "sceneFaultedSamples": sum(r["scene_state"] == "Faulted"
@@ -306,6 +428,8 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
             "Profiler counters exclude independent OS compositor/OBS/GPU allocation.",
             "Visual alpha, OBS capture latency, VRM fidelity and physical-device behavior need separate real evidence.",
             "Five-second scene samples cannot count VRM load/unload or tracking connect/disconnect cycles.",
+            "Transition events can count successful loader callbacks; a reload or replacement without unload is not a completed cycle.",
+            "Normalized tracking presence loss/return is NOT independently proven physical/protocol disconnect/reconnect.",
         ],
     }
     return summary
@@ -371,6 +495,71 @@ def self_test():
         assert result["overlayCaptureReadySamples"] == 2
         assert result["sceneFaultedSamples"] == 0
         assert result["sceneNonReadySamples"] == 0
+        assert result["lifecycleTransitionEvidence"] is None
+        event_path = Path(str(csv_path) + ".events.csv")
+        events = [
+            ("2026-10-18T10:00:00Z", "0.000", "1", "session_started", "recorder"),
+            ("2026-10-18T10:00:06Z", "6.000", "2", "character_loaded", "character.loader"),
+            ("2026-10-18T10:00:07Z", "7.000", "3", "character_loaded", "character.loader"),
+            ("2026-10-18T10:00:08Z", "8.000", "4", "character_unloaded", "character.loader"),
+            ("2026-10-18T10:00:09Z", "9.000", "5", "tracking_source_lost", "tracking.presence"),
+            ("2026-10-18T10:00:10Z", "10.000", "6", "tracking_source_restored", "tracking.presence"),
+            ("2026-10-18T10:00:15Z", "15.000", "7", "session_end", "recorder"),
+        ]
+        def write_events(items):
+            with event_path.open("w", encoding="utf-8", newline="") as output:
+                writer = csv.writer(output)
+                writer.writerow(EVENT_HEADER)
+                writer.writerows(items)
+        write_events(events)
+        measured = inspect(csv_path, "windows", "720p60", require_events=True,
+                           min_character_cycles=1)
+        transitions = measured["lifecycleTransitionEvidence"]
+        assert transitions["successfulLoadUnloadPairs"] == 1
+        assert transitions["characterLoadedEvents"] == 2
+        assert transitions["characterUnloadedEvents"] == 1
+        assert transitions["trackingSourceLossReturnPairs"] == 1
+        assert transitions["physicalDeviceReconnectCyclesVerified"] is False
+        for broken in (
+            events[:-1],
+            [events[0], dict(zip(EVENT_HEADER, events[1])).get("event"), *events[2:]],
+        )[:1]:
+            write_events(broken)
+            try:
+                inspect(csv_path, "windows", "720p60", require_events=True)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Incomplete M2 transition event log accepted")
+        for broken in (
+            [*events[:2], (events[2][0], events[2][1], "20",
+                           events[2][3], events[2][4]), *events[3:]],
+            [*events[:3], (events[3][0], "99999", events[3][2],
+                           events[3][3], events[3][4]), *events[4:]],
+            [*events[:4], (events[4][0], events[4][1], events[4][2],
+                           "tracking_source_lost", "physical.device"), *events[5:]],
+        ):
+            write_events(broken)
+            try:
+                inspect(csv_path, "windows", "720p60", require_events=True)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Fabricated or corrupted M2 transitions accepted")
+        write_events(events)
+        try:
+            inspect(csv_path, "windows", "720p60", min_character_cycles=2)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Model replacement miscounted as completed load/unload")
+        event_path.unlink()
+        try:
+            inspect(csv_path, "windows", "720p60", require_events=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Required transition events omitted without failure")
         write([rows[0], dict(rows[1], scene_state="Faulted"), *rows[2:]])
         with_fault = inspect(csv_path, "windows", "720p60")
         assert with_fault["sceneFaultedSamples"] == 1
@@ -438,6 +627,10 @@ def main():
     cli.add_argument("--min-duration-seconds", type=int, default=0)
     cli.add_argument("--require-character", action="store_true")
     cli.add_argument("--require-overlay", action="store_true")
+    cli.add_argument("--require-events", action="store_true",
+                     help="Require completed M2 .events.csv lifecycle sidecar")
+    cli.add_argument("--min-character-cycles", type=int, default=0,
+                     help="Require N observed successful loader load-then-unload pairs; not replacement or physical tracking cycles")
     cli.add_argument("--report", type=Path)
     args = cli.parse_args()
     if args.self_test:
@@ -450,7 +643,8 @@ def main():
                 "Invalid duration requirement")
         result = inspect(args.csv, args.platform, args.target,
                          args.min_duration_seconds, args.require_character,
-                         args.require_overlay)
+                         args.require_overlay, args.require_events,
+                         args.min_character_cycles)
         output = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.report:
             with args.report.open("x", encoding="utf-8") as report:
