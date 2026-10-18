@@ -95,6 +95,11 @@ metadata, is rejected rather than counted as a valid soak. It computes:
   -1, never a fabricated zero.
 - Render configuration, character presence, runtime scene state, and
   in-app overlay capture readiness, **not proof** of actual OBS output.
+- Counts of five-second interior samples where the scene is faulted/unready,
+  a character is loaded, or the in-app overlay reports capture-ready.
+  These reveal long-running anomalies but **do not prove** completed VRM
+  load/unload or physical tracking connect/disconnect operations: brief
+  state transitions may occur entirely between samples.
 
 Frames >=256ms overflow the final histogram bin. Nonzero overflow is
 reported and may make an upper percentile only a **lower bound**.
