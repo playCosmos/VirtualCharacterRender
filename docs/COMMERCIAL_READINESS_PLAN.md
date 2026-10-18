@@ -116,6 +116,14 @@ growth; deficiencies block promotion rather than being called PASS.
 - Crash/support runbook, troubleshooting, first-run manual and known
   limitations; test localization and keyboard accessibility.
 
+Implementation and acceptance handoff:
+[M3 distribution execution plan](M3_DISTRIBUTION_PLAN.md),
+[final-artifact signing and portable lifecycle](M3_DISTRIBUTION_OPERATIONS.md),
+[partial SBOM and license/security review](M3_LICENSE_SECURITY_REVIEW.md),
+and [privacy/support](M3_PRIVACY_SUPPORT.md).
+Offline ZIP and native-host signature verification are separate controls;
+neither independently completes the other or substitutes for user/device tests.
+
 Exit: signed/notarized packages, license/security review, reproducible
 clean-install and upgrade/rollback evidence. Never infer this from alpha CI.
 
