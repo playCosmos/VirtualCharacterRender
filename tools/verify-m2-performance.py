@@ -66,7 +66,10 @@ def parse_row(raw, index):
     for field in FLOAT_FIELDS:
         data[field] = measured_float(raw[field], field)
     for field in INT_FIELDS:
-        data[field] = measured_integer(raw[field], field)
+        if field == "gc_alloc_last_frame_bytes" and raw[field] == "-1":
+            data[field] = -1  # Unavailable ProfilerRecorder sentinel.
+        else:
+            data[field] = measured_integer(raw[field], field)
     for field in BOOL_FIELDS:
         value = measured_integer(raw[field], field)
         require(value in (0, 1), "Non-boolean recorded " + field)
