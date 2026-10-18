@@ -113,7 +113,9 @@ def validate_archive_binding(final_path, archive_path, expected_sha, platform):
             "archiveBindingVerified": True}
 
 
-def verify_windows(executable):
+def verify_windows(executable, expected_thumbprint=None):
+    require(re.fullmatch(r"[A-Fa-f0-9]{40}", expected_thumbprint or "") is not None,
+            "Expected trusted publisher certificate thumbprint is mandatory")
     require(sys.platform == "win32", "Authenticode must be checked on native Windows")
     require(executable.is_file() and not executable.is_symlink() and
             executable.suffix.lower() == ".exe", "Final Windows EXE not found")
@@ -145,6 +147,8 @@ def verify_windows(executable):
     # An untrusted/missing timestamp is not acceptable for long-lived release.
     require(result.get("timestampCertificatePresent") is True,
             "Authenticode signature has no independently observed timestamp certificate")
+    require(result["thumbprint"].lower() == expected_thumbprint.lower(),
+            "Authenticode signer differs from approved publisher identity")
     return {"platform": "windows", "status": "NATIVE_AUTHENTICODE_VALID_ON_HOST",
             "file": executable.name, "signerSubject": result["subject"],
             "signerThumbprint": result["thumbprint"],
@@ -152,7 +156,9 @@ def verify_windows(executable):
             "cleanMachineAcceptance": False, "distributionAcceptance": False}
 
 
-def verify_macos(bundle):
+def verify_macos(bundle, expected_team_id=None):
+    require(re.fullmatch(r"[A-Z0-9]{10}", expected_team_id or "") is not None,
+            "Approved Apple Developer Team ID is mandatory")
     require(sys.platform == "darwin", "Developer ID and Gatekeeper must be checked on macOS")
     require(bundle.is_dir() and not bundle.is_symlink() and bundle.suffix == ".app",
             "Final macOS .app bundle not found")
@@ -166,6 +172,8 @@ def verify_macos(bundle):
     details = command(["codesign", "--display", "--verbose=4", str(bundle)])
     team = re.search(r"(?m)^TeamIdentifier=([A-Z0-9]{10})$", details)
     require(team is not None, "Developer ID Team ID missing")
+    require(team.group(1) == expected_team_id,
+            "macOS Developer ID Team differs from approved publisher")
     require(re.search(r"(?m)^Authority=Developer ID Application:", details) is not None,
             "App is not signed with Developer ID Application identity")
     require(re.search(r"(?m)^CodeDirectory .+flags=.*runtime", details) is not None or
@@ -229,6 +237,8 @@ def main():
     parser.add_argument("--report", type=Path)
     parser.add_argument("--archive", type=Path, help="Final signed ZIP distributed to users")
     parser.add_argument("--archive-sha256", help="Expected independently rehashed final ZIP SHA256")
+    parser.add_argument("--expected-windows-thumbprint", help="Approved 40-hex Authenticode signer certificate ID")
+    parser.add_argument("--expected-macos-team-id", help="Approved ten-character Developer ID team")
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -244,8 +254,9 @@ def main():
         binding = (validate_archive_binding(args.path, args.archive,
                                             args.archive_sha256, args.platform)
                    if args.archive is not None else {"archiveBindingVerified": False})
-        result = (verify_windows(args.path) if args.platform == "windows"
-                  else verify_macos(args.path))
+        result = (verify_windows(args.path, args.expected_windows_thumbprint)
+                  if args.platform == "windows"
+                  else verify_macos(args.path, args.expected_macos_team_id))
         result.update(binding)
         data = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.report is not None:
