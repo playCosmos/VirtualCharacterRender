@@ -39,6 +39,8 @@ namespace VCR.Runtime.Application
             public bool usedBackupRecovery;
             public bool configurationLoadRejected;
             public bool quitSaveSuppressed;
+            public bool explicitSaveSucceeded;
+            public bool automaticSaveReenabled;
             // Capture the *applied* camera field of view, not just config JSON:
             // native relaunch evidence must prove settings reached the scene.
             public float observedCameraFieldOfView;
@@ -85,7 +87,9 @@ namespace VCR.Runtime.Application
             evidence.recoveryMode = _recoveryMode ?? string.Empty;
             if (_recoveryMode != null &&
                 _recoveryMode != "backup" &&
-                _recoveryMode != "unrecoverable")
+                _recoveryMode != "unrecoverable" &&
+                _recoveryMode != "accept-backup" &&
+                _recoveryMode != "accept-unrecoverable")
             {
                 evidence.error = "Unknown recovery smoke mode.";
             }
@@ -142,9 +146,13 @@ namespace VCR.Runtime.Application
                     bool guard = evidence.automaticSaveSuppressed;
                     bool recovered = evidence.usedBackupRecovery;
                     bool rejected = evidence.configurationLoadRejected;
-                    bool expected = _recoveryMode == "backup"
+                    bool needsBackup = _recoveryMode == "backup" ||
+                        _recoveryMode == "accept-backup";
+                    bool needsRejection = _recoveryMode == "unrecoverable" ||
+                        _recoveryMode == "accept-unrecoverable";
+                    bool expected = needsBackup
                         ? guard && recovered && !rejected
-                        : _recoveryMode == "unrecoverable"
+                        : needsRejection
                             ? guard && !recovered && rejected
                             : !guard && !recovered && !rejected;
                     if (!expected)
@@ -154,6 +162,29 @@ namespace VCR.Runtime.Application
                             "mode=" + (_recoveryMode ?? "normal") +
                             ", guard=" + guard + ", recovered=" +
                             recovered + ", rejected=" + rejected;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(evidence.error) &&
+                    (_recoveryMode == "accept-backup" ||
+                     _recoveryMode == "accept-unrecoverable"))
+                {
+                    // Operator-confirmation equivalent: real bootstrap
+                    // persistence after a guarded recovery, not a fake
+                    // direct file write performed by the test script.
+                    evidence.explicitSaveSucceeded =
+                        bootstrap.SaveConfiguration(out var saveError);
+                    evidence.automaticSaveReenabled =
+                        !bootstrap.AutomaticConfigurationSaveSuppressed &&
+                        string.IsNullOrWhiteSpace(
+                            bootstrap.LastConfigurationLoadError) &&
+                        string.IsNullOrWhiteSpace(
+                            bootstrap.LastConfigurationLoadWarning);
+                    if (!evidence.explicitSaveSucceeded ||
+                        !evidence.automaticSaveReenabled)
+                    {
+                        evidence.error = "Explicit recovered settings save " +
+                            "failed: " + saveError;
                     }
                 }
             }
@@ -194,7 +225,9 @@ namespace VCR.Runtime.Application
                     "Automatic configuration save suppressed",
                     StringComparison.Ordinal) &&
                 !shutdownError.Contains(" | ");
-            bool expectedGuardedQuit = !string.IsNullOrEmpty(_recoveryMode);
+            bool expectedGuardedQuit =
+                _recoveryMode == "backup" ||
+                _recoveryMode == "unrecoverable";
             _evidence.stopped = _bootstrap != null &&
                 !_bootstrap.IsStarted &&
                 scene != null &&
