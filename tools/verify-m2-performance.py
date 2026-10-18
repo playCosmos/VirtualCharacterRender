@@ -135,7 +135,15 @@ def validate_session(metadata, platform):
             "Unexpected architecture; native macOS requires separately verified Apple Silicon")
     # arm64 is mandatory to promote to the Apple Silicon product gate;
     # macOS x64 measurements are still useful but cannot be hardware acceptance.
-    return metadata
+    try:
+        started = dt.datetime.fromisoformat(
+            metadata["startedUtc"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("M2 session start is not a valid UTC timestamp") from exc
+    require(started.tzinfo is not None and
+            started.utcoffset() == dt.timedelta(0),
+            "M2 session start must be timezone-aware UTC")
+    return started
 
 
 def regression_slope(rows, field):
@@ -166,7 +174,7 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
         metadata = json.loads(session_path.read_text(encoding="utf-8"))
     except (UnicodeError, ValueError) as exc:
         raise ValueError("M2 session metadata is not valid JSON") from exc
-    validate_session(metadata, platform)
+    session_started = validate_session(metadata, platform)
     rows = []
     start_timestamp = None
     prev_timestamp = None
@@ -206,6 +214,18 @@ def inspect(csv_path, platform, target, min_duration_seconds=0,
 
     require(len(rows) >= 2, "At least two native performance samples required")
     first, last = rows[0], rows[-1]
+    # All elapsed-time claims must be anchored to the recorder's actual
+    # session start, not just internally monotonic rows. Without this guard,
+    # a handful of 5-second rows beginning at elapsed=14400 could be
+    # misclassified as a continuous 4-hour soak.
+    require(first["elapsed_seconds"] <= 60.0,
+            "First M2 sample was too late to establish continuity")
+    require(abs((start_timestamp - session_started).total_seconds() -
+                first["elapsed_seconds"]) <= 10.0,
+            "First M2 sample is inconsistent with the session start")
+    require(abs((prev_timestamp - session_started).total_seconds() -
+                last["elapsed_seconds"]) <= 120.0,
+            "Final M2 sample is inconsistent with the session start")
     require(last["quit_observed"], "Native normal quit marker missing")
     require(last["elapsed_seconds"] >= min_duration_seconds,
             "Insufficient continuous M2 recording duration")
@@ -345,7 +365,30 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Malformed/false M2 evidence accepted")
+        # An already-advanced uptime must never satisfy a four-hour soak
+        # with only a few seconds of actual samples.
+        fabricated = [
+            dict(row, elapsed_seconds=str(14400 + index * 5))
+            for index, row in enumerate(rows)
+        ]
+        write(fabricated)
+        try:
+            inspect(csv_path, "windows", "720p60", min_duration_seconds=14400)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Late-start M2 rows accepted as a 4h soak")
         write(rows)
+        session_path = root / "case.csv.session.json"
+        session_path.write_text(json.dumps(dict(
+            session, startedUtc="2026-10-17T10:00:00Z")), encoding="utf-8")
+        try:
+            inspect(csv_path, "windows", "720p60")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unrelated M2 session timestamp accepted")
+        session_path.write_text(json.dumps(session), encoding="utf-8")
         try:
             inspect(csv_path, "windows", "720p60", min_duration_seconds=14400)
         except ValueError:
