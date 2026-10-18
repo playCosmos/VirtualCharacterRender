@@ -282,7 +282,17 @@ namespace VCR.Runtime.Application
 
         private void OnCharacterUnloaded()
         {
-            WriteTransition("character_unloaded", "character.loader");
+            // ApplicationRuntimeBootstrap runs earlier in Unity's execution
+            // order and shuts down the scene on normal process exit. Its
+            // automatic cleanup must NOT turn a loaded character into an
+            // operator-verified load/unload cycle.
+            var scene = _bootstrap != null ? _bootstrap.SceneRuntime : null;
+            var shuttingDown = scene != null &&
+                (scene.State == SceneRuntimeState.ShuttingDown ||
+                 scene.State == SceneRuntimeState.Stopped);
+            WriteTransition(shuttingDown
+                ? "character_unloaded_shutdown"
+                : "character_unloaded", "character.loader");
         }
 
         private void OnCharacterLoadFailed(Exception error)
