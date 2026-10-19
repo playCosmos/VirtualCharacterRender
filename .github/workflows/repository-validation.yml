@@ -89,6 +89,9 @@ jobs:
       - name: Test M3 complete ZIP payload inventory and hash mismatch rejection
         run: python3 tools/generate-m3-payload-inventory.py --self-test
 
+      - name: Test M3 manual-license-bound THIRD_PARTY_NOTICES generation
+        run: python3 tools/build-m3-notices.py --self-test
+
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
