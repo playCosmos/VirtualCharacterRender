@@ -33,8 +33,16 @@ $UnityArgs = @(
     "-logFile", "-"
 )
 
-& $UnityEditor @UnityArgs
-$Status = $LASTEXITCODE
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+    # Windows PowerShell does not wait for the GUI-subsystem Unity.exe and
+    # never sets $LASTEXITCODE for it. Run Unity synchronously instead.
+    $UnityArguments = ($UnityArgs | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $Status = (Start-Process -FilePath $UnityEditor -ArgumentList $UnityArguments -NoNewWindow -Wait -PassThru).ExitCode
+}
+else {
+    & $UnityEditor @UnityArgs
+    $Status = $LASTEXITCODE
+}
 
 if ($Status -eq 0) {
     Write-Host "VCR P2 source-free batch validation: PASS"

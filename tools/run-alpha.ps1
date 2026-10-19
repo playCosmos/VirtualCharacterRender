@@ -59,8 +59,16 @@ if ($ProfileExit) {
     Write-Host "Exit diagnostic log: $LogPath"
 }
 
-& $Exe @ArgsList
-$ExitCode = $LASTEXITCODE
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+    # Windows PowerShell does not wait for GUI-subsystem processes and
+    # never sets $LASTEXITCODE for them. Run the player synchronously instead.
+    $CommandLine = ($ArgsList | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $ExitCode = (Start-Process -FilePath $Exe -ArgumentList $CommandLine -NoNewWindow -Wait -PassThru).ExitCode
+}
+else {
+    & $Exe @ArgsList
+    $ExitCode = $LASTEXITCODE
+}
 $Stopwatch.Stop()
 
 if ($ProfileExit) {

@@ -28,5 +28,15 @@ $UnityArgs = @(
     "-logFile", "-"
 )
 
-& $UnityEditor @UnityArgs
-exit $LASTEXITCODE
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+    # Windows PowerShell does not wait for the GUI-subsystem Unity.exe and
+    # never sets $LASTEXITCODE for it. Run Unity synchronously instead.
+    $UnityArguments = ($UnityArgs | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $UnityExit = (Start-Process -FilePath $UnityEditor -ArgumentList $UnityArguments -NoNewWindow -Wait -PassThru).ExitCode
+}
+else {
+    & $UnityEditor @UnityArgs
+    $UnityExit = $LASTEXITCODE
+}
+
+exit $UnityExit
