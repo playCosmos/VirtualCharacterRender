@@ -69,6 +69,7 @@ required_latest_chain = [
     ROOT / "tools" / "verify-m3-native-signatures.py",
     ROOT / "tools" / "generate-m3-sbom.py",
     ROOT / "tools" / "generate-m3-payload-inventory.py",
+    ROOT / "tools" / "build-m3-notices.py",
     ROOT / "docs" / "M3_DISTRIBUTION_PLAN.md",
     ROOT / "docs" / "M3_DISTRIBUTION_OPERATIONS.md",
     ROOT / "docs" / "M3_PRIVACY_SUPPORT.md",
@@ -198,6 +199,9 @@ m3_archive = ROOT / "tools" / "verify-m3-distribution.py"
 m3_native = ROOT / "tools" / "verify-m3-native-signatures.py"
 m3_sbom = ROOT / "tools" / "generate-m3-sbom.py"
 m3_payload = ROOT / "tools" / "generate-m3-payload-inventory.py"
+m3_notices = ROOT / "tools" / "build-m3-notices.py"
+m3_osc_receiver = VCR / "Runtime" / "Protocols" / "OscEventsUnity" / "OscNormalizedEventUdpReceiver.cs"
+m3_vmc_receiver = VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs"
 m3_alpha = ROOT / ".github" / "workflows" / "build-alpha-binaries.yml"
 for source, symbol, label in (
     (m3_archive, '"distributionAcceptance": False',
@@ -212,6 +216,16 @@ for source, symbol, label in (
      "M3 shipped-file inventory must never auto-approve redistribution"),
     (m3_alpha, "generate-m3-payload-inventory.py",
      "M3 alpha workflow must preserve shipped-file inventory for review"),
+    (m3_alpha, "m3-license-review-PENDING.json",
+     "M3 alpha must preserve pending license review templates"),
+    (m3_notices, "PENDING/unapproved component blocks",
+     "M3 notices must reject incomplete licensing reviews"),
+    (m3_notices, '"licenseAuditApproved": False',
+     "M3 notices tool must not silently claim legal approval"),
+    (m3_osc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "OSC default loopback sender must bind only to loopback"),
+    (m3_vmc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "VMC default loopback sender must bind only to loopback"),
 ):
     require_source_contains(source, symbol, label)
 
