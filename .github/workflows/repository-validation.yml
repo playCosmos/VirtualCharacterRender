@@ -80,6 +80,18 @@ jobs:
       - name: Test M2 real-desktop performance evidence verifier
         run: python3 tools/verify-m2-performance.py --self-test
 
+      - name: Test M3 offline distribution provenance checks
+        run: python3 tools/verify-m3-distribution.py --self-test
+
+      - name: Test M3 native-signature verifier rejects missing unsigned binaries
+        run: python3 tools/verify-m3-native-signatures.py --self-test
+
+      - name: Test M3 complete ZIP payload inventory and hash mismatch rejection
+        run: python3 tools/generate-m3-payload-inventory.py --self-test
+
+      - name: Test M3 manual-license-bound THIRD_PARTY_NOTICES generation
+        run: python3 tools/build-m3-notices.py --self-test
+
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
@@ -98,16 +110,20 @@ jobs:
       - name: Verify Ultraleap LFS restoration rejects corrupt or incomplete assets
         run: python3 tools/restore-ultraleap-lfs.py --self-test
 
-      - name: Verify third-party source pins and inventory contract
+      - name: Verify third-party pins and partial M3 CycloneDX source inventory
         run: |
           python3 tools/audit-third-party-dependencies.py --self-test
           python3 tools/audit-third-party-dependencies.py --output dependency-inventory.json
+          python3 tools/generate-m3-sbom.py --self-test
+          python3 tools/generate-m3-sbom.py --output m3-source-sbom.cdx.json
 
       - name: Preserve non-approved dependency inventory for review
         uses: actions/upload-artifact@v4
         with:
           name: dependency-inventory-${{ github.sha }}
-          path: dependency-inventory.json
+          path: |
+            dependency-inventory.json
+            m3-source-sbom.cdx.json
           if-no-files-found: error
           retention-days: 30
 

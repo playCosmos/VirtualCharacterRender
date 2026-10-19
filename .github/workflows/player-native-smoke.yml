@@ -2,7 +2,7 @@ name: Native Windows and macOS Player startup smoke
 
 on:
   pull_request:
-    branches: [develop, feature/commercial-readiness-phase1]
+    branches: [develop, feature/commercial-readiness-phase1, feature/commercial-readiness-m2-evidence]
   push:
     branches: [develop]
   workflow_dispatch:

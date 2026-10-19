@@ -65,6 +65,15 @@ required_latest_chain = [
     VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs.meta",
     ROOT / "tools" / "verify-m2-performance.py",
     ROOT / "docs" / "M2_PERFORMANCE_EVIDENCE.md",
+    ROOT / "tools" / "verify-m3-distribution.py",
+    ROOT / "tools" / "verify-m3-native-signatures.py",
+    ROOT / "tools" / "generate-m3-sbom.py",
+    ROOT / "tools" / "generate-m3-payload-inventory.py",
+    ROOT / "tools" / "build-m3-notices.py",
+    ROOT / "docs" / "M3_DISTRIBUTION_PLAN.md",
+    ROOT / "docs" / "M3_DISTRIBUTION_OPERATIONS.md",
+    ROOT / "docs" / "M3_PRIVACY_SUPPORT.md",
+    ROOT / "docs" / "M3_LICENSE_SECURITY_REVIEW.md",
 ]
 for path in required_latest_chain:
     require(path)
@@ -184,6 +193,41 @@ require_source_contains(
     m2_launcher, "refuse_prior_evidence(",
     "P10 GUI launcher must refuse overwrite of pre-existing event evidence",
 )
+
+
+m3_archive = ROOT / "tools" / "verify-m3-distribution.py"
+m3_native = ROOT / "tools" / "verify-m3-native-signatures.py"
+m3_sbom = ROOT / "tools" / "generate-m3-sbom.py"
+m3_payload = ROOT / "tools" / "generate-m3-payload-inventory.py"
+m3_notices = ROOT / "tools" / "build-m3-notices.py"
+m3_osc_receiver = VCR / "Runtime" / "Protocols" / "OscEventsUnity" / "OscNormalizedEventUdpReceiver.cs"
+m3_vmc_receiver = VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs"
+m3_alpha = ROOT / ".github" / "workflows" / "build-alpha-binaries.yml"
+for source, symbol, label in (
+    (m3_archive, '"distributionAcceptance": False',
+     "M3 archive validation must not claim distribution signoff"),
+    (m3_archive, "archive.testzip()",
+     "M3 archive validation must verify ZIP member CRC"),
+    (m3_native, '"distributionAcceptance": False',
+     "M3 signature-check outcome must not claim distribution approval"),
+    (m3_sbom, "PENDING_MANUAL_APPROVAL",
+     "M3 partial SBOM must require manual license clearance"),
+    (m3_payload, '"commercialRedistributionApproved": False',
+     "M3 shipped-file inventory must never auto-approve redistribution"),
+    (m3_alpha, "generate-m3-payload-inventory.py",
+     "M3 alpha workflow must preserve shipped-file inventory for review"),
+    (m3_alpha, "m3-license-review-PENDING.json",
+     "M3 alpha must preserve pending license review templates"),
+    (m3_notices, "PENDING/unapproved component blocks",
+     "M3 notices must reject incomplete licensing reviews"),
+    (m3_notices, '"licenseAuditApproved": False',
+     "M3 notices tool must not silently claim legal approval"),
+    (m3_osc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "OSC default loopback sender must bind only to loopback"),
+    (m3_vmc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "VMC default loopback sender must bind only to loopback"),
+):
+    require_source_contains(source, symbol, label)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"

@@ -245,6 +245,22 @@ jobs:
             --arg mac_sha "$(sha256sum "release-assets/$mac" | cut -d' ' -f1)" \
             '{tag:$tag,source_sha:$sha,unity_version:$unity,workflow_run:$workflow,assets:[{name:$windows,sha256:$windows_sha},{name:$mac,sha256:$mac_sha}]}' \
             > release-assets/build-provenance.json
+          # Verify the exact signed-off source assertion, independent hashes
+          # and safe archive shape before posting an immutable alpha release.
+          # This does NOT attest developer signing or M3 distribution approval.
+          python3 tools/verify-m3-distribution.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" > release-assets/m3-source-preflight.json
+          python3 tools/generate-m3-payload-inventory.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" \
+            --output release-assets/m3-payload-inventory.json
+          # Produce PENDING review rows only; never auto-signoff or publish
+          # a license approval without exact final-payload manual clearance.
+          python3 tools/build-m3-notices.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" \
+            --template release-assets/m3-license-review-PENDING.json
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
@@ -275,6 +291,16 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "VirtualCharacterRender $VERSION" \
             --notes-file release-notes.md --prerelease
+      - name: Preserve complete shipped-file inventory for restricted release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3-inventory-${{ needs.preflight.outputs.version }}
+          path: |
+            release-assets/m3-source-preflight.json
+            release-assets/m3-payload-inventory.json
+            release-assets/m3-license-review-PENDING.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Verify published assets and release target
         shell: bash
         run: |
