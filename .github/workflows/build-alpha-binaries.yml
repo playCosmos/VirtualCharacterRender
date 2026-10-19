@@ -255,6 +255,12 @@ jobs:
             --artifacts release-assets --version "$VERSION" \
             --source "$GITHUB_SHA" \
             --output release-assets/m3-payload-inventory.json
+          # Produce PENDING review rows only; never auto-signoff or publish
+          # a license approval without exact final-payload manual clearance.
+          python3 tools/build-m3-notices.py \
+            --artifacts release-assets --version "$VERSION" \
+            --source "$GITHUB_SHA" \
+            --template release-assets/m3-license-review-PENDING.json
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
@@ -292,6 +298,7 @@ jobs:
           path: |
             release-assets/m3-source-preflight.json
             release-assets/m3-payload-inventory.json
+            release-assets/m3-license-review-PENDING.json
           if-no-files-found: error
           retention-days: 30
       - name: Verify published assets and release target
