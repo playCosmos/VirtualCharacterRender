@@ -349,7 +349,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 _receiver =
                     new UdpClient(
                         new IPEndPoint(
-                            IPAddress.Any,
+                            _allowedSender != null && IPAddress.IsLoopback(_allowedSender)
+                                ? IPAddress.Loopback
+                                : IPAddress.Any,
                             localPort));
 
                 _receiver.Client.ReceiveTimeout =
