@@ -90,6 +90,45 @@ OS security or share signing credentials for routine basic support.
 8. If a problem is reproducible, open an issue with redacted logs and exact
    test environment. Respect customer-provided confidentiality restrictions.
 
+## M3 source security findings and fixes (2026-10-19)
+
+This is a focused source review, **not** a network penetration test or
+assurance about the behavior of third-party native libraries.
+
+- **Fixed — OSC/VMC default NIC exposure:** both the optional normalized
+  OSC-event and VMC UDP receivers previously bound to `IPAddress.Any`
+  even when their default accepted sender was `127.0.0.1`. The source
+  filter rejected remote data, but the listening port was still reachable
+  on other interfaces. The default loopback sender configuration now binds
+  explicitly to `IPAddress.Loopback`. Explicit LAN sender configuration
+  continues to bind publicly and filter by that sender's address.
+  **Verify on real Windows/macOS using `netstat`/`Get-NetUDPEndpoint`
+  or `lsof -nP -iUDP`** while toggling each source; source inspection
+  alone does not prove firewall policy or resistance to spoofing.
+- **Verified source boundary — OSC/VMC:** sender address is checked before
+  packet decoding; OSC events use a bounded queue and per-frame dispatch
+  budget. Plain UDP sender IP filtering is **not** cryptographic
+  authentication; do not accept untrusted LAN exposure as protected.
+- **Verified source boundary — WebSocket:** optional client transport
+  rejects remote unencrypted `ws://` endpoints and URI user-info
+  credentials; remote endpoints require `wss://`. A remote service's
+  authorization and certificate policies still need runtime testing.
+- **Verified source boundary — shader packages:** package inventory
+  enforces file-count/size caps, validates declared resource paths and
+  rejects symbolic/reparse-point directories and files. It is a data-only
+  extension path, not permission to execute executable plugins. Malformed
+  manifests and time-of-check/time-of-use replacement still deserve
+  adversarial test coverage.
+- **Deferred physical protocol path — ARKit:** binds a local UDP port on
+  all interfaces to receive traffic from an explicitly configured iOS
+  device. Keep this opt-in and test listener closure, spoofing and device
+  recovery on physical machines. Do not silently switch ARKit to
+  loopback-only, which would break legitimate iOS tracking.
+
+Do not mark broader security, privacy or redistribution gates PASS until
+the final binary, actual listeners, user consent, permissions and native
+hardware behavior have been inspected.
+
 ## Security and retention gates before commercial distribution
 
 The operator must verify firewall/network listeners when inactive and when
