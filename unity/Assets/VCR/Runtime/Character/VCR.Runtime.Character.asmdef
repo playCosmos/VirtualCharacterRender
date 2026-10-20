@@ -1,0 +1,23 @@
+{
+  "name": "VCR.Runtime.Character",
+  "rootNamespace": "VCR.Runtime.Character",
+  "references": [
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.Appearance.Unity",
+    "VCR.Runtime.Tracking.Mixing",
+    "UniGLTF",
+    "VRM10",
+    "VCR.Runtime.Materials.Unity",
+    "UniHumanoid",
+    "UniGLTF.Utils"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

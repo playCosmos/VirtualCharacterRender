@@ -1,0 +1,18 @@
+{
+  "name": "VCR.Runtime.Tracking.MediaPipe",
+  "rootNamespace": "VCR.Runtime.Tracking.MediaPipe",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking",
+    "Mediapipe.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,182 @@
+using System;
+using VCR.Runtime.Core;
+using VCR.Runtime.Tracking;
+
+namespace VCR.Runtime.Diagnostics
+{
+    [Serializable]
+    public sealed class RuntimeDiagnosticsMetricEvidence
+    {
+        public string Name;
+        public bool ValueAvailable;
+        public double Value;
+        public string Unit;
+    }
+
+    [Serializable]
+    public sealed class RuntimeDiagnosticsEvidenceDocument
+    {
+        public const int CurrentVersion = 1;
+
+        public int Version =
+            CurrentVersion;
+        public string Utc;
+        public string OperatingSystem;
+        public string Cpu;
+        public string Gpu;
+        public string UnityVersion;
+        public long Sequence;
+        public double RealtimeSeconds;
+        public float FrameAverageMs;
+        public float FrameP95Ms;
+        public float FrameP99Ms;
+        public double FaceHz;
+        public double BodyHandsHz;
+        public double FullBodyHz;
+        public double ExpressionHz;
+        public bool FaceAgeAvailable;
+        public double FaceAgeMs;
+        public bool BodyHandsAgeAvailable;
+        public double BodyHandsAgeMs;
+        public bool FullBodyAgeAvailable;
+        public double FullBodyAgeMs;
+        public bool ExpressionAgeAvailable;
+        public double ExpressionAgeMs;
+        public bool HasPresence;
+        public string PresenceState;
+        public bool AnySourceAvailable;
+        public bool SubjectEvidence;
+        public RuntimeDiagnosticsMetricEvidence[] Metrics =
+            Array.Empty<RuntimeDiagnosticsMetricEvidence>();
+
+        public static RuntimeDiagnosticsEvidenceDocument
+            FromSnapshot(
+                RuntimeDiagnosticsSnapshot snapshot)
+        {
+            var sourceMetrics =
+                snapshot.Metrics ??
+                Array.Empty<RuntimeMetric>();
+            var metrics =
+                new RuntimeDiagnosticsMetricEvidence[
+                    sourceMetrics.Count];
+
+            for (var i = 0;
+                 i < sourceMetrics.Count;
+                 i++)
+            {
+                metrics[i] =
+                    new RuntimeDiagnosticsMetricEvidence
+                    {
+                        Name =
+                            sourceMetrics[i].Name,
+                        ValueAvailable =
+                            IsFinite(
+                                sourceMetrics[i]
+                                    .Value),
+                        Value =
+                            FiniteOrZero(
+                                sourceMetrics[i]
+                                    .Value),
+                        Unit =
+                            sourceMetrics[i].Unit
+                    };
+            }
+
+            var presence =
+                snapshot.Presence;
+
+            return new RuntimeDiagnosticsEvidenceDocument
+            {
+                Utc =
+                    DateTime.UtcNow.ToString(
+                        "O"),
+                OperatingSystem =
+                    UnityEngine.SystemInfo
+                        .operatingSystem,
+                Cpu =
+                    UnityEngine.SystemInfo
+                        .processorType,
+                Gpu =
+                    UnityEngine.SystemInfo
+                        .graphicsDeviceName,
+                UnityVersion =
+                    UnityEngine.Application
+                        .unityVersion,
+                Sequence =
+                    snapshot.Sequence,
+                RealtimeSeconds =
+                    snapshot.RealtimeSeconds,
+                FrameAverageMs =
+                    snapshot.FrameAverageMs,
+                FrameP95Ms =
+                    snapshot.FrameP95Ms,
+                FrameP99Ms =
+                    snapshot.FrameP99Ms,
+                FaceHz =
+                    snapshot.FaceHz,
+                BodyHandsHz =
+                    snapshot.BodyHandsHz,
+                FullBodyHz =
+                    snapshot.FullBodyHz,
+                ExpressionHz =
+                    snapshot.ExpressionHz,
+                FaceAgeAvailable =
+                    IsFinite(
+                        snapshot.FaceAgeMs),
+                FaceAgeMs =
+                    FiniteOrZero(
+                        snapshot.FaceAgeMs),
+                BodyHandsAgeAvailable =
+                    IsFinite(
+                        snapshot.BodyHandsAgeMs),
+                BodyHandsAgeMs =
+                    FiniteOrZero(
+                        snapshot.BodyHandsAgeMs),
+                FullBodyAgeAvailable =
+                    IsFinite(
+                        snapshot.FullBodyAgeMs),
+                FullBodyAgeMs =
+                    FiniteOrZero(
+                        snapshot.FullBodyAgeMs),
+                ExpressionAgeAvailable =
+                    IsFinite(
+                        snapshot.ExpressionAgeMs),
+                ExpressionAgeMs =
+                    FiniteOrZero(
+                        snapshot.ExpressionAgeMs),
+                HasPresence =
+                    presence.HasValue,
+                PresenceState =
+                    presence.HasValue
+                        ? presence.Value
+                            .SubjectState
+                            .ToString()
+                        : null,
+                AnySourceAvailable =
+                    presence.HasValue &&
+                    presence.Value
+                        .AnySourceAvailable,
+                SubjectEvidence =
+                    presence.HasValue &&
+                    presence.Value
+                        .SubjectEvidence,
+                Metrics =
+                    metrics
+            };
+        }
+
+        private static bool IsFinite(
+            double value) =>
+                !double.IsNaN(
+                    value) &&
+                !double.IsInfinity(
+                    value);
+
+        private static double FiniteOrZero(
+            double value) =>
+                IsFinite(
+                    value)
+                    ? value
+                    : 0.0;
+    }
+}

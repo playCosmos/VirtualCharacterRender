@@ -1,0 +1,84 @@
+name: Repository validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "checkpoint/**"
+      - "feature/**"
+      - "fix/**"
+      - "release/**"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      strict_reproducibility:
+        description: "Fail when Unity-generated lock/settings evidence is missing"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  repository-structure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate repository structure
+        run: python3 tools/validate-repository-structure.py
+      - name: Parse PowerShell tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          foreach ($scriptFile in Get-ChildItem -Path tools -Filter '*.ps1' -File) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $scriptFile.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $failed = $true
+              foreach ($parseError in $parseErrors) {
+                Write-Error -ErrorAction Continue "$($scriptFile.Name):$($parseError.Extent.StartLineNumber): $($parseError.Message)"
+              }
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Validate Unity pinned dependency graph (when baseline is captured)
+        if: ${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectSettings.asset') != '' }}
+        run: python3 tools/validate-unity-reproducibility.py
+
+      - name: Validate immutable alpha release policy
+        run: python3 tools/validate-alpha-release-policy.py
+
+      - name: Test Unity source-free evidence verifier
+        run: python3 tools/verify-unity-source-free-report.py --self-test
+
+      - name: Test interactive P10 evidence format verifier
+        run: python3 tools/verify-p10-interactive-evidence.py --self-test
+
+      - name: Test P10 interactive desktop launcher safety and CLI
+        run: python3 tools/run-p10-interactive.py --self-test
+
+      - name: Test P10 source-matched artifact downloader
+        run: python3 tools/download-p10-tested-players.py --self-test
+
+      - name: Test desktop shutdown latency attribution
+        run: python3 tools/analyze-shutdown-log.py --self-test
+
+      - name: Validate strict Unity reproducibility
+        if: >-
+          ${{
+            (github.event_name == 'workflow_dispatch' && inputs.strict_reproducibility) ||
+            github.ref == 'refs/heads/main' ||
+            github.ref == 'refs/heads/develop' ||
+            (github.event_name == 'pull_request' && github.base_ref == 'develop') ||
+            (github.event_name == 'pull_request' && github.base_ref == 'main')
+          }}
+        run: python3 tools/validate-repository-structure.py --strict-reproducibility

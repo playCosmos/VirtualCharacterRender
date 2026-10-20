@@ -1,0 +1,14 @@
+{
+  "name": "VCR.Runtime.Environment",
+  "rootNamespace": "VCR.Runtime.Environment",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

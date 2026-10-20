@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Managed-code stripping policy for player builds (IL2CPP and Mono).
+
+  Audited 2026-10-20: VCR runtime code does not use reflection in players.
+  The only project reflection (DesktopCharacterFileSelectionAdapter.SelectEditor)
+  is compiled under UNITY_EDITOR and therefore never enters a player.
+
+  UniGLTF's UniJSON runtime resolves casting and serialization helpers through
+  reflection: UniJSON.ConcreteCast.GetMethod(...) and
+  UniJSON.FormatterExtensions.GetMethod("Serialize").MakeGenericMethod(...).
+  Preserve those types so VRM loading keeps working with managed stripping.
+
+  When adding new reflection-based runtime code, add the smallest possible
+  <assembly>/<type> entry here instead of disabling stripping.
+-->
+<linker>
+  <assembly fullname="UniGLTF">
+    <type fullname="UniJSON.ConcreteCast" preserve="all" />
+    <type fullname="UniJSON.FormatterExtensions" preserve="all" />
+  </assembly>
+</linker>

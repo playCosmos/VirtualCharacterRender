@@ -1,0 +1,210 @@
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+using VCR.Runtime.Materials;
+using VCR.Runtime.Materials.Unity;
+
+namespace VCR.Editor.P0
+{
+    public static class P0ShaderBundleBuilder
+    {
+        private const string ShaderAssetPath =
+            "Assets/VCR/P0/Shaders/P0TintUnlit.shader";
+
+        [MenuItem("VCR/P0/Build Shader Bundle/Windows x64")]
+        public static void BuildWindows()
+        {
+            Build(
+                BuildTarget.StandaloneWindows64,
+                "windows",
+                ShaderBundleTargetPlatform.WindowsX64);
+        }
+
+        [MenuItem("VCR/P0/Build Shader Bundle/macOS")]
+        public static void BuildMac()
+        {
+            Build(
+                BuildTarget.StandaloneOSX,
+                "macos",
+                ShaderBundleTargetPlatform.MacOS);
+        }
+
+        [MenuItem("VCR/P0/Validate Current Platform Shader Bundle")]
+        public static void ValidateCurrentPlatformBundle()
+        {
+            var platformFolder =
+                EditorUserBuildSettings.activeBuildTarget switch
+                {
+                    BuildTarget.StandaloneWindows64 =>
+                        "windows",
+                    BuildTarget.StandaloneOSX =>
+                        "macos",
+                    _ =>
+                        null
+                };
+
+            if (platformFolder == null)
+            {
+                Debug.LogError(
+                    "VCR P0 shader bundle: active build target is not a supported desktop target.");
+                return;
+            }
+
+            var bundlePath =
+                Path.GetFullPath(
+                    Path.Combine(
+                        "Assets",
+                        "VCR",
+                        "P0",
+                        "BuiltShaderBundles",
+                        platformFolder,
+                        "vcr-p0-shaders.bundle"));
+
+            var root = new GameObject(
+                "VCR P0 Shader Bundle Self-Test");
+            root.hideFlags =
+                HideFlags.HideAndDontSave;
+
+            try
+            {
+                var loader =
+                    root.AddComponent<
+                        RuntimeShaderBundleLoader>();
+
+                if (!loader.TryLoadFromFile(
+                        bundlePath,
+                        out var registeredCount,
+                        out var loadError))
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - " +
+                        loadError);
+                    return;
+                }
+
+                if (registeredCount <= 0)
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - no Shader assets were registered.");
+                    return;
+                }
+
+                if (!RuntimeShaderRegistry.TryResolve(
+                        "VCR/P0/TintUnlit",
+                        out var shader) ||
+                    shader == null)
+                {
+                    Debug.LogError(
+                        "VCR P0 shader bundle: FAIL - loaded Shader was not registered.");
+                    return;
+                }
+
+                Debug.Log(
+                    $"VCR P0 shader bundle SELF-TEST: PASS - '{shader.name}' loaded and registered from {bundlePath}.");
+            }
+            finally
+            {
+                RuntimeShaderRegistry.Unregister(
+                    "VCR/P0/TintUnlit");
+
+                if (root != null)
+                {
+                    Object.DestroyImmediate(root);
+                }
+            }
+        }
+
+        private static void Build(
+            BuildTarget target,
+            string platformFolder,
+            string targetPlatform)
+        {
+            var shader =
+                AssetDatabase.LoadAssetAtPath<Shader>(
+                    ShaderAssetPath);
+
+            if (shader == null)
+            {
+                Debug.LogError(
+                    "VCR P0 shader bundle: validation Shader asset is missing.");
+                return;
+            }
+
+            var outputDirectory =
+                Path.Combine(
+                    "Assets",
+                    "VCR",
+                    "P0",
+                    "BuiltShaderBundles",
+                    platformFolder);
+
+            Directory.CreateDirectory(
+                outputDirectory);
+
+            var builds = new[]
+            {
+                new AssetBundleBuild
+                {
+                    assetBundleName =
+                        "vcr-p0-shaders.bundle",
+                    assetNames =
+                        new[]
+                        {
+                            ShaderAssetPath
+                        }
+                }
+            };
+
+            var manifest =
+                BuildPipeline.BuildAssetBundles(
+                    outputDirectory,
+                    builds,
+                    BuildAssetBundleOptions
+                        .ForceRebuildAssetBundle,
+                    target);
+
+            AssetDatabase.Refresh();
+
+            if (manifest == null)
+            {
+                Debug.LogError(
+                    $"VCR P0 shader bundle: FAIL for {target}.");
+                return;
+            }
+
+            var bundlePath =
+                Path.Combine(
+                    outputDirectory,
+                    "vcr-p0-shaders.bundle");
+
+            var metadata =
+                new ShaderBundleMetadata
+                {
+                    BundleId =
+                        "vcr-p0-shaders",
+                    TargetPlatform =
+                        targetPlatform,
+                    UnityVersion =
+                        Application.unityVersion,
+                    ShaderIds =
+                        new[]
+                        {
+                            "VCR/P0/TintUnlit"
+                        }
+                };
+
+            File.WriteAllText(
+                bundlePath + ".vcr.json",
+                JsonUtility.ToJson(
+                    metadata,
+                    prettyPrint: true));
+
+            AssetDatabase.Refresh();
+
+            Debug.Log(
+                $"VCR P0 shader bundle: PASS - {target} -> {bundlePath}. " +
+                $"Metadata target={targetPlatform}, Unity={Application.unityVersion}. " +
+                "Build the other target separately; bundles are platform-specific.");
+        }
+    }
+}

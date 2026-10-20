@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Appearance.Unity",
+  "rootNamespace": "VCR.Runtime.Appearance.Unity",
+  "references": [
+    "VCR.Runtime.Appearance",
+    "VCR.Runtime.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.Broadcast.Soop",
+  "rootNamespace": "VCR.Runtime.Broadcast.Soop",
+  "references": [
+    "VCR.Runtime.Events"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

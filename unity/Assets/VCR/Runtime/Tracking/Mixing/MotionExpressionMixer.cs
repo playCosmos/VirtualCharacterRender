@@ -1,0 +1,1094 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using VCR.Runtime.Core;
+
+namespace VCR.Runtime.Tracking.Mixing
+{
+    /// <summary>
+    /// One-performer P5 mixer entry point.
+    ///
+    /// Routed face/body/full-body frames pass through unchanged. Routed
+    /// expressions form the base layer and one optional expression provider is
+    /// blended on top. Pose/procedural layers can extend this component without
+    /// changing the character-facing provider contract.
+    /// </summary>
+    [DisallowMultipleComponent]
+    [DefaultExecutionOrder(6000)]
+    public sealed class MotionExpressionMixer :
+        MonoBehaviour,
+        ITrackingMixProvider,
+        ITrackingHandFrameProvider,
+        IRuntimeMetricsSource
+    {
+        [Header("Inputs")]
+        [SerializeField] private MonoBehaviour routedProviderBehaviour;
+        [SerializeField] private bool autoFindRoutedProvider = true;
+        [Tooltip("Optional primary humanoid-pose layer. Existing scenes keep this as the first overlay slot.")]
+        [SerializeField] private MonoBehaviour poseLayerProviderBehaviour;
+        [Tooltip("Additional humanoid-pose layers applied in array order after the primary pose layer.")]
+        [SerializeField] private HumanoidPoseLayerSlot[] additionalPoseLayers =
+            Array.Empty<HumanoidPoseLayerSlot>();
+        [Tooltip("Optional expression-only layer. It never contributes performer-presence evidence.")]
+        [SerializeField] private MonoBehaviour expressionLayerProviderBehaviour;
+
+        [Header("Pose layer")]
+        [SerializeField] private HumanoidPoseLayerSettings poseLayerSettings = new();
+
+        [Header("Expression layer")]
+        [SerializeField] private ExpressionBlendMode expressionBlendMode =
+            ExpressionBlendMode.Override;
+        [SerializeField, Range(0f, 1f)] private float expressionLayerWeight = 1f;
+        [SerializeField, Range(0f, 1f)] private float expressionDeadzone = 0f;
+        [SerializeField, Min(0f)] private float expressionSmoothing = 0f;
+
+        private ITrackingFrameProvider _routedProvider;
+        private ITrackingPresenceProvider _presenceProvider;
+        private ITrackingFrameProvider _poseLayerProvider;
+        private ITrackingFrameProvider _expressionLayerProvider;
+
+        private TrackingFrame _latestPoseFrame;
+        private TrackingFrame _lastBasePoseFrame;
+        private TrackingFrame _lastLayerPoseFrame;
+        private long _poseSequence;
+        private bool _poseDirty = true;
+        private bool _poseSpaceMismatch;
+        private TrackingFrame[] _additionalPoseLayerFrames =
+            Array.Empty<TrackingFrame>();
+
+        private NormalizedExpressionState _targetExpressions;
+        private NormalizedExpressionState _currentExpressions;
+        private TrackingFrame _latestExpressionFrame;
+        private TrackingFrame _lastBaseExpressionFrame;
+        private TrackingFrame _lastLayerExpressionFrame;
+        private long _expressionSequence;
+
+        private bool _targetDirty = true;
+        private bool _outputDirty;
+        private bool _expressionSmoothingActive;
+        private float _nextProviderSearchTime;
+
+        public TrackingPresenceSnapshot Presence =>
+            IsServiceAlive(_presenceProvider)
+                ? _presenceProvider.Presence
+                : default;
+
+        public bool HumanoidPosePreSmoothed => false;
+        public bool ExpressionsPreSmoothed =>
+            expressionSmoothing > 0f;
+
+        public float PrimaryPoseLayerWeight =>
+            poseLayerSettings?.Weight ?? 0f;
+
+        public bool PrimaryPoseLayerConfigured =>
+            IsServiceAlive(_poseLayerProvider) ||
+            (poseLayerProviderBehaviour != null &&
+             poseLayerProviderBehaviour is
+                 ITrackingFrameProvider);
+
+        public float ExpressionLayerWeight =>
+            SanitizeUnitInterval(
+                expressionLayerWeight,
+                fallback:
+                    1f);
+
+        public ExpressionBlendMode ExpressionLayerBlendMode =>
+            expressionBlendMode;
+
+        public bool IsExpressionLayerProvider(
+            MonoBehaviour provider) =>
+                provider != null &&
+                ReferenceEquals(
+                    expressionLayerProviderBehaviour,
+                    provider);
+
+        private void Awake()
+        {
+            SanitizeExpressionLayerConfiguration();
+            ResolveProviders();
+        }
+
+        private void Update()
+        {
+            if (!IsServiceAlive(_routedProvider))
+            {
+                _routedProvider = null;
+                _presenceProvider = null;
+
+            }
+
+            if (!IsServiceAlive(_poseLayerProvider))
+            {
+                _poseLayerProvider = null;
+            }
+
+            if (!IsServiceAlive(_expressionLayerProvider))
+            {
+                _expressionLayerProvider = null;
+            }
+
+            if (_routedProvider == null &&
+                autoFindRoutedProvider &&
+                Time.unscaledTime >=
+                    _nextProviderSearchTime)
+            {
+                _nextProviderSearchTime =
+                    Time.unscaledTime + 1f;
+                ResolveProviders();
+            }
+
+            if (!IsServiceAlive(_routedProvider))
+            {
+                ResetPoseState();
+                ResetExpressionState();
+                return;
+            }
+
+            UpdatePoseOutput();
+            UpdateExpressionTarget();
+            UpdateExpressionOutput(
+                Time.unscaledDeltaTime);
+        }
+
+        public void SetRoutedProvider(
+            MonoBehaviour provider)
+        {
+            routedProviderBehaviour = provider;
+            _routedProvider =
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
+            _presenceProvider =
+                provider != null
+                    ? provider as ITrackingPresenceProvider
+                    : null;
+            ResetPoseState();
+            ResetExpressionState();
+        }
+
+        public void SetPoseLayerProvider(
+            MonoBehaviour provider)
+        {
+            poseLayerProviderBehaviour =
+                provider;
+            _poseLayerProvider =
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
+            ResetPoseState();
+        }
+
+        public void ConfigurePoseLayer(
+            HumanoidPoseLayerSettings settings)
+        {
+            poseLayerSettings =
+                settings?.Clone() ??
+                new HumanoidPoseLayerSettings();
+            _poseDirty = true;
+        }
+
+        public bool TrySetPrimaryPoseLayerWeight(
+            float weight,
+            out string error)
+        {
+            error = null;
+
+            if (float.IsNaN(weight) ||
+                float.IsInfinity(weight) ||
+                weight < 0f ||
+                weight > 1f)
+            {
+                error =
+                    "Primary pose layer weight must be finite and in the 0..1 range.";
+                return false;
+            }
+
+            if (!PrimaryPoseLayerConfigured)
+            {
+                error =
+                    "No primary humanoid-pose layer is configured.";
+                return false;
+            }
+
+            poseLayerSettings ??=
+                new HumanoidPoseLayerSettings();
+
+            poseLayerSettings.Configure(
+                poseLayerSettings.Enabled,
+                poseLayerSettings.Role,
+                poseLayerSettings.BlendMode,
+                weight,
+                poseLayerSettings.RuntimeMask);
+
+            _poseDirty = true;
+            return true;
+        }
+
+        public bool TryAddAdditionalPoseLayer(
+            MonoBehaviour provider,
+            HumanoidPoseLayerSettings settings,
+            out string error)
+        {
+            error = null;
+
+            if (provider == null ||
+                provider is not ITrackingFrameProvider ||
+                ReferenceEquals(
+                    provider,
+                    this))
+            {
+                error =
+                    "Additional pose layer provider must implement ITrackingFrameProvider and cannot be the mixer itself.";
+                return false;
+            }
+
+            foreach (var existing in
+                     additionalPoseLayers ??
+                     Array.Empty<HumanoidPoseLayerSlot>())
+            {
+                if (existing != null &&
+                    ReferenceEquals(
+                        existing.ProviderBehaviour,
+                        provider))
+                {
+                    return true;
+                }
+            }
+
+            var current =
+                additionalPoseLayers ??
+                Array.Empty<HumanoidPoseLayerSlot>();
+
+            var next =
+                new HumanoidPoseLayerSlot[
+                    current.Length + 1];
+
+            Array.Copy(
+                current,
+                next,
+                current.Length);
+
+            var slot =
+                new HumanoidPoseLayerSlot();
+
+            slot.Configure(
+                provider,
+                settings ??
+                new HumanoidPoseLayerSettings());
+
+            next[next.Length - 1] =
+                slot;
+
+            SetAdditionalPoseLayers(
+                next);
+            return true;
+        }
+
+        public void SetAdditionalPoseLayers(
+            params HumanoidPoseLayerSlot[] layers)
+        {
+            if (layers == null ||
+                layers.Length == 0)
+            {
+                additionalPoseLayers =
+                    Array.Empty<
+                        HumanoidPoseLayerSlot>();
+            }
+            else
+            {
+                var clones =
+                    new HumanoidPoseLayerSlot[
+                        layers.Length];
+
+                for (var i = 0;
+                     i < layers.Length;
+                     i++)
+                {
+                    clones[i] =
+                        layers[i]?.Clone();
+                }
+
+                additionalPoseLayers =
+                    clones;
+            }
+
+            ResetPoseState();
+        }
+
+        public void SetExpressionLayerProvider(
+            MonoBehaviour provider)
+        {
+            expressionLayerProviderBehaviour =
+                provider;
+            _expressionLayerProvider =
+                provider != null
+                    ? provider as ITrackingFrameProvider
+                    : null;
+            ResetExpressionState();
+        }
+
+        public void ConfigureExpressionLayer(
+            ExpressionBlendMode mode,
+            float weight,
+            float deadzone,
+            float smoothing)
+        {
+            expressionBlendMode = mode;
+            expressionLayerWeight =
+                SanitizeUnitInterval(
+                    weight,
+                    fallback:
+                        1f);
+            expressionDeadzone =
+                SanitizeUnitInterval(
+                    deadzone,
+                    fallback:
+                        0f);
+            expressionSmoothing =
+                SanitizeNonNegative(
+                    smoothing,
+                    fallback:
+                        0f);
+            _targetDirty = true;
+        }
+
+        private void SanitizeExpressionLayerConfiguration()
+        {
+            expressionLayerWeight =
+                SanitizeUnitInterval(
+                    expressionLayerWeight,
+                    fallback:
+                        1f);
+            expressionDeadzone =
+                SanitizeUnitInterval(
+                    expressionDeadzone,
+                    fallback:
+                        0f);
+            expressionSmoothing =
+                SanitizeNonNegative(
+                    expressionSmoothing,
+                    fallback:
+                        0f);
+        }
+
+        private static float SanitizeUnitInterval(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Clamp01(
+                value);
+        }
+
+        private static float SanitizeNonNegative(
+            float value,
+            float fallback)
+        {
+            if (float.IsNaN(value) ||
+                float.IsInfinity(value))
+            {
+                return fallback;
+            }
+
+            return Mathf.Max(
+                0f,
+                value);
+        }
+
+        public bool TryGetLatestFace(
+            out TrackingFrame frame)
+        {
+            if (!IsServiceAlive(_routedProvider))
+            {
+                frame = null;
+                return false;
+            }
+
+            return _routedProvider
+                .TryGetLatestFace(
+                    out frame);
+        }
+
+        public bool TryGetLatestBodyHands(
+            out TrackingFrame frame)
+        {
+            if (!IsServiceAlive(_routedProvider))
+            {
+                frame = null;
+                return false;
+            }
+
+            return _routedProvider
+                .TryGetLatestBodyHands(
+                    out frame);
+        }
+
+        public bool TryGetLatestHands(
+            out TrackingFrame frame)
+        {
+            if (!IsServiceAlive(_routedProvider) ||
+                _routedProvider is not
+                    ITrackingHandFrameProvider hands)
+            {
+                frame = null;
+                return false;
+            }
+
+            return hands.TryGetLatestHands(
+                out frame);
+        }
+
+        public bool TryGetLatestHumanoidPose(
+            out TrackingFrame frame)
+        {
+            frame =
+                _latestPoseFrame;
+
+            return frame != null;
+        }
+
+        public bool TryGetLatestExpressions(
+            out TrackingFrame frame)
+        {
+            frame =
+                _latestExpressionFrame;
+
+            return frame != null;
+        }
+
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.layer_configured",
+                    IsServiceAlive(_poseLayerProvider)
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.weight",
+                    poseLayerSettings?.Weight ?? 0f,
+                    "ratio"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.role",
+                    (int)(poseLayerSettings?.Role ??
+                        MotionLayerRole.Base),
+                    "enum"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.mode",
+                    (int)(poseLayerSettings?.BlendMode ??
+                        HumanoidPoseBlendMode.Override),
+                    "enum"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.space_mismatch",
+                    _poseSpaceMismatch
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.pose.additional_layers",
+                    additionalPoseLayers?.Length ?? 0,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.weight",
+                    expressionLayerWeight,
+                    "ratio"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.deadzone",
+                    expressionDeadzone,
+                    "ratio"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.mode",
+                    (int)expressionBlendMode,
+                    "enum"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.smoothing",
+                    expressionSmoothing,
+                    "rate"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.smoothing_active",
+                    _expressionSmoothingActive
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
+            output.Add(
+                new RuntimeMetric(
+                    "mixer.expression.layer_configured",
+                    IsServiceAlive(_expressionLayerProvider)
+                        ? 1.0
+                        : 0.0,
+                    "bool"));
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
+        private void ResolveProviders()
+        {
+            if (routedProviderBehaviour != null &&
+                routedProviderBehaviour is
+                    ITrackingFrameProvider configured &&
+                !(configured is ITrackingMixProvider))
+            {
+                _routedProvider =
+                    configured;
+                _presenceProvider =
+                    routedProviderBehaviour as
+                        ITrackingPresenceProvider;
+            }
+
+            if (poseLayerProviderBehaviour != null &&
+                poseLayerProviderBehaviour is
+                    ITrackingFrameProvider poseLayer &&
+                !ReferenceEquals(
+                    poseLayer,
+                    this))
+            {
+                _poseLayerProvider =
+                    poseLayer;
+            }
+
+            if (expressionLayerProviderBehaviour != null &&
+                expressionLayerProviderBehaviour is
+                    ITrackingFrameProvider layer &&
+                !ReferenceEquals(
+                    layer,
+                    this))
+            {
+                _expressionLayerProvider =
+                    layer;
+            }
+
+            if (IsServiceAlive(_routedProvider) ||
+                !autoFindRoutedProvider)
+            {
+                return;
+            }
+
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            ITrackingFrameProvider direct = null;
+            ITrackingPresenceProvider directPresence = null;
+            MonoBehaviour directBehaviour = null;
+
+            foreach (var behaviour in behaviours)
+            {
+                if (ReferenceEquals(
+                        behaviour,
+                        this) ||
+                    behaviour is ITrackingMixProvider)
+                {
+                    continue;
+                }
+
+                if (behaviour is
+                    ITrackingRouteProvider route)
+                {
+                    _routedProvider = route;
+                    _presenceProvider = route;
+                    routedProviderBehaviour =
+                        behaviour;
+                    return;
+                }
+
+                if (direct == null &&
+                    behaviour is
+                        ITrackingFrameProvider provider)
+                {
+                    direct = provider;
+                    directPresence =
+                        behaviour as
+                            ITrackingPresenceProvider;
+                    directBehaviour =
+                        behaviour;
+                }
+            }
+
+            if (direct != null)
+            {
+                _routedProvider = direct;
+                _presenceProvider =
+                    directPresence;
+                routedProviderBehaviour =
+                    directBehaviour;
+            }
+        }
+
+        private void UpdatePoseOutput()
+        {
+            TrackingFrame baseFrame = null;
+            TrackingFrame primaryLayerFrame = null;
+
+            _routedProvider
+                .TryGetLatestHumanoidPose(
+                    out baseFrame);
+
+            if (IsServiceAlive(_poseLayerProvider) &&
+                !ReferenceEquals(
+                    _poseLayerProvider,
+                    _routedProvider))
+            {
+                _poseLayerProvider
+                    .TryGetLatestHumanoidPose(
+                        out primaryLayerFrame);
+            }
+
+            var baseChanged =
+                FrameChanged(
+                    baseFrame,
+                    ref _lastBasePoseFrame);
+            var primaryChanged =
+                FrameChanged(
+                    primaryLayerFrame,
+                    ref _lastLayerPoseFrame);
+
+            EnsureAdditionalPoseRuntimeState();
+
+            var additionalChanged = false;
+
+            for (var i = 0;
+                 i < _additionalPoseLayerFrames.Length;
+                 i++)
+            {
+                var previousFrame =
+                    _additionalPoseLayerFrames[i];
+
+                TryGetAdditionalPoseLayerFrame(
+                    i,
+                    out var frame);
+
+                _additionalPoseLayerFrames[i] =
+                    frame;
+
+                if (!ReferenceEquals(
+                        frame,
+                        previousFrame))
+                {
+                    additionalChanged = true;
+                }
+            }
+
+            if (!baseChanged &&
+                !primaryChanged &&
+                !additionalChanged &&
+                !_poseDirty)
+            {
+                return;
+            }
+
+            _poseDirty = false;
+            _poseSpaceMismatch = false;
+
+            var mixedPose =
+                baseFrame?.HumanoidPose;
+            var hasMixedLayer = false;
+            var confidence =
+                baseFrame?.Confidence ?? 0f;
+
+            ApplyPoseLayer(
+                primaryLayerFrame,
+                poseLayerSettings,
+                ref mixedPose,
+                ref hasMixedLayer,
+                ref confidence);
+
+            if (additionalPoseLayers != null)
+            {
+                for (var i = 0;
+                     i < additionalPoseLayers.Length;
+                     i++)
+                {
+                    var frame =
+                        i <
+                        _additionalPoseLayerFrames.Length
+                            ? _additionalPoseLayerFrames[i]
+                            : null;
+
+                    if (frame?.HumanoidPose == null)
+                    {
+                        continue;
+                    }
+
+                    ApplyPoseLayer(
+                        frame,
+                        additionalPoseLayers[i]?.RuntimeSettings,
+                        ref mixedPose,
+                        ref hasMixedLayer,
+                        ref confidence);
+                }
+            }
+
+            if (mixedPose == null)
+            {
+                _latestPoseFrame = null;
+                return;
+            }
+
+            if (!hasMixedLayer &&
+                ReferenceEquals(
+                    mixedPose,
+                    baseFrame?.HumanoidPose))
+            {
+                _latestPoseFrame =
+                    baseFrame;
+                return;
+            }
+
+            var nowUs =
+                MonotonicClock
+                    .NowMicroseconds();
+
+            _latestPoseFrame =
+                new TrackingFrame(
+                    ++_poseSequence,
+                    sourceTimestampUs:
+                        nowUs,
+                    validRegions:
+                        TrackingRegion.FullBody,
+                    confidence:
+                        confidence,
+                    subjectDetected:
+                        baseFrame?.SubjectDetected ??
+                        false,
+                    humanoidPose:
+                        mixedPose,
+                    sourceId:
+                        "motion-expression-mixer:pose",
+                    runtimeTimestampUs:
+                        nowUs);
+        }
+
+        private void ApplyPoseLayer(
+            TrackingFrame layerFrame,
+            HumanoidPoseLayerSettings settings,
+            ref HumanoidPoseState mixedPose,
+            ref bool hasMixedLayer,
+            ref float confidence)
+        {
+            if (layerFrame?.HumanoidPose == null ||
+                settings == null ||
+                !settings.Enabled ||
+                settings.Weight <= 0f)
+            {
+                return;
+            }
+
+            var next =
+                HumanoidPoseMixerMath.Blend(
+                    mixedPose,
+                    layerFrame.HumanoidPose,
+                    settings,
+                    out var mismatch);
+
+            if (mismatch)
+            {
+                _poseSpaceMismatch = true;
+                return;
+            }
+
+            if (next == null ||
+                ReferenceEquals(
+                    next,
+                    mixedPose))
+            {
+                return;
+            }
+
+            mixedPose = next;
+            hasMixedLayer = true;
+            confidence =
+                Math.Max(
+                    confidence,
+                    layerFrame.Confidence);
+        }
+
+        private void EnsureAdditionalPoseRuntimeState()
+        {
+            var count =
+                additionalPoseLayers?.Length ?? 0;
+
+            if (_additionalPoseLayerFrames.Length ==
+                    count)
+            {
+                return;
+            }
+
+            _additionalPoseLayerFrames =
+                new TrackingFrame[count];
+        }
+
+        private bool TryGetAdditionalPoseLayerFrame(
+            int index,
+            out TrackingFrame frame)
+        {
+            frame = null;
+
+            if (additionalPoseLayers == null ||
+                index < 0 ||
+                index >= additionalPoseLayers.Length)
+            {
+                return false;
+            }
+
+            var provider =
+                additionalPoseLayers[index]?.Provider;
+
+            if (!IsServiceAlive(provider) ||
+                ReferenceEquals(
+                    provider,
+                    this) ||
+                ReferenceEquals(
+                    provider,
+                    _routedProvider))
+            {
+                return false;
+            }
+
+            return provider.TryGetLatestHumanoidPose(
+                out frame) &&
+                frame?.HumanoidPose != null;
+        }
+
+        private void UpdateExpressionTarget()
+        {
+            TrackingFrame baseFrame = null;
+            TrackingFrame layerFrame = null;
+
+            _routedProvider
+                .TryGetLatestExpressions(
+                    out baseFrame);
+
+            if (IsServiceAlive(_expressionLayerProvider) &&
+                !ReferenceEquals(
+                    _expressionLayerProvider,
+                    _routedProvider))
+            {
+                _expressionLayerProvider
+                    .TryGetLatestExpressions(
+                        out layerFrame);
+            }
+
+            var baseChanged =
+                FrameChanged(
+                    baseFrame,
+                    ref _lastBaseExpressionFrame);
+
+            var layerChanged =
+                FrameChanged(
+                    layerFrame,
+                    ref _lastLayerExpressionFrame);
+
+            if (!baseChanged &&
+                !layerChanged &&
+                !_targetDirty)
+            {
+                return;
+            }
+
+            _targetDirty = false;
+            _outputDirty = true;
+
+            if (layerFrame?.Expressions == null ||
+                expressionLayerWeight <= 0f)
+            {
+                _targetExpressions =
+                    baseFrame?.Expressions;
+
+                if (expressionSmoothing <= 0f)
+                {
+                    _currentExpressions =
+                        _targetExpressions;
+                    _latestExpressionFrame =
+                        _targetExpressions != null
+                            ? baseFrame
+                            : null;
+                    _outputDirty = false;
+                    _expressionSmoothingActive =
+                        false;
+                }
+
+                return;
+            }
+
+            _targetExpressions =
+                ExpressionMixerMath.Blend(
+                    baseFrame?.Expressions,
+                    layerFrame.Expressions,
+                    expressionLayerWeight,
+                    expressionDeadzone,
+                    expressionBlendMode);
+        }
+
+        private void UpdateExpressionOutput(
+            float deltaSeconds)
+        {
+            if (_targetExpressions == null)
+            {
+                _currentExpressions = null;
+                _latestExpressionFrame = null;
+                _outputDirty = false;
+                _expressionSmoothingActive = false;
+                return;
+            }
+
+            if (!_outputDirty &&
+                !_expressionSmoothingActive)
+            {
+                return;
+            }
+
+            if (expressionSmoothing > 0f)
+            {
+                if (_currentExpressions != null &&
+                    ExpressionMixerMath
+                        .ApproximatelyEqual(
+                            _currentExpressions,
+                            _targetExpressions))
+                {
+                    _currentExpressions =
+                        _targetExpressions;
+                    _expressionSmoothingActive =
+                        false;
+                }
+                else
+                {
+                    var alpha =
+                        ExpressionMixerMath
+                            .SmoothAlpha(
+                                expressionSmoothing,
+                                deltaSeconds);
+
+                    if (alpha <= 0f)
+                    {
+                        _expressionSmoothingActive =
+                            true;
+                        return;
+                    }
+
+                    _currentExpressions =
+                        ExpressionMixerMath.Blend(
+                            _currentExpressions,
+                            _targetExpressions,
+                            alpha,
+                            0f,
+                            ExpressionBlendMode.Override);
+
+                    _expressionSmoothingActive =
+                        !ExpressionMixerMath
+                            .ApproximatelyEqual(
+                                _currentExpressions,
+                                _targetExpressions);
+
+                    if (!_expressionSmoothingActive)
+                    {
+                        _currentExpressions =
+                            _targetExpressions;
+                    }
+                }
+            }
+            else
+            {
+                _currentExpressions =
+                    _targetExpressions;
+                _expressionSmoothingActive = false;
+            }
+
+            var nowUs =
+                MonotonicClock
+                    .NowMicroseconds();
+
+            _latestExpressionFrame =
+                new TrackingFrame(
+                    ++_expressionSequence,
+                    sourceTimestampUs:
+                        nowUs,
+                    validRegions:
+                        TrackingRegion.Expressions,
+                    confidence:
+                        1f,
+                    subjectDetected:
+                        false,
+                    expressions:
+                        _currentExpressions,
+                    sourceId:
+                        "motion-expression-mixer",
+                    runtimeTimestampUs:
+                        nowUs);
+
+            _outputDirty = false;
+        }
+
+        private static bool FrameChanged(
+            TrackingFrame frame,
+            ref TrackingFrame lastFrame)
+        {
+            if (ReferenceEquals(
+                    frame,
+                    lastFrame))
+            {
+                return false;
+            }
+
+            lastFrame = frame;
+            return true;
+        }
+
+        private void ResetPoseState()
+        {
+            _lastBasePoseFrame = null;
+            _lastLayerPoseFrame = null;
+            _latestPoseFrame = null;
+            _poseDirty = true;
+            _poseSpaceMismatch = false;
+            _additionalPoseLayerFrames =
+                Array.Empty<TrackingFrame>();
+        }
+
+        private void ResetExpressionState()
+        {
+            _lastBaseExpressionFrame = null;
+            _lastLayerExpressionFrame = null;
+            _targetExpressions = null;
+            _currentExpressions = null;
+            _latestExpressionFrame = null;
+            _targetDirty = true;
+            _outputDirty = false;
+            _expressionSmoothingActive = false;
+        }
+    }
+}

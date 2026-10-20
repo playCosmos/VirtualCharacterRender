@@ -1,0 +1,17 @@
+{
+  "name": "VCR.Runtime.Diagnostics",
+  "rootNamespace": "VCR.Runtime.Diagnostics",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Tracking"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

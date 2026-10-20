@@ -1,0 +1,4386 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+UNITY = ROOT / "unity"
+VCR = UNITY / "Assets" / "VCR"
+
+parser = argparse.ArgumentParser(
+    description="Validate repository structure and Unity project reproducibility evidence."
+)
+parser.add_argument(
+    "--strict-reproducibility",
+    action="store_true",
+    help=(
+        "Treat missing Unity-generated reproducibility files as errors. "
+        "Use this for release/promotion gates after opening the project with the pinned editor."
+    ),
+)
+args = parser.parse_args()
+
+errors: list[str] = []
+warnings: list[str] = []
+
+
+def require(path: Path, label: str | None = None) -> None:
+    if not path.is_file():
+        errors.append(f"missing required file: {label or path.relative_to(ROOT)}")
+
+
+def load_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        errors.append(f"invalid JSON: {path.relative_to(ROOT)}: {exc}")
+        return {}
+
+
+require(UNITY / "ProjectSettings" / "ProjectVersion.txt")
+require(UNITY / "Packages" / "manifest.json")
+require(ROOT / "tools" / "bootstrap-mediapipe.sh")
+require(ROOT / "tools" / "bootstrap-mediapipe.ps1")
+
+required_latest_chain = [
+    VCR / "Editor" / "P11" / "P11BatchValidation.cs",
+    VCR / "Editor" / "P11" / "VCR.Editor.P11.asmdef",
+    VCR / "Editor" / "P12" / "P12BatchValidation.cs",
+    VCR / "Editor" / "P12" / "VCR.Editor.P12.asmdef",
+    VCR / "Editor" / "P13" / "P13BatchValidation.cs",
+    VCR / "Editor" / "P13" / "VCR.Editor.P13.asmdef",
+    VCR / "Runtime" / "Tracking" / "SnapshotArrayOwnership.cs",
+    VCR / "Runtime" / "Tracking" / "BorrowedHumanoidPose.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "PendingSubmissionTracker.cs",
+    VCR / "Runtime" / "Protocols" / "Vmc" / "VmcPacketReader.cs",
+    ROOT / "tools" / "validate-p12-source-free.sh",
+    ROOT / "tools" / "validate-p12-source-free.ps1",
+    ROOT / "tools" / "validate-p13-source-free.sh",
+    ROOT / "tools" / "validate-p13-source-free.ps1",
+]
+for path in required_latest_chain:
+    require(path)
+
+
+def require_source_contains(path: Path, token: str, label: str) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    if token not in source:
+        errors.append(
+            f"hot-path source contract missing: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+def forbid_source_pattern(path: Path, pattern: str, label: str) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    if re.search(pattern, source, flags=re.MULTILINE):
+        errors.append(
+            f"hot-path source regression: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+def require_source_occurrences(
+    path: Path,
+    token: str,
+    expected: int,
+    label: str,
+) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    actual = source.count(token)
+    if actual != expected:
+        errors.append(
+            f"hot-path source occurrence mismatch: {label}: "
+            f"{path.relative_to(ROOT)}: expected {expected}, got {actual}"
+        )
+
+
+def require_source_order(
+    path: Path,
+    first: str,
+    second: str,
+    label: str,
+) -> None:
+    if not path.is_file():
+        return
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    first_index = source.find(first)
+    second_index = source.find(second)
+    if (
+        first_index < 0
+        or second_index < 0
+        or first_index >= second_index
+    ):
+        errors.append(
+            f"source ordering contract missing: {label}: {path.relative_to(ROOT)}"
+        )
+
+
+osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
+require_source_contains(
+    osc_writer,
+    "TryAppendBundleMessage",
+    "OSC writer must retain reusable-buffer bundle append support",
+)
+forbid_source_pattern(
+    osc_writer,
+    r"\bMemoryStream\b",
+    "OSC writer must not reintroduce MemoryStream staging",
+)
+forbid_source_pattern(
+    osc_writer,
+    r"\bArrayPool\s*<",
+    "OSC writer must not require transient pooled encoding buffers",
+)
+
+vmc_sender = VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpSender.cs"
+require_source_contains(
+    vmc_sender,
+    "TryAppendBundleMessage",
+    "VMC sender must write directly into its reusable OSC packet buffer",
+)
+require_source_contains(
+    vmc_sender,
+    "ISelectiveNormalizedMotionSnapshotProvider",
+    "VMC sender must use selective snapshot capture when the provider supports it",
+)
+require_source_contains(
+    vmc_sender,
+    "includeExpressions:",
+    "VMC selective capture must propagate the expression-send setting",
+)
+require_source_contains(
+    vmc_sender,
+    "IBorrowedHumanoidPoseProvider",
+    "VMC sender must retain pose-only borrowed compatibility",
+)
+require_source_contains(
+    vmc_sender,
+    "IBorrowedNormalizedMotionProvider",
+    "VMC sender must prefer combined borrowed motion when available",
+)
+require_source_contains(
+    vmc_sender,
+    "protocol.vmc.send.borrowed_motion_packets",
+    "VMC borrowed-motion usage must remain observable in runtime metrics",
+)
+require_source_order(
+    vmc_sender,
+    "IBorrowedNormalizedMotionProvider borrowedMotionProvider",
+    "IBorrowedHumanoidPoseProvider;",
+    "VMC sender must evaluate combined borrowed motion before pose-only compatibility",
+)
+require_source_order(
+    vmc_sender,
+    "selective.TryCaptureMotion(",
+    "borrowedProvider.TryBorrowHumanoidPose(",
+    "VMC sender must finish expression capture before borrowing provider-owned pose buffers",
+)
+forbid_source_pattern(
+    vmc_sender,
+    r"OscPacketWriter\s*\.\s*WriteBundle\s*\(",
+    "VMC sender must not rebuild a bundle from per-message byte arrays",
+)
+require_source_contains(
+    vmc_sender,
+    "SanitizeConfiguration();",
+    "VMC sender must sanitize serialized scheduling/destination configuration before runtime use",
+)
+require_source_contains(
+    vmc_sender,
+    "private static float FiniteOrZero(",
+    "VMC sender must contain non-finite scalar output before OSC serialization",
+)
+require_source_contains(
+    vmc_sender,
+    "private static float Clamp01Finite(",
+    "VMC sender must contain non-finite expression weights before OSC serialization",
+)
+require_source_contains(
+    vmc_sender,
+    "var rotationValid =",
+    "VMC sender must replace non-finite or degenerate provider quaternions before wire output",
+)
+
+p3_tracking_validation = (
+    VCR
+    / "Editor"
+    / "P3"
+    / "P3BuiltInTrackingValidation.cs"
+)
+require_source_contains(
+    p3_tracking_validation,
+    "ValidateAudioSnapshotSuppression",
+    "P3 validation must cover unchanged audio expression snapshot suppression",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "float.PositiveInfinity",
+    "P3 validation must inject non-finite audio fallback configuration",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "audio fallback math must contain non-finite configuration/input values",
+    "P3 validation must prove audio fallback math never publishes NaN from invalid numeric input",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "MediaPipe presence timing conversion must reject non-finite seconds",
+    "P3 validation must cover MediaPipe timing conversion sanitization and saturation",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "ARKit receiver configuration must contain non-finite timing/pose values",
+    "P3 validation must cover ARKit receiver numeric sanitization and timing saturation",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "webcam preprocessing exposure/gamma sanitization must reject non-finite values",
+    "P3 validation must cover webcam preprocessing numeric sanitization",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "MediaPipe normalizers must contain non-finite blendshape/confidence values",
+    "P3 validation must cover MediaPipe normalizer numeric containment",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "VRM tracking application must contain non-finite configuration/smoothing/expression values",
+    "P3 validation must cover final VRM tracking numeric containment",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "VRM humanoid pose application must contain non-finite smoothing/expression values",
+    "P3 validation must cover full-body VRM numeric containment",
+)
+require_source_contains(
+    p3_tracking_validation,
+    "tracking timestamp math must preserve full-range elapsed time without signed overflow",
+    "P3 validation must cover extreme tracking timestamp arithmetic",
+)
+
+p0_vmc_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0VmcSetupMenu.cs"
+)
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateBorrowedSenderEquivalence",
+    "P0 VMC validation must compare borrowed and immutable sender packet bytes",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateVmcNumericContainment",
+    "P0 VMC validation must prove non-finite pose/expression/time values are contained before wire serialization",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "MakeByRefType()",
+    "P0 VMC validation must invoke the borrowed in-parameter serialization overload",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "ValidateDirectVmcPacketPath",
+    "P0 VMC validation must cover direct packet parity and malformed-packet atomicity",
+)
+require_source_contains(
+    p0_vmc_validation,
+    "_customExpressionWireNames",
+    "P0 VMC validation must cover repeated direct custom-name cache reuse",
+)
+
+locked_bounded_queues = [
+    VCR
+    / "Runtime"
+    / "Events"
+    / "Unity"
+    / "NormalizedEventHub.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "WebSocketUnity"
+    / "WebSocketEventClientTransport.cs",
+]
+for locked_queue in locked_bounded_queues:
+    require_source_contains(
+        locked_queue,
+        "Queue<",
+        "bounded Unity ingress queues must use reusable locked Queue<T> storage",
+    )
+    require_source_contains(
+        locked_queue,
+        "_queueSync",
+        "bounded Unity ingress queues must retain explicit synchronization",
+    )
+    forbid_source_pattern(
+        locked_queue,
+        r"\bConcurrentQueue\s*<",
+        "lock-protected bounded queues must not reintroduce redundant ConcurrentQueue segment management",
+    )
+
+event_text_transform = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventTextTransform.cs"
+)
+require_source_contains(
+    event_text_transform,
+    "string.Concat(",
+    "event text prefix/suffix application must build the final affixed string without an intermediate concatenation",
+)
+forbid_source_pattern(
+    event_text_transform,
+    r"prefix\s*\+",
+    "event text prefix application must not allocate an intermediate prefix result",
+)
+
+event_runtime_engine = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeEngine.cs"
+)
+require_source_contains(
+    event_runtime_engine,
+    "_traceSubscribers",
+    "event tracing must reuse a copy-on-write subscriber snapshot",
+)
+forbid_source_pattern(
+    event_runtime_engine,
+    r"GetInvocationList\s*\(",
+    "event tracing must not allocate a delegate invocation array per trace entry",
+)
+
+audio_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AudioEventActionHandler.cs"
+)
+require_source_contains(
+    audio_event_action_handler,
+    "double.IsNaN(",
+    "audio action volume overrides must reject NaN before reaching AudioSource",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "command.Value >\n                     float.MaxValue",
+    "audio action volume overrides must reject values outside the float range",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "CloneBindings(",
+    "audio binding configuration must deep-clone caller-owned binding objects",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "TryBuildBindingMap(",
+    "audio binding rebuild must stage validation before replacing the live binding map",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "CommitBindingMap(",
+    "audio binding rebuild must commit only a fully validated staged map",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "binding?.Source != null",
+    "audio completion capability probes must reject destroyed AudioSource bindings",
+)
+require_source_contains(
+    audio_event_action_handler,
+    "completion probe failed: {exception.Message}",
+    "audio completion property failures must be converted to false/error",
+)
+
+environment_state_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EnvironmentStateEventActionHandler.cs"
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "\"Environment runtime action failed: \"",
+    "environment action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "\"Environment runtime transition action failed: \"",
+    "environment transition action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    environment_state_event_action_handler,
+    "catch\n            {\n                return false;",
+    "environment action capability probes must fail closed when Status getters throw",
+)
+
+material_preset_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "MaterialPresetEventActionHandler.cs"
+)
+require_source_contains(
+    material_preset_event_action_handler,
+    "\"Material preset action dependency failed: \"",
+    "material preset handler must contain resolver/controller dependency exceptions",
+)
+
+p9_event_runtime_validation = (
+    VCR
+    / "Editor"
+    / "P9"
+    / "P9EventRuntimeValidation.cs"
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "synthetic trace subscriber failure",
+    "P9 event validation must retain trace subscriber failure-isolation coverage",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "text transform must preserve the original string when no work is configured",
+    "P9 event validation must cover text-transform reference passthrough and affix null semantics",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "ValidateAudioActionNumericContainment(",
+    "P9 event validation must cover non-finite audio volume containment",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "double.PositiveInfinity",
+    "P9 audio validation must inject non-finite values explicitly",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "\"mutated-external-audio\"",
+    "P9 audio validation must prove caller-owned binding mutation cannot rewrite the live audio map",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "\"invalid\"",
+    "P9 audio validation must prove invalid replacement input preserves the previous live binding map",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "destroyedProbeEscaped",
+    "P9 audio validation must prove destroyed AudioSource completion probes fail closed",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "environmentStatusEscaped",
+    "P9 validation must prove environment Status getter exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "environmentExecuteEscaped",
+    "P9 validation must prove environment SetState exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "resolverFailureEscaped",
+    "P9 validation must prove material preset resolver exceptions are contained",
+)
+require_source_contains(
+    p9_event_runtime_validation,
+    "ThrowOnResolve",
+    "P9 material preset resolver fake must expose deterministic exception injection",
+)
+
+vmc_accumulator = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs"
+)
+require_source_contains(
+    vmc_accumulator,
+    "_customExpressionWireNames",
+    "VMC custom expression wire names must retain a bounded repeat-name cache",
+)
+require_source_contains(
+    vmc_accumulator,
+    "ApplyCustomBlendUtf8(",
+    "VMC custom expression wire-name cache must be applied before string materialization",
+)
+require_source_contains(
+    vmc_accumulator,
+    "Array.Empty<",
+    "VMC expression snapshots must reuse the shared empty custom-expression array when no custom channels exist",
+)
+
+vmc_direct_reader = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcPacketReader.cs"
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ValidatePacket(",
+    "direct VMC parsing must validate a complete packet before state mutation",
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ApplyPacket(",
+    "direct VMC parsing must retain a separate post-validation apply pass",
+)
+require_source_contains(
+    vmc_direct_reader,
+    "ApplyCustomBlendUtf8(",
+    "direct VMC parsing must route repeated custom names through the bounded wire-name cache",
+)
+require_source_order(
+    vmc_direct_reader,
+    "if (!ValidatePacket(",
+    "if (!ApplyPacket(",
+    "direct VMC parsing must complete validation before applying packet state",
+)
+forbid_source_pattern(
+    vmc_direct_reader,
+    r"new\s+OscMessage\b",
+    "direct VMC packet parsing must not allocate transient OscMessage objects",
+)
+forbid_source_pattern(
+    vmc_direct_reader,
+    r"new\s+OscArgument\s*\[",
+    "direct VMC packet parsing must not allocate transient OSC argument arrays",
+)
+
+vmc_udp_receiver = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "VmcUnity"
+    / "VmcUdpReceiver.cs"
+)
+require_source_contains(
+    vmc_udp_receiver,
+    "TryProcessPacket(",
+    "VMC UDP receiver must parse directly from its reusable datagram buffer",
+)
+forbid_source_pattern(
+    vmc_udp_receiver,
+    r"OscPacketReader\s*\.\s*TryReadMessages",
+    "VMC UDP receiver must not rebuild generic OSC message objects per datagram",
+)
+
+osc_event_mapper = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEvents"
+    / "OscNormalizedEventMapper.cs"
+)
+require_source_contains(
+    osc_event_mapper,
+    "public static class OscNormalizedEventPacketReader",
+    "generic OSC event ingress must retain its specialized direct packet reader across the Unity transport assembly boundary",
+)
+require_source_contains(
+    osc_event_mapper,
+    "ValidatePacket(",
+    "direct OSC event parsing must validate the complete packet before exposing events",
+)
+require_source_contains(
+    osc_event_mapper,
+    "ReadPacketEvents(",
+    "direct OSC event parsing must retain a separate post-validation mapping pass",
+)
+forbid_source_pattern(
+    osc_event_mapper,
+    r"new\s+OscMessage\b",
+    "direct OSC event packet parsing must not allocate transient OscMessage objects",
+)
+forbid_source_pattern(
+    osc_event_mapper,
+    r"new\s+OscArgument\s*\[",
+    "direct OSC event packet parsing must not allocate transient OSC argument arrays",
+)
+
+osc_event_receiver = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs"
+)
+require_source_contains(
+    osc_event_receiver,
+    "OscNormalizedEventPacketReader",
+    "OSC event UDP receive must use the specialized direct packet reader",
+)
+forbid_source_pattern(
+    osc_event_receiver,
+    r"OscPacketReader\s*\.\s*TryReadMessages",
+    "OSC event UDP receive must not rebuild generic OSC message objects per datagram",
+)
+
+p8_protocol_validation = (
+    VCR
+    / "Editor"
+    / "P8"
+    / "P8ProtocolEventAdapterValidation.cs"
+)
+require_source_contains(
+    p8_protocol_validation,
+    "ValidateOscDirectPacketPath",
+    "P8 protocol validation must cover direct OSC event parsing and malformed-packet atomicity",
+)
+
+websocket_event_adapter = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "WebSocketUnity"
+    / "WebSocketEventInjectionAdapter.cs"
+)
+soop_event_adapter = (
+    VCR
+    / "Runtime"
+    / "Broadcast"
+    / "SoopUnity"
+    / "SoopBridgeEventAdapter.cs"
+)
+for json_event_adapter in [
+    websocket_event_adapter,
+    soop_event_adapter,
+]:
+    require_source_contains(
+        json_event_adapter,
+        "_documentScratch",
+        "JSON event ingress must reuse one DTO wrapper instead of allocating one per message",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "_parseSync",
+        "reusable JSON ingress DTO state must be protected against concurrent TryHandleText calls",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "JsonUtility.FromJsonOverwrite(",
+        "JSON event ingress must overwrite its reusable DTO wrapper",
+    )
+    require_source_contains(
+        json_event_adapter,
+        "ResetDocument(",
+        "reusable JSON ingress DTO fields must be reset before each overwrite",
+    )
+    forbid_source_pattern(
+        json_event_adapter,
+        r"JsonUtility\s*\.\s*FromJson\s*<",
+        "JSON event ingress must not allocate a new DTO wrapper per message",
+    )
+
+require_source_contains(
+    p8_protocol_validation,
+    "ValidateJsonIngressScratchReset",
+    "P8 protocol validation must cover omitted-field reset for reusable JSON ingress DTOs",
+)
+require_source_contains(
+    p8_protocol_validation,
+    "SOOP JSON scratch reuse must reset omitted user/nickname fields",
+    "P8 protocol validation must prevent stale SOOP scratch fields from leaking across messages",
+)
+require_source_contains(
+    p8_protocol_validation,
+    "WebSocket JSON scratch reuse must reset every omitted optional field",
+    "P8 protocol validation must prevent stale WebSocket scratch fields from leaking across messages",
+)
+
+humanoid_names = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "HumanoidBoneNames.cs"
+)
+require_source_contains(
+    humanoid_names,
+    "TryParseAscii(",
+    "VMC humanoid bone names must support allocation-free byte-span lookup",
+)
+
+standard_expression_names = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "StandardExpressionNames.cs"
+)
+require_source_contains(
+    standard_expression_names,
+    "TryParseAscii(",
+    "VMC standard expression names must support allocation-free byte-span lookup",
+)
+
+udp_receivers = [
+    VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "OscEventsUnity"
+    / "OscNormalizedEventUdpReceiver.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKitUnity"
+    / "IFacialMocapUdpReceiver.cs",
+]
+for udp_receiver in udp_receivers:
+    require_source_contains(
+        udp_receiver,
+        "ReceiveFrom(",
+        "UDP receive hot paths must reuse caller-owned datagram buffers",
+    )
+    forbid_source_pattern(
+        udp_receiver,
+        r"\b(?:receiver|_receiver)\s*\.\s*Receive\s*\(",
+        "UDP receive hot paths must not allocate one byte array per datagram",
+    )
+
+mediapipe_submission_tracker = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "PendingSubmissionTracker.cs"
+)
+require_source_contains(
+    mediapipe_submission_tracker,
+    "_submissionOrder",
+    "MediaPipe submission correlation must retain fixed-ring history",
+)
+require_source_contains(
+    mediapipe_submission_tracker,
+    "_evictionCount",
+    "MediaPipe pending timestamp eviction must remain observable",
+)
+
+mediapipe_submission_sources = [
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeFaceSource.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeHolisticSource.cs",
+]
+for mediapipe_submission_source in mediapipe_submission_sources:
+    require_source_contains(
+        mediapipe_submission_source,
+        "PendingSubmissionTracker",
+        "MediaPipe LIVE_STREAM sources must use bounded submission correlation",
+    )
+    forbid_source_pattern(
+        mediapipe_submission_source,
+        r"_submittedAtUs\s*\.\s*Clear\s*\(",
+        "MediaPipe sources must not drop all in-flight latency correlation at capacity",
+    )
+
+mediapipe_webcam_runner = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeWebcamTrackingRunner.cs"
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "ShouldSubmitTask(",
+    "MediaPipe webcam task loops must use direct task gating instead of delegate dispatch",
+)
+forbid_source_pattern(
+    mediapipe_webcam_runner,
+    r"new\s+WaitUntil\s*\(",
+    "MediaPipe webcam readback wait must not allocate a WaitUntil closure per task lifecycle",
+)
+forbid_source_pattern(
+    mediapipe_webcam_runner,
+    r"Func<bool>\s+shouldSubmit|Action<Image,\s*long>\s+submit",
+    "MediaPipe webcam task loops must not retain delegate-based hot-path submission dispatch",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "SanitizePresenceTimingConfiguration();",
+    "MediaPipe startup must normalize serialized presence timing before constructing the resolver",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "microseconds >=\n                long.MaxValue",
+    "MediaPipe seconds-to-microseconds conversion must saturate oversized finite values",
+)
+require_source_contains(
+    mediapipe_webcam_runner,
+    "float.IsNaN(seconds) ||",
+    "MediaPipe seconds-to-microseconds conversion must reject non-finite values",
+)
+
+borrowed_pose_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "BorrowedHumanoidPose.cs"
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "IBorrowedHumanoidPoseProvider",
+    "borrowed humanoid pose providers must retain an explicit synchronous contract",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "IBorrowedNormalizedMotionProvider",
+    "combined borrowed motion providers must retain a synchronous zero-copy contract",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "BorrowedExpressionState",
+    "borrowed motion must retain a reusable expression view",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "BorrowedMotionSample",
+    "borrowed motion must retain a combined pose/expression sample",
+)
+require_source_contains(
+    borrowed_pose_contract,
+    "The backing arrays remain owned by the provider",
+    "borrowed pose lifetime must remain documented next to the type",
+)
+
+motion_snapshot_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "INormalizedMotionSnapshotProvider.cs"
+)
+require_source_contains(
+    motion_snapshot_contract,
+    "ISelectiveNormalizedMotionSnapshotProvider",
+    "motion snapshot providers must retain the optional selective capture contract",
+)
+require_source_contains(
+    motion_snapshot_contract,
+    "NormalizedMotionSnapshotRequest",
+    "selective motion capture must retain an explicit domain request value",
+)
+
+vrm_snapshot_provider = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs"
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "request.IncludeExpressions",
+    "VRM snapshot provider must skip expression capture when not requested",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "IBorrowedHumanoidPoseProvider",
+    "VRM snapshot provider must expose reusable borrowed pose buffers for synchronous consumers",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "IBorrowedNormalizedMotionProvider",
+    "VRM snapshot provider must expose combined borrowed motion sampling",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "SampleBorrowedExpressions(",
+    "VRM borrowed expression sampling must reuse provider-owned buffers",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "Array.Clear(",
+    "VRM borrowed buffers must clear stale presence/expression state before reuse",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "SamplePose(",
+    "VRM owned and borrowed pose paths must share one sampling implementation",
+)
+require_source_contains(
+    vrm_snapshot_provider,
+    "request.IncludeHumanoidPose",
+    "VRM snapshot provider must skip pose capture when not requested",
+)
+
+appearance_bindings = (
+    VCR
+    / "Runtime"
+    / "Appearance"
+    / "Unity"
+    / "AppearanceBindings.cs"
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceOutfitBinding Clone()",
+    "appearance outfit bindings must own a clone boundary",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearancePresetBinding Clone()",
+    "appearance preset bindings must deep-clone nested accessory selections",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceTransitionStepBinding Clone()",
+    "appearance transition steps must clone dependency-id arrays",
+)
+require_source_contains(
+    appearance_bindings,
+    "public AppearanceTransitionBinding Clone()",
+    "appearance transition bindings must deep-clone markers/steps/cancellation steps",
+)
+
+appearance_runtime = (
+    VCR
+    / "Runtime"
+    / "Appearance"
+    / "Unity"
+    / "BasicCharacterAppearanceRuntime.cs"
+)
+require_source_contains(
+    appearance_runtime,
+    "ClearCurrentPresetAndNotify(",
+    "appearance preset invalidation must publish a snapshot so cached consumers cannot go stale",
+)
+require_source_contains(
+    appearance_runtime,
+    "NotifyAppearanceChanged(",
+    "appearance change notifications must be routed through subscriber isolation",
+)
+require_source_contains(
+    appearance_runtime,
+    "NotifyStatusChanged(",
+    "appearance status notifications must be routed through subscriber isolation",
+)
+require_source_order(
+    appearance_runtime,
+    "_currentPresetId =\n                    targetId;",
+    "if (!ReplaceUserPresets(",
+    "active user-preset rename must stage the new current id before registry replacement to avoid transient invalidation",
+)
+require_source_contains(
+    appearance_runtime,
+    "_currentPresetId =\n                        sourceId;",
+    "failed active user-preset rename must restore the previous current id",
+)
+require_source_contains(
+    appearance_runtime,
+    "CurrentAppearanceMatchesPreset(",
+    "user-preset registry replacement must invalidate a current preset identity whose definition no longer matches the actual appearance",
+)
+require_source_contains(
+    appearance_runtime,
+    "_appearanceSubscriberFailureCount",
+    "appearance subscriber failures must be observable through diagnostics",
+)
+require_source_contains(
+    appearance_runtime,
+    "_statusSubscriberFailureCount",
+    "appearance status subscriber failures must be observable through diagnostics",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.subscriber.appearance_failures",
+    "appearance subscriber failure diagnostics metric must remain exposed",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.subscriber.status_failures",
+    "appearance status subscriber failure diagnostics metric must remain exposed",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCanExecute(",
+    "appearance transition executor capability probes must be exception-contained",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCanTrackCompletion(",
+    "appearance transition completion capability probes must be exception-contained",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCountExecutors(",
+    "appearance transition required-executor validation must use the contained probe path",
+)
+require_source_contains(
+    appearance_runtime,
+    "TryCountCompletionProbes(",
+    "appearance transition completion validation must use the contained probe path",
+)
+require_source_contains(
+    appearance_runtime,
+    "appearance.transition.executor_probe_failures",
+    "appearance transition executor probe failures must remain visible in diagnostics",
+)
+require_source_contains(
+    appearance_runtime,
+    "CaptureConfigurationSnapshot(",
+    "appearance configuration rebuild must snapshot the current live configuration before destructive validation",
+)
+require_source_contains(
+    appearance_runtime,
+    "RestoreConfigurationSnapshot(",
+    "failed appearance configuration rebuild must restore the previous live configuration",
+)
+require_source_contains(
+    appearance_runtime,
+    "RebuildConfigurationCore(",
+    "appearance configuration rebuild must isolate destructive staging behind a transactional wrapper",
+)
+require_source_contains(
+    appearance_runtime,
+    "SetState(\n                    _state,\n                    error);",
+    "rejected ConfigureBindings input must preserve the restored operational appearance state",
+)
+require_source_contains(
+    appearance_runtime,
+    "previousOutfits =\n                outfits;",
+    "ConfigureBindings must retain previous authoring inputs until the replacement rebuild succeeds",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneOutfitBindings(",
+    "ConfigureBindings must deep-clone mutable outfit binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "var resolvedBinding =\n                    binding?.Clone();",
+    "appearance rebuild must clone mutable authoring outfit/accessory bindings again before storing live resolved caches",
+)
+require_source_contains(
+    appearance_runtime,
+    "foreach (var binding in\n                     _accessories.Values)",
+    "appearance accessory transform-state pruning must follow resolved bindings rather than mutable authoring objects",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneAccessoryBindings(",
+    "ConfigureBindings must deep-clone mutable accessory binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "ClonePresetBindings(",
+    "ConfigureBindings must deep-clone mutable preset binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "CloneTransitionBindings(",
+    "ConfigureBindings must deep-clone mutable transition binding inputs",
+)
+require_source_contains(
+    appearance_runtime,
+    "_presetIds.AsReadOnly()",
+    "appearance preset ids must expose a cached read-only view rather than the mutable backing List",
+)
+require_source_contains(
+    appearance_runtime,
+    "_transitionIds.AsReadOnly()",
+    "appearance transition ids must expose a cached read-only view rather than the mutable backing List",
+)
+require_source_contains(
+    appearance_runtime,
+    "_userPresetIds.AsReadOnly()",
+    "appearance user-preset ids must expose a cached read-only view rather than the mutable backing List",
+)
+forbid_source_pattern(
+    appearance_runtime,
+    r"AppearanceChanged\?\.Invoke",
+    "appearance runtime must not let one AppearanceChanged subscriber abort committed state transitions",
+)
+forbid_source_pattern(
+    appearance_runtime,
+    r"StatusChanged\?\.Invoke",
+    "appearance runtime must not let one StatusChanged subscriber abort runtime state transitions",
+)
+
+require_source_contains(
+    appearance_runtime,
+    "TransitionExecutorDiscoveryRetrySeconds = 1.0;",
+    "missing appearance transition executors must use bounded discovery retry",
+)
+require_source_contains(
+    appearance_runtime,
+    "_nextTransitionExecutorResolveAt",
+    "appearance transition executor discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    appearance_runtime,
+    "Time.realtimeSinceStartupAsDouble",
+    "appearance transition executor retry must use monotonic realtime",
+)
+
+appearance_transition_action_executor = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AppearanceTransitionActionExecutor.cs"
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "HandlerDiscoveryRetrySeconds = 1.0;",
+    "missing transition event handlers must use bounded discovery retry",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "_nextHandlerResolveAt",
+    "transition event-handler discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "Time.realtimeSinceStartupAsDouble",
+    "transition event-handler retry must use monotonic realtime",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "TryFindHandlerCount(",
+    "appearance transition action bridge must contain delegated CanHandle probe failures",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "TryResolveCompletionProbe(",
+    "appearance transition action bridge must contain delegated completion probe failures",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "appearance.transition.action_handler_probe_failures",
+    "delegated action-handler probe failures must remain visible in diagnostics",
+)
+require_source_contains(
+    appearance_transition_action_executor,
+    "appearance.transition.action_completion_probe_failures",
+    "delegated completion probe failures must remain visible in diagnostics",
+)
+
+application_runtime_bootstrap = (
+    VCR
+    / "Runtime"
+    / "Application"
+    / "ApplicationRuntimeBootstrap.cs"
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "public bool Suspend()",
+    "application bootstrap must expose scene suspend success/failure",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "return sceneRuntime.Suspend();",
+    "application bootstrap suspend must propagate the scene lifecycle result",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "public bool Resume()",
+    "application bootstrap must expose scene resume success/failure",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "return sceneRuntime.Resume();",
+    "application bootstrap resume must propagate the scene lifecycle result",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "\"Runtime configuration capture/save failed: \"",
+    "application configuration save must contain scene snapshot/adapter getter exceptions",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "var startupBaseline =\n                sceneRuntime.CaptureConfiguration();",
+    "application startup must capture the pre-attempt scene configuration before applying persisted state",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "var startupConfigurationStore =\n                new RuntimeConfigurationStore(",
+    "application startup must stage its configuration store without committing a failed attempt path",
+)
+require_source_order(
+    application_runtime_bootstrap,
+    "_configurationStore =\n                    startupConfigurationStore;",
+    "_started = true;",
+    "application startup must commit its configuration store only immediately before marking startup successful",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "TryRestoreStartupBaseline(",
+    "failed application startup attempts must restore their pre-attempt scene configuration",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "sceneRuntime.State ==\n                        SceneRuntimeState.Faulted &&\n                    !sceneRuntime.Initialize()",
+    "startup rollback must recover a transient faulted scene so the same bootstrap can be retried",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "var firstShutdown =\n                !_quitting;",
+    "application shutdown must distinguish the first call from later cleanup retries without blocking retries",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "sceneRuntime.Shutdown();",
+    "application shutdown retries must continue delegating cleanup to the scene runtime",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "var sceneError =\n                    sceneRuntime.Status.LastError;",
+    "application shutdown must propagate scene cleanup failures through its bool/error contract",
+)
+require_source_contains(
+    application_runtime_bootstrap,
+    "\"VCR application shutdown completed with errors: \"",
+    "application quit logging must describe aggregate shutdown failures instead of mislabeling every failure as a configuration-save error",
+)
+
+
+application_ui = (
+    VCR
+    / "Runtime"
+    / "UI"
+    / "ApplicationUiController.cs"
+)
+single_character_scene_runtime = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "SingleCharacterSceneRuntime.cs"
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool TryCaptureRenderSettings(",
+    "scene runtime must expose render-bootstrap availability without guessing from fallback settings",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "settings =\n                    RenderRuntimeSettings.Default1080p;",
+    "missing render bootstrap must preserve the historical default render-settings fallback while reporting unavailable",
+)
+
+require_source_contains(
+    single_character_scene_runtime,
+    "OptionalServiceDiscoveryRetrySeconds = 1.0;",
+    "scene runtime must bound negative optional-service discovery retries",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "ref _nextEnvironmentRuntimeResolveAt",
+    "missing environment runtime discovery must be retry-throttled",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "ref _nextOverlayOutputResolveAt",
+    "missing overlay output discovery must be retry-throttled",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "Time.realtimeSinceStartupAsDouble",
+    "optional-service retry throttling must use monotonic realtime rather than frame time",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_optionalServiceBehaviourScratch",
+    "scene runtime optional-service discovery must reuse one MonoBehaviour scratch list",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "GetComponentsInChildren<MonoBehaviour>(\n                true,\n                _optionalServiceBehaviourScratch);",
+    "scene runtime optional-service discovery must use the non-alloc List overload",
+)
+forbid_source_pattern(
+    single_character_scene_runtime,
+    r"GetComponentsInChildren<MonoBehaviour>\(true\)",
+    "scene runtime optional-service discovery must not allocate a MonoBehaviour array",
+)
+
+require_source_contains(
+    single_character_scene_runtime,
+    "RenderBootstrapDiscoveryRetrySeconds = 1.0;",
+    "missing render bootstrap discovery must use bounded retry",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_nextRenderBootstrapResolveAt",
+    "render bootstrap discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "private void ResolveRenderBootstrap()",
+    "scene runtime must isolate render-bootstrap discovery from full scene dependency discovery",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool TryCaptureRenderSettings(\n            out RenderRuntimeSettings settings)\n        {\n            ResolveRenderBootstrap();",
+    "render-settings capture must not resolve unrelated scene dependencies",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public BroadcastCaptureReadiness EvaluateBroadcastCaptureTarget(\n            BroadcastCaptureTarget target)\n        {\n            ResolveRenderBootstrap();",
+    "broadcast target evaluation must not resolve unrelated scene dependencies before render sampling",
+)
+
+require_source_contains(
+    single_character_scene_runtime,
+    "NotifyStatusChanged(",
+    "scene status notifications must isolate subscriber failures",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "scene.status_subscriber_failures",
+    "scene status subscriber failures must remain visible in diagnostics",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "catch (OperationCanceledException)",
+    "scene character loading must handle cancellation separately from faults",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RestoreStateAfterCancelledCharacterLoad(",
+    "scene character loading must restore idle state after an isolated cancellation",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "_overlayOutput.Apply(settings);",
+    "_overlayConfiguration =\n                nextConfiguration;",
+    "scene overlay configuration must commit only after the adapter apply succeeds",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "var previousConfiguration =\n                CaptureConfiguration();",
+    "scene configuration apply must capture a rollback snapshot before mutating runtime state",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RollbackConfiguration(",
+    "scene configuration apply must rollback earlier mutations after a later apply failure",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\" | rollback incomplete: \"",
+    "incomplete scene configuration rollback errors must retain explicit rollback context",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "var rollbackError =",
+    "SetFault(\n                    rollbackError);",
+    "incomplete scene configuration rollback must fault the scene before propagating the exception",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_configurationRecoveryPending",
+    "scene runtime must explicitly track incomplete configuration rollback recovery",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "_configurationRecoveryPending =\n                    true;",
+    "SetFault(\n                    rollbackError);",
+    "configuration rollback recovery must be marked pending before the scene is faulted",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "if (_configurationRecoveryPending)\n            {\n                return false;\n            }",
+    "scene initialization alone must not clear an incomplete configuration rollback fault",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"scene.configuration_recovery_pending\"",
+    "configuration rollback recovery state must remain visible in runtime diagnostics",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Scene suspend failed: \"",
+    "scene Suspend must contain external adapter shutdown exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Scene initialization failed: \"",
+    "scene Initialize must contain presentation apply exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "if (_state == SceneRuntimeState.Stopped &&\n                _capabilities == null &&\n                string.IsNullOrWhiteSpace(\n                    _lastError))",
+    "scene shutdown must only fast-return after all cleanup has succeeded",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "capabilities.Dispose();",
+    "_capabilities = null;",
+    "scene shutdown must release the capability registry reference only after disposal succeeds",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "renderBootstrap\n                            ?.RestoreRuntimeOverrides()",
+    "failed scene initialization must rollback captured render overrides",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "RunRollbackStep(\n                    \"light\"",
+    "RunRollbackStep(\n                    \"render\"",
+    "scene initialization rollback must restore presentation state in reverse apply order",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Scene resume failed: \"",
+    "scene Resume must contain external presentation restore exceptions",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool TryRecoverOverlayOutput(\n            out string error)\n        {\n            error = null;",
+    "overlay recovery must initialize and return structured errors through its Try contract",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "TrySyncOverlayConfiguration(",
+    "overlay adapter discovery must not fail solely because its Settings getter throws",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "CaptureOverlayConfiguration()",
+    "explicit scene configuration capture must sample live overlay settings rather than silently persisting a stale cache",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Overlay output status/settings read failed: \"",
+    "overlay readiness must convert adapter getter exceptions into a Faulted readiness result",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Overlay output recovery failed: \" +\n                    exception.Message;",
+    "overlay recovery must convert lifecycle/adapter exceptions into structured false/error results",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "public bool SetEnvironmentState(\n            string stateId,\n            out string error)\n        {\n            error = null;",
+    "scene environment state changes must initialize structured error reporting",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Environment state change failed: \" +\n                    exception.Message;",
+    "scene environment state changes must convert lifecycle/adapter exceptions into false/error results",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Broadcast capture target apply failed: \" +",
+    "broadcast target apply must convert lifecycle/render exceptions into false/error results",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "renderBootstrap.Apply(\n                            previousSettings);",
+    "broadcast target apply must restore the previous render settings after a failed apply",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "\"Broadcast capture target apply failed and render rollback was incomplete: \"",
+    "failed broadcast render apply must surface incomplete rollback details",
+)
+require_source_order(
+    single_character_scene_runtime,
+    "\"Broadcast capture target apply failed and render rollback was incomplete: \"",
+    "SetFault(\n                            error);",
+    "incomplete broadcast render rollback must fault the scene before returning false",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "RunRollbackStep(",
+    "scene configuration rollback must isolate failures so later restore steps still run",
+)
+require_source_contains(
+    single_character_scene_runtime,
+    "_state !=\n                    SceneRuntimeState.LoadingCharacter",
+    "cancelled-load recovery must not overwrite newer lifecycle states",
+)
+forbid_source_pattern(
+    single_character_scene_runtime,
+    r"StatusChanged\?\.Invoke",
+    "scene runtime must not let one status subscriber abort lifecycle transitions",
+)
+
+overlay_output_recovery = (
+    VCR
+    / "Runtime"
+    / "Output"
+    / "OverlayOutputRecovery.cs"
+)
+require_source_contains(
+    overlay_output_recovery,
+    "var settings =\n                    adapter.Settings;",
+    "overlay recovery must sample adapter settings inside its contained restart path",
+)
+require_source_contains(
+    overlay_output_recovery,
+    "status =\n                    adapter.Status;",
+    "overlay recovery must sample adapter status inside the same contained restart path",
+)
+require_source_contains(
+    overlay_output_recovery,
+    "\"Overlay output restart failed: \"",
+    "overlay recovery getter/apply/shutdown failures must be returned as false/error",
+)
+
+environment_lighting_profile = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "EnvironmentLightingProfile.cs"
+)
+require_source_contains(
+    environment_lighting_profile,
+    "IsFinite(",
+    "environment lighting profiles must reject non-finite numeric propagation",
+)
+require_source_contains(
+    environment_lighting_profile,
+    "fallback:\n                        1f",
+    "environment lighting RGB components must use neutral fallbacks for non-finite input",
+)
+require_source_contains(
+    environment_lighting_profile,
+    "fallback:\n                        0f",
+    "environment lighting weight must use no-influence fallback for non-finite input",
+)
+
+environment_transition_spec = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "EnvironmentTransitionSpec.cs"
+)
+require_source_contains(
+    environment_transition_spec,
+    "IsSupportedMode(mode)",
+    "environment transition specs must sanitize unsupported enum values",
+)
+require_source_contains(
+    environment_transition_spec,
+    "IsFinite(durationSeconds)",
+    "environment transition specs must sanitize non-finite durations",
+)
+
+p6_environment_validation = (
+    VCR
+    / "Editor"
+    / "P6"
+    / "P6EnvironmentRuntimeValidation.cs"
+)
+require_source_contains(
+    p6_environment_validation,
+    "ValidateTransitionCompletionFailure(",
+    "P6 validation must retain transition completion failure/recovery coverage",
+)
+require_source_contains(
+    p6_environment_validation,
+    "\"environment.transition_completion_pending\"",
+    "P6 validation must assert the transition completion-pending diagnostic",
+)
+
+basic_environment_runtime = (
+    VCR
+    / "Runtime"
+    / "Environment"
+    / "Unity"
+    / "BasicEnvironmentRuntime.cs"
+)
+require_source_contains(
+    basic_environment_runtime,
+    "NotifyStateChanged(",
+    "environment state notifications must isolate subscriber failures",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "environment.state_subscriber_failures",
+    "environment state subscriber failures must remain visible in diagnostics",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "CloneStateBindings(",
+    "environment state bindings must be deep-cloned at the runtime boundary",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "TryRestoreStateBindings(",
+    "failed environment state-binding apply must preserve the previous active binding state",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "CaptureBindingActiveStates(",
+    "environment binding activation must snapshot exact root states before mutation",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "RestoreBindingActiveStates(",
+    "environment binding activation failures must restore the exact pre-apply root states",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment state binding apply failed: \"",
+    "environment state binding apply exceptions must be contained by the bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment transition binding prepare failed: \"",
+    "environment transition root preparation exceptions must be contained by the bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\" | rollback incomplete: \"",
+    "environment binding rollback failures must remain explicit in structured errors",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "private bool TryCompleteTransition(",
+    "environment transition completion must expose a transactional success/failure boundary",
+)
+require_source_order(
+    basic_environment_runtime,
+    "new EnvironmentTransitionStatus(\n                    true,",
+    "TryApplyStateBinding(\n                    stateId,",
+    "environment transition completion must remain active until final root activation succeeds",
+)
+require_source_order(
+    basic_environment_runtime,
+    "TryApplyStateBinding(\n                    stateId,",
+    "new EnvironmentTransitionStatus(\n                    false,",
+    "environment transition completion must commit inactive status only after final root activation succeeds",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment transition completion failed: \"",
+    "environment transition completion root failures must remain explicit",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "sameState &&\n                _transitionStatus.Active",
+    "same-state idempotence must not bypass an unresolved transition completion",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"environment.transition_completion_pending\"",
+    "environment diagnostics must expose 100-percent transitions whose final root commit is still pending",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "TryApplyLightingProfileToTargets(",
+    "environment lighting applies must report target execution failures through the public bool/error contract",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "var previousProfile =\n                _lightingProfile;",
+    "environment lighting profile changes must retain the previous profile for rollback",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "lightingTargetBehaviours =\n                    previousBehaviours;",
+    "failed lighting-target replacement must restore the previous target configuration",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment lighting target validation failed: \"",
+    "environment lighting validation exceptions must be converted into structured failures",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "\"Environment transition target validation failed: \"",
+    "environment transition validation exceptions must be converted into structured failures",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "var normalized =\n                new EnvironmentTransitionSpec(",
+    "default environment transition configuration must reuse normalized transition-spec semantics",
+)
+require_source_contains(
+    basic_environment_runtime,
+    "TryApplyStateBinding(\n                    next,\n                    stateId,",
+    "environment state-binding configuration must apply staged bindings before committing them",
+)
+forbid_source_pattern(
+    basic_environment_runtime,
+    r"StateChanged\?\.Invoke",
+    "environment runtime must not let one state subscriber abort committed state/update dispatch",
+)
+
+effect_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EffectEventActionHandler.cs"
+)
+require_source_contains(
+    effect_event_action_handler,
+    "CloneBindings(",
+    "effect binding configuration must deep-clone caller-owned binding objects",
+)
+require_source_contains(
+    effect_event_action_handler,
+    "TryBuildBindingMap(",
+    "effect binding rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    effect_event_action_handler,
+    "CommitBindingMap(",
+    "effect binding rebuild must commit only a fully validated staged map",
+)
+
+prop_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "PropEventActionHandler.cs"
+)
+require_source_contains(
+    prop_event_action_handler,
+    "CloneBindings(",
+    "prop binding configuration must deep-clone caller-owned binding objects and root arrays",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "TryBuildBindingMap(",
+    "prop binding rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "double.IsNaN(",
+    "prop.set_active must reject non-finite boolean values",
+)
+require_source_contains(
+    prop_event_action_handler,
+    "command.Value != 0.0",
+    "prop.set_active must accept only explicit 0/1 boolean values",
+)
+
+scene_sequence_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "SceneSequenceEventActionHandler.cs"
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "CloneBindings(",
+    "scene sequence configuration must deep-clone caller-owned bindings",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "CloneSteps(",
+    "scene sequence configuration must deep-clone mutable step arrays and step objects",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "TryBuildSequenceMap(",
+    "scene sequence rebuild must validate a staged map before replacing the live map",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "double.IsNaN(",
+    "scene sequence valued steps must reject non-finite numeric values",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "HandlerDiscoveryRetrySeconds",
+    "missing scene sequence delegated handlers must use bounded discovery retry",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "_nextHandlerResolveAt",
+    "scene sequence delegated-handler discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    scene_sequence_event_action_handler,
+    "Time.realtimeSinceStartupAsDouble",
+    "scene sequence delegated-handler retry must use monotonic realtime",
+)
+
+appearance_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "AppearanceEventActionHandler.cs"
+)
+require_source_contains(
+    appearance_event_action_handler,
+    "\"Appearance runtime action failed: \"",
+    "appearance action handler must contain delegated runtime exceptions",
+)
+require_source_contains(
+    appearance_event_action_handler,
+    "catch\n            {\n                return false;",
+    "appearance action capability probes must fail closed when Status getters throw",
+)
+
+p11_appearance_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"rollback-invalid\"",
+    "P11 appearance validation must inject a failed rebuild over a known-good runtime configuration",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "rollbackRejected",
+    "P11 appearance validation must prove failed rebuilds preserve the previous live cache/state",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"rejected-configure\"",
+    "P11 appearance validation must prove rejected ConfigureBindings input leaves the last known-good runtime operational",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"external-outfit\"",
+    "P11 appearance validation must mutate caller-owned bindings after ConfigureBindings",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-authoring-outfit\"",
+    "P11 appearance validation must prove live resolved bindings are isolated from in-place serialized authoring edits until rebuild",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "presetMutationRejected",
+    "P11 appearance validation must prove exposed id collections reject external mutation",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "aliasRebuildSucceeded",
+    "P11 appearance validation must prove later rebuilds remain isolated from caller mutation",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-effect\"",
+    "P11 validation must prove effect binding caller mutation cannot rewrite the live effect map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-effect\"",
+    "P11 validation must prove invalid effect replacement preserves the previous live binding",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-prop\"",
+    "P11 validation must prove prop binding caller/root-array mutation cannot rewrite the live prop map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "double.PositiveInfinity",
+    "P11 validation must cover non-finite prop boolean rejection",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"mutated-external-sequence\"",
+    "P11 validation must prove scene sequence caller mutation cannot rewrite the live sequence map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-sequence\"",
+    "P11 validation must prove invalid/non-finite scene sequence replacement preserves the previous live map",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "P11ThrowingAppearanceRuntime",
+    "P11 validation must cover throwing appearance runtime Status/action boundaries",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "statusProbeEscaped",
+    "P11 validation must prove appearance Status getter exceptions do not escape CanHandle",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "actionEscaped",
+    "P11 validation must prove delegated appearance action exceptions do not escape TryExecute",
+)
+
+p6_environment_validation = (
+    VCR
+    / "Editor"
+    / "P6"
+    / "P6EnvironmentRuntimeValidation.cs"
+)
+require_source_contains(
+    p6_environment_validation,
+    "throwingStateSubscriber",
+    "P6 validation must prove environment state subscriber failures are isolated",
+)
+require_source_contains(
+    p6_environment_validation,
+    "\"external-day\"",
+    "P6 validation must prove configured state bindings are isolated from later caller mutation",
+)
+require_source_contains(
+    p6_environment_validation,
+    "P6ConditionalThrowEnvironmentLightingTarget",
+    "P6 validation must cover lighting target apply failure rollback",
+)
+require_source_contains(
+    p6_environment_validation,
+    "ThrowOnValidate",
+    "P6 validation must cover transition/lighting validator exception containment",
+)
+require_source_contains(
+    p6_environment_validation,
+    "transitionValidationAccepted",
+    "P6 validation must prove transition validation exceptions leave state unchanged",
+)
+require_source_contains(
+    p6_environment_validation,
+    "failedProfileAccepted",
+    "P6 validation must cover lighting profile rollback after partial target execution",
+)
+require_source_contains(
+    p6_environment_validation,
+    "ValidateTransitionSpecSanitization(",
+    "P6 validation must cover environment transition spec sanitization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "(EnvironmentTransitionMode)999",
+    "P6 validation must cover unsupported transition-mode normalization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "nonFiniteLighting",
+    "P6 validation must cover non-finite environment lighting profile sanitization",
+)
+require_source_contains(
+    p6_environment_validation,
+    "clampedLighting",
+    "P6 validation must preserve finite lighting clamp semantics",
+)
+
+primary_camera_controller = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "PrimaryCameraController.cs"
+)
+require_source_contains(
+    primary_camera_controller,
+    "FiniteOrDefault(",
+    "primary camera settings must sanitize non-finite transform/projection values",
+)
+require_source_contains(
+    primary_camera_controller,
+    "SceneCameraSettings.Default",
+    "primary camera non-finite settings must fall back to known finite defaults",
+)
+
+primary_light_controller = (
+    VCR
+    / "Runtime"
+    / "Scene"
+    / "PrimaryLightController.cs"
+)
+require_source_contains(
+    primary_light_controller,
+    "FiniteOrDefault(",
+    "primary light settings must sanitize non-finite numeric/color values",
+)
+require_source_contains(
+    primary_light_controller,
+    "value.Shadows == LightShadows.None",
+    "primary light settings must reject unsupported shadow enum values",
+)
+
+desktop_render_bootstrap = (
+    VCR
+    / "Runtime"
+    / "Rendering"
+    / "DesktopRenderBootstrap.cs"
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeConfiguration();",
+    "desktop render Apply must sanitize serialized runtime settings before touching global state",
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeRenderScale(",
+    "desktop render scale must reject NaN/Infinity before URP assignment",
+)
+require_source_contains(
+    desktop_render_bootstrap,
+    "SanitizeResolutionPreset(",
+    "desktop render settings must normalize unsupported resolution preset values",
+)
+
+p1_renderer_validation = (
+    VCR
+    / "Editor"
+    / "P1"
+    / "P1RendererCoreValidation.cs"
+)
+require_source_contains(
+    p1_renderer_validation,
+    "scene.TryCaptureRenderSettings(",
+    "P1 validation must cover render-bootstrap availability with current settings",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "throwingSceneStatusSubscriber",
+    "P1 validation must prove scene status subscriber failures are isolated",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "RestoreStateAfterCancelledCharacterLoad",
+    "P1 validation must cover cancelled character-load state recovery",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "ThrowOnSettingsRead",
+    "P1 validation must inject configuration-capture failure through the overlay settings getter",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "ThrowOnStatusRead",
+    "P1 validation must inject overlay status getter failure",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "settingsFailureReadiness",
+    "P1 validation must prove overlay getter failures become readiness/recovery failures",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "captureFailureSaveResult",
+    "P1 validation must prove configuration capture failure returns false/error without stopping the scene",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "capabilityThrowingDisposeCount == 2",
+    "P1 validation must prove retained scene capability cleanup is retried before registry release",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "nonFiniteCameraSettings",
+    "P1 validation must cover camera NaN/Infinity fallback",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "nonFiniteLightSettings",
+    "P1 validation must cover light NaN/Infinity fallback",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "(RenderResolutionPreset)999",
+    "P1 validation must cover unsupported render preset normalization",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "stale cancelled-load completion must not overwrite a newer operation generation",
+    "P1 validation must guard stale cancelled-load generations",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "cancelled-load recovery must not overwrite a newer Suspend/Unload lifecycle state",
+    "P1 validation must guard lifecycle states newer than a cancelled load",
+)
+require_source_contains(
+    p1_renderer_validation,
+    "failed overlay adapter apply must not commit an unapplied configuration snapshot",
+    "P1 validation must cover overlay adapter failure before configuration commit",
+)
+
+require_source_contains(
+    application_ui,
+    "_buttonLabels",
+    "application UI must cache button label components across refreshes",
+)
+require_source_contains(
+    application_ui,
+    "_buttonLabels.TryGetValue",
+    "application UI button label refresh must use the component cache",
+)
+require_source_contains(
+    application_ui,
+    "SetSectionLabel(",
+    "application UI section labels must avoid unchanged text assignments",
+)
+require_source_contains(
+    application_ui,
+    "currentAppearance",
+    "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "_summaryBuilder",
+    "application UI summary rendering must reuse one StringBuilder scratch buffer",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+List<string>\s*\(\s*_trackingControls\.Count\s*\)",
+    "tracking summary refresh must not allocate a temporary line list",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+string\s*\[\s*visibleCount\s*\]",
+    "appearance preset-order summary must not allocate a temporary string array",
+)
+require_source_contains(
+    application_ui,
+    "SetTextIfChanged(",
+    "application UI status/title/content refresh must skip unchanged Text.text assignments",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_(?:statusText|sectionTitle|contentText)\.text\s*=",
+    "application UI primary text fields must route assignments through SetTextIfChanged",
+)
+require_source_contains(
+    application_ui,
+    "_subscribedAppearanceRuntime",
+    "application UI must subscribe to appearance snapshots instead of polling defensive Current copies every refresh",
+)
+require_source_contains(
+    application_ui,
+    "OnAppearanceChanged(",
+    "application UI must cache AppearanceChanged snapshots",
+)
+require_source_occurrences(
+    application_ui,
+    "_appearanceRuntime.Current",
+    1,
+    "application UI may read the defensive appearance Current snapshot only in its cache fallback",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_appearanceRuntime\.Current\.PresetId",
+    "application UI preset-id-only paths must use allocation-free appearance status",
+)
+require_source_occurrences(
+    application_ui,
+    "eventRuntime.CaptureRules()",
+    1,
+    "application UI may defensively clone event rules only for persistence, not refresh/navigation",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.RuleCount",
+    "application UI event controls must use allocation-free event rule count lookup",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.TryGetRuleSummaryAt(",
+    "application UI event controls must use allocation-free readonly indexed event rule summaries",
+)
+require_source_contains(
+    application_ui,
+    "eventRuntime.TryGetRuleSummary(",
+    "application UI event toggle lookup must use allocation-free readonly id summaries",
+)
+forbid_source_pattern(
+    application_ui,
+    r"eventRuntime\.GetRuleAt\s*\(",
+    "application UI refresh/navigation must not allocate defensive mutable rule clones",
+)
+forbid_source_pattern(
+    application_ui,
+    r"eventRuntime\.TryGetRule\s*\(",
+    "application UI refresh/toggle paths must not allocate defensive mutable rule clones",
+)
+forbid_source_pattern(
+    application_ui,
+    r"eventRuntime\.Engine\b",
+    "application UI must read event counters/trace state through the host readonly facade",
+)
+forbid_source_pattern(
+    application_ui,
+    r"CaptureStatuses\s*\(",
+    "application UI Settings refresh must not clone capability status arrays",
+)
+require_source_contains(
+    application_ui,
+    ".StatusCount",
+    "application UI Settings refresh must use allocation-free capability status counts",
+)
+require_source_contains(
+    application_ui,
+    "TryGetStatusAt(",
+    "application UI Settings refresh must use allocation-free indexed capability status lookup",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_materialController\.GetSlots\s*\(",
+    "application UI Materials refresh must not clone material slot descriptors",
+)
+require_source_contains(
+    application_ui,
+    "_materialController.TryGetSlotAt(",
+    "application UI Materials refresh must use allocation-free indexed material slot lookup",
+)
+require_source_contains(
+    application_ui,
+    "_diagnosticsMetricSource",
+    "application UI Diagnostics refresh must cache the source metric snapshot identity",
+)
+require_source_contains(
+    application_ui,
+    "_trackingSummaryCache",
+    "application UI Tracking refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_environmentSummaryCache",
+    "application UI Environment refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_settingsSummaryCache",
+    "application UI Settings refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_eventsSummaryCache",
+    "application UI Events refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_outputSummaryCache",
+    "application UI Output refresh must cache unchanged readiness/summary state",
+)
+forbid_source_pattern(
+    application_ui,
+    r'"Transparent: "\s*\+|"Topmost: "\s*\+|"Click-through: "\s*\+',
+    "output control refresh must use stable label literals instead of rebuilding unchanged strings",
+)
+require_source_contains(
+    application_ui,
+    "out var outputSettings,",
+    "output control refresh must reuse the sampled overlay settings snapshot within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "GetTrackingToggleLabel(",
+    "tracking control refresh must cache dynamic enable/disable labels",
+)
+require_source_contains(
+    application_ui,
+    "_trackingToggleLabelHasControl",
+    "tracking toggle label cache must distinguish no-control state explicitly",
+)
+require_source_contains(
+    application_ui,
+    "GetSettingsCapabilityLabel(",
+    "settings capability refresh must cache dynamic enable/disable/retry labels",
+)
+require_source_contains(
+    application_ui,
+    "GetAppearanceTransitionButtonLabel(",
+    "appearance transition control refresh must cache dynamic transition/progress labels",
+)
+require_source_contains(
+    application_ui,
+    "GetEnvironmentTransitionModeLabel(",
+    "environment transition control refresh must use stable enum label literals",
+)
+require_source_contains(
+    application_ui,
+    "GetDiagnosticsNextPageLabel(",
+    "diagnostics paging control refresh must cache dynamic page labels",
+)
+forbid_source_pattern(
+    application_ui,
+    r'"Transition: "\s*\+',
+    "transition control refresh labels must not rebuild unchanged prefix strings",
+)
+forbid_source_pattern(
+    application_ui,
+    r'\$"Next Metrics \(',
+    "diagnostics paging refresh must not interpolate a new label every tick",
+)
+forbid_source_pattern(
+    application_ui,
+    r'"Trace: "\s*\+|"VSync: "\s*\+|"Background: "\s*\+|"CSV Evidence: "\s*\+|"Console Log: "\s*\+',
+    "boolean control refresh labels must use stable full-string literals",
+)
+require_source_contains(
+    application_ui,
+    "_materialSummaryCache",
+    "application UI Materials refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_characterSummaryCache",
+    "application UI Character refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_characterUiOperationGeneration",
+    "application UI character async actions must version requests so stale completions cannot overwrite newer state",
+)
+require_source_contains(
+    application_ui,
+    "IsCurrentCharacterUiOperation(",
+    "application UI character async completions must verify request generation and scene-runtime identity",
+)
+require_source_contains(
+    application_ui,
+    "operationGeneration =\n                ++_characterUiOperationGeneration;",
+    "character load/reload requests must advance the UI operation generation before awaiting",
+)
+require_source_contains(
+    application_ui,
+    "_characterUiOperationGeneration++;\n\n            try\n            {\n                sceneRuntime.UnloadCharacter();",
+    "character unload must invalidate outstanding async load/reload UI completions",
+)
+require_source_contains(
+    application_ui,
+    "ReferenceEquals(\n                    sceneRuntime,\n                    runtime);",
+    "stale character UI completion checks must reject results from a replaced scene runtime",
+)
+require_source_contains(
+    application_ui,
+    "_motionSummaryCache",
+    "application UI Motion refresh must cache unchanged rendered summary text",
+)
+require_source_contains(
+    application_ui,
+    "_contextVisibilitySection",
+    "application UI context-control visibility must be cached by selected section",
+)
+require_source_contains(
+    application_ui,
+    "_statusBarCache",
+    "application UI status bar must cache unchanged rendered text",
+)
+require_source_contains(
+    application_ui,
+    "MonoBehaviour[] activeDependencyBehaviours",
+    "application UI dependency refresh must share one active-behaviour discovery snapshot",
+)
+require_source_contains(
+    application_ui,
+    "ResolveConcreteDependencies(",
+    "application UI concrete runtime dependencies must resolve through the shared discovery snapshot",
+)
+require_source_occurrences(
+    application_ui,
+    "FindFirstObjectByType<",
+    1,
+    "application UI must not perform separate global FindFirstObjectByType scans for each optional runtime dependency",
+)
+require_source_contains(
+    application_ui,
+    "GetActiveDependencyBehaviours(",
+    "application UI optional dependency resolvers must reuse the shared active-behaviour snapshot",
+)
+require_source_contains(
+    application_ui,
+    "ResolveCharacterFileSelectionAdapter(\n                    ref activeDependencyBehaviours);",
+    "application UI file-selection discovery must participate in shared dependency scanning",
+)
+require_source_contains(
+    application_ui,
+    "ResolveAppearanceRuntime(\n                    ref activeDependencyBehaviours);",
+    "application UI appearance discovery must participate in shared dependency scanning",
+)
+
+require_source_contains(
+    application_ui,
+    "_environmentRuntime",
+    "application UI must cache the resolved environment runtime instead of polling scene discovery every refresh",
+)
+require_source_contains(
+    application_ui,
+    "_environmentRuntime =\n                        sceneRuntime?.EnvironmentRuntime;",
+    "application UI environment dependency must be refreshed on the bounded dependency pass",
+)
+require_source_contains(
+    application_ui,
+    "_environmentRuntimeOwner",
+    "application UI cached environment runtime must be bound to its owning scene runtime",
+)
+require_source_contains(
+    application_ui,
+    "GetCachedEnvironmentRuntime()",
+    "application UI Environment availability/control/summary must reject stale cached environment runtimes",
+)
+require_source_contains(
+    application_ui,
+    "MissingTrackingControlDiscoveryRetrySeconds = 5f;",
+    "missing tracking controls must use a bounded low-frequency discovery retry",
+)
+require_source_contains(
+    application_ui,
+    "_nextTrackingControlResolveTime",
+    "tracking control discovery must retain its negative-cache deadline",
+)
+require_source_contains(
+    application_ui,
+    "ResolveTrackingControls(\n                    force);",
+    "periodic tracking-control resolution must preserve forced startup discovery",
+)
+require_source_contains(
+    application_ui,
+    "ResolveTrackingControls(\n                    force: true);",
+    "capability changes must bypass tracking-control negative caching",
+)
+
+require_source_contains(
+    application_ui,
+    "_uiRefreshPassActive",
+    "application UI must scope runtime sample reuse to one RefreshAll pass",
+)
+require_source_contains(
+    application_ui,
+    "TryGetOverlayOutputForUiRefresh(",
+    "application UI must share one exception-contained overlay status/settings snapshot within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "TryGetRenderSettingsForUiRefresh(",
+    "application UI must share one render-settings sample within a refresh pass",
+)
+require_source_contains(
+    application_ui,
+    "finally\n            {\n                _uiRefreshPassActive",
+    "application UI refresh-pass cache must be invalidated even if refresh throws",
+)
+require_source_contains(
+    application_ui,
+    "_statusBarOutputState",
+    "status-bar cache must include overlay output state",
+)
+require_source_contains(
+    application_ui,
+    "_statusBarActionMessage",
+    "status-bar cache must include the last action message",
+)
+require_source_contains(
+    application_ui,
+    "RefreshContextActionVisibility(",
+    "application UI context-control visibility work must be isolated from per-refresh state updates",
+)
+require_source_contains(
+    application_ui,
+    "_sectionAvailabilityCache",
+    "application UI section availability/labels must only update when availability changes",
+)
+require_source_contains(
+    application_ui,
+    "Array.Clear(\n                _sectionAvailabilityCache",
+    "application UI rebuild must invalidate cached section availability",
+)
+require_source_contains(
+    application_ui,
+    "_motionSummaryManualSequence",
+    "motion summary cache must use manual expression source sequence to skip unchanged expression formatting",
+)
+require_source_contains(
+    application_ui,
+    "_motionPoseWeightLabelStateValid",
+    "motion pose-weight label formatting must be cached across unchanged refreshes",
+)
+require_source_contains(
+    application_ui,
+    "RefreshMotionPoseWeightLabel(",
+    "motion pose-weight slider callback and refresh path must share the cached label formatter",
+)
+require_source_contains(
+    application_ui,
+    "_motionSummaryExpressionInput",
+    "motion summary cache must include the selected expression input text",
+)
+require_source_contains(
+    application_ui,
+    "CharacterSummaryCacheMatches(",
+    "application UI Character refresh must compare displayed scene/appearance state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_characterSummaryPresetIds",
+    "character summary cache must retain visible user-preset ids without rebuilding order text on cache hits",
+)
+require_source_contains(
+    application_ui,
+    "AppendUserPresetOrder(",
+    "character summary must append preset order directly into the shared summary builder on cache miss",
+)
+forbid_source_pattern(
+    application_ui,
+    r"FormatUserPresetOrder\s*\(",
+    "character summary refresh must not allocate a standalone preset-order string",
+)
+require_source_contains(
+    application_ui,
+    "MaterialSummaryCacheMatches(",
+    "application UI Materials refresh must compare selected status/descriptor state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_materialSummaryRequestedSlotId",
+    "material summary cache must include the displayed/requested slot id",
+)
+require_source_contains(
+    application_ui,
+    "_materialSummaryErrorCount",
+    "material summary cache must include controller error count",
+)
+require_source_contains(
+    application_ui,
+    "TryCaptureRenderSettings(",
+    "application UI Output refresh must sample render-bootstrap availability once for its cache key",
+)
+forbid_source_pattern(
+    application_ui,
+    r"EvaluateBroadcastCaptureTarget\s*\(",
+    "application UI Output refresh must not re-enter scene broadcast readiness evaluation every 2 Hz tick",
+)
+require_source_contains(
+    application_ui,
+    "EventsSummaryCacheMatches(",
+    "application UI Events refresh must compare rule/runtime counters before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_eventsSummaryProcessedEvents",
+    "events summary cache must include processed-event counters",
+)
+require_source_contains(
+    application_ui,
+    "_eventsSummaryRuleStorePath",
+    "events summary cache must include the displayed persisted-rule path",
+)
+require_source_contains(
+    application_ui,
+    "SettingsSummaryCacheMatches(",
+    "application UI Settings refresh must compare displayed runtime/capability/render state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_settingsSummaryCapabilityId",
+    "settings summary cache must include the selected capability identity",
+)
+require_source_contains(
+    application_ui,
+    "_settingsSummaryRenderScale",
+    "settings summary cache must include displayed render settings",
+)
+require_source_contains(
+    application_ui,
+    "EnvironmentSummaryCacheMatches(",
+    "application UI Environment refresh must compare displayed state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_environmentSummaryTransitionPercent",
+    "environment summary cache must key active transitions by displayed progress percentage",
+)
+require_source_contains(
+    application_ui,
+    "TrackingSummaryCacheMatches(",
+    "application UI Tracking refresh must compare displayed presence/control state before rebuilding text",
+)
+require_source_contains(
+    application_ui,
+    "_trackingSummaryEvents",
+    "tracking summary cache must include transient presence-event flags in its cache key",
+)
+require_source_contains(
+    application_ui,
+    "TrackingSummaryControlState[]",
+    "tracking summary cache must reuse control-state storage instead of allocating per refresh",
+)
+require_source_contains(
+    application_ui,
+    "GetSortedDiagnosticMetrics(",
+    "application UI Diagnostics refresh must reuse one sorted metric snapshot per diagnostics report",
+)
+require_source_contains(
+    application_ui,
+    "_diagnosticsSummaryCache",
+    "application UI Diagnostics refresh must reuse completed summary text while the snapshot/page/settings key is unchanged",
+)
+require_source_contains(
+    application_ui,
+    "InvalidateDiagnosticsSummaryCache()",
+    "application UI Diagnostics summary cache must be invalidated when diagnostics binding lifecycle changes",
+)
+require_source_contains(
+    application_ui,
+    "_diagnosticsSummarySequence ==",
+    "application UI Diagnostics summary cache must key reuse to the published snapshot sequence",
+)
+forbid_source_pattern(
+    application_ui,
+    r"RuntimeMetric\[\]\)\s*\n?\s*source\.Clone\s*\(",
+    "application UI Diagnostics refresh must not clone already-sorted published metric arrays",
+)
+forbid_source_pattern(
+    application_ui,
+    r"new\s+(?:System\.Text\.)?StringBuilder\s*\(",
+    "application UI refresh must reuse its shared StringBuilder instead of allocating a new builder",
+)
+require_source_contains(
+    application_ui,
+    "SetInputTextIfChanged(",
+    "application UI refresh must suppress unchanged InputField text assignments",
+)
+forbid_source_pattern(
+    application_ui,
+    r"_(?:eventMaxCommandsInput|settingsRenderScaleInput|settingsFpsInput)\.text\s*=",
+    "stable numeric UI refresh fields must not assign InputField.text directly",
+)
+require_source_contains(
+    application_ui,
+    "displayedMaxCommands",
+    "event max-command refresh must compare the existing numeric value before formatting",
+)
+require_source_contains(
+    application_ui,
+    "displayedRenderScale",
+    "render-scale refresh must compare the existing numeric value before formatting",
+)
+require_source_contains(
+    application_ui,
+    "displayedTargetFps",
+    "target-FPS refresh must compare the existing numeric value before formatting",
+)
+
+material_override_controller = (
+    VCR
+    / "Runtime"
+    / "Materials"
+    / "Unity"
+    / "MaterialOverrideController.cs"
+)
+require_source_contains(
+    material_override_controller,
+    "public bool TryGetSlotAt(",
+    "material override controller must expose allocation-free indexed slot lookup",
+)
+
+character_2d_parameter_mapping = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DParameterMapping.cs"
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"new\s+(?:System\.Collections\.Generic\.)?(?:HashSet|List)\s*<",
+    "2D parameter mapping hot paths must not allocate temporary HashSet/List scratch collections",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"\.ToArray\s*\(",
+    "2D parameter mapping hot paths must not allocate a second result array through ToArray",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"Enum\.IsDefined\s*\(",
+    "2D parameter validation must use allocation-free enum range checks",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "var valueCount = 0;",
+    "2D parameter snapshot API must pre-count emitted values and allocate one exact-size owned output array",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "public int Revision =>",
+    "2D parameter mapping profiles must version in-place Configure/Inspector mutations",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "public int BindingCount =>",
+    "2D parameter mapping profiles must expose allocation-free binding counts to runtime hot paths",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal Character2DParameterBinding\n            GetBindingAt(",
+    "2D parameter mapping runtime evaluators must use allocation-free internal indexed binding access",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "CloneBindings(",
+    "2D parameter mapping profiles must deep-clone caller-owned binding inputs and public snapshots",
+)
+forbid_source_pattern(
+    character_2d_parameter_mapping,
+    r"profile\.Bindings",
+    "2D parameter mapping hot paths must not use the defensive public binding snapshot",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal static bool TryEvaluateValidated(",
+    "2D parameter mapping must retain its exact-size validated snapshot evaluator",
+)
+require_source_contains(
+    character_2d_parameter_mapping,
+    "internal static bool TryEvaluateValidatedInto(",
+    "2D parameter mapping must expose a caller-buffer evaluator for the runtime hot path",
+)
+
+character_2d_runtime = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DRuntime.cs"
+)
+require_source_contains(
+    character_2d_runtime,
+    "_validatedMappingRevision",
+    "2D runtime mapping validation cache must include the profile revision",
+)
+require_source_contains(
+    character_2d_runtime,
+    "EnsureConfiguredMappingValidated(",
+    "2D runtime must cache mapping validation across unchanged tracking updates",
+)
+require_source_contains(
+    character_2d_runtime,
+    ".BindingCount);",
+    "2D runtime parameter scratch sizing must avoid cloning the public binding snapshot",
+)
+require_source_contains(
+    character_2d_runtime,
+    "_parameterScratch",
+    "2D runtime must retain reusable mapped-parameter scratch storage",
+)
+require_source_contains(
+    character_2d_runtime,
+    "EnsureParameterScratchCapacity(",
+    "2D runtime must grow mapped-parameter scratch only when profile capacity requires it",
+)
+require_source_contains(
+    character_2d_runtime,
+    ".TryEvaluateValidatedInto(",
+    "2D runtime hot path must evaluate directly into reusable mapped-parameter scratch",
+)
+require_source_contains(
+    character_2d_runtime,
+    "_parameterScratch.AsSpan(",
+    "2D runtime must pass only the emitted mapped-parameter range to the backend sink",
+)
+forbid_source_pattern(
+    character_2d_runtime,
+    r"Character2DParameterMapper\s*\n?\s*\.TryEvaluate\s*\(",
+    "2D runtime hot path must not repeat full mapping validation every changed tracking frame",
+)
+
+character_2d_contracts = (
+    VCR
+    / "Runtime"
+    / "Presentation2D"
+    / "Character2DBackendContracts.cs"
+)
+require_source_contains(
+    character_2d_contracts,
+    "ReadOnlySpan<Character2DParameterValue>",
+    "2D mapped-parameter sinks must synchronously borrow runtime scratch instead of receiving owned arrays",
+)
+
+p13_source_validation = (
+    VCR
+    / "Editor"
+    / "P13"
+    / "P13SourceValidation.cs"
+)
+require_source_contains(
+    p13_source_validation,
+    "same profile object mutates",
+    "P13 validation must cover mapping-cache invalidation for in-place profile mutation",
+)
+require_source_contains(
+    p13_source_validation,
+    "\"ExternalCallerMutation\"",
+    "P13 validation must prove Configure input bindings are isolated from later caller mutation",
+)
+require_source_contains(
+    p13_source_validation,
+    "\"ExternalExportMutation\"",
+    "P13 validation must prove public binding snapshots cannot mutate the live mapping profile",
+)
+require_source_contains(
+    p13_source_validation,
+    "reuse the same parameter scratch when capacity is unchanged",
+    "P13 validation must cover mapped-parameter scratch reuse across changed frames",
+)
+
+capability_registry = (
+    VCR
+    / "Runtime"
+    / "Capabilities"
+    / "CapabilityRegistry.cs"
+)
+require_source_contains(
+    capability_registry,
+    "_sortedIds",
+    "capability registry must maintain stable sorted ids for allocation-free indexed status lookup",
+)
+require_source_contains(
+    capability_registry,
+    "public bool TryGetStatusAt(",
+    "capability registry must expose allocation-free indexed status lookup",
+)
+require_source_contains(
+    capability_registry,
+    "instance.Dispose();\n                entry.Instance = null;",
+    "capability instances must remain owned until disposal actually succeeds",
+)
+require_source_contains(
+    capability_registry,
+    "entry.State =\n                    CapabilityState.Faulted;",
+    "failed registry disposal must preserve a faulted retryable entry state",
+)
+require_source_order(
+    capability_registry,
+    "if (failures != null)",
+    "_entries.Clear();",
+    "capability registry must not clear retryable entries before reporting disposal failures",
+)
+
+p0_capability_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0CapabilityMenu.cs"
+)
+require_source_contains(
+    p0_capability_validation,
+    "TransientFailingDisposeService",
+    "P0 capability validation must cover transient disposal failures",
+)
+require_source_contains(
+    p0_capability_validation,
+    "registryRetainedAfterFailure",
+    "P0 capability validation must prove failed registry disposal retains retry ownership",
+)
+forbid_source_pattern(
+    capability_registry,
+    r"Array\.Sort\s*\(",
+    "capability status capture must reuse the maintained sorted id index instead of sorting every snapshot",
+)
+
+event_runtime_rule = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeRule.cs"
+)
+event_runtime_engine = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "EventRuntimeEngine.cs"
+)
+require_source_contains(
+    event_runtime_rule,
+    "public static class EventRuntimeRuleCloner",
+    "event runtime deep-clone policy must be centralized in the core rule model",
+)
+require_source_contains(
+    event_runtime_rule,
+    "private static EventActionTemplate[]\n            CloneActions(",
+    "event runtime deep cloner must include nested action templates",
+)
+require_source_contains(
+    event_runtime_engine,
+    "EventRuntimeRuleCloner\n                    .CloneRules(",
+    "event runtime engine must deep-clone caller-owned rules before installation",
+)
+
+event_runtime_host = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "EventRuntimeHost.cs"
+)
+require_source_contains(
+    event_runtime_host,
+    "public EventRuntimeRule GetRuleAt(",
+    "event runtime host must retain compatibility rule lookup through defensive clones",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRule(",
+    "event runtime host must retain compatibility id lookup through defensive clones",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRuleSummaryAt(",
+    "event runtime host must expose allocation-free readonly indexed rule summaries",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool TryGetRuleSummary(",
+    "event runtime host must expose allocation-free readonly id rule summaries",
+)
+require_source_contains(
+    event_runtime_host,
+    "public bool RuleTracingEnabled =>",
+    "event runtime host must expose trace state without publishing the mutable engine",
+)
+require_source_contains(
+    event_runtime_host,
+    "public long ProcessedEvents =>",
+    "event runtime host must expose processed-event counters through a readonly facade",
+)
+require_source_contains(
+    event_runtime_host,
+    "public long MatchedRules =>",
+    "event runtime host must expose matched-rule counters through a readonly facade",
+)
+forbid_source_pattern(
+    event_runtime_host,
+    r"public\s+EventRuntimeEngine\s+Engine",
+    "event runtime host must not expose its mutable EventRuntimeEngine instance",
+)
+require_source_contains(
+    event_runtime_host,
+    "EventRuntimeRuleCloner\n                .CloneRule(",
+    "event runtime mutable rule lookup must clone the live rule before returning it",
+)
+require_source_contains(
+    event_runtime_host,
+    "private bool TryApplyRules(",
+    "event runtime host rule application must use a non-destructive Try path",
+)
+require_source_contains(
+    event_runtime_host,
+    "EventRuntimeRuleCloner\n                    .CloneRules(\n                        nextRules);",
+    "event runtime host must deep-clone caller-owned rules before installation",
+)
+require_source_contains(
+    event_runtime_host,
+    "return EventRuntimeRuleCloner\n                .CloneRules(\n                    rules);",
+    "event runtime host CaptureRules must deep-clone the live nested rule graph",
+)
+require_source_contains(
+    event_runtime_host,
+    "match.Enabled =\n                    previousEnabled;",
+    "failed rule-enable apply must rollback the requested host mutation",
+)
+require_source_contains(
+    event_runtime_host,
+    "maxCommandsPerEvent =\n                    previousValue;",
+    "failed max-command apply must rollback the requested host limit",
+)
+forbid_source_pattern(
+    event_runtime_host,
+    r"rules\s*=\s*Array\.Empty<EventRuntimeRule>\(\);\s*_engine\.TrySetRules",
+    "failed event-host rule apply must not destroy the host rule set",
+)
+
+baked_motion_cue_asset = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueAsset.cs"
+)
+require_source_contains(
+    baked_motion_cue_asset,
+    "public BakedMotionCueDefinition Clone()",
+    "baked motion cue definitions must support deep ownership copies",
+)
+require_source_contains(
+    baked_motion_cue_asset,
+    "cue?.Clone()",
+    "baked motion cue assets must return/set defensive cue copies",
+)
+
+baked_motion_cue_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs"
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "_cueIds.AsReadOnly()",
+    "baked motion cue ids must expose a read-only view",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "Array.AsReadOnly(",
+    "baked motion cue assets must expose a read-only array view",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "CloneCueDefinitions(",
+    "runtime-configured baked cue definitions must be deep-cloned",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "var stagedCues =",
+    "baked cue rebuild must stage a replacement set before committing live state",
+)
+require_source_contains(
+    baked_motion_cue_source,
+    "_cues.Clear();",
+    "baked cue rebuild must commit only after all staged cues validate",
+)
+
+procedural_motion_cue_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs"
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "_cueIds.AsReadOnly()",
+    "procedural motion cue ids must expose a read-only view",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "CloneCueDefinitions(",
+    "procedural motion cue ConfigureCues input must be deep-cloned",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "sourceCue?.Clone()",
+    "procedural motion cue rebuild must isolate live cues from serialized authoring objects",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "var stagedCues =",
+    "procedural motion cue rebuild must stage a replacement set before committing",
+)
+require_source_contains(
+    procedural_motion_cue_source,
+    "public ProceduralMotionCueDefinition Clone()",
+    "procedural motion cue definitions must deep-clone curves and bone cue data",
+)
+
+motion_cue_event_action_handler = (
+    VCR
+    / "Runtime"
+    / "EventRuntime"
+    / "Unity"
+    / "MotionCueEventActionHandler.cs"
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "TryMatches(",
+    "motion cue runtime capability probes must isolate external runtime getter failures",
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "\"Motion cue runtime execution failed: \"",
+    "motion cue runtime execution exceptions must be converted to false/error",
+)
+require_source_contains(
+    motion_cue_event_action_handler,
+    "\"Motion cue completion probe failed: \"",
+    "motion cue completion status getter failures must be converted to false/error",
+)
+
+motion_cue_sources = [
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs",
+]
+for motion_cue_source in motion_cue_sources:
+    require_source_contains(
+        motion_cue_source,
+        "_cachedSourceId",
+        "active motion cues must cache their stable TrackingFrame source id",
+    )
+    require_source_contains(
+        motion_cue_source,
+        "GetSourceId(",
+        "active motion cue publication must reuse its cached source id",
+    )
+
+p11_external_motion_import_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11ExternalMotionImportValidation.cs"
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "RunBakedMotionCueOwnershipChecks(",
+    "P11 external-motion validation must exercise baked cue ownership and rollback",
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "\"caller-mutated-runtime-cue\"",
+    "P11 external-motion validation must prove ConfigureCues caller mutation is isolated",
+)
+require_source_contains(
+    p11_external_motion_import_validation,
+    "invalidAssetRejected",
+    "P11 external-motion validation must prove failed baked cue rebuild preserves the last known-good set",
+)
+p11_appearance_validation_motion_probe = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation_motion_probe,
+    "P11ThrowingMotionCueRuntime",
+    "P11 validation must cover throwing motion runtime capability/execution/completion probes",
+)
+require_source_contains(
+    p11_appearance_validation_motion_probe,
+    "ConfigureStatusThrowAfter(",
+    "P11 motion validation must distinguish resolution-time and completion-time status failures",
+)
+
+
+humanoid_pose_layer_mask = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerMask.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "public HumanoidPoseLayerMask Clone()",
+    "humanoid pose layer masks must support defensive ownership copies",
+)
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "private static float SanitizeWeight(",
+    "humanoid pose layer masks must normalize non-finite root/default/bone weights",
+)
+require_source_contains(
+    humanoid_pose_layer_mask,
+    "fallback:\n                        DefaultBoneWeight",
+    "non-finite bone overrides must fall back to the current mask default",
+)
+
+humanoid_bone_weight = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidBoneWeight.cs"
+)
+require_source_contains(
+    humanoid_bone_weight,
+    "private static float SanitizeWeight(",
+    "standalone humanoid bone weights must normalize non-finite values",
+)
+
+humanoid_pose_layer_settings = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerSettings.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "RuntimeMask.Clone()",
+    "public humanoid pose layer mask access must return a defensive copy",
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "internal HumanoidPoseLayerMask RuntimeMask =>",
+    "humanoid pose mixer hot paths must retain allocation-free internal mask access",
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "layerMask?.Clone()",
+    "humanoid pose layer settings must clone caller-owned masks on Configure",
+)
+require_source_contains(
+    humanoid_pose_layer_settings,
+    "SanitizeWeight(",
+    "humanoid pose layer settings must normalize non-finite weights before they reach mixer hot paths",
+)
+
+humanoid_pose_layer_slot = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseLayerSlot.cs"
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "RuntimeSettings.Clone()",
+    "public pose-layer slot settings access must return a defensive copy",
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "internal HumanoidPoseLayerSettings RuntimeSettings =>",
+    "mixer hot paths must retain allocation-free internal slot settings access",
+)
+require_source_contains(
+    humanoid_pose_layer_slot,
+    "layerSettings?.Clone()",
+    "pose-layer slots must clone caller-owned settings on Configure",
+)
+
+humanoid_pose_mixer_math = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseMixerMath.cs"
+)
+require_source_contains(
+    humanoid_pose_mixer_math,
+    "settings.RuntimeMask",
+    "humanoid pose blend hot path must use the internal mask without defensive-copy allocation",
+)
+
+mixer_runtime = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "MotionExpressionMixer.cs"
+)
+require_source_contains(
+    mixer_runtime,
+    "_additionalPoseLayerFrames",
+    "mixer must reuse one additional-layer provider sample for change detection and blending",
+)
+require_source_contains(
+    mixer_runtime,
+    "settings?.Clone()",
+    "primary pose-layer configuration must clone caller-owned settings",
+)
+require_source_contains(
+    mixer_runtime,
+    "layers[i]?.Clone()",
+    "additional pose-layer configuration must deep-clone caller-owned slots",
+)
+require_source_contains(
+    mixer_runtime,
+    "additionalPoseLayers[i]?.RuntimeSettings",
+    "mixer pose hot path must use allocation-free internal slot settings",
+)
+require_source_contains(
+    mixer_runtime,
+    "_lastBasePoseFrame",
+    "mixer must track immutable input snapshots by frame identity rather than sequence alone",
+)
+forbid_source_pattern(
+    mixer_runtime,
+    r"_additionalPoseLayerSequences|_additionalPoseLayerSourceIds",
+    "mixer additional-layer change detection must not retain redundant sequence/source arrays",
+)
+
+require_source_contains(
+    mixer_runtime,
+    "_targetExpressions != null",
+    "mixer must retain zero-transform base-expression passthrough gating",
+)
+require_source_contains(
+    mixer_runtime,
+    "? baseFrame",
+    "mixer must reuse the routed base expression frame when no expression transform is active",
+)
+require_source_contains(
+    mixer_runtime,
+    "SanitizeExpressionLayerConfiguration();",
+    "mixer Awake must normalize serialized expression-layer numeric state",
+)
+require_source_contains(
+    mixer_runtime,
+    "SanitizeUnitInterval(",
+    "expression mixer weight/deadzone configuration must reject non-finite values",
+)
+require_source_contains(
+    mixer_runtime,
+    "SanitizeNonNegative(",
+    "expression mixer smoothing configuration must reject non-finite values",
+)
+
+p11_appearance_validation = (
+    VCR
+    / "Editor"
+    / "P11"
+    / "P11AppearanceRuntimeValidation.cs"
+)
+require_source_contains(
+    p11_appearance_validation,
+    "P11ThrowingProbeExecutor",
+    "P11 validation must cover throwing transition executor capability probes",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "currentInvalidationNotifications",
+    "P11 appearance validation must cover current-preset invalidation notifications",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"caller-mutated-spin\"",
+    "P11 appearance validation must prove procedural ConfigureCues caller mutation is isolated",
+)
+require_source_contains(
+    p11_appearance_validation,
+    "\"invalid-procedural\"",
+    "P11 appearance validation must prove invalid procedural replacement preserves the prior live cue set",
+)
+
+p5_mixer_validation = (
+    VCR
+    / "Editor"
+    / "P5"
+    / "P5ExpressionMixerValidation.cs"
+)
+require_source_contains(
+    p5_mixer_validation,
+    "unmodified base expression frame must pass through",
+    "P5 validation must guard allocation-free base expression frame passthrough",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "public pose-layer mask access must return a defensive copy",
+    "P5 validation must prove public mask access cannot mutate live settings",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "caller-owned masks/settings/slots are mutated",
+    "P5 validation must prove mixer-owned pose-layer configuration survives caller mutation",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "float.PositiveInfinity",
+    "P5 validation must inject non-finite expression-layer configuration",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "non-finite pose-layer weight must sanitize",
+    "P5 validation must prove non-finite pose weights are normalized",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "non-finite default pose mask weight must sanitize",
+    "P5 validation must prove non-finite pose mask weights are normalized",
+)
+require_source_contains(
+    p5_mixer_validation,
+    "standalone non-finite humanoid bone weight must sanitize",
+    "P5 validation must prove standalone bone weights cannot retain NaN/Infinity",
+)
+
+tracking_route_policy = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Routing"
+    / "TrackingRoutePolicy.cs"
+)
+require_source_contains(
+    tracking_route_policy,
+    "RuntimeFacePriorityOrder.Clone()",
+    "public face priority access must return a defensive copy",
+)
+require_source_contains(
+    tracking_route_policy,
+    "RuntimeExpressionPriorityOrder.Clone()",
+    "public expression priority access must return a defensive copy",
+)
+require_source_contains(
+    tracking_route_policy,
+    "internal TrackingSourceKind[]\n            RuntimeFacePriorityOrder",
+    "tracking route hot paths must retain a cached internal face-priority array",
+)
+require_source_contains(
+    tracking_route_policy,
+    "var order =\n                RuntimeFacePriorityOrder;",
+    "tracking route priority lookup must avoid allocating the public defensive copy",
+)
+
+tracking_router = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Routing"
+    / "PriorityTrackingRouter.cs"
+)
+forbid_source_pattern(
+    tracking_router,
+    r"new\s+TrackingFrame\s*\(",
+    "tracking router must reuse selected immutable child frames instead of allocating route envelopes",
+)
+require_source_contains(
+    tracking_router,
+    "_latestFace = selected;",
+    "tracking router face output must preserve child-frame identity",
+)
+require_source_contains(
+    tracking_router,
+    "_latestBodyHands = selected;",
+    "tracking router body/hands output must preserve child-frame identity",
+)
+require_source_contains(
+    tracking_router,
+    "TryGetUsableFaceCandidate(",
+    "tracking router must reuse one sampled face candidate for activation, selection, and routing",
+)
+require_source_occurrences(
+    tracking_router,
+    "provider.TryGetLatestFace(",
+    1,
+    "tracking router must poll a face provider only through the single candidate-sampling helper",
+)
+require_source_contains(
+    tracking_router,
+    "_selectedFaceFrame",
+    "tracking router duplicate suppression must use immutable frame identity",
+)
+require_source_contains(
+    tracking_router,
+    "SanitizePresenceTimingConfiguration();",
+    "tracking router Awake must normalize serialized presence timing before constructing the resolver",
+)
+require_source_contains(
+    tracking_router,
+    "microseconds >=\n                long.MaxValue",
+    "tracking router seconds-to-microseconds conversion must saturate oversized finite values",
+)
+require_source_contains(
+    tracking_router,
+    "float.IsNaN(seconds) ||",
+    "tracking router seconds-to-microseconds conversion must reject non-finite values",
+)
+require_source_contains(
+    tracking_router,
+    "_expressionFallbackActivation",
+    "tracking router must support suspending an expensive expression fallback",
+)
+require_source_contains(
+    tracking_router,
+    "UpdateExpressionFallbackActivation(",
+    "tracking router must gate expression fallback work before fallback polling",
+)
+require_source_contains(
+    tracking_router,
+    "tracking.route.fallback_expression_inference_enabled",
+    "tracking router metrics must expose expression fallback activation state",
+)
+
+audio_expression_math = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionMath.cs"
+)
+require_source_contains(
+    audio_expression_math,
+    "private static bool IsFinite(",
+    "audio expression math must retain a shared finite-value guard",
+)
+require_source_contains(
+    audio_expression_math,
+    "if (!IsFinite(threshold) ||",
+    "audio level normalization must reject non-finite threshold/gain inputs",
+)
+require_source_contains(
+    audio_expression_math,
+    "deltaSeconds =\n                IsFinite(deltaSeconds)",
+    "audio smoothing must normalize non-finite delta time before exponent math",
+)
+
+audio_expression_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionSource.cs"
+)
+require_source_contains(
+    audio_expression_source,
+    "IExpressionTrackingActivationControl",
+    "audio expression fallback must expose router-controlled activation",
+)
+require_source_contains(
+    audio_expression_source,
+    "if (!_expressionTrackingEnabled)",
+    "disabled audio fallback must skip per-frame audio sampling and RMS work",
+)
+require_source_contains(
+    audio_expression_source,
+    "_latest = null;",
+    "disabling audio fallback must discard stale expression output",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeConfiguration();",
+    "audio expression source Awake must normalize serialized numeric configuration",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeRange(",
+    "audio expression threshold/gain configuration must reject non-finite values",
+)
+require_source_contains(
+    audio_expression_source,
+    "SanitizeMinimum(",
+    "audio expression attack/release configuration must reject non-finite values",
+)
+
+expression_activation_contract = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "IFaceTrackingActivationControl.cs"
+)
+require_source_contains(
+    expression_activation_contract,
+    "IExpressionTrackingActivationControl",
+    "tracking activation contracts must include expression fallback gating",
+)
+forbid_source_pattern(
+    tracking_router,
+    r"ChildSequence",
+    "tracking router must not regress to source/sequence-only duplicate suppression",
+)
+require_source_contains(
+    tracking_router,
+    "EnsureRoutePolicy()",
+    "tracking router must store and reuse a recovered default routing policy",
+)
+forbid_source_pattern(
+    tracking_router,
+    r"routePolicy\s*\?\?",
+    "tracking router hot paths must not allocate throwaway default policies",
+)
+
+p4_routing_validation = (
+    VCR
+    / "Editor"
+    / "P4"
+    / "P4TrackingRoutingValidation.cs"
+)
+require_source_contains(
+    p4_routing_validation,
+    "sample the selected preferred face once",
+    "P4 validation must guard single-sample preferred face routing",
+)
+require_source_contains(
+    p4_routing_validation,
+    "router must store and reuse a recovered default policy",
+    "P4 validation must cover recovered route-policy reuse",
+)
+require_source_contains(
+    p4_routing_validation,
+    "public face priority access must return a defensive copy",
+    "P4 validation must prove route priority arrays cannot mutate the internal policy",
+)
+require_source_contains(
+    p4_routing_validation,
+    "without a loss gap",
+    "P4 validation must cover same-source/same-sequence immutable frame replacement",
+)
+require_source_contains(
+    p4_routing_validation,
+    "must suspend audio fallback sampling",
+    "P4 validation must cover expression fallback activation and skipped polling",
+)
+require_source_contains(
+    p4_routing_validation,
+    "tracking router presence timing conversion must reject non-finite seconds",
+    "P4 validation must cover router timing conversion sanitization and saturation",
+)
+
+tracking_source_health_snapshot = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "TrackingSourceHealthSnapshot.cs"
+)
+require_source_contains(
+    tracking_source_health_snapshot,
+    "public static class TrackingTimestampMath",
+    "tracking timestamp age arithmetic must use the shared overflow-safe helper across routing assemblies",
+)
+require_source_contains(
+    tracking_source_health_snapshot,
+    "unchecked(\n                    (ulong)(",
+    "tracking timestamp elapsed math must preserve the full non-negative long range without signed overflow",
+)
+
+tracking_presence_resolver = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "TrackingPresenceResolver.cs"
+)
+require_source_contains(
+    tracking_presence_resolver,
+    "TrackingTimestampMath\n                    .TryElapsedMicroseconds(",
+    "tracking presence freshness/timers must use overflow-safe timestamp math",
+)
+forbid_source_pattern(
+    tracking_presence_resolver,
+    r"nowUs\s*-\s*(?:frame\.SourceTimestampUs|_startedAtUs|_lostCandidateSinceUs|_restoreCandidateSinceUs)",
+    "tracking presence timing must not use signed long subtraction directly",
+)
+
+vrm_tracking_target = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10TrackingTarget.cs"
+)
+require_source_contains(
+    vrm_tracking_target,
+    "_lastFaceFrame",
+    "VRM face/body target must detect routed snapshot changes by immutable frame identity",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "SanitizeConfiguration();",
+    "VRM tracking target must sanitize serialized numeric configuration before runtime use",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "float.IsFinite(\n                    point.Position.X)",
+    "VRM tracking target must reject non-finite body joint positions",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "private static bool TryToUnity(",
+    "VRM tracking target must reject non-finite or degenerate head quaternions before Transform application",
+)
+require_source_contains(
+    vrm_tracking_target,
+    "return float.IsFinite(value)\n                ? Mathf.Clamp01(value)\n                : 0f;",
+    "VRM expression application must contain non-finite coefficients",
+)
+
+runtime_diagnostics_snapshot = (
+    VCR
+    / "Runtime"
+    / "Diagnostics"
+    / "RuntimeDiagnosticsSnapshot.cs"
+)
+require_source_contains(
+    runtime_diagnostics_snapshot,
+    "public IReadOnlyList<RuntimeMetric> Metrics { get; }",
+    "runtime diagnostics snapshots must expose metrics through a read-only collection contract",
+)
+require_source_contains(
+    runtime_diagnostics_snapshot,
+    "Array.AsReadOnly(",
+    "runtime diagnostics snapshots must wrap published metric arrays once instead of exposing mutable backing arrays",
+)
+
+runtime_diagnostics = (
+    VCR
+    / "Runtime"
+    / "Diagnostics"
+    / "RuntimeDiagnostics.cs"
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_lastFaceFrame",
+    "runtime diagnostics update counting must observe immutable frame identity",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_metrics.Sort(",
+    "runtime diagnostics must publish subsystem metrics in deterministic sorted order",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "CompareRuntimeMetrics(",
+    "runtime diagnostics must reuse its report-cadence metric comparator",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_csvBuilder",
+    "runtime diagnostics CSV evidence must reuse one StringBuilder across reports",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "AppendCsvSanitized(",
+    "runtime diagnostics CSV evidence must sanitize metric text while appending instead of allocating a replacement string",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"var\s+metricsText\s*=\s*new\s+StringBuilder",
+    "runtime diagnostics CSV evidence must not allocate a separate metrics StringBuilder per report",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"var\s+line\s*=\s*string\.Format\s*\(",
+    "runtime diagnostics CSV evidence must build directly into the reusable CSV buffer",
+)
+forbid_source_pattern(
+    runtime_diagnostics,
+    r"\.ToString\s*\(\)\.Replace\s*\(",
+    "runtime diagnostics CSV evidence must sanitize while appending instead of allocating a replacement copy",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "RuntimeMetricComparison",
+    "runtime diagnostics metric sorting must reuse a cached comparison delegate",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_metricSources",
+    "runtime diagnostics must cache discovered metric sources between reports",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "metricSourceRefreshIntervalSeconds",
+    "runtime diagnostics metric-source discovery must remain lower-frequency than report collection",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "_reportBuilder",
+    "runtime diagnostics console reports must reuse StringBuilder scratch storage",
+)
+require_source_contains(
+    runtime_diagnostics,
+    "RefreshMetricSources(",
+    "runtime diagnostics must refresh cached metric sources through the bounded discovery path",
+)
+
+p0_diagnostics_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0DiagnosticsValidation.cs"
+)
+require_source_contains(
+    p0_diagnostics_validation,
+    "P0ThrowingMetricsSource",
+    "P0 diagnostics validation must retain metric-source failure isolation coverage",
+)
+require_source_contains(
+    p0_diagnostics_validation,
+    "metricMutationRejected",
+    "P0 diagnostics validation must prove published metric collections reject external mutation",
+)
+
+humanoid_pose_state = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "HumanoidPoseState.cs"
+)
+require_source_contains(
+    humanoid_pose_state,
+    "_boneMask",
+    "immutable humanoid pose snapshots must store bone presence as a bitmask",
+)
+require_source_contains(
+    humanoid_pose_state,
+    "BoneBit(",
+    "humanoid pose bitmask helpers must remain available to hot producers",
+)
+
+pose_bitmask_producers = [
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs",
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "HumanoidPoseMixerMath.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "BakedMotionCueSource.cs",
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "Mixing"
+    / "ProceduralMotionCueSource.cs",
+]
+for pose_bitmask_producer in pose_bitmask_producers:
+    require_source_contains(
+        pose_bitmask_producer,
+        "boneMask",
+        "hot immutable pose producers must build a compact bone-presence bitmask",
+    )
+    forbid_source_pattern(
+        pose_bitmask_producer,
+        r"new\s+bool\s*\[\s*\(int\)HumanoidBoneId\.Count\s*\]",
+        "hot immutable pose producers must not allocate a second bool[] presence snapshot",
+    )
+
+audio_expression_source = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "AudioUnity"
+    / "AudioDrivenExpressionSource.cs"
+)
+require_source_contains(
+    audio_expression_source,
+    "PublishEpsilon",
+    "audio fallback must retain an unchanged-value snapshot suppression threshold",
+)
+require_source_contains(
+    audio_expression_source,
+    "_lastSampleTimestampUs",
+    "audio fallback health must advance independently of immutable frame publication",
+)
+require_source_contains(
+    audio_expression_source,
+    "_lastPublishedValue",
+    "audio fallback must remember its last immutable published value",
+)
+require_source_order(
+    audio_expression_source,
+    "_lastSampleTimestampUs =",
+    "if (_latest != null",
+    "audio fallback health sampling must advance before unchanged frame publication is suppressed",
+)
+
+humanoid_pose_target = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10HumanoidPoseTarget.cs"
+)
+require_source_contains(
+    humanoid_pose_target,
+    "MaxTrackedCustomExpressions",
+    "VRM custom-expression application state must remain bounded",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "SanitizeConfiguration();",
+    "VRM humanoid pose target must sanitize serialized smoothing values before runtime use",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "if (!TryToUnity(\n                        sourcePose.LocalRotation,",
+    "VRM humanoid pose target must reject non-finite bone rotations before Transform application",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "var hasSourcePosition =\n                TryToUnity(",
+    "VRM humanoid pose target must validate root position before applying it",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "var hasSourceRotation =\n                TryToUnity(",
+    "VRM humanoid pose target must validate root rotation before applying it",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "private static float Clamp01(",
+    "VRM humanoid expression application must finite-clamp standard and custom weights",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "_lastPoseFrame",
+    "VRM full-body target must detect immutable snapshot replacement by frame identity",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "_customExpressionNameScratch",
+    "VRM custom-expression neutralization must reuse scratch storage",
+)
+require_source_contains(
+    humanoid_pose_target,
+    "FadeCustomExpressionsToNeutral(",
+    "missing custom expressions must fade to neutral instead of remaining latched",
+)
+forbid_source_pattern(
+    humanoid_pose_target,
+    r"new\s+string\s*\[\s*_smoothedCustomExpressions\.Count\s*\]",
+    "VRM custom-expression neutralization must not allocate one name array per frame",
+)
+
+vrm_motion_snapshot_provider = (
+    VCR
+    / "Runtime"
+    / "Character"
+    / "Vrm10MotionSnapshotProvider.cs"
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "ExpressionKeys",
+    "VRM motion snapshot capture must enumerate expression keys without boxing an IDictionary enumerator",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "GetWeight(",
+    "VRM motion snapshot capture must read weights through the stable key list",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "TryCaptureTransform(",
+    "VRM motion snapshot capture must exclude non-finite or degenerate Unity transforms",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "private static float Clamp01Finite(",
+    "VRM motion snapshot capture must finite-clamp expression weights",
+)
+require_source_contains(
+    vrm_motion_snapshot_provider,
+    "rotationMagnitudeSquared < 1e-8f",
+    "VRM motion snapshot capture must reject degenerate quaternions without relying on a non-existent Unity Quaternion.sqrMagnitude member",
+)
+forbid_source_pattern(
+    vrm_motion_snapshot_provider,
+    r"GetWeights\s*\(\s*\)",
+    "VRM motion snapshot hot paths must not foreach the IDictionary-returning GetWeights API",
+)
+
+snapshot_ownership = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "SnapshotArrayOwnership.cs"
+)
+require_source_contains(
+    snapshot_ownership,
+    "SnapshotArrayOwnership.Transfer",
+    "snapshot arrays must retain an explicit zero-copy ownership-transfer mode",
+)
+require_source_contains(
+    snapshot_ownership,
+    "SnapshotArrayOwnership.Copy",
+    "snapshot arrays must retain a defensive-copy ownership mode",
+)
+
+webcam_frame_preprocessor = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "WebcamFramePreprocessor.cs"
+)
+require_source_contains(
+    webcam_frame_preprocessor,
+    "private static float SanitizeBounded(",
+    "webcam preprocessing must finite-normalize exposure/gamma before shader upload",
+)
+require_source_contains(
+    webcam_frame_preprocessor,
+    "if (!float.IsFinite(value))",
+    "webcam preprocessing sanitizer must reject NaN/Infinity",
+)
+
+mediapipe_face_normalizer = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeFaceNormalizer.cs"
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "if (!float.IsFinite(value) ||",
+    "MediaPipe face blendshape normalization must reject non-finite scores",
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "float.IsFinite(rotation.x)",
+    "MediaPipe face normalization must reject non-finite head rotation output",
+)
+require_source_contains(
+    mediapipe_face_normalizer,
+    "float.IsFinite(translation.x)",
+    "MediaPipe face normalization must reject non-finite head translation output",
+)
+
+mediapipe_holistic_normalizer = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "MediaPipe"
+    / "MediaPipeHolisticNormalizer.cs"
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "!float.IsFinite(landmark.x)",
+    "MediaPipe holistic normalization must reject landmarks with non-finite coordinates",
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "private static float SanitizeConfidence(",
+    "MediaPipe holistic confidence must contain NaN/Infinity",
+)
+require_source_contains(
+    mediapipe_holistic_normalizer,
+    "float.IsFinite(confidence)",
+    "MediaPipe upper-body confidence aggregation must ignore non-finite samples",
+)
+
+snapshot_hot_paths = [
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeFaceNormalizer.cs",
+    VCR / "Runtime" / "Tracking" / "MediaPipe" / "MediaPipeHolisticNormalizer.cs",
+    VCR / "Runtime" / "Tracking" / "Mixing" / "ExpressionMixerMath.cs",
+    VCR / "Runtime" / "Tracking" / "Mixing" / "HumanoidPoseMixerMath.cs",
+    VCR / "Runtime" / "Protocols" / "Vmc" / "VmcFrameAccumulator.cs",
+]
+for snapshot_hot_path in snapshot_hot_paths:
+    require_source_contains(
+        snapshot_hot_path,
+        "SnapshotArrayOwnership.Transfer",
+        "fresh hot-path snapshot arrays must explicitly transfer ownership instead of cloning",
+    )
+
+ifacial_frame = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKit"
+    / "IFacialMocapFrame.cs"
+)
+require_source_contains(
+    ifacial_frame,
+    "ReadOnlySpan<float> Coefficients",
+    "raw iFacialMocap coefficients must not expose a mutable array",
+)
+require_source_contains(
+    ifacial_frame,
+    "DetachCoefficientOwnership",
+    "raw iFacialMocap coefficients must retain explicit one-shot transfer",
+)
+forbid_source_pattern(
+    ifacial_frame,
+    r"public\s+float\[\]\s+Coefficients",
+    "raw iFacialMocap coefficients must not expose mutable array ownership",
+)
+
+vmc_accumulator = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcFrameAccumulator.cs"
+)
+require_source_contains(
+    vmc_accumulator,
+    "MaxCustomExpressions",
+    "VMC custom expression state must retain a hard entry limit",
+)
+require_source_contains(
+    vmc_accumulator,
+    "MaxCustomExpressionNameCharacters",
+    "VMC custom expression names must retain a hard length limit",
+)
+require_source_contains(
+    vmc_accumulator,
+    "_customExpressionStaging.Count >=",
+    "VMC accumulator must enforce its custom expression entry limit",
+)
+
+require_source_contains(
+    vmc_accumulator,
+    "regions |=\n                    TrackingRegion.Expressions;",
+    "VMC expression payloads must advertise TrackingRegion.Expressions at the producer boundary",
+)
+
+p0_vmc_validation = (
+    VCR
+    / "Editor"
+    / "P0"
+    / "P0VmcSetupMenu.cs"
+)
+require_source_contains(
+    p0_vmc_validation,
+    "expressionFrame.ValidRegions",
+    "P0 VMC validation must cover expression region flags",
+)
+
+vmc_source = (
+    VCR
+    / "Runtime"
+    / "Protocols"
+    / "Vmc"
+    / "VmcTrackingSource.cs"
+)
+require_source_contains(
+    vmc_source,
+    "_accumulator.ResetState();",
+    "VMC source stop/dispose paths must clear retained session state",
+)
+
+ifacial_parser = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKit"
+    / "IFacialMocapFrameParser.cs"
+)
+require_source_contains(
+    ifacial_parser,
+    "ReadOnlySpan<char>",
+    "iFacialMocap parser must retain span-based token parsing",
+)
+forbid_source_pattern(
+    ifacial_parser,
+    r"\.Substring\s*\(",
+    "iFacialMocap packet parsing must not allocate substring tokens",
+)
+forbid_source_pattern(
+    ifacial_parser,
+    r"\.Split\s*\(",
+    "iFacialMocap head parsing must not allocate split arrays/strings",
+)
+
+ifacial_receiver = (
+    VCR
+    / "Runtime"
+    / "Tracking"
+    / "ArKitUnity"
+    / "IFacialMocapUdpReceiver.cs"
+)
+require_source_contains(
+    ifacial_receiver,
+    "StrictUtf8.GetChars(",
+    "iFacialMocap UDP decode must reuse a caller-owned character buffer",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"StrictUtf8\.GetString\s*\(",
+    "iFacialMocap UDP receive must not allocate one full packet string per datagram",
+)
+require_source_contains(
+    ifacial_receiver,
+    "StartStreamingV2Bytes",
+    "iFacialMocap handshake payload bytes must be cached instead of encoded on every retry",
+)
+require_source_contains(
+    ifacial_receiver,
+    "SanitizeReceiverConfiguration();",
+    "ARKit receiver startup must sanitize serialized timing and pose conversion values",
+)
+require_source_contains(
+    ifacial_receiver,
+    "private static float SanitizeSeconds(",
+    "ARKit receiver timing values must contain NaN/Infinity before scheduling",
+)
+require_source_contains(
+    ifacial_receiver,
+    "private static Vector3 SanitizeVector3(",
+    "ARKit receiver axis conversion vectors must contain non-finite components",
+)
+require_source_contains(
+    ifacial_receiver,
+    "microseconds >=\n                long.MaxValue",
+    "ARKit presence timing conversion must saturate oversized finite values",
+)
+require_source_contains(
+    ifacial_receiver,
+    "_handshakeSender",
+    "iFacialMocap handshake retries must reuse one sender socket per receiver lifecycle",
+)
+require_source_contains(
+    ifacial_receiver,
+    "CloseHandshakeSender();",
+    "iFacialMocap receiver shutdown/recovery must release a reusable or faulted handshake sender",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"using\s+var\s+sender\s*=\s*new\s+UdpClient",
+    "iFacialMocap handshake retry must not create and dispose a UDP socket on every send",
+)
+forbid_source_pattern(
+    ifacial_receiver,
+    r"var\s+bytes\s*=\s*Encoding\.UTF8\.GetBytes",
+    "iFacialMocap handshake retry must not re-encode the constant command on every send",
+)
+
+if VCR.is_dir():
+    for path in VCR.rglob("*"):
+        if not path.is_file():
+            continue
+
+        if path.suffix in {".cs", ".asmdef"}:
+            if path.stat().st_size == 0:
+                errors.append(f"empty source file: {path.relative_to(ROOT)}")
+
+            meta = Path(str(path) + ".meta")
+            if not meta.is_file():
+                errors.append(f"missing Unity meta file: {meta.relative_to(ROOT)}")
+            elif meta.stat().st_size == 0:
+                errors.append(f"empty Unity meta file: {meta.relative_to(ROOT)}")
+            else:
+                meta_text = meta.read_text(encoding="utf-8", errors="replace")
+                if "fileFormatVersion:" not in meta_text or "guid:" not in meta_text:
+                    errors.append(
+                        f"invalid Unity meta file: {meta.relative_to(ROOT)} "
+                        "(missing fileFormatVersion or guid)"
+                    )
+
+        if path.suffix == ".asmdef":
+            document = load_json(path)
+            if document and not document.get("name"):
+                errors.append(f"assembly definition has no name: {path.relative_to(ROOT)}")
+
+manifest_path = UNITY / "Packages" / "manifest.json"
+if manifest_path.is_file():
+    manifest = load_json(manifest_path)
+    dependencies = manifest.get("dependencies", {})
+    mediapipe = dependencies.get("com.github.homuler.mediapipe")
+    expected = "file:LocalPackages/com.github.homuler.mediapipe-0.16.3.tgz"
+    if mediapipe != expected:
+        errors.append(
+            "MediaPipe manifest dependency is not pinned to the expected local package "
+            f"({expected!r}); got {mediapipe!r}"
+        )
+
+p12_batch = VCR / "Editor" / "P12" / "P12BatchValidation.cs"
+if p12_batch.is_file() and "P11BatchValidation.RunChecks()" not in p12_batch.read_text(encoding="utf-8"):
+    errors.append("P12 batch validation no longer inherits the P11 validation chain")
+
+p13_batch = VCR / "Editor" / "P13" / "P13BatchValidation.cs"
+if p13_batch.is_file() and "P12BatchValidation.RunChecks()" not in p13_batch.read_text(encoding="utf-8"):
+    errors.append("P13 batch validation no longer inherits the P12 validation chain")
+
+alpha_builder = VCR / "Editor" / "Alpha" / "AlphaApplicationSceneBuilder.cs"
+alpha_build_menu = VCR / "Editor" / "Alpha" / "AlphaBuildMenu.cs"
+alpha_asmdef = VCR / "Editor" / "Alpha" / "VCR.Editor.Alpha.asmdef"
+
+require_source_contains(
+    alpha_asmdef,
+    "\"VCR.Editor.P13\"",
+    "alpha editor assembly must depend on the latest P13 integration/validation layer",
+)
+require_source_contains(
+    alpha_builder,
+    "MediaPipeWebcamTrackingRunner",
+    "alpha scene must retain the MediaPipe webcam implementation",
+)
+require_source_contains(
+    alpha_builder,
+    "IFacialMocapUdpReceiver",
+    "alpha scene must retain the ARKit/iFacialMocap implementation",
+)
+require_source_contains(
+    alpha_builder,
+    "VmcUdpReceiver",
+    "alpha scene must retain VMC receive support",
+)
+require_source_contains(
+    alpha_builder,
+    "VmcUdpSender",
+    "alpha scene must retain VMC send support",
+)
+require_source_contains(
+    alpha_builder,
+    "ApplicationUiController",
+    "alpha scene must include the application UI",
+)
+require_source_contains(
+    alpha_builder,
+    "BasicCharacterAppearanceRuntime",
+    "alpha scene must include the appearance runtime",
+)
+require_source_contains(
+    alpha_builder,
+    "MaterialOverrideController",
+    "alpha scene must include material override controls",
+)
+require_source_contains(
+    alpha_builder,
+    "EventRuntimeHost",
+    "alpha scene must include the event runtime",
+)
+require_source_contains(
+    alpha_builder,
+    "Character2DRuntime",
+    "alpha scene must retain the P13 backend-neutral 2D host",
+)
+require_source_contains(
+    alpha_builder,
+    "mediaPipe.enabled = false;",
+    "equipment-free alpha startup must not auto-open the webcam",
+)
+require_source_contains(
+    alpha_builder,
+    "arkit.enabled = false;",
+    "equipment-free alpha startup must not auto-start ARKit/iFacialMocap",
+)
+require_source_contains(
+    alpha_build_menu,
+    "P13BatchValidation.RunChecks()",
+    "alpha validation must run the complete inherited P0-P13 source-free chain",
+)
+require_source_contains(
+    alpha_build_menu,
+    "AlphaApplicationSceneBuilder\n                .CreateAlphaRuntimeScene()",
+    "alpha build must regenerate the integrated runtime scene before building",
+)
+
+# These files must be generated by the pinned Unity editor. Hand-authored
+# substitutes are not accepted. Development checks keep the gap visible as a
+# warning; release/promotion checks can opt into a strict failure gate.
+for path in [
+    UNITY / "Packages" / "packages-lock.json",
+    UNITY / "ProjectSettings" / "ProjectSettings.asset",
+]:
+    if not path.is_file():
+        message = (
+            f"reproducibility evidence still missing: {path.relative_to(ROOT)} "
+            "(generate/commit from the pinned Unity editor, do not hand-author)"
+        )
+        if args.strict_reproducibility:
+            errors.append(message)
+        else:
+            warnings.append(message)
+
+for message in warnings:
+    print(f"WARNING: {message}")
+
+if errors:
+    for message in errors:
+        print(f"ERROR: {message}", file=sys.stderr)
+    print(f"Repository structure validation: FAIL ({len(errors)} error(s))", file=sys.stderr)
+    raise SystemExit(1)
+
+mode = (
+    "strict reproducibility"
+    if args.strict_reproducibility
+    else "development"
+)
+print(
+    "Repository structure validation: PASS "
+    f"(mode={mode}; {len(warnings)} non-blocking warning(s))"
+)

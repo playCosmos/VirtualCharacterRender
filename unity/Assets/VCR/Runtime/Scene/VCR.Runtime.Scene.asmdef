@@ -1,0 +1,22 @@
+{
+  "name": "VCR.Runtime.Scene",
+  "rootNamespace": "VCR.Runtime.Scene",
+  "references": [
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Character",
+    "VCR.Runtime.Rendering",
+    "VRM10",
+    "VCR.Runtime.Output",
+    "VCR.Runtime.Environment",
+    "VCR.Runtime.Capabilities"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

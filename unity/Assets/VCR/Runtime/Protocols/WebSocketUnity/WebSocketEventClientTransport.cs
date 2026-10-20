@@ -1,0 +1,1081 @@
+using System;
+using System.Collections.Generic;
+using System.Net.WebSockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+using VCR.Runtime.Core;
+using VCR.Runtime.Protocols.WebSocket;
+
+namespace VCR.Runtime.Protocols.WebSocketUnity
+{
+    /// <summary>
+    /// Optional outbound WebSocket bridge transport for event injection.
+    ///
+    /// Network receive runs asynchronously. Complete text messages enter a
+    /// bounded queue and are delivered to IWebSocketTextMessageHandler only
+    /// from Unity's main thread.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class WebSocketEventClientTransport :
+        MonoBehaviour,
+        IRuntimeMetricsSource
+    {
+        [Header("Endpoint")]
+        [SerializeField]
+        private string endpoint =
+            "ws://127.0.0.1:39541/vcr/events";
+
+        [SerializeField]
+        private bool autoConnect = true;
+
+        [SerializeField]
+        private bool autoReconnect = true;
+
+        [SerializeField, Min(0.25f)]
+        private float reconnectDelaySeconds = 2f;
+
+        [SerializeField, Min(1f)]
+        private float keepAliveSeconds = 20f;
+
+        [Header("Ingress")]
+        [SerializeField, Range(1024, 1048576)]
+        private int maxMessageBytes = 65536;
+
+        [SerializeField, Range(32, 8192)]
+        private int maxQueuedMessages = 1024;
+
+        [SerializeField, Range(1, 2048)]
+        private int maxDispatchPerFrame = 128;
+
+        [SerializeField]
+        private MonoBehaviour messageHandlerBehaviour;
+
+        [SerializeField]
+        private bool autoFindMessageHandler = true;
+
+        [SerializeField, Min(0.1f)]
+        private float autoFindRetrySeconds = 1f;
+
+        private static readonly UTF8Encoding StrictUtf8 =
+            new(
+                encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
+
+        private readonly Queue<string>
+            _queue = new(
+                1024);
+
+        private readonly object _queueSync =
+            new();
+
+        private readonly object _clientSync =
+            new();
+
+        private IWebSocketTextMessageHandler _handler;
+        private float _nextHandlerResolveRealtime;
+        private CancellationTokenSource _cancellation;
+        private Task _runTask;
+        private ClientWebSocket _client;
+        private Uri _pendingStartUri;
+        private bool _pendingStartRequested;
+        private long _generation;
+
+        private int _state =
+            (int)WebSocketClientTransportState.Stopped;
+        private int _queuedCount;
+
+        private long _connectSuccesses;
+        private long _connectFailures;
+        private long _messagesReceived;
+        private long _messagesDropped;
+        private long _messagesDispatched;
+        private long _handlerRejections;
+        private long _handlerExceptions;
+        private long _transportRejections;
+
+        private string _backgroundError;
+
+        public WebSocketClientTransportState State =>
+            (WebSocketClientTransportState)
+            Volatile.Read(
+                ref _state);
+
+        public int QueuedCount =>
+            Math.Max(
+                0,
+                Volatile.Read(
+                    ref _queuedCount));
+
+        public int MaxMessageBytes =>
+            Math.Max(
+                1024,
+                Math.Min(
+                    1048576,
+                    maxMessageBytes));
+
+        public int MaxQueuedMessages =>
+            Math.Max(
+                32,
+                Math.Min(
+                    8192,
+                    maxQueuedMessages));
+
+        public int MaxDispatchPerFrame =>
+            Math.Max(
+                1,
+                Math.Min(
+                    2048,
+                    maxDispatchPerFrame));
+
+        public long ConnectSuccessCount =>
+            Interlocked.Read(
+                ref _connectSuccesses);
+
+        public long ConnectFailureCount =>
+            Interlocked.Read(
+                ref _connectFailures);
+
+        public long MessagesReceived =>
+            Interlocked.Read(
+                ref _messagesReceived);
+
+        public long MessagesDropped =>
+            Interlocked.Read(
+                ref _messagesDropped);
+
+        private void Awake()
+        {
+            ResolveHandler(
+                force: true);
+        }
+
+        private void OnEnable()
+        {
+            ResolveHandler(
+                force: true);
+
+            if (Application.isPlaying &&
+                autoConnect)
+            {
+                StartTransport(
+                    out _);
+            }
+        }
+
+        private void Update()
+        {
+            FinalizeTransportLifecycle();
+
+            var error =
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    null);
+
+            if (!string.IsNullOrEmpty(
+                    error))
+            {
+                Debug.LogWarning(
+                    "VCR WebSocket transport: " +
+                    error,
+                    this);
+            }
+
+            if (!IsServiceAlive(_handler))
+            {
+                _handler = null;
+
+                ResolveHandler();
+            }
+
+            if (!IsServiceAlive(_handler))
+            {
+                return;
+            }
+
+            var budget =
+                MaxDispatchPerFrame;
+
+            for (var i = 0;
+                 i < budget;
+                 i++)
+            {
+                string message;
+
+                lock (_queueSync)
+                {
+                    if (_queue.Count == 0)
+                    {
+                        break;
+                    }
+
+                    message =
+                        _queue.Dequeue();
+
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                }
+
+                try
+                {
+                    if (_handler.TryHandleText(
+                            message,
+                            out var handlerError))
+                    {
+                        Interlocked.Increment(
+                            ref _messagesDispatched);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(
+                            ref _handlerRejections);
+
+                        if (!string.IsNullOrWhiteSpace(
+                                handlerError))
+                        {
+                            Interlocked.Exchange(
+                                ref _backgroundError,
+                                handlerError);
+                        }
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Interlocked.Increment(
+                        ref _handlerRejections);
+                    Interlocked.Increment(
+                        ref _handlerExceptions);
+                    Interlocked.Exchange(
+                        ref _backgroundError,
+                        "WebSocket message handler threw: " +
+                        exception.Message);
+                }
+            }
+        }
+
+        public void SetHandler(
+            IWebSocketTextMessageHandler handler)
+        {
+            _handler =
+                IsServiceAlive(handler)
+                    ? handler
+                    : null;
+            messageHandlerBehaviour =
+                _handler as MonoBehaviour;
+        }
+
+        public bool StartTransport(
+            out string error)
+        {
+            error = null;
+
+            FinalizeCompletedRun();
+
+            if (_runTask != null &&
+                !_runTask.IsCompleted &&
+                _cancellation != null &&
+                !_cancellation.IsCancellationRequested)
+            {
+                return true;
+            }
+
+            if (!TryValidateEndpoint(
+                    endpoint,
+                    out var uri,
+                    out error))
+            {
+                ClearPendingStart();
+                SetState(
+                    WebSocketClientTransportState.Faulted);
+                return false;
+            }
+
+            if (_runTask != null &&
+                !_runTask.IsCompleted)
+            {
+                RequestStopTransport();
+                _pendingStartUri = uri;
+                _pendingStartRequested = true;
+                return true;
+            }
+
+            BeginTransportRun(
+                uri);
+            return true;
+        }
+
+        public void StopTransport()
+        {
+            ClearPendingStart();
+            RequestStopTransport();
+        }
+
+        private void RequestStopTransport()
+        {
+            Interlocked.Increment(
+                ref _generation);
+
+            var cancellation =
+                _cancellation;
+
+            if (cancellation != null)
+            {
+                try
+                {
+                    cancellation.Cancel();
+                }
+                catch
+                {
+                    // Shutdown path.
+                }
+            }
+
+            lock (_clientSync)
+            {
+                try
+                {
+                    _client?.Abort();
+                }
+                catch
+                {
+                    // Shutdown path.
+                }
+            }
+
+            DropQueuedMessages();
+            FinalizeCompletedRun();
+
+            SetState(
+                WebSocketClientTransportState.Stopped);
+        }
+
+        private void BeginTransportRun(
+            Uri uri)
+        {
+            ClearPendingStart();
+
+            var generation =
+                Interlocked.Increment(
+                    ref _generation);
+            var cancellation =
+                new CancellationTokenSource();
+
+            _cancellation =
+                cancellation;
+            _runTask =
+                RunTransportAsync(
+                    uri,
+                    cancellation.Token,
+                    generation);
+
+            _ = _runTask.ContinueWith(
+                _ =>
+                {
+                    try
+                    {
+                        cancellation.Dispose();
+                    }
+                    catch
+                    {
+                        // Completion cleanup path.
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private void FinalizeTransportLifecycle()
+        {
+            if (_runTask != null &&
+                !_runTask.IsCompleted)
+            {
+                return;
+            }
+
+            FinalizeCompletedRun();
+
+            if (!_pendingStartRequested ||
+                _pendingStartUri == null)
+            {
+                return;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                ClearPendingStart();
+                return;
+            }
+
+            var uri =
+                _pendingStartUri;
+            ClearPendingStart();
+            BeginTransportRun(
+                uri);
+        }
+
+        private void FinalizeCompletedRun()
+        {
+            var task =
+                _runTask;
+
+            if (task == null ||
+                !task.IsCompleted)
+            {
+                return;
+            }
+
+            try
+            {
+                task.GetAwaiter()
+                    .GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown.
+            }
+            catch (Exception exception)
+            {
+                Interlocked.Exchange(
+                    ref _backgroundError,
+                    "WebSocket transport task failed: " +
+                    exception.Message);
+            }
+
+            if (ReferenceEquals(
+                    _runTask,
+                    task))
+            {
+                _runTask = null;
+                _cancellation = null;
+            }
+        }
+
+        private void ClearPendingStart()
+        {
+            _pendingStartRequested = false;
+            _pendingStartUri = null;
+        }
+
+        /// <summary>
+        /// Source-free validation path through the same bounded main-thread
+        /// delivery queue used by network receive.
+        /// </summary>
+        public bool TryQueueText(
+            string message,
+            out string error)
+        {
+            error = null;
+
+            if (message == null)
+            {
+                error =
+                    "WebSocket text message is null.";
+                Interlocked.Increment(
+                    ref _transportRejections);
+                return false;
+            }
+
+            int byteCount;
+
+            try
+            {
+                byteCount =
+                    StrictUtf8.GetByteCount(
+                        message);
+            }
+            catch (EncoderFallbackException exception)
+            {
+                error =
+                    "WebSocket text message is not valid UTF-8: " +
+                    exception.Message;
+                Interlocked.Increment(
+                    ref _transportRejections);
+                return false;
+            }
+
+            if (byteCount >
+                MaxMessageBytes)
+            {
+                error =
+                    "WebSocket text message exceeds the configured byte limit.";
+                Interlocked.Increment(
+                    ref _transportRejections);
+                return false;
+            }
+
+            EnqueueText(
+                message);
+
+            return true;
+        }
+
+        public static bool TryValidateEndpoint(
+            string value,
+            out Uri uri,
+            out string error)
+        {
+            uri = null;
+            error = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    value) ||
+                !Uri.TryCreate(
+                    value,
+                    UriKind.Absolute,
+                    out uri))
+            {
+                error =
+                    "WebSocket endpoint must be an absolute ws:// or wss:// URI.";
+                return false;
+            }
+
+            var isWs =
+                string.Equals(
+                    uri.Scheme,
+                    "ws",
+                    StringComparison.OrdinalIgnoreCase);
+            var isWss =
+                string.Equals(
+                    uri.Scheme,
+                    "wss",
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!isWs &&
+                !isWss)
+            {
+                error =
+                    "WebSocket endpoint scheme must be ws or wss.";
+                uri = null;
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    uri.Host) ||
+                !string.IsNullOrEmpty(
+                    uri.UserInfo))
+            {
+                error =
+                    "WebSocket endpoint host is required and URI user-info credentials are not allowed.";
+                uri = null;
+                return false;
+            }
+
+            if (isWs &&
+                !uri.IsLoopback)
+            {
+                error =
+                    "Unencrypted ws:// is allowed only for loopback endpoints; remote endpoints require wss://.";
+                uri = null;
+                return false;
+            }
+
+            return true;
+        }
+
+        public void CollectMetrics(
+            List<RuntimeMetric> output)
+        {
+            if (output == null)
+            {
+                return;
+            }
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.state",
+                    (int)State,
+                    "enum"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.connect_success",
+                    ConnectSuccessCount,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.connect_failure",
+                    ConnectFailureCount,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.message_limit",
+                    MaxMessageBytes,
+                    "bytes"));
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.queue_limit",
+                    MaxQueuedMessages,
+                    "count"));
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.dispatch_limit",
+                    MaxDispatchPerFrame,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.received",
+                    MessagesReceived,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.dropped",
+                    MessagesDropped,
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.dispatched",
+                    Interlocked.Read(
+                        ref _messagesDispatched),
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.handler_rejected",
+                    Interlocked.Read(
+                        ref _handlerRejections),
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.handler_exceptions",
+                    Interlocked.Read(
+                        ref _handlerExceptions),
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.rejected",
+                    Interlocked.Read(
+                        ref _transportRejections),
+                    "count"));
+
+            output.Add(
+                new RuntimeMetric(
+                    "protocol.websocket.transport.queue",
+                    QueuedCount,
+                    "count"));
+        }
+
+        private async Task RunTransportAsync(
+            Uri uri,
+            CancellationToken cancellationToken,
+            long generation)
+        {
+            var firstAttempt = true;
+
+            while (!cancellationToken
+                       .IsCancellationRequested)
+            {
+                SetStateIfCurrent(
+                    generation,
+                    firstAttempt
+                        ? WebSocketClientTransportState.Connecting
+                        : WebSocketClientTransportState.Reconnecting);
+
+                using var client =
+                    new ClientWebSocket();
+
+                client.Options.KeepAliveInterval =
+                    TimeSpan.FromSeconds(
+                        Math.Max(
+                            1f,
+                            keepAliveSeconds));
+
+                lock (_clientSync)
+                {
+                    _client = client;
+                }
+
+                try
+                {
+                    await client.ConnectAsync(
+                        uri,
+                        cancellationToken);
+
+                    Interlocked.Increment(
+                        ref _connectSuccesses);
+
+                    SetStateIfCurrent(
+                        generation,
+                        WebSocketClientTransportState.Connected);
+
+                    await ReceiveLoopAsync(
+                        client,
+                        cancellationToken,
+                        generation);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception exception)
+                {
+                    if (cancellationToken
+                            .IsCancellationRequested ||
+                        Interlocked.Read(
+                            ref _generation) !=
+                        generation)
+                    {
+                        break;
+                    }
+
+                    Interlocked.Increment(
+                        ref _connectFailures);
+
+                    Interlocked.Exchange(
+                        ref _backgroundError,
+                        exception.Message);
+                }
+                finally
+                {
+                    lock (_clientSync)
+                    {
+                        if (ReferenceEquals(
+                                _client,
+                                client))
+                        {
+                            _client = null;
+                        }
+                    }
+                }
+
+                if (cancellationToken
+                        .IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (!autoReconnect)
+                {
+                    SetStateIfCurrent(
+                        generation,
+                        WebSocketClientTransportState.Faulted);
+                    return;
+                }
+
+                firstAttempt = false;
+
+                try
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(
+                            Math.Max(
+                                0.25f,
+                                reconnectDelaySeconds)),
+                        cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+
+            SetStateIfCurrent(
+                generation,
+                WebSocketClientTransportState.Stopped);
+        }
+
+        private async Task ReceiveLoopAsync(
+            ClientWebSocket client,
+            CancellationToken cancellationToken,
+            long generation)
+        {
+            var messageLimit =
+                MaxMessageBytes;
+            var chunk =
+                new byte[
+                    Math.Min(
+                        8192,
+                        messageLimit)];
+
+            var messageBytes =
+                new byte[
+                    messageLimit];
+
+            var offset = 0;
+            var discarding = false;
+
+            while (!cancellationToken
+                       .IsCancellationRequested &&
+                   client.State ==
+                       WebSocketState.Open)
+            {
+                var result =
+                    await client.ReceiveAsync(
+                        new ArraySegment<byte>(
+                            chunk),
+                        cancellationToken);
+
+                if (result.MessageType ==
+                    WebSocketMessageType.Close)
+                {
+                    return;
+                }
+
+                if (result.MessageType !=
+                    WebSocketMessageType.Text)
+                {
+                    if (!discarding)
+                    {
+                        Interlocked.Increment(
+                            ref _transportRejections);
+                    }
+
+                    discarding =
+                        !result.EndOfMessage;
+                    offset = 0;
+                    continue;
+                }
+
+                if (discarding)
+                {
+                    if (result.EndOfMessage)
+                    {
+                        discarding = false;
+                    }
+
+                    continue;
+                }
+
+                if (offset + result.Count >
+                    messageBytes.Length)
+                {
+                    Interlocked.Increment(
+                        ref _transportRejections);
+
+                    offset = 0;
+                    discarding =
+                        !result.EndOfMessage;
+                    continue;
+                }
+
+                Buffer.BlockCopy(
+                    chunk,
+                    0,
+                    messageBytes,
+                    offset,
+                    result.Count);
+
+                offset +=
+                    result.Count;
+
+                if (!result.EndOfMessage)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var text =
+                        StrictUtf8.GetString(
+                            messageBytes,
+                            0,
+                            offset);
+
+                    EnqueueText(
+                        text,
+                        generation);
+                }
+                catch (DecoderFallbackException)
+                {
+                    Interlocked.Increment(
+                        ref _transportRejections);
+                }
+
+                offset = 0;
+            }
+        }
+
+        private void EnqueueText(
+            string message)
+        {
+            Interlocked.Increment(
+                ref _messagesReceived);
+
+            lock (_queueSync)
+            {
+                EnqueueTextLocked(
+                    message);
+            }
+        }
+
+        private bool EnqueueText(
+            string message,
+            long generation)
+        {
+            Interlocked.Increment(
+                ref _messagesReceived);
+
+            lock (_queueSync)
+            {
+                if (Interlocked.Read(
+                        ref _generation) !=
+                    generation)
+                {
+                    Interlocked.Increment(
+                        ref _messagesDropped);
+                    return false;
+                }
+
+                EnqueueTextLocked(
+                    message);
+                return true;
+            }
+        }
+
+        private void EnqueueTextLocked(
+            string message)
+        {
+            _queue.Enqueue(
+                message);
+            Interlocked.Increment(
+                ref _queuedCount);
+
+            var limit =
+                MaxQueuedMessages;
+
+            while (Volatile.Read(
+                       ref _queuedCount) >
+                   limit &&
+                   _queue.Count > 0)
+            {
+                _queue.Dequeue();
+                Interlocked.Decrement(
+                    ref _queuedCount);
+                Interlocked.Increment(
+                    ref _messagesDropped);
+            }
+        }
+
+        private void DropQueuedMessages()
+        {
+            lock (_queueSync)
+            {
+                while (_queue.Count > 0)
+                {
+                    _queue.Dequeue();
+                    Interlocked.Decrement(
+                        ref _queuedCount);
+                    Interlocked.Increment(
+                        ref _messagesDropped);
+                }
+
+                Volatile.Write(
+                    ref _queuedCount,
+                    0);
+            }
+        }
+
+        private static bool IsServiceAlive(
+            object service)
+        {
+            if (service == null)
+            {
+                return false;
+            }
+
+            return service is UnityEngine.Object unityObject
+                ? unityObject != null
+                : true;
+        }
+
+        private void ResolveHandler(
+            bool force = false)
+        {
+            if (messageHandlerBehaviour != null &&
+                messageHandlerBehaviour is
+                    IWebSocketTextMessageHandler configured)
+            {
+                _handler = configured;
+                _nextHandlerResolveRealtime = 0f;
+                return;
+            }
+
+            if (!autoFindMessageHandler)
+            {
+                return;
+            }
+
+            var now =
+                Time.realtimeSinceStartup;
+
+            if (!force &&
+                now <
+                _nextHandlerResolveRealtime)
+            {
+                return;
+            }
+
+            _nextHandlerResolveRealtime =
+                now +
+                Mathf.Max(
+                    0.1f,
+                    autoFindRetrySeconds);
+
+            var behaviours =
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            foreach (var behaviour in
+                     behaviours)
+            {
+                if (ReferenceEquals(
+                        behaviour,
+                        this))
+                {
+                    continue;
+                }
+
+                if (behaviour is
+                    IWebSocketTextMessageHandler handler)
+                {
+                    _handler = handler;
+                    messageHandlerBehaviour =
+                        behaviour;
+                    return;
+                }
+            }
+        }
+
+        private void SetStateIfCurrent(
+            long generation,
+            WebSocketClientTransportState state)
+        {
+            if (Interlocked.Read(
+                    ref _generation) !=
+                generation)
+            {
+                return;
+            }
+
+            SetState(
+                state);
+        }
+
+        private void SetState(
+            WebSocketClientTransportState state)
+        {
+            Volatile.Write(
+                ref _state,
+                (int)state);
+        }
+
+        private void OnDisable()
+        {
+            StopTransport();
+        }
+
+        private void OnDestroy()
+        {
+            StopTransport();
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "VCR.Runtime.EventRuntime",
+  "rootNamespace": "VCR.Runtime.EventRuntime",
+  "references": [
+    "VCR.Runtime.Events"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

@@ -1,0 +1,14 @@
+{
+  "name": "VCR.Runtime.Protocols.Osc",
+  "rootNamespace": "VCR.Runtime.Protocols.Osc",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

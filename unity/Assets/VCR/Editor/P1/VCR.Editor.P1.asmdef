@@ -1,0 +1,30 @@
+{
+  "name": "VCR.Editor.P1",
+  "rootNamespace": "VCR.Editor.P1",
+  "references": [
+    "VCR.Editor.P0",
+    "VCR.Runtime.Core",
+    "VCR.Runtime.Character",
+    "VCR.Runtime.Rendering",
+    "VCR.Runtime.Scene",
+    "VRM10",
+    "VCR.Runtime.Output",
+    "VCR.Runtime.Environment",
+    "VCR.Runtime.Environment.Unity",
+    "VCR.Runtime.Capabilities",
+    "VCR.Runtime.Application",
+    "VCR.Runtime.Tracking",
+    "VCR.Runtime.P1ValidationFixtures"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

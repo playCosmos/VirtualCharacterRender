@@ -1,0 +1,471 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using VCR.Runtime.Appearance;
+
+namespace VCR.Editor.P11
+{
+    public static class
+        P11AppearanceTransitionPackageUtility
+    {
+        public static AppearanceTransitionPackage
+            CreatePackage(
+                string packageId,
+                IReadOnlyList<
+                    AppearanceTransitionPreset> transitions)
+        {
+            var cloned =
+                new AppearanceTransitionPreset[
+                    transitions?.Count ?? 0];
+
+            for (var i = 0;
+                 i < cloned.Length;
+                 i++)
+            {
+                cloned[i] =
+                    CloneTransition(
+                        transitions[i]);
+            }
+
+            return new AppearanceTransitionPackage
+            {
+                Version =
+                    AppearanceTransitionPackage
+                        .CurrentVersion,
+                PackageId =
+                    string.IsNullOrWhiteSpace(
+                        packageId)
+                        ? "appearance-transitions"
+                        : packageId.Trim(),
+                Transitions =
+                    cloned
+            };
+        }
+
+        public static bool TrySerialize(
+            AppearanceTransitionPackage package,
+            out string json,
+            out string error)
+        {
+            json = null;
+
+            if (!Validate(
+                    package,
+                    out error))
+            {
+                return false;
+            }
+
+            try
+            {
+                json =
+                    JsonUtility.ToJson(
+                        package,
+                        prettyPrint:
+                            true);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Transition package serialization failed: " +
+                    exception.Message;
+                return false;
+            }
+        }
+
+        public static bool TryDeserialize(
+            string json,
+            out AppearanceTransitionPackage package,
+            out string error)
+        {
+            package = null;
+            error = null;
+
+            if (string.IsNullOrWhiteSpace(
+                    json))
+            {
+                error =
+                    "Transition package JSON is empty.";
+                return false;
+            }
+
+            try
+            {
+                package =
+                    JsonUtility.FromJson<
+                        AppearanceTransitionPackage>(
+                        json);
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Transition package JSON parse failed: " +
+                    exception.Message;
+                return false;
+            }
+
+            return Validate(
+                package,
+                out error);
+        }
+
+        public static bool Validate(
+            AppearanceTransitionPackage package,
+            out string error)
+        {
+            error = null;
+
+            if (package == null)
+            {
+                error =
+                    "Transition package document is missing.";
+                return false;
+            }
+
+            if (package.Version >
+                AppearanceTransitionPackage
+                    .CurrentVersion)
+            {
+                error =
+                    $"Transition package version {package.Version} is newer than supported version {AppearanceTransitionPackage.CurrentVersion}.";
+                return false;
+            }
+
+            if (package.Version < 1)
+            {
+                error =
+                    $"Transition package version {package.Version} is unsupported and has no migration path.";
+                return false;
+            }
+
+            if (package.Version == 1)
+            {
+                MigrateV1ToV2(
+                    package);
+            }
+
+            if (package.Version == 2)
+            {
+                MigrateV2ToV3(
+                    package);
+            }
+
+            if (package.Version !=
+                AppearanceTransitionPackage
+                    .CurrentVersion)
+            {
+                error =
+                    $"Transition package version {package.Version} could not be migrated to supported version {AppearanceTransitionPackage.CurrentVersion}.";
+                return false;
+            }
+
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            var ids =
+                new HashSet<string>(
+                    StringComparer.Ordinal);
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                if (transition == null ||
+                    string.IsNullOrWhiteSpace(
+                        transition.Id))
+                {
+                    error =
+                        "Every packaged transition requires a non-empty id.";
+                    return false;
+                }
+
+                if (!ids.Add(
+                        transition.Id))
+                {
+                    error =
+                        $"Transition package contains duplicate id '{transition.Id}'.";
+                    return false;
+                }
+
+                if (transition.Markers == null)
+                {
+                    transition.Markers =
+                        Array.Empty<
+                            AppearanceTransitionMarker>();
+                }
+
+                if (transition.Steps == null)
+                {
+                    transition.Steps =
+                        Array.Empty<
+                            AppearanceTransitionStep>();
+                }
+
+                if (transition.CancellationSteps ==
+                    null)
+                {
+                    transition.CancellationSteps =
+                        Array.Empty<
+                            AppearanceTransitionStep>();
+                }
+
+                if (!P11TransitionDependencyAuthoringUtility
+                    .TryValidateGroupMetadata(
+                        transition,
+                        out var metadataError))
+                {
+                    error =
+                        $"Transition '{transition.Id}' contains invalid graph authoring metadata: {metadataError}";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void MigrateV1ToV2(
+            AppearanceTransitionPackage package)
+        {
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                if (transition == null)
+                {
+                    continue;
+                }
+
+                transition.Markers ??=
+                    Array.Empty<
+                        AppearanceTransitionMarker>();
+                transition.Steps ??=
+                    Array.Empty<
+                        AppearanceTransitionStep>();
+                transition.CancellationSteps ??=
+                    Array.Empty<
+                        AppearanceTransitionStep>();
+
+                NormalizeV2Defaults(
+                    transition.Steps);
+                NormalizeV2Defaults(
+                    transition.CancellationSteps);
+            }
+
+            package.Version = 2;
+        }
+
+        private static void MigrateV2ToV3(
+            AppearanceTransitionPackage package)
+        {
+            package.Transitions ??=
+                Array.Empty<
+                    AppearanceTransitionPreset>();
+
+            foreach (var transition in
+                     package.Transitions)
+            {
+                if (transition == null)
+                {
+                    continue;
+                }
+
+                NormalizeV3AuthoringMetadata(
+                    transition.Steps);
+                NormalizeV3AuthoringMetadata(
+                    transition.CancellationSteps);
+            }
+
+            package.Version = 3;
+        }
+
+        private static void NormalizeV3AuthoringMetadata(
+            AppearanceTransitionStep[] steps)
+        {
+            foreach (var step in
+                     steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null)
+                {
+                    continue;
+                }
+
+                step.AuthoringLabel ??=
+                    string.Empty;
+                step.AuthoringGroup ??=
+                    string.Empty;
+            }
+        }
+
+        private static void NormalizeV2Defaults(
+            AppearanceTransitionStep[] steps)
+        {
+            foreach (var step in
+                     steps ??
+                     Array.Empty<
+                         AppearanceTransitionStep>())
+            {
+                if (step == null)
+                {
+                    continue;
+                }
+
+                step.DependsOnStepIds ??=
+                    Array.Empty<string>();
+
+                if (step.DependencyMode ==
+                        AppearanceTransitionDependencyMode.None &&
+                    step.DependencyTimeoutSeconds <= 0.0)
+                {
+                    step.DependencyTimeoutSeconds =
+                        5.0;
+                }
+            }
+        }
+
+        public static AppearanceTransitionPreset
+            CloneTransition(
+                AppearanceTransitionPreset source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new AppearanceTransitionPreset
+            {
+                Id = source.Id,
+                DurationSeconds =
+                    source.DurationSeconds,
+                QueuePolicy =
+                    source.QueuePolicy,
+                FallbackPolicy =
+                    source.FallbackPolicy,
+                Markers =
+                    CloneMarkers(
+                        source.Markers),
+                Steps =
+                    CloneSteps(
+                        source.Steps),
+                CancellationSteps =
+                    CloneSteps(
+                        source.CancellationSteps)
+            };
+        }
+
+        private static AppearanceTransitionMarker[]
+            CloneMarkers(
+                AppearanceTransitionMarker[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceTransitionMarker>();
+
+            var result =
+                new AppearanceTransitionMarker[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var marker =
+                    source[i];
+
+                result[i] =
+                    marker == null
+                        ? null
+                        : new AppearanceTransitionMarker
+                        {
+                            Name =
+                                marker.Name,
+                            TimeSeconds =
+                                marker.TimeSeconds
+                        };
+            }
+
+            return result;
+        }
+
+        private static AppearanceTransitionStep[]
+            CloneSteps(
+                AppearanceTransitionStep[] source)
+        {
+            source ??=
+                Array.Empty<
+                    AppearanceTransitionStep>();
+
+            var result =
+                new AppearanceTransitionStep[
+                    source.Length];
+
+            for (var i = 0;
+                 i < source.Length;
+                 i++)
+            {
+                var step =
+                    source[i];
+
+                if (step == null)
+                {
+                    result[i] = null;
+                    continue;
+                }
+
+                result[i] =
+                    new AppearanceTransitionStep
+                    {
+                        TimeSeconds =
+                            step.TimeSeconds,
+                        TimingMode =
+                            step.TimingMode,
+                        MarkerName =
+                            step.MarkerName,
+                        MarkerOffsetSeconds =
+                            step.MarkerOffsetSeconds,
+                        StepId =
+                            step.StepId,
+                        AuthoringLabel =
+                            step.AuthoringLabel,
+                        AuthoringGroup =
+                            step.AuthoringGroup,
+                        DependencyMode =
+                            step.DependencyMode,
+                        DependsOnStepIds =
+                            step.DependsOnStepIds != null
+                                ? (string[])step.DependsOnStepIds.Clone()
+                                : Array.Empty<string>(),
+                        DependencyTimeoutSeconds =
+                            step.DependencyTimeoutSeconds,
+                        Kind =
+                            step.Kind,
+                        ActionType =
+                            step.ActionType,
+                        TargetId =
+                            step.TargetId,
+                        Name =
+                            step.Name,
+                        Text =
+                            step.Text,
+                        Value =
+                            step.Value,
+                        HasValue =
+                            step.HasValue,
+                        Required =
+                            step.Required,
+                        Blocking =
+                            step.Blocking,
+                        CompletionTimeoutSeconds =
+                            step.CompletionTimeoutSeconds
+                    };
+            }
+
+            return result;
+        }
+    }
+}
