@@ -58,7 +58,9 @@ jobs:
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
           buildMethod: VCR.Editor.P13.P13BatchValidation.RunSourceFreeAndExit
-          customImage: unityci/editor:6000.3.25f1-windows-il2cpp-3
+          # Editor-only checks do not build a Player. Use the Ubuntu-hosted
+          # Windows Mono image; Windows IL2CPP requires a Windows host.
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
           manualExit: true
           versioning: None
           allowDirtyBuild: true

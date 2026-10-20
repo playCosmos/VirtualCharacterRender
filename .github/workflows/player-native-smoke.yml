@@ -44,9 +44,11 @@ jobs:
         include:
           - platform: windows
             unityTarget: StandaloneWindows64
-            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+            # Ubuntu-hosted CI can only cross-build a Windows Mono Player.
+            # Windows IL2CPP release evidence is produced on a Windows host.
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsMonoAndExit
             outputFolder: Windows
-            image: unityci/editor:6000.3.25f1-windows-il2cpp-3
+            image: unityci/editor:6000.3.25f1-windows-mono-3
           - platform: macos
             unityTarget: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
@@ -109,9 +111,10 @@ jobs:
           if [[ "$PLAYER_PLATFORM" == windows ]]; then
             test -s "$folder/VirtualCharacterRender.exe"
             test -d "$folder/VirtualCharacterRender_Data"
-            # The Windows alpha must be an IL2CPP player, not a Mono fallback.
-            test -s "$folder/GameAssembly.dll"
-            test ! -d "$folder/MonoBleedingEdge"
+            # This Linux-hosted gate validates the supported Windows Mono
+            # smoke Player. Windows IL2CPP is built and validated on Windows.
+            test -d "$folder/MonoBleedingEdge"
+            test ! -e "$folder/GameAssembly.dll"
           else
             test -d "$folder/VirtualCharacterRender.app/Contents/MacOS"
           fi

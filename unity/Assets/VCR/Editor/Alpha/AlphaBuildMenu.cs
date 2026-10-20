@@ -99,6 +99,18 @@ namespace VCR.Editor.Alpha
                 WindowsOutput);
         }
 
+        // CI-only path: Ubuntu-hosted game-ci images do not include the
+        // Windows IL2CPP toolchain. The native startup smoke builds a Mono
+        // Player; Windows release Players still use BuildWindows()/IL2CPP on
+        // a Windows host.
+        public static bool BuildWindowsMono()
+        {
+            return BuildWithScriptingBackend(
+                ScriptingImplementation.Mono2x,
+                BuildTarget.StandaloneWindows64,
+                WindowsOutput);
+        }
+
         [MenuItem("VCR/Alpha/Build/macOS Development Alpha")]
         public static void BuildMacFromMenu()
         {
@@ -242,6 +254,12 @@ namespace VCR.Editor.Alpha
         {
             ExitWithResult(
                 BuildWindows());
+        }
+
+        public static void BuildWindowsMonoAndExit()
+        {
+            ExitWithResult(
+                BuildWindowsMono());
         }
 
         public static void BuildMacAndExit()
