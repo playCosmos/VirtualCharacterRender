@@ -2,6 +2,11 @@ name: Windows IL2CPP build and native startup smoke
 
 on:
   workflow_dispatch:
+  # Temporary branch trigger used to validate this workflow before it lands on
+  # the default branch. Remove before merging.
+  push:
+    branches:
+      - ci/windows-il2cpp-build
 
 permissions:
   contents: read
