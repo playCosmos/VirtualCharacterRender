@@ -50,6 +50,7 @@ jobs:
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
           buildMethod: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+          customImage: unityci/editor:6000.3.25f1-windows-il2cpp-3
           versioning: None
           allowDirtyBuild: true
       - name: Verify actual Unity-generated files and strict repository gate

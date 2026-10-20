@@ -91,16 +91,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows x64
+          - name: Windows x64 (IL2CPP)
             target: StandaloneWindows64
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
             folder: Windows
             suffix: Windows-x64
-          - name: macOS
+            image: unityci/editor:6000.3.25f1-windows-il2cpp-3
+          - name: macOS (Mono)
             target: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
             folder: macOS
             suffix: macOS
+            image: unityci/editor:6000.3.25f1-mac-mono-3
     env:
       VCR_RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
     steps:
@@ -140,6 +142,7 @@ jobs:
           unityVersion: 6000.3.25f1
           targetPlatform: ${{ matrix.target }}
           buildMethod: ${{ matrix.method }}
+          customImage: ${{ matrix.image }}
           versioning: None
           allowDirtyBuild: true
       - name: Package player with source proof and checksum
@@ -153,6 +156,9 @@ jobs:
           test -d "$folder"
           if [[ "$PLAYER_FOLDER" == Windows ]]; then
             test -f "$folder/VirtualCharacterRender.exe"
+            # The Windows alpha must be an IL2CPP player, not a Mono fallback.
+            test -f "$folder/GameAssembly.dll"
+            test ! -d "$folder/MonoBleedingEdge"
           else
             test -d "$folder/VirtualCharacterRender.app"
           fi

@@ -58,6 +58,7 @@ jobs:
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
           buildMethod: VCR.Editor.P13.P13BatchValidation.RunSourceFreeAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-il2cpp-3
           manualExit: true
           versioning: None
           allowDirtyBuild: true

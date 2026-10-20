@@ -46,10 +46,12 @@ jobs:
             unityTarget: StandaloneWindows64
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
             outputFolder: Windows
+            image: unityci/editor:6000.3.25f1-windows-il2cpp-3
           - platform: macos
             unityTarget: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
             outputFolder: macOS
+            image: unityci/editor:6000.3.25f1-mac-mono-3
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
@@ -91,6 +93,7 @@ jobs:
           unityVersion: 6000.3.25f1
           targetPlatform: ${{ matrix.unityTarget }}
           buildMethod: ${{ matrix.method }}
+          customImage: ${{ matrix.image }}
           versioning: None
           allowDirtyBuild: true
       - name: Verify built Player and package immutable input evidence
@@ -106,6 +109,9 @@ jobs:
           if [[ "$PLAYER_PLATFORM" == windows ]]; then
             test -s "$folder/VirtualCharacterRender.exe"
             test -d "$folder/VirtualCharacterRender_Data"
+            # The Windows alpha must be an IL2CPP player, not a Mono fallback.
+            test -s "$folder/GameAssembly.dll"
+            test ! -d "$folder/MonoBleedingEdge"
           else
             test -d "$folder/VirtualCharacterRender.app/Contents/MacOS"
           fi
