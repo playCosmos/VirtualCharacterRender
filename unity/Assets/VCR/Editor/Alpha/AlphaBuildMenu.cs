@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using VCR.Editor.P0;
@@ -91,7 +92,9 @@ namespace VCR.Editor.Alpha
 
         public static bool BuildWindows()
         {
-            return Build(
+            // Release policy: Windows alpha players ship with IL2CPP.
+            return BuildWithScriptingBackend(
+                ScriptingImplementation.IL2CPP,
                 BuildTarget.StandaloneWindows64,
                 WindowsOutput);
         }
@@ -108,9 +111,43 @@ namespace VCR.Editor.Alpha
 
         public static bool BuildMac()
         {
-            return Build(
+            // macOS alpha players stay on Mono: IL2CPP macOS players can only
+            // be produced on a macOS host with Xcode, while release CI
+            // cross-builds the macOS player on Linux.
+            return BuildWithScriptingBackend(
+                ScriptingImplementation.Mono2x,
                 BuildTarget.StandaloneOSX,
                 MacOutput);
+        }
+
+        private static bool BuildWithScriptingBackend(
+            ScriptingImplementation backend,
+            BuildTarget target,
+            string location)
+        {
+            var previous =
+                PlayerSettings.GetScriptingBackend(
+                    NamedBuildTarget.Standalone);
+
+            try
+            {
+                PlayerSettings.SetScriptingBackend(
+                    NamedBuildTarget.Standalone,
+                    backend);
+
+                return Build(
+                    target,
+                    location);
+            }
+            finally
+            {
+                // Restore the committed backend and persist it so gates that
+                // hash ProjectSettings.asset stay reproducible after a build.
+                PlayerSettings.SetScriptingBackend(
+                    NamedBuildTarget.Standalone,
+                    previous);
+                AssetDatabase.SaveAssets();
+            }
         }
 
         public static bool Build(

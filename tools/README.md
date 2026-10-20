@@ -15,6 +15,10 @@ Windows:
 ./tools/run-alpha.ps1
 ~~~
 
+The Windows player is built with IL2CPP (ProjectSettings default). The macOS
+player stays on Mono because IL2CPP macOS players can only be produced on a
+macOS host with Xcode, while release CI cross-builds macOS on Linux.
+
 Independent source-free validation evidence:
 
 ~~~powershell
