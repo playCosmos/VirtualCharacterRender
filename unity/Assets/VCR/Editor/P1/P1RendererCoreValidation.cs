@@ -52,8 +52,27 @@ namespace VCR.Editor.P1
                 characterRoot.transform.SetParent(
                     root.transform,
                     false);
-                characterRoot.AddComponent<
-                    Vrm10CharacterLoader>();
+                var characterLoader =
+                    characterRoot.AddComponent<
+                        Vrm10CharacterLoader>();
+                var serializedCharacterLoader =
+                    new SerializedObject(characterLoader);
+                var placementProperty =
+                    serializedCharacterLoader.FindProperty(
+                        "localEulerAngles");
+                var placementEuler =
+                    placementProperty != null
+                        ? placementProperty.vector3Value
+                        : Vector3.zero;
+
+                Expect(
+                    placementProperty != null &&
+                    Math.Abs(placementEuler.x) < 0.0001f &&
+                    Math.Abs(placementEuler.y - 180f) <
+                        0.0001f &&
+                    Math.Abs(placementEuler.z) < 0.0001f,
+                    "default VRM placement must face the camera",
+                    failures);
 
                 var cameraObject =
                     new GameObject("Main Camera");
