@@ -2,9 +2,9 @@
 
 ## Release
 
-Current alpha candidate: 0.1.0-alpha.1.
+Current alpha candidate: 0.1.0-alpha.4.
 
-Immutable source snapshot: tag `v0.1.0-alpha.1` at commit `d739002abc99ac9c6adf5edfed0595aa4aa7878b`. The historical `release/0.1.0-alpha.1` branch may contain later workflow-retirement commits; build provenance follows the tag, not a mutable branch tip.
+Immutable source snapshot: tag `v0.1.0-alpha.4` at commit `9536fdf625f9bce69a8061e4ebbfbf9dc7859193`. The tag is a lightweight tag on the release commit; build provenance follows the tag, not a mutable branch tip.
 
 This alpha is a full-feature integration build of the current develop runtime. No existing camera, ARKit, VMC, rendering, UI, appearance, event, material, environment, diagnostics, or 2D-host implementation is compiled out for the alpha.
 
@@ -12,16 +12,25 @@ The first validation pass intentionally does not require physical webcam or ARKi
 
 ## Build evidence
 
-The most recent successful complete alpha binary workflow is [run 37933298925](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/37933298925), with Unity `6000.3.25f1` at tagged source commit `d739002abc99ac9c6adf5edfed0595aa4aa7878b`.
+The most recent successful complete alpha binary workflow is [run 39550583196](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39550583196), with Unity `6000.3.25f1` at tagged source commit `9536fdf625f9bce69a8061e4ebbfbf9dc7859193`. Both platform builds, ZIP packaging, the native Windows Player smoke, and release attachment succeeded:
 
-Both platform builds, ZIP packaging, and release attachment succeeded:
+- Windows x64 **IL2CPP** Development build: `VirtualCharacterRender-0.1.0-alpha.4-Windows-x64.zip` (469,605,154 bytes; SHA-256 `0e0e6afe5e33118b3743345cfde2c97f693e7995311aa5b25688633378bfd21b`)
+- macOS Development **Mono** build: `VirtualCharacterRender-0.1.0-alpha.4-macOS.zip` (105,075,696 bytes; SHA-256 `91a6201383b45aeaa3c1dd26132bb5286d4f49e3b5162c2b7103b82b4c80f63c`)
 
-- Windows x64 Development build: `VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip` (94,912,033 bytes; SHA-256 `fa35c62520fe399fb2561c75fdee193675eecf6d631300b33b67fe824c8f7631`)
-- macOS Development build: `VirtualCharacterRender-0.1.0-alpha.1-macOS.zip` (105,031,040 bytes; SHA-256 `c3bfc5daf590367b19163d53dc2e1e0f7ad690b954cfc81d4f6619dec58beb3b`)
+The Windows IL2CPP build produced a 155,316,224-byte `GameAssembly.dll` (SHA-256 `90a057f56dc9b2f8395ae21abb7b3f46cc63770f584a7c95c4ff2aa8b19d6cf5`) and an `il2cpp_data/Metadata/global-metadata.dat` file; no `MonoBleedingEdge` runtime is present. The packaged Player started, reached the scene, reported no character loaded, shut down cleanly, and exited 0 with a 21,641 ms lifetime on `Windows-10-10.0.20348-SP0`.
 
-The earlier successful run `37583662055` remains historical evidence, not evidence that its exact archives are still the ones published. The SHA-256 values above are GitHub's published asset digest fields; independent download/re-hash and player runtime testing remain separate evidence.
+Published evidence assets are part of the release:
 
-This closes compile/package-resolution and standalone binary-generation evidence for the tagged alpha snapshot. It does not close runtime behavior, hardware tracking, OBS, signing/notarization, or performance evidence. New alpha versions follow `docs/RELEASE_PROVENANCE.md`.
+- `il2cpp-evidence.txt` — backend, Unity version, source SHA, and `GameAssembly.dll`/`UnityPlayer.dll`/`global-metadata.dat` hashes
+- `windows-il2cpp-smoke.json` — Player-owned startup/shutdown report
+- `windows-il2cpp-runner-evidence.json` — archive/source binding, exit code, and lifetime
+- `build-provenance.json` and `SHA256SUMS.txt`
+
+Independent download verification matched both ZIP hashes to `SHA256SUMS.txt`, and `python tools/verify-windows-il2cpp-release.py` returned **PASS** against the published Windows ZIP and evidence.
+
+The macOS leg was re-run once after a transient Unity Bee build-backend failure on its first attempt. The published macOS ZIP comes from the successful re-run (attempt 2); the successful Windows IL2CPP artifact from attempt 1 was reused. The retry is recorded here rather than hidden.
+
+This closes Windows IL2CPP compile, package-resolution, binary-generation, and native startup/shutdown evidence for the tagged alpha snapshot. It does not close VRM/character runtime behavior, hardware tracking, OBS, signing/notarization, clean-install/rollback, or performance evidence. New alpha versions follow `docs/RELEASE_PROVENANCE.md`.
 
 ## Startup policy
 
@@ -50,13 +59,13 @@ Run:
 ./tools/build-alpha.ps1
 ~~~
 
-The script bootstraps the pinned MediaPipe 0.16.3 package when missing, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player, and packages the output as a ZIP. The P0-P13 source-free validation chain is intentionally a separate evidence pass so Editor-only validation defects cannot prevent creation of an alpha binary that is needed to test the runtime itself.
+The script bootstraps the pinned MediaPipe 0.16.3 package when missing, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player with the **IL2CPP** scripting backend, and packages the output as a ZIP. The Unity installation must include the Windows IL2CPP module; the committed project default is also IL2CPP. The P0-P13 source-free validation chain is intentionally a separate evidence pass so Editor-only validation defects cannot prevent creation of an alpha binary that is needed to test the runtime itself.
 
 Expected outputs:
 
 ~~~text
-Builds/Alpha/0.1.0-alpha.1/Windows/VirtualCharacterRender.exe
-Builds/Alpha/VirtualCharacterRender-0.1.0-alpha.1-Windows-x64.zip
+Builds/Alpha/0.1.0-alpha.4/Windows/VirtualCharacterRender.exe
+Builds/Alpha/VirtualCharacterRender-0.1.0-alpha.4-Windows-x64.zip
 ~~~
 
 Run the non-hardware validation chain separately:
