@@ -4,11 +4,11 @@ on:
   push:
     tags:
       - "v*-alpha.*"
-    # One version-bound develop commit can publish alpha.2; tag pushes ignore path filters.
+    # One version-bound develop commit can publish alpha.4; tag pushes ignore path filters.
     branches:
       - develop
     paths:
-      - ".github/release-intents/v0.1.0-alpha.3"
+      - ".github/release-intents/v0.1.0-alpha.4"
 
 permissions:
   contents: read
@@ -36,15 +36,15 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           if [[ "$GITHUB_REF" == "refs/heads/develop" ]]; then
-            intent="$(cat .github/release-intents/v0.1.0-alpha.3)"
-            test "$intent" = "0.1.0-alpha.3"
+            intent="$(cat .github/release-intents/v0.1.0-alpha.4)"
+            test "$intent" = "0.1.0-alpha.4"
             tag="v$intent"
           else
             tag="$GITHUB_REF_NAME"
             [[ "$GITHUB_REF" == "refs/tags/$tag" ]]
           fi
           if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+-alpha[.][0-9]+$ ]]; then
-            echo "Expected a new tag such as v0.1.0-alpha.3" >&2
+            echo "Expected a new tag such as v0.1.0-alpha.4" >&2
             exit 1
           fi
           # gh api /git/ref can return a non-empty 'null' sentinel for a
@@ -85,19 +85,21 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     needs: [preflight, native-macos-settings]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Windows x64 (IL2CPP)
+            runsOn: windows-2022
             target: StandaloneWindows64
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
             folder: Windows
             suffix: Windows-x64
-            image: unityci/editor:6000.3.25f1-windows-il2cpp-3
+            image: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
           - name: macOS (Mono)
+            runsOn: ubuntu-latest
             target: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
             folder: macOS
@@ -110,27 +112,100 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify source SHA
+      - name: Verify source SHA and prepare Windows worktree
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          test ! -e unity/Library
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # A CRLF checkout would break the bash bootstrap scripts.
+            find tools -maxdepth 1 -name '*.sh' -print0 | xargs -0 sed -i 's/\r$//'
+            command -v git
+            command -v curl
+            command -v tar
+            command -v sha256sum
+          fi
+      - name: Use pinned Python runtime on Windows
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Provide python3 alias required by Windows bootstrap scripts
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shim_dir="$RUNNER_TEMP/vcr-shims"
+          mkdir -p "$shim_dir"
+          cat > "$shim_dir/python3" <<'EOF'
+          #!/usr/bin/env bash
+          exec python "$@"
+          EOF
+          chmod +x "$shim_dir/python3"
+          printf '%s\n' "$(cygpath -w "$shim_dir")" >> "$GITHUB_PATH"
+          "$shim_dir/python3" --version
       - name: Bind version for Unity runner, even when container env is filtered
         shell: bash
         run: |
           mkdir -p Builds/Alpha
           printf '%s\n' "$VCR_RELEASE_VERSION" > Builds/Alpha/release-version.txt
       - name: Bootstrap pinned MediaPipe package and models
+        shell: bash
         run: bash ./tools/bootstrap-mediapipe.sh
       - name: Bootstrap pinned Pretendard UI font
+        shell: bash
         run: bash ./tools/bootstrap-ui-fonts.sh
       - name: Bootstrap pinned Ultraleap Unity 6 compatibility
+        shell: bash
         run: bash ./tools/bootstrap-ultraleap.sh
       - name: Bootstrap pinned UniWinC native teardown compatibility
+        shell: bash
         run: bash ./tools/bootstrap-uniwinc.sh
       - name: Download compiled AppKit settings host
         uses: actions/download-artifact@v4
         with:
           name: vcr-settings-appkit
           path: unity/Assets/Plugins/macOS/
+      - name: Ensure Windows Docker daemon is ready
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $maxRetries = 10
+          $retryDelay = 6
+          for ($i = 0; $i -lt $maxRetries; $i++) {
+            $svc = Get-Service docker -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -eq 'Running') {
+              docker version 2>$null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Docker is ready."
+                exit 0
+              }
+            }
+            if ($svc -and $svc.Status -eq 'Stopped') {
+              Write-Host "Docker service stopped, attempting to start..."
+              Start-Service docker -ErrorAction SilentlyContinue
+            }
+            Write-Host "Waiting for Docker daemon (attempt $($i+1)/$maxRetries)..."
+            Start-Sleep -Seconds $retryDelay
+          }
+          Write-Error "Docker daemon did not start within $($maxRetries * $retryDelay) seconds"
+          exit 1
+      - name: Pull pinned Windows IL2CPP editor image
+        if: runner.os == 'Windows'
+        shell: powershell
+        timeout-minutes: 25
+        run: |
+          $image = 'unityci/editor:windows-6000.3.25f1-windows-il2cpp-3'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "Pulling $image (attempt $attempt/3)..."
+            docker pull $image
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 30
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Failed to pull $image" }
+          docker image inspect $image | Out-Null
       - name: Build Unity alpha
         uses: game-ci/unity-builder@v4
         env:
@@ -158,22 +233,63 @@ jobs:
             test -f "$folder/VirtualCharacterRender.exe"
             # The Windows alpha must be an IL2CPP player, not a Mono fallback.
             test -f "$folder/GameAssembly.dll"
+            test -f "$folder/UnityPlayer.dll"
+            test -f "$folder/VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat"
             test ! -d "$folder/MonoBleedingEdge"
           else
             test -d "$folder/VirtualCharacterRender.app"
           fi
           mkdir -p release-assets
           package="VirtualCharacterRender-$VCR_RELEASE_VERSION-$PACKAGE_SUFFIX.zip"
-          (cd "$folder" && zip -r -y "$GITHUB_WORKSPACE/release-assets/$package" .)
-          test -s "release-assets/$package"
+          target="$PWD/release-assets/$package"
+          if [[ "$PLAYER_FOLDER" == Windows ]]; then
+            seven_zip="$(command -v 7z || true)"
+            if [[ -z "$seven_zip" && -f "/c/Program Files/7-Zip/7z.exe" ]]; then
+              seven_zip="/c/Program Files/7-Zip/7z.exe"
+            fi
+            if [[ -n "$seven_zip" ]]; then
+              (cd "$folder" && "$seven_zip" a -tzip "$target" . >/dev/null)
+            else
+              powershell -NoProfile -Command "Compress-Archive -Path '$(cygpath -w "$folder")\\*' -DestinationPath '$(cygpath -w "$target")' -Force"
+            fi
+            {
+              printf 'backend=IL2CPP\n'
+              printf 'version=%s\n' "$VCR_RELEASE_VERSION"
+              printf 'unity_version=6000.3.25f1\n'
+              printf 'source_sha=%s\n' "$GITHUB_SHA"
+              printf 'gameassembly_sha256=%s\n' "$(sha256sum "$folder/GameAssembly.dll" | cut -d' ' -f1)"
+              printf 'gameassembly_size=%s\n' "$(stat -c%s "$folder/GameAssembly.dll")"
+              printf 'unityplayer_sha256=%s\n' "$(sha256sum "$folder/UnityPlayer.dll" | cut -d' ' -f1)"
+              printf 'global_metadata_sha256=%s\n' "$(sha256sum "$folder/VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat" | cut -d' ' -f1)"
+            } > release-assets/il2cpp-evidence.txt
+          else
+            (cd "$folder" && zip -r -y "$target" .)
+          fi
+          test -s "$target"
           (cd release-assets && sha256sum "$package" > "$package.sha256")
           printf '%s\n' "$GITHUB_SHA" > "release-assets/$package.source-sha"
           cat "release-assets/$package.sha256"
+      - name: Execute native Windows IL2CPP Player
+        if: runner.os == 'Windows'
+        env:
+          PACKAGE_SUFFIX: ${{ matrix.suffix }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="VirtualCharacterRender-$VCR_RELEASE_VERSION-$PACKAGE_SUFFIX.zip"
+          python tools/run-player-smoke.py \
+            --platform windows \
+            --archive "release-assets/$package" \
+            --source "$GITHUB_SHA" \
+            --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
+          cp Builds/PlayerSmoke/windows/player-smoke.json release-assets/windows-il2cpp-smoke.json
+          cp Builds/PlayerSmoke/windows/runner-evidence.json release-assets/windows-il2cpp-runner-evidence.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: alpha-${{ matrix.suffix }}
           path: release-assets/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   publish:
@@ -202,8 +318,8 @@ jobs:
             test "$GITHUB_REF" = "refs/tags/$tag"
             test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
           else
-            test "$VERSION" = "0.1.0-alpha.3"
-            test "$(cat .github/release-intents/v0.1.0-alpha.3)" = "$VERSION"
+            test "$VERSION" = "0.1.0-alpha.4"
+            test "$(cat .github/release-intents/v0.1.0-alpha.4)" = "$VERSION"
           fi
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -216,12 +332,22 @@ jobs:
             test "$(cat "release-assets/$package.source-sha")" = "$GITHUB_SHA"
             (cd release-assets && sha256sum --check "$package.sha256")
           done
+          test -s release-assets/windows-il2cpp-smoke.json
+          test -s release-assets/windows-il2cpp-runner-evidence.json
+          test -s release-assets/il2cpp-evidence.txt
+          python3 tools/verify-windows-il2cpp-release.py \
+            --smoke release-assets/windows-il2cpp-smoke.json \
+            --runner release-assets/windows-il2cpp-runner-evidence.json \
+            --evidence release-assets/il2cpp-evidence.txt \
+            --archive "release-assets/VirtualCharacterRender-$VERSION-Windows-x64.zip" \
+            --source "$GITHUB_SHA" \
+            --version "$VERSION"
       - name: Create immutable alpha tag after both builds passed
         if: ${{ github.ref == 'refs/heads/develop' }}
         shell: bash
         run: |
           set -euo pipefail
-          test "$VERSION" = "0.1.0-alpha.3"
+          test "$VERSION" = "0.1.0-alpha.4"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           tag="v$VERSION"
           remote_sha="$(git ls-remote --refs origin "refs/tags/$tag" | awk -v ref="refs/tags/$tag" '$2 == ref {print $1}')"
@@ -239,7 +365,9 @@ jobs:
           tag="v$VERSION"
           windows="VirtualCharacterRender-$VERSION-Windows-x64.zip"
           mac="VirtualCharacterRender-$VERSION-macOS.zip"
-          (cd release-assets && sha256sum "$windows" "$mac" > SHA256SUMS.txt)
+          (cd release-assets && sha256sum "$windows" "$mac" \
+            windows-il2cpp-smoke.json windows-il2cpp-runner-evidence.json \
+            il2cpp-evidence.txt > SHA256SUMS.txt)
           jq -n \
             --arg tag "$tag" \
             --arg sha "$GITHUB_SHA" \
@@ -247,14 +375,16 @@ jobs:
             --arg workflow "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg windows "$windows" \
             --arg windows_sha "$(sha256sum "release-assets/$windows" | cut -d' ' -f1)" \
+            --arg windows_backend "IL2CPP" \
+            --arg windows_smoke_sha "$(sha256sum "release-assets/windows-il2cpp-smoke.json" | cut -d' ' -f1)" \
             --arg mac "$mac" \
             --arg mac_sha "$(sha256sum "release-assets/$mac" | cut -d' ' -f1)" \
-            '{tag:$tag,source_sha:$sha,unity_version:$unity,workflow_run:$workflow,assets:[{name:$windows,sha256:$windows_sha},{name:$mac,sha256:$mac_sha}]}' \
+            '{tag:$tag,source_sha:$sha,unity_version:$unity,workflow_run:$workflow,windows_backend:$windows_backend,assets:[{name:$windows,sha256:$windows_sha},{name:$mac,sha256:$mac_sha}],windows_smoke:{asset:"windows-il2cpp-smoke.json",sha256:$windows_smoke_sha,passed:true}}' \
             > release-assets/build-provenance.json
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
-          Integrated desktop development alpha for Windows x64 and macOS (Unity 6000.3.25f1).
+          Integrated desktop development alpha for Windows x64 (IL2CPP) and macOS (Mono) (Unity 6000.3.25f1).
 
           - Immutable source tag: \`$tag\`
           - Source commit: [\`$GITHUB_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
@@ -264,11 +394,16 @@ jobs:
 
           ### Run (Unity is not required)
 
-          - Windows x64: extract the Windows ZIP and double-click \`VirtualCharacterRender.exe\`.
+          - Windows x64: extract the Windows IL2CPP ZIP and double-click \`VirtualCharacterRender.exe\`.
           - Apple Silicon macOS: extract the macOS ZIP and open \`VirtualCharacterRender.app\`. If macOS blocks an unsigned app, review it under System Settings > Privacy & Security.
           - You can launch without a VRM model, camera or OBS; enable those features separately after startup.
 
-          This release demonstrates build/package success, not physical tracking, OBS, or performance validation. See \`docs/ALPHA_TESTING.md\`.
+          ### Build and runtime evidence
+
+          - Windows x64 backend: \`IL2CPP\` (GameAssembly.dll and il2cpp_data included; no MonoBleedingEdge).
+          - The Windows IL2CPP Player passed a native startup/shutdown smoke before publication.
+          - Evidence assets: \`windows-il2cpp-smoke.json\`, \`windows-il2cpp-runner-evidence.json\`, \`il2cpp-evidence.txt\`.
+          - This release demonstrates build/package success and Windows IL2CPP startup/shutdown. It does not prove physical tracking, OBS, camera, Ultraleap, or performance validation. See \`docs/ALPHA_TESTING.md\`.
           EOF
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -278,6 +413,9 @@ jobs:
           gh release create "$tag" \
             "release-assets/$windows" "release-assets/$mac" \
             release-assets/SHA256SUMS.txt release-assets/build-provenance.json \
+            release-assets/il2cpp-evidence.txt \
+            release-assets/windows-il2cpp-smoke.json \
+            release-assets/windows-il2cpp-runner-evidence.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "VirtualCharacterRender $VERSION" \
             --notes-file release-notes.md --prerelease
@@ -288,6 +426,6 @@ jobs:
           tag="v$VERSION"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
           test "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')" = "$GITHUB_SHA"
-          for file in "VirtualCharacterRender-$VERSION-Windows-x64.zip" "VirtualCharacterRender-$VERSION-macOS.zip" SHA256SUMS.txt build-provenance.json; do
+          for file in "VirtualCharacterRender-$VERSION-Windows-x64.zip" "VirtualCharacterRender-$VERSION-macOS.zip" SHA256SUMS.txt build-provenance.json il2cpp-evidence.txt windows-il2cpp-smoke.json windows-il2cpp-runner-evidence.json; do
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx -- "$file"
           done

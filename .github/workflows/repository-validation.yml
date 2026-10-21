@@ -57,6 +57,9 @@ jobs:
       - name: Validate immutable alpha release policy
         run: python3 tools/validate-alpha-release-policy.py
 
+      - name: Test native Player smoke sidecar resolution
+        run: python3 tools/test-player-smoke-sidecars.py
+
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
 
