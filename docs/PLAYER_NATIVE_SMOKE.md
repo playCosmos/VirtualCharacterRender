@@ -12,9 +12,10 @@ Development Player on Linux using the already pinned MediaPipe,
 Pretendard, Ultraleap and UniWinC bootstraps, and then downloads the
 exact archives to native Windows and macOS GitHub-hosted runners.
 Windows IL2CPP cannot be produced on a Linux host: it requires a Windows
-host with the Visual C++/Windows SDK IL2CPP toolchain. The IL2CPP release
-player is built and smoke-tested separately on Windows; this Linux CI
-gate does not claim IL2CPP coverage.
+host with the Visual C++/Windows SDK IL2CPP toolchain. The Windows IL2CPP
+release player is built and smoke-tested separately by
+`.github/workflows/windows-il2cpp-build.yml` on `windows-2022`; this Linux
+CI gate does not claim IL2CPP coverage.
 
 The packaging step requires an actual Player, records archive SHA-256
 and source commit, and verifies committed Unity lock/settings files
@@ -37,8 +38,28 @@ With `-batchmode -nographics`, the built Player must:
 
 `tools/run-player-smoke.py` verifies the ZIP source SHA, package digest,
 native executable SHA, exact Unity version, runtime report, platform,
-exit status, and runtime time limit. On failure it uploads the log and
-runner diagnosis; missing JSON is **FAIL**, not an assumed PASS.
+exit status, and runtime time limit. It accepts both release sidecars
+(`<asset>.zip.sha256`/`<asset>.zip.source-sha`) and native-smoke sidecars
+(`<platform>.sha256`/`<platform>.source-sha`). On failure it uploads the
+log and runner diagnosis; missing JSON is **FAIL**, not an assumed PASS.
+
+## Windows IL2CPP host gate
+
+`.github/workflows/windows-il2cpp-build.yml` is the reproducible Windows
+IL2CPP path. It runs on a `windows-2022` host, pulls the pinned
+`unityci/editor:windows-6000.3.25f1-windows-il2cpp-3` image, builds with
+`VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu`, and requires:
+
+- `VirtualCharacterRender.exe`, `UnityPlayer.dll`, `GameAssembly.dll`;
+- `VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat`;
+- no `MonoBleedingEdge` directory;
+- a packaged ZIP with source SHA and SHA-256 sidecars;
+- the packaged Player itself to write a passing startup/shutdown report.
+
+The alpha release workflow uses the same Windows host path and adds
+`tools/verify-windows-il2cpp-release.py` before publishing. Publication is
+refused unless the Player report, native runner evidence, IL2CPP metadata
+and archive digest all describe the same source commit and artifact.
 
 ## Evidence and exclusions
 
@@ -47,7 +68,8 @@ plus Player logs. This is **headless native process evidence** only.
 
 It does **not** establish that GUI presentation, transparent windows,
 OBS capture, physical camera/tracking, VRM 0.x/1.0 model quality,
-Ultraleap, Apple Silicon architecture, frame-rate targets, or the Windows
-IL2CPP player work. Those require a later interactive
+Ultraleap, Apple Silicon architecture, frame-rate targets, or interactive
+Windows IL2CPP VRM/tracking behavior. Those require a later interactive
 hardware-equipped Windows/macOS validation pass. A Windows/macOS build
-alone never counts as a runtime PASS.
+alone never counts as a runtime PASS; the Windows IL2CPP startup/shutdown
+smoke is process evidence, not interactive product acceptance.

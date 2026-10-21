@@ -1,0 +1,195 @@
+name: Windows IL2CPP build and native startup smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-il2cpp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows x64 IL2CPP and execute Player
+    runs-on: windows-2022
+    timeout-minutes: 150
+    env:
+      VCR_RELEASE_VERSION: 0.0.0-alpha.0
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify source and normalize Windows shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          test ! -e unity/Library
+          # A CRLF checkout would break the bash bootstrap scripts.
+          find tools -maxdepth 1 -name '*.sh' -print0 | xargs -0 sed -i 's/\r$//'
+          command -v git
+          command -v curl
+          command -v tar
+          command -v sha256sum
+
+      - name: Use pinned Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Provide python3 alias required by bootstrap scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shim_dir="$RUNNER_TEMP/vcr-shims"
+          mkdir -p "$shim_dir"
+          cat > "$shim_dir/python3" <<'EOF'
+          #!/usr/bin/env bash
+          exec python "$@"
+          EOF
+          chmod +x "$shim_dir/python3"
+          printf '%s\n' "$(cygpath -w "$shim_dir")" >> "$GITHUB_PATH"
+          "$shim_dir/python3" --version
+
+      - name: Bootstrap pinned MediaPipe and models
+        shell: bash
+        run: bash tools/bootstrap-mediapipe.sh
+
+      - name: Bootstrap verified Pretendard UI font
+        shell: bash
+        run: bash tools/bootstrap-ui-fonts.sh
+
+      - name: Bootstrap pinned Ultraleap compatibility
+        shell: bash
+        run: bash tools/bootstrap-ultraleap.sh
+
+      - name: Bootstrap pinned UniWinC compatibility
+        shell: bash
+        run: bash tools/bootstrap-uniwinc.sh
+
+      - name: Bind alpha version for the Unity build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Builds/Alpha
+          printf '%s\n' "$VCR_RELEASE_VERSION" > Builds/Alpha/release-version.txt
+          test "$(cat Builds/Alpha/release-version.txt)" = "$VCR_RELEASE_VERSION"
+
+      - name: Ensure Windows Docker daemon is ready
+        shell: powershell
+        run: |
+          $maxRetries = 10
+          $retryDelay = 6
+          for ($i = 0; $i -lt $maxRetries; $i++) {
+            $svc = Get-Service docker -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -eq 'Running') {
+              docker version 2>$null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Docker is ready."
+                exit 0
+              }
+            }
+            if ($svc -and $svc.Status -eq 'Stopped') {
+              Write-Host "Docker service stopped, attempting to start..."
+              Start-Service docker -ErrorAction SilentlyContinue
+            }
+            Write-Host "Waiting for Docker daemon (attempt $($i+1)/$maxRetries)..."
+            Start-Sleep -Seconds $retryDelay
+          }
+          Write-Error "Docker daemon did not start within $($maxRetries * $retryDelay) seconds"
+          exit 1
+
+      - name: Pull pinned Windows IL2CPP editor image
+        shell: powershell
+        timeout-minutes: 25
+        run: |
+          $image = 'unityci/editor:windows-6000.3.25f1-windows-il2cpp-3'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "Pulling $image (attempt $attempt/3)..."
+            docker pull $image
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 30
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Failed to pull $image" }
+          docker image inspect $image | Out-Null
+
+      - name: Build Windows IL2CPP Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+          customImage: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Verify real IL2CPP output and package provenance
+        shell: bash
+        env:
+          PLAYER_FOLDER: Windows
+          PACKAGE_SUFFIX: Windows-x64
+        run: |
+          set -euo pipefail
+          folder="Builds/Alpha/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          test -d "$folder"
+          test -s "$folder/VirtualCharacterRender.exe"
+          test -s "$folder/GameAssembly.dll"
+          test -s "$folder/UnityPlayer.dll"
+          test -f "$folder/VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat"
+          test ! -d "$folder/MonoBleedingEdge"
+          mkdir -p release-assets
+          {
+            printf 'version=%s\n' "$VCR_RELEASE_VERSION"
+            printf 'source_sha=%s\n' "$GITHUB_SHA"
+            printf 'gameassembly_sha256=%s\n' "$(sha256sum "$folder/GameAssembly.dll" | cut -d' ' -f1)"
+            printf 'gameassembly_size=%s\n' "$(stat -c%s "$folder/GameAssembly.dll")"
+            printf 'unityplayer_sha256=%s\n' "$(sha256sum "$folder/UnityPlayer.dll" | cut -d' ' -f1)"
+            printf 'global_metadata_sha256=%s\n' "$(sha256sum "$folder/VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat" | cut -d' ' -f1)"
+          } > release-assets/il2cpp-evidence.txt
+          cat release-assets/il2cpp-evidence.txt
+          package="VirtualCharacterRender-$VCR_RELEASE_VERSION-$PACKAGE_SUFFIX.zip"
+          target="$GITHUB_WORKSPACE/release-assets/$package"
+          seven_zip="$(command -v 7z || true)"
+          if [[ -z "$seven_zip" && -f "/c/Program Files/7-Zip/7z.exe" ]]; then
+            seven_zip="/c/Program Files/7-Zip/7z.exe"
+          fi
+          if [[ -n "$seven_zip" ]]; then
+            (cd "$folder" && "$seven_zip" a -tzip "$target" . >/dev/null)
+          else
+            powershell -NoProfile -Command "Compress-Archive -Path '$folder\\*' -DestinationPath '$target' -Force"
+          fi
+          test -s "$target"
+          (cd release-assets && sha256sum "$package" > "$package.sha256")
+          printf '%s\n' "$GITHUB_SHA" > "release-assets/$package.source-sha"
+          cat "release-assets/$package.sha256"
+
+      - name: Execute native Windows IL2CPP Player
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/run-player-smoke.py \
+            --platform windows \
+            --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
+            --source "$GITHUB_SHA" \
+            --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
+
+      - name: Upload IL2CPP player and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-il2cpp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            release-assets/
+            Builds/PlayerSmoke/windows/
+          if-no-files-found: warn
+          retention-days: 7

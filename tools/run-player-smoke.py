@@ -22,10 +22,24 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def sidecar(archive, suffix):
+    # Native smoke artifacts use "<platform>.sha256"/"<platform>.source-sha"
+    # (suffix replaces .zip), while release assets use the standard
+    # "<asset>.zip.sha256"/"<asset>.zip.source-sha" convention. Accept both.
+    candidates = (
+        archive.with_suffix(suffix),
+        archive.with_name(archive.name + suffix),
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(
+        "Missing Player archive sidecar: " +
+        " or ".join(str(candidate) for candidate in candidates))
+
+
 def execute(args):
     archive = Path(args.archive).resolve()
-    digest_file = archive.with_suffix(".sha256")
-    source_file = archive.with_suffix(".source-sha")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     result_path = output / "player-smoke.json"
@@ -44,8 +58,10 @@ def execute(args):
     }
 
     try:
-        if not archive.is_file() or not digest_file.is_file() or not source_file.is_file():
-            raise RuntimeError("Missing Player archive, SHA-256 or source provenance")
+        if not archive.is_file():
+            raise RuntimeError("Missing Player archive")
+        digest_file = sidecar(archive, ".sha256")
+        source_file = sidecar(archive, ".source-sha")
         if source_file.read_text(encoding="utf-8").strip() != args.source:
             raise RuntimeError("Artifact source SHA does not match the tested checkout")
 
