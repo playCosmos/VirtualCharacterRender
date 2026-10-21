@@ -26,7 +26,12 @@ namespace VCR.Runtime.Character
         [Header("Placement")]
         [SerializeField] private Transform characterParent;
         [SerializeField] private Vector3 localPosition = Vector3.zero;
-        [SerializeField] private Vector3 localEulerAngles = Vector3.zero;
+
+        // VRM 0.x/1.0 assets face +Z. The VCR camera sits on -Z and looks
+        // toward +Z, so the default placement must turn the character around
+        // to present its front to the viewer.
+        [SerializeField] private Vector3 localEulerAngles =
+            new(0f, 180f, 0f);
 
         [Header("Tracking")]
         [SerializeField] private MonoBehaviour trackingProviderBehaviour;
