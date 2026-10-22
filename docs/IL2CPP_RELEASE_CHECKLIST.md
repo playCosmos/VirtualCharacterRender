@@ -20,9 +20,9 @@ does not convert the older Development alpha build, the headless startup
 smoke, or a local diagnostic build into interactive product acceptance.
 
 Current audit count: **7 PASS, 6 PARTIAL, 2 OPEN, 1 HOLD**. The count includes
-the complete local release-candidate archive, native smoke, and verifier
-evidence below. It still does not include interactive GUI, hardware, OBS, or
-M2 acceptance.
+the complete local release-candidate archive, native smoke, verifier evidence,
+and one candidate GUI shutdown check. It still does not include release-grade
+interactive GUI, OBS, hardware, or M2 acceptance.
 
 Decision applied 2026-10-22 in `a9aab228b998a8b370700fef10a13c075de9edb8`: the
 alpha publication workflow and the Windows IL2CPP CI workflow now use the
