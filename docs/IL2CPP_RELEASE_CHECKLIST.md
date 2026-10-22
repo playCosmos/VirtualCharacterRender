@@ -54,7 +54,7 @@ remains unpublished and is not authorized for tagging/release.
 | I-06 | macOS remains on Mono; Windows-only IL2CPP changes do not alter the macOS backend. | `AlphaBuildMenu.BuildMac()` selects `ScriptingImplementation.Mono2x`; alpha.4 published a macOS Mono ZIP from the same release workflow. | **PASS** | This is a backend/build-scope pass only. Apple Silicon macOS runtime and hardware evidence remain M2 work. |
 | I-07 | Native plugins used by the product (MediaPipe, Ultraleap/LeapC, UniWinC) are packaged and load under IL2CPP. | The current candidate package contains `VirtualCharacterRender_Data/Plugins/x86_64/LeapC.dll`, `LibUniWinC.dll`, `mediapipe_c.dll`, and `UltraleapOpenXRUnity.dll`; the corresponding managed assemblies are present under the IL2CPP backup folder. The headless smoke does not exercise the plugin entry points. | **PARTIAL** | Exercise each plugin in a real Player where hardware or a deterministic fixture permits; packaging alone is not runtime loading evidence. |
 | I-08 | P/Invoke, native callbacks, delegate marshalling, and AOT-generated wrappers are safe on Windows IL2CPP. | Project-owned P/Invoke exists in `DesktopNativeSettingsWindow`, `DesktopWindowChromeController`, and `DesktopCharacterFileSelectionAdapter` (Windows `user32`/`comdlg32`); macOS settings use `VcrSettingsWindow` under platform guards. No `MonoPInvokeCallback` was found in `Assets`. The project compiles and the headless smoke starts, but GUI P/Invoke paths are not exercised. | **PARTIAL** | Exercise the native settings/window/file-dialog paths and package callbacks in the release candidate; add a focused marshalling audit if new callbacks are introduced. |
-| I-09 | VRM 0.x/1.0 load, reload, unload, material/MToon, expression, blink, and mouth behavior work under Windows IL2CPP. | The fixed non-Development diagnostic build loaded an Alicia VRM and was used for quit-timing screenshots. The current alpha.5 candidate GUI run also loaded the private Alicia VRM (`CharacterReady`, `characterLoaded=true`, screenshot) and exited 0. A local 4-model x 2-run matrix then loaded VRM0 (`AliciaSolid`, `Sendagaya_Shibu`) and VRM1 (`Seed-san`, `VRM1_Constraint_Twist_Sample`) 8/8 times with `CharacterReady`, `characterLoaded=true`, `quitCallbackObserved=true`, and exit 0; evidence is local-only under `Builds/ReleaseCandidates/0.1.0-alpha.5/vrm-matrix`. These samples are private local evidence and the runs did not exercise expressions, blink/mouth, materials, or UI/configuration combinations. | **PARTIAL** | Repeat with a clean release candidate and the full real-VRM/material/expression/UI matrix; keep public samples private. Do not count this as M2 PASS. |
+| I-09 | VRM 0.x/1.0 load, reload, unload, material/MToon, expression, blink, and mouth behavior work under Windows IL2CPP. | The fixed non-Development diagnostic build loaded an Alicia VRM and was used for quit-timing screenshots. The current alpha.5 candidate GUI run also loaded the private Alicia VRM (`CharacterReady`, `characterLoaded=true`, screenshot) and exited 0. A local 4-model x 2-run matrix then loaded VRM0 (`AliciaSolid`, `Sendagaya_Shibu`) and VRM1 (`Seed-san`, `VRM1_Constraint_Twist_Sample`) 8/8 times with `CharacterReady`, `characterLoaded=true`, `quitCallbackObserved=true`, and exit 0; evidence is local-only under `Builds/ReleaseCandidates/0.1.0-alpha.5/vrm-matrix`. A separate local negative check used a synthetic 9-byte non-GLB file and a 1,073,741,825-byte VRM: both failed to load without crashing, logged a clear load error, stayed at `sceneState=Ready` with `characterLoaded=false`, and exited 0; `runtime.json` did not expose the error and no visual fallback/UI review was done. These samples are private local evidence and the runs did not exercise expressions, blink/mouth, materials, or UI/configuration combinations. | **PARTIAL** | Repeat with a clean release candidate and the full real-VRM/material/expression/UI matrix; keep public samples private. Do not count this as M2 PASS. |
 | I-10 | Transparent window, topmost, click-through, resize, DPI, and desktop output behavior work under IL2CPP. | The published alpha.4 smoke used `-batchmode -nographics`, so it does not prove GUI presentation or transparent-window behavior. Diagnostic and current candidate GUI screenshots exist, but no release-grade interactive or OBS evidence exists. | **OPEN** | Run interactive Windows IL2CPP checks, including OBS 720p60/1080p60 and DPI/resize cases. |
 | I-11 | MediaPipe webcam, ARKit/iFacialMocap, VMC/OSC, and tracking routing work under IL2CPP. | The components are included in the alpha scene but start disabled. P0-P13 source-free Editor validation passed; no physical camera/ARKit or real VMC/OSC IL2CPP runtime evidence was found. | **OPEN** | Exercise real and loopback tracking paths in the release candidate; hardware evidence remains required for M2. |
 | I-12 | Ultraleap/LeapC lifecycle and shutdown are correct under IL2CPP. | `924ddbc7` adds `VcrUltraleapRuntimePolicy`, which avoids the unused LeapC hint connection. Fixed diagnostic non-Development runs exited in ~0.6-1.1 s; actual Ultraleap hardware was not tested. | **PARTIAL** | Test hardware-enabled startup/shutdown, repeat-run acceptance, and retain a native stack/evidence boundary. |
@@ -121,9 +121,10 @@ remains unpublished and is not authorized for tagging/release.
   true.
 - Verifier: PASS (`tools/verify-windows-il2cpp-release.py`) using the archive,
   sidecars, source, version, IL2CPP evidence, smoke JSON, and runner evidence.
-- The candidate has **not** been interactively exercised with a VRM, OBS,
-  physical tracking hardware, or macOS. It is release-candidate process
-  evidence, not M2 acceptance.
+- The candidate has been locally exercised with four private VRM samples in
+  8 GUI runs, but not with OBS, physical tracking hardware, Apple Silicon
+  macOS, or the full expression/material/UI matrix. It is release-candidate
+  process plus local load/unload evidence, not M2 acceptance.
 
 ### Local repeat and VRM matrix (unpublished diagnostic)
 
@@ -143,6 +144,13 @@ remains unpublished and is not authorized for tagging/release.
   `quitCallbackObserved=true`, and exit 0. Window-gone was 454.3-783.0 ms;
   PID exit was 729.5-1,083.5 ms. Evidence:
   `Builds/ReleaseCandidates/0.1.0-alpha.5/vrm-matrix/`.
+- Local negative VRM diagnostics: a synthetic 9-byte non-GLB file and a
+  1,073,741,825-byte VRM both failed to load without crashing, logged
+  `glb header not found` / the 1 GiB safety-limit error, remained at
+  `sceneState=Ready` with `characterLoaded=false`, and exited 0. The runtime
+  telemetry did not expose the load error, and no visual fallback/UI review
+  was performed. Evidence:
+  `Builds/ReleaseCandidates/0.1.0-alpha.5/vrm-negative/`.
 - The repeat and matrix are local diagnostics only. They are not 5-run CI
   acceptance, OBS 720p60/1080p60, camera/Ultraleap hardware, Apple Silicon
   macOS, soak/cycle, or M2 PASS evidence. The >2 s headless tail requires a
@@ -167,8 +175,13 @@ release-candidate smoke is a separate process-level gate.
 Both the Windows IL2CPP and native Windows/macOS smoke workflows now accept a
 `smoke_repeat_count` dispatch input (1-10). When it is greater than 1, the
 native runner records the quit-marker-to-process-exit tail in
-`repeat-summary.json` and requires the marker. No 5-run CI dispatch is claimed
-in this revision; the local 2-run result above is not a substitute.
+`repeat-summary.json` and requires the marker. A 5-run dispatch is in progress
+on `5a7a97e7`: Windows IL2CPP
+[run 39754710821](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754710821)
+and native Windows/macOS
+[run 39754714410](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754714410).
+Results are pending and are not claimed in this revision; the local 2-run
+result above is not a substitute.
 
 ## Explicitly not claimed
 
