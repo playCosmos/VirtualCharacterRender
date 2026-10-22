@@ -61,6 +61,14 @@ The alpha release workflow uses the same Windows host path and adds
 refused unless the Player report, native runner evidence, IL2CPP metadata
 and archive digest all describe the same source commit and artifact.
 
+For a **non-Development** release-candidate verification build, use
+`VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsReleaseCandidateAndExit`. It
+uses `BuildOptions.None`, writes to
+`Builds/ReleaseCandidates/<version>/Windows`, and is the path used for the
+local `0.1.0-alpha.5` candidate. It is not yet the publication workflow
+path. See `docs/IL2CPP_RELEASE_CHECKLIST.md` for the 16-item evidence audit
+and the boundary between process smoke and interactive acceptance.
+
 ## Evidence and exclusions
 
 CI outputs an archive per platform and separate startup/shutdown JSON
