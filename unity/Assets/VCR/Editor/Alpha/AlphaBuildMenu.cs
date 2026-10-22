@@ -13,6 +13,9 @@ namespace VCR.Editor.Alpha
     {
         private const string DefaultVersion = "0.1.0-alpha.1";
 
+        private const BuildOptions DevelopmentAlphaBuildOptions =
+            BuildOptions.Development | BuildOptions.AllowDebugging;
+
         // CI sets this from the immutable tag. The legacy local default remains
         // available to run existing alpha.1 evidence builds.
         public static string Version
@@ -52,6 +55,10 @@ namespace VCR.Editor.Alpha
 
         public static string WindowsOutput =>
             "Builds/Alpha/" + Version + "/Windows/VirtualCharacterRender.exe";
+
+        public static string WindowsReleaseCandidateOutput =>
+            "Builds/ReleaseCandidates/" + Version +
+            "/Windows/VirtualCharacterRender.exe";
 
         public static string MacOutput =>
             "Builds/Alpha/" + Version + "/macOS/VirtualCharacterRender.app";
@@ -96,7 +103,29 @@ namespace VCR.Editor.Alpha
             return BuildWithScriptingBackend(
                 ScriptingImplementation.IL2CPP,
                 BuildTarget.StandaloneWindows64,
-                WindowsOutput);
+                WindowsOutput,
+                DevelopmentAlphaBuildOptions);
+        }
+
+        [MenuItem("VCR/Alpha/Build/Windows x64 IL2CPP Release Candidate")]
+        public static void BuildWindowsReleaseCandidateFromMenu()
+        {
+            if (!BuildWindowsReleaseCandidate())
+            {
+                throw new InvalidOperationException(
+                    "VCR Windows IL2CPP release-candidate build failed.");
+            }
+        }
+
+        public static bool BuildWindowsReleaseCandidate()
+        {
+            // Release-candidate provenance requires a non-Development Player.
+            // Keep the legacy Development alpha path for smoke/diagnostics.
+            return BuildWithScriptingBackend(
+                ScriptingImplementation.IL2CPP,
+                BuildTarget.StandaloneWindows64,
+                WindowsReleaseCandidateOutput,
+                BuildOptions.None);
         }
 
         // CI-only path: Ubuntu-hosted game-ci images do not include the
@@ -108,7 +137,8 @@ namespace VCR.Editor.Alpha
             return BuildWithScriptingBackend(
                 ScriptingImplementation.Mono2x,
                 BuildTarget.StandaloneWindows64,
-                WindowsOutput);
+                WindowsOutput,
+                DevelopmentAlphaBuildOptions);
         }
 
         [MenuItem("VCR/Alpha/Build/macOS Development Alpha")]
@@ -129,13 +159,15 @@ namespace VCR.Editor.Alpha
             return BuildWithScriptingBackend(
                 ScriptingImplementation.Mono2x,
                 BuildTarget.StandaloneOSX,
-                MacOutput);
+                MacOutput,
+                DevelopmentAlphaBuildOptions);
         }
 
         private static bool BuildWithScriptingBackend(
             ScriptingImplementation backend,
             BuildTarget target,
-            string location)
+            string location,
+            BuildOptions options)
         {
             var previous =
                 PlayerSettings.GetScriptingBackend(
@@ -149,7 +181,8 @@ namespace VCR.Editor.Alpha
 
                 return Build(
                     target,
-                    location);
+                    location,
+                    options);
             }
             finally
             {
@@ -165,6 +198,17 @@ namespace VCR.Editor.Alpha
         public static bool Build(
             BuildTarget target,
             string location)
+        {
+            return Build(
+                target,
+                location,
+                DevelopmentAlphaBuildOptions);
+        }
+
+        public static bool Build(
+            BuildTarget target,
+            string location,
+            BuildOptions options)
         {
             Debug.Log(
                 "VCR Alpha build: source-free validation is a separate evidence pass and does not block alpha binary generation. " +
@@ -211,8 +255,7 @@ namespace VCR.Editor.Alpha
                         target =
                             target,
                         options =
-                            BuildOptions.Development |
-                            BuildOptions.AllowDebugging
+                            options
                     });
 
             var summary =
@@ -260,6 +303,12 @@ namespace VCR.Editor.Alpha
         {
             ExitWithResult(
                 BuildWindowsMono());
+        }
+
+        public static void BuildWindowsReleaseCandidateAndExit()
+        {
+            ExitWithResult(
+                BuildWindowsReleaseCandidate());
         }
 
         public static void BuildMacAndExit()
