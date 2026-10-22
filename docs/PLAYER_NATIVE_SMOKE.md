@@ -63,6 +63,11 @@ The alpha release workflow uses the same Windows host path and adds
 refused unless the Player report, native runner evidence, IL2CPP metadata
 and archive digest all describe the same source commit and artifact.
 
+A non-Development dispatch at `a9aab228` ([run
+39734065562](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39734065562))
+passed the packaged smoke and verifier; this is headless process evidence,
+not interactive acceptance.
+
 For a **non-Development** release-candidate verification build, use
 `VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsReleaseCandidateFromMenu` (or
 `BuildWindowsReleaseCandidateAndExit` in batch mode). It uses

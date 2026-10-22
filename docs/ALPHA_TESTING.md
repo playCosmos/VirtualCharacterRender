@@ -32,7 +32,9 @@ The macOS leg was re-run once after a transient Unity Bee build-backend failure 
 
 This closes Windows IL2CPP compile, package-resolution, binary-generation, and native startup/shutdown evidence for the tagged alpha snapshot. It does not close VRM/character runtime behavior, hardware tracking, OBS, signing/notarization, clean-install/rollback, or performance evidence. New alpha versions follow `docs/RELEASE_PROVENANCE.md`.
 
-A local `0.1.0-alpha.5` non-Development IL2CPP candidate was built from `c87e98d03f65f170d77bb7a86de62f4e53a16ea7` and passed the packaged Player smoke and `tools/verify-windows-il2cpp-release.py`. It is **not published**: there is no alpha.5 tag or GitHub Release. See `docs/IL2CPP_RELEASE_CHECKLIST.md` for the item-by-item evidence boundary.
+A local `0.1.0-alpha.5` non-Development IL2CPP candidate was built from `c87e98d03f65f170d77bb7a86de62f4e53a16ea7` and passed the packaged Player smoke and `tools/verify-windows-il2cpp-release.py`. A local candidate GUI shutdown check with the private Alicia VRM at a 720p window recorded window-gone 441.9 ms and PID exit 754.7 ms with exit code 0, after `CharacterReady`; this is a single local run, not 5-run acceptance or hardware evidence. It is **not published**: there is no alpha.5 tag or GitHub Release. See `docs/IL2CPP_RELEASE_CHECKLIST.md` for the item-by-item evidence boundary.
+
+Independent CI verification also passed on `a9aab228`: Windows IL2CPP run [39734065562](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39734065562) built a non-Development `0.0.0-alpha.0` artifact, passed the packaged smoke (exit 0, 5,359.0 ms), and passed the verifier step; native Windows/macOS Mono smoke run [39733680939](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39733680939) and P0-P13 run [39733680901](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39733680901) also passed. These are process/provenance checks, not GUI/OBS/hardware acceptance.
 
 ## Startup policy
 
