@@ -128,7 +128,7 @@ jobs:
           projectPath: unity
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
-          buildMethod: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+          buildMethod: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsReleaseCandidateFromMenu
           customImage: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
           versioning: None
           allowDirtyBuild: true
@@ -140,7 +140,7 @@ jobs:
           PACKAGE_SUFFIX: Windows-x64
         run: |
           set -euo pipefail
-          folder="Builds/Alpha/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          folder="Builds/ReleaseCandidates/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
           test -d "$folder"
           test -s "$folder/VirtualCharacterRender.exe"
           test -s "$folder/GameAssembly.dll"
@@ -149,7 +149,10 @@ jobs:
           test ! -d "$folder/MonoBleedingEdge"
           mkdir -p release-assets
           {
+            printf 'backend=IL2CPP\n'
+            printf 'build_options=None\n'
             printf 'version=%s\n' "$VCR_RELEASE_VERSION"
+            printf 'unity_version=6000.3.25f1\n'
             printf 'source_sha=%s\n' "$GITHUB_SHA"
             printf 'gameassembly_sha256=%s\n' "$(sha256sum "$folder/GameAssembly.dll" | cut -d' ' -f1)"
             printf 'gameassembly_size=%s\n' "$(stat -c%s "$folder/GameAssembly.dll")"
@@ -182,6 +185,20 @@ jobs:
             --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
             --source "$GITHUB_SHA" \
             --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
+
+      - name: Verify Windows IL2CPP release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Builds/PlayerSmoke/windows/player-smoke.json release-assets/windows-il2cpp-smoke.json
+          cp Builds/PlayerSmoke/windows/runner-evidence.json release-assets/windows-il2cpp-runner-evidence.json
+          python tools/verify-windows-il2cpp-release.py \
+            --smoke release-assets/windows-il2cpp-smoke.json \
+            --runner release-assets/windows-il2cpp-runner-evidence.json \
+            --evidence release-assets/il2cpp-evidence.txt \
+            --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
+            --source "$GITHUB_SHA" \
+            --version "$VCR_RELEASE_VERSION"
 
       - name: Upload IL2CPP player and runtime evidence
         if: always()

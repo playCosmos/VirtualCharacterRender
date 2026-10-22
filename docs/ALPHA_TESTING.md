@@ -2,7 +2,7 @@
 
 ## Release
 
-Current alpha candidate: 0.1.0-alpha.4.
+Current published alpha: 0.1.0-alpha.4.
 
 Immutable source snapshot: tag `v0.1.0-alpha.4` at commit `9536fdf625f9bce69a8061e4ebbfbf9dc7859193`. The tag is a lightweight tag on the release commit; build provenance follows the tag, not a mutable branch tip.
 
@@ -32,6 +32,8 @@ The macOS leg was re-run once after a transient Unity Bee build-backend failure 
 
 This closes Windows IL2CPP compile, package-resolution, binary-generation, and native startup/shutdown evidence for the tagged alpha snapshot. It does not close VRM/character runtime behavior, hardware tracking, OBS, signing/notarization, clean-install/rollback, or performance evidence. New alpha versions follow `docs/RELEASE_PROVENANCE.md`.
 
+A local `0.1.0-alpha.5` non-Development IL2CPP candidate was built from `c87e98d03f65f170d77bb7a86de62f4e53a16ea7` and passed the packaged Player smoke and `tools/verify-windows-il2cpp-release.py`. It is **not published**: there is no alpha.5 tag or GitHub Release. See `docs/IL2CPP_RELEASE_CHECKLIST.md` for the item-by-item evidence boundary.
+
 ## Startup policy
 
 The integrated alpha scene includes these physical/external input components but starts them disabled:
@@ -59,7 +61,7 @@ Run:
 ./tools/build-alpha.ps1
 ~~~
 
-The script bootstraps the pinned MediaPipe 0.16.3 package when missing, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player with the **IL2CPP** scripting backend, and packages the output as a ZIP. The Unity installation must include the Windows IL2CPP module; the committed project default is also IL2CPP. The P0-P13 source-free validation chain is intentionally a separate evidence pass so Editor-only validation defects cannot prevent creation of an alpha binary that is needed to test the runtime itself.
+The script bootstraps the pinned MediaPipe 0.16.3 package when missing, creates a fresh integrated alpha runtime scene, builds a Windows x64 Development Player with the **IL2CPP** scripting backend, and packages the output as a ZIP for local diagnostics. The release workflow is different: it uses `VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsReleaseCandidateFromMenu` with `BuildOptions.None` (non-Development), writes to `Builds/ReleaseCandidates/<version>/Windows`, and requires `tools/verify-windows-il2cpp-release.py` before upload/publication. The Unity installation must include the Windows IL2CPP module; the committed project default is also IL2CPP. The P0-P13 source-free validation chain is intentionally a separate evidence pass so Editor-only validation defects cannot prevent creation of an alpha binary that is needed to test the runtime itself.
 
 Expected outputs:
 

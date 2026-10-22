@@ -91,10 +91,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows x64 (IL2CPP)
+          - name: Windows x64 (IL2CPP, non-Development)
             runsOn: windows-2022
             target: StandaloneWindows64
-            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsFromMenu
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsReleaseCandidateFromMenu
             folder: Windows
             suffix: Windows-x64
             image: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
@@ -227,7 +227,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          folder="Builds/Alpha/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          if [[ "$PLAYER_FOLDER" == Windows ]]; then
+            folder="Builds/ReleaseCandidates/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          else
+            folder="Builds/Alpha/$VCR_RELEASE_VERSION/$PLAYER_FOLDER"
+          fi
           test -d "$folder"
           if [[ "$PLAYER_FOLDER" == Windows ]]; then
             test -f "$folder/VirtualCharacterRender.exe"
@@ -254,6 +258,7 @@ jobs:
             fi
             {
               printf 'backend=IL2CPP\n'
+              printf 'build_options=None\n'
               printf 'version=%s\n' "$VCR_RELEASE_VERSION"
               printf 'unity_version=6000.3.25f1\n'
               printf 'source_sha=%s\n' "$GITHUB_SHA"
@@ -384,7 +389,7 @@ jobs:
           cat > release-notes.md <<EOF
           ## VirtualCharacterRender $VERSION
 
-          Integrated desktop development alpha for Windows x64 (IL2CPP) and macOS (Mono) (Unity 6000.3.25f1).
+          Integrated desktop alpha for Windows x64 (IL2CPP, non-Development) and macOS (Mono) (Unity 6000.3.25f1).
 
           - Immutable source tag: \`$tag\`
           - Source commit: [\`$GITHUB_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
@@ -400,7 +405,7 @@ jobs:
 
           ### Build and runtime evidence
 
-          - Windows x64 backend: \`IL2CPP\` (GameAssembly.dll and il2cpp_data included; no MonoBleedingEdge).
+          - Windows x64 backend: \`IL2CPP\` (non-Development; GameAssembly.dll and il2cpp_data included; no MonoBleedingEdge).
           - The Windows IL2CPP Player passed a native startup/shutdown smoke before publication.
           - Evidence assets: \`windows-il2cpp-smoke.json\`, \`windows-il2cpp-runner-evidence.json\`, \`il2cpp-evidence.txt\`.
           - This release demonstrates build/package success and Windows IL2CPP startup/shutdown. It does not prove physical tracking, OBS, camera, Ultraleap, or performance validation. See \`docs/ALPHA_TESTING.md\`.
