@@ -2,6 +2,12 @@ name: Windows IL2CPP build and native startup smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      smoke_repeat_count:
+        description: Number of packaged Player startup/shutdown runs (1-10)
+        required: false
+        default: '1'
+        type: string
 
 permissions:
   contents: read
@@ -178,13 +184,36 @@ jobs:
 
       - name: Execute native Windows IL2CPP Player
         shell: bash
+        env:
+          SMOKE_REPEAT_COUNT: ${{ github.event.inputs.smoke_repeat_count || '1' }}
         run: |
           set -euo pipefail
-          python tools/run-player-smoke.py \
-            --platform windows \
-            --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
-            --source "$GITHUB_SHA" \
-            --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
+          case "$SMOKE_REPEAT_COUNT" in
+            ''|*[!0-9]*)
+              echo "smoke_repeat_count must be an integer from 1 to 10" >&2
+              exit 2
+              ;;
+          esac
+          if [[ "$SMOKE_REPEAT_COUNT" -lt 1 || "$SMOKE_REPEAT_COUNT" -gt 10 ]]; then
+            echo "smoke_repeat_count must be between 1 and 10" >&2
+            exit 2
+          fi
+          output="$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
+          if [[ "$SMOKE_REPEAT_COUNT" == "1" ]]; then
+            python tools/run-player-smoke.py \
+              --platform windows \
+              --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
+              --source "$GITHUB_SHA" \
+              --output "$output"
+          else
+            python tools/run-player-smoke-repeat.py \
+              --platform windows \
+              --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
+              --source "$GITHUB_SHA" \
+              --output "$output" \
+              --repeat "$SMOKE_REPEAT_COUNT" \
+              --require-quit-marker
+          fi
 
       - name: Verify Windows IL2CPP release evidence
         shell: bash

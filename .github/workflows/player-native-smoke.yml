@@ -6,6 +6,12 @@ on:
   push:
     branches: [develop]
   workflow_dispatch:
+    inputs:
+      smoke_repeat_count:
+        description: Number of native startup/shutdown runs per platform (1-10)
+        required: false
+        default: '1'
+        type: string
 
 permissions:
   contents: read
@@ -161,13 +167,35 @@ jobs:
         shell: bash
         env:
           PLAYER_PLATFORM: ${{ matrix.platform }}
+          SMOKE_REPEAT_COUNT: ${{ github.event.inputs.smoke_repeat_count || '1' }}
         run: |
           set -euo pipefail
-          python tools/run-player-smoke.py \
-            --platform "$PLAYER_PLATFORM" \
-            --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
-            --source "$GITHUB_SHA" \
-            --output "$GITHUB_WORKSPACE/Builds/PlayerSmoke/$PLAYER_PLATFORM"
+          case "$SMOKE_REPEAT_COUNT" in
+            ''|*[!0-9]*)
+              echo "smoke_repeat_count must be an integer from 1 to 10" >&2
+              exit 2
+              ;;
+          esac
+          if [[ "$SMOKE_REPEAT_COUNT" -lt 1 || "$SMOKE_REPEAT_COUNT" -gt 10 ]]; then
+            echo "smoke_repeat_count must be between 1 and 10" >&2
+            exit 2
+          fi
+          output="$GITHUB_WORKSPACE/Builds/PlayerSmoke/$PLAYER_PLATFORM"
+          if [[ "$SMOKE_REPEAT_COUNT" == "1" ]]; then
+            python tools/run-player-smoke.py \
+              --platform "$PLAYER_PLATFORM" \
+              --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
+              --source "$GITHUB_SHA" \
+              --output "$output"
+          else
+            python tools/run-player-smoke-repeat.py \
+              --platform "$PLAYER_PLATFORM" \
+              --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
+              --source "$GITHUB_SHA" \
+              --output "$output" \
+              --repeat "$SMOKE_REPEAT_COUNT" \
+              --require-quit-marker
+          fi
       - name: Preserve native runtime logs and machine-readable evidence
         if: always()
         uses: actions/upload-artifact@v4

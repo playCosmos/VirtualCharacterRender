@@ -14,6 +14,10 @@ import time
 import zipfile
 
 
+QUIT_MARKER = "VCR exit: OnApplicationQuit finished"
+PLAYER_TIMEOUT_SECONDS = 100
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -112,28 +116,62 @@ def execute(args):
         print("Running real " + args.platform + " Player on " + summary["runnerPlatform"], flush=True)
         with runnerlog.open("w", encoding="utf-8") as output_log:
             started_at = time.monotonic()
+            process = subprocess.Popen(
+                command,
+                cwd=unpacked,
+                stdout=output_log,
+                stderr=subprocess.STDOUT,
+            )
+            quit_marker_ms = None
+            process_exit_ms = None
             try:
-                completed = subprocess.run(
-                    command,
-                    cwd=unpacked,
-                    stdout=output_log,
-                    stderr=subprocess.STDOUT,
-                    timeout=100,
-                    check=False,
-                )
-                summary["exitCode"] = completed.returncode
-            except subprocess.TimeoutExpired as exception:
-                summary["exitCode"] = None
-                raise RuntimeError("Player did not exit within 100 seconds") from exception
+                while True:
+                    now = time.monotonic()
+                    if quit_marker_ms is None and logfile.is_file():
+                        try:
+                            contents = logfile.read_text(
+                                encoding="utf-8", errors="replace")
+                        except OSError:
+                            contents = ""
+                        if QUIT_MARKER in contents:
+                            quit_marker_ms = round(
+                                (time.monotonic() - started_at) * 1000, 1)
+                    return_code = process.poll()
+                    if return_code is not None:
+                        process_exit_ms = round(
+                            (time.monotonic() - started_at) * 1000, 1)
+                        summary["exitCode"] = return_code
+                        break
+                    if now - started_at > PLAYER_TIMEOUT_SECONDS:
+                        summary["exitCode"] = None
+                        raise RuntimeError(
+                            "Player did not exit within " +
+                            str(PLAYER_TIMEOUT_SECONDS) + " seconds")
+                    time.sleep(0.025)
             finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                if process_exit_ms is None:
+                    process_exit_ms = round(
+                        (time.monotonic() - started_at) * 1000, 1)
                 # End-to-end subprocess lifetime is a useful CI baseline,
                 # but includes startup and does not prove GUI quit latency.
-                summary["playerProcessLifetimeMs"] = round(
-                    (time.monotonic() - started_at) * 1000, 1)
+                summary["playerProcessLifetimeMs"] = process_exit_ms
+                summary["quitMarkerMs"] = quit_marker_ms
+                summary["quitTailMs"] = (
+                    round(process_exit_ms - quit_marker_ms, 1)
+                    if quit_marker_ms is not None else None
+                )
                 print(
                     "Player process lifetime (startup + shutdown): " +
                     str(summary["playerProcessLifetimeMs"]) + " ms",
                     flush=True)
+                if summary["quitTailMs"] is not None:
+                    print(
+                        "Quit marker to process exit: " +
+                        str(summary["quitTailMs"]) + " ms",
+                        flush=True)
 
         if not result_path.is_file():
             raise RuntimeError("Player did not write its runtime smoke evidence")
@@ -152,6 +190,9 @@ def execute(args):
             raise RuntimeError("Expected a native macOS Player")
         if summary["exitCode"] != 0:
             raise RuntimeError("Player failed with exit code " + str(summary["exitCode"]))
+        if args.require_quit_marker and summary.get("quitMarkerMs") is None:
+            raise RuntimeError(
+                "Player did not emit its quit marker: " + QUIT_MARKER)
 
         summary["passed"] = True
         print("Native Player startup/shutdown: PASS", flush=True)
@@ -176,4 +217,9 @@ if __name__ == "__main__":
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
     cli.add_argument("--output", required=True)
+    cli.add_argument(
+        "--require-quit-marker",
+        action="store_true",
+        help="fail unless Player.log contains the managed quit marker before process exit",
+    )
     sys.exit(execute(cli.parse_args()))
