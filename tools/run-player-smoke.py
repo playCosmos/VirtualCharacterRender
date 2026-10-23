@@ -8,6 +8,7 @@ import os
 import plistlib
 import platform
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -76,8 +77,12 @@ def execute(args):
             raise RuntimeError("Player artifact SHA-256 mismatch")
 
         # Preserve only logs and hashes as smoke artifacts, not the Player.
+        # Repeat runs must start from a clean tree: macOS `unzip` otherwise
+        # prompts to replace existing files and exits non-zero under CI.
         unpacked = output.parent / ("unpacked-" + args.platform)
-        unpacked.mkdir(exist_ok=True)
+        if unpacked.exists():
+            shutil.rmtree(unpacked)
+        unpacked.mkdir(parents=True)
         if args.platform == "macos":
             subprocess.run(
                 ["unzip", "-q", str(archive), "-d", str(unpacked)],
