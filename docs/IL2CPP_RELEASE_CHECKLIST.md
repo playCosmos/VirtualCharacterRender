@@ -1,6 +1,6 @@
 # IL2CPP Release-Backend Checklist (16-Item Audit)
 
-Status date: 2026-10-22
+Status date: 2026-10-23
 
 This document is an evidence audit of the Windows x64 IL2CPP release backend.
 It is not an M2, M3, M4, P10, OBS, hardware, or performance acceptance report.
@@ -21,10 +21,12 @@ smoke, or a local diagnostic build into interactive product acceptance.
 
 Current audit count: **7 PASS, 6 PARTIAL, 2 OPEN, 1 HOLD**. The count includes
 the complete local release-candidate archive, native smoke, verifier evidence,
-one candidate GUI shutdown check, a local two-run headless repeat, and a local
-4-model x 2-run VRM GUI matrix. It still does not include release-grade
-interactive GUI, OBS, hardware, or M2 acceptance, and the repeat/matrix
-diagnostics do not change the item statuses.
+one candidate GUI shutdown check, local two- and five-run headless repeats, a
+local 4-model x 2-run VRM GUI matrix, CI Windows IL2CPP 5-runs that
+reproduced the >2 s tail, a same-commit native Windows/macOS 5-run, and a
+symbolized native audio-cleanup stack. It still
+does not include release-grade interactive GUI, OBS, hardware, or M2
+acceptance, and the repeat/matrix diagnostics do not change the item statuses.
 
 Decision applied 2026-10-22 in `a9aab228b998a8b370700fef10a13c075de9edb8`: the
 alpha publication workflow and the Windows IL2CPP CI workflow now use the
@@ -59,9 +61,9 @@ remains unpublished and is not authorized for tagging/release.
 | I-11 | MediaPipe webcam, ARKit/iFacialMocap, VMC/OSC, and tracking routing work under IL2CPP. | The components are included in the alpha scene but start disabled. P0-P13 source-free Editor validation passed; no physical camera/ARKit or real VMC/OSC IL2CPP runtime evidence was found. | **OPEN** | Exercise real and loopback tracking paths in the release candidate; hardware evidence remains required for M2. |
 | I-12 | Ultraleap/LeapC lifecycle and shutdown are correct under IL2CPP. | `924ddbc7` adds `VcrUltraleapRuntimePolicy`, which avoids the unused LeapC hint connection. Fixed diagnostic non-Development runs exited in ~0.6-1.1 s; actual Ultraleap hardware was not tested. | **PARTIAL** | Test hardware-enabled startup/shutdown, repeat-run acceptance, and retain a native stack/evidence boundary. |
 | I-13 | The packaged Windows IL2CPP Player passes real startup/shutdown smoke. | Alpha.4 passed the packaged Player smoke and exited 0 (21,641 ms lifetime). The current clean candidate also passed: exit 0, process lifetime 4,332.6 ms, with `started`, `sceneReady`, `noCharacter`, `stopped`, and `passed` all true. CI run `39734065562` independently passed the non-Development packaged smoke from `a9aab228`: exit 0, process lifetime 5,359.0 ms, all flags true. | **PASS** | This is headless process evidence, not GUI acceptance; interactive presentation remains I-10. |
-| I-14 | There is no unexplained long quit tail in the non-Development IL2CPP path. | Baseline diagnostic: ~16,946 ms window / ~17,224 ms PID. Fixed diagnostic: window ~429/780/772 ms; PID ~705/1,066/1,046 ms. The current alpha.5 candidate package was then checked once with the private Alicia VRM at 720p: window gone 441.9 ms, PID exit 754.7 ms, exit code 0, with `CharacterReady` and `quitCallbackObserved=true`. A local 2-run packaged headless repeat (`tools/run-player-smoke-repeat.py`, `--require-quit-marker`) recorded marker-to-PID-exit tails of 2,043.3/2,090.9 ms despite exit 0; this reproduces a >2 s tail outside CI. A local 4-model x 2-run GUI matrix recorded window-gone 454.3-783.0 ms and PID exit 729.5-1,083.5 ms, which is close-path timing, not the headless tail. A best-effort native stack capture at the tail (PID 26600, tail 2,071.6 ms, 87 threads frozen) found the main thread in `WaitOnAddress` via `UnityMain+0x426c26`/`+0x426ebe`/`+0x423cce`, with worker threads idle and the IL2CPP finalizer waiting; symbols are partial, so this is not a root-cause attribution. The original issue's 2.1-2.5 s non-Development CI tail is separate and still open. | **PARTIAL** | Run the required 5-run CI acceptance, symbolize/attribute the native tail stack, and test actual Ultraleap hardware/macOS boundaries. |
-| I-15 | `tools/verify-windows-il2cpp-release.py` accepts the archive, source, smoke, and IL2CPP evidence as one consistent artifact. | The verifier passed for the published alpha.4 Windows ZIP and evidence. It also passed for the current candidate: archive `b2256bfc6d9a7210d9c3498a87f53d646553c46167e8f5af9fbcc6b81b8189ef`, source `c87e98d03f65f170d77bb7a86de62f4e53a16ea7`, version `0.1.0-alpha.5`, with matching `.sha256`/`.source-sha` sidecars, IL2CPP evidence, smoke JSON, and runner evidence. The Windows IL2CPP CI workflow now runs the verifier before uploading its artifact. CI run `39734065562` passed step 16 with archive `1b9f1b663e66ab53ed85184fd9910314e0c5d6c08125bcde8ab2cd2c1e9cd75b`, source `a9aab228b998a8b370700fef10a13c075de9edb8`, version `0.0.0-alpha.0`; the `.sha256` sidecar and runner evidence matched. | **PASS** | None for the local candidate or CI provenance. Publication still requires explicit authorization and a green publication run. |
-| I-16 | Release provenance is immutable and publication is explicitly authorized. | Alpha.4 is the latest published release at `9536fdf625f9bce69a8061e4ebbfbf9dc7859193`. Alpha.5 remains an unpublished local candidate; no new tag or release was created. Windows IL2CPP CI run `39734065562`, native Windows/macOS Mono smoke run `39733680939`, and P0-P13 run `39733680901` passed on `a9aab228`; the candidate GUI shutdown check passed once. The publication workflow and Windows IL2CPP CI now use the non-Development release-candidate method. | **HOLD** | Do not tag or publish alpha.5 without explicit authorization. The non-Development CI/verifier gate and one candidate GUI check are green; publication and release-grade GUI/OBS/hardware evidence still require authorization/external validation. |
+| I-14 | There is no unexplained long quit tail in the non-Development IL2CPP path. | Baseline diagnostic: ~16,946 ms window / ~17,224 ms PID. Fixed diagnostic: window ~429/780/772 ms; PID ~705/1,066/1,046 ms. The current alpha.5 candidate package was checked with the private Alicia VRM at 720p: window gone 441.9 ms, PID exit 754.7 ms, exit 0, with `CharacterReady` and `quitCallbackObserved=true`. A local 2-run headless repeat recorded tails of 2,043.3/2,090.9 ms; a separate local 5-run set passed 5/5 with median 2,065.7 ms, range 2,040.3-2,068.6 ms. A local 4-model x 2-run GUI matrix recorded window-gone 454.3-783.0 ms and PID exit 729.5-1,083.5 ms, which is close-path timing, not the headless tail. CI then confirmed the non-Development tail: Windows IL2CPP 5/5 PASS with verifier PASS and marker-to-PID-exit median 2,063.0 ms, range 2,062.0-2,063.0 ms; native Windows Mono 5/5 PASS with median 94.0 ms, range 79-109 ms. A same-commit Windows IL2CPP rerun [run 39876883333](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39876883333) on `d30d11af` also passed 5/5 with verifier PASS, tail median 2,062.0 ms, range 2,047.0-2,078.0 ms. The macOS repeat initially passed only 1/5 because the harness reused `unpacked-macos` and `unzip` prompted for replacement; `d30d11af` fixed the clean-unpack step, and the same-commit native rerun [run 39875640833](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39875640833) passed Windows Mono 5/5 (median 94.0 ms, range 78-110 ms) and macOS Mono 5/5 (median 227.9 ms, range 127.6-405.1 ms). A native stack at the tail (PID 26600, 2,071.6 ms, 87 threads frozen) was symbolized with the matching local Unity 6000.3.25f1 non-Development IL2CPP PDB (signature `9C93C608-27D2-4C18-B06C-5D7A4D4DCE28`, age 1, DbgHelp `PdbUnmatched=0`): the main thread was in `Baselib_Semaphore_TryTimedAcquire` -> `audio::DualThreadManager::ControlWaitForFlush` -> `ControlPanicClear` -> `ClearAllManagers` -> `CleanupAllObjects` -> `CleanupEngine` -> `PlayerCleanup`. This attributes the tail to Unity audio cleanup, not the managed VCR quit callback or the IL2CPP finalizer. A single local `-noaudio` diagnostic still recorded a 2,029.8 ms tail (control 2,057.3 ms), so the flag is not a mitigation; a project-level audio disable would require a rebuild and was not evaluated. The exact reason for the flush wait and whether it is avoidable remain open. | **PARTIAL** | Decide whether the engine audio flush wait is acceptable or avoidable, and test actual Ultraleap hardware/macOS boundaries. Do not close the issue from the 5-run alone. |
+| I-15 | `tools/verify-windows-il2cpp-release.py` accepts the archive, source, smoke, and IL2CPP evidence as one consistent artifact. | The verifier passed for the published alpha.4 Windows ZIP and evidence. It also passed for the current candidate: archive `b2256bfc6d9a7210d9c3498a87f53d646553c46167e8f5af9fbcc6b81b8189ef`, source `c87e98d03f65f170d77bb7a86de62f4e53a16ea7`, version `0.1.0-alpha.5`, with matching `.sha256`/`.source-sha` sidecars, IL2CPP evidence, smoke JSON, and runner evidence. The Windows IL2CPP CI workflow now runs the verifier before uploading its artifact. CI run `39734065562` passed step 16 with archive `1b9f1b663e66ab53ed85184fd9910314e0c5d6c08125bcde8ab2cd2c1e9cd75b`, source `a9aab228b998a8b370700fef10a13c075de9edb8`, version `0.0.0-alpha.0`; the `.sha256` sidecar and runner evidence matched. The same-commit rerun `39876883333` also passed the verifier with archive SHA-256 `af14513320fd14f6cc58983706b8acb89e43cece3b17291289befb778eadd5a8`, source `d30d11afa5d17688058ad5c7e7a8a1c36b79916e`, version `0.0.0-alpha.0`. | **PASS** | None for the local candidate or CI provenance. Publication still requires explicit authorization and a green publication run. |
+| I-16 | Release provenance is immutable and publication is explicitly authorized. | Alpha.4 is the latest published release at `9536fdf625f9bce69a8061e4ebbfbf9dc7859193`. Alpha.5 remains an unpublished local candidate; no new tag or release was created. Windows IL2CPP CI run `39734065562`, native Windows/macOS Mono smoke run `39733680939`, and P0-P13 run `39733680901` passed on `a9aab228`; the candidate GUI shutdown check passed once. The publication workflow and Windows IL2CPP CI now use the non-Development release-candidate method. The same-commit native and Windows IL2CPP reruns are green (`39875640833`, `39876883333`). | **HOLD** | Do not tag or publish alpha.5 without explicit authorization. The non-Development CI/verifier gate and one candidate GUI check are green; publication and release-grade GUI/OBS/hardware evidence still require authorization/external validation. |
 
 ## Evidence ledger
 
@@ -136,8 +138,11 @@ remains unpublished and is not authorized for tagging/release.
   `c87e98d03f65f170d77bb7a86de62f4e53a16ea7`, archive SHA-256
   `b2256bfc6d9a7210d9c3498a87f53d646553c46167e8f5af9fbcc6b81b8189ef`.
   Quit-marker-to-PID-exit tails were 2,043.3 ms and 2,090.9 ms; process
-  lifetimes were 7,296.7 ms and 3,960.2 ms. Both exited 0. Evidence:
-  `Builds/ReleaseCandidates/0.1.0-alpha.5/smoke-repeat-local/`.
+  lifetimes were 7,296.7 ms and 3,960.2 ms. Both exited 0. A separate 5-run
+  set passed 5/5 with median 2,065.7 ms (range 2,040.3-2,068.6 ms) and
+  process lifetime median 3,444.4 ms (range 3,364.3-3,598.7 ms). Evidence:
+  `Builds/ReleaseCandidates/0.1.0-alpha.5/smoke-repeat-local/` and
+  `smoke-repeat-local-5/`.
 - Local VRM matrix: VRM0 `AliciaSolid_vrm-0.51` and `Sendagaya_Shibu`;
   VRM1 `Seed-san` and `VRM1_Constraint_Twist_Sample`; 2 runs each at a 720p
   window. All 8/8 reached `CharacterReady` with `characterLoaded=true`,
@@ -151,15 +156,22 @@ remains unpublished and is not authorized for tagging/release.
   telemetry did not expose the load error, and no visual fallback/UI review
   was performed. Evidence:
   `Builds/ReleaseCandidates/0.1.0-alpha.5/vrm-negative/`.
-- The repeat and matrix are local diagnostics only. They are not 5-run CI
-  acceptance, OBS 720p60/1080p60, camera/Ultraleap hardware, Apple Silicon
-  macOS, soak/cycle, or M2 PASS evidence. The >2 s headless tail requires a
-  clean CI repeat and, if it persists, a native stack.
-- Native tail stack (best effort): PID 26600, marker-to-PID-exit 2,071.6 ms,
-  87 threads frozen for DbgHelp. The main thread was in `WaitOnAddress` via
-  `UnityMain+0x426c26`/`+0x426ebe`/`+0x423cce`; other sampled threads were
-  idle/finalizer waits. Unity PDBs were unavailable, so this is partial
-  evidence, not a root-cause attribution. A separate 8,453,015-byte minidump
+- The local repeat and matrix are diagnostics. The first Windows IL2CPP CI
+  5-run now reproduces the >2 s tail, but this is still not OBS
+  720p60/1080p60, camera/Ultraleap hardware, Apple Silicon macOS, soak/cycle,
+  or M2 PASS evidence. The macOS and same-commit native reruns now pass 5/5;
+  the same-commit Windows IL2CPP rerun also passed 5/5 with verifier PASS. The
+  decision on the audio flush wait remains open.
+- Native tail stack: PID 26600, marker-to-PID-exit 2,071.6 ms, 87 threads
+  frozen for DbgHelp. The matching local Unity 6000.3.25f1 nondevelopment
+  IL2CPP PDB (signature `9C93C608-27D2-4C18-B06C-5D7A4D4DCE28`, age 1,
+  `PdbUnmatched=0`) resolves the main thread to
+  `Baselib_Semaphore_TryTimedAcquire` -> `audio::DualThreadManager::ControlWaitForFlush`
+  -> `ControlPanicClear` -> `ClearAllManagers` -> `CleanupAllObjects` ->
+  `CleanupEngine` -> `PlayerCleanup`. This attributes the tail to Unity's
+  audio cleanup, not the managed VCR callback or IL2CPP finalizer. A single
+  `-noaudio` diagnostic still recorded 2,029.8 ms (control 2,057.3 ms), so the
+  flag is not a mitigation. A separate 8,453,015-byte minidump
   (`quit-tail.dmp`) from PID 42816 (tail 2,053.3 ms) is retained for an
   external native debugger. Evidence:
   `Builds/ReleaseCandidates/0.1.0-alpha.5/native-tail-stack/`.
@@ -175,13 +187,42 @@ release-candidate smoke is a separate process-level gate.
 Both the Windows IL2CPP and native Windows/macOS smoke workflows now accept a
 `smoke_repeat_count` dispatch input (1-10). When it is greater than 1, the
 native runner records the quit-marker-to-process-exit tail in
-`repeat-summary.json` and requires the marker. A 5-run dispatch is in progress
-on `5a7a97e7`: Windows IL2CPP
-[run 39754710821](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754710821)
-and native Windows/macOS
-[run 39754714410](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754714410).
-Results are pending and are not claimed in this revision; the local 2-run
-result above is not a substitute.
+`repeat-summary.json` and requires the marker. The first 5-run dispatch on
+`5a7a97e7` produced:
+
+- Windows IL2CPP non-Development:
+  [run 39754710821](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754710821)
+  — **5/5 PASS**, verifier **PASS**, tail median **2,063.0 ms** (range
+  2,062.0-2,063.0 ms). This reproduces the >2 s non-Development tail in CI.
+- Native Windows Mono:
+  [run 39754714410](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39754714410)
+  — **5/5 PASS**, tail median **94.0 ms** (range 79-109 ms).
+- Native macOS Mono: **1/5** in the first run. Run 01 passed with a 341.1 ms
+  tail; runs 02-05 reused `unpacked-macos`, so `unzip` prompted to replace
+  existing files and exited non-zero under CI. `d30d11af` deletes the unpack
+  tree before extraction.
+- Same-commit native rerun on `d30d11af`
+  [run 39875640833](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39875640833):
+  **success**. Windows Mono **5/5 PASS** (tail median **94.0 ms**, range
+  **78-110 ms**); macOS Mono **5/5 PASS** (tail median **227.9 ms**, range
+  **127.6-405.1 ms**). The macOS clean-unpack fix is validated.
+- An earlier same-commit Windows IL2CPP attempt
+  [run 39875638572](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39875638572)
+  failed before the Player build because the Unity container could not create
+  `C:/Users/ContainerAdministrator/AppData/Local/Unity/Caches` and Package
+  Manager IPC was cancelled. This is a CI environment failure, not a
+  source/build failure.
+- Same-commit Windows IL2CPP rerun on `d30d11af`
+  [run 39876883333](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39876883333):
+  **success**. **5/5 PASS**, verifier **PASS**, tail median **2,062.0 ms**
+  (range **2,047.0-2,078.0 ms**); archive SHA-256
+  `af14513320fd14f6cc58983706b8acb89e43cece3b17291289befb778eadd5a8`,
+  source `d30d11afa5d17688058ad5c7e7a8a1c36b79916e`, version
+  `0.0.0-alpha.0`.
+
+The Windows CI result confirms the tail is not a local harness artifact, but it
+is not M2 acceptance. The local repeat and matrix results remain diagnostics.
+The same-commit native macOS and Windows IL2CPP reruns are now green.
 
 ## Explicitly not claimed
 
