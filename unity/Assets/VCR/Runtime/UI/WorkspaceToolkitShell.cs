@@ -347,6 +347,47 @@ namespace VCR.Runtime.UI
                 Build();
             }) { text = "Move: " + currentDock };
             panel.Add(move);
+            var dragHandle = new Label("Drag panel to left / right / bottom");
+            dragHandle.style.color = new Color(0.68f, 0.77f, 0.85f);
+            panel.Add(dragHandle);
+            var dragging = false;
+            var pointerId = -1;
+            dragHandle.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (evt.button != 0 || dragging) return;
+                dragging = true;
+                pointerId = evt.pointerId;
+                dragHandle.CapturePointer(pointerId);
+                evt.StopPropagation();
+            });
+            dragHandle.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (!dragging || evt.pointerId != pointerId) return;
+                dragging = false;
+                pointerId = -1;
+                var position = evt.position;
+                if (dragHandle.HasPointerCapture(evt.pointerId))
+                    dragHandle.ReleasePointer(evt.pointerId);
+                var destination = _leftDock != null && _leftDock.worldBound.Contains(position)
+                    ? "left" : _rightDock != null && _rightDock.worldBound.Contains(position)
+                    ? "right" : _bottomDock != null && _bottomDock.worldBound.Contains(position)
+                    ? "bottom" : null;
+                if (destination != null && destination != currentDock)
+                {
+                    PlayerPrefs.SetString(key, destination);
+                    if (destination == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
+                    if (destination == "right") { _rightVisible = true; PlayerPrefs.SetInt(RightVisibleKey, 1); }
+                    if (destination == "bottom") { _bottomVisible = true; PlayerPrefs.SetInt(BottomVisibleKey, 1); }
+                    PlayerPrefs.Save();
+                    Build();
+                }
+                evt.StopPropagation();
+            });
+            dragHandle.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                dragging = false;
+                pointerId = -1;
+            });
             target.Add(panel);
         }
 
