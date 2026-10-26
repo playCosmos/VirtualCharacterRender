@@ -730,7 +730,6 @@ namespace VCR.Runtime.UI
             var previous = panel.parent;
             PlayerPrefs.SetString("VCR.UI.Workspace.Dock." + id + ".v1", destination);
             PlayerPrefs.SetString("VCR.UI.Workspace.ActiveTab." + destination + ".v1", panel.name);
-            PlayerPrefs.DeleteKey("VCR.UI.Workspace.Order." + id + ".v1");
             if (destination == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
             if (destination == "right") { _rightVisible = true; PlayerPrefs.SetInt(RightVisibleKey, 1); }
             if (destination == "bottom") { _bottomVisible = true; PlayerPrefs.SetInt(BottomVisibleKey, 1); }
@@ -739,14 +738,21 @@ namespace VCR.Runtime.UI
                 previous.Remove(panel);
                 SaveDockOrder(previous);
             }
-            // Persist a deterministic position at the end of the destination dock.
+            // Persist a deterministic position after existing destination panels.
             var destinationDock = destination == "left" ? _leftDock :
                 destination == "right" ? _rightDock : _bottomDock;
             var destinationCount = 0;
             if (destinationDock != null)
                 foreach (var child in destinationDock.Children())
                     if (child.name != null && child.name.StartsWith("vcr-panel-")) destinationCount++;
-            PlayerPrefs.SetInt("VCR.UI.Workspace.Order." + id + ".v1", destinationCount);
+            var lastOrder = -1;
+            if (destinationDock != null)
+                foreach (var child in destinationDock.Children())
+                    if (child.name != null && child.name.StartsWith("vcr-panel-"))
+                        lastOrder = Mathf.Max(lastOrder, PlayerPrefs.GetInt(
+                            "VCR.UI.Workspace.Order." + child.name.Substring("vcr-panel-".Length) + ".v1",
+                            destinationCount));
+            PlayerPrefs.SetInt("VCR.UI.Workspace.Order." + id + ".v1", lastOrder + 1);
             PlayerPrefs.Save();
             Build();
         }
