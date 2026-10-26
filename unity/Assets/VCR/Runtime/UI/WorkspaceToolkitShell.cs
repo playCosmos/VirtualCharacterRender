@@ -395,9 +395,11 @@ namespace VCR.Runtime.UI
             target.Add(panel);
             var orderKey = "VCR.UI.Workspace.Order." + id + ".v1";
             var savedOrder = PlayerPrefs.GetInt(orderKey, -1);
-            if (savedOrder >= 0)
-                panel.PlaceBehind(target.childCount > 1
-                    ? target[Mathf.Clamp(savedOrder, 0, target.childCount - 2)] : panel);
+            if (savedOrder >= 0 && target.childCount > 1)
+            {
+                target.Remove(panel);
+                target.Insert(Mathf.Clamp(savedOrder, 0, target.childCount), panel);
+            }
             panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
             panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
         }
