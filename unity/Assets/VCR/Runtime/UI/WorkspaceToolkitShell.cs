@@ -531,6 +531,15 @@ namespace VCR.Runtime.UI
                 var tabPointer = -1;
                 var tabStart = Vector2.zero;
                 var tabMoved = false;
+                tab.RegisterCallback<KeyDownEvent>(evt =>
+                {
+                    if (evt.keyCode != KeyCode.Escape || !draggingTab) return;
+                    draggingTab = false;
+                    suppressClick = true;
+                    if (tab.HasPointerCapture(tabPointer)) tab.ReleasePointer(tabPointer);
+                    tabPointer = -1;
+                    evt.StopPropagation();
+                });
                 tab.RegisterCallback<PointerDownEvent>(evt =>
                 {
                     if (evt.button != 0) return;
@@ -629,12 +638,24 @@ namespace VCR.Runtime.UI
             panel.Add(dragHandle);
             var dragging = false;
             var pointerId = -1;
+            dragHandle.focusable = true;
+            dragHandle.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode != KeyCode.Escape || !dragging) return;
+                dragging = false;
+                if (dragHandle.HasPointerCapture(pointerId)) dragHandle.ReleasePointer(pointerId);
+                pointerId = -1;
+                if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
+                if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
+                evt.StopPropagation();
+            });
             dragHandle.RegisterCallback<PointerDownEvent>(evt =>
             {
                 if (evt.button != 0 || dragging) return;
                 dragging = true;
                 pointerId = evt.pointerId;
                 dragHandle.CapturePointer(pointerId);
+                dragHandle.Focus();
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.Flex;
                 evt.StopPropagation();
             });
