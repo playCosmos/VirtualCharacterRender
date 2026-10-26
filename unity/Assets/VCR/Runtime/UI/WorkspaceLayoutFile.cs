@@ -105,10 +105,14 @@ namespace VCR.Runtime.UI
                 for (var i = 0; i < Ids.Length; i++)
                 {
                     var dock = layout.docks[i];
+                    var dockKey = "VCR.UI.Workspace.Dock." + Ids[i] + ".v1";
                     if (dock == "left" || dock == "right" || dock == "bottom")
-                        PlayerPrefs.SetString("VCR.UI.Workspace.Dock." + Ids[i] + ".v1", dock);
+                        PlayerPrefs.SetString(dockKey, dock);
+                    else PlayerPrefs.DeleteKey(dockKey);
+                    var orderKey = "VCR.UI.Workspace.Order." + Ids[i] + ".v1";
                     if (layout.orders[i] >= 0)
-                        PlayerPrefs.SetInt("VCR.UI.Workspace.Order." + Ids[i] + ".v1", layout.orders[i]);
+                        PlayerPrefs.SetInt(orderKey, layout.orders[i]);
+                    else PlayerPrefs.DeleteKey(orderKey);
                 }
                 PlayerPrefs.Save();
                 return true;
@@ -124,7 +128,11 @@ namespace VCR.Runtime.UI
 
         private static void SetTab(string dock, string panelName)
         {
-            if (string.IsNullOrEmpty(panelName)) return;
+            if (string.IsNullOrEmpty(panelName))
+            {
+                PlayerPrefs.DeleteKey("VCR.UI.Workspace.ActiveTab." + dock + ".v1");
+                return;
+            }
             foreach (var id in Ids)
                 if (panelName == "vcr-panel-" + id)
                 {
