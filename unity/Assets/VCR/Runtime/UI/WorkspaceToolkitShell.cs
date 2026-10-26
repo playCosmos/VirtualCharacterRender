@@ -21,6 +21,7 @@ namespace VCR.Runtime.UI
         private VisualElement _root;
         private VisualElement _dockHost;
         private Label _status;
+        private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
 
         private void OnEnable()
         {
@@ -28,6 +29,7 @@ namespace VCR.Runtime.UI
             if (_document == null || _document.rootVisualElement == null)
                 return;
 
+            advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0) == 1;
             _root = _document.rootVisualElement;
             Build();
         }
@@ -73,7 +75,9 @@ namespace VCR.Runtime.UI
             header.style.paddingTop = 8;
             header.style.paddingBottom = 8;
             header.style.backgroundColor = new Color(0.15f, 0.17f, 0.19f);
-            var title = new Label("VirtualCharacterRender  /  Live");
+            var title = new Label(advancedWorkspace
+                ? "VirtualCharacterRender  /  Advanced"
+                : "VirtualCharacterRender  /  Live");
             title.style.flexGrow = 1;
             title.style.color = Color.white;
             header.Add(title);
@@ -81,6 +85,8 @@ namespace VCR.Runtime.UI
             var toggle = new Button(() =>
             {
                 advancedWorkspace = !advancedWorkspace;
+                PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
+                PlayerPrefs.Save();
                 Build();
             }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
             header.Add(toggle);
