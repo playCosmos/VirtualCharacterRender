@@ -38,6 +38,7 @@ namespace VCR.Runtime.UI
         private bool _previewBoundFromCamera;
         private bool _previewExplicitlyBound;
         private VisualElement _dragOverlay;
+        private Label _dockTargetLabel;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -163,6 +164,7 @@ namespace VCR.Runtime.UI
             _bottomDock = null;
             _previewImage = null;
             _dragOverlay = null;
+            _dockTargetLabel = null;
             _previewBoundFromCamera = false;
         }
 
@@ -345,6 +347,19 @@ namespace VCR.Runtime.UI
             _dragOverlay.style.display = DisplayStyle.None;
             _dragOverlay.pickingMode = PickingMode.Ignore;
             _workspaceRoot.Add(_dragOverlay);
+            _dockTargetLabel = new Label();
+            _dockTargetLabel.style.position = Position.Absolute;
+            _dockTargetLabel.style.right = 12;
+            _dockTargetLabel.style.top = 50;
+            _dockTargetLabel.style.backgroundColor = new Color(0.15f, 0.38f, 0.50f);
+            _dockTargetLabel.style.color = Color.white;
+            _dockTargetLabel.style.paddingLeft = 12;
+            _dockTargetLabel.style.paddingRight = 12;
+            _dockTargetLabel.style.paddingTop = 8;
+            _dockTargetLabel.style.paddingBottom = 8;
+            _dockTargetLabel.style.display = DisplayStyle.None;
+            _dockTargetLabel.pickingMode = PickingMode.Ignore;
+            _workspaceRoot.Add(_dockTargetLabel);
         }
 
         // Move controls provide deterministic, persistent dock relocation.
@@ -393,19 +408,28 @@ namespace VCR.Runtime.UI
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.Flex;
                 evt.StopPropagation();
             });
+            dragHandle.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (!dragging || evt.pointerId != pointerId) return;
+                if (_dockTargetLabel != null)
+                {
+                    var destination = DockAt(evt.position);
+                    _dockTargetLabel.text = destination == null ? "No dock target" : "Drop: " + destination;
+                    _dockTargetLabel.style.display = DisplayStyle.Flex;
+                }
+                evt.StopPropagation();
+            });
             dragHandle.RegisterCallback<PointerUpEvent>(evt =>
             {
                 if (!dragging || evt.pointerId != pointerId) return;
                 dragging = false;
                 pointerId = -1;
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
+                if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
                 var position = evt.position;
                 if (dragHandle.HasPointerCapture(evt.pointerId))
                     dragHandle.ReleasePointer(evt.pointerId);
-                var destination = _leftDock != null && _leftDock.worldBound.Contains(position)
-                    ? "left" : _rightDock != null && _rightDock.worldBound.Contains(position)
-                    ? "right" : _bottomDock != null && _bottomDock.worldBound.Contains(position)
-                    ? "bottom" : null;
+                var destination = DockAt(position);
                 if (destination != null && destination != currentDock)
                 {
                     PlayerPrefs.SetString(key, destination);
@@ -420,6 +444,7 @@ namespace VCR.Runtime.UI
             dragHandle.RegisterCallback<PointerCaptureOutEvent>(_ =>
             {
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
+                if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
                 dragging = false;
                 pointerId = -1;
             });
@@ -433,6 +458,14 @@ namespace VCR.Runtime.UI
             }
             panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
             panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
+        }
+
+        private string DockAt(Vector2 position)
+        {
+            if (_leftDock != null && _leftDock.worldBound.Contains(position)) return "left";
+            if (_rightDock != null && _rightDock.worldBound.Contains(position)) return "right";
+            if (_bottomDock != null && _bottomDock.worldBound.Contains(position)) return "bottom";
+            return null;
         }
 
         private void MovePanelOrder(VisualElement panel, string id, int direction)
