@@ -473,6 +473,7 @@ namespace VCR.Runtime.UI
                 if (child.name != null && child.name.StartsWith("vcr-panel-"))
                     panels.Add(child);
             if (panels.Count < 2) return;
+            // Tabbed panels share the same dock; drag onto a tab to reorder.
             var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
             var active = Mathf.Clamp(PlayerPrefs.GetInt(key, 0), 0, panels.Count - 1);
             foreach (var panel in panels)
@@ -496,8 +497,10 @@ namespace VCR.Runtime.UI
                     PlayerPrefs.SetInt(key, index);
                     PlayerPrefs.Save();
                 }) { text = name };
+                tab.name = "vcr-tab-" + name;
                 tabs.Add(tab);
             }
+            tabs.name = "vcr-dock-tabs-" + dockId;
             dock.Insert(0, tabs);
         }
 
