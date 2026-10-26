@@ -292,6 +292,9 @@ namespace VCR.Runtime.UI
                 var next = currentDock == "left" ? "right" :
                     currentDock == "right" ? "bottom" : "left";
                 PlayerPrefs.SetString(key, next);
+                if (next == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
+                if (next == "right") { _rightVisible = true; PlayerPrefs.SetInt(RightVisibleKey, 1); }
+                if (next == "bottom") { _bottomVisible = true; PlayerPrefs.SetInt(BottomVisibleKey, 1); }
                 PlayerPrefs.Save();
                 Build();
             }) { text = "Move: " + currentDock };
