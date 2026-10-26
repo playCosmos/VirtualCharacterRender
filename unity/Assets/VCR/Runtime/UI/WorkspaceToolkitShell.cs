@@ -868,6 +868,9 @@ namespace VCR.Runtime.UI
             _tabMode = false;
             _leftVisible = true;
             _rightVisible = true;
+            // Replace the previous snapshot immediately: reset must survive a crash
+            // or forced shutdown without restoring the old panel arrangement.
+            WorkspaceLayoutFile.Save();
             Build();
         }
 
