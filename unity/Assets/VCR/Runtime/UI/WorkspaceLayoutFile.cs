@@ -67,10 +67,20 @@ namespace VCR.Runtime.UI
                 File.WriteAllText(temporary, JsonUtility.ToJson(layout, true));
                 if (File.Exists(path))
                 {
-                    try { File.Replace(temporary, path, path + ".bak"); }
-                    catch (PlatformNotSupportedException)
+                    // Never replace a valid backup with a corrupt primary snapshot.
+                    var validPrimary = TryRead(path, out _);
+                    if (validPrimary)
                     {
-                        File.Copy(path, path + ".bak", true);
+                        try { File.Replace(temporary, path, path + ".bak"); }
+                        catch (PlatformNotSupportedException)
+                        {
+                            File.Copy(path, path + ".bak", true);
+                            File.Delete(path);
+                            File.Move(temporary, path);
+                        }
+                    }
+                    else
+                    {
                         File.Delete(path);
                         File.Move(temporary, path);
                     }
@@ -120,6 +130,18 @@ namespace VCR.Runtime.UI
             return false;
         }
 
+        internal static void ClearSnapshots()
+        {
+            // Reset is a user-requested destructive operation. Remove both snapshots
+            // so a later restore cannot resurrect the previous arrangement.
+            foreach (var path in new[] { PathName, PathName + ".bak", PathName + ".tmp" })
+            {
+                try { if (File.Exists(path)) File.Delete(path); }
+                catch (IOException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
+                catch (UnauthorizedAccessException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
+            }
+        }
+
         private static void SetSize(string name, float value, float min, float max)
         {
             if (float.IsNaN(value) || float.IsInfinity(value)) return;
@@ -139,6 +161,7 @@ namespace VCR.Runtime.UI
                     PlayerPrefs.SetString("VCR.UI.Workspace.ActiveTab." + dock + ".v1", panelName);
                     return;
                 }
+            PlayerPrefs.DeleteKey("VCR.UI.Workspace.ActiveTab." + dock + ".v1");
         }
 
         private static bool TryRead(string path, out Layout layout)
