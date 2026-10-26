@@ -231,6 +231,7 @@ namespace VCR.Runtime.UI
                 handle.style.height = 6;
 
             var dragging = false;
+            var activePointerId = -1;
             var startPosition = 0f;
             var startValue = initial;
             var currentValue = initial;
@@ -238,6 +239,7 @@ namespace VCR.Runtime.UI
             {
                 if (evt.button != 0 || dragging) return;
                 dragging = true;
+                activePointerId = evt.pointerId;
                 startPosition = horizontal ? evt.position.x : evt.position.y;
                 startValue = currentValue;
                 handle.CapturePointer(evt.pointerId);
@@ -245,7 +247,7 @@ namespace VCR.Runtime.UI
             });
             handle.RegisterCallback<PointerMoveEvent>(evt =>
             {
-                if (!dragging) return;
+                if (!dragging || evt.pointerId != activePointerId) return;
                 var position = horizontal ? evt.position.x : evt.position.y;
                 var delta = (position - startPosition) * (reverse ? -1f : 1f);
                 currentValue = Mathf.Clamp(startValue + delta, min, max);
@@ -254,15 +256,23 @@ namespace VCR.Runtime.UI
             });
             handle.RegisterCallback<PointerUpEvent>(evt =>
             {
-                if (!dragging) return;
+                if (!dragging || evt.pointerId != activePointerId) return;
                 dragging = false;
+                activePointerId = -1;
                 if (handle.HasPointerCapture(evt.pointerId))
                     handle.ReleasePointer(evt.pointerId);
                 PlayerPrefs.SetFloat(key, currentValue);
                 PlayerPrefs.Save();
                 evt.StopPropagation();
             });
-            handle.RegisterCallback<PointerCaptureOutEvent>(_ => dragging = false);
+            handle.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                if (!dragging) return;
+                dragging = false;
+                activePointerId = -1;
+                PlayerPrefs.SetFloat(key, currentValue);
+                PlayerPrefs.Save();
+            });
             return handle;
         }
 
