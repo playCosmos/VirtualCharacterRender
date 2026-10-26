@@ -29,6 +29,8 @@ namespace VCR.Runtime.UI
         private VisualElement _leftDock;
         private VisualElement _rightDock;
         private VisualElement _bottomDock;
+        private Texture _previewTexture;
+        private Image _previewImage;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -82,7 +84,8 @@ namespace VCR.Runtime.UI
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
                 if (_trackingStatus != null) _trackingStatus.text = "Runtime unavailable";
-                if (_previewStatus != null) _previewStatus.text = "Preview unavailable: no scene runtime";
+                if (_previewStatus != null) _previewStatus.text = _previewTexture == null
+                    ? "Preview unavailable: no scene runtime" : "External preview texture connected";
                 return;
             }
             var state = sceneRuntime.Status;
@@ -94,12 +97,21 @@ namespace VCR.Runtime.UI
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
-                    ? "Model loaded: " + modelName + " (viewport not connected)"
-                    : "No active model (viewport not connected)";
+                    ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
+                    : "No active model" + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)");
             if (_inspectorStatus != null)
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
                 _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
+        }
+
+        /// <summary>Bind an externally owned runtime viewport texture. This shell never creates or disposes the texture.</summary>
+        public void BindPreviewTexture(Texture texture)
+        {
+            _previewTexture = texture;
+            if (_previewImage == null) return;
+            _previewImage.image = texture;
+            _previewImage.style.display = texture == null ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private void OnDisable()
@@ -117,6 +129,7 @@ namespace VCR.Runtime.UI
             _leftDock = null;
             _rightDock = null;
             _bottomDock = null;
+            _previewImage = null;
         }
 
         private void Build()
@@ -224,6 +237,12 @@ namespace VCR.Runtime.UI
                 "Preview — runtime viewport integration pending", 360);
             _previewStatus = new Label("Waiting for model state...");
             preview.Add(_previewStatus);
+            _previewImage = new Image();
+            _previewImage.scaleMode = ScaleMode.ScaleToFit;
+            _previewImage.style.flexGrow = 1;
+            _previewImage.style.display = _previewTexture == null ? DisplayStyle.None : DisplayStyle.Flex;
+            _previewImage.image = _previewTexture;
+            preview.Add(_previewImage);
             center.Add(preview);
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
             _inspectorStatus = new Label("Waiting for scene state...");
