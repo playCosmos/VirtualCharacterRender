@@ -427,6 +427,9 @@ namespace VCR.Runtime.UI
             _workspaceRoot.Add(bottom);
             if (_tabMode)
             {
+                SortDockPanels(left);
+                SortDockPanels(right);
+                SortDockPanels(bottom);
                 ApplyDockTabs(left, "left");
                 ApplyDockTabs(right, "right");
                 ApplyDockTabs(bottom, "bottom");
@@ -466,6 +469,27 @@ namespace VCR.Runtime.UI
             _workspaceRoot.Add(_dockTargetLabel);
         }
 
+        private static void SortDockPanels(VisualElement dock)
+        {
+            var panels = new System.Collections.Generic.List<VisualElement>();
+            foreach (var child in dock.Children())
+                if (child.name != null && child.name.StartsWith("vcr-panel-"))
+                    panels.Add(child);
+            panels.Sort((a, b) =>
+            {
+                var aId = a.name.Substring("vcr-panel-".Length);
+                var bId = b.name.Substring("vcr-panel-".Length);
+                var aOrder = PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + aId + ".v1", int.MaxValue);
+                var bOrder = PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + bId + ".v1", int.MaxValue);
+                return aOrder.CompareTo(bOrder);
+            });
+            foreach (var panel in panels)
+            {
+                dock.Remove(panel);
+                dock.Add(panel);
+            }
+        }
+
         private void ApplyDockTabs(VisualElement dock, string dockId)
         {
             var panels = new System.Collections.Generic.List<VisualElement>();
@@ -492,8 +516,10 @@ namespace VCR.Runtime.UI
                 var panel = panels[i];
                 panel.style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
                 var name = panel.name.Substring("vcr-panel-".Length);
+                var suppressClick = false;
                 var tab = new Button(() =>
                 {
+                    if (suppressClick) { suppressClick = false; return; }
                     for (var j = 0; j < panels.Count; j++)
                         panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
                     PlayerPrefs.SetString(key, panel.name);
@@ -512,6 +538,7 @@ namespace VCR.Runtime.UI
                     tabPointer = evt.pointerId;
                     tabStart = evt.position;
                     tabMoved = false;
+                    suppressClick = false;
                     tab.CapturePointer(tabPointer);
                 });
                 tab.RegisterCallback<PointerMoveEvent>(evt =>
@@ -526,6 +553,7 @@ namespace VCR.Runtime.UI
                     draggingTab = false;
                     var drop = evt.position;
                     var moved = tabMoved;
+                    suppressClick = moved;
                     if (tab.HasPointerCapture(evt.pointerId))
                         tab.ReleasePointer(evt.pointerId);
                     if (!moved) return;
