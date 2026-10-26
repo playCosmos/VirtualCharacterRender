@@ -243,16 +243,11 @@ namespace VCR.Runtime.UI
             var bottomSplitter = Splitter(false, _bottomHeight, 100f, 400f, value =>
             {
                 _bottomHeight = value;
-                // The bottom element is assigned after the splitter is created.
                 var target = _root.Q<VisualElement>("vcr-bottom");
                 if (target != null) target.style.height = value;
             }, BottomHeightKey, true);
             bottomSplitter.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _root.Add(bottomSplitter);
-            var bottom = new VisualElement { name = "vcr-bottom" };
-            bottom.style.flexDirection = FlexDirection.Row;
-            bottom.style.height = _bottomHeight;
-            bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
