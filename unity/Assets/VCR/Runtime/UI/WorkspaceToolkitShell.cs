@@ -22,6 +22,12 @@ namespace VCR.Runtime.UI
         private VisualElement _dockHost;
         private Label _status;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
+        private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
+        private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
+        private const string BottomHeightKey = "VCR.UI.Workspace.BottomHeight.v1";
+        private float _leftWidth = 220f;
+        private float _rightWidth = 260f;
+        private float _bottomHeight = 150f;
 
         private void OnEnable()
         {
@@ -30,6 +36,9 @@ namespace VCR.Runtime.UI
                 return;
 
             advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0) == 1;
+            _leftWidth = ReadSize(LeftWidthKey, 220f, 140f, 520f);
+            _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
+            _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
             _root = _document.rootVisualElement;
             Build();
         }
@@ -90,6 +99,7 @@ namespace VCR.Runtime.UI
                 Build();
             }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
             header.Add(toggle);
+            header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _root.Add(header);
 
             _dockHost = new VisualElement();
@@ -97,12 +107,22 @@ namespace VCR.Runtime.UI
             _dockHost.style.flexDirection = FlexDirection.Row;
             _root.Add(_dockHost);
 
-            var left = Column(220);
+            var left = Column(_leftWidth);
             var center = Column(0);
             center.style.flexGrow = 1;
-            var right = Column(260);
+            var right = Column(_rightWidth);
             _dockHost.Add(left);
+            _dockHost.Add(Splitter(true, _leftWidth, 140f, 520f, value =>
+            {
+                _leftWidth = value;
+                left.style.width = value;
+            }, LeftWidthKey));
             _dockHost.Add(center);
+            _dockHost.Add(Splitter(true, _rightWidth, 160f, 520f, value =>
+            {
+                _rightWidth = value;
+                right.style.width = value;
+            }, RightWidthKey, true));
             _dockHost.Add(right);
 
             left.Add(Panel(WorkspacePanelCatalog.Scenes, "Scenes", 140));
@@ -116,9 +136,16 @@ namespace VCR.Runtime.UI
                 right.Add(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120));
             }
 
-            var bottom = new VisualElement();
+            _root.Add(Splitter(false, _bottomHeight, 100f, 400f, value =>
+            {
+                _bottomHeight = value;
+                // The bottom element is assigned after the splitter is created.
+                var target = _root.Q<VisualElement>("vcr-bottom");
+                if (target != null) target.style.height = value;
+            }, BottomHeightKey, true));
+            var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
-            bottom.style.height = 150;
+            bottom.style.height = _bottomHeight;
             bottom.Add(Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150));
             bottom.Add(Panel(WorkspacePanelCatalog.Actions, "Actions", 150));
             bottom.Add(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150));
@@ -130,6 +157,75 @@ namespace VCR.Runtime.UI
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
             _root.Add(_status);
+        }
+
+        private static float ReadSize(string key, float fallback, float min, float max)
+        {
+            var value = PlayerPrefs.GetFloat(key, fallback);
+            return float.IsNaN(value) || float.IsInfinity(value)
+                ? fallback : Mathf.Clamp(value, min, max);
+        }
+
+        private void ResetLayout()
+        {
+            PlayerPrefs.DeleteKey(LeftWidthKey);
+            PlayerPrefs.DeleteKey(RightWidthKey);
+            PlayerPrefs.DeleteKey(BottomHeightKey);
+            PlayerPrefs.Save();
+            _leftWidth = 220f;
+            _rightWidth = 260f;
+            _bottomHeight = 150f;
+            Build();
+        }
+
+        // Splitters use pointer capture, so releasing outside the handle still
+        // ends a drag. Only a completed drag writes the persisted dimension.
+        private static VisualElement Splitter(
+            bool horizontal, float initial, float min, float max,
+            System.Action<float> apply, string key, bool reverse = false)
+        {
+            var handle = new VisualElement();
+            handle.style.flexShrink = 0;
+            handle.style.backgroundColor = new Color(0.27f, 0.31f, 0.35f);
+            if (horizontal)
+                handle.style.width = 6;
+            else
+                handle.style.height = 6;
+
+            var dragging = false;
+            var startPosition = 0f;
+            var startValue = initial;
+            var currentValue = initial;
+            handle.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (evt.button != 0 || dragging) return;
+                dragging = true;
+                startPosition = horizontal ? evt.position.x : evt.position.y;
+                startValue = currentValue;
+                handle.CapturePointer(evt.pointerId);
+                evt.StopPropagation();
+            });
+            handle.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (!dragging) return;
+                var position = horizontal ? evt.position.x : evt.position.y;
+                var delta = (position - startPosition) * (reverse ? -1f : 1f);
+                currentValue = Mathf.Clamp(startValue + delta, min, max);
+                apply(currentValue);
+                evt.StopPropagation();
+            });
+            handle.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (!dragging) return;
+                dragging = false;
+                if (handle.HasPointerCapture(evt.pointerId))
+                    handle.ReleasePointer(evt.pointerId);
+                PlayerPrefs.SetFloat(key, currentValue);
+                PlayerPrefs.Save();
+                evt.StopPropagation();
+            });
+            handle.RegisterCallback<PointerCaptureOutEvent>(_ => dragging = false);
+            return handle;
         }
 
         private static VisualElement Column(float width)
