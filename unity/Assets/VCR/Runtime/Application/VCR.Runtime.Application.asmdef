@@ -10,7 +10,9 @@
     "VRM10",
     "VCR.Runtime.Rendering",
     "VCR.Runtime.Diagnostics",
-    "VCR.Runtime.Output"
+    "VCR.Runtime.Output",
+    "VCR.Runtime.Capabilities",
+    "VCR.Runtime.Materials.Unity"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

@@ -402,7 +402,8 @@ namespace VCR.Runtime.UI
 
         public ApplicationUiModel Model => _model;
 
-        private const string LastCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
+        private const string LastCharacterPathKey =
+            ApplicationRuntimeBootstrap.LastCharacterPathPreferenceKey;
         private bool _characterRestoreAttempted;
         private bool _configurationStartupNoticeDelivered;
 
@@ -496,6 +497,9 @@ namespace VCR.Runtime.UI
             {
                 _characterRestoreAttempted = true;
                 _lastActionMessage = "Previous VRM file was not found. Select a model.";
+                Debug.LogWarning(
+                    "VCR inventory: stage=restore category=model status=missing filename=" +
+                    Path.GetFileName(path), this);
                 return;
             }
 
@@ -506,6 +510,9 @@ namespace VCR.Runtime.UI
             }
 
             _characterRestoreAttempted = true;
+            Debug.Log(
+                "VCR inventory: stage=restore category=model status=loading filename=" +
+                Path.GetFileName(path), this);
             var generation = ++_characterUiOperationGeneration;
             if (_characterPathInput != null)
             {
@@ -523,12 +530,20 @@ namespace VCR.Runtime.UI
                 _lastActionMessage = loaded != null
                     ? "Previous character restored."
                     : "Previous character could not be restored.";
+                Debug.Log(
+                    "VCR inventory: stage=restore category=model status=" +
+                    (loaded != null ? "restored" : "not_loaded") +
+                    " filename=" + Path.GetFileName(path), this);
             }
             catch (Exception exception)
             {
                 if (IsCurrentCharacterUiOperation(generation, runtime))
                 {
                     _lastActionMessage = "Previous character restore failed: " + exception.Message;
+                    Debug.LogWarning(
+                        "VCR inventory: stage=restore category=model status=failed filename=" +
+                        Path.GetFileName(path) +
+                        " exception=" + exception.GetType().Name, this);
                 }
             }
 

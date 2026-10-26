@@ -149,6 +149,9 @@ namespace VCR.Runtime.Character
 
                 NotifyCharacterLoaded(
                     Current);
+                Debug.Log(
+                    "VCR inventory: stage=runtime category=model status=loaded" +
+                    " format=vrm filename=" + Path.GetFileName(path), this);
                 return Current;
             }
             catch (OperationCanceledException)
@@ -203,8 +206,14 @@ namespace VCR.Runtime.Character
             }
 
             var current = Current;
+            var unloadedFile = CurrentPath;
             Current = null;
             CurrentPath = null;
+            Debug.Log(
+                "VCR inventory: stage=runtime category=model status=unloaded" +
+                " format=vrm filename=" +
+                (string.IsNullOrWhiteSpace(unloadedFile)
+                    ? "<none>" : Path.GetFileName(unloadedFile)), this);
 
             current.gameObject.SetActive(false);
             DestroyLoaded(current);

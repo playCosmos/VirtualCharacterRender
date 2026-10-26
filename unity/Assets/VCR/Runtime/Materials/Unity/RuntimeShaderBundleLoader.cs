@@ -235,6 +235,16 @@ namespace VCR.Runtime.Materials.Unity
                     LoadedShaderCount +=
                         registeredCount;
                     committed = true;
+                    Debug.Log(
+                        "VCR inventory: stage=runtime category=shader_bundle status=loaded" +
+                        " count=" + registeredCount +
+                        " filename=" + Path.GetFileName(normalizedPath), this);
+                    foreach (var shaderId in shaderIds)
+                    {
+                        Debug.Log(
+                            "VCR inventory: stage=runtime category=registered_shader id=" +
+                            shaderId.Replace('\r', ' ').Replace('\n', ' '), this);
+                    }
                     return true;
                 }
                 finally

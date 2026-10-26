@@ -32,6 +32,18 @@ namespace VCR.Runtime.Capabilities
             }
         }
 
+        // Snapshot names only: metadata registration is not executable code load.
+        public string[] GetRegisteredProviderIds()
+        {
+            lock (_sync)
+            {
+                var ids = new string[_providers.Count];
+                _providers.Keys.CopyTo(ids, 0);
+                Array.Sort(ids, StringComparer.Ordinal);
+                return ids;
+            }
+        }
+
         public DeclarativeCapabilityRegistration CaptureOwner(
             object owner)
         {
