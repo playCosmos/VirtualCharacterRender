@@ -739,6 +739,14 @@ namespace VCR.Runtime.UI
                 previous.Remove(panel);
                 SaveDockOrder(previous);
             }
+            // Persist a deterministic position at the end of the destination dock.
+            var destinationDock = destination == "left" ? _leftDock :
+                destination == "right" ? _rightDock : _bottomDock;
+            var destinationCount = 0;
+            if (destinationDock != null)
+                foreach (var child in destinationDock.Children())
+                    if (child.name != null && child.name.StartsWith("vcr-panel-")) destinationCount++;
+            PlayerPrefs.SetInt("VCR.UI.Workspace.Order." + id + ".v1", destinationCount);
             PlayerPrefs.Save();
             Build();
         }
