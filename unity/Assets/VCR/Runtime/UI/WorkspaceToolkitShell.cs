@@ -553,7 +553,10 @@ namespace VCR.Runtime.UI
                 if (_dockTargetLabel != null)
                 {
                     var destination = DockAt(evt.position);
-                    _dockTargetLabel.text = destination == null ? "No dock target" : "Drop: " + destination;
+                    var sibling = destination == currentDock ? PanelAt(evt.position, target, panel) : null;
+                    _dockTargetLabel.text = destination == null ? "No dock target" :
+                        sibling == null ? "Drop: " + destination :
+                        "Reorder before: " + sibling.name.Substring("vcr-panel-".Length);
                     _dockTargetLabel.style.display = DisplayStyle.Flex;
                 }
                 evt.StopPropagation();
@@ -569,7 +572,18 @@ namespace VCR.Runtime.UI
                 if (dragHandle.HasPointerCapture(evt.pointerId))
                     dragHandle.ReleasePointer(evt.pointerId);
                 var destination = DockAt(position);
-                if (destination != null && destination != currentDock)
+                if (destination == currentDock)
+                {
+                    var sibling = PanelAt(position, target, panel);
+                    if (sibling != null)
+                    {
+                        target.Remove(panel);
+                        target.Insert(target.IndexOf(sibling), panel);
+                        SaveDockOrder(target);
+                        Build();
+                    }
+                }
+                else if (destination != null)
                 {
                     PlayerPrefs.SetString(key, destination);
                     if (destination == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
@@ -599,6 +613,30 @@ namespace VCR.Runtime.UI
             panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
         }
 
+        private static VisualElement PanelAt(Vector2 position, VisualElement dock, VisualElement dragged)
+        {
+            if (dock == null) return null;
+            foreach (var child in dock.Children())
+            {
+                if (child == dragged || child.name == null ||
+                    !child.name.StartsWith("vcr-panel-")) continue;
+                if (child.worldBound.Contains(position)) return child;
+            }
+            return null;
+        }
+
+        private static void SaveDockOrder(VisualElement dock)
+        {
+            var order = 0;
+            foreach (var child in dock.Children())
+            {
+                if (child.name == null || !child.name.StartsWith("vcr-panel-")) continue;
+                PlayerPrefs.SetInt("VCR.UI.Workspace.Order." +
+                    child.name.Substring("vcr-panel-".Length) + ".v1", order++);
+            }
+            PlayerPrefs.Save();
+        }
+
         private string DockAt(Vector2 position)
         {
             if (_leftDock != null && _leftDock.worldBound.Contains(position)) return "left";
@@ -616,14 +654,8 @@ namespace VCR.Runtime.UI
             if (index == next) return;
             parent.Remove(panel);
             parent.Insert(next, panel);
-            for (var i = 0; i < parent.childCount; i++)
-            {
-                var child = parent[i];
-                if (!child.name.StartsWith("vcr-panel-")) continue;
-                PlayerPrefs.SetInt("VCR.UI.Workspace.Order." +
-                    child.name.Substring("vcr-panel-".Length) + ".v1", i);
-            }
-            PlayerPrefs.Save();
+            SaveDockOrder(parent);
+            if (_tabMode) Build();
         }
 
         private static float ReadSize(string key, float fallback, float min, float max)
