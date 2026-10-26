@@ -32,6 +32,8 @@ namespace VCR.Runtime.UI
         private const string BottomVisibleKey = "VCR.UI.Workspace.BottomVisible.v1";
         private const string LeftVisibleKey = "VCR.UI.Workspace.LeftVisible.v1";
         private const string ScenesHeightKey = "VCR.UI.Workspace.ScenesHeight.v1";
+        private const string RightInspectorHeightKey = "VCR.UI.Workspace.InspectorHeight.v1";
+        private float _inspectorHeight = 260f;
         private float _scenesHeight = 180f;
         private const string RightVisibleKey = "VCR.UI.Workspace.RightVisible.v1";
         private bool _leftVisible = true;
@@ -50,6 +52,7 @@ namespace VCR.Runtime.UI
             advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0) == 1;
             _leftWidth = ReadSize(LeftWidthKey, 220f, 140f, 520f);
             _scenesHeight = ReadSize(ScenesHeightKey, 180f, 100f, 400f);
+            _inspectorHeight = ReadSize(RightInspectorHeightKey, 260f, 140f, 520f);
             _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
             _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
@@ -206,9 +209,19 @@ namespace VCR.Runtime.UI
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
             _inspectorStatus = new Label("Waiting for scene state...");
             inspector.Add(_inspectorStatus);
+            if (advancedWorkspace)
+            {
+                inspector.style.height = _inspectorHeight;
+                inspector.style.flexGrow = 0;
+            }
             right.Add(inspector);
             if (advancedWorkspace)
             {
+                right.Add(Splitter(false, _inspectorHeight, 140f, 520f, value =>
+                {
+                    _inspectorHeight = value;
+                    inspector.style.height = value;
+                }, RightInspectorHeightKey));
                 right.Add(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140));
                 right.Add(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120));
             }
@@ -253,6 +266,7 @@ namespace VCR.Runtime.UI
         {
             PlayerPrefs.DeleteKey(LeftWidthKey);
             PlayerPrefs.DeleteKey(ScenesHeightKey);
+            PlayerPrefs.DeleteKey(RightInspectorHeightKey);
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
@@ -261,6 +275,7 @@ namespace VCR.Runtime.UI
             PlayerPrefs.Save();
             _leftWidth = 220f;
             _scenesHeight = 180f;
+            _inspectorHeight = 260f;
             _rightWidth = 260f;
             _bottomHeight = 150f;
             _bottomVisible = true;
