@@ -34,6 +34,7 @@ namespace VCR.Runtime.UI
         [SerializeField] private bool discoverCameraPreview = true;
         [SerializeField] private RenderTexture previewRenderTexture;
         private Image _previewImage;
+        private bool _previewBoundFromCamera;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -69,6 +70,7 @@ namespace VCR.Runtime.UI
             _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
             if (previewRenderTexture != null)
                 _previewTexture = previewRenderTexture;
+            _previewBoundFromCamera = false;
             _root = _document.rootVisualElement;
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
             _workspaceRoot.style.flexGrow = 1;
@@ -78,11 +80,18 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
-            if (_previewTexture == null && previewCamera == null && discoverCameraPreview && sceneRuntime != null)
+            if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
                 previewCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
-            if (_previewTexture == null && previewCamera != null && previewCamera.targetTexture != null)
-                BindPreviewTexture(previewCamera.targetTexture);
+            if (_previewBoundFromCamera || _previewTexture == null)
+            {
+                var cameraTexture = previewCamera != null ? previewCamera.targetTexture : null;
+                if (cameraTexture != _previewTexture)
+                {
+                    _previewBoundFromCamera = cameraTexture != null;
+                    BindPreviewTexture(cameraTexture);
+                }
+            }
             if (_status == null || Time.unscaledTime < _nextStatusRefresh)
                 return;
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
@@ -140,7 +149,7 @@ namespace VCR.Runtime.UI
             _rightDock = null;
             _bottomDock = null;
             _previewImage = null;
-            previewCamera = null;
+            _previewBoundFromCamera = false;
         }
 
         private void Build()
