@@ -364,13 +364,13 @@ namespace VCR.Runtime.UI
             var scenes = Panel(WorkspacePanelCatalog.Scenes, "Scenes", 100);
             scenes.style.height = _scenesHeight;
             scenes.style.flexGrow = 0;
-            left.Add(scenes);
+            PlacePanel(scenes, WorkspacePanelCatalog.Scenes, "left");
             var scenesSplitter = Splitter(false, _scenesHeight, 100f, 400f, value =>
             {
                 _scenesHeight = value;
                 scenes.style.height = value;
             }, ScenesHeightKey);
-            scenesSplitter.style.display = _tabMode ? DisplayStyle.None : DisplayStyle.Flex;
+            scenesSplitter.style.display = !_tabMode && scenes.parent == left ? DisplayStyle.Flex : DisplayStyle.None;
             left.Add(scenesSplitter);
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
             _sourcesStatus = new Label("Waiting for model state...");
@@ -475,13 +475,16 @@ namespace VCR.Runtime.UI
             foreach (var child in dock.Children())
                 if (child.name != null && child.name.StartsWith("vcr-panel-"))
                     panels.Add(child);
+            var creationOrder = new System.Collections.Generic.Dictionary<VisualElement, int>();
+            for (var i = 0; i < panels.Count; i++) creationOrder[panels[i]] = i;
             panels.Sort((a, b) =>
             {
                 var aId = a.name.Substring("vcr-panel-".Length);
                 var bId = b.name.Substring("vcr-panel-".Length);
                 var aOrder = PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + aId + ".v1", int.MaxValue);
                 var bOrder = PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + bId + ".v1", int.MaxValue);
-                return aOrder.CompareTo(bOrder);
+                var comparison = aOrder.CompareTo(bOrder);
+                return comparison != 0 ? comparison : creationOrder[a].CompareTo(creationOrder[b]);
             });
             foreach (var panel in panels)
             {
@@ -716,10 +719,7 @@ namespace VCR.Runtime.UI
                 activePointerId = -1;
             });
             target.Add(panel);
-            var orderKey = "VCR.UI.Workspace.Order." + id + ".v1";
-            // Ordering is restored once after every panel is created. Inserting
-            // during construction mixes panel indices with splitter elements.
-            // Keep the preference key for the final SortDockPanels pass.
+            // The final SortDockPanels pass restores the persisted order.
             panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
             panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
         }
