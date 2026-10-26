@@ -321,6 +321,26 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.Save();
                 Build();
             }) { text = _rightVisible ? "Hide right" : "Show right" });
+            header.Add(new Button(() =>
+            {
+                if (!WorkspaceLayoutFile.Save())
+                    Debug.LogWarning("Workspace layout snapshot could not be saved.");
+            }) { text = "Save layout" });
+            header.Add(new Button(() =>
+            {
+                if (!WorkspaceLayoutFile.Load()) return;
+                advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, 0) != 0;
+                _tabMode = PlayerPrefs.GetInt(TabModeKey, 0) != 0;
+                _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
+                _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
+                _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
+                _leftWidth = ReadSize(LeftWidthKey, 220f, 140f, 520f);
+                _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
+                _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
+                _scenesHeight = ReadSize(ScenesHeightKey, 180f, 100f, 400f);
+                _inspectorHeight = ReadSize(RightInspectorHeightKey, 260f, 140f, 520f);
+                Build();
+            }) { text = "Restore layout" });
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _workspaceRoot.Add(header);
 
