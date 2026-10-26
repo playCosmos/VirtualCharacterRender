@@ -35,6 +35,7 @@ namespace VCR.Runtime.UI
         [SerializeField] private RenderTexture previewRenderTexture;
         private Image _previewImage;
         private bool _previewBoundFromCamera;
+        private bool _previewExplicitlyBound;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -71,6 +72,7 @@ namespace VCR.Runtime.UI
             if (previewRenderTexture != null)
                 _previewTexture = previewRenderTexture;
             _previewBoundFromCamera = false;
+            _previewExplicitlyBound = previewRenderTexture != null;
             _root = _document.rootVisualElement;
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
             _workspaceRoot.style.flexGrow = 1;
@@ -83,13 +85,13 @@ namespace VCR.Runtime.UI
             if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
                 previewCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
-            if (_previewBoundFromCamera || _previewTexture == null)
+            if (!_previewExplicitlyBound && (_previewBoundFromCamera || _previewTexture == null))
             {
                 var cameraTexture = previewCamera != null ? previewCamera.targetTexture : null;
                 if (cameraTexture != _previewTexture)
                 {
                     _previewBoundFromCamera = cameraTexture != null;
-                    BindPreviewTexture(cameraTexture);
+                    SetPreviewTexture(cameraTexture);
                 }
             }
             if (_status == null || Time.unscaledTime < _nextStatusRefresh)
@@ -126,6 +128,13 @@ namespace VCR.Runtime.UI
 
         /// <summary>Bind an externally owned runtime viewport texture. This shell never creates or disposes the texture.</summary>
         public void BindPreviewTexture(Texture texture)
+        {
+            _previewExplicitlyBound = texture != null;
+            _previewBoundFromCamera = false;
+            SetPreviewTexture(texture);
+        }
+
+        private void SetPreviewTexture(Texture texture)
         {
             _previewTexture = texture;
             if (_previewImage == null) return;
