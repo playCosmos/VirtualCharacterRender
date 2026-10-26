@@ -393,6 +393,32 @@ namespace VCR.Runtime.UI
                 pointerId = -1;
             });
             target.Add(panel);
+            var orderKey = "VCR.UI.Workspace.Order." + id + ".v1";
+            var savedOrder = PlayerPrefs.GetInt(orderKey, -1);
+            if (savedOrder >= 0)
+                panel.PlaceBehind(target.childCount > 1
+                    ? target[Mathf.Clamp(savedOrder, 0, target.childCount - 2)] : panel);
+            panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
+            panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
+        }
+
+        private void MovePanelOrder(VisualElement panel, string id, int direction)
+        {
+            var parent = panel.parent;
+            if (parent == null) return;
+            var index = parent.IndexOf(panel);
+            var next = Mathf.Clamp(index + direction, 0, parent.childCount - 1);
+            if (index == next) return;
+            parent.Remove(panel);
+            parent.Insert(next, panel);
+            for (var i = 0; i < parent.childCount; i++)
+            {
+                var child = parent[i];
+                if (!child.name.StartsWith("vcr-panel-")) continue;
+                PlayerPrefs.SetInt("VCR.UI.Workspace.Order." +
+                    child.name.Substring("vcr-panel-".Length) + ".v1", i);
+            }
+            PlayerPrefs.Save();
         }
 
         private static float ReadSize(string key, float fallback, float min, float max)
@@ -411,7 +437,10 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
             foreach (var id in WorkspacePanelCatalog.GetDefaultPanelIds(true))
+            {
                 PlayerPrefs.DeleteKey("VCR.UI.Workspace.Dock." + id + ".v1");
+                PlayerPrefs.DeleteKey("VCR.UI.Workspace.Order." + id + ".v1");
+            }
             PlayerPrefs.DeleteKey(LeftVisibleKey);
             PlayerPrefs.DeleteKey(RightVisibleKey);
             PlayerPrefs.Save();
