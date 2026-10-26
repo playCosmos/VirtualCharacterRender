@@ -25,6 +25,9 @@ namespace VCR.Runtime.UI
         private Label _inspectorStatus;
         private Label _trackingStatus;
         private Label _previewStatus;
+        private VisualElement _leftDock;
+        private VisualElement _rightDock;
+        private VisualElement _bottomDock;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -106,6 +109,9 @@ namespace VCR.Runtime.UI
             _inspectorStatus = null;
             _trackingStatus = null;
             _previewStatus = null;
+            _leftDock = null;
+            _rightDock = null;
+            _bottomDock = null;
         }
 
         private void Build()
@@ -168,6 +174,8 @@ namespace VCR.Runtime.UI
             var center = Column(0);
             center.style.flexGrow = 1;
             var right = Column(_rightWidth);
+            _leftDock = left;
+            _rightDock = right;
             left.style.display = _leftVisible ? DisplayStyle.Flex : DisplayStyle.None;
             right.style.display = _rightVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _dockHost.Add(left);
@@ -200,7 +208,7 @@ namespace VCR.Runtime.UI
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
-            left.Add(sources);
+            PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview,
                 "Preview — runtime viewport integration pending", 360);
             _previewStatus = new Label("Waiting for model state...");
@@ -214,7 +222,7 @@ namespace VCR.Runtime.UI
                 inspector.style.height = _inspectorHeight;
                 inspector.style.flexGrow = 0;
             }
-            right.Add(inspector);
+            PlacePanel(inspector, WorkspacePanelCatalog.Inspector, "right");
             if (advancedWorkspace)
             {
                 right.Add(Splitter(false, _inspectorHeight, 140f, 520f, value =>
@@ -222,8 +230,8 @@ namespace VCR.Runtime.UI
                     _inspectorHeight = value;
                     inspector.style.height = value;
                 }, RightInspectorHeightKey));
-                right.Add(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140));
-                right.Add(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120));
+                PlacePanel(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140), WorkspacePanelCatalog.Materials, "right");
+                PlacePanel(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120), WorkspacePanelCatalog.Capabilities, "right");
             }
 
             var bottomSplitter = Splitter(false, _bottomHeight, 100f, 400f, value =>
@@ -242,9 +250,10 @@ namespace VCR.Runtime.UI
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
-            bottom.Add(tracking);
-            bottom.Add(Panel(WorkspacePanelCatalog.Actions, "Actions", 150));
-            bottom.Add(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150));
+            _bottomDock = bottom;
+            PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
+            PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
+            PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
             _root.Add(bottom);
 
             _status = new Label("Waiting for scene runtime status...");
@@ -253,6 +262,38 @@ namespace VCR.Runtime.UI
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
             _root.Add(_status);
+        }
+
+        // Move controls provide deterministic, persistent dock relocation.
+        // Preview stays anchored to the central viewport region.
+        private void PlacePanel(VisualElement panel, string id, string defaultDock)
+        {
+            var key = "VCR.UI.Workspace.Dock." + id + ".v1";
+            var dock = PlayerPrefs.GetString(key, defaultDock);
+            if (dock != "left" && dock != "right" && dock != "bottom")
+                dock = defaultDock;
+            var target = dock == "left" ? _leftDock :
+                dock == "right" ? _rightDock : _bottomDock;
+            // Bottom is constructed after the side docks. Defer bottom-bound
+            // side panels until the bottom host exists.
+            if (target == null)
+            {
+                dock = defaultDock;
+                target = dock == "left" ? _leftDock :
+                    dock == "right" ? _rightDock : _bottomDock;
+            }
+            if (target == null) return;
+            var currentDock = dock;
+            var move = new Button(() =>
+            {
+                var next = currentDock == "left" ? "right" :
+                    currentDock == "right" ? "bottom" : "left";
+                PlayerPrefs.SetString(key, next);
+                PlayerPrefs.Save();
+                Build();
+            }) { text = "Move: " + currentDock };
+            panel.Add(move);
+            target.Add(panel);
         }
 
         private static float ReadSize(string key, float fallback, float min, float max)
@@ -270,6 +311,8 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
+            foreach (var id in WorkspacePanelCatalog.GetDefaultPanelIds(true))
+                PlayerPrefs.DeleteKey("VCR.UI.Workspace.Dock." + id + ".v1");
             PlayerPrefs.DeleteKey(LeftVisibleKey);
             PlayerPrefs.DeleteKey(RightVisibleKey);
             PlayerPrefs.Save();
