@@ -240,6 +240,8 @@ namespace VCR.Runtime.UI
                 _nativeSettingsWasVisible = false;
             }
 
+            _nativeSettings.PumpMessages();
+
             for (var i = 0; i < 48; ++i)
             {
                 var id = _nativeSettings.PollAction();

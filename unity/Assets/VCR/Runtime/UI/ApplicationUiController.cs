@@ -3157,6 +3157,11 @@ namespace VCR.Runtime.UI
             }
             catch (Exception exception)
             {
+                Debug.LogError(
+                    "VCR LoadCharacterFromPath failed for '" + path +
+                    "': " + exception,
+                    this);
+
                 if (!IsCurrentCharacterUiOperation(
                         operationGeneration,
                         runtime))

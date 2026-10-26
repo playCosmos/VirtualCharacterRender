@@ -128,6 +128,44 @@ def require_source_order(
         )
 
 
+native_settings_source = VCR / "Runtime" / "UI" / "DesktopNativeSettingsWindow.cs"
+require_source_contains(
+    native_settings_source,
+    "[AOT.MonoPInvokeCallback(typeof(WindowProcedure))]",
+    "Win32 Settings window procedure must carry the IL2CPP reverse P/Invoke attribute",
+)
+require_source_contains(
+    native_settings_source,
+    "SetWindowPos(hwnd, HwndTopmost",
+    "Native Settings must stay above a topmost Unity render overlay",
+)
+require_source_contains(
+    native_settings_source,
+    "private static void PumpWindowMessages",
+    "Native Settings must dispatch native control messages on the Unity main thread",
+)
+require_source_contains(
+    native_settings_source,
+    "PeekMessageW(out var msg, target",
+    "Native Settings must pump messages for each native control handle",
+)
+require_source_contains(
+    native_settings_source,
+    "chromeControls",
+    "Native Settings category tabs must be included in the native message pump",
+)
+require_source_contains(
+    native_settings_source,
+    "PumpWindowMessages(control)",
+    "Native Settings category controls must be included in the native message pump",
+)
+require_source_contains(
+    VCR / "Runtime" / "UI" / "ApplicationUiController.NativeSettings.cs",
+    "_nativeSettings.PumpMessages();",
+    "Native Settings must pump child control messages before draining actions",
+)
+
+
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
 require_source_contains(
     osc_writer,

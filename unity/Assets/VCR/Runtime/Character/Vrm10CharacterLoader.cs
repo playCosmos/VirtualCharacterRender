@@ -163,6 +163,11 @@ namespace VCR.Runtime.Character
             }
             catch (Exception exception)
             {
+                Debug.LogError(
+                    "VCR VRM load failed for '" + path +
+                    "': " + exception,
+                    this);
+
                 if (loaded != null &&
                     loaded != Current)
                 {

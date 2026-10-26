@@ -38,6 +38,10 @@ namespace VCR.Runtime.UI
         private const int CommandMessage = 0x111;
         private const int RemoveMessage = 1;
         private const int ClassAlreadyExists = 1410;
+        private const uint SwpNoSize = 0x0001u;
+        private const uint SwpNoMove = 0x0002u;
+        private const uint SwpNoActivate = 0x0010u;
+        private static readonly IntPtr HwndTopmost = new IntPtr(-1);
         private const string ClassName = "VCR.NativeSettings.Window.1";
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -77,6 +81,9 @@ namespace VCR.Runtime.UI
         [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(
+            IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height,
+            uint flags);
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool UpdateWindow(IntPtr hwnd);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -97,11 +104,16 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, IntPtr> editHandles = new Dictionary<int, IntPtr>();
         private readonly Dictionary<int, List<IntPtr>> categoryControls =
             new Dictionary<int, List<IntPtr>>();
+        private readonly List<IntPtr> chromeControls = new List<IntPtr>();
         private readonly int[] rows = new int[4];
         private readonly Queue<int> events = new Queue<int>();
         private IntPtr hwnd;
         private readonly IntPtr instance;
 
+        // IL2CPP must generate a reverse P/Invoke thunk for the Win32 window
+        // procedure; without this attribute the native Settings window cannot
+        // be created in a Player build.
+        [AOT.MonoPInvokeCallback(typeof(WindowProcedure))]
         private static IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
             if (current != null && current.hwnd == hwnd)
@@ -150,9 +162,11 @@ namespace VCR.Runtime.UI
             var labels = new[] { "일반", "캐릭터 / 모델", "트래킹", "출력" };
             for (var i = 0; i < labels.Length; i++)
             {
-                CreateWindowExW(0, "BUTTON", labels[i], ChildVisible | ButtonStyle,
+                var tab = CreateWindowExW(0, "BUTTON", labels[i], ChildVisible | ButtonStyle,
                     20 + i * 220, 18, 200, 36, hwnd, new IntPtr(100 + i),
                     instance, IntPtr.Zero);
+                if (tab != IntPtr.Zero)
+                    chromeControls.Add(tab);
             }
         }
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
@@ -301,6 +315,11 @@ namespace VCR.Runtime.UI
             if (hwnd != IntPtr.Zero && IsWindow(hwnd))
             {
                 ShowWindow(hwnd, ShowNormal);
+                // The render overlay can be WS_EX_TOPMOST. A normal Settings
+                // window would open behind it, so keep this window above the
+                // overlay while it is visible.
+                SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0,
+                    SwpNoMove | SwpNoSize | SwpNoActivate);
                 SetForegroundWindow(hwnd);
                 UpdateWindow(hwnd);
             }
@@ -309,21 +328,47 @@ namespace VCR.Runtime.UI
 #endif
         }
 
+        public void PumpMessages()
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            if (hwnd == IntPtr.Zero)
+                return;
+
+            // Dispatch only messages addressed to this window or one of its
+            // controls. Unity's own messages must stay in the thread queue.
+            PumpWindowMessages(hwnd);
+            foreach (var tab in chromeControls)
+            {
+                if (tab != IntPtr.Zero && IsWindow(tab))
+                    PumpWindowMessages(tab);
+            }
+            foreach (var entry in categoryControls)
+            {
+                foreach (var control in entry.Value)
+                {
+                    if (control != IntPtr.Zero && IsWindow(control))
+                        PumpWindowMessages(control);
+                }
+            }
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private static void PumpWindowMessages(IntPtr target)
+        {
+            var count = 0;
+            while (count++ < 64 &&
+                   PeekMessageW(out var msg, target, 0, 0, RemoveMessage))
+            {
+                TranslateMessage(ref msg);
+                DispatchMessageW(ref msg);
+            }
+        }
+#endif
+
         public int PollAction()
         {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-            // Do not steal Unity messages. Only dispatch messages addressed
-            // to our own native top-level window on Unity's main thread.
-            if (hwnd != IntPtr.Zero)
-            {
-                var count = 0;
-                while (count++ < 64 &&
-                       PeekMessageW(out var msg, hwnd, 0, 0, RemoveMessage))
-                {
-                    TranslateMessage(ref msg);
-                    DispatchMessageW(ref msg);
-                }
-            }
             return events.Count > 0 ? events.Dequeue() : 0;
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             return MacPollAction();
@@ -340,6 +385,7 @@ namespace VCR.Runtime.UI
             if (current == this) current = null;
             editHandles.Clear();
             categoryControls.Clear();
+            chromeControls.Clear();
             events.Clear();
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacDestroy();
