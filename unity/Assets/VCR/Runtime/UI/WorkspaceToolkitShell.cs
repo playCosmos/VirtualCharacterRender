@@ -27,6 +27,8 @@ namespace VCR.Runtime.UI
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
         private const string BottomHeightKey = "VCR.UI.Workspace.BottomHeight.v1";
+        private const string BottomVisibleKey = "VCR.UI.Workspace.BottomVisible.v1";
+        private bool _bottomVisible = true;
         private float _leftWidth = 220f;
         private float _rightWidth = 260f;
         private float _bottomHeight = 150f;
@@ -41,6 +43,7 @@ namespace VCR.Runtime.UI
             _leftWidth = ReadSize(LeftWidthKey, 220f, 140f, 520f);
             _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
             _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
+            _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
             _root = _document.rootVisualElement;
             Build();
         }
@@ -108,6 +111,13 @@ namespace VCR.Runtime.UI
                 Build();
             }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
             header.Add(toggle);
+            header.Add(new Button(() =>
+            {
+                _bottomVisible = !_bottomVisible;
+                PlayerPrefs.SetInt(BottomVisibleKey, _bottomVisible ? 1 : 0);
+                PlayerPrefs.Save();
+                Build();
+            }) { text = _bottomVisible ? "Hide bottom" : "Show bottom" });
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _root.Add(header);
 
@@ -151,16 +161,19 @@ namespace VCR.Runtime.UI
                 right.Add(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120));
             }
 
-            _root.Add(Splitter(false, _bottomHeight, 100f, 400f, value =>
+            var bottomSplitter = Splitter(false, _bottomHeight, 100f, 400f, value =>
             {
                 _bottomHeight = value;
                 // The bottom element is assigned after the splitter is created.
                 var target = _root.Q<VisualElement>("vcr-bottom");
                 if (target != null) target.style.height = value;
-            }, BottomHeightKey, true));
+            }, BottomHeightKey, true);
+            bottomSplitter.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            _root.Add(bottomSplitter);
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
             bottom.style.height = _bottomHeight;
+            bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             bottom.Add(Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150));
             bottom.Add(Panel(WorkspacePanelCatalog.Actions, "Actions", 150));
             bottom.Add(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150));
@@ -186,10 +199,12 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(LeftWidthKey);
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
+            PlayerPrefs.DeleteKey(BottomVisibleKey);
             PlayerPrefs.Save();
             _leftWidth = 220f;
             _rightWidth = 260f;
             _bottomHeight = 150f;
+            _bottomVisible = true;
             Build();
         }
 
