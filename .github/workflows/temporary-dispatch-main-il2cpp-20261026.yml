@@ -3,7 +3,7 @@
 name: One-shot main IL2CPP verification trigger
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
     branches: [main]
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
       - name: Verify unchanged main and dispatch existing CI workflow
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_MAIN: 4e7e70540f537c5ea3e404276239254cad091f6b
+          EXPECTED_MAIN: a7d3ab24085567259f89194ef7789b943a3f06e9
         shell: bash
         run: |
           set -euo pipefail
