@@ -21,6 +21,8 @@ namespace VCR.Runtime.UI
         private VisualElement _root;
         private VisualElement _dockHost;
         private Label _status;
+        private Label _sourcesStatus;
+        private Label _inspectorStatus;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -53,6 +55,8 @@ namespace VCR.Runtime.UI
             if (sceneRuntime == null)
             {
                 _status.text = "Scene runtime unavailable";
+                if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
+                if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
                 return;
             }
             var state = sceneRuntime.Status;
@@ -61,6 +65,9 @@ namespace VCR.Runtime.UI
                 ? "<none>" : System.IO.Path.GetFileName(path);
             _status.text = "Scene: " + state.State + " | Model: " + modelName +
                 " | Loaded: " + state.HasCharacter;
+            if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
+            if (_inspectorStatus != null)
+                _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
         }
 
         private void OnDisable()
@@ -70,6 +77,8 @@ namespace VCR.Runtime.UI
             _root = null;
             _dockHost = null;
             _status = null;
+            _sourcesStatus = null;
+            _inspectorStatus = null;
         }
 
         private void Build()
@@ -126,10 +135,16 @@ namespace VCR.Runtime.UI
             _dockHost.Add(right);
 
             left.Add(Panel(WorkspacePanelCatalog.Scenes, "Scenes", 140));
-            left.Add(Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220));
+            var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
+            _sourcesStatus = new Label("Waiting for model state...");
+            sources.Add(_sourcesStatus);
+            left.Add(sources);
             center.Add(Panel(WorkspacePanelCatalog.Preview,
                 "Preview — runtime viewport integration pending", 360));
-            right.Add(Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260));
+            var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
+            _inspectorStatus = new Label("Waiting for scene state...");
+            inspector.Add(_inspectorStatus);
+            right.Add(inspector);
             if (advancedWorkspace)
             {
                 right.Add(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140));
