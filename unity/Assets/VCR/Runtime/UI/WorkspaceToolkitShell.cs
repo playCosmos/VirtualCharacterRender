@@ -31,6 +31,7 @@ namespace VCR.Runtime.UI
         private VisualElement _bottomDock;
         private Texture _previewTexture;
         [SerializeField] private Camera previewCamera;
+        [SerializeField] private bool discoverCameraPreview = true;
         [SerializeField] private RenderTexture previewRenderTexture;
         private Image _previewImage;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
@@ -77,6 +78,9 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
+            if (_previewTexture == null && previewCamera == null && discoverCameraPreview && sceneRuntime != null)
+                previewCamera = sceneRuntime.CameraController != null
+                    ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
             if (_previewTexture == null && previewCamera != null && previewCamera.targetTexture != null)
                 BindPreviewTexture(previewCamera.targetTexture);
             if (_status == null || Time.unscaledTime < _nextStatusRefresh)
