@@ -24,6 +24,7 @@ namespace VCR.Runtime.UI
         private Label _sourcesStatus;
         private Label _inspectorStatus;
         private Label _trackingStatus;
+        private Label _previewStatus;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -62,6 +63,7 @@ namespace VCR.Runtime.UI
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
                 if (_trackingStatus != null) _trackingStatus.text = "Runtime unavailable";
+                if (_previewStatus != null) _previewStatus.text = "Preview unavailable: no scene runtime";
                 return;
             }
             var state = sceneRuntime.Status;
@@ -71,6 +73,10 @@ namespace VCR.Runtime.UI
             _status.text = "Scene: " + state.State + " | Model: " + modelName +
                 " | Loaded: " + state.HasCharacter;
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
+            if (_previewStatus != null)
+                _previewStatus.text = state.HasCharacter
+                    ? "Model loaded: " + modelName + " (viewport not connected)"
+                    : "No active model (viewport not connected)";
             if (_inspectorStatus != null)
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
@@ -87,6 +93,7 @@ namespace VCR.Runtime.UI
             _sourcesStatus = null;
             _inspectorStatus = null;
             _trackingStatus = null;
+            _previewStatus = null;
         }
 
         private void Build()
@@ -154,8 +161,11 @@ namespace VCR.Runtime.UI
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
             left.Add(sources);
-            center.Add(Panel(WorkspacePanelCatalog.Preview,
-                "Preview — runtime viewport integration pending", 360));
+            var preview = Panel(WorkspacePanelCatalog.Preview,
+                "Preview — runtime viewport integration pending", 360);
+            _previewStatus = new Label("Waiting for model state...");
+            preview.Add(_previewStatus);
+            center.Add(preview);
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
             _inspectorStatus = new Label("Waiting for scene state...");
             inspector.Add(_inspectorStatus);
