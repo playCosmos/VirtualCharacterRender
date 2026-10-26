@@ -141,6 +141,7 @@ namespace VCR.Runtime.UI
         {
             _previewExplicitlyBound = texture != null;
             _previewBoundFromCamera = false;
+            if (_ownedPreviewTexture != null) ReleaseOwnedPreview();
             SetPreviewTexture(texture);
         }
 
@@ -211,7 +212,16 @@ namespace VCR.Runtime.UI
             _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
             _ownedPreviewCamera.transform.SetPositionAndRotation(
                 previewCamera.transform.position, previewCamera.transform.rotation);
-            _ownedPreviewCamera.Render();
+            try
+            {
+                _ownedPreviewCamera.Render();
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning("Workspace preview render unavailable: " + exception.Message, this);
+                ReleaseOwnedPreview();
+                enabled = false;
+            }
         }
 
         private void ReleaseOwnedPreview()
@@ -232,6 +242,7 @@ namespace VCR.Runtime.UI
 
         private void Build()
         {
+            ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
             _workspaceRoot.style.backgroundColor = new Color(0.105f, 0.12f, 0.14f);
