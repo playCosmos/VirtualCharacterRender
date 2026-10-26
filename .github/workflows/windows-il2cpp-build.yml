@@ -201,13 +201,13 @@ jobs:
           output="$GITHUB_WORKSPACE/Builds/PlayerSmoke/windows"
           if [[ "$SMOKE_REPEAT_COUNT" == "1" ]]; then
             python tools/run-player-smoke.py \
-              --platform windows \
+              --platform windows-nodebug \
               --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
               --source "$GITHUB_SHA" \
               --output "$output"
           else
             python tools/run-player-smoke-repeat.py \
-              --platform windows \
+              --platform windows-nodebug \
               --archive "release-assets/VirtualCharacterRender-$VCR_RELEASE_VERSION-Windows-x64.zip" \
               --source "$GITHUB_SHA" \
               --output "$output" \
