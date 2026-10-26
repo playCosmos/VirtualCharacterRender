@@ -15,6 +15,7 @@ namespace VCR.Runtime.UI
     {
         [SerializeField] private bool advancedWorkspace;
         [SerializeField] private SingleCharacterSceneRuntime sceneRuntime;
+        [SerializeField] private ApplicationUiController applicationUiController;
         [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
         private float _nextStatusRefresh;
         private UIDocument _document;
@@ -190,6 +191,18 @@ namespace VCR.Runtime.UI
                 Build();
             }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
             header.Add(toggle);
+            var settingsButton = new Button(() =>
+            {
+                if (applicationUiController == null)
+                    applicationUiController = FindFirstObjectByType<ApplicationUiController>();
+                if (applicationUiController != null)
+                    applicationUiController.ShowNativeSettingsWindow();
+            }) { text = "Settings" };
+            settingsButton.SetEnabled(DesktopNativeSettingsWindow.Supported);
+            settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
+                ? "Open the existing native settings window"
+                : "Native settings are unavailable on this platform";
+            header.Add(settingsButton);
             header.Add(new Button(() =>
             {
                 _bottomVisible = !_bottomVisible;
