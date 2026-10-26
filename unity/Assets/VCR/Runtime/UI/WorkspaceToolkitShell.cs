@@ -30,6 +30,10 @@ namespace VCR.Runtime.UI
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
         private const string BottomHeightKey = "VCR.UI.Workspace.BottomHeight.v1";
         private const string BottomVisibleKey = "VCR.UI.Workspace.BottomVisible.v1";
+        private const string LeftVisibleKey = "VCR.UI.Workspace.LeftVisible.v1";
+        private const string RightVisibleKey = "VCR.UI.Workspace.RightVisible.v1";
+        private bool _leftVisible = true;
+        private bool _rightVisible = true;
         private bool _bottomVisible = true;
         private float _leftWidth = 220f;
         private float _rightWidth = 260f;
@@ -46,6 +50,8 @@ namespace VCR.Runtime.UI
             _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
             _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
+            _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
+            _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
             _root = _document.rootVisualElement;
             Build();
         }
@@ -130,6 +136,20 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.Save();
                 Build();
             }) { text = _bottomVisible ? "Hide bottom" : "Show bottom" });
+            header.Add(new Button(() =>
+            {
+                _leftVisible = !_leftVisible;
+                PlayerPrefs.SetInt(LeftVisibleKey, _leftVisible ? 1 : 0);
+                PlayerPrefs.Save();
+                Build();
+            }) { text = _leftVisible ? "Hide left" : "Show left" });
+            header.Add(new Button(() =>
+            {
+                _rightVisible = !_rightVisible;
+                PlayerPrefs.SetInt(RightVisibleKey, _rightVisible ? 1 : 0);
+                PlayerPrefs.Save();
+                Build();
+            }) { text = _rightVisible ? "Hide right" : "Show right" });
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _root.Add(header);
 
@@ -142,18 +162,24 @@ namespace VCR.Runtime.UI
             var center = Column(0);
             center.style.flexGrow = 1;
             var right = Column(_rightWidth);
+            left.style.display = _leftVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            right.style.display = _rightVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _dockHost.Add(left);
-            _dockHost.Add(Splitter(true, _leftWidth, 140f, 520f, value =>
+            var leftSplitter = Splitter(true, _leftWidth, 140f, 520f, value =>
             {
                 _leftWidth = value;
                 left.style.width = value;
-            }, LeftWidthKey));
+            }, LeftWidthKey);
+            leftSplitter.style.display = _leftVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            _dockHost.Add(leftSplitter);
             _dockHost.Add(center);
-            _dockHost.Add(Splitter(true, _rightWidth, 160f, 520f, value =>
+            var rightSplitter = Splitter(true, _rightWidth, 160f, 520f, value =>
             {
                 _rightWidth = value;
                 right.style.width = value;
-            }, RightWidthKey, true));
+            }, RightWidthKey, true);
+            rightSplitter.style.display = _rightVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            _dockHost.Add(rightSplitter);
             _dockHost.Add(right);
 
             left.Add(Panel(WorkspacePanelCatalog.Scenes, "Scenes", 140));
@@ -218,11 +244,15 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
+            PlayerPrefs.DeleteKey(LeftVisibleKey);
+            PlayerPrefs.DeleteKey(RightVisibleKey);
             PlayerPrefs.Save();
             _leftWidth = 220f;
             _rightWidth = 260f;
             _bottomHeight = 150f;
             _bottomVisible = true;
+            _leftVisible = true;
+            _rightVisible = true;
             Build();
         }
 
