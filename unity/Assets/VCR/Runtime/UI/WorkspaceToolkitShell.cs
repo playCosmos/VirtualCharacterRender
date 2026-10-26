@@ -43,6 +43,8 @@ namespace VCR.Runtime.UI
         private RenderTexture _ownedPreviewTexture;
         private int _previewWidth;
         private int _previewHeight;
+        private const string TabModeKey = "VCR.UI.Workspace.TabMode.v1";
+        private bool _tabMode;
         private bool _previewRenderUnsupported;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
@@ -74,6 +76,7 @@ namespace VCR.Runtime.UI
             _inspectorHeight = ReadSize(RightInspectorHeightKey, 260f, 140f, 520f);
             _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
             _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
+            _tabMode = PlayerPrefs.GetInt(TabModeKey, 0) != 0;
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
             _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
             _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
@@ -292,6 +295,13 @@ namespace VCR.Runtime.UI
             header.Add(settingsButton);
             header.Add(new Button(() =>
             {
+                _tabMode = !_tabMode;
+                PlayerPrefs.SetInt(TabModeKey, _tabMode ? 1 : 0);
+                PlayerPrefs.Save();
+                Build();
+            }) { text = _tabMode ? "Stack panels" : "Tab panels" });
+            header.Add(new Button(() =>
+            {
                 _bottomVisible = !_bottomVisible;
                 PlayerPrefs.SetInt(BottomVisibleKey, _bottomVisible ? 1 : 0);
                 PlayerPrefs.Save();
@@ -410,6 +420,12 @@ namespace VCR.Runtime.UI
             PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
             _workspaceRoot.Add(bottom);
+            if (_tabMode)
+            {
+                ApplyDockTabs(left, "left");
+                ApplyDockTabs(right, "right");
+                ApplyDockTabs(bottom, "bottom");
+            }
 
             _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
@@ -443,6 +459,36 @@ namespace VCR.Runtime.UI
             _dockTargetLabel.style.display = DisplayStyle.None;
             _dockTargetLabel.pickingMode = PickingMode.Ignore;
             _workspaceRoot.Add(_dockTargetLabel);
+        }
+
+        private void ApplyDockTabs(VisualElement dock, string dockId)
+        {
+            var panels = new System.Collections.Generic.List<VisualElement>();
+            foreach (var child in dock.Children())
+                if (child.name != null && child.name.StartsWith("vcr-panel-"))
+                    panels.Add(child);
+            if (panels.Count < 2) return;
+            var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
+            var active = Mathf.Clamp(PlayerPrefs.GetInt(key, 0), 0, panels.Count - 1);
+            var tabs = new VisualElement();
+            tabs.style.flexDirection = FlexDirection.Row;
+            tabs.style.flexShrink = 0;
+            for (var i = 0; i < panels.Count; i++)
+            {
+                var index = i;
+                var panel = panels[i];
+                panel.style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
+                var name = panel.name.Substring("vcr-panel-".Length);
+                var tab = new Button(() =>
+                {
+                    for (var j = 0; j < panels.Count; j++)
+                        panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
+                    PlayerPrefs.SetInt(key, index);
+                    PlayerPrefs.Save();
+                }) { text = name };
+                tabs.Add(tab);
+            }
+            dock.Insert(0, tabs);
         }
 
         // Move controls provide deterministic, persistent dock relocation.
@@ -585,6 +631,10 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
+            PlayerPrefs.DeleteKey(TabModeKey);
+            PlayerPrefs.DeleteKey("VCR.UI.Workspace.ActiveTab.left.v1");
+            PlayerPrefs.DeleteKey("VCR.UI.Workspace.ActiveTab.right.v1");
+            PlayerPrefs.DeleteKey("VCR.UI.Workspace.ActiveTab.bottom.v1");
             foreach (var id in WorkspacePanelCatalog.GetDefaultPanelIds(true))
             {
                 PlayerPrefs.DeleteKey("VCR.UI.Workspace.Dock." + id + ".v1");
@@ -599,6 +649,7 @@ namespace VCR.Runtime.UI
             _rightWidth = 260f;
             _bottomHeight = 150f;
             _bottomVisible = true;
+            _tabMode = false;
             _leftVisible = true;
             _rightVisible = true;
             Build();
