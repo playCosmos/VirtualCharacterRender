@@ -425,11 +425,11 @@ namespace VCR.Runtime.UI
             PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
             _workspaceRoot.Add(bottom);
+            SortDockPanels(left);
+            SortDockPanels(right);
+            SortDockPanels(bottom);
             if (_tabMode)
             {
-                SortDockPanels(left);
-                SortDockPanels(right);
-                SortDockPanels(bottom);
                 ApplyDockTabs(left, "left");
                 ApplyDockTabs(right, "right");
                 ApplyDockTabs(bottom, "bottom");
@@ -526,6 +526,13 @@ namespace VCR.Runtime.UI
                     PlayerPrefs.Save();
                 }) { text = name };
                 tab.name = "vcr-tab-" + name;
+                tab.tooltip = "Click to activate. Drag to reorder or move to another dock.";
+                tab.RegisterCallback<KeyDownEvent>(evt =>
+                {
+                    if (!evt.ctrlKey || (evt.keyCode != KeyCode.LeftArrow && evt.keyCode != KeyCode.RightArrow)) return;
+                    MovePanelOrder(panel, name, evt.keyCode == KeyCode.LeftArrow ? -1 : 1);
+                    evt.StopPropagation();
+                });
                 // Tab drag works even when its panel body is hidden.
                 var draggingTab = false;
                 var tabPointer = -1;
@@ -775,11 +782,18 @@ namespace VCR.Runtime.UI
         {
             var parent = panel.parent;
             if (parent == null) return;
-            var index = parent.IndexOf(panel);
-            var next = Mathf.Clamp(index + direction, 0, parent.childCount - 1);
+            var panels = new System.Collections.Generic.List<VisualElement>();
+            foreach (var child in parent.Children())
+                if (child.name != null && child.name.StartsWith("vcr-panel-")) panels.Add(child);
+            var index = panels.IndexOf(panel);
+            if (index < 0) return;
+            var next = Mathf.Clamp(index + direction, 0, panels.Count - 1);
             if (index == next) return;
+            var neighbor = panels[next];
             parent.Remove(panel);
-            parent.Insert(next, panel);
+            var insertAt = parent.IndexOf(neighbor);
+            if (direction > 0) insertAt++;
+            parent.Insert(Mathf.Clamp(insertAt, 0, parent.childCount), panel);
             SaveDockOrder(parent);
             if (_tabMode) Build();
         }
