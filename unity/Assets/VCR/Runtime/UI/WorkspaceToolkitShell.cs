@@ -19,6 +19,7 @@ namespace VCR.Runtime.UI
         private float _nextStatusRefresh;
         private UIDocument _document;
         private VisualElement _root;
+        private VisualElement _workspaceRoot;
         private VisualElement _dockHost;
         private Label _status;
         private Label _sourcesStatus;
@@ -62,6 +63,9 @@ namespace VCR.Runtime.UI
             _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
             _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
             _root = _document.rootVisualElement;
+            _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
+            _workspaceRoot.style.flexGrow = 1;
+            _root.Add(_workspaceRoot);
             Build();
         }
 
@@ -100,8 +104,9 @@ namespace VCR.Runtime.UI
 
         private void OnDisable()
         {
-            if (_root != null)
-                _root.Clear();
+            if (_workspaceRoot != null)
+                _workspaceRoot.RemoveFromHierarchy();
+            _workspaceRoot = null;
             _root = null;
             _dockHost = null;
             _status = null;
@@ -116,9 +121,9 @@ namespace VCR.Runtime.UI
 
         private void Build()
         {
-            _root.Clear();
-            _root.style.flexGrow = 1;
-            _root.style.backgroundColor = new Color(0.105f, 0.12f, 0.14f);
+            _workspaceRoot.Clear();
+            _workspaceRoot.style.flexGrow = 1;
+            _workspaceRoot.style.backgroundColor = new Color(0.105f, 0.12f, 0.14f);
 
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
@@ -163,7 +168,7 @@ namespace VCR.Runtime.UI
                 Build();
             }) { text = _rightVisible ? "Hide right" : "Show right" });
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
-            _root.Add(header);
+            _workspaceRoot.Add(header);
 
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
@@ -174,7 +179,7 @@ namespace VCR.Runtime.UI
             _dockHost = new VisualElement();
             _dockHost.style.flexGrow = 1;
             _dockHost.style.flexDirection = FlexDirection.Row;
-            _root.Add(_dockHost);
+            _workspaceRoot.Add(_dockHost);
 
             var left = Column(_leftWidth);
             var center = Column(0);
@@ -243,25 +248,25 @@ namespace VCR.Runtime.UI
             var bottomSplitter = Splitter(false, _bottomHeight, 100f, 400f, value =>
             {
                 _bottomHeight = value;
-                var target = _root.Q<VisualElement>("vcr-bottom");
+                var target = _workspaceRoot.Q<VisualElement>("vcr-bottom");
                 if (target != null) target.style.height = value;
             }, BottomHeightKey, true);
             bottomSplitter.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
-            _root.Add(bottomSplitter);
+            _workspaceRoot.Add(bottomSplitter);
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
-            _root.Add(bottom);
+            _workspaceRoot.Add(bottom);
 
             _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
             _status.style.paddingLeft = 12;
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
-            _root.Add(_status);
+            _workspaceRoot.Add(_status);
         }
 
         // Move controls provide deterministic, persistent dock relocation.
