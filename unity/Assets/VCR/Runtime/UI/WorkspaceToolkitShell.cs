@@ -39,6 +39,10 @@ namespace VCR.Runtime.UI
         private bool _previewExplicitlyBound;
         private VisualElement _dragOverlay;
         private Label _dockTargetLabel;
+        private Camera _ownedPreviewCamera;
+        private RenderTexture _ownedPreviewTexture;
+        private int _previewWidth;
+        private int _previewHeight;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -88,7 +92,8 @@ namespace VCR.Runtime.UI
             if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
                 previewCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
-            if (!_previewExplicitlyBound && (_previewBoundFromCamera || _previewTexture == null))
+            UpdateOwnedPreview();
+            if (!_previewExplicitlyBound && _ownedPreviewTexture == null && (_previewBoundFromCamera || _previewTexture == null))
             {
                 var cameraTexture = previewCamera != null ? previewCamera.targetTexture : null;
                 if (cameraTexture != _previewTexture)
@@ -166,6 +171,63 @@ namespace VCR.Runtime.UI
             _dragOverlay = null;
             _dockTargetLabel = null;
             _previewBoundFromCamera = false;
+            ReleaseOwnedPreview();
+        }
+
+        private void UpdateOwnedPreview()
+        {
+            if (_previewExplicitlyBound || previewCamera == null || _previewImage == null ||
+                previewCamera.targetTexture != null)
+            {
+                ReleaseOwnedPreview();
+                return;
+            }
+            var width = Mathf.Clamp(Mathf.RoundToInt(_previewImage.resolvedStyle.width), 256, 1920);
+            var height = Mathf.Clamp(Mathf.RoundToInt(_previewImage.resolvedStyle.height), 256, 1080);
+            if (width == _previewWidth && height == _previewHeight && _ownedPreviewCamera != null)
+                return;
+            ReleaseOwnedPreview();
+            _previewWidth = width;
+            _previewHeight = height;
+            _ownedPreviewTexture = new RenderTexture(width, height, 16)
+            {
+                name = "VCR Workspace Preview",
+                hideFlags = HideFlags.DontSave
+            };
+            _ownedPreviewTexture.Create();
+            var cameraObject = new GameObject("VCR Workspace Preview Camera");
+            cameraObject.hideFlags = HideFlags.HideAndDontSave;
+            _ownedPreviewCamera = cameraObject.AddComponent<Camera>();
+            _ownedPreviewCamera.enabled = false;
+            _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
+            SetPreviewTexture(_ownedPreviewTexture);
+        }
+
+        private void LateUpdate()
+        {
+            if (_ownedPreviewCamera == null || previewCamera == null) return;
+            _ownedPreviewCamera.CopyFrom(previewCamera);
+            _ownedPreviewCamera.enabled = false;
+            _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
+            _ownedPreviewCamera.transform.SetPositionAndRotation(
+                previewCamera.transform.position, previewCamera.transform.rotation);
+            _ownedPreviewCamera.Render();
+        }
+
+        private void ReleaseOwnedPreview()
+        {
+            if (_ownedPreviewCamera != null)
+                Destroy(_ownedPreviewCamera.gameObject);
+            _ownedPreviewCamera = null;
+            if (_ownedPreviewTexture != null)
+            {
+                if (_previewTexture == _ownedPreviewTexture) SetPreviewTexture(null);
+                _ownedPreviewTexture.Release();
+                Destroy(_ownedPreviewTexture);
+            }
+            _ownedPreviewTexture = null;
+            _previewWidth = 0;
+            _previewHeight = 0;
         }
 
         private void Build()
