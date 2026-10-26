@@ -26,6 +26,10 @@ namespace VCR.Runtime.UI
         private Label _sourcesStatus;
         private Label _inspectorStatus;
         private Label _trackingStatus;
+        private Button _reloadCharacterButton;
+        private Button _unloadCharacterButton;
+        private Label _actionResult;
+        private bool _characterActionPending;
         private Label _previewStatus;
         private VisualElement _leftDock;
         private VisualElement _rightDock;
@@ -138,6 +142,10 @@ namespace VCR.Runtime.UI
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
                 _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
+            if (_reloadCharacterButton != null)
+                _reloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
+            if (_unloadCharacterButton != null)
+                _unloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
             if (!string.IsNullOrWhiteSpace(state.LastError))
                 _status.text += " | Error: " + state.LastError;
         }
@@ -182,6 +190,9 @@ namespace VCR.Runtime.UI
             _sourcesStatus = null;
             _inspectorStatus = null;
             _trackingStatus = null;
+            _reloadCharacterButton = null;
+            _unloadCharacterButton = null;
+            _actionResult = null;
             _previewStatus = null;
             _leftDock = null;
             _rightDock = null;
@@ -455,7 +466,16 @@ namespace VCR.Runtime.UI
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
-            PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
+            var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
+            _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
+            _unloadCharacterButton = new Button(UnloadActiveCharacter) { text = "Unload active VRM" };
+            _reloadCharacterButton.SetEnabled(false);
+            _unloadCharacterButton.SetEnabled(false);
+            actions.Add(_reloadCharacterButton);
+            actions.Add(_unloadCharacterButton);
+            _actionResult = new Label("Actions operate on the current scene runtime.");
+            actions.Add(_actionResult);
+            PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
             _workspaceRoot.Add(bottom);
             SortDockPanels(left);
@@ -847,6 +867,50 @@ namespace VCR.Runtime.UI
             var value = PlayerPrefs.GetFloat(key, fallback);
             return float.IsNaN(value) || float.IsInfinity(value)
                 ? fallback : Mathf.Clamp(value, min, max);
+        }
+
+        private async void ReloadActiveCharacter()
+        {
+            if (_characterActionPending || sceneRuntime == null || !sceneRuntime.Status.HasCharacter) return;
+            _characterActionPending = true;
+            if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
+            if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
+            try
+            {
+                var loaded = await sceneRuntime.ReloadCharacterAsync();
+                if (_actionResult != null)
+                    _actionResult.text = loaded != null ? "Active VRM reloaded." : "VRM reload returned no model.";
+            }
+            catch (System.OperationCanceledException)
+            {
+                if (_actionResult != null) _actionResult.text = "VRM reload canceled.";
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex, this);
+                if (_actionResult != null) _actionResult.text = "VRM reload failed: " + ex.Message;
+            }
+            finally
+            {
+                _characterActionPending = false;
+                _nextStatusRefresh = 0f;
+            }
+        }
+
+        private void UnloadActiveCharacter()
+        {
+            if (_characterActionPending || sceneRuntime == null || !sceneRuntime.Status.HasCharacter) return;
+            try
+            {
+                sceneRuntime.UnloadCharacter();
+                if (_actionResult != null) _actionResult.text = "Active VRM unloaded.";
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex, this);
+                if (_actionResult != null) _actionResult.text = "VRM unload failed: " + ex.Message;
+            }
+            _nextStatusRefresh = 0f;
         }
 
         private void ResetLayout()
