@@ -74,8 +74,10 @@ def verify(args):
 
     require(runner.get("suite") == "native-player-smoke-runner",
             "Unexpected native runner suite")
-    require(runner.get("platform") == "windows",
-            "Unexpected native runner platform")
+    require(runner.get("platform") == "windows-nodebug",
+            "IL2CPP release candidate must use non-development smoke variant")
+    require(runner.get("developmentBuild") is False,
+            "IL2CPP release candidate must be a non-Development Player")
     require(runner.get("passed") is True, "Native runner did not pass")
     require(runner.get("error") == "", "Native runner reported an error")
     require(runner.get("exitCode") == 0, "Player exit code was not zero")
@@ -98,6 +100,8 @@ def verify(args):
             "Unexpected Player smoke suite")
     require(smoke.get("platform") == "WindowsPlayer",
             "Expected a native Windows Player")
+    require(smoke.get("developmentBuild") is False,
+            "IL2CPP runtime report must confirm non-Development mode")
     require(smoke.get("unityVersion") == UNITY_VERSION,
             "Player Unity version mismatch")
     for field in ("started", "sceneReady", "noCharacter", "stopped", "passed"):
@@ -107,6 +111,8 @@ def verify(args):
 
     require(evidence.get("backend") == "IL2CPP",
             "Windows player was not built with IL2CPP")
+    require(evidence.get("build_options") == "None",
+            "IL2CPP release candidate must use BuildOptions.None")
     require(evidence.get("version") == args.version,
             "IL2CPP evidence version mismatch")
     require(evidence.get("source_sha") == args.source,
