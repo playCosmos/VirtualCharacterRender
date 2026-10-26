@@ -67,7 +67,13 @@ namespace VCR.Runtime.UI
                 File.WriteAllText(temporary, JsonUtility.ToJson(layout, true));
                 if (File.Exists(path))
                 {
-                    File.Replace(temporary, path, path + ".bak");
+                    try { File.Replace(temporary, path, path + ".bak"); }
+                    catch (PlatformNotSupportedException)
+                    {
+                        File.Copy(path, path + ".bak", true);
+                        File.Delete(path);
+                        File.Move(temporary, path);
+                    }
                 }
                 else File.Move(temporary, path);
                 return true;
@@ -138,6 +144,14 @@ namespace VCR.Runtime.UI
                     candidate.docks == null || candidate.orders == null ||
                     candidate.docks.Length != Ids.Length || candidate.orders.Length != Ids.Length)
                     return false;
+                for (var i = 0; i < Ids.Length; i++)
+                {
+                    var dock = candidate.docks[i];
+                    if (!string.IsNullOrEmpty(dock) && dock != "left" && dock != "right" && dock != "bottom")
+                        return false;
+                    if (candidate.orders[i] < -1 || candidate.orders[i] > Ids.Length * 4)
+                        return false;
+                }
                 layout = candidate;
                 return true;
             }
