@@ -365,11 +365,13 @@ namespace VCR.Runtime.UI
             scenes.style.height = _scenesHeight;
             scenes.style.flexGrow = 0;
             left.Add(scenes);
-            left.Add(Splitter(false, _scenesHeight, 100f, 400f, value =>
+            var scenesSplitter = Splitter(false, _scenesHeight, 100f, 400f, value =>
             {
                 _scenesHeight = value;
                 scenes.style.height = value;
-            }, ScenesHeightKey));
+            }, ScenesHeightKey);
+            scenesSplitter.style.display = _tabMode ? DisplayStyle.None : DisplayStyle.Flex;
+            left.Add(scenesSplitter);
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
@@ -396,11 +398,14 @@ namespace VCR.Runtime.UI
             PlacePanel(inspector, WorkspacePanelCatalog.Inspector, "right");
             if (advancedWorkspace)
             {
-                right.Add(Splitter(false, _inspectorHeight, 140f, 520f, value =>
+                var inspectorSplitter = Splitter(false, _inspectorHeight, 140f, 520f, value =>
                 {
                     _inspectorHeight = value;
                     inspector.style.height = value;
-                }, RightInspectorHeightKey));
+                }, RightInspectorHeightKey);
+                inspectorSplitter.style.display = !_tabMode && inspector.parent == right
+                    ? DisplayStyle.Flex : DisplayStyle.None;
+                right.Add(inspectorSplitter);
                 PlacePanel(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140), WorkspacePanelCatalog.Materials, "right");
                 PlacePanel(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120), WorkspacePanelCatalog.Capabilities, "right");
             }
@@ -470,6 +475,11 @@ namespace VCR.Runtime.UI
             if (panels.Count < 2) return;
             var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
             var active = Mathf.Clamp(PlayerPrefs.GetInt(key, 0), 0, panels.Count - 1);
+            foreach (var panel in panels)
+            {
+                panel.style.height = StyleKeyword.Auto;
+                panel.style.flexGrow = 1;
+            }
             var tabs = new VisualElement();
             tabs.style.flexDirection = FlexDirection.Row;
             tabs.style.flexShrink = 0;
