@@ -38,6 +38,8 @@ Alpha.5 also exposed native Settings defects after that candidate build. Its IL2
 
 Independent CI verification also passed on `a9aab228`: Windows IL2CPP run [39734065562](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39734065562) built a non-Development `0.0.0-alpha.0` artifact, passed the packaged smoke (exit 0, 5,359.0 ms), and passed the verifier step; native Windows/macOS Mono smoke run [39733680939](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39733680939) and P0-P13 run [39733680901](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/39733680901) also passed. These are process/provenance checks, not GUI/OBS/hardware acceptance.
 
+After the native Settings fixes, the Windows IL2CPP 5-run CI on `be3f833333dd7281b54e857d7aeeb9eec43123508` ([run 40251761723](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/40251761723)) also passed **5/5** with `--require-quit-marker` (managed `VCR exit: OnApplicationQuit finished`), verifier **PASS**, and quit-marker-to-PID-exit median **2,063.0 ms** (range **2,062.0-2,078.0 ms**). The verified archive SHA-256 was `b2f5bc2f67318f1bb3fdefe22380642cebdf328071a4d805fa2ddbaa8638d184`, version `0.0.0-alpha.0`; the packaged smoke recorded exit 0, 5,000.0 ms lifetime, and all of `started`/`sceneReady`/`noCharacter`/`stopped`/`passed` true. This is process/provenance evidence for the native Settings fix commit, not GUI/OBS/hardware acceptance.
+
 ## Startup policy
 
 The integrated alpha scene includes these physical/external input components but starts them disabled:
