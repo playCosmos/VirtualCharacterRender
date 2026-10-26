@@ -23,6 +23,7 @@ namespace VCR.Runtime.UI
         private Label _status;
         private Label _sourcesStatus;
         private Label _inspectorStatus;
+        private Label _trackingStatus;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -60,6 +61,7 @@ namespace VCR.Runtime.UI
                 _status.text = "Scene runtime unavailable";
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
+                if (_trackingStatus != null) _trackingStatus.text = "Runtime unavailable";
                 return;
             }
             var state = sceneRuntime.Status;
@@ -71,6 +73,8 @@ namespace VCR.Runtime.UI
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
             if (_inspectorStatus != null)
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
+            if (_trackingStatus != null)
+                _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
         }
 
         private void OnDisable()
@@ -82,6 +86,7 @@ namespace VCR.Runtime.UI
             _status = null;
             _sourcesStatus = null;
             _inspectorStatus = null;
+            _trackingStatus = null;
         }
 
         private void Build()
@@ -174,7 +179,10 @@ namespace VCR.Runtime.UI
             bottom.style.flexDirection = FlexDirection.Row;
             bottom.style.height = _bottomHeight;
             bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
-            bottom.Add(Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150));
+            var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
+            _trackingStatus = new Label("Waiting for runtime...");
+            tracking.Add(_trackingStatus);
+            bottom.Add(tracking);
             bottom.Add(Panel(WorkspacePanelCatalog.Actions, "Actions", 150));
             bottom.Add(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150));
             _root.Add(bottom);
