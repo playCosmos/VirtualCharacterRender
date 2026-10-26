@@ -55,10 +55,20 @@ jobs:
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsMonoAndExit
             outputFolder: Windows
             image: unityci/editor:6000.3.25f1-windows-mono-3
+          - platform: windows-nodebug
+            unityTarget: StandaloneWindows64
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildWindowsWithoutDebuggingFromMenu
+            outputFolder: WindowsNoDebug
+            image: unityci/editor:6000.3.25f1-windows-mono-3
           - platform: macos
             unityTarget: StandaloneOSX
             method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacFromMenu
             outputFolder: macOS
+            image: unityci/editor:6000.3.25f1-mac-mono-3
+          - platform: macos-nodebug
+            unityTarget: StandaloneOSX
+            method: VCR.Editor.Alpha.AlphaBuildMenu.BuildMacWithoutDebuggingFromMenu
+            outputFolder: macOSNoDebug
             image: unityci/editor:6000.3.25f1-mac-mono-3
     steps:
       - name: Checkout exact tested commit
@@ -109,12 +119,13 @@ jobs:
         env:
           PLAYER_PLATFORM: ${{ matrix.platform }}
           OUTPUT_FOLDER: ${{ matrix.outputFolder }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           sha256sum --check "$RUNNER_TEMP/project-inputs.sha256"
           folder="Builds/Alpha/0.0.0-alpha.0/$OUTPUT_FOLDER"
           test -d "$folder"
-          if [[ "$PLAYER_PLATFORM" == windows ]]; then
+          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
             test -s "$folder/VirtualCharacterRender.exe"
             test -d "$folder/VirtualCharacterRender_Data"
             # This Linux-hosted gate validates the supported Windows Mono
@@ -127,9 +138,14 @@ jobs:
           mkdir -p player-artifacts
           target="$GITHUB_WORKSPACE/player-artifacts/$PLAYER_PLATFORM.zip"
           (cd "$folder" && zip -q -r -y "$target" .)
+          if [[ "$PLAYER_PLATFORM" == windows* ]]; then
+            # Diagnostic scripts accompany CI smoke archives, not releases.
+            zip -q -j "$target" tools/start-exit-diagnostics.cmd tools/collect-exit-diagnostics.ps1 tools/start-exit-diagnostics-native.cmd tools/capture-exit-dump.ps1
+          fi
           test -s "$target"
           sha256sum "$target" > "player-artifacts/$PLAYER_PLATFORM.sha256"
           printf '%s\n' "$GITHUB_SHA" > "player-artifacts/$PLAYER_PLATFORM.source-sha"
+          printf '%s\n' "$PR_HEAD_SHA" > "player-artifacts/$PLAYER_PLATFORM.pr-head-sha"
       - name: Upload Player ZIP and provenance
         uses: actions/upload-artifact@v4
         with:
@@ -148,7 +164,11 @@ jobs:
         include:
           - platform: windows
             runner: windows-latest
+          - platform: windows-nodebug
+            runner: windows-latest
           - platform: macos
+            runner: macos-15
+          - platform: macos-nodebug
             runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
@@ -168,6 +188,7 @@ jobs:
         env:
           PLAYER_PLATFORM: ${{ matrix.platform }}
           SMOKE_REPEAT_COUNT: ${{ github.event.inputs.smoke_repeat_count || '1' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           case "$SMOKE_REPEAT_COUNT" in
@@ -186,12 +207,14 @@ jobs:
               --platform "$PLAYER_PLATFORM" \
               --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
               --source "$GITHUB_SHA" \
+              --pr-head "$PR_HEAD_SHA" \
               --output "$output"
           else
             python tools/run-player-smoke-repeat.py \
               --platform "$PLAYER_PLATFORM" \
               --archive "player-artifacts/$PLAYER_PLATFORM.zip" \
               --source "$GITHUB_SHA" \
+              --pr-head "$PR_HEAD_SHA" \
               --output "$output" \
               --repeat "$SMOKE_REPEAT_COUNT" \
               --require-quit-marker

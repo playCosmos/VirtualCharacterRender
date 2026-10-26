@@ -55,7 +55,8 @@ def require_desktop(platform_name):
         raise ValueError("A logged-in macOS desktop session is required")
 
 
-def make_command(platform_name, unpacked, log_file, telemetry_file, vrm):
+def make_command(platform_name, unpacked, log_file, telemetry_file, vrm,
+                 m2_performance_file=None):
     args = [
         "-screen-fullscreen", "0",
         "-logFile", str(log_file),
@@ -63,6 +64,8 @@ def make_command(platform_name, unpacked, log_file, telemetry_file, vrm):
     ]
     if vrm:
         args.append("--vcr-vrm=" + str(vrm))
+    if m2_performance_file is not None:
+        args.append("--vcr-m2-perf-csv=" + str(m2_performance_file))
     if platform_name == "windows":
         binary = unpacked / "VirtualCharacterRender.exe"
         if not binary.is_file():
@@ -72,6 +75,39 @@ def make_command(platform_name, unpacked, log_file, telemetry_file, vrm):
     if not (bundle / "Contents" / "Info.plist").is_file():
         raise ValueError("Extracted macOS Player bundle missing")
     return ["open", "-W", "-n", "-a", str(bundle), "--args", *args]
+
+
+def m2_file_set(performance_file):
+    """The opt-in recorder always owns all three mutually bound local files."""
+    return (
+        performance_file,
+        Path(str(performance_file) + ".session.json"),
+        Path(str(performance_file) + ".events.csv"),
+    )
+
+
+def check_m2_outputs(performance_file):
+    # Presence is a launcher sanity check, NOT acceptance of contents.
+    # The separate strict M2 verifier checks clocks, shutdown markers and
+    # complete VRM callbacks; OBS evidence remains independent.
+    maximum_bytes = (24 * 1024 * 1024, 32 * 1024, 24 * 1024 * 1024)
+    for path, limit in zip(m2_file_set(performance_file), maximum_bytes):
+        if (path.is_symlink() or not path.is_file() or
+                not 0 < path.stat().st_size <= limit):
+            raise ValueError("M2 evidence output missing/unsafe/empty/excessive: " +
+                             str(path))
+
+
+def refuse_prior_evidence(label, log_file, telemetry_file,
+                          m2_performance_file=None):
+    paths = [log_file, telemetry_file]
+    if m2_performance_file is not None:
+        paths.extend(m2_file_set(m2_performance_file))
+    # A dangling symlink must not bypass the preflight. Never overwrite
+    # partial evidence left after a crash, including M2 lifecycle events.
+    if any(path.exists() or path.is_symlink() for path in paths):
+        raise ValueError("Refusing to overwrite existing session evidence for " +
+                         label)
 
 
 def run(args):
@@ -93,8 +129,10 @@ def run(args):
     attachments.mkdir(exist_ok=True)
     log_file = attachments / (label + ".log")
     telemetry_file = attachments / (label + "-runtime.json")
-    if log_file.exists() or telemetry_file.exists():
-        raise ValueError("Refusing to overwrite existing session evidence for " + label)
+    performance_file = attachments / (label + "-m2-performance.csv")
+    refuse_prior_evidence(
+        label, log_file, telemetry_file,
+        performance_file if args.m2_performance else None)
 
     vrm = args.vrm.resolve() if args.vrm else None
     if vrm and (not vrm.is_file() or vrm.suffix.lower() != ".vrm"):
@@ -104,6 +142,9 @@ def run(args):
     print("Target label:", args.target, "(configure resolution and FPS in the GUI)", flush=True)
     print("Player log:", log_file, flush=True)
     print("Native telemetry:", telemetry_file, flush=True)
+    if args.m2_performance:
+        print("Optional M2 performance CSV:", performance_file, flush=True)
+        print("M2 evidence is measurement-only, NOT proof of OBS frames.", flush=True)
     print("Use OBS manually; no screenshot or transparency result is inferred.", flush=True)
     print("Close the Player normally after recording and stable sampling.", flush=True)
     with tempfile.TemporaryDirectory(prefix="vcr-p10-player-") as tmp:
@@ -113,7 +154,9 @@ def run(args):
         else:
             with zipfile.ZipFile(archive) as package:
                 package.extractall(unpacked)
-        command = make_command(args.platform, unpacked, log_file, telemetry_file, vrm)
+        command = make_command(
+            args.platform, unpacked, log_file, telemetry_file, vrm,
+            performance_file if args.m2_performance else None)
         completed = subprocess.run(command, cwd=unpacked, check=False)
     if completed.returncode != 0:
         raise ValueError("GUI launcher/player exited nonzero: " + str(completed.returncode))
@@ -130,6 +173,11 @@ def run(args):
             or not isinstance(telemetry.get("samples"), list)
             or len(telemetry["samples"]) < 2):
         raise ValueError("Telemetry identity, normal quit or sample count is incomplete")
+    if args.m2_performance:
+        check_m2_outputs(performance_file)
+        print("M2 CSV, session metadata and lifecycle events written; verify " +
+              "contents separately with tools/verify-m2-performance.py. " +
+              "No automatic model/device/OBS PASS.")
     print("Native session files recorded. GUI/OBS observations STILL REQUIRE MANUAL REVIEW.")
     print("Operator JSON must reference the log and runtime telemetry files; no PASS auto-written.")
     return 0
@@ -166,12 +214,47 @@ def self_test():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("test", encoding="utf-8")
             command = make_command(name, unpacked, root / "case.log",
-                                   root / "case-runtime.json", None)
+                                   root / "case-runtime.json", None,
+                                   root / "case-m2.csv")
             assembled = " ".join(command)
             if ("--vcr-interactive-evidence=" not in assembled
                     or "-screen-fullscreen 0" not in assembled
+                    or "--vcr-m2-perf-csv=" not in assembled
                     or "-batchmode" in assembled or "-nographics" in assembled):
                 raise AssertionError("invalid interactive Player command: " + assembled)
+        perf = root / "case-m2.csv"
+        expected = m2_file_set(perf)
+        player_log, native_telemetry = root / "session.log", root / "session-runtime.json"
+        for prior_file in (player_log, native_telemetry, *expected):
+            prior_file.write_text("previous evidence", encoding="utf-8")
+            try:
+                refuse_prior_evidence("windows-720p60", player_log,
+                                      native_telemetry, perf)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Refusing old M2 evidence failed: " + str(prior_file))
+            prior_file.unlink()
+        refuse_prior_evidence("windows-720p60", player_log, native_telemetry, perf)
+        for path in expected:
+            path.write_text("self-test\n", encoding="utf-8")
+        check_m2_outputs(perf)
+        for path in expected:
+            path.unlink()
+            try:
+                check_m2_outputs(perf)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Missing M2 sidecar incorrectly accepted: " + str(path))
+            path.write_text("self-test\\n", encoding="utf-8")
+        expected[-1].write_bytes(b"")
+        try:
+            check_m2_outputs(perf)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Empty M2 events CSV incorrectly accepted")
     print("P10 desktop Player runner self-test PASS (no GUI/OBS claim)")
 
 
@@ -184,6 +267,9 @@ def main():
     parser.add_argument("--artifacts", type=Path)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--vrm", type=Path, help="Optional private model, never uploaded")
+    parser.add_argument(
+        "--m2-performance", action="store_true",
+        help="Record optional real-desktop frame/memory CSV with no automatic OBS pass")
     options = parser.parse_args()
     try:
         if options.self_test:

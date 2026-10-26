@@ -34,9 +34,10 @@ def timing_stats(values):
 
 def main():
     cli = argparse.ArgumentParser()
-    cli.add_argument("--platform", choices=("windows", "macos"), required=True)
+    cli.add_argument("--platform", choices=("windows", "windows-nodebug", "macos", "macos-nodebug"), required=True)
     cli.add_argument("--archive", required=True)
     cli.add_argument("--source", required=True)
+    cli.add_argument("--pr-head", help="expected PR head of the tested source tree")
     cli.add_argument("--output", required=True)
     cli.add_argument("--repeat", type=int, default=5)
     cli.add_argument(
@@ -66,6 +67,8 @@ def main():
             "--source", args.source,
             "--output", str(run_dir),
         ]
+        if args.pr_head:
+            command.extend(("--pr-head", args.pr_head))
         if args.require_quit_marker:
             command.append("--require-quit-marker")
         print(f"Repeat run {index}/{args.repeat}: starting", flush=True)
@@ -123,6 +126,7 @@ def main():
         "suite": "native-player-smoke-repeat",
         "platform": args.platform,
         "sourceSha": args.source,
+        "pullRequestHeadSha": args.pr_head if args.pr_head else args.source,
         "archive": str(archive),
         "repeatCount": args.repeat,
         "requireQuitMarker": args.require_quit_marker,

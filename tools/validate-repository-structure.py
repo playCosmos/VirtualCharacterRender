@@ -61,6 +61,19 @@ required_latest_chain = [
     ROOT / "tools" / "validate-p12-source-free.ps1",
     ROOT / "tools" / "validate-p13-source-free.sh",
     ROOT / "tools" / "validate-p13-source-free.ps1",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs",
+    VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs.meta",
+    ROOT / "tools" / "verify-m2-performance.py",
+    ROOT / "docs" / "M2_PERFORMANCE_EVIDENCE.md",
+    ROOT / "tools" / "verify-m3-distribution.py",
+    ROOT / "tools" / "verify-m3-native-signatures.py",
+    ROOT / "tools" / "generate-m3-sbom.py",
+    ROOT / "tools" / "generate-m3-payload-inventory.py",
+    ROOT / "tools" / "build-m3-notices.py",
+    ROOT / "docs" / "M3_DISTRIBUTION_PLAN.md",
+    ROOT / "docs" / "M3_DISTRIBUTION_OPERATIONS.md",
+    ROOT / "docs" / "M3_PRIVACY_SUPPORT.md",
+    ROOT / "docs" / "M3_LICENSE_SECURITY_REVIEW.md",
 ]
 for path in required_latest_chain:
     require(path)
@@ -129,41 +142,123 @@ def require_source_order(
 
 
 native_settings_source = VCR / "Runtime" / "UI" / "DesktopNativeSettingsWindow.cs"
-require_source_contains(
-    native_settings_source,
-    "[AOT.MonoPInvokeCallback(typeof(WindowProcedure))]",
-    "Win32 Settings window procedure must carry the IL2CPP reverse P/Invoke attribute",
-)
-require_source_contains(
-    native_settings_source,
-    "SetWindowPos(hwnd, HwndTopmost",
-    "Native Settings must stay above a topmost Unity render overlay",
-)
-require_source_contains(
-    native_settings_source,
-    "private static void PumpWindowMessages",
-    "Native Settings must dispatch native control messages on the Unity main thread",
-)
-require_source_contains(
-    native_settings_source,
-    "PeekMessageW(out var msg, target",
-    "Native Settings must pump messages for each native control handle",
-)
-require_source_contains(
-    native_settings_source,
-    "chromeControls",
-    "Native Settings category tabs must be included in the native message pump",
-)
-require_source_contains(
-    native_settings_source,
-    "PumpWindowMessages(control)",
-    "Native Settings category controls must be included in the native message pump",
-)
+for token, message in (
+    ("[AOT.MonoPInvokeCallback(typeof(WindowProcedure))]",
+     "Win32 Settings must retain IL2CPP reverse P/Invoke callback protection"),
+    ("SetWindowPos(hwnd, HwndTopmost",
+     "Settings window must stay above the render overlay while visible"),
+    ("private static void PumpWindowMessages",
+     "Native Settings must dispatch native control HWND messages"),
+    ("PumpWindowMessages(tab)",
+     "Native Settings must dispatch navigation tab messages"),
+    ("PumpWindowMessages(control)",
+     "Native Settings must dispatch per-page controls"),
+):
+    require_source_contains(native_settings_source, token, message)
 require_source_contains(
     VCR / "Runtime" / "UI" / "ApplicationUiController.NativeSettings.cs",
     "_nativeSettings.PumpMessages();",
-    "Native Settings must pump child control messages before draining actions",
+    "Native Settings must pump child controls before draining native actions",
 )
+require_source_contains(
+    VCR / "Runtime" / "Tracking" / "Ultraleap" /
+    "VcrUltraleapRuntimePolicy.cs",
+    "HandTrackingSourceUtility.LeapOpenXRHintingAvailable = true;",
+    "Do not restart unused LeapC hint workers during IL2CPP shutdown",
+)
+forbid_source_pattern(
+    ROOT / "tools" / "bootstrap-ultraleap.sh",
+    r"VCR_ULTRALEAP_LAZY_HINT_CONNECTION",
+    "Do not patch unused Ultraleap hints in two different layers",
+)
+
+m2_recorder = VCR / "Runtime" / "Application" / "M2PerformanceRecorder.cs"
+m2_alpha = VCR / "Editor" / "Alpha" / "AlphaApplicationSceneBuilder.cs"
+require_source_contains(
+    m2_recorder, "--vcr-m2-perf-csv=",
+    "M2 recording must remain explicit opt-in",
+)
+require_source_contains(
+    m2_recorder, "Application.isBatchMode",
+    "M2 must refuse simulated headless GUI evidence",
+)
+require_source_contains(
+    m2_recorder, "FileMode.CreateNew",
+    "M2 must not silently overwrite prior evidence",
+)
+require_source_contains(
+    m2_alpha, "root.AddComponent<M2PerformanceRecorder>();",
+    "M2 evidence component must be part of the generated native Player scene",
+)
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterLoaded += OnCharacterLoaded;",
+    "M2 must record actual VRM loader success callbacks, not sampled character state",
+)
+require_source_contains(
+    m2_recorder, "_characterLoader.CharacterUnloaded += OnCharacterUnloaded;",
+    "M2 must record actual VRM loader unload callbacks",
+)
+require_source_contains(
+    m2_recorder, "character_unloaded_shutdown",
+    "M2 must separate automatic shutdown cleanup from measured VRM cycles",
+)
+require_source_contains(
+    m2_recorder, "TrackingPresenceEvents.TrackingSourceLost",
+    "M2 tracking evidence must retain normalized source-loss typing",
+)
+m2_verifier = ROOT / "tools" / "verify-m2-performance.py"
+require_source_contains(
+    m2_verifier, "min_character_cycles",
+    "M2 verifier must retain optional real loader callback cycle checks",
+)
+require_source_contains(
+    m2_verifier, "shutdownUnloadEventsExcluded",
+    "M2 verifier must explicitly exclude process-shutdown unloads",
+)
+m2_launcher = ROOT / "tools" / "run-p10-interactive.py"
+require_source_contains(
+    m2_launcher, "check_m2_outputs(performance_file)",
+    "P10 GUI launcher must detect missing M2 event sidecar",
+)
+require_source_contains(
+    m2_launcher, "refuse_prior_evidence(",
+    "P10 GUI launcher must refuse overwrite of pre-existing event evidence",
+)
+
+
+m3_archive = ROOT / "tools" / "verify-m3-distribution.py"
+m3_native = ROOT / "tools" / "verify-m3-native-signatures.py"
+m3_sbom = ROOT / "tools" / "generate-m3-sbom.py"
+m3_payload = ROOT / "tools" / "generate-m3-payload-inventory.py"
+m3_notices = ROOT / "tools" / "build-m3-notices.py"
+m3_osc_receiver = VCR / "Runtime" / "Protocols" / "OscEventsUnity" / "OscNormalizedEventUdpReceiver.cs"
+m3_vmc_receiver = VCR / "Runtime" / "Protocols" / "VmcUnity" / "VmcUdpReceiver.cs"
+m3_alpha = ROOT / ".github" / "workflows" / "build-alpha-binaries.yml"
+for source, symbol, label in (
+    (m3_archive, '"distributionAcceptance": False',
+     "M3 archive validation must not claim distribution signoff"),
+    (m3_archive, "archive.testzip()",
+     "M3 archive validation must verify ZIP member CRC"),
+    (m3_native, '"distributionAcceptance": False',
+     "M3 signature-check outcome must not claim distribution approval"),
+    (m3_sbom, "PENDING_MANUAL_APPROVAL",
+     "M3 partial SBOM must require manual license clearance"),
+    (m3_payload, '"commercialRedistributionApproved": False',
+     "M3 shipped-file inventory must never auto-approve redistribution"),
+    (m3_alpha, "generate-m3-payload-inventory.py",
+     "M3 alpha workflow must preserve shipped-file inventory for review"),
+    (m3_alpha, "m3-license-review-PENDING.json",
+     "M3 alpha must preserve pending license review templates"),
+    (m3_notices, "PENDING/unapproved component blocks",
+     "M3 notices must reject incomplete licensing reviews"),
+    (m3_notices, '"licenseAuditApproved": False',
+     "M3 notices tool must not silently claim legal approval"),
+    (m3_osc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "OSC default loopback sender must bind only to loopback"),
+    (m3_vmc_receiver, "IPAddress.IsLoopback(_allowedSender)",
+     "VMC default loopback sender must bind only to loopback"),
+):
+    require_source_contains(source, symbol, label)
 
 
 osc_writer = VCR / "Runtime" / "Protocols" / "Osc" / "OscPacketWriter.cs"
@@ -1402,7 +1497,7 @@ require_source_contains(
 )
 require_source_order(
     single_character_scene_runtime,
-    "_overlayOutput.Apply(settings);",
+    "_overlayOutput.Apply(nextConfiguration.ToSettings());",
     "_overlayConfiguration =\n                nextConfiguration;",
     "scene overlay configuration must commit only after the adapter apply succeeds",
 )

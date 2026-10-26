@@ -1,0 +1,109 @@
+# Internal investigation only: four Windows binaries from one pinned Unity
+# version, identical build options, same exact source tree. No releases/tags.
+name: Windows native shutdown A-B-C-D comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/quit-visible-window-latency
+    paths:
+      - .github/workflows/windows-exit-comparison.yml
+      - unity/Assets/VCR/Editor/Alpha/ExitComparisonBuildMenu.cs
+      - unity/Assets/VCR/Runtime/Application/ExitComparisonProbe.cs
+      - tools/collect-exit-diagnostics.ps1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exit-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-exit-variants:
+    name: Windows exit comparison ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: A
+            method: VCR.Editor.Alpha.ExitComparisonBuildMenu.BuildWindowsA
+          - variant: B
+            method: VCR.Editor.Alpha.ExitComparisonBuildMenu.BuildWindowsB
+          - variant: C
+            method: VCR.Editor.Alpha.ExitComparisonBuildMenu.BuildWindowsC
+          - variant: D
+            method: VCR.Editor.Alpha.ExitComparisonBuildMenu.BuildWindowsD
+    steps:
+      - name: Checkout exact comparison source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify pinned Unity and immutable project inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/project-inputs.sha256"
+          test ! -e unity/Library
+      - name: Bootstrap pinned MediaPipe and models
+        run: bash tools/bootstrap-mediapipe.sh
+      - name: Bootstrap verified Pretendard UI fonts
+        run: bash tools/bootstrap-ui-fonts.sh
+      - name: Bootstrap pinned Ultraleap compatibility
+        run: bash tools/bootstrap-ultraleap.sh
+      - name: Bootstrap pinned UniWinC compatibility
+        run: bash tools/bootstrap-uniwinc.sh
+      - name: Build non-development diagnostic Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: ${{ matrix.method }}
+          versioning: None
+          allowDirtyBuild: true
+      - name: Validate Player and package exact source and diagnosis tools
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          sha256sum --check "$RUNNER_TEMP/project-inputs.sha256"
+          folder="Builds/ExitComparison/$VARIANT"
+          test -s "$folder/VirtualCharacterRender.exe"
+          test -d "$folder/VirtualCharacterRender_Data"
+          mkdir -p "$GITHUB_WORKSPACE/exit-comparison-artifacts"
+          archive="$GITHUB_WORKSPACE/exit-comparison-artifacts/vcr-exit-compare-$VARIANT.zip"
+          (cd "$folder" && zip -q -r -y "$archive" .)
+          # Unity runs in a Docker container, whose build output may be
+          # root-owned. Add extras only to the runner-owned ZIP.
+          manifest="$RUNNER_TEMP/comparison-variant.json"
+          printf '{"variant":"%s","commit":"%s","unity":"6000.3.25f1","buildOptions":"None","control":"same Unity project; loaded native modules must be measured separately"}\n' "$VARIANT" "$GITHUB_SHA" > "$manifest"
+          zip -q -j "$archive" "$manifest" \
+            tools/start-exit-diagnostics.cmd \
+            tools/collect-exit-diagnostics.ps1 \
+            tools/start-exit-diagnostics-native.cmd \
+            tools/capture-exit-dump.ps1
+          for required in VirtualCharacterRender.exe comparison-variant.json start-exit-diagnostics.cmd collect-exit-diagnostics.ps1 start-exit-diagnostics-native.cmd capture-exit-dump.ps1; do
+            unzip -Z1 "$archive" | grep -Fx "$required"
+          done
+          sha256sum "$archive" > "$GITHUB_WORKSPACE/exit-comparison-artifacts/vcr-exit-compare-$VARIANT.sha256"
+          printf '%s\n' "$GITHUB_SHA" > "$GITHUB_WORKSPACE/exit-comparison-artifacts/source-sha.txt"
+      - name: Upload isolated comparison Player
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exit-compare-${{ matrix.variant }}-${{ github.sha }}
+          path: exit-comparison-artifacts/
+          if-no-files-found: error
+          retention-days: 14

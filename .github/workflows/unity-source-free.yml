@@ -8,6 +8,10 @@ on:
   pull_request:
     branches:
       - develop
+      # Stacked M2 PR validates its exact source on the M1 integration base.
+      - feature/commercial-readiness-phase1
+      # Stacked M3 PR validates its runtime/network fix against M2.
+      - feature/commercial-readiness-m2-evidence
   workflow_dispatch:
 
 permissions:

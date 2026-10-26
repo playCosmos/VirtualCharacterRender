@@ -20,15 +20,33 @@ EXIT = re.compile(
 UNIW = re.compile(
     r"VCR UniWinC shutdown: completed \((\d+) ms\)")
 
+LATE = re.compile(
+    r"VCR exit: late managed quit callback at (\d+) ms")
+UDP_JOIN = re.compile(
+    r"VCR exit: (ARKit|VMC|OSC) UDP receive worker join=(\d+) ms, stillAlive=(True|False)")
 
 def analyze(contents):
     records = []
     timeline = []
+    quit_started = False
     for line in contents.splitlines():
+        # Receivers may stop/restart during normal operation. Their join
+        # times belong to exit attribution only after a real quit marker.
+        if ("VCR exit: quit requested (t=0 ms)" in line or
+                "VCR exit: OnApplicationQuit without wantsToQuit" in line):
+            quit_started = True
         for regex, category in ((PHASE, "scene"), (MEDIAPIPE, "mediapipe")):
             match = regex.search(line)
             if match:
                 records.append((int(match.group(2)), category, match.group(1).strip()))
+        match = UDP_JOIN.search(line)
+        if match and quit_started:
+            records.append((int(match.group(2)), "udp",
+                            match.group(1) + " worker join (alive=" +
+                            match.group(3) + ")"))
+        match = LATE.search(line)
+        if match:
+            timeline.append(("late managed quit callback", int(match.group(1))))
         match = UNIW.search(line)
         if match:
             records.append((int(match.group(1)), "native", "UniWinC state reset"))
@@ -74,13 +92,33 @@ VCR shutdown step end: capability disposal (275 ms)
 VCR shutdown: scene teardown ended at 298 ms
 VCR shutdown: end at 302 ms, success=True
 VCR exit: OnApplicationQuit finished at 315 ms
+VCR exit: late managed quit callback at 320 ms
+VCR exit: VMC UDP receive worker join=750 ms, stillAlive=True
 VCR exit: runtime bootstrap destroyed at 319 ms
 """
     records, timeline = analyze(sample)
-    assert records[0] == (275, "scene", "capability disposal")
-    assert records[1] == (220, "mediapipe", "webcam stop")
+    assert (275, "scene", "capability disposal") in records
+    assert (220, "mediapipe", "webcam stop") in records
+    assert records[0][0] == 750  # Sort by latency, including UDP joins.
     assert ("OnApplicationQuit finished", 315) in timeline
+    assert ("late managed quit callback", 320) in timeline
+    assert (750, "udp", "VMC worker join (alive=True)") in records
     assert "t=319 ms" in format_report(sample)
+    # A slow join from runtime reconfiguration MUST NOT look like a
+    # stalled application shutdown.
+    mixed = (
+        "VCR exit: VMC UDP receive worker join=9000 ms, stillAlive=False\n" +
+        sample
+    )
+    mixed_records, _ = analyze(mixed)
+    assert (9000, "udp", "VMC worker join (alive=False)") not in mixed_records
+    assert mixed_records[0][0] == 750
+    # Native quit without the cancelable wantsToQuit event is still a quit.
+    unannounced = (
+        "VCR exit: OnApplicationQuit without wantsToQuit (t=0 ms)\n"
+        "VCR exit: OSC UDP receive worker join=45 ms, stillAlive=False\n"
+    )
+    assert (45, "udp", "OSC worker join (alive=False)") in analyze(unannounced)[0]
     assert "No VCR shutdown measurements" in format_report("Unrelated line")
     print("VCR shutdown log analyzer self-test PASS")
 

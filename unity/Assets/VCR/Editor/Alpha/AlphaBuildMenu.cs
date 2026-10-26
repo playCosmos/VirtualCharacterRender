@@ -128,6 +128,22 @@ namespace VCR.Editor.Alpha
                 BuildOptions.None);
         }
 
+        // CI-only retail-like Windows Mono control. Linux cross-builds cannot use IL2CPP.
+        // This is diagnostic evidence, never a distribution/release target.
+        public static void BuildWindowsWithoutDebuggingFromMenu()
+        {
+            if (!BuildWithScriptingBackend(
+                    ScriptingImplementation.Mono2x,
+                    BuildTarget.StandaloneWindows64,
+                    "Builds/Alpha/" + Version +
+                    "/WindowsNoDebug/VirtualCharacterRender.exe",
+                    BuildOptions.None))
+            {
+                throw new InvalidOperationException(
+                    "VCR Windows Mono non-development diagnostic build failed.");
+            }
+        }
+
         // CI-only path: Ubuntu-hosted game-ci images do not include the
         // Windows IL2CPP toolchain. The native startup smoke builds a Mono
         // Player; Windows release Players still use BuildWindows()/IL2CPP on
@@ -161,6 +177,21 @@ namespace VCR.Editor.Alpha
                 BuildTarget.StandaloneOSX,
                 MacOutput,
                 DevelopmentAlphaBuildOptions);
+        }
+
+        // Retail-like macOS Mono smoke control; signing/notarization remains separate.
+        public static void BuildMacWithoutDebuggingFromMenu()
+        {
+            if (!BuildWithScriptingBackend(
+                    ScriptingImplementation.Mono2x,
+                    BuildTarget.StandaloneOSX,
+                    "Builds/Alpha/" + Version +
+                    "/macOSNoDebug/VirtualCharacterRender.app",
+                    BuildOptions.None))
+            {
+                throw new InvalidOperationException(
+                    "VCR macOS Mono non-development diagnostic build failed.");
+            }
         }
 
         private static bool BuildWithScriptingBackend(

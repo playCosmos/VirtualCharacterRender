@@ -230,6 +230,10 @@ namespace VCR.Editor.Alpha
             // normal Player or headless smoke invocation.
             root.AddComponent<InteractiveOutputTelemetry>();
 
+            // M2 profiling is also inert until the operator supplies an
+            // absolute --vcr-m2-perf-csv path on a visible desktop.
+            root.AddComponent<M2PerformanceRecorder>();
+
             var presentation2D =
                 new GameObject(
                     "Presentation2D");

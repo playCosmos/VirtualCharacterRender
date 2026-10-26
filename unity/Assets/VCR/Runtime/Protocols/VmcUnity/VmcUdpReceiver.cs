@@ -403,8 +403,16 @@ namespace VCR.Runtime.Protocols.VmcUnity
 
             try
             {
+                // Restrict the listening socket itself to loopback when
+                // the configured sender is loopback-only. Filtering packets
+                // after receiving on IPAddress.Any still exposes a port on
+                // external NICs, even if those datagrams are discarded.
+                var bindAddress =
+                    _allowedSender != null && IPAddress.IsLoopback(_allowedSender)
+                        ? IPAddress.Loopback
+                        : IPAddress.Any;
                 _receiver = new UdpClient(
-                    new IPEndPoint(IPAddress.Any, localPort));
+                    new IPEndPoint(bindAddress, localPort));
                 _receiver.Client.ReceiveTimeout = 250;
             }
             catch (Exception exception)
@@ -677,7 +685,11 @@ namespace VCR.Runtime.Protocols.VmcUnity
                 thread.IsAlive &&
                 Thread.CurrentThread != thread)
             {
+                var wait = System.Diagnostics.Stopwatch.StartNew();
                 thread.Join(750);
+                Debug.Log("VCR exit: VMC UDP receive worker join=" +
+                    wait.ElapsedMilliseconds + " ms, stillAlive=" +
+                    thread.IsAlive, this);
             }
 
             if (thread != null &&

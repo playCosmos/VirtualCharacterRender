@@ -22,6 +22,17 @@ permissions:
   contents: read
 
 jobs:
+  windows-exit-diagnostics:
+    name: Validate Windows real-PC evidence collector
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Launch native mock Player and inspect diagnostic ZIP
+        shell: powershell
+        run: .\\tools\\test-exit-collector.ps1
+
   repository-structure:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -69,11 +80,52 @@ jobs:
       - name: Test P10 interactive desktop launcher safety and CLI
         run: python3 tools/run-p10-interactive.py --self-test
 
+      - name: Test M2 real-desktop performance evidence verifier
+        run: python3 tools/verify-m2-performance.py --self-test
+
+      - name: Test M3 offline distribution provenance checks
+        run: python3 tools/verify-m3-distribution.py --self-test
+
+      - name: Test M3 native-signature verifier rejects missing unsigned binaries
+        run: python3 tools/verify-m3-native-signatures.py --self-test
+
+      - name: Test M3 complete ZIP payload inventory and hash mismatch rejection
+        run: python3 tools/generate-m3-payload-inventory.py --self-test
+
+      - name: Test M3 manual-license-bound THIRD_PARTY_NOTICES generation
+        run: python3 tools/build-m3-notices.py --self-test
+
       - name: Test P10 source-matched artifact downloader
         run: python3 tools/download-p10-tested-players.py --self-test
 
       - name: Test desktop shutdown latency attribution
         run: python3 tools/analyze-shutdown-log.py --self-test
+
+      - name: Test real desktop quit evidence observer
+        run: python3 tools/diagnose-gui-shutdown.py --self-test
+
+      - name: Test native Player quit timer including timeout preservation
+        run: python3 tools/run-player-smoke.py --self-test
+
+      # Unused LeapC hint connection is blocked by VCR-owned runtime policy.
+      # Static source checks verify it; external package modification is not needed.
+
+      - name: Verify third-party pins and partial M3 CycloneDX source inventory
+        run: |
+          python3 tools/audit-third-party-dependencies.py --self-test
+          python3 tools/audit-third-party-dependencies.py --output dependency-inventory.json
+          python3 tools/generate-m3-sbom.py --self-test
+          python3 tools/generate-m3-sbom.py --output m3-source-sbom.cdx.json
+
+      - name: Preserve non-approved dependency inventory for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-inventory-${{ github.sha }}
+          path: |
+            dependency-inventory.json
+            m3-source-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Validate strict Unity reproducibility
         if: >-
