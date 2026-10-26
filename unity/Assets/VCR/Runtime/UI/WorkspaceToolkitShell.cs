@@ -30,6 +30,8 @@ namespace VCR.Runtime.UI
         private VisualElement _rightDock;
         private VisualElement _bottomDock;
         private Texture _previewTexture;
+        [SerializeField] private Camera previewCamera;
+        [SerializeField] private RenderTexture previewRenderTexture;
         private Image _previewImage;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
@@ -64,6 +66,8 @@ namespace VCR.Runtime.UI
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
             _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
             _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
+            if (previewRenderTexture != null)
+                _previewTexture = previewRenderTexture;
             _root = _document.rootVisualElement;
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
             _workspaceRoot.style.flexGrow = 1;
@@ -73,6 +77,8 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
+            if (_previewTexture == null && previewCamera != null && previewCamera.targetTexture != null)
+                BindPreviewTexture(previewCamera.targetTexture);
             if (_status == null || Time.unscaledTime < _nextStatusRefresh)
                 return;
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
