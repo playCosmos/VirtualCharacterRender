@@ -349,7 +349,9 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 _receiver =
                     new UdpClient(
                         new IPEndPoint(
-                            IPAddress.Any,
+                            _allowedSender != null && IPAddress.IsLoopback(_allowedSender)
+                                ? IPAddress.Loopback
+                                : IPAddress.Any,
                             localPort));
 
                 _receiver.Client.ReceiveTimeout =
@@ -754,8 +756,11 @@ namespace VCR.Runtime.Protocols.OscEventsUnity
                 thread.IsAlive &&
                 Thread.CurrentThread != thread)
             {
-                thread.Join(
-                    750);
+                var wait = System.Diagnostics.Stopwatch.StartNew();
+                thread.Join(750);
+                Debug.Log("VCR exit: OSC UDP receive worker join=" +
+                    wait.ElapsedMilliseconds + " ms, stillAlive=" +
+                    thread.IsAlive, this);
             }
 
             if (thread != null &&

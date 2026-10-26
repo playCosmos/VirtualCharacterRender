@@ -14,7 +14,7 @@ namespace VCR.Runtime.Scene
         {
             return new OverlayOutputSettings(
                 Transparent,
-                Topmost,
+                false,
                 ClickThrough);
         }
 
@@ -24,7 +24,7 @@ namespace VCR.Runtime.Scene
             return new OverlayOutputConfiguration
             {
                 Transparent = settings.Transparent,
-                Topmost = settings.Topmost,
+                Topmost = false,
                 ClickThrough = settings.ClickThrough
             };
         }
@@ -33,7 +33,7 @@ namespace VCR.Runtime.Scene
             new()
             {
                 Transparent = true,
-                Topmost = true,
+                Topmost = false,
                 ClickThrough = false
             };
     }

@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #include <cstring>
+#include <algorithm>
 #include <deque>
 #include <map>
 #include <string>
@@ -8,6 +9,19 @@
 namespace {
     NSWindow *settingsWindow = nil;
     NSView *settingsRoot = nil;
+    NSScrollView *details = nil;
+    NSView *sidebar = nil;
+    NSMutableDictionary<NSNumber *, NSView *> *pages = nil;
+    NSMutableDictionary<NSNumber *, NSMutableArray<NSArray<NSView *> *> *> *rowGroups = nil;
+    NSMutableArray<NSButton *> *navigation = nil;
+    NSColor *constColor(CGFloat r, CGFloat g, CGFloat b) {
+        return [NSColor colorWithCalibratedRed:r green:g blue:b alpha:1];
+    }
+    NSColor *surfaceColor() { return constColor(0.106, 0.122, 0.145); }
+    NSColor *sidebarColor() { return constColor(0.141, 0.165, 0.192); }
+    NSColor *buttonColor() { return constColor(0.165, 0.188, 0.231); }
+    NSColor *activeColor() { return constColor(0.105, 0.350, 0.665); }
+    NSColor *foregroundColor() { return constColor(0.886, 0.910, 0.945); }
     NSMutableDictionary<NSNumber *, NSTextField *> *fields = nil;
     NSMutableDictionary<NSNumber *, NSMutableArray<NSView *> *> *categoryViews = nil;
     int categoryRows[4] = {0, 0, 0, 0};
@@ -21,10 +35,34 @@ namespace {
     void selectCategory(int category) {
         if (category < 0 || category >= 4) return;
         selectedCategory = category;
-        for (int i = 0; i < 4; ++i) {
-            NSArray<NSView *> *views = categoryViews[@(i)];
-            for (NSView *view in views) {
-                view.hidden = i != category;
+        for (int i = 0; i < (int)navigation.count; ++i) {
+            NSButton *button = navigation[(NSUInteger)i];
+            button.layer.backgroundColor =
+                (i == category ? activeColor() : sidebarColor()).CGColor;
+            button.contentTintColor = foregroundColor();
+        }
+        if (details) {
+            [details setDocumentView:pages[@(category)]];
+            // NSScrollView has a distinct scroll position for the selected page.
+            [details.contentView scrollToPoint:
+                NSMakePoint(0, NSHeight(pages[@(category)].bounds) -
+                              NSHeight(details.contentView.bounds))];
+            [details reflectScrolledClipView:details.contentView];
+        }
+    }
+
+    void layoutRows(int category) {
+        if (category < 0 || category >= 4 || !pages) return;
+        NSView *page = pages[@(category)];
+        CGFloat height = std::max((CGFloat)650, (CGFloat)categoryRows[category] * 52 + 36);
+        page.frame = NSMakeRect(0, 0, 660, height);
+        NSArray<NSArray<NSView *> *> *rows = rowGroups[@(category)];
+        for (NSUInteger index = 0; index < rows.count; ++index) {
+            CGFloat y = height - 64 - (CGFloat)index * 52;
+            for (NSView *view in rows[index]) {
+                NSRect frame = view.frame;
+                frame.origin.y = y;
+                view.frame = frame;
             }
         }
     }
@@ -39,6 +77,8 @@ namespace {
     const int button = (int)[sender tag];
     if (button >= 100 && button < 104) {
         selectCategory(button - 100);
+        // Keep the managed selection in sync with the native sidebar.
+        actions.push_back(button);
     } else {
         actions.push_back(button);
     }
@@ -66,25 +106,64 @@ __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
                     backing:NSBackingStoreBuffered
                       defer:NO];
     [settingsWindow setTitle:@"VirtualCharacterRender - 환경설정"];
+    // The detail document is 660pt wide and horizontal scrolling is disabled.
+    // Do not allow a narrower content area to clip its text fields/buttons.
+    [settingsWindow setContentMinSize:NSMakeSize(940, 480)];
     [settingsWindow setDelegate:delegate];
     [settingsWindow center];
+    settingsWindow.level = NSNormalWindowLevel;
+    settingsWindow.appearance =
+        [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     settingsRoot = settingsWindow.contentView;
     [settingsRoot setWantsLayer:YES];
-    settingsRoot.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
+    settingsRoot.layer.backgroundColor = surfaceColor().CGColor;
     fields = [NSMutableDictionary dictionary];
     categoryViews = [NSMutableDictionary dictionary];
+    pages = [NSMutableDictionary dictionary];
+    rowGroups = [NSMutableDictionary dictionary];
+    navigation = [NSMutableArray array];
+
+    sidebar = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 220, 720)];
+    sidebar.autoresizingMask = NSViewHeightSizable;
+    sidebar.wantsLayer = YES;
+    sidebar.layer.backgroundColor = sidebarColor().CGColor;
+    [settingsRoot addSubview:sidebar];
+
+    details = [[NSScrollView alloc] initWithFrame:NSMakeRect(242, 20, 678, 680)];
+    details.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    details.hasVerticalScroller = YES;
+    details.hasHorizontalScroller = NO;
+    details.drawsBackground = NO;
+    [settingsRoot addSubview:details];
+
+    NSTextField *heading = [NSTextField labelWithString:@"환경설정"];
+    heading.frame = NSMakeRect(22, 654, 180, 32);
+    heading.font = [NSFont boldSystemFontOfSize:19];
+    heading.textColor = foregroundColor();
+    heading.autoresizingMask = NSViewMinYMargin;
+    [sidebar addSubview:heading];
+
     NSArray<NSString *> *labels = @[@"일반", @"캐릭터 / 모델", @"트래킹", @"출력"];
     for (int category = 0; category < 4; ++category) {
         NSButton *button = [[NSButton alloc]
-            initWithFrame:NSMakeRect(20 + category * 220, 670, 202, 33)];
+            initWithFrame:NSMakeRect(18, 593 - category * 50, 184, 40)];
         button.title = labels[category];
         button.tag = 100 + category;
         button.target = delegate;
         button.action = @selector(clicked:);
-        button.bezelStyle = NSBezelStyleRounded;
+        button.bordered = NO;
+        button.wantsLayer = YES;
+        button.layer.cornerRadius = 5;
+        button.layer.backgroundColor = sidebarColor().CGColor;
+        button.contentTintColor = foregroundColor();
+        button.font = [NSFont systemFontOfSize:14 weight:NSFontWeightMedium];
         button.autoresizingMask = NSViewMinYMargin;
-        [settingsRoot addSubview:button];
+        [sidebar addSubview:button];
+        [navigation addObject:button];
         categoryViews[@(category)] = [NSMutableArray array];
+        rowGroups[@(category)] = [NSMutableArray array];
+        NSView *page = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 660, 650)];
+        pages[@(category)] = page;
     }
     selectCategory(0);
 }
@@ -107,40 +186,60 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
     int category, int ident, int kind, const char *label, const char *value) {
     if (!settingsWindow) VCR_SettingsCreate();
     if (category < 0 || category >= 4) return;
-    const CGFloat y = 620 - categoryRows[category]++ * 48;
+    ++categoryRows[category];
+    NSView *page = pages[@(category)];
     NSMutableArray<NSView *> *views = categoryViews[@(category)];
+    NSMutableArray<NSView *> *row = [NSMutableArray array];
     if (kind == 2) {
         NSTextField *caption = [NSTextField labelWithString:toString(label)];
-        caption.frame = NSMakeRect(220, y + 4, 230, 30);
+        caption.frame = NSMakeRect(20, 0, 208, 30);
+        caption.textColor = foregroundColor();
         caption.autoresizingMask = NSViewMinYMargin;
-        [settingsRoot addSubview:caption];
+        [page addSubview:caption];
         [views addObject:caption];
+        [row addObject:caption];
         NSTextField *input = [[NSTextField alloc]
-            initWithFrame:NSMakeRect(460, y + 4, 388, 29)];
+            initWithFrame:NSMakeRect(244, 0, 380, 30)];
         input.stringValue = toString(value);
-        input.autoresizingMask = NSViewMinYMargin;
-        [settingsRoot addSubview:input];
+        input.textColor = foregroundColor();
+        input.backgroundColor = buttonColor();
+        input.drawsBackground = YES;
+        input.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+        [page addSubview:input];
         [views addObject:input];
+        [row addObject:input];
         fields[@(ident)] = input;
     } else if (kind == 1) {
         NSButton *button = [[NSButton alloc]
-            initWithFrame:NSMakeRect(220, y, 628, 36)];
+            initWithFrame:NSMakeRect(20, 0, 604, 36)];
         button.title = toString(label);
         button.tag = ident;
         button.target = delegate;
         button.action = @selector(clicked:);
-        button.bezelStyle = NSBezelStyleRounded;
-        button.autoresizingMask = NSViewMinYMargin;
-        [settingsRoot addSubview:button];
+        button.bordered = NO;
+        button.wantsLayer = YES;
+        button.layer.backgroundColor = buttonColor().CGColor;
+        button.layer.cornerRadius = 5;
+        button.contentTintColor = foregroundColor();
+        button.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+        [page addSubview:button];
         [views addObject:button];
+        [row addObject:button];
     } else {
         NSTextField *text = [NSTextField labelWithString:toString(label)];
-        text.frame = NSMakeRect(220, y + 4, 628, 30);
-        text.autoresizingMask = NSViewMinYMargin;
-        [settingsRoot addSubview:text];
+        text.frame = NSMakeRect(20, 0, 604, 30);
+        text.font = [NSFont systemFontOfSize:16 weight:NSFontWeightSemibold];
+        text.textColor = foregroundColor();
+        text.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+        [page addSubview:text];
         [views addObject:text];
+        [row addObject:text];
+        if (ident != 0) fields[@(ident)] = text;
     }
-    for (NSView *view in views) view.hidden = category != selectedCategory;
+    [rowGroups[@(category)] addObject:row];
+    layoutRows(category);
+    if (category == selectedCategory)
+        [details setDocumentView:page];
 }
 
 __attribute__((visibility("default"))) void VCR_SettingsClearCategory(int category) {
@@ -156,6 +255,8 @@ __attribute__((visibility("default"))) void VCR_SettingsClearCategory(int catego
     }
     [categoryViews[@(category)] removeAllObjects];
     categoryRows[category] = 0;
+    [rowGroups[@(category)] removeAllObjects];
+    layoutRows(category);
 }
 
 __attribute__((visibility("default"))) void VCR_SettingsSetText(
@@ -188,6 +289,11 @@ __attribute__((visibility("default"))) void VCR_SettingsDestroy(void) {
     }
     settingsWindow = nil;
     settingsRoot = nil;
+    sidebar = nil;
+    details = nil;
+    pages = nil;
+    rowGroups = nil;
+    navigation = nil;
     fields = nil;
     categoryViews = nil;
     delegate = nil;
