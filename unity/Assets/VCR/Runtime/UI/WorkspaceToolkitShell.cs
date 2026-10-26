@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using VCR.Runtime.Scene;
 
 namespace VCR.Runtime.UI
 {
@@ -13,6 +14,9 @@ namespace VCR.Runtime.UI
     public sealed class WorkspaceToolkitShell : MonoBehaviour
     {
         [SerializeField] private bool advancedWorkspace;
+        [SerializeField] private SingleCharacterSceneRuntime sceneRuntime;
+        [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
+        private float _nextStatusRefresh;
         private UIDocument _document;
         private VisualElement _root;
         private VisualElement _dockHost;
@@ -26,6 +30,26 @@ namespace VCR.Runtime.UI
 
             _root = _document.rootVisualElement;
             Build();
+        }
+
+        private void Update()
+        {
+            if (_status == null || Time.unscaledTime < _nextStatusRefresh)
+                return;
+            _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null)
+            {
+                _status.text = "Scene runtime unavailable";
+                return;
+            }
+            var state = sceneRuntime.Status;
+            var path = sceneRuntime.CurrentCharacterPath;
+            var modelName = string.IsNullOrWhiteSpace(path)
+                ? "<none>" : System.IO.Path.GetFileName(path);
+            _status.text = "Scene: " + state.State + " | Model: " + modelName +
+                " | Loaded: " + state.HasCharacter;
         }
 
         private void OnDisable()
@@ -94,7 +118,7 @@ namespace VCR.Runtime.UI
             bottom.Add(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150));
             _root.Add(bottom);
 
-            _status = new Label("UI Toolkit preview only • No model or output state bound");
+            _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
             _status.style.paddingLeft = 12;
             _status.style.paddingTop = 5;
