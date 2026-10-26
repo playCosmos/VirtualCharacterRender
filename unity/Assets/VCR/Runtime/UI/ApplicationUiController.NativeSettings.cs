@@ -21,6 +21,12 @@ namespace VCR.Runtime.UI
         private int _nativeFeedbackCategory = -1;
         private int _nativePendingCharacterGeneration = -1;
 
+        /// <summary>Open the existing OS-native settings window from alternate workspace shells.</summary>
+        public void ShowNativeSettingsWindow()
+        {
+            OpenNativeSettings();
+        }
+
         private void OpenNativeSettings()
         {
             if (!DesktopNativeSettingsWindow.Supported)
