@@ -448,6 +448,11 @@ namespace VCR.Runtime.Materials.Unity
                         null);
 
                 error = null;
+                Debug.Log(
+                    "VCR inventory: stage=runtime category=declarative_plugin" +
+                    " status=loaded id=" + manifest.PackageId +
+                    " version=" + manifest.PackageVersion +
+                    " shaders=" + manifest.ShaderIds.Length, this);
                 return true;
             }
             catch (Exception exception)

@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using UniVRM10;
 using UnityEngine;
 using VCR.Runtime.Scene;
+using VCR.Runtime.Capabilities;
+using VCR.Runtime.Materials.Unity;
 
 namespace VCR.Runtime.Application
 {
@@ -21,6 +23,8 @@ namespace VCR.Runtime.Application
     public sealed class ApplicationRuntimeBootstrap :
         MonoBehaviour
     {
+        public const string LastCharacterPathPreferenceKey =
+            "VCR.Character.LastSuccessfulPath.v1";
         private const string VrmOption = "vcr-vrm";
         private const string ConfigOption = "vcr-config";
 
@@ -252,6 +256,7 @@ namespace VCR.Runtime.Application
                         $"config='{_configurationStore.Path}', " +
                         $"character='{sceneRuntime.CurrentCharacterPath ?? "<none>"}'.",
                         this);
+                    LogStartupInventory();
                 }
 
                 return true;
@@ -272,6 +277,87 @@ namespace VCR.Runtime.Application
                 }
 
                 throw;
+            }
+        }
+
+        // Reporting is snapshot-only and never activates optional services.
+        // A remembered path is not an active character. UI restoration may
+        // complete later, with its own result/event logs.
+        private void LogStartupInventory()
+        {
+            try
+            {
+                var status = sceneRuntime.Status;
+                Debug.Log(
+                    "VCR inventory: stage=startup category=module id=application status=started" +
+                    " unity=" + UnityEngine.Application.unityVersion +
+                    " platform=" + UnityEngine.Application.platform +
+                    " gpu_api=" + SystemInfo.graphicsDeviceType, this);
+                Debug.Log(
+                    "VCR inventory: stage=startup category=module id=scene state=" +
+                    status.State, this);
+
+                var capabilities = sceneRuntime.Capabilities?.CaptureStatuses();
+                Debug.Log(
+                    "VCR inventory: stage=startup category=capability count=" +
+                    (capabilities?.Length ?? 0), this);
+                if (capabilities != null)
+                {
+                    foreach (var capability in capabilities)
+                    {
+                        Debug.Log(
+                            "VCR inventory: stage=startup category=capability id=" +
+                            capability.Id + " state=" + capability.State, this);
+                    }
+                }
+
+                var providers = DeclarativeCapabilityCatalog
+                    .Shared.GetRegisteredProviderIds();
+                Debug.Log(
+                    "VCR inventory: stage=startup category=declarative_plugin count=" +
+                    providers.Length + " executable_plugins=unsupported", this);
+                foreach (var provider in providers)
+                {
+                    Debug.Log(
+                        "VCR inventory: stage=startup category=declarative_plugin id=" +
+                        provider + " state=registered", this);
+                }
+
+                var shaders = RuntimeShaderRegistry.GetRegisteredIds();
+                Debug.Log(
+                    "VCR inventory: stage=startup category=registered_shader count=" +
+                    shaders.Length, this);
+                foreach (var shader in shaders)
+                {
+                    Debug.Log(
+                        "VCR inventory: stage=startup category=registered_shader id=" +
+                        shader.Replace('\r', ' ').Replace('\n', ' '), this);
+                }
+
+                var activePath = sceneRuntime.CurrentCharacterPath;
+                Debug.Log(
+                    "VCR inventory: stage=startup-pre-ui-restore category=model" +
+                    " active=" + status.HasCharacter +
+                    " filename=" +
+                    (string.IsNullOrWhiteSpace(activePath)
+                        ? "<none>" : Path.GetFileName(activePath)), this);
+                var rememberedPath = PlayerPrefs.GetString(
+                    LastCharacterPathPreferenceKey, string.Empty);
+                Debug.Log(
+                    "VCR inventory: stage=startup-pre-ui-restore category=remembered_model" +
+                    " present=" + !string.IsNullOrWhiteSpace(rememberedPath) +
+                    " file_exists=" +
+                    (!string.IsNullOrWhiteSpace(rememberedPath) &&
+                     File.Exists(rememberedPath)) +
+                    " filename=" +
+                    (string.IsNullOrWhiteSpace(rememberedPath)
+                        ? "<none>" : Path.GetFileName(rememberedPath)), this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "VCR inventory: stage=startup status=unavailable exception=" +
+                    exception.GetType().Name, this);
             }
         }
 
