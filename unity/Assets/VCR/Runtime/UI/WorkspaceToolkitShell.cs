@@ -43,6 +43,7 @@ namespace VCR.Runtime.UI
         private RenderTexture _ownedPreviewTexture;
         private int _previewWidth;
         private int _previewHeight;
+        private bool _previewRenderUnsupported;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -92,7 +93,7 @@ namespace VCR.Runtime.UI
             if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
                 previewCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
-            UpdateOwnedPreview();
+            if (!_previewRenderUnsupported) UpdateOwnedPreview();
             if (!_previewExplicitlyBound && _ownedPreviewTexture == null && (_previewBoundFromCamera || _previewTexture == null))
             {
                 var cameraTexture = previewCamera != null ? previewCamera.targetTexture : null;
@@ -141,6 +142,7 @@ namespace VCR.Runtime.UI
         {
             _previewExplicitlyBound = texture != null;
             _previewBoundFromCamera = false;
+            if (texture != null) _previewRenderUnsupported = false;
             if (_ownedPreviewTexture != null) ReleaseOwnedPreview();
             SetPreviewTexture(texture);
         }
@@ -183,8 +185,14 @@ namespace VCR.Runtime.UI
                 ReleaseOwnedPreview();
                 return;
             }
-            var width = Mathf.Clamp(Mathf.RoundToInt(_previewImage.resolvedStyle.width), 256, 1920);
-            var height = Mathf.Clamp(Mathf.RoundToInt(_previewImage.resolvedStyle.height), 256, 1080);
+            var previewContainer = _previewImage.parent;
+            if (previewContainer == null) return;
+            var availableWidth = previewContainer.resolvedStyle.width;
+            var availableHeight = previewContainer.resolvedStyle.height;
+            if (float.IsNaN(availableWidth) || float.IsNaN(availableHeight) ||
+                availableWidth <= 0 || availableHeight <= 0) return;
+            var width = Mathf.Clamp(Mathf.RoundToInt(availableWidth), 256, 1920);
+            var height = Mathf.Clamp(Mathf.RoundToInt(availableHeight - 45f), 256, 1080);
             if (width == _previewWidth && height == _previewHeight && _ownedPreviewCamera != null)
                 return;
             ReleaseOwnedPreview();
@@ -220,7 +228,9 @@ namespace VCR.Runtime.UI
             {
                 Debug.LogWarning("Workspace preview render unavailable: " + exception.Message, this);
                 ReleaseOwnedPreview();
-                enabled = false;
+                _previewRenderUnsupported = true;
+                if (_previewStatus != null)
+                    _previewStatus.text = "Preview render unsupported; runtime controls remain available";
             }
         }
 
