@@ -717,12 +717,9 @@ namespace VCR.Runtime.UI
             });
             target.Add(panel);
             var orderKey = "VCR.UI.Workspace.Order." + id + ".v1";
-            var savedOrder = PlayerPrefs.GetInt(orderKey, -1);
-            if (savedOrder >= 0 && target.childCount > 1)
-            {
-                target.Remove(panel);
-                target.Insert(Mathf.Clamp(savedOrder, 0, target.childCount), panel);
-            }
+            // Ordering is restored once after every panel is created. Inserting
+            // during construction mixes panel indices with splitter elements.
+            // Keep the preference key for the final SortDockPanels pass.
             panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
             panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
         }
