@@ -124,6 +124,8 @@ namespace VCR.Runtime.UI
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
                 _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
+            if (!string.IsNullOrWhiteSpace(state.LastError))
+                _status.text += " | Error: " + state.LastError;
         }
 
         /// <summary>Bind an externally owned runtime viewport texture. This shell never creates or disposes the texture.</summary>
@@ -348,6 +350,8 @@ namespace VCR.Runtime.UI
             }) { text = "Move: " + currentDock };
             panel.Add(move);
             var dragHandle = new Label("Drag panel to left / right / bottom");
+            dragHandle.style.paddingTop = 5;
+            dragHandle.style.paddingBottom = 5;
             dragHandle.style.color = new Color(0.68f, 0.77f, 0.85f);
             panel.Add(dragHandle);
             var dragging = false;
