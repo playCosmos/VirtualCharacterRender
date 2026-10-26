@@ -160,6 +160,16 @@ namespace VCR.Runtime.UI
             _previewImage.style.display = texture == null ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused && _workspaceRoot != null) WorkspaceLayoutFile.Save();
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
+        }
+
         private void OnDisable()
         {
             if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
@@ -868,6 +878,7 @@ namespace VCR.Runtime.UI
             _tabMode = false;
             _leftVisible = true;
             _rightVisible = true;
+            WorkspaceLayoutFile.ClearSnapshots();
             // Replace the previous snapshot immediately: reset must survive a crash
             // or forced shutdown without restoring the old panel arrangement.
             WorkspaceLayoutFile.Save();
