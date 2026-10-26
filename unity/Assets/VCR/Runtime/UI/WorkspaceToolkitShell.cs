@@ -165,6 +165,12 @@ namespace VCR.Runtime.UI
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _root.Add(header);
 
+            var bottom = new VisualElement { name = "vcr-bottom" };
+            bottom.style.flexDirection = FlexDirection.Row;
+            bottom.style.height = _bottomHeight;
+            bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            _bottomDock = bottom;
+
             _dockHost = new VisualElement();
             _dockHost.style.flexGrow = 1;
             _dockHost.style.flexDirection = FlexDirection.Row;
@@ -250,7 +256,6 @@ namespace VCR.Runtime.UI
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
-            _bottomDock = bottom;
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Actions, "Actions", 150), WorkspacePanelCatalog.Actions, "bottom");
             PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
@@ -274,8 +279,6 @@ namespace VCR.Runtime.UI
                 dock = defaultDock;
             var target = dock == "left" ? _leftDock :
                 dock == "right" ? _rightDock : _bottomDock;
-            // Bottom is constructed after the side docks. Defer bottom-bound
-            // side panels until the bottom host exists.
             if (target == null)
             {
                 dock = defaultDock;
