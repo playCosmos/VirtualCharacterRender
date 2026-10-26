@@ -37,6 +37,7 @@ namespace VCR.Runtime.UI
         private Image _previewImage;
         private bool _previewBoundFromCamera;
         private bool _previewExplicitlyBound;
+        private VisualElement _dragOverlay;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -161,6 +162,7 @@ namespace VCR.Runtime.UI
             _rightDock = null;
             _bottomDock = null;
             _previewImage = null;
+            _dragOverlay = null;
             _previewBoundFromCamera = false;
         }
 
@@ -330,6 +332,19 @@ namespace VCR.Runtime.UI
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
             _workspaceRoot.Add(_status);
+            _dragOverlay = new Label("Drop onto left, right or bottom dock");
+            _dragOverlay.style.position = Position.Absolute;
+            _dragOverlay.style.left = 12;
+            _dragOverlay.style.top = 50;
+            _dragOverlay.style.paddingLeft = 12;
+            _dragOverlay.style.paddingRight = 12;
+            _dragOverlay.style.paddingTop = 8;
+            _dragOverlay.style.paddingBottom = 8;
+            _dragOverlay.style.backgroundColor = new Color(0.12f, 0.35f, 0.48f);
+            _dragOverlay.style.color = Color.white;
+            _dragOverlay.style.display = DisplayStyle.None;
+            _dragOverlay.pickingMode = PickingMode.Ignore;
+            _workspaceRoot.Add(_dragOverlay);
         }
 
         // Move controls provide deterministic, persistent dock relocation.
@@ -375,6 +390,7 @@ namespace VCR.Runtime.UI
                 dragging = true;
                 pointerId = evt.pointerId;
                 dragHandle.CapturePointer(pointerId);
+                if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.Flex;
                 evt.StopPropagation();
             });
             dragHandle.RegisterCallback<PointerUpEvent>(evt =>
@@ -382,6 +398,7 @@ namespace VCR.Runtime.UI
                 if (!dragging || evt.pointerId != pointerId) return;
                 dragging = false;
                 pointerId = -1;
+                if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
                 var position = evt.position;
                 if (dragHandle.HasPointerCapture(evt.pointerId))
                     dragHandle.ReleasePointer(evt.pointerId);
@@ -402,6 +419,7 @@ namespace VCR.Runtime.UI
             });
             dragHandle.RegisterCallback<PointerCaptureOutEvent>(_ =>
             {
+                if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
                 dragging = false;
                 pointerId = -1;
             });
