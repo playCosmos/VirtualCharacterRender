@@ -1,0 +1,33 @@
+# One-off PR workflow to verify the exact integrated main revision.
+# This workflow is not intended to be merged into main.
+name: One-shot main IL2CPP verification trigger
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ci/windows-il2cpp-post-merge-check-20261026'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify unchanged main and dispatch existing CI workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: 4e7e70540f537c5ea3e404276239254cad091f6b
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          if [[ "$actual" != "$EXPECTED_MAIN" ]]; then
+            echo "main changed since integration; refuse wrong-source dispatch" >&2
+            exit 1
+          fi
+          gh workflow run windows-il2cpp-build.yml --ref main --repo "$GITHUB_REPOSITORY" -f smoke_repeat_count=5
+          echo "Requested the existing Windows-hosted IL2CPP workflow on exact main $actual"
