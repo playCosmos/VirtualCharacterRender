@@ -501,20 +501,32 @@ namespace VCR.Runtime.UI
                 // Tab drag works even when its panel body is hidden.
                 var draggingTab = false;
                 var tabPointer = -1;
+                var tabStart = Vector2.zero;
+                var tabMoved = false;
                 tab.RegisterCallback<PointerDownEvent>(evt =>
                 {
                     if (evt.button != 0) return;
                     draggingTab = true;
                     tabPointer = evt.pointerId;
+                    tabStart = evt.position;
+                    tabMoved = false;
                     tab.CapturePointer(tabPointer);
+                });
+                tab.RegisterCallback<PointerMoveEvent>(evt =>
+                {
+                    if (!draggingTab || evt.pointerId != tabPointer) return;
+                    if ((evt.position - tabStart).sqrMagnitude > 64f)
+                        tabMoved = true;
                 });
                 tab.RegisterCallback<PointerUpEvent>(evt =>
                 {
                     if (!draggingTab || evt.pointerId != tabPointer) return;
                     draggingTab = false;
                     var drop = evt.position;
+                    var moved = tabMoved;
                     if (tab.HasPointerCapture(evt.pointerId))
                         tab.ReleasePointer(evt.pointerId);
+                    if (!moved) return;
                     var destination = DockAt(drop);
                     if (destination != null && destination != dockId)
                     {
@@ -531,6 +543,9 @@ namespace VCR.Runtime.UI
                                 var other = dock.Q<VisualElement>("vcr-panel-" +
                                     candidate.name.Substring("vcr-tab-".Length));
                                 if (other == null) break;
+                                var oldIndex = dock.IndexOf(panel);
+                                var otherIndex = dock.IndexOf(other);
+                                if (oldIndex == otherIndex) break;
                                 dock.Remove(panel);
                                 dock.Insert(dock.IndexOf(other), panel);
                                 SaveDockOrder(dock);
@@ -663,7 +678,11 @@ namespace VCR.Runtime.UI
             if (destination == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
             if (destination == "right") { _rightVisible = true; PlayerPrefs.SetInt(RightVisibleKey, 1); }
             if (destination == "bottom") { _bottomVisible = true; PlayerPrefs.SetInt(BottomVisibleKey, 1); }
-            if (previous != null) SaveDockOrder(previous);
+            if (previous != null)
+            {
+                previous.Remove(panel);
+                SaveDockOrder(previous);
+            }
             PlayerPrefs.Save();
             Build();
         }
