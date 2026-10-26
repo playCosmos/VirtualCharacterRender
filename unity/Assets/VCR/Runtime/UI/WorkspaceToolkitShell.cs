@@ -140,6 +140,7 @@ namespace VCR.Runtime.UI
             _rightDock = null;
             _bottomDock = null;
             _previewImage = null;
+            previewCamera = null;
         }
 
         private void Build()
