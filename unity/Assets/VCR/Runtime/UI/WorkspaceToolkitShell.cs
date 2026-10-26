@@ -644,14 +644,14 @@ namespace VCR.Runtime.UI
             dragHandle.style.color = new Color(0.68f, 0.77f, 0.85f);
             panel.Add(dragHandle);
             var dragging = false;
-            var pointerId = -1;
+            var activePointerId = -1;
             dragHandle.focusable = true;
             dragHandle.RegisterCallback<KeyDownEvent>(evt =>
             {
                 if (evt.keyCode != KeyCode.Escape || !dragging) return;
                 dragging = false;
-                if (dragHandle.HasPointerCapture(pointerId)) dragHandle.ReleasePointer(pointerId);
-                pointerId = -1;
+                if (dragHandle.HasPointerCapture(activePointerId)) dragHandle.ReleasePointer(activePointerId);
+                activePointerId = -1;
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
                 if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
                 evt.StopPropagation();
@@ -660,7 +660,7 @@ namespace VCR.Runtime.UI
             {
                 if (evt.button != 0 || dragging) return;
                 dragging = true;
-                pointerId = evt.pointerId;
+                activePointerId = evt.pointerId;
                 dragHandle.CapturePointer(pointerId);
                 dragHandle.Focus();
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.Flex;
@@ -668,7 +668,7 @@ namespace VCR.Runtime.UI
             });
             dragHandle.RegisterCallback<PointerMoveEvent>(evt =>
             {
-                if (!dragging || evt.pointerId != pointerId) return;
+                if (!dragging || evt.pointerId != activePointerId) return;
                 if (_dockTargetLabel != null)
                 {
                     var destination = DockAt(evt.position);
@@ -682,9 +682,9 @@ namespace VCR.Runtime.UI
             });
             dragHandle.RegisterCallback<PointerUpEvent>(evt =>
             {
-                if (!dragging || evt.pointerId != pointerId) return;
+                if (!dragging || evt.pointerId != activePointerId) return;
                 dragging = false;
-                pointerId = -1;
+                activePointerId = -1;
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
                 if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
                 var position = evt.position;
@@ -713,7 +713,7 @@ namespace VCR.Runtime.UI
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.None;
                 if (_dockTargetLabel != null) _dockTargetLabel.style.display = DisplayStyle.None;
                 dragging = false;
-                pointerId = -1;
+                activePointerId = -1;
             });
             target.Add(panel);
             var orderKey = "VCR.UI.Workspace.Order." + id + ".v1";
