@@ -66,6 +66,8 @@ namespace VCR.Runtime.UI
 
         private void OnEnable()
         {
+            // Existing PlayerPrefs layouts remain the migration fallback.
+            WorkspaceLayoutFile.Load();
             _document = GetComponent<UIDocument>();
             if (_document == null || _document.rootVisualElement == null)
                 return;
@@ -160,6 +162,7 @@ namespace VCR.Runtime.UI
 
         private void OnDisable()
         {
+            if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
             if (_workspaceRoot != null)
                 _workspaceRoot.RemoveFromHierarchy();
             _workspaceRoot = null;
