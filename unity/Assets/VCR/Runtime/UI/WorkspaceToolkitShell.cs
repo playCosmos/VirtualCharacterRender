@@ -475,7 +475,9 @@ namespace VCR.Runtime.UI
             if (panels.Count < 2) return;
             // Tabbed panels share the same dock; drag onto a tab to reorder.
             var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
-            var active = Mathf.Clamp(PlayerPrefs.GetInt(key, 0), 0, panels.Count - 1);
+            var selectedId = PlayerPrefs.GetString(key, panels[0].name);
+            var active = panels.FindIndex(p => p.name == selectedId);
+            if (active < 0) active = 0;
             foreach (var panel in panels)
             {
                 panel.style.height = StyleKeyword.Auto;
@@ -494,7 +496,7 @@ namespace VCR.Runtime.UI
                 {
                     for (var j = 0; j < panels.Count; j++)
                         panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
-                    PlayerPrefs.SetInt(key, index);
+                    PlayerPrefs.SetString(key, panel.name);
                     PlayerPrefs.Save();
                 }) { text = name };
                 tab.name = "vcr-tab-" + name;
@@ -674,6 +676,7 @@ namespace VCR.Runtime.UI
             if (destination != "left" && destination != "right" && destination != "bottom") return;
             var previous = panel.parent;
             PlayerPrefs.SetString("VCR.UI.Workspace.Dock." + id + ".v1", destination);
+            PlayerPrefs.SetString("VCR.UI.Workspace.ActiveTab." + destination + ".v1", panel.name);
             PlayerPrefs.DeleteKey("VCR.UI.Workspace.Order." + id + ".v1");
             if (destination == "left") { _leftVisible = true; PlayerPrefs.SetInt(LeftVisibleKey, 1); }
             if (destination == "right") { _rightVisible = true; PlayerPrefs.SetInt(RightVisibleKey, 1); }
