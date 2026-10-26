@@ -31,6 +31,8 @@ namespace VCR.Runtime.UI
         private const string BottomHeightKey = "VCR.UI.Workspace.BottomHeight.v1";
         private const string BottomVisibleKey = "VCR.UI.Workspace.BottomVisible.v1";
         private const string LeftVisibleKey = "VCR.UI.Workspace.LeftVisible.v1";
+        private const string ScenesHeightKey = "VCR.UI.Workspace.ScenesHeight.v1";
+        private float _scenesHeight = 180f;
         private const string RightVisibleKey = "VCR.UI.Workspace.RightVisible.v1";
         private bool _leftVisible = true;
         private bool _rightVisible = true;
@@ -47,6 +49,7 @@ namespace VCR.Runtime.UI
 
             advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0) == 1;
             _leftWidth = ReadSize(LeftWidthKey, 220f, 140f, 520f);
+            _scenesHeight = ReadSize(ScenesHeightKey, 180f, 100f, 400f);
             _rightWidth = ReadSize(RightWidthKey, 260f, 160f, 520f);
             _bottomHeight = ReadSize(BottomHeightKey, 150f, 100f, 400f);
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
@@ -182,7 +185,15 @@ namespace VCR.Runtime.UI
             _dockHost.Add(rightSplitter);
             _dockHost.Add(right);
 
-            left.Add(Panel(WorkspacePanelCatalog.Scenes, "Scenes", 140));
+            var scenes = Panel(WorkspacePanelCatalog.Scenes, "Scenes", 100);
+            scenes.style.height = _scenesHeight;
+            scenes.style.flexGrow = 0;
+            left.Add(scenes);
+            left.Add(Splitter(false, _scenesHeight, 100f, 400f, value =>
+            {
+                _scenesHeight = value;
+                scenes.style.height = value;
+            }, ScenesHeightKey));
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
@@ -241,6 +252,7 @@ namespace VCR.Runtime.UI
         private void ResetLayout()
         {
             PlayerPrefs.DeleteKey(LeftWidthKey);
+            PlayerPrefs.DeleteKey(ScenesHeightKey);
             PlayerPrefs.DeleteKey(RightWidthKey);
             PlayerPrefs.DeleteKey(BottomHeightKey);
             PlayerPrefs.DeleteKey(BottomVisibleKey);
@@ -248,6 +260,7 @@ namespace VCR.Runtime.UI
             PlayerPrefs.DeleteKey(RightVisibleKey);
             PlayerPrefs.Save();
             _leftWidth = 220f;
+            _scenesHeight = 180f;
             _rightWidth = 260f;
             _bottomHeight = 150f;
             _bottomVisible = true;
