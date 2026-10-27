@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;
 using VCR.Runtime.Tracking;
 
 namespace VCR.Runtime.UI
@@ -380,6 +381,331 @@ namespace VCR.Runtime.UI
                     ShowWorkspaceNativeTrackingDetails(id);
             }
             return true;
+        }
+
+        private ScrollView _workspaceTrackingList;
+        private VisualElement _workspaceTrackingEditor;
+        private Label _workspaceTrackingFeedback;
+        private float _nextWorkspaceTrackingPanelRefresh;
+        private string _workspaceTrackingPanelSignature;
+
+        private void ResetWorkspaceTrackingPanel()
+        {
+            _workspaceTrackingList = null;
+            _workspaceTrackingEditor = null;
+            _workspaceTrackingFeedback = null;
+            _workspaceTrackingPanelSignature = null;
+            _nextWorkspaceTrackingPanelRefresh = 0f;
+        }
+
+        private void BuildWorkspaceTrackingPanel(VisualElement panel)
+        {
+            _workspaceTrackingFeedback = new Label(
+                "Select an input source to manage it. Configuration is also available in Settings.");
+            panel.Add(_workspaceTrackingFeedback);
+
+            var actions = new VisualElement();
+            actions.style.flexDirection = FlexDirection.Row;
+            actions.Add(new Button(() =>
+            {
+                _workspaceTrackingPanelSignature = null;
+                _nextWorkspaceTrackingPanelRefresh = 0f;
+                RefreshWorkspaceTrackingPanel();
+            }) { text = "Refresh inputs" });
+            if (DesktopNativeSettingsWindow.Supported)
+            {
+                actions.Add(new Button(() =>
+                {
+                    OpenWorkspaceNativeSettings();
+                    if (_workspaceNativeSettings != null)
+                    {
+                        RebuildWorkspaceNativeTrackingSources();
+                        _workspaceNativeSettings.SelectCategory(2);
+                    }
+                }) { text = "Device Settings" });
+            }
+            panel.Add(actions);
+
+            _workspaceTrackingList = new ScrollView();
+            _workspaceTrackingList.name = "vcr-tracking-input-list";
+            _workspaceTrackingList.style.flexGrow = 1;
+            _workspaceTrackingList.style.minHeight = 60;
+            panel.Add(_workspaceTrackingList);
+
+            _workspaceTrackingEditor = new VisualElement();
+            _workspaceTrackingEditor.name = "vcr-tracking-input-editor";
+            panel.Add(_workspaceTrackingEditor);
+            RefreshWorkspaceTrackingPanel();
+        }
+
+        private void RefreshWorkspaceTrackingPanel()
+        {
+            if (_workspaceTrackingList == null ||
+                Time.unscaledTime < _nextWorkspaceTrackingPanelRefresh)
+                return;
+            _nextWorkspaceTrackingPanelRefresh = Time.unscaledTime + 2f;
+
+            try
+            {
+                var sources = DiscoverWorkspaceTrackingSources();
+                var signature = "";
+                foreach (var source in sources)
+                {
+                    signature += source.ControlId + "\u001f" + source.DisplayName + "\u001f" +
+                        source.ControlEnabled + "\u001f" + source.ControlHealthState +
+                        "\u001f" + source.ControlError + "\u001f" +
+                        _workspaceConfiguredTracking.Contains(source.ControlId) + "\u001e";
+                }
+                if (signature == _workspaceTrackingPanelSignature)
+                    return;
+                _workspaceTrackingPanelSignature = signature;
+                _workspaceTrackingList.Clear();
+
+                if (sources.Count == 0)
+                {
+                    _workspaceTrackingList.Add(
+                        new Label("No tracking devices detected. Connect a source and refresh."));
+                    return;
+                }
+
+                foreach (var source in sources)
+                {
+                    var sourceId = source.ControlId;
+                    var configured = _workspaceConfiguredTracking.Contains(sourceId);
+                    var container = new VisualElement();
+                    container.style.marginBottom = 5;
+                    container.style.paddingBottom = 5;
+                    container.style.borderBottomWidth = 1;
+                    container.style.borderBottomColor = new Color(0.24f, 0.28f, 0.32f);
+
+                    var name = new Label((source.DisplayName ?? sourceId) + " — " +
+                        (source.ControlEnabled ? source.ControlHealthState.ToString() : "Off") +
+                        (configured ? "" : " (not added)"));
+                    container.Add(name);
+
+                    if (!string.IsNullOrWhiteSpace(source.ControlError))
+                    {
+                        var error = new Label(source.ControlError);
+                        error.style.color = new Color(1f, 0.55f, 0.45f);
+                        container.Add(error);
+                    }
+
+                    var buttons = new VisualElement();
+                    buttons.style.flexDirection = FlexDirection.Row;
+                    buttons.style.flexWrap = Wrap.Wrap;
+                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId))
+                        { text = configured ? "Remove" : "Add" });
+                    if (configured)
+                    {
+                        buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(sourceId))
+                            { text = source.ControlEnabled ? "Disable" : "Enable" });
+                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(sourceId))
+                            { text = "Recover" });
+                        if (source is ITrackingRuntimeConfigurable)
+                            buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId))
+                                { text = "Configure" });
+                    }
+                    container.Add(buttons);
+                    _workspaceTrackingList.Add(container);
+                }
+            }
+            catch (Exception ex)
+            {
+                SetWorkspaceTrackingFeedback("Unable to list tracking devices: " + ex.Message);
+                Debug.LogException(ex, this);
+            }
+        }
+
+        private void SetWorkspaceTrackingFeedback(string message)
+        {
+            if (_workspaceTrackingFeedback != null)
+                _workspaceTrackingFeedback.text = message;
+        }
+
+        private void TrackingPanelActionFinished(string message)
+        {
+            SetWorkspaceTrackingFeedback(message);
+            _workspaceTrackingPanelSignature = null;
+            _nextWorkspaceTrackingPanelRefresh = 0f;
+            RefreshWorkspaceTrackingPanel();
+        }
+
+        private void UpdateWorkspaceTrackingMembership(string sourceId)
+        {
+            try
+            {
+                var source = FindWorkspaceTrackingSource(sourceId);
+                if (source == null)
+                {
+                    SetWorkspaceTrackingFeedback("Tracking source disconnected.");
+                    return;
+                }
+                var configured = _workspaceConfiguredTracking.Contains(sourceId);
+                // Keep the former dashboard behavior: newly added devices start disabled.
+                if (source.ControlEnabled &&
+                    !source.TrySetControlEnabled(false, out var error))
+                {
+                    SetWorkspaceTrackingFeedback("Cannot " + (configured ? "remove" : "add") +
+                        " source: " + error);
+                    return;
+                }
+
+                if (configured)
+                {
+                    _workspaceConfiguredTracking.Remove(sourceId);
+                    _workspaceRestoredTracking.Remove(sourceId);
+                    _workspaceTrackingEditor?.Clear();
+                }
+                else
+                {
+                    _workspaceConfiguredTracking.Add(sourceId);
+                    _workspaceRestoredTracking.Add(sourceId);
+                }
+                PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, 0);
+                PersistConfiguredWorkspaceTracking();
+                TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
+                    (configured ? " removed." : " added (disabled)."));
+
+                if (!configured && source is ITrackingRuntimeConfigurable settings &&
+                    settings.OpenConfigurationOnAdd)
+                    EditWorkspaceTrackingSettings(sourceId);
+            }
+            catch (Exception ex)
+            {
+                SetWorkspaceTrackingFeedback("Tracking source update failed: " + ex.Message);
+                Debug.LogException(ex, this);
+            }
+        }
+
+        private void ToggleWorkspaceTrackingEnabled(string sourceId)
+        {
+            try
+            {
+                var source = FindWorkspaceTrackingSource(sourceId);
+                if (source == null || !_workspaceConfiguredTracking.Contains(sourceId))
+                {
+                    SetWorkspaceTrackingFeedback("Add a connected source before enabling it.");
+                    return;
+                }
+                var enabled = !source.ControlEnabled;
+                if (!source.TrySetControlEnabled(enabled, out var error))
+                {
+                    SetWorkspaceTrackingFeedback("Tracking toggle failed: " + error);
+                    return;
+                }
+                _workspaceRestoredTracking.Add(sourceId);
+                PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, enabled ? 1 : 0);
+                PlayerPrefs.Save();
+                TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
+                    (enabled ? " enabled." : " disabled."));
+            }
+            catch (Exception ex)
+            {
+                SetWorkspaceTrackingFeedback("Tracking toggle failed: " + ex.Message);
+                Debug.LogException(ex, this);
+            }
+        }
+
+        private void RecoverWorkspaceTrackingSource(string sourceId)
+        {
+            try
+            {
+                var source = FindWorkspaceTrackingSource(sourceId);
+                if (source == null)
+                {
+                    SetWorkspaceTrackingFeedback("Tracking source disconnected.");
+                    return;
+                }
+                if (source.TryRecover(out var error))
+                    TrackingPanelActionFinished("Recovery requested for " +
+                        (source.DisplayName ?? sourceId) + ".");
+                else
+                    SetWorkspaceTrackingFeedback("Recovery failed: " + error);
+            }
+            catch (Exception ex)
+            {
+                SetWorkspaceTrackingFeedback("Recovery failed: " + ex.Message);
+                Debug.LogException(ex, this);
+            }
+        }
+
+        private void EditWorkspaceTrackingSettings(string sourceId)
+        {
+            if (_workspaceTrackingEditor == null) return;
+            _workspaceTrackingEditor.Clear();
+            try
+            {
+                var source = FindWorkspaceTrackingSource(sourceId);
+                if (!(source is ITrackingRuntimeConfigurable configurable))
+                {
+                    SetWorkspaceTrackingFeedback("This source has no editable settings.");
+                    return;
+                }
+                var settings = configurable.GetConfigurationSettings();
+                if (settings == null || settings.Count > MaxNativeTrackingFields)
+                {
+                    SetWorkspaceTrackingFeedback("Tracking configuration is unavailable.");
+                    return;
+                }
+                _workspaceTrackingEditor.Add(new Label(configurable.ConfigurationTitle));
+                var fields = new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase);
+                foreach (var setting in settings)
+                {
+                    if (string.IsNullOrWhiteSpace(setting.Key) ||
+                        fields.ContainsKey(setting.Key))
+                        continue;
+                    var key = TrackingSettingKey + sourceId + "." + setting.Key;
+                    var field = new TextField(setting.Label)
+                    {
+                        value = PlayerPrefs.GetString(key, setting.Value),
+                        tooltip = setting.HelpText
+                    };
+                    _workspaceTrackingEditor.Add(field);
+                    fields[setting.Key] = field;
+                }
+                _workspaceTrackingEditor.Add(new Button(() =>
+                {
+                    try
+                    {
+                        var live = FindWorkspaceTrackingSource(sourceId);
+                        if (!(live is ITrackingRuntimeConfigurable target))
+                        {
+                            SetWorkspaceTrackingFeedback("Tracking source disconnected.");
+                            return;
+                        }
+                        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var field in fields)
+                            values[field.Key] = field.Value.value ?? "";
+                        if (!target.TryApplyConfiguration(values, out var error))
+                        {
+                            SetWorkspaceTrackingFeedback("Apply failed: " + error);
+                            return;
+                        }
+                        foreach (var pair in values)
+                            PlayerPrefs.SetString(TrackingSettingKey + sourceId + "." + pair.Key,
+                                pair.Value);
+                        _workspaceConfiguredTracking.Add(sourceId);
+                        _workspaceRestoredTracking.Add(sourceId);
+                        PersistConfiguredWorkspaceTracking();
+                        _workspaceTrackingEditor.Clear();
+                        TrackingPanelActionFinished("Tracking settings saved and applied.");
+                    }
+                    catch (Exception ex)
+                    {
+                        SetWorkspaceTrackingFeedback("Apply failed: " + ex.Message);
+                        Debug.LogException(ex, this);
+                    }
+                }) { text = "Save and apply" });
+                _workspaceTrackingEditor.Add(new Button(() =>
+                    _workspaceTrackingEditor.Clear()) { text = "Cancel" });
+                SetWorkspaceTrackingFeedback("Editing " + (source.DisplayName ?? sourceId));
+            }
+            catch (Exception ex)
+            {
+                _workspaceTrackingEditor.Clear();
+                SetWorkspaceTrackingFeedback("Unable to open tracking settings: " + ex.Message);
+                Debug.LogException(ex, this);
+            }
         }
     }
 }
