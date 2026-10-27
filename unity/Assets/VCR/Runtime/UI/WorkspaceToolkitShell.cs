@@ -15,7 +15,9 @@ namespace VCR.Runtime.UI
     {
         [SerializeField] private bool advancedWorkspace;
         [SerializeField] private SingleCharacterSceneRuntime sceneRuntime;
-        [SerializeField] private ApplicationUiController applicationUiController;
+        private DesktopNativeSettingsWindow _workspaceNativeSettings;
+        private bool _nativeSettingsWasVisible;
+        private bool _runInBackgroundBeforeSettings;
         [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
         private float _nextStatusRefresh;
         private UIDocument _document;
@@ -153,6 +155,7 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
+            PumpWorkspaceNativeSettings();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -273,6 +276,11 @@ namespace VCR.Runtime.UI
 
         private void OnDisable()
         {
+            _workspaceNativeSettings?.Dispose();
+            _workspaceNativeSettings = null;
+            if (_nativeSettingsWasVisible)
+                UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
+            _nativeSettingsWasVisible = false;
             if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
             if (_workspaceRoot != null)
                 _workspaceRoot.RemoveFromHierarchy();
@@ -405,6 +413,102 @@ namespace VCR.Runtime.UI
 
         // P1 scenes generated from P0 do not contain the legacy uGUI controller.
         // Keep the Settings action usable without creating a second UI controller.
+        // U1 owns its native settings window independently of the legacy uGUI controller.
+        // Render settings are the first migrated category; remaining categories must
+        // be migrated before the old controller can be retired.
+        private void OpenWorkspaceNativeSettings()
+        {
+            if (!DesktopNativeSettingsWindow.Supported)
+            {
+                ShowWorkspaceSettingsFallback();
+                return;
+            }
+            try
+            {
+                if (_workspaceNativeSettings == null)
+                {
+                    _workspaceNativeSettings = new DesktopNativeSettingsWindow();
+                    _workspaceNativeSettings.Add(0, 1, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Render settings");
+                    _workspaceNativeSettings.Add(0, 11, DesktopNativeSettingsWindow.ControlKind.Edit,
+                        "Target FPS (30-120)", "60");
+                    _workspaceNativeSettings.Add(0, 201, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Apply FPS");
+                    _workspaceNativeSettings.Add(0, 202, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Toggle VSync");
+                    _workspaceNativeSettings.Add(0, 90, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Changes apply to the active scene.");
+                    _workspaceNativeSettings.SelectCategory(0);
+                }
+                if (sceneRuntime == null)
+                    sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+                if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
+                    _workspaceNativeSettings.SetText(11, settings.TargetFrameRate.ToString());
+                if (!_workspaceNativeSettings.IsVisible)
+                {
+                    _runInBackgroundBeforeSettings = UnityEngine.Application.runInBackground;
+                    UnityEngine.Application.runInBackground = true;
+                }
+                _workspaceNativeSettings.Open();
+                _nativeSettingsWasVisible = _workspaceNativeSettings.IsVisible;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("U1 native Settings unavailable: " + exception);
+                _workspaceNativeSettings?.Dispose();
+                _workspaceNativeSettings = null;
+                _nativeSettingsWasVisible = false;
+                UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
+                ShowWorkspaceSettingsFallback();
+            }
+        }
+
+        private void PumpWorkspaceNativeSettings()
+        {
+            if (_workspaceNativeSettings == null) return;
+            _workspaceNativeSettings.PumpMessages();
+            if (!_workspaceNativeSettings.IsVisible && _nativeSettingsWasVisible)
+            {
+                UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
+                _nativeSettingsWasVisible = false;
+            }
+            for (var i = 0; i < 48; ++i)
+            {
+                var action = _workspaceNativeSettings.PollAction();
+                if (action == 0) break;
+                if (action != 201 && action != 202) continue;
+                if (sceneRuntime == null)
+                    sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+                if (sceneRuntime == null || !sceneRuntime.TryCaptureRenderSettings(out var settings))
+                {
+                    _workspaceNativeSettings.SetText(90, "Render runtime unavailable.");
+                    continue;
+                }
+                if (action == 201)
+                {
+                    if (!int.TryParse(_workspaceNativeSettings.GetText(11), out var fps) ||
+                        fps < 30 || fps > 120)
+                    {
+                        _workspaceNativeSettings.SetText(90, "FPS must be between 30 and 120.");
+                        continue;
+                    }
+                    settings.TargetFrameRate = fps;
+                }
+                else
+                {
+                    settings.UseVSync = !settings.UseVSync;
+                }
+                sceneRuntime.ApplyRenderSettings(settings);
+                if (sceneRuntime.TryCaptureRenderSettings(out var applied))
+                {
+                    _workspaceNativeSettings.SetText(11, applied.TargetFrameRate.ToString());
+                    _workspaceNativeSettings.SetText(90,
+                        "FPS: " + applied.TargetFrameRate + ", VSync: " +
+                        (applied.UseVSync ? "on" : "off"));
+                }
+            }
+        }
+
         private void ShowWorkspaceSettingsFallback()
         {
             if (_workspaceRoot == null) return;
@@ -523,10 +627,8 @@ namespace VCR.Runtime.UI
             header.Add(toggle);
             var settingsButton = new Button(() =>
             {
-                if (applicationUiController == null)
-                    applicationUiController = FindFirstObjectByType<ApplicationUiController>();
-                if (applicationUiController != null && DesktopNativeSettingsWindow.Supported)
-                    applicationUiController.ShowNativeSettingsWindow();
+                if (DesktopNativeSettingsWindow.Supported)
+                    OpenWorkspaceNativeSettings();
                 else
                     ShowWorkspaceSettingsFallback();
             }) { text = "Settings" };
