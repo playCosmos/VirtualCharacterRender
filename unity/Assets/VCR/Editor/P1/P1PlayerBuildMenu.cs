@@ -58,6 +58,15 @@ namespace VCR.Editor.P1
                 return false;
             }
 
+            // Existing P1 scenes may predate the UI Toolkit workspace.
+            // Upgrade in place before packaging, rather than shipping a
+            // successfully built player without the U1 application shell.
+            if (!P1ApplicationSceneBuilder.EnsureWorkspaceInExistingScene())
+            {
+                Debug.LogError("VCR P1 build: workspace scene upgrade failed.");
+                return false;
+            }
+
             P0TransparentOutputMenu.ConfigureProjectBaseline();
             AssetDatabase.SaveAssets();
 
