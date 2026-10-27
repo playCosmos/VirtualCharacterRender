@@ -633,11 +633,15 @@ namespace VCR.Runtime.UI
             if (_workspaceNativeSettings == null) return;
             if (sceneRuntime == null)
                 sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
-            if (sceneRuntime == null ||
-                !sceneRuntime.TryCaptureOverlayOutput(out _, out var settings, out var error))
+            if (sceneRuntime == null)
+            {
+                _workspaceNativeSettings.SetText(93, "Output runtime unavailable.");
+                return;
+            }
+            if (!sceneRuntime.TryCaptureOverlayOutput(out _, out var settings, out var error))
             {
                 _workspaceNativeSettings.SetText(93,
-                    "Output unavailable: " + (error ?? "Scene runtime not ready."));
+                    "Output unavailable: " + (error ?? "unknown error"));
                 return;
             }
             _workspaceNativeSettings.SetText(93,
