@@ -130,6 +130,9 @@ namespace VCR.Runtime.UI
         {
             InitializeWorkspaceTrackingRestore();
             ResetWorkspaceTrackingPanel();
+            ResetWorkspaceCapabilitiesPanel();
+            ResetWorkspaceLogPanel();
+            SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
             // Existing PlayerPrefs layouts remain the migration fallback.
@@ -168,6 +171,8 @@ namespace VCR.Runtime.UI
             PumpWorkspaceNativeSettings();
             RestoreWorkspaceTrackingPreferences();
             RefreshWorkspaceTrackingPanel();
+            RefreshWorkspaceCapabilitiesPanel();
+            DrainWorkspaceLog();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -289,6 +294,9 @@ namespace VCR.Runtime.UI
 
         private void OnDisable()
         {
+            UnsubscribeWorkspaceLog();
+            ResetWorkspaceCapabilitiesPanel();
+            ResetWorkspaceLogPanel();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -1023,7 +1031,9 @@ namespace VCR.Runtime.UI
                     ? DisplayStyle.Flex : DisplayStyle.None;
                 right.Add(inspectorSplitter);
                 PlacePanel(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140), WorkspacePanelCatalog.Materials, "right");
-                PlacePanel(Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120), WorkspacePanelCatalog.Capabilities, "right");
+                var modules = Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120);
+                BuildWorkspaceCapabilitiesPanel(modules);
+                PlacePanel(modules, WorkspacePanelCatalog.Capabilities, "right");
             }
 
             var bottomSplitter = Splitter(false, _bottomHeight, 100f, 400f, value =>
@@ -1049,7 +1059,9 @@ namespace VCR.Runtime.UI
             _actionResult = new Label("Actions operate on the current scene runtime.");
             actions.Add(_actionResult);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
-            PlacePanel(Panel(WorkspacePanelCatalog.Events, "Log / Events", 150), WorkspacePanelCatalog.Events, "bottom");
+            var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
+            BuildWorkspaceLogPanel(events);
+            PlacePanel(events, WorkspacePanelCatalog.Events, "bottom");
             _workspaceRoot.Add(bottom);
             SortDockPanels(left);
             SortDockPanels(right);
