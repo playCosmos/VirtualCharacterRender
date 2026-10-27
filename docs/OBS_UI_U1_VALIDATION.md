@@ -4,7 +4,7 @@ U1 is implemented in source but **not accepted as a production UI** until Unity 
 
 ## Integration and validation
 
-- `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts.
+- `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts. When no active model is present and a saved valid `.vrm` path exists, the shell now attempts startup restoration without the legacy uGUI controller, logging restore attempts/results. Explicit Unload clears the saved restoration path. Unsupported FBX import is not implied.
 - `P1ApplicationSceneBuilder.cs` installs the shell and a persisted `PanelSettings` asset into newly generated P1 scenes; it can also upgrade existing scenes without regenerating their other objects.
 - `P1PlayerBuildMenu.cs` requires the workspace before packaging Windows/macOS players.
 - `ApplicationUiController.cs` remains the existing uGUI controller. The U1 shell independently owns a native Settings window on supported desktop Players with render scale/FPS/VSync/background controls, VRM load/reload/unload, tracking source discovery/configuration/enable-disable/recovery, and overlay transparent/click-through/recovery actions. Native navigation IDs 100–103 must switch pages. Tracking input keys remain backward-compatible with `VCR.TrackingInputs.*.v1`; stored configured inputs are restored when providers become available. Other legacy UI controls and desktop parity checks remain incomplete, so **U1 is not complete**.
