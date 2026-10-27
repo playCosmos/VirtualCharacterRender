@@ -13,7 +13,7 @@ namespace VCR.Runtime.UI
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UIDocument))]
-    public sealed class WorkspaceToolkitShell : MonoBehaviour
+    public sealed partial class WorkspaceToolkitShell : MonoBehaviour
     {
         [SerializeField] private bool advancedWorkspace;
         [SerializeField] private SingleCharacterSceneRuntime sceneRuntime;
@@ -125,6 +125,7 @@ namespace VCR.Runtime.UI
 
         private void OnEnable()
         {
+            InitializeWorkspaceTrackingRestore();
             // Existing PlayerPrefs layouts remain the migration fallback.
             var restoredSnapshot = WorkspaceLayoutFile.Load();
             _document = GetComponent<UIDocument>();
@@ -159,6 +160,7 @@ namespace VCR.Runtime.UI
         private void Update()
         {
             PumpWorkspaceNativeSettings();
+            RestoreWorkspaceTrackingPreferences();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -234,7 +236,7 @@ namespace VCR.Runtime.UI
             if (_inspectorStatus != null)
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
-                _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
+                _trackingStatus.text = GetWorkspaceTrackingSummary();
             if (_inspectorModelPath != null)
                 _inspectorModelPath.text = "Model path: " + (string.IsNullOrWhiteSpace(path) ? "<none>" : path);
             if (_inspectorCameraStatus != null)
@@ -471,6 +473,7 @@ namespace VCR.Runtime.UI
                         "Recover output");
                     _workspaceNativeSettings.Add(3, 93, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Output controls require a compatible active adapter.");
+                    RebuildWorkspaceNativeTrackingSources();
                     _workspaceNativeSettings.SelectCategory(0);
                 }
                 if (sceneRuntime == null)
@@ -523,9 +526,12 @@ namespace VCR.Runtime.UI
                 if (action >= 100 && action <= 103)
                 {
                     _workspaceNativeSettings.SelectCategory(action - 100);
+                    if (action == 102) RebuildWorkspaceNativeTrackingSources();
                     if (action == 103) RefreshWorkspaceOverlayStatus();
                     continue;
                 }
+                if (HandleWorkspaceNativeTrackingAction(action))
+                    continue;
                 if (action >= 401 && action <= 403)
                 {
                     ApplyWorkspaceOverlayAction(action);
