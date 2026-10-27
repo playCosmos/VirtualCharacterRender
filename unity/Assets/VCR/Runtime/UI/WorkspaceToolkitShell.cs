@@ -884,7 +884,7 @@ namespace VCR.Runtime.UI
                 tab.RegisterCallback<PointerMoveEvent>(evt =>
                 {
                     if (!draggingTab || evt.pointerId != tabPointer) return;
-                    if ((evt.position - tabStart).sqrMagnitude > 64f)
+                    if (((Vector2)evt.position - tabStart).sqrMagnitude > 64f)
                         tabMoved = true;
                 });
                 tab.RegisterCallback<PointerUpEvent>(evt =>
@@ -985,7 +985,7 @@ namespace VCR.Runtime.UI
                 if (evt.button != 0 || dragging) return;
                 dragging = true;
                 activePointerId = evt.pointerId;
-                dragHandle.CapturePointer(pointerId);
+                dragHandle.CapturePointer(activePointerId);
                 dragHandle.Focus();
                 if (_dragOverlay != null) _dragOverlay.style.display = DisplayStyle.Flex;
                 evt.StopPropagation();
