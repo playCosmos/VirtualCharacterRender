@@ -84,8 +84,10 @@ namespace VCR.Editor.P1
                       BuildOptions.AllowDebugging
                     : BuildOptions.None;
 
-            var report =
-                BuildPipeline.BuildPlayer(
+            BuildReport report;
+            try
+            {
+                report = BuildPipeline.BuildPlayer(
                     new BuildPlayerOptions
                     {
                         scenes =
@@ -100,7 +102,20 @@ namespace VCR.Editor.P1
                         options =
                             options
                     });
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError(
+                    "VCR P1 build: BuildPipeline exception for " + target + ".");
+                Debug.LogException(exception);
+                return false;
+            }
 
+            if (report == null || report.summary == null)
+            {
+                Debug.LogError("VCR P1 build: BuildPipeline returned no usable report.");
+                return false;
+            }
             var summary = report.summary;
 
             if (summary.result !=
