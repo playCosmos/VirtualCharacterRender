@@ -160,6 +160,12 @@ namespace VCR.Editor.P1
                 return;
             }
 
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                Debug.LogWarning("VCR P1: scene regeneration cancelled to preserve unsaved changes.");
+                return;
+            }
+
             if (!P0TrackingSceneBuilder.CreateRuntimeScene(
                     ScenePath,
                     "VCR P1 Runtime",
