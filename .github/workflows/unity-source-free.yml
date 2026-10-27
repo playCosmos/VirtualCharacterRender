@@ -5,6 +5,8 @@ on:
     branches:
       - develop
       - ci/unity-p0-p13-source-free
+      # U1 must compile in Unity, not just pass repository lint.
+      - feature/obs-ui-u1-layout-contract-20261026
   pull_request:
     branches:
       - develop
