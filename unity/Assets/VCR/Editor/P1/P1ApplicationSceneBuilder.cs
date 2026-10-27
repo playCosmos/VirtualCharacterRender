@@ -121,7 +121,7 @@ namespace VCR.Editor.P1
                 }
                 // The runtime resolves CameraController during initialization,
                 // so its property may still be null while validating an Editor scene.
-                if (mainCamera.GetComponent<VCR.Runtime.Rendering.PrimaryCameraController>() == null)
+                if (mainCamera.GetComponent<PrimaryCameraController>() == null)
                 {
                     Debug.LogError(
                         "VCR P1: tagged MainCamera has no PrimaryCameraController.");
