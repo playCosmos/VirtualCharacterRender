@@ -31,6 +31,8 @@ namespace VCR.Runtime.UI
         private Label _inspectorCameraStatus;
         private Button _applySceneViewButton;
         private Button _applyRenderButton;
+        private IntegerField _targetFrameRateInput;
+        private Toggle _vsyncInput;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
@@ -215,6 +217,8 @@ namespace VCR.Runtime.UI
             _inspectorCameraStatus = null;
             _applySceneViewButton = null;
             _applyRenderButton = null;
+            _targetFrameRateInput = null;
+            _vsyncInput = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
@@ -473,6 +477,16 @@ namespace VCR.Runtime.UI
             inspector.Add(_inspectorCameraStatus);
             _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply scene camera settings" };
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
+            _targetFrameRateInput = new IntegerField("Target FPS");
+            _targetFrameRateInput.tooltip = "Applied when current render settings are committed.";
+            _vsyncInput = new Toggle("VSync");
+            inspector.Add(_targetFrameRateInput);
+            inspector.Add(_vsyncInput);
+            if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var currentRender))
+            {
+                _targetFrameRateInput.SetValueWithoutNotify(currentRender.TargetFrameRate);
+                _vsyncInput.SetValueWithoutNotify(currentRender.UseVSync);
+            }
             inspector.Add(_applySceneViewButton);
             inspector.Add(_applyRenderButton);
             if (advancedWorkspace)
@@ -951,7 +965,11 @@ namespace VCR.Runtime.UI
             if (sceneRuntime == null || _characterActionPending) return;
             try
             {
-                sceneRuntime.ApplyRenderSettings();
+                if (!sceneRuntime.TryCaptureRenderSettings(out var settings))
+                    throw new System.InvalidOperationException("Render settings are unavailable.");
+                settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 1, 1000);
+                settings.UseVSync = _vsyncInput.value;
+                sceneRuntime.ApplyRenderSettings(settings);
                 if (_inspectorStatus != null) _inspectorStatus.text = "Current render settings applied.";
             }
             catch (System.Exception ex)
