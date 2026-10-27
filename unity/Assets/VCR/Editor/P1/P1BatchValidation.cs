@@ -1,5 +1,6 @@
 using System;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 using VCR.Editor.P0;
 
@@ -65,6 +66,26 @@ namespace VCR.Editor.P1
             BuildDevelopmentAndExit(
                 BuildTarget.StandaloneWindows64,
                 "Builds/P1/Windows-Development/VirtualCharacterRender.exe");
+        }
+
+        // Linux Unity CI has the Windows Mono module, not Windows IL2CPP.
+        // This explicitly produces a Mono smoke-test player without changing
+        // the checked-in IL2CPP release baseline.
+        public static void BuildWindowsMonoCiAndExit()
+        {
+            var target = NamedBuildTarget.Standalone;
+            var original = PlayerSettings.GetScriptingBackend(target);
+            try
+            {
+                PlayerSettings.SetScriptingBackend(target, ScriptingImplementation.Mono2x);
+                BuildDevelopmentAndExit(
+                    BuildTarget.StandaloneWindows64,
+                    "Builds/P1/Windows-Development/VirtualCharacterRender.exe");
+            }
+            finally
+            {
+                PlayerSettings.SetScriptingBackend(target, original);
+            }
         }
 
         public static void BuildMacDevelopmentAndExit()
