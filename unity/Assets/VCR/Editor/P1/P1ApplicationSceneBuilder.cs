@@ -49,8 +49,16 @@ namespace VCR.Editor.P1
 
             foreach (var root in scene.GetRootGameObjects())
             {
-                if (root.GetComponentInChildren<WorkspaceToolkitShell>(true) != null)
-                    return true;
+                var existingShell = root.GetComponentInChildren<WorkspaceToolkitShell>(true);
+                if (existingShell == null)
+                    continue;
+                var existingDocument = existingShell.GetComponent<UIDocument>();
+                if (existingDocument == null || existingDocument.panelSettings == null)
+                {
+                    Debug.LogError("VCR P1: existing workspace has no configured UIDocument/PanelSettings.");
+                    return false;
+                }
+                return true;
             }
 
             var panelSettings =
