@@ -99,6 +99,11 @@ namespace VCR.Editor.P1
                     panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
                     AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
                 }
+                if (!AssetDatabase.Contains(panelSettings))
+                {
+                    Debug.LogError("VCR P1: could not persist workspace PanelSettings.");
+                    return false;
+                }
 
                 var workspaceObject = new GameObject("Workspace UI Toolkit");
                 workspaceObject.SetActive(false);
