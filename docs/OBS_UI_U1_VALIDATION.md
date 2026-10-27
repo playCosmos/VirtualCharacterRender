@@ -7,7 +7,7 @@ U1 is implemented in source but **not accepted as a production UI** until Unity 
 - `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts.
 - `P1ApplicationSceneBuilder.cs` installs the shell and a persisted `PanelSettings` asset into newly generated P1 scenes; it can also upgrade existing scenes without regenerating their other objects.
 - `P1PlayerBuildMenu.cs` requires the workspace before packaging Windows/macOS players.
-- `ApplicationUiController.cs` remains the existing uGUI controller. Native Settings still depends on this controller; a standalone UI Toolkit settings integration is **not complete**.
+- `ApplicationUiController.cs` remains the existing uGUI controller. Native Settings still depends on this controller. If it is absent, the shell now provides an in-workspace Render settings fallback (FPS 30–120 and VSync); a complete standalone native Settings window is **not complete**.
 - The generated `Assets/VCR/P1/P1Runtime.unity` scene is not committed in this branch. Generate it locally before attempting the P1 player build.
 
 ## Unity 6000.3.25f1 batch checks
@@ -37,7 +37,7 @@ The workspace check returns exit code 0 on success, 1 on failure. It may upgrade
 3. Test VRM load, reload, unload, last-model restore and unsupported FBX behavior without claiming an importer exists.
 4. Test live preview in the actual rendering pipeline, camera discovery and preview cleanup after model/scene changes.
 5. Test docking, tab/stack, resize, hide/show, layout persistence, corrupt-layout recovery and keyboard/focus handling.
-6. Test native Settings availability from the shell, including the case where `ApplicationUiController` is absent.
+6. Test native Settings availability from the shell. When `ApplicationUiController` is absent, verify the fallback panel opens, applies FPS/VSync, handles missing runtime and closes.
 7. Verify startup logs, module/plugin/shader/model discovery and the configured 60 FPS default / 120 FPS maximum.
 8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
 9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
