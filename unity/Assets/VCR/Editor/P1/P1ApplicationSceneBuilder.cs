@@ -72,6 +72,11 @@ namespace VCR.Editor.P1
                         Debug.LogError("VCR P1: existing workspace has no configured UIDocument/PanelSettings.");
                         return false;
                     }
+                    if (!AssetDatabase.Contains(existingDocument.panelSettings))
+                    {
+                        Debug.LogError("VCR P1: workspace PanelSettings is not a persistent project asset.");
+                        return false;
+                    }
                     if (!existingShell.gameObject.activeInHierarchy || !existingShell.enabled ||
                         !existingDocument.enabled)
                     {
