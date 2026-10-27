@@ -78,6 +78,43 @@ namespace VCR.Runtime.UI
         private float _rightWidth = 260f;
         private float _bottomHeight = 150f;
 
+        private string _lastPersistedLayoutSignature;
+        private float _nextLayoutPersistenceCheck;
+
+        private string CaptureLayoutSignature()
+        {
+            var keys = new[]
+            {
+                WorkspaceModeKey, LeftWidthKey, ScenesHeightKey, RightInspectorHeightKey,
+                RightWidthKey, BottomHeightKey, BottomVisibleKey, LeftVisibleKey,
+                RightVisibleKey, TabModeKey
+            };
+            var signature = new System.Text.StringBuilder(512);
+            foreach (var key in keys)
+                signature.Append(key).Append('=').Append(PlayerPrefs.GetString(key, "#"))
+                    .Append('/').Append(PlayerPrefs.GetInt(key, -9999))
+                    .Append('/').Append(PlayerPrefs.GetFloat(key, -9999f)).Append(';');
+            foreach (var dock in new[] { "left", "right", "bottom" })
+                signature.Append(PlayerPrefs.GetString("VCR.UI.Workspace.ActiveTab." + dock + ".v1", "")).Append(';');
+            foreach (var id in WorkspacePanelCatalog.GetDefaultPanelIds(true))
+                signature.Append(id).Append(':')
+                    .Append(PlayerPrefs.GetString("VCR.UI.Workspace.Dock." + id + ".v1", ""))
+                    .Append(':').Append(PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + id + ".v1", -1)).Append(';');
+            return signature.ToString();
+        }
+
+        private void PersistLayoutIfChanged()
+        {
+            if (_workspaceRoot == null || Time.unscaledTime < _nextLayoutPersistenceCheck)
+                return;
+            _nextLayoutPersistenceCheck = Time.unscaledTime + 2f;
+            var signature = CaptureLayoutSignature();
+            if (signature == _lastPersistedLayoutSignature)
+                return;
+            if (WorkspaceLayoutFile.Save())
+                _lastPersistedLayoutSignature = signature;
+        }
+
         private void OnEnable()
         {
             // Existing PlayerPrefs layouts remain the migration fallback.
@@ -105,10 +142,13 @@ namespace VCR.Runtime.UI
             _workspaceRoot.style.flexGrow = 1;
             _root.Add(_workspaceRoot);
             Build();
+            _lastPersistedLayoutSignature = CaptureLayoutSignature();
+            _nextLayoutPersistenceCheck = Time.unscaledTime + 2f;
         }
 
         private void Update()
         {
+            PersistLayoutIfChanged();
             if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
                 previewCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
