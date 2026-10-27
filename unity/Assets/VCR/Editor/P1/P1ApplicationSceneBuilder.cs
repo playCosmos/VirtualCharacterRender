@@ -119,6 +119,13 @@ namespace VCR.Editor.P1
                     Debug.LogError("VCR P1: tagged MainCamera is disabled.");
                     return false;
                 }
+                if (runtime.CameraController == null ||
+                    runtime.CameraController.GetComponent<Camera>() != mainCamera)
+                {
+                    Debug.LogError(
+                        "VCR P1: character runtime camera controller is missing or does not reference the tagged MainCamera.");
+                    return false;
+                }
 
                 if (existingShell != null)
                 {
