@@ -73,13 +73,25 @@ namespace VCR.Editor.P1
                 }
 
                 var runtimeCount = 0;
+                SingleCharacterSceneRuntime runtime = null;
                 foreach (var root in scene.GetRootGameObjects())
-                    runtimeCount += root.GetComponentsInChildren<SingleCharacterSceneRuntime>(true).Length;
+                {
+                    foreach (var candidate in root.GetComponentsInChildren<SingleCharacterSceneRuntime>(true))
+                    {
+                        runtimeCount++;
+                        runtime = candidate;
+                    }
+                }
                 if (runtimeCount != 1)
                 {
                     Debug.LogError(
                         "VCR P1: expected exactly one SingleCharacterSceneRuntime, found " +
                         runtimeCount + ".");
+                    return false;
+                }
+                if (!runtime.isActiveAndEnabled)
+                {
+                    Debug.LogError("VCR P1: character scene runtime is disabled.");
                     return false;
                 }
 
