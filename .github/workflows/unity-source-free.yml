@@ -115,6 +115,18 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      - name: Restore pinned IL2CPP project settings after Mono smoke build
+        if: always() && github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- unity/ProjectSettings/ProjectSettings.asset; then
+            echo "Restoring checked-in IL2CPP project baseline after CI-only Mono build."
+            git diff -- unity/ProjectSettings/ProjectSettings.asset
+            git restore --source=HEAD -- unity/ProjectSettings/ProjectSettings.asset
+          fi
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+
       - name: Require P1 Windows player output
         if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
         shell: bash
