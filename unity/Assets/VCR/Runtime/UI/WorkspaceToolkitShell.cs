@@ -403,6 +403,84 @@ namespace VCR.Runtime.UI
             _previewHeight = 0;
         }
 
+        // P1 scenes generated from P0 do not contain the legacy uGUI controller.
+        // Keep the Settings action usable without creating a second UI controller.
+        private void ShowWorkspaceSettingsFallback()
+        {
+            if (_workspaceRoot == null) return;
+            var existing = _workspaceRoot.Q<VisualElement>("vcr-settings-fallback");
+            if (existing != null)
+            {
+                existing.RemoveFromHierarchy();
+                return;
+            }
+
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+
+            var panel = new VisualElement { name = "vcr-settings-fallback" };
+            panel.style.position = Position.Absolute;
+            panel.style.top = 48;
+            panel.style.right = 16;
+            panel.style.width = 310;
+            panel.style.paddingTop = 12;
+            panel.style.paddingBottom = 12;
+            panel.style.paddingLeft = 12;
+            panel.style.paddingRight = 12;
+            panel.style.backgroundColor = new Color(0.17f, 0.19f, 0.22f);
+            panel.style.borderTopWidth = 1;
+            panel.style.borderBottomWidth = 1;
+            panel.style.borderLeftWidth = 1;
+            panel.style.borderRightWidth = 1;
+            panel.style.borderTopColor = Color.gray;
+            panel.style.borderBottomColor = Color.gray;
+            panel.style.borderLeftColor = Color.gray;
+            panel.style.borderRightColor = Color.gray;
+
+            var title = new Label("Render settings");
+            title.style.color = Color.white;
+            panel.Add(title);
+            var fps = new IntegerField("Target FPS (30–120)");
+            var vsync = new Toggle("VSync");
+            var available = sceneRuntime != null &&
+                sceneRuntime.TryCaptureRenderSettings(out var current);
+            fps.value = available ? Mathf.Clamp(current.TargetFrameRate, 30, 120) : 60;
+            vsync.value = available && current.UseVSync;
+            fps.SetEnabled(available);
+            vsync.SetEnabled(available);
+            panel.Add(fps);
+            panel.Add(vsync);
+            var feedback = new Label(available ? "" : "Scene runtime unavailable.");
+            feedback.style.color = Color.white;
+            panel.Add(feedback);
+            var apply = new Button(() =>
+            {
+                if (sceneRuntime == null ||
+                    !sceneRuntime.TryCaptureRenderSettings(out var settings))
+                {
+                    feedback.text = "Render settings unavailable.";
+                    return;
+                }
+                try
+                {
+                    settings.TargetFrameRate = Mathf.Clamp(fps.value, 30, 120);
+                    settings.UseVSync = vsync.value;
+                    sceneRuntime.ApplyRenderSettings(settings);
+                    feedback.text = "Render settings applied.";
+                    SynchronizeRenderInputs();
+                }
+                catch (System.Exception exception)
+                {
+                    feedback.text = "Apply failed: " + exception.Message;
+                    Debug.LogException(exception, this);
+                }
+            }) { text = "Apply" };
+            apply.SetEnabled(available);
+            panel.Add(apply);
+            panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
+            _workspaceRoot.Add(panel);
+        }
+
         private void Build()
         {
             ReleaseOwnedPreview();
@@ -438,8 +516,7 @@ namespace VCR.Runtime.UI
                 if (applicationUiController != null)
                     applicationUiController.ShowNativeSettingsWindow();
                 else
-                    Debug.LogWarning(
-                        "VCR workspace: native Settings requires an ApplicationUiController in the active scene.");
+                    ShowWorkspaceSettingsFallback();
             }) { text = "Settings" };
             settingsButton.SetEnabled(DesktopNativeSettingsWindow.Supported);
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
