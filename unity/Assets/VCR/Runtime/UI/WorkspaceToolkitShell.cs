@@ -368,12 +368,12 @@ namespace VCR.Runtime.UI
             {
                 _ownedPreviewCamera.CopyFrom(previewCamera);
                 _ownedPreviewCamera.enabled = false;
-            _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
-            // UI Toolkit preview must not duplicate audio listeners or
-            // introduce an extra camera into the scene's normal render loop.
-            _ownedPreviewCamera.stereoTargetEye = StereoTargetEyeMask.None;
-            _ownedPreviewCamera.transform.SetPositionAndRotation(
-                previewCamera.transform.position, previewCamera.transform.rotation);
+                _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
+                // The preview is mono and explicitly rendered, not part of the
+                // scene camera's normal frame submission.
+                _ownedPreviewCamera.stereoTargetEye = StereoTargetEyeMask.None;
+                _ownedPreviewCamera.transform.SetPositionAndRotation(
+                    previewCamera.transform.position, previewCamera.transform.rotation);
                 _ownedPreviewCamera.Render();
             }
             catch (System.Exception exception)
