@@ -160,7 +160,17 @@ namespace VCR.Editor.P1
                 return;
             }
 
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            if (Application.isBatchMode)
+            {
+                for (var index = 0; index < EditorSceneManager.sceneCount; index++)
+                {
+                    if (!EditorSceneManager.GetSceneAt(index).isDirty)
+                        continue;
+                    Debug.LogError("VCR P1: refusing scene regeneration with unsaved changes in batch mode.");
+                    return;
+                }
+            }
+            else if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
             {
                 Debug.LogWarning("VCR P1: scene regeneration cancelled to preserve unsaved changes.");
                 return;
