@@ -37,8 +37,18 @@ namespace VCR.Editor.P1
                 break;
             }
             if (!targetAlreadyLoaded)
-                scene = EditorSceneManager.OpenScene(
-                    ScenePath, OpenSceneMode.Additive);
+            {
+                try
+                {
+                    scene = EditorSceneManager.OpenScene(
+                        ScenePath, OpenSceneMode.Additive);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogError("VCR P1: failed to open runtime scene: " + exception.Message);
+                    return false;
+                }
+            }
             if (!scene.IsValid() || !scene.isLoaded)
             {
                 Debug.LogError("VCR P1: runtime scene could not be loaded for workspace validation.");
