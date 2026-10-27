@@ -41,77 +41,87 @@ namespace VCR.Editor.P1
             if (!scene.IsValid())
                 return false;
 
-            var workspaceCount = 0;
-            WorkspaceToolkitShell existingShell = null;
-            foreach (var root in scene.GetRootGameObjects())
+            try
             {
-                var shells = root.GetComponentsInChildren<WorkspaceToolkitShell>(true);
-                workspaceCount += shells.Length;
-                if (shells.Length > 0)
-                    existingShell = shells[0];
-            }
-            if (workspaceCount > 1)
-            {
-                Debug.LogError("VCR P1: multiple workspace shells found; refusing ambiguous UI setup.");
-                return false;
-            }
-            if (existingShell != null)
-            {
-                // A dirty target scene may contain edits not yet serialized.
-                // Validate it, but do not silently package a different disk state.
+                var workspaceCount = 0;
+                WorkspaceToolkitShell existingShell = null;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    var shells = root.GetComponentsInChildren<WorkspaceToolkitShell>(true);
+                    workspaceCount += shells.Length;
+                    if (shells.Length > 0)
+                        existingShell = shells[0];
+                }
+                if (workspaceCount > 1)
+                {
+                    Debug.LogError("VCR P1: multiple workspace shells found; refusing ambiguous UI setup.");
+                    return false;
+                }
+                if (existingShell != null)
+                {
+                    // A dirty target scene may contain edits not yet serialized.
+                    // Validate it, but do not silently package a different disk state.
+                    if (scene.isDirty)
+                    {
+                        Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before building.");
+                        return false;
+                    }
+                    var existingDocument = existingShell.GetComponent<UIDocument>();
+                    if (existingDocument == null || existingDocument.panelSettings == null)
+                    {
+                        Debug.LogError("VCR P1: existing workspace has no configured UIDocument/PanelSettings.");
+                        return false;
+                    }
+                    if (!existingShell.gameObject.activeInHierarchy || !existingShell.enabled ||
+                        !existingDocument.enabled)
+                    {
+                        Debug.LogError("VCR P1: existing workspace is disabled; refusing to build a player with no visible shell.");
+                        return false;
+                    }
+                    return true;
+                }
+    
                 if (scene.isDirty)
                 {
-                    Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before building.");
+                    Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before adding workspace.");
                     return false;
                 }
-                var existingDocument = existingShell.GetComponent<UIDocument>();
-                if (existingDocument == null || existingDocument.panelSettings == null)
+    
+                var panelSettings =
+                    AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+                if (panelSettings == null)
                 {
-                    Debug.LogError("VCR P1: existing workspace has no configured UIDocument/PanelSettings.");
-                    return false;
+                    panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+                    AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
                 }
-                if (!existingShell.gameObject.activeInHierarchy || !existingShell.enabled ||
-                    !existingDocument.enabled)
+    
+                var workspaceObject = new GameObject("Workspace UI Toolkit");
+                workspaceObject.SetActive(false);
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
+                    workspaceObject, scene);
+                var document = workspaceObject.AddComponent<UIDocument>();
+                document.panelSettings = panelSettings;
+                workspaceObject.AddComponent<WorkspaceToolkitShell>();
+                workspaceObject.SetActive(true);
+    
+                if (!EditorSceneManager.SaveScene(scene))
                 {
-                    Debug.LogError("VCR P1: existing workspace is disabled; refusing to build a player with no visible shell.");
+                    Object.DestroyImmediate(workspaceObject);
+                    Debug.LogError("VCR P1: could not save workspace into existing scene.");
                     return false;
                 }
+    
+                AssetDatabase.SaveAssets();
+                Debug.Log("VCR P1: existing runtime scene upgraded with UI Toolkit workspace.");
                 return true;
             }
-
-            if (scene.isDirty)
+            finally
             {
-                Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before adding workspace.");
-                return false;
+                // Only close scenes opened by this method. Preserve scenes
+                // that were already part of the user's editing session.
+                if (!targetAlreadyLoaded && scene.IsValid() && scene.isLoaded)
+                    EditorSceneManager.CloseScene(scene, true);
             }
-
-            var panelSettings =
-                AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-            if (panelSettings == null)
-            {
-                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-                AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
-            }
-
-            var workspaceObject = new GameObject("Workspace UI Toolkit");
-            workspaceObject.SetActive(false);
-            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
-                workspaceObject, scene);
-            var document = workspaceObject.AddComponent<UIDocument>();
-            document.panelSettings = panelSettings;
-            workspaceObject.AddComponent<WorkspaceToolkitShell>();
-            workspaceObject.SetActive(true);
-
-            if (!EditorSceneManager.SaveScene(scene))
-            {
-                Object.DestroyImmediate(workspaceObject);
-                Debug.LogError("VCR P1: could not save workspace into existing scene.");
-                return false;
-            }
-
-            AssetDatabase.SaveAssets();
-            Debug.Log("VCR P1: existing runtime scene upgraded with UI Toolkit workspace.");
-            return true;
         }
 
         [MenuItem("VCR/P1/Upgrade Existing Runtime Scene With Workspace")]
