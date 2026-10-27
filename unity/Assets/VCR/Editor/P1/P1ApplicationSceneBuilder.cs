@@ -27,9 +27,9 @@ namespace VCR.Editor.P1
             // Additive loading preserves unrelated open scenes and their edits.
             var targetAlreadyLoaded = false;
             var scene = default(UnityEngine.SceneManagement.Scene);
-            for (var index = 0; index < EditorSceneManager.sceneCount; index++)
+            for (var index = 0; index < UnityEngine.SceneManagement.SceneManager.sceneCount; index++)
             {
-                var loaded = EditorSceneManager.GetSceneAt(index);
+                var loaded = UnityEngine.SceneManagement.SceneManager.GetSceneAt(index);
                 if (loaded.path != ScenePath) continue;
                 scene = loaded;
                 targetAlreadyLoaded = true;
@@ -165,9 +165,9 @@ namespace VCR.Editor.P1
 
             if (Application.isBatchMode)
             {
-                for (var index = 0; index < EditorSceneManager.sceneCount; index++)
+                for (var index = 0; index < UnityEngine.SceneManagement.SceneManager.sceneCount; index++)
                 {
-                    if (!EditorSceneManager.GetSceneAt(index).isDirty)
+                    if (!UnityEngine.SceneManagement.SceneManager.GetSceneAt(index).isDirty)
                         continue;
                     Debug.LogError("VCR P1: refusing scene regeneration with unsaved changes in batch mode.");
                     return;
