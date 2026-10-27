@@ -34,6 +34,7 @@ namespace VCR.Runtime.UI
         private Button _applyRenderButton;
         private IntegerField _targetFrameRateInput;
         private Toggle _vsyncInput;
+        private SingleCharacterSceneRuntime _renderInputsRuntime;
         private Label _inspectorFeedback;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
@@ -191,6 +192,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
             if (sceneRuntime == null)
             {
+                _renderInputsRuntime = null;
                 _status.text = "Scene runtime unavailable";
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
@@ -208,6 +210,7 @@ namespace VCR.Runtime.UI
                     ? "Preview unavailable: no scene runtime" : "External preview texture connected";
                 return;
             }
+            SynchronizeRenderInputs();
             var state = sceneRuntime.Status;
             var path = sceneRuntime.CurrentCharacterPath;
             var modelName = string.IsNullOrWhiteSpace(path)
@@ -288,6 +291,7 @@ namespace VCR.Runtime.UI
             _applyRenderButton = null;
             _targetFrameRateInput = null;
             _vsyncInput = null;
+            _renderInputsRuntime = null;
             _inspectorFeedback = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
@@ -562,11 +566,8 @@ namespace VCR.Runtime.UI
             });
             inspector.Add(_targetFrameRateInput);
             inspector.Add(_vsyncInput);
-            if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var currentRender))
-            {
-                _targetFrameRateInput.SetValueWithoutNotify(currentRender.TargetFrameRate);
-                _vsyncInput.SetValueWithoutNotify(currentRender.UseVSync);
-            }
+            _renderInputsRuntime = null;
+            SynchronizeRenderInputs();
             inspector.Add(_applySceneViewButton);
             inspector.Add(_applyRenderButton);
             _inspectorFeedback = new Label("");
@@ -1040,6 +1041,18 @@ namespace VCR.Runtime.UI
                 if (_inspectorFeedback != null) _inspectorFeedback.text = "Camera settings failed: " + ex.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+        }
+
+        private void SynchronizeRenderInputs()
+        {
+            if (sceneRuntime == null || _renderInputsRuntime == sceneRuntime ||
+                _targetFrameRateInput == null || _vsyncInput == null)
+                return;
+            if (!sceneRuntime.TryCaptureRenderSettings(out var currentRender))
+                return;
+            _targetFrameRateInput.SetValueWithoutNotify(Mathf.Clamp(currentRender.TargetFrameRate, 30, 120));
+            _vsyncInput.SetValueWithoutNotify(currentRender.UseVSync);
+            _renderInputsRuntime = sceneRuntime;
         }
 
         private void ApplyRenderFromInspector()
