@@ -32,7 +32,7 @@ namespace VCR.Runtime.UI
         }
 
         private static readonly string[] Ids = WorkspacePanelCatalog.GetDefaultPanelIds(true);
-        private static string PathName => Path.Combine(Application.persistentDataPath, FileName);
+        private static string PathName => Path.Combine(UnityEngine.Application.persistentDataPath, FileName);
 
         internal static bool Save()
         {
