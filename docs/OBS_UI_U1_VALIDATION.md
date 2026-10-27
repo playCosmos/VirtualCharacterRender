@@ -14,6 +14,14 @@ U1 is implemented in source but **not accepted as a production UI** until Unity 
 
 After opening the Unity project and resolving all compilation errors, create the scene using **VCR > P1 > Create Application Runtime Scene**. For an existing scene, use **VCR > P1 > Upgrade Existing Runtime Scene With Workspace** instead of regenerating it.
 
+For a clean checkout where the generated scene does not exist, the non-overwriting batch generator can create and validate it:
+
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit -logFile <log-path>
+```
+
+The generator exits with code 1 if the P1 scene already exists. It creates scene and project assets, so review the resulting working-tree changes before committing.
+
 Run this command from the host with Unity installed (replace paths as appropriate):
 
 ```text
