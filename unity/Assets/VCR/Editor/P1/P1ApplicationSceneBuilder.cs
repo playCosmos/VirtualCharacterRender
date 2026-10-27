@@ -27,23 +27,21 @@ namespace VCR.Editor.P1
             // OpenScene(Single) replaces the currently edited scene. Never
             // discard unrelated unsaved work during an upgrade or build.
             var activeScene = EditorSceneManager.GetActiveScene();
-            if (activeScene.IsValid() && activeScene.isDirty)
+            // Additive loading avoids replacing an unrelated active scene and
+            // therefore avoids discarding the user's unsaved editing state.
+            var targetAlreadyLoaded = false;
+            var scene = default(UnityEngine.SceneManagement.Scene);
+            for (var index = 0; index < EditorSceneManager.sceneCount; index++)
             {
-                if (Application.isBatchMode)
-                {
-                    Debug.LogError("VCR P1: active scene has unsaved changes; refusing batch upgrade.");
-                    return false;
-                }
-                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                {
-                    Debug.LogWarning("VCR P1: workspace upgrade cancelled.");
-                    return false;
-                }
+                var loaded = EditorSceneManager.GetSceneAt(index);
+                if (loaded.path != ScenePath) continue;
+                scene = loaded;
+                targetAlreadyLoaded = true;
+                break;
             }
-
-            var scene = activeScene.IsValid() && activeScene.path == ScenePath
-                ? activeScene
-                : EditorSceneManager.OpenScene(ScenePath);
+            if (!targetAlreadyLoaded)
+                scene = EditorSceneManager.OpenScene(
+                    ScenePath, OpenSceneMode.Additive);
             if (!scene.IsValid())
                 return false;
 
