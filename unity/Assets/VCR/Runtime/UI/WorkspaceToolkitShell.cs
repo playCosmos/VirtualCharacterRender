@@ -19,6 +19,7 @@ namespace VCR.Runtime.UI
         private DesktopNativeSettingsWindow _workspaceNativeSettings;
         private bool _nativeSettingsWasVisible;
         private bool _runInBackgroundBeforeSettings;
+        private string _nativeModelPathOverride;
         [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
         private float _nextStatusRefresh;
         private UIDocument _document;
@@ -512,6 +513,7 @@ namespace VCR.Runtime.UI
                         _workspaceNativeSettings.SetText(91, "A model operation is in progress.");
                         continue;
                     }
+                    _nativeModelPathOverride = path;
                     if (_modelPathInput != null) _modelPathInput.value = path;
                     LoadModelFromPath();
                     continue;
@@ -1373,7 +1375,10 @@ namespace VCR.Runtime.UI
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "Scene runtime unavailable.";
                 return;
             }
-            var path = _modelPathInput?.value?.Trim();
+            var path = !string.IsNullOrWhiteSpace(_nativeModelPathOverride)
+                ? _nativeModelPathOverride
+                : _modelPathInput?.value?.Trim();
+            _nativeModelPathOverride = null;
             if (string.IsNullOrEmpty(path) ||
                 !string.Equals(System.IO.Path.GetExtension(path), ".vrm",
                     System.StringComparison.OrdinalIgnoreCase) ||
