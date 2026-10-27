@@ -109,7 +109,7 @@ jobs:
           projectPath: unity
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
-          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildWindowsDevelopmentAndExit
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildWindowsMonoCiAndExit
           customImage: unityci/editor:6000.3.25f1-windows-mono-3
           manualExit: true
           versioning: None
