@@ -111,11 +111,12 @@ namespace VCR.Editor.P1
                 return false;
             }
 
-            if (report == null || report.summary == null)
+            if (report == null)
             {
-                Debug.LogError("VCR P1 build: BuildPipeline returned no usable report.");
+                Debug.LogError("VCR P1 build: BuildPipeline returned no report.");
                 return false;
             }
+            // BuildReport.summary is a BuildSummary value type, not a nullable report.
             var summary = report.summary;
 
             if (summary.result !=
