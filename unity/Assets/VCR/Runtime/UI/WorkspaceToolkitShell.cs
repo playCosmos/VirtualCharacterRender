@@ -118,7 +118,7 @@ namespace VCR.Runtime.UI
         private void OnEnable()
         {
             // Existing PlayerPrefs layouts remain the migration fallback.
-            WorkspaceLayoutFile.Load();
+            var restoredSnapshot = WorkspaceLayoutFile.Load();
             _document = GetComponent<UIDocument>();
             if (_document == null || _document.rootVisualElement == null)
                 return;
@@ -142,7 +142,8 @@ namespace VCR.Runtime.UI
             _workspaceRoot.style.flexGrow = 1;
             _root.Add(_workspaceRoot);
             Build();
-            _lastPersistedLayoutSignature = CaptureLayoutSignature();
+            // First run and legacy PlayerPrefs migration need an initial JSON snapshot.
+            _lastPersistedLayoutSignature = restoredSnapshot ? CaptureLayoutSignature() : null;
             _nextLayoutPersistenceCheck = Time.unscaledTime + 2f;
         }
 
@@ -1164,7 +1165,10 @@ namespace VCR.Runtime.UI
             WorkspaceLayoutFile.ClearSnapshots();
             // Replace the previous snapshot immediately: reset must survive a crash
             // or forced shutdown without restoring the old panel arrangement.
-            WorkspaceLayoutFile.Save();
+            if (WorkspaceLayoutFile.Save())
+                _lastPersistedLayoutSignature = CaptureLayoutSignature();
+            else
+                _lastPersistedLayoutSignature = null;
             Build();
         }
 
