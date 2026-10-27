@@ -58,6 +58,12 @@ namespace VCR.Editor.P1
                     Debug.LogError("VCR P1: existing workspace has no configured UIDocument/PanelSettings.");
                     return false;
                 }
+                if (!existingShell.gameObject.activeInHierarchy || !existingShell.enabled ||
+                    !existingDocument.enabled)
+                {
+                    Debug.LogError("VCR P1: existing workspace is disabled; refusing to build a player with no visible shell.");
+                    return false;
+                }
                 return true;
             }
 
