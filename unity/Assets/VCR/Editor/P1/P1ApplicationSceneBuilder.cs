@@ -94,9 +94,9 @@ namespace VCR.Editor.P1
             }
 
             var workspaceObject = new GameObject("Workspace UI Toolkit");
+            workspaceObject.SetActive(false);
             UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
                 workspaceObject, scene);
-            workspaceObject.SetActive(false);
             var document = workspaceObject.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             workspaceObject.AddComponent<WorkspaceToolkitShell>();
