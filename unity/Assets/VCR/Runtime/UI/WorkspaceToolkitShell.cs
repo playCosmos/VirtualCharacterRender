@@ -352,6 +352,9 @@ namespace VCR.Runtime.UI
             _ownedPreviewCamera.CopyFrom(previewCamera);
             _ownedPreviewCamera.enabled = false;
             _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
+            // UI Toolkit preview must not duplicate audio listeners or
+            // introduce an extra camera into the scene's normal render loop.
+            _ownedPreviewCamera.stereoTargetEye = StereoTargetEyeMask.None;
             _ownedPreviewCamera.transform.SetPositionAndRotation(
                 previewCamera.transform.position, previewCamera.transform.rotation);
             try
