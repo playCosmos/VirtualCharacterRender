@@ -1,24 +1,37 @@
 # UI Toolkit U1 integration gate
 
-This is a prototype, not a completed replacement for the existing uGUI interface.
+U1 is implemented in source but **not accepted as a production UI** until Unity compilation, player builds and interactive desktop checks pass. GitHub repository CI success alone does not establish Unity compatibility.
 
-## Current code paths
+## Integration and validation
 
-- `WorkspacePanelCatalog.cs`: stable panel identifiers and validation.
-- `WorkspaceToolkitShell.cs`: opt-in `UIDocument` shell; status text reads `SingleCharacterSceneRuntime`.
-- `ApplicationUiController.cs`: existing production uGUI implementation remains active.
+- `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts.
+- `P1ApplicationSceneBuilder.cs` installs the shell and a persisted `PanelSettings` asset into newly generated P1 scenes; it can also upgrade existing scenes without regenerating their other objects.
+- `P1PlayerBuildMenu.cs` requires the workspace before packaging Windows/macOS players.
+- `ApplicationUiController.cs` remains the existing uGUI controller. Native Settings still depends on this controller; a standalone UI Toolkit settings integration is **not complete**.
+- The generated `Assets/VCR/P1/P1Runtime.unity` scene is not committed in this branch. Generate it locally before attempting the P1 player build.
 
-## Manual Unity 6000.3.25f1 validation
+## Unity 6000.3.25f1 batch checks
 
-1. Open the Unity project; check for compile errors in `VCR.Runtime.UI`.
-2. In an isolated test scene or copy, create a `PanelSettings` asset and `UIDocument` GameObject, attach `WorkspaceToolkitShell`.
-3. Confirm Live/Advanced toggle and verify each expected panel appears.
-4. Confirm status shows unavailable when scene runtime is absent and reflects the actual scene runtime when present.
-5. Verify that disabling the prototype leaves character rendering and tracking unaffected.
-6. Confirm no UI Toolkit preview is misrepresented as the output/capture transport.
-7. Check 100%, 150%, 200% DPI and 720p/1080p window sizes on Windows and Retina scaling on macOS.
-8. Do not replace production UI or merge this draft until the real Player build and interaction evidence is available.
+After opening the Unity project and resolving all compilation errors, create the scene using **VCR > P1 > Create Application Runtime Scene**. For an existing scene, use **VCR > P1 > Upgrade Existing Runtime Scene With Workspace** instead of regenerating it.
 
-## Known missing work
+Run this command from the host with Unity installed (replace paths as appropriate):
 
-Docking, drag/drop, split resizing, layout persistence, runtime-bound controls, model library, log viewer, native Settings replacement and production scene integration remain unimplemented. Repository validation CI does not run Unity compilation.
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.RunWorkspaceAndExit -logFile <log-path>
+```
+
+The workspace check returns exit code 0 on success, 1 on failure. It may upgrade an older P1 scene and save the result; run on a clean working tree or review the changes afterwards. It does **not** test rendering, native window behavior, mouse input, or GPU compatibility. `RunSourceFreeAndExit` is a separate source-free P0/P1 check that does not require a generated P1 scene.
+
+## Manual acceptance checklist
+
+1. Verify no Unity C# compilation errors and build Windows x64 and macOS players on their supported build hosts.
+2. Launch the P1 player; verify the UI Toolkit shell is visible and no duplicate UI obscures it.
+3. Test VRM load, reload, unload, last-model restore and unsupported FBX behavior without claiming an importer exists.
+4. Test live preview in the actual rendering pipeline, camera discovery and preview cleanup after model/scene changes.
+5. Test docking, tab/stack, resize, hide/show, layout persistence, corrupt-layout recovery and keyboard/focus handling.
+6. Test native Settings availability from the shell, including the case where `ApplicationUiController` is absent.
+7. Verify startup logs, module/plugin/shader/model discovery and the configured 60 FPS default / 120 FPS maximum.
+8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
+9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
+
+Do not merge PR #44 or publish a U1 release until the above evidence is collected.
