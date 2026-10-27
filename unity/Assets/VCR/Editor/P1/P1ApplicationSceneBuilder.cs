@@ -57,6 +57,13 @@ namespace VCR.Editor.P1
             }
             if (existingShell != null)
             {
+                // A dirty target scene may contain edits not yet serialized.
+                // Validate it, but do not silently package a different disk state.
+                if (scene.isDirty)
+                {
+                    Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before building.");
+                    return false;
+                }
                 var existingDocument = existingShell.GetComponent<UIDocument>();
                 if (existingDocument == null || existingDocument.panelSettings == null)
                 {
