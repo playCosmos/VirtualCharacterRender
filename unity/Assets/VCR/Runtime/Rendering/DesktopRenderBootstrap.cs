@@ -36,7 +36,7 @@ namespace VCR.Runtime.Rendering
         [SerializeField, Range(0.5f, 2.0f)] private float renderScale = 1.0f;
 
         [Header("Frame pacing")]
-        [SerializeField, Range(30, 240)] private int targetFrameRate = 60;
+        [SerializeField, Range(30, 120)] private int targetFrameRate = 60;
         [Tooltip("Disabled by default because monitor refresh may not be 60 Hz. Frame pacing is measured independently.")]
         [SerializeField] private bool useVSync = false;
         [SerializeField] private bool runInBackground = true;
@@ -136,7 +136,7 @@ namespace VCR.Runtime.Rendering
                 Math.Clamp(
                     settings.TargetFrameRate,
                     30,
-                    240);
+                    120);
             useVSync = settings.UseVSync;
             runInBackground = settings.RunInBackground;
 
@@ -176,7 +176,7 @@ namespace VCR.Runtime.Rendering
             targetFrameRate = Math.Clamp(
                 framesPerSecond,
                 30,
-                240);
+                120);
             useVSync = vSync;
             Apply();
         }
