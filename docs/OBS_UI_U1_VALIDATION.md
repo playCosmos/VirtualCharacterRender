@@ -28,6 +28,15 @@ Run this command from the host with Unity installed (replace paths as appropriat
 Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.RunWorkspaceAndExit -logFile <log-path>
 ```
 
+After generating and validating the scene, run a real Unity development player build on a host with the matching platform module installed:
+
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.BuildWindowsDevelopmentAndExit -vcrBuildOutput <windows-output.exe> -logFile <windows-build-log>
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.BuildMacDevelopmentAndExit -vcrBuildOutput <macos-output.app> -logFile <macos-build-log>
+```
+
+Both commands return exit code 0 only if the Unity BuildPipeline reports success, otherwise 1. Do not run both simultaneously against the same project directory; use separate checkouts or serialize the builds. Building a player does not prove its GUI or rendering works.
+
 The workspace check returns exit code 0 on success, 1 on failure. It may upgrade an older P1 scene and save the result; run on a clean working tree or review the changes afterwards. It does **not** test rendering, native window behavior, mouse input, or GPU compatibility. `RunSourceFreeAndExit` is a separate source-free P0/P1 check that does not require a generated P1 scene.
 
 ## Manual acceptance checklist
