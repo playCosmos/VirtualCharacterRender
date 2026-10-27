@@ -98,6 +98,42 @@ jobs:
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
           echo "P1 UI Toolkit workspace generation: PASS"
 
+      - name: Build P1 Windows development player
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildWindowsDevelopmentAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require P1 Windows player output
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Builds/P1/Windows-Development/VirtualCharacterRender.exe
+          test -d unity/Builds/P1/Windows-Development/VirtualCharacterRender_Data
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "P1 Windows development player: PASS"
+
+      - name: Archive P1 Windows development player
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: unity/Builds/P1/Windows-Development/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Diagnose Unity package lock drift
         if: always()
         shell: bash
