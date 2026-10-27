@@ -41,11 +41,22 @@ namespace VCR.Editor.P1
             if (!scene.IsValid())
                 return false;
 
+            var workspaceCount = 0;
+            WorkspaceToolkitShell existingShell = null;
             foreach (var root in scene.GetRootGameObjects())
             {
-                var existingShell = root.GetComponentInChildren<WorkspaceToolkitShell>(true);
-                if (existingShell == null)
-                    continue;
+                var shells = root.GetComponentsInChildren<WorkspaceToolkitShell>(true);
+                workspaceCount += shells.Length;
+                if (shells.Length > 0)
+                    existingShell = shells[0];
+            }
+            if (workspaceCount > 1)
+            {
+                Debug.LogError("VCR P1: multiple workspace shells found; refusing ambiguous UI setup.");
+                return false;
+            }
+            if (existingShell != null)
+            {
                 var existingDocument = existingShell.GetComponent<UIDocument>();
                 if (existingDocument == null || existingDocument.panelSettings == null)
                 {
