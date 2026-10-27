@@ -50,6 +50,7 @@ namespace VCR.Runtime.UI
         [SerializeField] private RenderTexture previewRenderTexture;
         private Image _previewImage;
         private bool _previewBoundFromCamera;
+        private bool _discoveredPreviewCamera;
         private bool _previewExplicitlyBound;
         private VisualElement _dragOverlay;
         private Label _dockTargetLabel;
@@ -136,6 +137,7 @@ namespace VCR.Runtime.UI
             if (previewRenderTexture != null)
                 _previewTexture = previewRenderTexture;
             _previewBoundFromCamera = false;
+            _discoveredPreviewCamera = false;
             _previewExplicitlyBound = previewRenderTexture != null;
             _root = _document.rootVisualElement;
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
@@ -150,9 +152,25 @@ namespace VCR.Runtime.UI
         private void Update()
         {
             PersistLayoutIfChanged();
-            if (previewCamera == null && discoverCameraPreview && sceneRuntime != null)
-                previewCamera = sceneRuntime.CameraController != null
+            // Resolve the runtime before camera discovery. The runtime may be
+            // created after the shell, including on a delayed startup path.
+            if (sceneRuntime == null && Time.unscaledTime >= _nextStatusRefresh)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (discoverCameraPreview && sceneRuntime != null)
+            {
+                var runtimeCamera = sceneRuntime.CameraController != null
                     ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
+                if (runtimeCamera != previewCamera)
+                {
+                    // Never replace an explicitly assigned camera with discovery.
+                    if (_discoveredPreviewCamera || previewCamera == null)
+                    {
+                        previewCamera = runtimeCamera;
+                        _discoveredPreviewCamera = runtimeCamera != null;
+                        ReleaseOwnedPreview();
+                    }
+                }
+            }
             if (!_previewRenderUnsupported) UpdateOwnedPreview();
             if (!_previewExplicitlyBound && _ownedPreviewTexture == null && (_previewBoundFromCamera || _previewTexture == null))
             {
