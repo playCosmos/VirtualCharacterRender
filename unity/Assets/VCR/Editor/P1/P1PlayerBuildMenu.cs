@@ -49,6 +49,18 @@ namespace VCR.Editor.P1
             string location,
             bool development)
         {
+            if (target != BuildTarget.StandaloneWindows64 &&
+                target != BuildTarget.StandaloneOSX)
+            {
+                Debug.LogError("VCR P1 build: unsupported target " + target + ".");
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(location))
+            {
+                Debug.LogError("VCR P1 build: output location is required.");
+                return false;
+            }
+
             if (!File.Exists(
                     P1ApplicationSceneBuilder.ScenePath))
             {
