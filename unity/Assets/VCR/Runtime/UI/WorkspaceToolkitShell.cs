@@ -564,6 +564,7 @@ namespace VCR.Runtime.UI
             {
                 _targetFrameRateInput.SetValueWithoutNotify(Mathf.Clamp(_targetFrameRateInput.value, 30, 120));
             });
+            _targetFrameRateInput.SetValueWithoutNotify(60);
             inspector.Add(_targetFrameRateInput);
             inspector.Add(_vsyncInput);
             _renderInputsRuntime = null;
@@ -1058,6 +1059,13 @@ namespace VCR.Runtime.UI
         private void ApplyRenderFromInspector()
         {
             if (sceneRuntime == null || _characterActionPending) return;
+            SynchronizeRenderInputs();
+            if (_renderInputsRuntime != sceneRuntime)
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Render settings unavailable: runtime not initialized.";
+                return;
+            }
             try
             {
                 if (!sceneRuntime.TryCaptureRenderSettings(out var settings))
