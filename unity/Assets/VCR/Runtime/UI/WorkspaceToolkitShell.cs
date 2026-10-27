@@ -61,6 +61,7 @@ namespace VCR.Runtime.UI
         private const string TabModeKey = "VCR.UI.Workspace.TabMode.v1";
         private bool _tabMode;
         private bool _previewRenderUnsupported;
+        private float _nextPreviewRetryAt;
         private const string WorkspaceModeKey = "VCR.UI.Workspace.Advanced.v1";
         private const string LeftWidthKey = "VCR.UI.Workspace.LeftWidth.v1";
         private const string RightWidthKey = "VCR.UI.Workspace.RightWidth.v1";
@@ -171,6 +172,8 @@ namespace VCR.Runtime.UI
                     }
                 }
             }
+            if (_previewRenderUnsupported && Time.unscaledTime >= _nextPreviewRetryAt)
+                _previewRenderUnsupported = false;
             if (!_previewRenderUnsupported) UpdateOwnedPreview();
             if (!_previewExplicitlyBound && _ownedPreviewTexture == null && (_previewBoundFromCamera || _previewTexture == null))
             {
@@ -353,6 +356,7 @@ namespace VCR.Runtime.UI
                 Debug.LogWarning("Workspace preview render unavailable: " + exception.Message, this);
                 ReleaseOwnedPreview();
                 _previewRenderUnsupported = true;
+                _nextPreviewRetryAt = Time.unscaledTime + 10f;
                 if (_previewStatus != null)
                     _previewStatus.text = "Preview render unsupported; runtime controls remain available";
             }
