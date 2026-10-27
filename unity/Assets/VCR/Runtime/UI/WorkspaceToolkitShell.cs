@@ -454,8 +454,6 @@ namespace VCR.Runtime.UI
             }
             fps.value = initialFps;
             vsync.value = initialVsync;
-            fps.SetEnabled(available);
-            vsync.SetEnabled(available);
             panel.Add(fps);
             panel.Add(vsync);
             var feedback = new Label(available ? "" : "Scene runtime unavailable.");
@@ -463,6 +461,8 @@ namespace VCR.Runtime.UI
             panel.Add(feedback);
             var apply = new Button(() =>
             {
+                if (sceneRuntime == null)
+                    sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime == null ||
                     !sceneRuntime.TryCaptureRenderSettings(out var settings))
                 {
@@ -488,7 +488,6 @@ namespace VCR.Runtime.UI
                     Debug.LogException(exception, this);
                 }
             }) { text = "Apply" };
-            apply.SetEnabled(available);
             panel.Add(apply);
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
             _workspaceRoot.Add(panel);
