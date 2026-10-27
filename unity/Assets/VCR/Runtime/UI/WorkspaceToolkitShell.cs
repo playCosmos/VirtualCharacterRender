@@ -419,6 +419,7 @@ namespace VCR.Runtime.UI
                 _scenesHeight = value;
                 scenes.style.height = value;
             }, ScenesHeightKey);
+            scenesSplitter.name = "vcr-splitter-scenes";
             scenesSplitter.style.display = !_tabMode && scenes.parent == left ? DisplayStyle.Flex : DisplayStyle.None;
             left.Add(scenesSplitter);
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
@@ -458,6 +459,7 @@ namespace VCR.Runtime.UI
                     _inspectorHeight = value;
                     inspector.style.height = value;
                 }, RightInspectorHeightKey);
+                inspectorSplitter.name = "vcr-splitter-inspector";
                 inspectorSplitter.style.display = !_tabMode && inspector.parent == right
                     ? DisplayStyle.Flex : DisplayStyle.None;
                 right.Add(inspectorSplitter);
@@ -492,6 +494,8 @@ namespace VCR.Runtime.UI
             SortDockPanels(left);
             SortDockPanels(right);
             SortDockPanels(bottom);
+            PositionPanelSplitter(left, WorkspacePanelCatalog.Scenes, "vcr-splitter-scenes", _tabMode);
+            PositionPanelSplitter(right, WorkspacePanelCatalog.Inspector, "vcr-splitter-inspector", _tabMode);
             if (_tabMode)
             {
                 ApplyDockTabs(left, "left");
@@ -555,6 +559,23 @@ namespace VCR.Runtime.UI
                 dock.Remove(panel);
                 dock.Add(panel);
             }
+        }
+
+        private static void PositionPanelSplitter(
+            VisualElement dock, string panelId, string splitterName, bool tabMode)
+        {
+            var splitter = dock.Q<VisualElement>(splitterName);
+            if (splitter == null) return;
+            var panel = dock.Q<VisualElement>("vcr-panel-" + panelId);
+            var visible = !tabMode && panel != null && panel.parent == dock &&
+                          dock.childCount > 2;
+            splitter.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!visible) return;
+            // The sorted panels must stay adjacent to their resize handle.
+            // Inserting the handle after its panel avoids a detached splitter
+            // at the top of a dock when saved panel order is restored.
+            dock.Remove(splitter);
+            dock.Insert(dock.IndexOf(panel) + 1, splitter);
         }
 
         private void ApplyDockTabs(VisualElement dock, string dockId)
