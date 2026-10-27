@@ -102,16 +102,23 @@ namespace VCR.Runtime.UI
                             }
                             if (hasPersisted &&
                                 !configurable.TryApplyConfiguration(values, out var applyError))
+                            {
                                 Debug.LogWarning("U1 tracking settings restore failed for " +
                                                  id + ": " + applyError, this);
+                                _workspaceRestoredTracking.Remove(id);
+                                continue;
+                            }
                         }
                     }
 
                     var enabled = PlayerPrefs.GetInt(TrackingEnabledKey + id, 0) != 0;
                     if (source.ControlEnabled != enabled &&
                         !source.TrySetControlEnabled(enabled, out var enableError))
+                    {
                         Debug.LogWarning("U1 tracking enable restore failed for " +
                                          id + ": " + enableError, this);
+                        _workspaceRestoredTracking.Remove(id);
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -356,10 +363,10 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Add(id);
                     _workspaceRestoredTracking.Add(id);
                     // Newly added inputs start disabled, matching the old dashboard.
-                    if (control.ControlEnabled && !control.TrySetControlEnabled(false, out var error))
+                    if (control.ControlEnabled && !control.TrySetControlEnabled(false, out var addError))
                     {
                         _workspaceConfiguredTracking.Remove(id);
-                        _workspaceNativeSettings.SetText(92, "Add failed: " + error);
+                        _workspaceNativeSettings.SetText(92, "Add failed: " + addError);
                         return true;
                     }
                     PlayerPrefs.SetInt(TrackingEnabledKey + id, 0);
