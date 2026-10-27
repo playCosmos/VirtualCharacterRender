@@ -27,6 +27,8 @@ namespace VCR.Runtime.UI
         private TextField _modelPathInput;
         private Button _loadModelButton;
         private Label _inspectorStatus;
+        private Label _inspectorModelPath;
+        private Label _inspectorCameraStatus;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
@@ -145,6 +147,10 @@ namespace VCR.Runtime.UI
                 _inspectorStatus.text = "State: " + state.State + " | Loaded: " + state.HasCharacter;
             if (_trackingStatus != null)
                 _trackingStatus.text = "Scene active: " + state.HasCharacter + " (tracking details not connected)";
+            if (_inspectorModelPath != null)
+                _inspectorModelPath.text = "Model path: " + (string.IsNullOrWhiteSpace(path) ? "<none>" : path);
+            if (_inspectorCameraStatus != null)
+                _inspectorCameraStatus.text = "Camera: " + (sceneRuntime.CameraController == null ? "unavailable" : "connected");
             if (_reloadCharacterButton != null)
                 _reloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
             if (_unloadCharacterButton != null)
@@ -194,6 +200,8 @@ namespace VCR.Runtime.UI
             _modelPathInput = null;
             _loadModelButton = null;
             _inspectorStatus = null;
+            _inspectorModelPath = null;
+            _inspectorCameraStatus = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
@@ -446,6 +454,10 @@ namespace VCR.Runtime.UI
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
             _inspectorStatus = new Label("Waiting for scene state...");
             inspector.Add(_inspectorStatus);
+            _inspectorModelPath = new Label("Model path: none");
+            inspector.Add(_inspectorModelPath);
+            _inspectorCameraStatus = new Label("Camera: unavailable");
+            inspector.Add(_inspectorCameraStatus);
             if (advancedWorkspace)
             {
                 inspector.style.height = _inspectorHeight;
