@@ -318,9 +318,12 @@ namespace VCR.Runtime.UI
             var availableHeight = previewContainer.resolvedStyle.height;
             if (float.IsNaN(availableWidth) || float.IsNaN(availableHeight) ||
                 availableWidth <= 0 || availableHeight <= 0) return;
-            var width = Mathf.Clamp(Mathf.RoundToInt(availableWidth), 256, 1920);
-            var height = Mathf.Clamp(Mathf.RoundToInt(availableHeight - 45f), 256, 1080);
-            if (width == _previewWidth && height == _previewHeight && _ownedPreviewCamera != null)
+            // Quantize dimensions to avoid reallocating a render target for
+            // every subpixel layout adjustment during splitter dragging.
+            var width = Mathf.Clamp(Mathf.RoundToInt(availableWidth / 16f) * 16, 256, 1920);
+            var height = Mathf.Clamp(Mathf.RoundToInt((availableHeight - 45f) / 16f) * 16, 256, 1080);
+            if (width == _previewWidth && height == _previewHeight &&
+                _ownedPreviewCamera != null && _ownedPreviewTexture != null)
                 return;
             ReleaseOwnedPreview();
             _previewWidth = width;
