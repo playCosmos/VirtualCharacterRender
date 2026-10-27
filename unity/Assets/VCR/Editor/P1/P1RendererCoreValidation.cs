@@ -407,7 +407,7 @@ namespace VCR.Editor.P1
                         1f) <
                         0.0001f &&
                     render.TargetFrameRate ==
-                        240,
+                        120,
                     "render settings must sanitize non-finite scale and unsupported resolution preset before applying globals",
                     failures);
 
