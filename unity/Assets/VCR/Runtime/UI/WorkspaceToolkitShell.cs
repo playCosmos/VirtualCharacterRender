@@ -478,8 +478,9 @@ namespace VCR.Runtime.UI
                 Debug.LogError("U1 native Settings unavailable: " + exception);
                 _workspaceNativeSettings?.Dispose();
                 _workspaceNativeSettings = null;
+                if (_nativeSettingsWasVisible)
+                    UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
                 _nativeSettingsWasVisible = false;
-                UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
                 ShowWorkspaceSettingsFallback();
             }
         }
@@ -560,6 +561,13 @@ namespace VCR.Runtime.UI
                     settings.UseVSync = false;
                 }
                 sceneRuntime.ApplyRenderSettings(settings);
+                if (action == 203)
+                {
+                    // The window temporarily forces background execution while open.
+                    // Preserve the user's newly selected value for window close.
+                    _runInBackgroundBeforeSettings = settings.RunInBackground;
+                    UnityEngine.Application.runInBackground = true;
+                }
                 if (sceneRuntime.TryCaptureRenderSettings(out var applied))
                 {
                     _workspaceNativeSettings.SetText(11, applied.TargetFrameRate.ToString());
