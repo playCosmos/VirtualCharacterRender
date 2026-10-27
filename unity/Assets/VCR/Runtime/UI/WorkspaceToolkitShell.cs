@@ -443,12 +443,27 @@ namespace VCR.Runtime.UI
                         "Restore render defaults");
                     _workspaceNativeSettings.Add(0, 90, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Changes apply to the active scene.");
+                    _workspaceNativeSettings.Add(1, 2, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "VRM model management");
+                    _workspaceNativeSettings.Add(1, 12, DesktopNativeSettingsWindow.ControlKind.Edit,
+                        "VRM file path", "");
+                    _workspaceNativeSettings.Add(1, 300, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Load VRM from path");
+                    _workspaceNativeSettings.Add(1, 302, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Reload active VRM");
+                    _workspaceNativeSettings.Add(1, 303, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Unload active VRM");
+                    _workspaceNativeSettings.Add(1, 91, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Only existing .vrm files are supported.");
                     _workspaceNativeSettings.SelectCategory(0);
                 }
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
                     _workspaceNativeSettings.SetText(11, settings.TargetFrameRate.ToString());
+                _workspaceNativeSettings.SetText(12,
+                    _modelPathInput != null ? _modelPathInput.value ?? "" :
+                    PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
                 if (!_workspaceNativeSettings.IsVisible)
                 {
                     _runInBackgroundBeforeSettings = UnityEngine.Application.runInBackground;
@@ -481,6 +496,36 @@ namespace VCR.Runtime.UI
             {
                 var action = _workspaceNativeSettings.PollAction();
                 if (action == 0) break;
+                if (action == 300)
+                {
+                    var path = _workspaceNativeSettings.GetText(12)?.Trim();
+                    if (string.IsNullOrEmpty(path) ||
+                        !string.Equals(System.IO.Path.GetExtension(path), ".vrm",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        !System.IO.File.Exists(path))
+                    {
+                        _workspaceNativeSettings.SetText(91, "Choose an existing .vrm file.");
+                        continue;
+                    }
+                    if (_characterActionPending)
+                    {
+                        _workspaceNativeSettings.SetText(91, "A model operation is in progress.");
+                        continue;
+                    }
+                    if (_modelPathInput != null) _modelPathInput.value = path;
+                    LoadModelFromPath();
+                    continue;
+                }
+                if (action == 302)
+                {
+                    ReloadActiveCharacter();
+                    continue;
+                }
+                if (action == 303)
+                {
+                    UnloadActiveCharacter();
+                    continue;
+                }
                 if (action != 201 && action != 202 && action != 203 && action != 204) continue;
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
