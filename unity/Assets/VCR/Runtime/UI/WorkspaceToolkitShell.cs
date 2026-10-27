@@ -437,6 +437,10 @@ namespace VCR.Runtime.UI
                         "Apply FPS");
                     _workspaceNativeSettings.Add(0, 202, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Toggle VSync");
+                    _workspaceNativeSettings.Add(0, 203, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Toggle background execution");
+                    _workspaceNativeSettings.Add(0, 204, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Restore render defaults");
                     _workspaceNativeSettings.Add(0, 90, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Changes apply to the active scene.");
                     _workspaceNativeSettings.SelectCategory(0);
@@ -477,7 +481,7 @@ namespace VCR.Runtime.UI
             {
                 var action = _workspaceNativeSettings.PollAction();
                 if (action == 0) break;
-                if (action != 201 && action != 202) continue;
+                if (action != 201 && action != 202 && action != 203 && action != 204) continue;
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime == null || !sceneRuntime.TryCaptureRenderSettings(out var settings))
@@ -495,9 +499,18 @@ namespace VCR.Runtime.UI
                     }
                     settings.TargetFrameRate = fps;
                 }
-                else
+                else if (action == 202)
                 {
                     settings.UseVSync = !settings.UseVSync;
+                }
+                else if (action == 203)
+                {
+                    settings.RunInBackground = !settings.RunInBackground;
+                }
+                else
+                {
+                    settings.TargetFrameRate = 60;
+                    settings.UseVSync = false;
                 }
                 sceneRuntime.ApplyRenderSettings(settings);
                 if (sceneRuntime.TryCaptureRenderSettings(out var applied))
@@ -505,7 +518,8 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.SetText(11, applied.TargetFrameRate.ToString());
                     _workspaceNativeSettings.SetText(90,
                         "FPS: " + applied.TargetFrameRate + ", VSync: " +
-                        (applied.UseVSync ? "on" : "off"));
+                        (applied.UseVSync ? "on" : "off") + ", Background: " +
+                        (applied.RunInBackground ? "on" : "off"));
                 }
             }
         }
