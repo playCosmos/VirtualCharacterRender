@@ -477,8 +477,8 @@ namespace VCR.Runtime.UI
             inspector.Add(_inspectorCameraStatus);
             _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply scene camera settings" };
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
-            _targetFrameRateInput = new IntegerField("Target FPS (1–120)");
-            _targetFrameRateInput.tooltip = "Supported target: 1–120 FPS. Default: 60 FPS.";
+            _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
+            _targetFrameRateInput.tooltip = "Supported target: 30–120 FPS. Default: 60 FPS.";
             _vsyncInput = new Toggle("VSync");
             inspector.Add(_targetFrameRateInput);
             inspector.Add(_vsyncInput);
@@ -967,7 +967,7 @@ namespace VCR.Runtime.UI
             {
                 if (!sceneRuntime.TryCaptureRenderSettings(out var settings))
                     throw new System.InvalidOperationException("Render settings are unavailable.");
-                settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 1, 120);
+                settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 30, 120);
                 settings.UseVSync = _vsyncInput.value;
                 sceneRuntime.ApplyRenderSettings(settings);
                 if (_inspectorStatus != null) _inspectorStatus.text = "Current render settings applied.";
