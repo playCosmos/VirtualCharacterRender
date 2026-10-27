@@ -33,6 +33,7 @@ namespace VCR.Runtime.UI
         private Button _applyRenderButton;
         private IntegerField _targetFrameRateInput;
         private Toggle _vsyncInput;
+        private Label _inspectorFeedback;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
@@ -137,6 +138,8 @@ namespace VCR.Runtime.UI
                 if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
                 if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(false);
                 if (_applyRenderButton != null) _applyRenderButton.SetEnabled(false);
+                if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(false);
+                if (_vsyncInput != null) _vsyncInput.SetEnabled(false);
                 if (_trackingStatus != null) _trackingStatus.text = "Runtime unavailable";
                 if (_previewStatus != null) _previewStatus.text = _previewTexture == null
                     ? "Preview unavailable: no scene runtime" : "External preview texture connected";
@@ -150,6 +153,8 @@ namespace VCR.Runtime.UI
                 " | Loaded: " + state.HasCharacter;
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
             if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
+            if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
+            if (_vsyncInput != null) _vsyncInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -219,6 +224,7 @@ namespace VCR.Runtime.UI
             _applyRenderButton = null;
             _targetFrameRateInput = null;
             _vsyncInput = null;
+            _inspectorFeedback = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
@@ -489,6 +495,8 @@ namespace VCR.Runtime.UI
             }
             inspector.Add(_applySceneViewButton);
             inspector.Add(_applyRenderButton);
+            _inspectorFeedback = new Label("");
+            inspector.Add(_inspectorFeedback);
             if (advancedWorkspace)
             {
                 inspector.style.height = _inspectorHeight;
@@ -950,12 +958,12 @@ namespace VCR.Runtime.UI
             try
             {
                 sceneRuntime.ApplySceneViewSettings();
-                if (_inspectorStatus != null) _inspectorStatus.text = "Scene camera settings applied.";
+                if (_inspectorFeedback != null) _inspectorFeedback.text = "Scene camera settings applied.";
             }
             catch (System.Exception ex)
             {
                 Debug.LogException(ex, this);
-                if (_inspectorStatus != null) _inspectorStatus.text = "Camera settings failed: " + ex.Message;
+                if (_inspectorFeedback != null) _inspectorFeedback.text = "Camera settings failed: " + ex.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
@@ -970,12 +978,13 @@ namespace VCR.Runtime.UI
                 settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 30, 120);
                 settings.UseVSync = _vsyncInput.value;
                 sceneRuntime.ApplyRenderSettings(settings);
-                if (_inspectorStatus != null) _inspectorStatus.text = "Current render settings applied.";
+                if (_targetFrameRateInput != null) _targetFrameRateInput.SetValueWithoutNotify(settings.TargetFrameRate);
+                if (_inspectorFeedback != null) _inspectorFeedback.text = "Render settings applied: " + settings.TargetFrameRate + " FPS.";
             }
             catch (System.Exception ex)
             {
                 Debug.LogException(ex, this);
-                if (_inspectorStatus != null) _inspectorStatus.text = "Render settings failed: " + ex.Message;
+                if (_inspectorFeedback != null) _inspectorFeedback.text = "Render settings failed: " + ex.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
