@@ -1073,8 +1073,16 @@ namespace VCR.Runtime.UI
                 settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 30, 120);
                 settings.UseVSync = _vsyncInput.value;
                 sceneRuntime.ApplyRenderSettings(settings);
-                if (_targetFrameRateInput != null) _targetFrameRateInput.SetValueWithoutNotify(settings.TargetFrameRate);
-                if (_inspectorFeedback != null) _inspectorFeedback.text = "Render settings applied: " + settings.TargetFrameRate + " FPS.";
+                if (!sceneRuntime.TryCaptureRenderSettings(out var appliedSettings))
+                    throw new System.InvalidOperationException("Unable to read back applied render settings.");
+                if (_targetFrameRateInput != null)
+                    _targetFrameRateInput.SetValueWithoutNotify(Mathf.Clamp(appliedSettings.TargetFrameRate, 30, 120));
+                if (_vsyncInput != null)
+                    _vsyncInput.SetValueWithoutNotify(appliedSettings.UseVSync);
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Render settings applied: " +
+                        appliedSettings.TargetFrameRate + " FPS, VSync " +
+                        (appliedSettings.UseVSync ? "on" : "off") + ".";
             }
             catch (System.Exception ex)
             {
