@@ -456,7 +456,7 @@ namespace VCR.Runtime.UI
             vsync.value = initialVsync;
             panel.Add(fps);
             panel.Add(vsync);
-            var feedback = new Label(available ? "" : "Scene runtime unavailable.");
+            var feedback = new Label(available ? "" : "Runtime not ready; Apply will retry discovery.");
             feedback.style.color = Color.white;
             panel.Add(feedback);
             var apply = new Button(() =>
