@@ -24,6 +24,8 @@ namespace VCR.Runtime.UI
         private VisualElement _dockHost;
         private Label _status;
         private Label _sourcesStatus;
+        private TextField _modelPathInput;
+        private Button _loadModelButton;
         private Label _inspectorStatus;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
@@ -134,6 +136,7 @@ namespace VCR.Runtime.UI
             _status.text = "Scene: " + state.State + " | Model: " + modelName +
                 " | Loaded: " + state.HasCharacter;
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
+            if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -188,6 +191,8 @@ namespace VCR.Runtime.UI
             _dockHost = null;
             _status = null;
             _sourcesStatus = null;
+            _modelPathInput = null;
+            _loadModelButton = null;
             _inspectorStatus = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
@@ -419,6 +424,12 @@ namespace VCR.Runtime.UI
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
+            _modelPathInput = new TextField("VRM file path");
+            _modelPathInput.value = PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", "");
+            _modelPathInput.tooltip = "Absolute path to a local .vrm file. FBX runtime import is not available.";
+            sources.Add(_modelPathInput);
+            _loadModelButton = new Button(LoadModelFromPath) { text = "Load VRM" };
+            sources.Add(_loadModelButton);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview,
                 "Preview — runtime viewport integration pending", 360);
@@ -867,6 +878,57 @@ namespace VCR.Runtime.UI
             var value = PlayerPrefs.GetFloat(key, fallback);
             return float.IsNaN(value) || float.IsInfinity(value)
                 ? fallback : Mathf.Clamp(value, min, max);
+        }
+
+        private async void LoadModelFromPath()
+        {
+            if (_characterActionPending) return;
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null)
+            {
+                if (_sourcesStatus != null) _sourcesStatus.text = "Scene runtime unavailable.";
+                return;
+            }
+            var path = _modelPathInput?.value?.Trim();
+            if (string.IsNullOrEmpty(path) ||
+                !string.Equals(System.IO.Path.GetExtension(path), ".vrm",
+                    System.StringComparison.OrdinalIgnoreCase) ||
+                !System.IO.File.Exists(path))
+            {
+                if (_sourcesStatus != null) _sourcesStatus.text = "Select an existing .vrm file path.";
+                return;
+            }
+            _characterActionPending = true;
+            if (_loadModelButton != null) _loadModelButton.SetEnabled(false);
+            if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
+            if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
+            try
+            {
+                var loaded = await sceneRuntime.LoadCharacterAsync(path);
+                if (loaded == null)
+                {
+                    if (_sourcesStatus != null) _sourcesStatus.text = "VRM load returned no model.";
+                    return;
+                }
+                PlayerPrefs.SetString("VCR.Character.LastSuccessfulPath.v1", path);
+                PlayerPrefs.Save();
+                if (_sourcesStatus != null) _sourcesStatus.text = "Loaded: " + System.IO.Path.GetFileName(path);
+            }
+            catch (System.OperationCanceledException)
+            {
+                if (_sourcesStatus != null) _sourcesStatus.text = "VRM load canceled.";
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex, this);
+                if (_sourcesStatus != null) _sourcesStatus.text = "VRM load failed: " + ex.Message;
+            }
+            finally
+            {
+                _characterActionPending = false;
+                _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+            }
         }
 
         private async void ReloadActiveCharacter()
