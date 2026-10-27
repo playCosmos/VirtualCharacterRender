@@ -530,7 +530,21 @@ namespace VCR.Runtime.UI
                     if (action == 103) RefreshWorkspaceOverlayStatus();
                     continue;
                 }
-                if (HandleWorkspaceNativeTrackingAction(action))
+                // A third-party tracking source can throw while toggling or applying
+                // its own configuration. Keep the independent Settings UI responsive.
+                var handledTracking = false;
+                try
+                {
+                    handledTracking = HandleWorkspaceNativeTrackingAction(action);
+                }
+                catch (Exception exception)
+                {
+                    handledTracking = true;
+                    _workspaceNativeSettings.SetText(92,
+                        "Tracking action failed: " + exception.Message);
+                    Debug.LogException(exception, this);
+                }
+                if (handledTracking)
                     continue;
                 if (action >= 401 && action <= 403)
                 {
