@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VCR.Runtime.Scene;
+using VCR.Runtime.Output;
 
 namespace VCR.Runtime.UI
 {
@@ -460,6 +461,16 @@ namespace VCR.Runtime.UI
                         "Unload active VRM");
                     _workspaceNativeSettings.Add(1, 91, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Only existing .vrm files are supported.");
+                    _workspaceNativeSettings.Add(3, 3, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Transparent overlay output");
+                    _workspaceNativeSettings.Add(3, 401, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Toggle transparent background");
+                    _workspaceNativeSettings.Add(3, 402, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Toggle click-through (may disable mouse input)");
+                    _workspaceNativeSettings.Add(3, 403, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Recover output");
+                    _workspaceNativeSettings.Add(3, 93, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Output controls require a compatible active adapter.");
                     _workspaceNativeSettings.SelectCategory(0);
                 }
                 if (sceneRuntime == null)
@@ -473,6 +484,7 @@ namespace VCR.Runtime.UI
                 _workspaceNativeSettings.SetText(12,
                     _modelPathInput != null ? _modelPathInput.value ?? "" :
                     PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
+                RefreshWorkspaceOverlayStatus();
                 if (!_workspaceNativeSettings.IsVisible)
                 {
                     _runInBackgroundBeforeSettings = UnityEngine.Application.runInBackground;
@@ -506,6 +518,19 @@ namespace VCR.Runtime.UI
             {
                 var action = _workspaceNativeSettings.PollAction();
                 if (action == 0) break;
+                // Native navigation emits 100-103; without this, model/output
+                // pages exist but cannot be reached from the sidebar.
+                if (action >= 100 && action <= 103)
+                {
+                    _workspaceNativeSettings.SelectCategory(action - 100);
+                    if (action == 103) RefreshWorkspaceOverlayStatus();
+                    continue;
+                }
+                if (action >= 401 && action <= 403)
+                {
+                    ApplyWorkspaceOverlayAction(action);
+                    continue;
+                }
                 if (action == 300)
                 {
                     var path = _workspaceNativeSettings.GetText(12)?.Trim();
@@ -578,6 +603,7 @@ namespace VCR.Runtime.UI
                 }
                 else
                 {
+                    settings.RenderScale = 1f;
                     settings.TargetFrameRate = 60;
                     settings.UseVSync = false;
                 }
@@ -599,6 +625,76 @@ namespace VCR.Runtime.UI
                         (applied.UseVSync ? "on" : "off") + ", Background: " +
                         (applied.RunInBackground ? "on" : "off"));
                 }
+            }
+        }
+
+        private void RefreshWorkspaceOverlayStatus()
+        {
+            if (_workspaceNativeSettings == null) return;
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null ||
+                !sceneRuntime.TryCaptureOverlayOutput(out _, out var settings, out var error))
+            {
+                _workspaceNativeSettings.SetText(93,
+                    "Output unavailable: " + (error ?? "Scene runtime not ready."));
+                return;
+            }
+            _workspaceNativeSettings.SetText(93,
+                "Transparent: " + (settings.Transparent ? "on" : "off") +
+                ", click-through: " + (settings.ClickThrough ? "on" : "off"));
+        }
+
+        private void ApplyWorkspaceOverlayAction(int action)
+        {
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null)
+            {
+                _workspaceNativeSettings.SetText(93, "Output runtime unavailable.");
+                return;
+            }
+            if (action == 403)
+            {
+                var recovered = sceneRuntime.TryRecoverOverlayOutput(out var recoverError);
+                _workspaceNativeSettings.SetText(93, recovered
+                    ? "Output recovery requested."
+                    : "Output recovery failed: " + (recoverError ?? "unknown error"));
+                return;
+            }
+            if (!sceneRuntime.TryCaptureOverlayOutput(
+                    out _, out var current, out var error))
+            {
+                _workspaceNativeSettings.SetText(93,
+                    "Output unavailable: " + (error ?? "unknown error"));
+                return;
+            }
+            if (!ApplicationUiActionPolicy.CanApplyOverlaySetting(
+                    true, sceneRuntime.State, true))
+            {
+                _workspaceNativeSettings.SetText(93,
+                    "Output settings cannot be changed while the scene is busy.");
+                return;
+            }
+
+            var next = new OverlayOutputSettings(
+                action == 401 ? !current.Transparent : current.Transparent,
+                false,
+                action == 402 ? !current.ClickThrough : current.ClickThrough);
+            try
+            {
+                sceneRuntime.ApplyOverlayOutput(next);
+                RefreshWorkspaceOverlayStatus();
+                if (action == 402 && next.ClickThrough)
+                    _workspaceNativeSettings.SetText(93,
+                        "Click-through ON: mouse input passes through the overlay. " +
+                        "Use this Settings window to disable it.");
+            }
+            catch (Exception exception)
+            {
+                _workspaceNativeSettings.SetText(93,
+                    "Output setting failed: " + exception.Message);
+                Debug.LogException(exception, this);
             }
         }
 
