@@ -29,6 +29,8 @@ namespace VCR.Runtime.UI
         private Label _inspectorStatus;
         private Label _inspectorModelPath;
         private Label _inspectorCameraStatus;
+        private Button _applySceneViewButton;
+        private Button _applyRenderButton;
         private Label _trackingStatus;
         private Button _reloadCharacterButton;
         private Button _unloadCharacterButton;
@@ -151,6 +153,8 @@ namespace VCR.Runtime.UI
                 _inspectorModelPath.text = "Model path: " + (string.IsNullOrWhiteSpace(path) ? "<none>" : path);
             if (_inspectorCameraStatus != null)
                 _inspectorCameraStatus.text = "Camera: " + (sceneRuntime.CameraController == null ? "unavailable" : "connected");
+            if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && !_characterActionPending);
+            if (_applyRenderButton != null) _applyRenderButton.SetEnabled(!_characterActionPending);
             if (_reloadCharacterButton != null)
                 _reloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
             if (_unloadCharacterButton != null)
@@ -202,6 +206,8 @@ namespace VCR.Runtime.UI
             _inspectorStatus = null;
             _inspectorModelPath = null;
             _inspectorCameraStatus = null;
+            _applySceneViewButton = null;
+            _applyRenderButton = null;
             _trackingStatus = null;
             _reloadCharacterButton = null;
             _unloadCharacterButton = null;
@@ -458,6 +464,10 @@ namespace VCR.Runtime.UI
             inspector.Add(_inspectorModelPath);
             _inspectorCameraStatus = new Label("Camera: unavailable");
             inspector.Add(_inspectorCameraStatus);
+            _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply scene camera settings" };
+            _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
+            inspector.Add(_applySceneViewButton);
+            inspector.Add(_applyRenderButton);
             if (advancedWorkspace)
             {
                 inspector.style.height = _inspectorHeight;
@@ -911,6 +921,38 @@ namespace VCR.Runtime.UI
             var value = PlayerPrefs.GetFloat(key, fallback);
             return float.IsNaN(value) || float.IsInfinity(value)
                 ? fallback : Mathf.Clamp(value, min, max);
+        }
+
+        private void ApplySceneViewFromInspector()
+        {
+            if (sceneRuntime == null || _characterActionPending) return;
+            try
+            {
+                sceneRuntime.ApplySceneViewSettings();
+                if (_inspectorStatus != null) _inspectorStatus.text = "Scene camera settings applied.";
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex, this);
+                if (_inspectorStatus != null) _inspectorStatus.text = "Camera settings failed: " + ex.Message;
+            }
+            _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+        }
+
+        private void ApplyRenderFromInspector()
+        {
+            if (sceneRuntime == null || _characterActionPending) return;
+            try
+            {
+                sceneRuntime.ApplyRenderSettings();
+                if (_inspectorStatus != null) _inspectorStatus.text = "Current render settings applied.";
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex, this);
+                if (_inspectorStatus != null) _inspectorStatus.text = "Render settings failed: " + ex.Message;
+            }
+            _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
 
         private async void LoadModelFromPath()
