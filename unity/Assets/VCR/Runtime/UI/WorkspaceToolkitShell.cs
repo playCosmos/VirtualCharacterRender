@@ -337,7 +337,16 @@ namespace VCR.Runtime.UI
                 name = "VCR Workspace Preview",
                 hideFlags = HideFlags.DontSave
             };
-            _ownedPreviewTexture.Create();
+            if (!_ownedPreviewTexture.Create() || !_ownedPreviewTexture.IsCreated())
+            {
+                Debug.LogWarning("Workspace preview render texture allocation failed.", this);
+                ReleaseOwnedPreview();
+                _previewRenderUnsupported = true;
+                _nextPreviewRetryAt = Time.unscaledTime + 10f;
+                if (_previewStatus != null)
+                    _previewStatus.text = "Preview allocation failed; retrying in 10 seconds";
+                return;
+            }
             var cameraObject = new GameObject("VCR Workspace Preview Camera");
             cameraObject.hideFlags = HideFlags.HideAndDontSave;
             _ownedPreviewCamera = cameraObject.AddComponent<Camera>();
