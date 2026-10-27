@@ -96,12 +96,15 @@ namespace VCR.Editor.P1
                 }
 
                 var cameraCount = 0;
+                Camera mainCamera = null;
                 foreach (var root in scene.GetRootGameObjects())
                 {
                     foreach (var camera in root.GetComponentsInChildren<Camera>(true))
                     {
-                        if (camera.CompareTag("MainCamera"))
-                            cameraCount++;
+                        if (!camera.CompareTag("MainCamera"))
+                            continue;
+                        cameraCount++;
+                        mainCamera = camera;
                     }
                 }
                 if (cameraCount != 1)
@@ -109,6 +112,11 @@ namespace VCR.Editor.P1
                     Debug.LogError(
                         "VCR P1: expected exactly one tagged MainCamera, found " +
                         cameraCount + ".");
+                    return false;
+                }
+                if (!mainCamera.isActiveAndEnabled)
+                {
+                    Debug.LogError("VCR P1: tagged MainCamera is disabled.");
                     return false;
                 }
 
