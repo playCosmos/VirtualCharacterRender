@@ -348,7 +348,13 @@ namespace VCR.Runtime.UI
 
         private void LateUpdate()
         {
-            if (_ownedPreviewCamera == null || previewCamera == null) return;
+            if (_ownedPreviewCamera == null || previewCamera == null ||
+                _ownedPreviewTexture == null || !_ownedPreviewTexture.IsCreated())
+                return;
+            // A hidden or detached preview should not issue an extra GPU render.
+            if (_previewImage == null || _previewImage.panel == null ||
+                _previewImage.resolvedStyle.display == DisplayStyle.None)
+                return;
             _ownedPreviewCamera.CopyFrom(previewCamera);
             _ownedPreviewCamera.enabled = false;
             _ownedPreviewCamera.targetTexture = _ownedPreviewTexture;
