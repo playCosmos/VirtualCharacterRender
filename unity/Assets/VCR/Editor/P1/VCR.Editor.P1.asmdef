@@ -14,7 +14,8 @@
     "VCR.Runtime.Capabilities",
     "VCR.Runtime.Application",
     "VCR.Runtime.Tracking",
-    "VCR.Runtime.P1ValidationFixtures"
+    "VCR.Runtime.P1ValidationFixtures",
+    "VCR.Runtime.UI"
   ],
   "includePlatforms": [
     "Editor"
