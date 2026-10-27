@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UIElements;
+using VCR.Runtime.Application;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Output;
 
@@ -1543,6 +1544,14 @@ namespace VCR.Runtime.UI
         {
             if (_characterRestoreAttempted || _characterActionPending || sceneRuntime == null)
                 return;
+            // The application bootstrap may be restoring configuration or a
+            // command-line VRM asynchronously. Never race that startup load.
+            if (!UnityEngine.Application.isEditor)
+            {
+                var bootstrap = FindFirstObjectByType<ApplicationRuntimeBootstrap>();
+                if (bootstrap != null && bootstrap.isActiveAndEnabled && !bootstrap.IsStarted)
+                    return;
+            }
             if (sceneRuntime.Status.HasCharacter)
             {
                 _characterRestoreAttempted = true;
