@@ -46,6 +46,9 @@ namespace VCR.Runtime.UI
         private Button _unloadCharacterButton;
         private Label _actionResult;
         private bool _characterActionPending;
+        private bool _characterRestoreAttempted;
+        private bool _characterRestoreInProgress;
+        private const string LastSuccessfulCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
         private Label _previewStatus;
         private VisualElement _leftDock;
         private VisualElement _rightDock;
@@ -126,6 +129,8 @@ namespace VCR.Runtime.UI
         private void OnEnable()
         {
             InitializeWorkspaceTrackingRestore();
+            _characterRestoreAttempted = false;
+            _characterRestoreInProgress = false;
             // Existing PlayerPrefs layouts remain the migration fallback.
             var restoredSnapshot = WorkspaceLayoutFile.Load();
             _document = GetComponent<UIDocument>();
@@ -218,6 +223,7 @@ namespace VCR.Runtime.UI
                     ? "Preview unavailable: no scene runtime" : "External preview texture connected";
                 return;
             }
+            TryRestoreWorkspaceCharacter();
             SynchronizeRenderInputs();
             var state = sceneRuntime.Status;
             var path = sceneRuntime.CurrentCharacterPath;
@@ -1516,6 +1522,45 @@ namespace VCR.Runtime.UI
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
 
+        // The new U1 scene does not include the old uGUI controller that
+        // previously restored the last successfully loaded character.
+        private void TryRestoreWorkspaceCharacter()
+        {
+            if (_characterRestoreAttempted || _characterActionPending || sceneRuntime == null)
+                return;
+            if (sceneRuntime.Status.HasCharacter)
+            {
+                _characterRestoreAttempted = true;
+                return;
+            }
+            var path = PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                _characterRestoreAttempted = true;
+                return;
+            }
+            if (!string.Equals(System.IO.Path.GetExtension(path), ".vrm",
+                    StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
+            {
+                _characterRestoreAttempted = true;
+                if (_sourcesFeedback != null)
+                    _sourcesFeedback.text = "Previous VRM unavailable. Select an existing .vrm file.";
+                Debug.LogWarning("VCR inventory: stage=restore category=model status=missing filename=" +
+                    System.IO.Path.GetFileName(path), this);
+                return;
+            }
+            if (!ApplicationUiActionPolicy.CanLoadCharacter(true, sceneRuntime.State, path))
+                return;
+
+            _characterRestoreAttempted = true;
+            _characterRestoreInProgress = true;
+            _nativeModelPathOverride = path;
+            if (_modelPathInput != null) _modelPathInput.SetValueWithoutNotify(path);
+            Debug.Log("VCR inventory: stage=restore category=model status=loading filename=" +
+                System.IO.Path.GetFileName(path), this);
+            LoadModelFromPath();
+        }
+
         private async void LoadModelFromPath()
         {
             if (_characterActionPending) return;
@@ -1538,6 +1583,7 @@ namespace VCR.Runtime.UI
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "Select an existing .vrm file path.";
                 return;
             }
+            var restoringPreviousCharacter = _characterRestoreInProgress;
             _characterActionPending = true;
             if (_loadModelButton != null) _loadModelButton.SetEnabled(false);
             if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
@@ -1548,23 +1594,36 @@ namespace VCR.Runtime.UI
                 if (loaded == null)
                 {
                     if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load returned no model.";
+                    if (restoringPreviousCharacter)
+                        Debug.LogWarning("VCR inventory: stage=restore category=model status=not_loaded filename=" +
+                            System.IO.Path.GetFileName(path), this);
                     return;
                 }
-                PlayerPrefs.SetString("VCR.Character.LastSuccessfulPath.v1", path);
+                if (restoringPreviousCharacter)
+                    Debug.Log("VCR inventory: stage=restore category=model status=restored filename=" +
+                        System.IO.Path.GetFileName(path), this);
+                PlayerPrefs.SetString(LastSuccessfulCharacterPathKey, path);
                 PlayerPrefs.Save();
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "Loaded: " + System.IO.Path.GetFileName(path);
             }
             catch (System.OperationCanceledException)
             {
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load canceled.";
+                if (restoringPreviousCharacter)
+                    Debug.LogWarning("VCR inventory: stage=restore category=model status=canceled filename=" +
+                        System.IO.Path.GetFileName(path), this);
             }
             catch (System.Exception ex)
             {
                 Debug.LogException(ex, this);
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load failed: " + ex.Message;
+                if (restoringPreviousCharacter)
+                    Debug.LogWarning("VCR inventory: stage=restore category=model status=failed filename=" +
+                        System.IO.Path.GetFileName(path) + " exception=" + ex.GetType().Name, this);
             }
             finally
             {
+                _characterRestoreInProgress = false;
                 _characterActionPending = false;
                 _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
             }
@@ -1604,7 +1663,16 @@ namespace VCR.Runtime.UI
             try
             {
                 sceneRuntime.UnloadCharacter();
-                if (_actionResult != null) _actionResult.text = "Active VRM unloaded.";
+                // Unloading intentionally clears the next-start restoration target.
+                // Do not restore a model that the user explicitly removed.
+                PlayerPrefs.DeleteKey(LastSuccessfulCharacterPathKey);
+                PlayerPrefs.Save();
+                _characterRestoreAttempted = true;
+                _nativeModelPathOverride = null;
+                if (_modelPathInput != null) _modelPathInput.SetValueWithoutNotify("");
+                if (_workspaceNativeSettings != null)
+                    _workspaceNativeSettings.SetText(12, "");
+                if (_actionResult != null) _actionResult.text = "Active VRM unloaded; auto-restore cleared.";
             }
             catch (System.Exception ex)
             {
