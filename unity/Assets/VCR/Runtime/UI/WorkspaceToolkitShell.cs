@@ -437,6 +437,9 @@ namespace VCR.Runtime.UI
                     applicationUiController = FindFirstObjectByType<ApplicationUiController>();
                 if (applicationUiController != null)
                     applicationUiController.ShowNativeSettingsWindow();
+                else
+                    Debug.LogWarning(
+                        "VCR workspace: native Settings requires an ApplicationUiController in the active scene.");
             }) { text = "Settings" };
             settingsButton.SetEnabled(DesktopNativeSettingsWindow.Supported);
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
