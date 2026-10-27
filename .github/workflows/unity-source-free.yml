@@ -71,6 +71,33 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      - name: Generate and validate P1 UI Toolkit workspace
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require generated P1 workspace assets
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Assets/VCR/P1/P1Runtime.unity
+          test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "P1 UI Toolkit workspace generation: PASS"
+
       - name: Diagnose Unity package lock drift
         if: always()
         shell: bash
