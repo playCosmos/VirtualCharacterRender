@@ -80,13 +80,13 @@ namespace VCR.Editor.P1
                     }
                     return true;
                 }
-    
+
                 if (scene.isDirty)
                 {
                     Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before adding workspace.");
                     return false;
                 }
-    
+
                 var panelSettings =
                     AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
                 if (panelSettings == null)
@@ -94,7 +94,7 @@ namespace VCR.Editor.P1
                     panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
                     AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
                 }
-    
+
                 var workspaceObject = new GameObject("Workspace UI Toolkit");
                 workspaceObject.SetActive(false);
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
@@ -103,14 +103,14 @@ namespace VCR.Editor.P1
                 document.panelSettings = panelSettings;
                 workspaceObject.AddComponent<WorkspaceToolkitShell>();
                 workspaceObject.SetActive(true);
-    
+
                 if (!EditorSceneManager.SaveScene(scene))
                 {
                     Object.DestroyImmediate(workspaceObject);
                     Debug.LogError("VCR P1: could not save workspace into existing scene.");
                     return false;
                 }
-    
+
                 AssetDatabase.SaveAssets();
                 Debug.Log("VCR P1: existing runtime scene upgraded with UI Toolkit workspace.");
                 return true;
