@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using VCR.Editor.P0;
 using VCR.Runtime.UI;
+using VCR.Runtime.Scene;
 
 namespace VCR.Editor.P1
 {
@@ -60,6 +61,18 @@ namespace VCR.Editor.P1
                     Debug.LogError("VCR P1: multiple workspace shells found; refusing ambiguous UI setup.");
                     return false;
                 }
+
+                var runtimeCount = 0;
+                foreach (var root in scene.GetRootGameObjects())
+                    runtimeCount += root.GetComponentsInChildren<SingleCharacterSceneRuntime>(true).Length;
+                if (runtimeCount != 1)
+                {
+                    Debug.LogError(
+                        "VCR P1: expected exactly one SingleCharacterSceneRuntime, found " +
+                        runtimeCount + ".");
+                    return false;
+                }
+
                 if (existingShell != null)
                 {
                     // A dirty target scene may contain edits not yet serialized.
