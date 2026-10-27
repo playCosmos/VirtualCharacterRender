@@ -38,8 +38,11 @@ namespace VCR.Editor.P1
             if (!targetAlreadyLoaded)
                 scene = EditorSceneManager.OpenScene(
                     ScenePath, OpenSceneMode.Additive);
-            if (!scene.IsValid())
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError("VCR P1: runtime scene could not be loaded for workspace validation.");
                 return false;
+            }
 
             try
             {
