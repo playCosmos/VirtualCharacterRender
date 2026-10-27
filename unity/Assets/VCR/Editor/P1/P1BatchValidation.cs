@@ -58,6 +58,58 @@ namespace VCR.Editor.P1
             }
         }
 
+        // Runs an actual development player build in Unity batch mode.
+        // Supply -vcrBuildOutput <path> to override the default output location.
+        public static void BuildWindowsDevelopmentAndExit()
+        {
+            BuildDevelopmentAndExit(
+                BuildTarget.StandaloneWindows64,
+                "Builds/P1/Windows-Development/VirtualCharacterRender.exe");
+        }
+
+        public static void BuildMacDevelopmentAndExit()
+        {
+            BuildDevelopmentAndExit(
+                BuildTarget.StandaloneOSX,
+                "Builds/P1/macOS-Development/VirtualCharacterRender.app");
+        }
+
+        private static void BuildDevelopmentAndExit(BuildTarget target, string defaultOutput)
+        {
+            try
+            {
+                var output = defaultOutput;
+                var args = Environment.GetCommandLineArgs();
+                for (var index = 0; index < args.Length; index++)
+                {
+                    if (args[index] != "-vcrBuildOutput")
+                        continue;
+                    if (index + 1 >= args.Length ||
+                        string.IsNullOrWhiteSpace(args[index + 1]) ||
+                        args[index + 1].StartsWith("-"))
+                    {
+                        Debug.LogError("VCR P1 batch build: -vcrBuildOutput requires a path.");
+                        EditorApplication.Exit(1);
+                        return;
+                    }
+                    output = args[index + 1];
+                    break;
+                }
+
+                var passed = P1PlayerBuildMenu.Build(target, output, development: true);
+                Debug.Log(passed
+                    ? "VCR P1 development player build: PASS."
+                    : "VCR P1 development player build: FAIL.");
+                EditorApplication.Exit(passed ? 0 : 1);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("VCR P1 development player build: unexpected exception.");
+                Debug.LogException(exception);
+                EditorApplication.Exit(1);
+            }
+        }
+
         public static void RunSourceFreeAndExit()
         {
             try
