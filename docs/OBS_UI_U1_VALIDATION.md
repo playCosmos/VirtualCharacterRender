@@ -37,7 +37,7 @@ The workspace check returns exit code 0 on success, 1 on failure. It may upgrade
 3. Test VRM load, reload, unload, last-model restore and unsupported FBX behavior without claiming an importer exists.
 4. Test live preview in the actual rendering pipeline, camera discovery and preview cleanup after model/scene changes.
 5. Test docking, tab/stack, resize, hide/show, layout persistence, corrupt-layout recovery and keyboard/focus handling.
-6. Test native Settings availability from the shell. When `ApplicationUiController` is absent, verify the fallback panel opens, applies FPS/VSync, handles missing runtime and closes.
+6. Test native Settings availability from the shell. When `ApplicationUiController` is absent, or native Settings are unsupported, verify the fallback panel opens, applies FPS/VSync, reads back the effective values, handles missing runtime and closes. Settings must remain clickable on unsupported native-window platforms.
 7. Verify startup logs, module/plugin/shader/model discovery and the configured 60 FPS default / 120 FPS maximum.
 8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
 9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
