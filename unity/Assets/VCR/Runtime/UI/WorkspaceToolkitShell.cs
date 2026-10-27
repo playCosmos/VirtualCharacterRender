@@ -24,6 +24,7 @@ namespace VCR.Runtime.UI
         private VisualElement _dockHost;
         private Label _status;
         private Label _sourcesStatus;
+        private Label _sourcesFeedback;
         private TextField _modelPathInput;
         private Button _loadModelButton;
         private Label _inspectorStatus;
@@ -215,6 +216,7 @@ namespace VCR.Runtime.UI
             _dockHost = null;
             _status = null;
             _sourcesStatus = null;
+            _sourcesFeedback = null;
             _modelPathInput = null;
             _loadModelButton = null;
             _inspectorStatus = null;
@@ -462,6 +464,8 @@ namespace VCR.Runtime.UI
             sources.Add(_modelPathInput);
             _loadModelButton = new Button(LoadModelFromPath) { text = "Load VRM" };
             sources.Add(_loadModelButton);
+            _sourcesFeedback = new Label("");
+            sources.Add(_sourcesFeedback);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview,
                 "Preview — runtime viewport integration pending", 360);
@@ -486,6 +490,10 @@ namespace VCR.Runtime.UI
             _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
             _targetFrameRateInput.tooltip = "Supported target: 30–120 FPS. Default: 60 FPS.";
             _vsyncInput = new Toggle("VSync");
+            _targetFrameRateInput.RegisterCallback<FocusOutEvent>(_ =>
+            {
+                _targetFrameRateInput.SetValueWithoutNotify(Mathf.Clamp(_targetFrameRateInput.value, 30, 120));
+            });
             inspector.Add(_targetFrameRateInput);
             inspector.Add(_vsyncInput);
             if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var currentRender))
@@ -996,7 +1004,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
             if (sceneRuntime == null)
             {
-                if (_sourcesStatus != null) _sourcesStatus.text = "Scene runtime unavailable.";
+                if (_sourcesFeedback != null) _sourcesFeedback.text = "Scene runtime unavailable.";
                 return;
             }
             var path = _modelPathInput?.value?.Trim();
@@ -1005,7 +1013,7 @@ namespace VCR.Runtime.UI
                     System.StringComparison.OrdinalIgnoreCase) ||
                 !System.IO.File.Exists(path))
             {
-                if (_sourcesStatus != null) _sourcesStatus.text = "Select an existing .vrm file path.";
+                if (_sourcesFeedback != null) _sourcesFeedback.text = "Select an existing .vrm file path.";
                 return;
             }
             _characterActionPending = true;
@@ -1017,21 +1025,21 @@ namespace VCR.Runtime.UI
                 var loaded = await sceneRuntime.LoadCharacterAsync(path);
                 if (loaded == null)
                 {
-                    if (_sourcesStatus != null) _sourcesStatus.text = "VRM load returned no model.";
+                    if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load returned no model.";
                     return;
                 }
                 PlayerPrefs.SetString("VCR.Character.LastSuccessfulPath.v1", path);
                 PlayerPrefs.Save();
-                if (_sourcesStatus != null) _sourcesStatus.text = "Loaded: " + System.IO.Path.GetFileName(path);
+                if (_sourcesFeedback != null) _sourcesFeedback.text = "Loaded: " + System.IO.Path.GetFileName(path);
             }
             catch (System.OperationCanceledException)
             {
-                if (_sourcesStatus != null) _sourcesStatus.text = "VRM load canceled.";
+                if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load canceled.";
             }
             catch (System.Exception ex)
             {
                 Debug.LogException(ex, this);
-                if (_sourcesStatus != null) _sourcesStatus.text = "VRM load failed: " + ex.Message;
+                if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load failed: " + ex.Message;
             }
             finally
             {
