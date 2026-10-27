@@ -432,6 +432,10 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings = new DesktopNativeSettingsWindow();
                     _workspaceNativeSettings.Add(0, 1, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Render settings");
+                    _workspaceNativeSettings.Add(0, 10, DesktopNativeSettingsWindow.ControlKind.Edit,
+                        "Render scale (0.5-2.0)", "1");
+                    _workspaceNativeSettings.Add(0, 200, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Apply render scale");
                     _workspaceNativeSettings.Add(0, 11, DesktopNativeSettingsWindow.ControlKind.Edit,
                         "Target FPS (30-120)", "60");
                     _workspaceNativeSettings.Add(0, 201, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -461,7 +465,11 @@ namespace VCR.Runtime.UI
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
+                {
+                    _workspaceNativeSettings.SetText(10,
+                        settings.RenderScale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
                     _workspaceNativeSettings.SetText(11, settings.TargetFrameRate.ToString());
+                }
                 _workspaceNativeSettings.SetText(12,
                     _modelPathInput != null ? _modelPathInput.value ?? "" :
                     PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
@@ -529,7 +537,7 @@ namespace VCR.Runtime.UI
                     UnloadActiveCharacter();
                     continue;
                 }
-                if (action != 201 && action != 202 && action != 203 && action != 204) continue;
+                if (action != 200 && action != 201 && action != 202 && action != 203 && action != 204) continue;
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime == null || !sceneRuntime.TryCaptureRenderSettings(out var settings))
@@ -537,7 +545,20 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.SetText(90, "Render runtime unavailable.");
                     continue;
                 }
-                if (action == 201)
+                if (action == 200)
+                {
+                    if (!float.TryParse(_workspaceNativeSettings.GetText(10),
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var scale) ||
+                        float.IsNaN(scale) || float.IsInfinity(scale) ||
+                        scale < 0.5f || scale > 2.0f)
+                    {
+                        _workspaceNativeSettings.SetText(90, "Render scale must be 0.5-2.0.");
+                        continue;
+                    }
+                    settings.RenderScale = scale;
+                }
+                else if (action == 201)
                 {
                     if (!int.TryParse(_workspaceNativeSettings.GetText(11), out var fps) ||
                         fps < 30 || fps > 120)
@@ -570,6 +591,8 @@ namespace VCR.Runtime.UI
                 }
                 if (sceneRuntime.TryCaptureRenderSettings(out var applied))
                 {
+                    _workspaceNativeSettings.SetText(10,
+                        applied.RenderScale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
                     _workspaceNativeSettings.SetText(11, applied.TargetFrameRate.ToString());
                     _workspaceNativeSettings.SetText(90,
                         "FPS: " + applied.TargetFrameRate + ", VSync: " +
