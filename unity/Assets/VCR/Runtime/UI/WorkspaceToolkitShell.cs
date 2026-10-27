@@ -129,6 +129,7 @@ namespace VCR.Runtime.UI
         private void OnEnable()
         {
             InitializeWorkspaceTrackingRestore();
+            ResetWorkspaceTrackingPanel();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
             // Existing PlayerPrefs layouts remain the migration fallback.
@@ -166,6 +167,7 @@ namespace VCR.Runtime.UI
         {
             PumpWorkspaceNativeSettings();
             RestoreWorkspaceTrackingPreferences();
+            RefreshWorkspaceTrackingPanel();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -1035,6 +1037,7 @@ namespace VCR.Runtime.UI
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
+            BuildWorkspaceTrackingPanel(tracking);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
             _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
