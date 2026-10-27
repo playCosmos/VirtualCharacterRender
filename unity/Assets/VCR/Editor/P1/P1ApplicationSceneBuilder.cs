@@ -14,6 +14,59 @@ namespace VCR.Editor.P1
         private const string PanelSettingsPath =
             "Assets/VCR/P1/WorkspacePanelSettings.asset";
 
+        // Upgrade an existing P1 scene without replacing user-authored objects.
+        // The P0 scene generator is intentionally not invoked here.
+        public static bool EnsureWorkspaceInExistingScene()
+        {
+            if (!System.IO.File.Exists(ScenePath))
+            {
+                Debug.LogError("VCR P1: runtime scene is missing.");
+                return false;
+            }
+
+            var scene = EditorSceneManager.OpenScene(ScenePath);
+            if (!scene.IsValid())
+                return false;
+
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                if (root.GetComponentInChildren<WorkspaceToolkitShell>(true) != null)
+                    return true;
+            }
+
+            var panelSettings =
+                AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+            if (panelSettings == null)
+            {
+                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
+            }
+
+            var workspaceObject = new GameObject("Workspace UI Toolkit");
+            workspaceObject.SetActive(false);
+            var document = workspaceObject.AddComponent<UIDocument>();
+            document.panelSettings = panelSettings;
+            workspaceObject.AddComponent<WorkspaceToolkitShell>();
+            workspaceObject.SetActive(true);
+
+            if (!EditorSceneManager.SaveScene(scene))
+            {
+                Object.DestroyImmediate(workspaceObject);
+                Debug.LogError("VCR P1: could not save workspace into existing scene.");
+                return false;
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("VCR P1: existing runtime scene upgraded with UI Toolkit workspace.");
+            return true;
+        }
+
+        [MenuItem("VCR/P1/Upgrade Existing Runtime Scene With Workspace")]
+        public static void UpgradeExistingRuntimeScene()
+        {
+            EnsureWorkspaceInExistingScene();
+        }
+
         [MenuItem("VCR/P1/Create Application Runtime Scene")]
         public static void CreateApplicationRuntimeScene()
         {
