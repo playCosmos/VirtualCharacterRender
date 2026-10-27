@@ -73,6 +73,23 @@ namespace VCR.Editor.P1
                     return false;
                 }
 
+                var cameraCount = 0;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    foreach (var camera in root.GetComponentsInChildren<Camera>(true))
+                    {
+                        if (camera.CompareTag("MainCamera"))
+                            cameraCount++;
+                    }
+                }
+                if (cameraCount != 1)
+                {
+                    Debug.LogError(
+                        "VCR P1: expected exactly one tagged MainCamera, found " +
+                        cameraCount + ".");
+                    return false;
+                }
+
                 if (existingShell != null)
                 {
                     // A dirty target scene may contain edits not yet serialized.
