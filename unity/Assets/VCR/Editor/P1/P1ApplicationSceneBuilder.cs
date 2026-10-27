@@ -24,7 +24,26 @@ namespace VCR.Editor.P1
                 return false;
             }
 
-            var scene = EditorSceneManager.OpenScene(ScenePath);
+            // OpenScene(Single) replaces the currently edited scene. Never
+            // discard unrelated unsaved work during an upgrade or build.
+            var activeScene = EditorSceneManager.GetActiveScene();
+            if (activeScene.IsValid() && activeScene.isDirty)
+            {
+                if (Application.isBatchMode)
+                {
+                    Debug.LogError("VCR P1: active scene has unsaved changes; refusing batch upgrade.");
+                    return false;
+                }
+                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                {
+                    Debug.LogWarning("VCR P1: workspace upgrade cancelled.");
+                    return false;
+                }
+            }
+
+            var scene = activeScene.IsValid() && activeScene.path == ScenePath
+                ? activeScene
+                : EditorSceneManager.OpenScene(ScenePath);
             if (!scene.IsValid())
                 return false;
 
