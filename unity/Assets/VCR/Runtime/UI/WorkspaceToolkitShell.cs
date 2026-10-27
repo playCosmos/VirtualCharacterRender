@@ -521,15 +521,14 @@ namespace VCR.Runtime.UI
             {
                 if (applicationUiController == null)
                     applicationUiController = FindFirstObjectByType<ApplicationUiController>();
-                if (applicationUiController != null)
+                if (applicationUiController != null && DesktopNativeSettingsWindow.Supported)
                     applicationUiController.ShowNativeSettingsWindow();
                 else
                     ShowWorkspaceSettingsFallback();
             }) { text = "Settings" };
-            settingsButton.SetEnabled(DesktopNativeSettingsWindow.Supported);
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
-                ? "Open the existing native settings window"
-                : "Native settings are unavailable on this platform";
+                ? "Open native settings or the workspace render settings"
+                : "Open workspace render settings";
             header.Add(settingsButton);
             header.Add(new Button(() =>
             {
