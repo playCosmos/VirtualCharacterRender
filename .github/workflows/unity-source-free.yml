@@ -71,6 +71,15 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      - name: Diagnose Unity package lock drift
+        if: always()
+        shell: bash
+        run: |
+          if ! git diff --quiet -- unity/Packages/packages-lock.json; then
+            echo "::warning::Unity rewrote packages-lock.json; inspect the patch artifact before updating the pinned lock."
+            git diff -- unity/Packages/packages-lock.json | tee "$RUNNER_TEMP/unity-package-lock-diff.patch"
+          fi
+
       - name: Require actual PASS report and unchanged lock/settings
         shell: bash
         run: |
@@ -78,6 +87,15 @@ jobs:
           python3 tools/verify-unity-source-free-report.py Builds/Validation/p0-p13-source-free.json
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
           echo "Unity P0-P13 source-free evidence: PASS for $GITHUB_SHA"
+
+      - name: Archive Unity package lock drift
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-lock-drift-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/unity-package-lock-diff.patch
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Archive source-free validation evidence
         if: always()
