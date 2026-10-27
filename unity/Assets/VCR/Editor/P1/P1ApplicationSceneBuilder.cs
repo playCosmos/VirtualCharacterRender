@@ -194,7 +194,7 @@ namespace VCR.Editor.P1
                 AssetDatabase.CreateAsset(panelSettings, PanelSettingsPath);
             }
 
-            var scene = EditorSceneManager.GetActiveScene();
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             if (!scene.IsValid() || scene.path != ScenePath)
             {
                 Debug.LogError("VCR P1: expected runtime scene is not active; workspace was not created.");
