@@ -79,6 +79,12 @@ namespace VCR.Editor.P1
                 return true;
             }
 
+            if (scene.isDirty)
+            {
+                Debug.LogError("VCR P1: runtime scene has unsaved changes; save it before adding workspace.");
+                return false;
+            }
+
             var panelSettings =
                 AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
             if (panelSettings == null)
