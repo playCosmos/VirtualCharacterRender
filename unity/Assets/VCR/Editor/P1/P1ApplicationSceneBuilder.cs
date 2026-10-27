@@ -164,6 +164,11 @@ namespace VCR.Editor.P1
                 Debug.LogError("VCR P1: expected runtime scene is not active; workspace was not created.");
                 return;
             }
+            if (!AssetDatabase.Contains(panelSettings))
+            {
+                Debug.LogError("VCR P1: workspace PanelSettings could not be saved.");
+                return;
+            }
 
             var workspaceObject = new GameObject("Workspace UI Toolkit");
             workspaceObject.SetActive(false);
