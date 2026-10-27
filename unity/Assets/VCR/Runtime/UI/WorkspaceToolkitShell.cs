@@ -128,6 +128,13 @@ namespace VCR.Runtime.UI
                 _status.text = "Scene runtime unavailable";
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
+                if (_inspectorModelPath != null) _inspectorModelPath.text = "Model path: unavailable";
+                if (_inspectorCameraStatus != null) _inspectorCameraStatus.text = "Camera: unavailable";
+                if (_loadModelButton != null) _loadModelButton.SetEnabled(false);
+                if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
+                if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
+                if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(false);
+                if (_applyRenderButton != null) _applyRenderButton.SetEnabled(false);
                 if (_trackingStatus != null) _trackingStatus.text = "Runtime unavailable";
                 if (_previewStatus != null) _previewStatus.text = _previewTexture == null
                     ? "Preview unavailable: no scene runtime" : "External preview texture connected";
@@ -140,7 +147,7 @@ namespace VCR.Runtime.UI
             _status.text = "Scene: " + state.State + " | Model: " + modelName +
                 " | Loaded: " + state.HasCharacter;
             if (_sourcesStatus != null) _sourcesStatus.text = "Active model: " + modelName;
-            if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending);
+            if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -153,8 +160,8 @@ namespace VCR.Runtime.UI
                 _inspectorModelPath.text = "Model path: " + (string.IsNullOrWhiteSpace(path) ? "<none>" : path);
             if (_inspectorCameraStatus != null)
                 _inspectorCameraStatus.text = "Camera: " + (sceneRuntime.CameraController == null ? "unavailable" : "connected");
-            if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && !_characterActionPending);
-            if (_applyRenderButton != null) _applyRenderButton.SetEnabled(!_characterActionPending);
+            if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && !_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
+            if (_applyRenderButton != null) _applyRenderButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_reloadCharacterButton != null)
                 _reloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
             if (_unloadCharacterButton != null)
