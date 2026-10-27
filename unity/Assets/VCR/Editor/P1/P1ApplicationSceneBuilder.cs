@@ -143,6 +143,23 @@ namespace VCR.Editor.P1
         [MenuItem("VCR/P1/Create Application Runtime Scene")]
         public static void CreateApplicationRuntimeScene()
         {
+            if (System.IO.File.Exists(ScenePath) && !Application.isBatchMode &&
+                !EditorUtility.DisplayDialog(
+                    "Replace P1 Runtime Scene?",
+                    "This regenerates the P1 runtime scene and replaces existing scene objects. " +
+                    "Use 'Upgrade Existing Runtime Scene With Workspace' to preserve existing objects.",
+                    "Replace Scene",
+                    "Cancel"))
+            {
+                Debug.Log("VCR P1: scene regeneration cancelled.");
+                return;
+            }
+            if (System.IO.File.Exists(ScenePath) && Application.isBatchMode)
+            {
+                Debug.LogError("VCR P1: refusing to overwrite existing runtime scene in batch mode.");
+                return;
+            }
+
             if (!P0TrackingSceneBuilder.CreateRuntimeScene(
                     ScenePath,
                     "VCR P1 Runtime",
