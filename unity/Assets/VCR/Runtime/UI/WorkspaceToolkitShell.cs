@@ -442,10 +442,18 @@ namespace VCR.Runtime.UI
             panel.Add(title);
             var fps = new IntegerField("Target FPS (30–120)");
             var vsync = new Toggle("VSync");
-            var available = sceneRuntime != null &&
-                sceneRuntime.TryCaptureRenderSettings(out var current);
-            fps.value = available ? Mathf.Clamp(current.TargetFrameRate, 30, 120) : 60;
-            vsync.value = available && current.UseVSync;
+            var available = false;
+            var initialFps = 60;
+            var initialVsync = false;
+            if (sceneRuntime != null &&
+                sceneRuntime.TryCaptureRenderSettings(out var current))
+            {
+                available = true;
+                initialFps = Mathf.Clamp(current.TargetFrameRate, 30, 120);
+                initialVsync = current.UseVSync;
+            }
+            fps.value = initialFps;
+            vsync.value = initialVsync;
             fps.SetEnabled(available);
             vsync.SetEnabled(available);
             panel.Add(fps);
