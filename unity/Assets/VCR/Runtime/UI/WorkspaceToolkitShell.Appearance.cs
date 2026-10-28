@@ -157,6 +157,9 @@ namespace VCR.Runtime.UI
                 if (behaviour == null || !behaviour.isActiveAndEnabled ||
                     !(behaviour is IAppearanceRuntime candidate))
                     continue;
+                var owner = behaviour.GetComponentInParent<UniVRM10.Vrm10Instance>();
+                if (owner != null && owner != character)
+                    continue; // Never target a still-alive, different VRM.
                 if (only != null) return null;
                 only = candidate;
             }
