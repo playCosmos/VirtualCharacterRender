@@ -133,6 +133,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceTrackingPanel();
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
+            ResetWorkspaceMaterialsPanel();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -173,6 +174,7 @@ namespace VCR.Runtime.UI
             RestoreWorkspaceTrackingPreferences();
             RefreshWorkspaceTrackingPanel();
             RefreshWorkspaceCapabilitiesPanel();
+            RefreshWorkspaceMaterialsPanel();
             DrainWorkspaceLog();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
@@ -298,6 +300,7 @@ namespace VCR.Runtime.UI
             UnsubscribeWorkspaceLog();
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
+            ResetWorkspaceMaterialsPanel();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -1031,7 +1034,9 @@ namespace VCR.Runtime.UI
                 inspectorSplitter.style.display = !_tabMode && inspector.parent == right
                     ? DisplayStyle.Flex : DisplayStyle.None;
                 right.Add(inspectorSplitter);
-                PlacePanel(Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 140), WorkspacePanelCatalog.Materials, "right");
+                var materials = Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 200);
+                BuildWorkspaceMaterialsPanel(materials);
+                PlacePanel(materials, WorkspacePanelCatalog.Materials, "right");
                 var modules = Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120);
                 BuildWorkspaceCapabilitiesPanel(modules);
                 PlacePanel(modules, WorkspacePanelCatalog.Capabilities, "right");
