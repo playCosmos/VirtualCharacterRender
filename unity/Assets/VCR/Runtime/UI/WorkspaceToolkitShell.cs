@@ -138,6 +138,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceScenesPanel();
             ResetWorkspaceBroadcastPanel();
             ResetWorkspaceEnvironmentPanel();
+            ResetWorkspaceEventRules();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -184,6 +185,7 @@ namespace VCR.Runtime.UI
             RefreshWorkspaceScenesPanel();
             RefreshWorkspaceBroadcastStatus();
             RefreshWorkspaceEnvironmentPanel();
+            RefreshWorkspaceEventRulesPanel();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -313,6 +315,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceScenesPanel();
             ResetWorkspaceBroadcastPanel();
             ResetWorkspaceEnvironmentPanel();
+            ResetWorkspaceEventRules();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -898,6 +901,7 @@ namespace VCR.Runtime.UI
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             CaptureWorkspaceMaterialEditorDrafts();
             CaptureWorkspaceEnvironmentDraft();
+            CaptureWorkspaceEventRulesDraft();
             ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
@@ -1146,7 +1150,14 @@ namespace VCR.Runtime.UI
             actions.Add(actionsScroll);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
-            BuildWorkspaceLogPanel(events);
+            // The bottom dock is compact: scroll rule controls and logs as
+            // one content area instead of clipping the controls below it.
+            var eventsContent = new ScrollView { name = "vcr-events-content" };
+            eventsContent.style.flexGrow = 1;
+            eventsContent.style.minHeight = 60;
+            BuildWorkspaceEventRulesPanel(eventsContent);
+            BuildWorkspaceLogPanel(eventsContent);
+            events.Add(eventsContent);
             PlacePanel(events, WorkspacePanelCatalog.Events, "bottom");
             _workspaceRoot.Add(bottom);
             SortDockPanels(left);
