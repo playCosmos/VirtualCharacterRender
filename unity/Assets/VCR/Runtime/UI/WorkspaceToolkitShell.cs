@@ -506,19 +506,23 @@ namespace VCR.Runtime.UI
                 }
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
-                if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
-                {
-                    _workspaceNativeSettings.SetText(10,
-                        settings.RenderScale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
-                    _workspaceNativeSettings.SetText(11, settings.TargetFrameRate.ToString());
-                }
-                _workspaceNativeSettings.SetText(12,
-                    _modelPathInput != null ? _modelPathInput.value ?? "" :
-                    PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
-                RefreshWorkspaceConfigurationStatus();
-                RefreshWorkspaceOverlayStatus();
+                // Update fields only when opening a previously closed window.
+                // Re-invoking Settings while it is already open must not discard
+                // a partially edited model path, FPS or render scale.
                 if (!_workspaceNativeSettings.IsVisible)
                 {
+                    if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
+                    {
+                        _workspaceNativeSettings.SetText(10,
+                            settings.RenderScale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+                        _workspaceNativeSettings.SetText(11,
+                            settings.TargetFrameRate.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    }
+                    _workspaceNativeSettings.SetText(12,
+                        _modelPathInput != null ? _modelPathInput.value ?? "" :
+                        PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
+                    RefreshWorkspaceConfigurationStatus();
+                    RefreshWorkspaceOverlayStatus();
                     _runInBackgroundBeforeSettings = UnityEngine.Application.runInBackground;
                     UnityEngine.Application.runInBackground = true;
                 }
