@@ -280,6 +280,21 @@ namespace VCR.Runtime.UI
 
         private void ApplyWorkspaceAppearance(WorkspaceAppearanceAction action)
         {
+            // The model can change between the 0.5s status refresh and a click.
+            // Never apply IDs typed for an old VRM to its replacement.
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            var activeCharacter = sceneRuntime != null ? sceneRuntime.CurrentCharacter : null;
+            if (activeCharacter == null ||
+                (_appearanceObservedCharacter != int.MinValue &&
+                 activeCharacter.GetInstanceID() != _appearanceObservedCharacter))
+            {
+                _nextAppearanceWorkspaceRefresh = 0f;
+                RefreshWorkspaceAppearancePanel();
+                SetWorkspaceAppearanceFeedback(
+                    "Active character changed or is missing. Select appearance IDs again.");
+                return;
+            }
             var runtime = FindWorkspaceAppearanceRuntime();
             if (runtime == null || sceneRuntime == null || _characterActionPending ||
                 !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State))
