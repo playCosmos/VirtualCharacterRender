@@ -25,13 +25,17 @@ namespace VCR.Runtime.UI
         private int _workspaceDroppedLogCount;
         private RuntimeDiagnostics _workspaceDiagnostics;
         private Label _workspaceDiagnosticsStatus;
+        private Label _workspaceDiagnosticsFeedback;
         private float _nextWorkspaceDiagnosticsRefresh;
 
         private readonly struct WorkspaceLogEvent
         {
             public WorkspaceLogEvent(string message, LogType type)
             {
-                Message = message ?? "";
+                // Cap per-message memory too; a bounded queue alone does not
+                // protect against unbounded exception or plugin log strings.
+                Message = message == null ? "" :
+                    message.Length > 4096 ? message.Substring(0, 4096) + "…" : message;
                 Type = type;
                 Timestamp = DateTime.UtcNow.ToString("HH:mm:ss");
             }
@@ -73,6 +77,7 @@ namespace VCR.Runtime.UI
             _workspaceLogSummary = null;
             _workspaceDiagnostics = null;
             _workspaceDiagnosticsStatus = null;
+            _workspaceDiagnosticsFeedback = null;
             _nextWorkspaceDiagnosticsRefresh = 0f;
             _workspaceErrorsOnly = false;
             _workspaceLogHistory.Clear();
@@ -185,6 +190,9 @@ namespace VCR.Runtime.UI
             diagnostics.style.marginTop = 5;
             _workspaceDiagnosticsStatus = new Label("Runtime diagnostics: checking...");
             diagnostics.Add(_workspaceDiagnosticsStatus);
+            _workspaceDiagnosticsFeedback = new Label("");
+            _workspaceDiagnosticsFeedback.style.whiteSpace = WhiteSpace.Normal;
+            diagnostics.Add(_workspaceDiagnosticsFeedback);
             var buttons = new VisualElement();
             buttons.style.flexDirection = FlexDirection.Row;
             buttons.style.flexWrap = Wrap.Wrap;
@@ -193,14 +201,14 @@ namespace VCR.Runtime.UI
                 var service = ResolveWorkspaceDiagnostics();
                 if (service == null)
                 {
-                    _workspaceDiagnosticsStatus.text = "Runtime diagnostics unavailable.";
+                    _workspaceDiagnosticsFeedback.text = "Runtime diagnostics unavailable.";
                     return;
                 }
                 try
                 {
                     if (!service.TryCaptureNow(out var snapshot, out var error))
                     {
-                        _workspaceDiagnosticsStatus.text =
+                        _workspaceDiagnosticsFeedback.text =
                             "Capture unavailable: " + (error ?? "unknown error");
                         return;
                     }
@@ -209,7 +217,7 @@ namespace VCR.Runtime.UI
                 }
                 catch (Exception exception)
                 {
-                    _workspaceDiagnosticsStatus.text = "Capture failed: " + exception.Message;
+                    _workspaceDiagnosticsFeedback.text = "Capture failed: " + exception.Message;
                     Debug.LogException(exception, this);
                 }
             }) { text = "Capture metrics" });
@@ -218,22 +226,22 @@ namespace VCR.Runtime.UI
                 var service = ResolveWorkspaceDiagnostics();
                 if (service == null)
                 {
-                    _workspaceDiagnosticsStatus.text = "Runtime diagnostics unavailable.";
+                    _workspaceDiagnosticsFeedback.text = "Runtime diagnostics unavailable.";
                     return;
                 }
                 try
                 {
                     if (!service.TryWriteLatestSnapshotJson(out var path, out var error))
                     {
-                        _workspaceDiagnosticsStatus.text =
+                        _workspaceDiagnosticsFeedback.text =
                             "Export failed: " + (error ?? "unknown error");
                         return;
                     }
-                    _workspaceDiagnosticsStatus.text = "Diagnostics JSON saved: " + path;
+                    _workspaceDiagnosticsFeedback.text = "Diagnostics JSON saved: " + path;
                 }
                 catch (Exception exception)
                 {
-                    _workspaceDiagnosticsStatus.text = "Export failed: " + exception.Message;
+                    _workspaceDiagnosticsFeedback.text = "Export failed: " + exception.Message;
                     Debug.LogException(exception, this);
                 }
             }) { text = "Export latest JSON" });
