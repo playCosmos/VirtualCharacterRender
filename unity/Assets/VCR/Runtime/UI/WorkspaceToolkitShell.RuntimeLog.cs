@@ -230,6 +230,7 @@ namespace VCR.Runtime.UI
                             "Capture unavailable: " + (error ?? "unknown error");
                         return;
                     }
+                    _workspaceDiagnosticsMetricPage = 0;
                     _nextWorkspaceDiagnosticsRefresh = 0f;
                     RefreshWorkspaceDiagnosticsPanel();
                 }
@@ -249,6 +250,14 @@ namespace VCR.Runtime.UI
                 }
                 try
                 {
+                    if (service.LatestSnapshot.Sequence <= 0 &&
+                        !service.TryCaptureNow(out _, out var captureError))
+                    {
+                        _workspaceDiagnosticsFeedback.text =
+                            "Export requires a captured report: " +
+                            (captureError ?? "unknown error");
+                        return;
+                    }
                     if (!service.TryWriteLatestSnapshotJson(out var path, out var error))
                     {
                         _workspaceDiagnosticsFeedback.text =
