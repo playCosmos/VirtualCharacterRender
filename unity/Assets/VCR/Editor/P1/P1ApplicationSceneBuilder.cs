@@ -3,6 +3,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VCR.Editor.P0;
+using VCR.Runtime.Application;
 using VCR.Runtime.UI;
 using VCR.Runtime.Scene;
 
@@ -128,6 +129,30 @@ namespace VCR.Editor.P1
                     return false;
                 }
 
+                // A native smoke must test the same application bootstrap
+                // that drives this exact P1 scene. No separate test scene is
+                // permitted to stand in for the generated workspace Player.
+                var bootstrap = runtime.GetComponent<ApplicationRuntimeBootstrap>();
+                if (bootstrap == null)
+                {
+                    Debug.LogError("VCR P1: scene runtime has no ApplicationRuntimeBootstrap.");
+                    return false;
+                }
+                var smokeCount = 0;
+                PlayerStartupSmoke currentSmoke = null;
+                foreach (var root in scene.GetRootGameObjects())
+                    foreach (var smoke in root.GetComponentsInChildren<PlayerStartupSmoke>(true))
+                    {
+                        smokeCount++;
+                        currentSmoke = smoke;
+                    }
+                if (smokeCount > 1 || (currentSmoke != null &&
+                    currentSmoke.gameObject != bootstrap.gameObject))
+                {
+                    Debug.LogError("VCR P1: multiple or misplaced PlayerStartupSmoke components.");
+                    return false;
+                }
+
                 if (existingShell != null)
                 {
                     // A dirty target scene may contain edits not yet serialized.
@@ -154,6 +179,18 @@ namespace VCR.Editor.P1
                         Debug.LogError("VCR P1: existing workspace is disabled; refusing to build a player with no visible shell.");
                         return false;
                     }
+                    if (currentSmoke == null)
+                    {
+                        // Existing UI scenes need the same opt-in startup/quit
+                        // evidence as freshly generated scenes. Never modify
+                        // unsaved scenes or replace unrelated runtime objects.
+                        bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
+                        if (!EditorSceneManager.SaveScene(scene))
+                        {
+                            Debug.LogError("VCR P1: failed to upgrade Player smoke evidence component.");
+                            return false;
+                        }
+                    }
                     return true;
                 }
 
@@ -176,6 +213,8 @@ namespace VCR.Editor.P1
                     return false;
                 }
 
+                if (currentSmoke == null)
+                    bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
                 var workspaceObject = new GameObject("Workspace UI Toolkit");
                 workspaceObject.SetActive(false);
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
@@ -253,6 +292,29 @@ namespace VCR.Editor.P1
                     "environment.p1.basic",
                     "P1"))
                 return;
+
+            // Reuse the actual runtime bootstrap so CI launches the same P1
+            // scene as the shipped workspace, not an alpha-only smoke scene.
+            var runtimeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            ApplicationRuntimeBootstrap bootstrap = null;
+            if (runtimeScene.IsValid())
+                foreach (var root in runtimeScene.GetRootGameObjects())
+                    foreach (var candidate in root.GetComponentsInChildren<ApplicationRuntimeBootstrap>(true))
+                    {
+                        if (bootstrap != null)
+                        {
+                            Debug.LogError("VCR P1: multiple application bootstraps found.");
+                            return;
+                        }
+                        bootstrap = candidate;
+                    }
+            if (bootstrap == null)
+            {
+                Debug.LogError("VCR P1: generated scene has no application bootstrap.");
+                return;
+            }
+            if (bootstrap.GetComponent<PlayerStartupSmoke>() == null)
+                bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
 
             var panelSettings =
                 AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
