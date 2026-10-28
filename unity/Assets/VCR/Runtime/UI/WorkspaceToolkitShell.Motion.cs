@@ -43,6 +43,7 @@ namespace VCR.Runtime.UI
             _workspaceMotionValueDraft = null;
             _workspaceMotionObservedCharacter = int.MinValue;
             _nextWorkspaceMotionRefresh = 0f;
+            ResetWorkspaceMotionCues();
         }
 
         private void CaptureWorkspaceMotionDrafts()
@@ -53,6 +54,7 @@ namespace VCR.Runtime.UI
                 _workspaceMotionExpressionDraft = _workspaceMotionExpressionName.value;
             if (_workspaceMotionExpressionValue != null)
                 _workspaceMotionValueDraft = _workspaceMotionExpressionValue.value;
+            CaptureWorkspaceCueDrafts();
         }
 
         private void BuildWorkspaceMotionPanel(VisualElement container)
@@ -95,6 +97,7 @@ namespace VCR.Runtime.UI
                 "Manual expressions require a layer actually connected to the current mixer.");
             _workspaceMotionFeedback.style.whiteSpace = WhiteSpace.Normal;
             container.Add(_workspaceMotionFeedback);
+            BuildWorkspaceMotionCues(container);
             _nextWorkspaceMotionRefresh = 0f;
             RefreshWorkspaceMotionPanel();
         }
@@ -156,6 +159,7 @@ namespace VCR.Runtime.UI
                 _workspaceMotionPoseWeight?.SetValueWithoutNotify("");
                 _workspaceMotionExpressionName?.SetValueWithoutNotify("");
                 _workspaceMotionExpressionValue?.SetValueWithoutNotify("");
+                ClearWorkspaceCueSelection();
             }
             _workspaceMotionObservedCharacter = characterId;
             var found = ResolveWorkspaceMotionServices(out var mixer, out var manual);
@@ -178,6 +182,7 @@ namespace VCR.Runtime.UI
                 string.IsNullOrWhiteSpace(_workspaceMotionPoseWeight.value))
                 _workspaceMotionPoseWeight.SetValueWithoutNotify(
                     mixer.PrimaryPoseLayerWeight.ToString("0.###", CultureInfo.InvariantCulture));
+            RefreshWorkspaceMotionCues();
         }
 
         private bool TryGetWorkspaceMotionForEdit(
