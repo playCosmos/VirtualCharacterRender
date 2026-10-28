@@ -116,8 +116,13 @@ namespace VCR.Runtime.UI
             _nextWorkspaceMaterialsRefresh = Time.unscaledTime + 2f;
             try
             {
-                if (_workspaceMaterialController == null)
-                    _workspaceMaterialController = FindFirstObjectByType<MaterialOverrideController>();
+                if (sceneRuntime == null)
+                    sceneRuntime = FindFirstObjectByType<VCR.Runtime.Scene.SingleCharacterSceneRuntime>();
+                // Only edit the current model. Looking up an arbitrary scene-wide
+                // controller can affect a different character after reload.
+                var current = sceneRuntime != null ? sceneRuntime.CurrentCharacter : null;
+                _workspaceMaterialController = current != null
+                    ? current.GetComponent<MaterialOverrideController>() : null;
                 if (_workspacePackageLoader == null)
                     _workspacePackageLoader = FindFirstObjectByType<RuntimeShaderPackageLoader>();
 
@@ -223,11 +228,11 @@ namespace VCR.Runtime.UI
 
         private bool TryGetWorkspaceMaterialTarget(out MaterialOverrideController target)
         {
-            target = _workspaceMaterialController;
-            if (target == null)
-                target = FindFirstObjectByType<MaterialOverrideController>();
             if (sceneRuntime == null)
                 sceneRuntime = FindFirstObjectByType<VCR.Runtime.Scene.SingleCharacterSceneRuntime>();
+            var current = sceneRuntime != null ? sceneRuntime.CurrentCharacter : null;
+            target = current != null
+                ? current.GetComponent<MaterialOverrideController>() : null;
             if (sceneRuntime == null || !sceneRuntime.Status.HasCharacter || target == null)
             {
                 SetWorkspaceMaterialsFeedback(
