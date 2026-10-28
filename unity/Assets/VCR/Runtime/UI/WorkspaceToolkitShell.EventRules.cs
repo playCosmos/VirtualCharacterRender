@@ -131,7 +131,11 @@ namespace VCR.Runtime.UI
                     _workspaceEventStore = new EventRuntimeConfigurationStore(path);
                     // Match the legacy dashboard: restore only once on first
                     // discovery, never silently create/overwrite a saved file.
-                    if (File.Exists(path) &&
+                    // If the legacy dashboard is still active it retains
+                    // responsibility for its own startup restoration. Do
+                    // not overwrite its live, potentially unsaved edits.
+                    if (FindFirstObjectByType<ApplicationUiController>() == null &&
+                        File.Exists(path) &&
                         !TryReloadWorkspaceEventRules(current, out var error))
                         ReportWorkspaceEvent("Saved event rules not restored: " + error);
                 }
@@ -391,9 +395,13 @@ namespace VCR.Runtime.UI
                     if (host.GetRuleAt(i) != null) return false;
                     continue;
                 }
-                if (!host.TryGetRuleSummaryAt(i, out var current) ||
-                    !string.Equals(current.Id, rules[i].Id, StringComparison.Ordinal) ||
-                    current.Enabled != rules[i].Enabled)
+                // SetRules returns void and can reject a rule set without
+                // throwing. Comparing only IDs/enabled would falsely mark a
+                // change in filter/actions as successfully reloaded.
+                var current = host.GetRuleAt(i);
+                if (current == null ||
+                    !string.Equals(JsonUtility.ToJson(current),
+                        JsonUtility.ToJson(rules[i]), StringComparison.Ordinal))
                     return false;
             }
             return true;
