@@ -117,8 +117,21 @@ namespace VCR.Runtime.UI
                 var file = _workspacePresetStore.GetProfilePath(path);
                 // The legacy controller loads this profile as well. Do not
                 // race it or overwrite its in-memory pending changes.
-                if (FindFirstObjectByType<ApplicationUiController>() != null ||
-                    !File.Exists(file)) return true;
+                if (FindFirstObjectByType<ApplicationUiController>() != null)
+                    return true;
+                // A shared scene-level provider can survive a VRM swap. In
+                // the absence of a saved profile, clear its previous model's
+                // user presets rather than exposing them to the new model.
+                if (!File.Exists(file))
+                {
+                    if (registry.ReplaceUserPresets(Array.Empty<AppearancePreset>(),
+                            out var clearError))
+                        return true;
+                    _workspacePresetLoadError = clearError ?? "profile reset rejected";
+                    SetWorkspaceUserPresetFeedback("Profile reset failed: " +
+                        _workspacePresetLoadError);
+                    return false;
+                }
                 if (!_workspacePresetStore.TryLoad(path, out var presets, out var error))
                 {
                     _workspacePresetLoadError = error ?? "read rejected";
