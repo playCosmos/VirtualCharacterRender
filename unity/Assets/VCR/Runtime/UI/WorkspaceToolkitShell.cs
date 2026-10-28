@@ -1117,15 +1117,21 @@ namespace VCR.Runtime.UI
             BuildWorkspaceTrackingPanel(tracking);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
+            // The bottom dock defaults to 150 px. Keep both model actions
+            // and broadcast controls reachable instead of clipping the latter.
+            var actionsScroll = new ScrollView { name = "vcr-actions-content" };
+            actionsScroll.style.flexGrow = 1;
+            actionsScroll.style.minHeight = 60;
             _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
             _unloadCharacterButton = new Button(UnloadActiveCharacter) { text = "Unload active VRM" };
             _reloadCharacterButton.SetEnabled(false);
             _unloadCharacterButton.SetEnabled(false);
-            actions.Add(_reloadCharacterButton);
-            actions.Add(_unloadCharacterButton);
+            actionsScroll.Add(_reloadCharacterButton);
+            actionsScroll.Add(_unloadCharacterButton);
             _actionResult = new Label("Actions operate on the current scene runtime.");
-            actions.Add(_actionResult);
-            BuildWorkspaceBroadcastPanel(actions);
+            actionsScroll.Add(_actionResult);
+            BuildWorkspaceBroadcastPanel(actionsScroll);
+            actions.Add(actionsScroll);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
             BuildWorkspaceLogPanel(events);
