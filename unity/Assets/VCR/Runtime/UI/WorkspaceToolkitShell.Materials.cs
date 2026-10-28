@@ -162,7 +162,7 @@ namespace VCR.Runtime.UI
                 var previousController = _workspaceMaterialController;
                 _workspaceMaterialController = current != null
                     ? current.GetComponent<MaterialOverrideController>() : null;
-                if (previousController != null &&
+                if (!ReferenceEquals(previousController, null) &&
                     !ReferenceEquals(previousController, _workspaceMaterialController))
                 {
                     // Slot IDs can be identical across two different VRMs.
