@@ -681,11 +681,11 @@ namespace VCR.Runtime.UI
                 try
                 {
                     sceneRuntime.ApplyRenderSettings(settings);
-                    if (action == 203)
+                    // Applying *any* render setting writes runInBackground
+                    // through DesktopRenderBootstrap. Keep native Settings
+                    // responsive even when that preference is false.
+                    if (_nativeSettingsWasVisible)
                     {
-                        // Settings uses background ticking until the native
-                        // window is closed; keep the new user preference for
-                        // restoring after close.
                         _runInBackgroundBeforeSettings = settings.RunInBackground;
                         UnityEngine.Application.runInBackground = true;
                     }
@@ -866,7 +866,15 @@ namespace VCR.Runtime.UI
                 }
             }) { text = "Apply" };
             panel.Add(apply);
-            BuildWorkspaceConfigurationFallback(panel);
+            BuildWorkspaceConfigurationFallback(panel, () =>
+            {
+                if (sceneRuntime != null &&
+                    sceneRuntime.TryCaptureRenderSettings(out var loaded))
+                {
+                    fps.SetValueWithoutNotify(Mathf.Clamp(loaded.TargetFrameRate, 30, 120));
+                    vsync.SetValueWithoutNotify(loaded.UseVSync);
+                }
+            });
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
             _workspaceRoot.Add(panel);
         }
