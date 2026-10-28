@@ -16,6 +16,9 @@ namespace VCR.Runtime.UI
         private const float WorkspaceEventReloadConfirmSeconds = 15f;
         private const int WorkspaceEventVisibleRuleLimit = 80;
         private EventRuntimeHost _workspaceEventHost;
+        // Deliberately survives UI disable/re-enable: that should never
+        // replace unsaved runtime rules by replaying an old disk snapshot.
+        private EventRuntimeHost _workspaceEventStartupCheckedHost;
         private EventRuntimeConfigurationStore _workspaceEventStore;
         private bool _workspaceEventRestoreChecked;
         private ScrollView _workspaceEventRuleList;
@@ -134,10 +137,14 @@ namespace VCR.Runtime.UI
                     // If the legacy dashboard is still active it retains
                     // responsibility for its own startup restoration. Do
                     // not overwrite its live, potentially unsaved edits.
-                    if (FindFirstObjectByType<ApplicationUiController>() == null &&
-                        File.Exists(path) &&
-                        !TryReloadWorkspaceEventRules(current, out var error))
-                        ReportWorkspaceEvent("Saved event rules not restored: " + error);
+                    if (!ReferenceEquals(_workspaceEventStartupCheckedHost, current))
+                    {
+                        _workspaceEventStartupCheckedHost = current;
+                        if (FindFirstObjectByType<ApplicationUiController>() == null &&
+                            File.Exists(path) &&
+                            !TryReloadWorkspaceEventRules(current, out var error))
+                            ReportWorkspaceEvent("Saved event rules not restored: " + error);
+                    }
                 }
                 catch (Exception exception)
                 {
