@@ -400,6 +400,10 @@ namespace VCR.Runtime.UI
 
         private void BuildWorkspaceTrackingPanel(VisualElement panel)
         {
+            // Build() replaces the visual tree while the runtime remains the
+            // same. Invalidate the old tree's cache so the new list is populated.
+            _workspaceTrackingPanelSignature = null;
+            _nextWorkspaceTrackingPanelRefresh = 0f;
             _workspaceTrackingFeedback = new Label(
                 "Select an input source to manage it. Configuration is also available in Settings.");
             panel.Add(_workspaceTrackingFeedback);
