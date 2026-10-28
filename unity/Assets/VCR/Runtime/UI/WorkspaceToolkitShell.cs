@@ -1122,6 +1122,7 @@ namespace VCR.Runtime.UI
             actions.Add(_unloadCharacterButton);
             _actionResult = new Label("Actions operate on the current scene runtime.");
             actions.Add(_actionResult);
+            BuildWorkspaceBroadcastPanel(actions);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
             BuildWorkspaceLogPanel(events);
