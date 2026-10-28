@@ -635,6 +635,11 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.SetText(90, "Render runtime unavailable.");
                     continue;
                 }
+                if (!ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State))
+                {
+                    _workspaceNativeSettings.SetText(90, "Render settings unavailable while scene is busy.");
+                    continue;
+                }
                 if (action == 200)
                 {
                     if (!float.TryParse(_workspaceNativeSettings.GetText(10),
@@ -672,23 +677,32 @@ namespace VCR.Runtime.UI
                     settings.TargetFrameRate = 60;
                     settings.UseVSync = false;
                 }
-                sceneRuntime.ApplyRenderSettings(settings);
-                if (action == 203)
+                try
                 {
-                    // The window temporarily forces background execution while open.
-                    // Preserve the user's newly selected value for window close.
-                    _runInBackgroundBeforeSettings = settings.RunInBackground;
-                    UnityEngine.Application.runInBackground = true;
-                }
-                if (sceneRuntime.TryCaptureRenderSettings(out var applied))
-                {
+                    sceneRuntime.ApplyRenderSettings(settings);
+                    if (action == 203)
+                    {
+                        // Settings uses background ticking until the native
+                        // window is closed; keep the new user preference for
+                        // restoring after close.
+                        _runInBackgroundBeforeSettings = settings.RunInBackground;
+                        UnityEngine.Application.runInBackground = true;
+                    }
+                    if (!sceneRuntime.TryCaptureRenderSettings(out var applied))
+                        throw new InvalidOperationException("Unable to read applied render settings.");
                     _workspaceNativeSettings.SetText(10,
                         applied.RenderScale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
-                    _workspaceNativeSettings.SetText(11, applied.TargetFrameRate.ToString());
+                    _workspaceNativeSettings.SetText(11,
+                        applied.TargetFrameRate.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     _workspaceNativeSettings.SetText(90,
                         "FPS: " + applied.TargetFrameRate + ", VSync: " +
                         (applied.UseVSync ? "on" : "off") + ", Background: " +
                         (applied.RunInBackground ? "on" : "off"));
+                }
+                catch (Exception exception)
+                {
+                    _workspaceNativeSettings.SetText(90, "Render settings failed: " + exception.Message);
+                    Debug.LogException(exception, this);
                 }
             }
         }
