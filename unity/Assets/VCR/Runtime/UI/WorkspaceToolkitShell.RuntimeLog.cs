@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.UIElements;
+using VCR.Runtime.Diagnostics;
 
 namespace VCR.Runtime.UI
 {
@@ -22,6 +23,9 @@ namespace VCR.Runtime.UI
         private bool _workspaceLogSubscribed;
         private int _workspacePendingLogCount;
         private int _workspaceDroppedLogCount;
+        private RuntimeDiagnostics _workspaceDiagnostics;
+        private Label _workspaceDiagnosticsStatus;
+        private float _nextWorkspaceDiagnosticsRefresh;
 
         private readonly struct WorkspaceLogEvent
         {
@@ -67,6 +71,9 @@ namespace VCR.Runtime.UI
         {
             _workspaceLogList = null;
             _workspaceLogSummary = null;
+            _workspaceDiagnostics = null;
+            _workspaceDiagnosticsStatus = null;
+            _nextWorkspaceDiagnosticsRefresh = 0f;
             _workspaceErrorsOnly = false;
             _workspaceLogHistory.Clear();
             while (_workspacePendingLogs.TryDequeue(out _)) { }
@@ -97,12 +104,13 @@ namespace VCR.Runtime.UI
             {
                 var builder = new StringBuilder();
                 foreach (var log in _workspaceLogHistory)
-                    if (IsWorkspaceLogVisible(log))
+                    if (!_workspaceErrorsOnly || IsWorkspaceLogVisible(log))
                         builder.Append('[').Append(log.Timestamp).Append("] [")
                             .Append(log.Type).Append("] ").AppendLine(log.Message);
                 GUIUtility.systemCopyBuffer = builder.ToString();
             }) { text = "Copy visible" });
             panel.Add(controls);
+            BuildWorkspaceDiagnosticsControls(panel);
             _workspaceLogSummary = new Label("Waiting for application log events...");
             panel.Add(_workspaceLogSummary);
             _workspaceLogList = new ScrollView();
@@ -162,6 +170,109 @@ namespace VCR.Runtime.UI
                 " | Dropped during overload: " + Volatile.Read(ref _workspaceDroppedLogCount);
             if (last != null)
                 _workspaceLogList.ScrollTo(last);
+        }
+
+        private RuntimeDiagnostics ResolveWorkspaceDiagnostics()
+        {
+            if (_workspaceDiagnostics == null)
+                _workspaceDiagnostics = FindFirstObjectByType<RuntimeDiagnostics>();
+            return _workspaceDiagnostics;
+        }
+
+        private void BuildWorkspaceDiagnosticsControls(VisualElement panel)
+        {
+            var diagnostics = new VisualElement();
+            diagnostics.style.marginTop = 5;
+            _workspaceDiagnosticsStatus = new Label("Runtime diagnostics: checking...");
+            diagnostics.Add(_workspaceDiagnosticsStatus);
+            var buttons = new VisualElement();
+            buttons.style.flexDirection = FlexDirection.Row;
+            buttons.style.flexWrap = Wrap.Wrap;
+            buttons.Add(new Button(() =>
+            {
+                var service = ResolveWorkspaceDiagnostics();
+                if (service == null)
+                {
+                    _workspaceDiagnosticsStatus.text = "Runtime diagnostics unavailable.";
+                    return;
+                }
+                try
+                {
+                    if (!service.TryCaptureNow(out var snapshot, out var error))
+                    {
+                        _workspaceDiagnosticsStatus.text =
+                            "Capture unavailable: " + (error ?? "unknown error");
+                        return;
+                    }
+                    _nextWorkspaceDiagnosticsRefresh = 0f;
+                    RefreshWorkspaceDiagnosticsPanel();
+                }
+                catch (Exception exception)
+                {
+                    _workspaceDiagnosticsStatus.text = "Capture failed: " + exception.Message;
+                    Debug.LogException(exception, this);
+                }
+            }) { text = "Capture metrics" });
+            buttons.Add(new Button(() =>
+            {
+                var service = ResolveWorkspaceDiagnostics();
+                if (service == null)
+                {
+                    _workspaceDiagnosticsStatus.text = "Runtime diagnostics unavailable.";
+                    return;
+                }
+                try
+                {
+                    if (!service.TryWriteLatestSnapshotJson(out var path, out var error))
+                    {
+                        _workspaceDiagnosticsStatus.text =
+                            "Export failed: " + (error ?? "unknown error");
+                        return;
+                    }
+                    _workspaceDiagnosticsStatus.text = "Diagnostics JSON saved: " + path;
+                }
+                catch (Exception exception)
+                {
+                    _workspaceDiagnosticsStatus.text = "Export failed: " + exception.Message;
+                    Debug.LogException(exception, this);
+                }
+            }) { text = "Export latest JSON" });
+            diagnostics.Add(buttons);
+            panel.Add(diagnostics);
+            RefreshWorkspaceDiagnosticsPanel();
+        }
+
+        private void RefreshWorkspaceDiagnosticsPanel()
+        {
+            if (_workspaceDiagnosticsStatus == null ||
+                Time.unscaledTime < _nextWorkspaceDiagnosticsRefresh)
+                return;
+            _nextWorkspaceDiagnosticsRefresh = Time.unscaledTime + 2f;
+            var service = ResolveWorkspaceDiagnostics();
+            if (service == null)
+            {
+                _workspaceDiagnosticsStatus.text = "Runtime diagnostics service not found.";
+                return;
+            }
+            try
+            {
+                var snapshot = service.LatestSnapshot;
+                if (snapshot.Sequence <= 0)
+                {
+                    _workspaceDiagnosticsStatus.text = "Runtime diagnostics: waiting for first report.";
+                    return;
+                }
+                _workspaceDiagnosticsStatus.text = "Diagnostics #" + snapshot.Sequence +
+                    " | Frame avg " + snapshot.FrameAverageMs.ToString("0.##") +
+                    " ms, P95 " + snapshot.FrameP95Ms.ToString("0.##") +
+                    " ms | Face " + snapshot.FaceHz.ToString("0.#") +
+                    " Hz | Body " + snapshot.BodyHandsHz.ToString("0.#") + " Hz";
+            }
+            catch (Exception exception)
+            {
+                _workspaceDiagnosticsStatus.text = "Diagnostics read failed: " + exception.Message;
+                Debug.LogException(exception, this);
+            }
         }
     }
 }
