@@ -131,6 +131,7 @@ namespace VCR.Runtime.UI
         {
             InitializeWorkspaceTrackingRestore();
             ResetWorkspaceTrackingPanel();
+            ResetWorkspaceTrackingCameraPreview();
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
             ResetWorkspaceMaterialsPanel();
@@ -312,6 +313,7 @@ namespace VCR.Runtime.UI
         private void OnDisable()
         {
             UnsubscribeWorkspaceLog();
+            ResetWorkspaceTrackingCameraPreview();
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
             ResetWorkspaceMaterialsPanel();
@@ -1190,6 +1192,7 @@ namespace VCR.Runtime.UI
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
+            BuildWorkspaceTrackingCameraPreview(tracking);
             BuildWorkspaceTrackingPanel(tracking);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
