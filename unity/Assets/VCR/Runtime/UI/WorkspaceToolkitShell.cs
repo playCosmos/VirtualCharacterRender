@@ -893,6 +893,7 @@ namespace VCR.Runtime.UI
             var modelPathDraft = _modelPathInput != null
                 ? _modelPathInput.value
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
+            CaptureWorkspaceMaterialEditorDrafts();
             ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
