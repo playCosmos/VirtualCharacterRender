@@ -582,7 +582,7 @@ namespace VCR.Runtime.UI
                 }
                 if (action == 205 || action == 206)
                 {
-                    ApplyWorkspaceConfigurationAction(action);
+                    ApplyWorkspaceConfigurationActionWithNativeFeedback(action);
                     continue;
                 }
                 if (action == 300)
