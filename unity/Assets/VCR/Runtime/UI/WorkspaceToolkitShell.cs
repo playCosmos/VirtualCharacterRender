@@ -485,6 +485,8 @@ namespace VCR.Runtime.UI
                         "VRM file path", "");
                     _workspaceNativeSettings.Add(1, 300, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Load VRM from path");
+                    _workspaceNativeSettings.Add(1, 301, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Browse VRM file...");
                     _workspaceNativeSettings.Add(1, 302, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Reload active VRM");
                     _workspaceNativeSettings.Add(1, 303, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -587,6 +589,11 @@ namespace VCR.Runtime.UI
                 if (action == 205 || action == 206)
                 {
                     ApplyWorkspaceConfigurationActionWithNativeFeedback(action);
+                    continue;
+                }
+                if (action == 301)
+                {
+                    BrowseWorkspaceCharacterFile();
                     continue;
                 }
                 if (action == 300)
@@ -995,8 +1002,13 @@ namespace VCR.Runtime.UI
             _modelPathInput.value = PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", "");
             _modelPathInput.tooltip = "Absolute path to a local .vrm file. FBX runtime import is not available.";
             sources.Add(_modelPathInput);
+            var sourceActions = new VisualElement();
+            sourceActions.style.flexDirection = FlexDirection.Row;
+            sourceActions.style.flexWrap = Wrap.Wrap;
+            sourceActions.Add(new Button(BrowseWorkspaceCharacterFile) { text = "Browse VRM..." });
             _loadModelButton = new Button(LoadModelFromPath) { text = "Load VRM" };
-            sources.Add(_loadModelButton);
+            sourceActions.Add(_loadModelButton);
+            sources.Add(sourceActions);
             _sourcesFeedback = new Label("");
             sources.Add(_sourcesFeedback);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
