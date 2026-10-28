@@ -24,6 +24,29 @@ namespace VCR.Runtime.UI
         private RuntimeShaderPackageLoader _workspacePackageLoader;
         private float _nextWorkspaceMaterialsRefresh;
         private string _workspaceMaterialSignature;
+        // Only transient, in-session editing drafts. Never persist shader slot
+        // selection as an application preference across model changes.
+        private string _workspaceDraftMaterialSlot;
+        private string _workspaceDraftMaterialShader;
+        private string _workspaceDraftMaterialProperty;
+        private string _workspaceDraftMaterialValue;
+        private string _workspaceDraftPackageRoot;
+
+        private void CaptureWorkspaceMaterialEditorDrafts()
+        {
+            // Build() may hide the advanced panel entirely; keep the most
+            // recent text until the panel is recreated on this shell.
+            if (_workspaceMaterialSlotInput != null)
+                _workspaceDraftMaterialSlot = _workspaceMaterialSlotInput.value;
+            if (_workspaceMaterialShaderInput != null)
+                _workspaceDraftMaterialShader = _workspaceMaterialShaderInput.value;
+            if (_workspaceMaterialPropertyInput != null)
+                _workspaceDraftMaterialProperty = _workspaceMaterialPropertyInput.value;
+            if (_workspaceMaterialValueInput != null)
+                _workspaceDraftMaterialValue = _workspaceMaterialValueInput.value;
+            if (_workspacePackagePathInput != null)
+                _workspaceDraftPackageRoot = _workspacePackagePathInput.value;
+        }
 
         private void ResetWorkspaceMaterialsPanel()
         {
@@ -39,6 +62,11 @@ namespace VCR.Runtime.UI
             _workspacePackageLoader = null;
             _nextWorkspaceMaterialsRefresh = 0f;
             _workspaceMaterialSignature = null;
+            _workspaceDraftMaterialSlot = null;
+            _workspaceDraftMaterialShader = null;
+            _workspaceDraftMaterialProperty = null;
+            _workspaceDraftMaterialValue = null;
+            _workspaceDraftPackageRoot = null;
         }
 
         private void BuildWorkspaceMaterialsPanel(VisualElement panel)
@@ -75,9 +103,13 @@ namespace VCR.Runtime.UI
             panel.Add(_workspaceMaterialSlots);
 
             _workspaceMaterialSlotInput = new TextField("Material slot ID");
+            if (_workspaceDraftMaterialSlot != null)
+                _workspaceMaterialSlotInput.SetValueWithoutNotify(_workspaceDraftMaterialSlot);
             _workspaceMaterialSlotInput.tooltip = "Pick an existing slot from the list above.";
             panel.Add(_workspaceMaterialSlotInput);
             _workspaceMaterialShaderInput = new TextField("Compiled shader ID");
+            if (_workspaceDraftMaterialShader != null)
+                _workspaceMaterialShaderInput.SetValueWithoutNotify(_workspaceDraftMaterialShader);
             _workspaceMaterialShaderInput.tooltip =
                 "Registered or built-in compiled shader ID; raw shader source is not supported.";
             panel.Add(_workspaceMaterialShaderInput);
@@ -89,15 +121,17 @@ namespace VCR.Runtime.UI
             panel.Add(shaderActions);
 
             _workspaceMaterialPropertyInput = new TextField("Float property");
-            _workspaceMaterialPropertyInput.value = "_Smoothness";
+            _workspaceMaterialPropertyInput.value = _workspaceDraftMaterialProperty ?? "_Smoothness";
             panel.Add(_workspaceMaterialPropertyInput);
             _workspaceMaterialValueInput = new TextField("Float value");
-            _workspaceMaterialValueInput.value = "0.5";
+            _workspaceMaterialValueInput.value = _workspaceDraftMaterialValue ?? "0.5";
             panel.Add(_workspaceMaterialValueInput);
             panel.Add(new Button(ApplyWorkspaceMaterialFloat) { text = "Set float property" });
 
             panel.Add(new Label("Shader packages (precompiled, validated)"));
             _workspacePackagePathInput = new TextField("Package directory");
+            if (_workspaceDraftPackageRoot != null)
+                _workspacePackagePathInput.SetValueWithoutNotify(_workspaceDraftPackageRoot);
             _workspacePackagePathInput.tooltip =
                 "Path to an existing declarative shader package root containing manifest.json.";
             panel.Add(_workspacePackagePathInput);
@@ -125,8 +159,19 @@ namespace VCR.Runtime.UI
                 // Only edit the current model. Looking up an arbitrary scene-wide
                 // controller can affect a different character after reload.
                 var current = sceneRuntime != null ? sceneRuntime.CurrentCharacter : null;
+                var previousController = _workspaceMaterialController;
                 _workspaceMaterialController = current != null
                     ? current.GetComponent<MaterialOverrideController>() : null;
+                if (previousController != null &&
+                    !ReferenceEquals(previousController, _workspaceMaterialController))
+                {
+                    // Slot IDs can be identical across two different VRMs.
+                    // Never carry a previous model's selected slot into edits
+                    // against its replacement.
+                    if (_workspaceMaterialSlotInput != null)
+                        _workspaceMaterialSlotInput.SetValueWithoutNotify("");
+                    _workspaceDraftMaterialSlot = "";
+                }
                 if (_workspacePackageLoader == null)
                     _workspacePackageLoader = FindFirstObjectByType<RuntimeShaderPackageLoader>();
 
