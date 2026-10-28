@@ -887,6 +887,12 @@ namespace VCR.Runtime.UI
 
         private void Build()
         {
+            // Layout/mode changes rebuild the whole UI tree. Keep the
+            // operator's not-yet-loaded VRM path instead of replacing it
+            // with the last successful model from PlayerPrefs.
+            var modelPathDraft = _modelPathInput != null
+                ? _modelPathInput.value
+                : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
@@ -1029,7 +1035,7 @@ namespace VCR.Runtime.UI
             _sourcesStatus = new Label("Waiting for model state...");
             sources.Add(_sourcesStatus);
             _modelPathInput = new TextField("VRM file path");
-            _modelPathInput.value = PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", "");
+            _modelPathInput.value = modelPathDraft;
             _modelPathInput.tooltip = "Absolute path to a local .vrm file. FBX runtime import is not available.";
             sources.Add(_modelPathInput);
             var sourceActions = new VisualElement();
