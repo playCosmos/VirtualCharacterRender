@@ -1192,8 +1192,14 @@ namespace VCR.Runtime.UI
             var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
-            BuildWorkspaceTrackingCameraPreview(tracking);
-            BuildWorkspaceTrackingPanel(tracking);
+            // Both the opt-in video surface and the device controls need to
+            // remain reachable at the compact 150 px bottom-dock height.
+            var trackingScroll = new ScrollView { name = "vcr-tracking-content" };
+            trackingScroll.style.flexGrow = 1;
+            trackingScroll.style.minHeight = 60;
+            tracking.Add(trackingScroll);
+            BuildWorkspaceTrackingCameraPreview(trackingScroll);
+            BuildWorkspaceTrackingPanel(trackingScroll);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
             var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
             // The bottom dock defaults to 150 px. Keep both model actions
