@@ -137,6 +137,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceConfigurationActions();
             ResetWorkspaceScenesPanel();
             ResetWorkspaceBroadcastPanel();
+            ResetWorkspaceEnvironmentPanel();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -182,6 +183,7 @@ namespace VCR.Runtime.UI
             RefreshWorkspaceDiagnosticsPanel();
             RefreshWorkspaceScenesPanel();
             RefreshWorkspaceBroadcastStatus();
+            RefreshWorkspaceEnvironmentPanel();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -310,6 +312,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceConfigurationActions();
             ResetWorkspaceScenesPanel();
             ResetWorkspaceBroadcastPanel();
+            ResetWorkspaceEnvironmentPanel();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -894,6 +897,7 @@ namespace VCR.Runtime.UI
                 ? _modelPathInput.value
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             CaptureWorkspaceMaterialEditorDrafts();
+            CaptureWorkspaceEnvironmentDraft();
             ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
@@ -1138,6 +1142,7 @@ namespace VCR.Runtime.UI
             _actionResult = new Label("Actions operate on the current scene runtime.");
             actionsScroll.Add(_actionResult);
             BuildWorkspaceBroadcastPanel(actionsScroll);
+            BuildWorkspaceEnvironmentPanel(actionsScroll);
             actions.Add(actionsScroll);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
