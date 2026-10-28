@@ -43,6 +43,10 @@ namespace VCR.Runtime.UI
 
         private void BuildWorkspaceMaterialsPanel(VisualElement panel)
         {
+            // Rebuild invalidates list elements, not the underlying shaders
+            // and material slots. Force a first render on every new tree.
+            _workspaceMaterialSignature = null;
+            _nextWorkspaceMaterialsRefresh = 0f;
             _workspaceMaterialsSummary = new Label("Material runtime not yet discovered.");
             panel.Add(_workspaceMaterialsSummary);
             _workspaceMaterialsFeedback = new Label(
