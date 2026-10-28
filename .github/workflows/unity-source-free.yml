@@ -180,3 +180,78 @@ jobs:
           path: Builds/Validation/p0-p13-source-free.json
           if-no-files-found: warn
           retention-days: 30
+
+  # Build success on Ubuntu is not proof that the P1 Player starts on Windows.
+  # This headless gate tests the exact P1 scene/Player produced above, including
+  # its opt-in PlayerStartupSmoke report and real normal shutdown. It does NOT
+  # claim that the native Settings UI, click-through or rendered GUI was tested.
+  u1-windows-native-smoke:
+    name: Run P1 Windows Player startup/quit smoke
+    if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+    needs: unity-source-free
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+      - name: Download exact P1 Windows development Player
+        uses: actions/download-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/P1/Windows-Development
+      - name: Use pinned Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Package P1 Player with SHA-256 and exact-source sidecars
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import hashlib
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path("Builds/P1/Windows-Development")
+          if not (root / "VirtualCharacterRender.exe").is_file():
+              raise SystemExit("P1 Windows Player executable missing")
+          if not (root / "VirtualCharacterRender_Data").is_dir():
+              raise SystemExit("P1 Windows Player data missing")
+          target = Path("player-artifacts")
+          target.mkdir(exist_ok=True)
+          archive = target / "windows.zip"
+          with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=1, allowZip64=True) as z:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      z.write(file, file.relative_to(root).as_posix())
+          sha = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  sha.update(chunk)
+          (target / "windows.sha256").write_text(
+              sha.hexdigest() + "  windows.zip\\n", encoding="utf-8")
+          (target / "windows.source-sha").write_text(
+              os.environ["GITHUB_SHA"] + "\\n", encoding="utf-8")
+          print("P1 Windows Player archive SHA-256:", sha.hexdigest())
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Execute P1 Player on native Windows and verify quit/config restore
+        shell: pwsh
+        run: |
+          python tools/run-player-smoke.py `
+            --platform windows `
+            --archive player-artifacts/windows.zip `
+            --source "$env:GITHUB_SHA" `
+            --output Builds/PlayerSmoke/u1-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve P1 native startup and shutdown evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-windows-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            player-artifacts/windows.sha256
+            player-artifacts/windows.source-sha
+            Builds/PlayerSmoke/u1-windows/
+          if-no-files-found: warn
+          retention-days: 30
