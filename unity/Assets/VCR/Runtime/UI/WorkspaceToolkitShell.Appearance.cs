@@ -63,6 +63,7 @@ namespace VCR.Runtime.UI
             _appearanceWorkspaceSignature = null;
             _appearanceObservedCharacter = int.MinValue;
             _nextAppearanceWorkspaceRefresh = 0f;
+            ResetWorkspaceUserPresetPanel();
         }
 
         private void CaptureWorkspaceAppearanceDraft()
@@ -75,6 +76,7 @@ namespace VCR.Runtime.UI
                 _appearanceSlotDraft = _appearanceAccessorySlotInput.value;
             if (_appearanceAccessoryIdInput != null)
                 _appearanceAccessoryDraft = _appearanceAccessoryIdInput.value;
+            CaptureWorkspaceUserPresetDrafts();
         }
 
         private void BuildWorkspaceAppearancePanel(VisualElement container)
@@ -133,6 +135,7 @@ namespace VCR.Runtime.UI
                 "Appearance actions apply to the active VRM. Choose a registered ID.");
             _appearanceWorkspaceFeedback.style.whiteSpace = WhiteSpace.Normal;
             container.Add(_appearanceWorkspaceFeedback);
+            BuildWorkspaceUserPresetPanel(container);
             RefreshWorkspaceAppearancePanel();
         }
 
@@ -187,6 +190,7 @@ namespace VCR.Runtime.UI
                 _appearanceAccessorySlotInput?.SetValueWithoutNotify("");
                 _appearanceAccessoryIdInput?.SetValueWithoutNotify("");
                 _appearanceTransitionId = "Immediate";
+                ClearWorkspaceUserPresetSelection();
                 _appearanceWorkspaceSignature = null;
             }
             _appearanceObservedCharacter = characterId;
@@ -205,6 +209,7 @@ namespace VCR.Runtime.UI
             _appearanceRestoreButton?.SetEnabled(editable);
             _appearanceCancelButton?.SetEnabled(operational &&
                 ApplicationUiActionPolicy.CanCancelAppearanceTransition(true, status));
+            RefreshWorkspaceUserPresets(runtime, editable);
             if (runtime == null)
             {
                 _appearanceWorkspaceStatus.text = character == null
