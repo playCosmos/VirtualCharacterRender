@@ -47,6 +47,15 @@ namespace VCR.Runtime.UI
                 _userPresetTargetDraft = _userPresetTargetInput.value;
         }
 
+        private void ClearWorkspaceUserPresetSelection()
+        {
+            _userPresetNameDraft = "";
+            _userPresetTargetDraft = "";
+            _userPresetNameInput?.SetValueWithoutNotify("");
+            _userPresetTargetInput?.SetValueWithoutNotify("");
+            _userPresetListSignature = null;
+        }
+
         private void BuildWorkspaceUserPresetPanel(VisualElement container)
         {
             _userPresetListSignature = null;
