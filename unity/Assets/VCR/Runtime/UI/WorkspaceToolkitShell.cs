@@ -136,6 +136,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceMaterialsPanel();
             ResetWorkspaceConfigurationActions();
             ResetWorkspaceScenesPanel();
+            ResetWorkspaceBroadcastPanel();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -180,6 +181,7 @@ namespace VCR.Runtime.UI
             DrainWorkspaceLog();
             RefreshWorkspaceDiagnosticsPanel();
             RefreshWorkspaceScenesPanel();
+            RefreshWorkspaceBroadcastStatus();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -307,6 +309,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceMaterialsPanel();
             ResetWorkspaceConfigurationActions();
             ResetWorkspaceScenesPanel();
+            ResetWorkspaceBroadcastPanel();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
