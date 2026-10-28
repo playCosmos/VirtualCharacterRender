@@ -345,8 +345,6 @@ namespace VCR.Runtime.UI
 
         private void LoadWorkspaceShaderPackage()
         {
-            var loader = ResolveWorkspacePackageLoader();
-            if (loader == null) return;
             var path = _workspacePackagePathInput?.value?.Trim();
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -355,6 +353,26 @@ namespace VCR.Runtime.UI
             }
             try
             {
+                // The P1 scene need not create a package service at startup.
+                // Install it on the scene runtime only after an explicit load
+                // request, so shader packages remain optional.
+                var loader = _workspacePackageLoader;
+                if (loader == null)
+                    loader = FindFirstObjectByType<RuntimeShaderPackageLoader>();
+                if (loader == null)
+                {
+                    if (sceneRuntime == null)
+                        sceneRuntime = FindFirstObjectByType<VCR.Runtime.Scene.SingleCharacterSceneRuntime>();
+                    if (sceneRuntime == null)
+                    {
+                        SetWorkspaceMaterialsFeedback("Scene runtime unavailable for package load.");
+                        return;
+                    }
+                    loader = sceneRuntime.GetComponent<RuntimeShaderPackageLoader>();
+                    if (loader == null)
+                        loader = sceneRuntime.gameObject.AddComponent<RuntimeShaderPackageLoader>();
+                }
+                _workspacePackageLoader = loader;
                 if (loader.TryLoadPackage(path, out var error))
                     WorkspaceMaterialActionFinished("Shader package loaded: " +
                         loader.ActivePackageId + ".");
