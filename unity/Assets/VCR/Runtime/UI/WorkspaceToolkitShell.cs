@@ -140,6 +140,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceEnvironmentPanel();
             ResetWorkspaceEventRules();
             ResetWorkspaceAppearancePanel();
+            ResetWorkspaceMotionPanel();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -188,6 +189,7 @@ namespace VCR.Runtime.UI
             RefreshWorkspaceEnvironmentPanel();
             RefreshWorkspaceEventRulesPanel();
             RefreshWorkspaceAppearancePanel();
+            RefreshWorkspaceMotionPanel();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
@@ -319,6 +321,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceEnvironmentPanel();
             ResetWorkspaceEventRules();
             ResetWorkspaceAppearancePanel();
+            ResetWorkspaceMotionPanel();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -906,6 +909,7 @@ namespace VCR.Runtime.UI
             CaptureWorkspaceEnvironmentDraft();
             CaptureWorkspaceEventRulesDraft();
             CaptureWorkspaceAppearanceDraft();
+            CaptureWorkspaceMotionDrafts();
             ReleaseOwnedPreview();
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
@@ -1152,6 +1156,7 @@ namespace VCR.Runtime.UI
             BuildWorkspaceBroadcastPanel(actionsScroll);
             BuildWorkspaceEnvironmentPanel(actionsScroll);
             BuildWorkspaceAppearancePanel(actionsScroll);
+            BuildWorkspaceMotionPanel(actionsScroll);
             actions.Add(actionsScroll);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
             var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
