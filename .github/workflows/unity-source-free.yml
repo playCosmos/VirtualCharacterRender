@@ -229,9 +229,9 @@ jobs:
               for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                   sha.update(chunk)
           (target / "windows.sha256").write_text(
-              sha.hexdigest() + "  windows.zip\\n", encoding="utf-8")
+              sha.hexdigest() + "  windows.zip\n", encoding="utf-8")
           (target / "windows.source-sha").write_text(
-              os.environ["GITHUB_SHA"] + "\\n", encoding="utf-8")
+              os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
           print("P1 Windows Player archive SHA-256:", sha.hexdigest())
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
