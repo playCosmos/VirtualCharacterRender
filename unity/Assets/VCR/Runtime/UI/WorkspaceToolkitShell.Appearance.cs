@@ -13,7 +13,7 @@ namespace VCR.Runtime.UI
     {
         private enum WorkspaceAppearanceAction
         {
-            Preset, Outfit, SetAccessory, ClearAccessory, Restore, Cancel
+            Preset, Outfit, SetAccessory, ClearAccessory, Restore, Preview, Cancel
         }
 
         private TextField _appearancePresetInput;
@@ -25,6 +25,7 @@ namespace VCR.Runtime.UI
         private VisualElement _appearancePresetList;
         private VisualElement _appearanceTransitionList;
         private Button _appearanceCancelButton;
+        private Button _appearancePreviewButton;
         private Button _appearanceRestoreButton;
         private Button _appearanceApplyPresetButton;
         private Button _appearanceApplyOutfitButton;
@@ -50,6 +51,7 @@ namespace VCR.Runtime.UI
             _appearancePresetList = null;
             _appearanceTransitionList = null;
             _appearanceCancelButton = null;
+            _appearancePreviewButton = null;
             _appearanceRestoreButton = null;
             _appearanceApplyPresetButton = null;
             _appearanceApplyOutfitButton = null;
@@ -121,6 +123,8 @@ namespace VCR.Runtime.UI
                 ApplyWorkspaceAppearance(WorkspaceAppearanceAction.ClearAccessory)) { text = "Clear accessory" };
             _appearanceRestoreButton = new Button(() =>
                 ApplyWorkspaceAppearance(WorkspaceAppearanceAction.Restore)) { text = "Restore default" };
+            _appearancePreviewButton = new Button(() =>
+                ApplyWorkspaceAppearance(WorkspaceAppearanceAction.Preview)) { text = "Preview transition" };
             _appearanceCancelButton = new Button(() =>
                 ApplyWorkspaceAppearance(WorkspaceAppearanceAction.Cancel)) { text = "Cancel transition" };
             actions.Add(_appearanceApplyPresetButton);
@@ -128,6 +132,7 @@ namespace VCR.Runtime.UI
             actions.Add(_appearanceSetAccessoryButton);
             actions.Add(_appearanceClearAccessoryButton);
             actions.Add(_appearanceRestoreButton);
+            actions.Add(_appearancePreviewButton);
             actions.Add(_appearanceCancelButton);
             container.Add(actions);
 
@@ -207,6 +212,9 @@ namespace VCR.Runtime.UI
             _appearanceSetAccessoryButton?.SetEnabled(editable);
             _appearanceClearAccessoryButton?.SetEnabled(editable);
             _appearanceRestoreButton?.SetEnabled(editable);
+            _appearancePreviewButton?.SetEnabled(operational &&
+                ApplicationUiActionPolicy.CanPreviewAppearanceTransition(
+                    true, status.State, _appearanceTransitionId, status.CurrentOutfitId));
             _appearanceCancelButton?.SetEnabled(operational &&
                 ApplicationUiActionPolicy.CanCancelAppearanceTransition(true, status));
             RefreshWorkspaceUserPresets(runtime, editable);
@@ -313,7 +321,10 @@ namespace VCR.Runtime.UI
             var status = runtime.Status;
             if (action == WorkspaceAppearanceAction.Cancel
                 ? !ApplicationUiActionPolicy.CanCancelAppearanceTransition(true, status)
-                : !ApplicationUiActionPolicy.CanMutateAppearance(true, status.State))
+                : action == WorkspaceAppearanceAction.Preview
+                    ? !ApplicationUiActionPolicy.CanPreviewAppearanceTransition(
+                        true, status.State, _appearanceTransitionId, status.CurrentOutfitId)
+                    : !ApplicationUiActionPolicy.CanMutateAppearance(true, status.State))
             {
                 SetWorkspaceAppearanceFeedback("Appearance runtime is busy or not ready.");
                 return;
@@ -353,6 +364,14 @@ namespace VCR.Runtime.UI
                         break;
                     case WorkspaceAppearanceAction.Restore:
                         applied = runtime.RestoreDefault(_appearanceTransitionId, out error);
+                        break;
+                    case WorkspaceAppearanceAction.Preview:
+                        // Re-apply the current appearance through the selected
+                        // transition, without overwriting typed preset/outfit IDs.
+                        var current = runtime.Current;
+                        applied = !string.IsNullOrWhiteSpace(current.PresetId)
+                            ? runtime.SetPreset(current.PresetId, _appearanceTransitionId, out error)
+                            : runtime.SetOutfit(current.OutfitId, _appearanceTransitionId, out error);
                         break;
                     default:
                         applied = runtime.CancelTransition(out error);
