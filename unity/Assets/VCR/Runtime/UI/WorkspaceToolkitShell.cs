@@ -177,6 +177,7 @@ namespace VCR.Runtime.UI
             RefreshWorkspaceCapabilitiesPanel();
             RefreshWorkspaceMaterialsPanel();
             DrainWorkspaceLog();
+            RefreshWorkspaceDiagnosticsPanel();
             PersistLayoutIfChanged();
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
