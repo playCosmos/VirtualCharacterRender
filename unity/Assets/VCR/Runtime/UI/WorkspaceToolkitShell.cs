@@ -817,7 +817,11 @@ namespace VCR.Runtime.UI
             panel.style.position = Position.Absolute;
             panel.style.top = 48;
             panel.style.right = 16;
-            panel.style.width = 310;
+            panel.style.width = 330;
+            // The Editor/non-native fallback must stay reachable on small
+            // screens even after adding render scale and background controls.
+            panel.style.height = Length.Percent(75);
+            panel.style.minHeight = 220;
             panel.style.paddingTop = 12;
             panel.style.paddingBottom = 12;
             panel.style.paddingLeft = 12;
@@ -835,25 +839,43 @@ namespace VCR.Runtime.UI
             var title = new Label("Render settings");
             title.style.color = Color.white;
             panel.Add(title);
+            var content = new ScrollView();
+            content.style.flexGrow = 1;
+            content.style.minHeight = 80;
+            panel.Add(content);
+
+            var scale = new FloatField("Render scale (0.5–2.0)");
             var fps = new IntegerField("Target FPS (30–120)");
             var vsync = new Toggle("VSync");
+            var background = new Toggle("Run in background");
             var available = false;
+            var initialScale = 1f;
             var initialFps = 60;
             var initialVsync = false;
+            var initialBackground = true;
             if (sceneRuntime != null &&
                 sceneRuntime.TryCaptureRenderSettings(out var current))
             {
                 available = true;
-                initialFps = Mathf.Clamp(current.TargetFrameRate, 30, 120);
+                initialScale = current.RenderScale;
+                initialFps = current.TargetFrameRate;
                 initialVsync = current.UseVSync;
+                initialBackground = current.RunInBackground;
             }
-            fps.value = initialFps;
-            vsync.value = initialVsync;
-            panel.Add(fps);
-            panel.Add(vsync);
-            var feedback = new Label(available ? "" : "Runtime not ready; Apply will retry discovery.");
+            scale.SetValueWithoutNotify(initialScale);
+            fps.SetValueWithoutNotify(initialFps);
+            vsync.SetValueWithoutNotify(initialVsync);
+            background.SetValueWithoutNotify(initialBackground);
+            content.Add(scale);
+            content.Add(fps);
+            content.Add(vsync);
+            content.Add(background);
+
+            var feedback = new Label(available ? "" :
+                "Runtime not ready; Apply will retry discovery.");
             feedback.style.color = Color.white;
-            panel.Add(feedback);
+            feedback.style.whiteSpace = WhiteSpace.Normal;
+            content.Add(feedback);
             var apply = new Button(() =>
             {
                 if (sceneRuntime == null)
@@ -864,33 +886,64 @@ namespace VCR.Runtime.UI
                     feedback.text = "Render settings unavailable.";
                     return;
                 }
+                if (_characterActionPending ||
+                    !ApplicationUiActionPolicy.CanApplyRuntimeSettings(
+                        true, sceneRuntime.State))
+                {
+                    feedback.text = "Render settings unavailable while the scene is busy.";
+                    return;
+                }
+                var requestedScale = scale.value;
+                if (float.IsNaN(requestedScale) ||
+                    float.IsInfinity(requestedScale) ||
+                    requestedScale < 0.5f || requestedScale > 2f)
+                {
+                    feedback.text = "Render scale must be finite and between 0.5 and 2.0.";
+                    return;
+                }
+                if (fps.value < 30 || fps.value > 120)
+                {
+                    feedback.text = "Target FPS must be between 30 and 120.";
+                    return;
+                }
                 try
                 {
-                    settings.TargetFrameRate = Mathf.Clamp(fps.value, 30, 120);
+                    settings.RenderScale = requestedScale;
+                    settings.TargetFrameRate = fps.value;
                     settings.UseVSync = vsync.value;
+                    settings.RunInBackground = background.value;
                     sceneRuntime.ApplyRenderSettings(settings);
                     if (!sceneRuntime.TryCaptureRenderSettings(out var applied))
-                        throw new System.InvalidOperationException("Unable to read back render settings.");
-                    fps.SetValueWithoutNotify(Mathf.Clamp(applied.TargetFrameRate, 30, 120));
+                        throw new InvalidOperationException(
+                            "Unable to read back render settings.");
+                    scale.SetValueWithoutNotify(applied.RenderScale);
+                    fps.SetValueWithoutNotify(applied.TargetFrameRate);
                     vsync.SetValueWithoutNotify(applied.UseVSync);
-                    feedback.text = "Applied: " + applied.TargetFrameRate +
-                        " FPS, VSync " + (applied.UseVSync ? "on" : "off") + ".";
+                    background.SetValueWithoutNotify(applied.RunInBackground);
+                    feedback.text = "Applied: scale " +
+                        applied.RenderScale.ToString("0.###",
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        ", " + applied.TargetFrameRate +
+                        " FPS, VSync " + (applied.UseVSync ? "on" : "off") +
+                        ", background " + (applied.RunInBackground ? "on" : "off") + ".";
                     SynchronizeRenderInputs();
                 }
-                catch (System.Exception exception)
+                catch (Exception exception)
                 {
                     feedback.text = "Apply failed: " + exception.Message;
                     Debug.LogException(exception, this);
                 }
-            }) { text = "Apply" };
-            panel.Add(apply);
-            BuildWorkspaceConfigurationFallback(panel, () =>
+            }) { text = "Apply render settings" };
+            content.Add(apply);
+            BuildWorkspaceConfigurationFallback(content, () =>
             {
                 if (sceneRuntime != null &&
                     sceneRuntime.TryCaptureRenderSettings(out var loaded))
                 {
-                    fps.SetValueWithoutNotify(Mathf.Clamp(loaded.TargetFrameRate, 30, 120));
+                    scale.SetValueWithoutNotify(loaded.RenderScale);
+                    fps.SetValueWithoutNotify(loaded.TargetFrameRate);
                     vsync.SetValueWithoutNotify(loaded.UseVSync);
+                    background.SetValueWithoutNotify(loaded.RunInBackground);
                 }
             });
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
