@@ -146,7 +146,7 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private void BuildWorkspaceConfigurationFallback(VisualElement panel)
+        private void BuildWorkspaceConfigurationFallback(VisualElement panel, Action onReload)
         {
             var section = new Label("Runtime configuration");
             section.style.marginTop = 12;
@@ -164,7 +164,11 @@ namespace VCR.Runtime.UI
             }) { text = "Save config" });
             actions.Add(new Button(() =>
             {
-                status.text = ApplyWorkspaceConfigurationAction(206);
+                var result = ApplyWorkspaceConfigurationAction(206);
+                status.text = result;
+                if (string.Equals(result, "Saved runtime configuration reloaded.",
+                        StringComparison.Ordinal))
+                    onReload?.Invoke();
             }) { text = "Reload config" });
             actions.Add(new Button(() =>
             {
