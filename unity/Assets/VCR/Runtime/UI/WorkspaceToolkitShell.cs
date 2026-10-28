@@ -134,6 +134,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
             ResetWorkspaceMaterialsPanel();
+            ResetWorkspaceConfigurationActions();
             SubscribeWorkspaceLog();
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -301,6 +302,7 @@ namespace VCR.Runtime.UI
             ResetWorkspaceCapabilitiesPanel();
             ResetWorkspaceLogPanel();
             ResetWorkspaceMaterialsPanel();
+            ResetWorkspaceConfigurationActions();
             _workspaceNativeSettings?.Dispose();
             _workspaceNativeSettings = null;
             if (_nativeSettingsWasVisible)
@@ -469,8 +471,14 @@ namespace VCR.Runtime.UI
                         "Toggle background execution");
                     _workspaceNativeSettings.Add(0, 204, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Restore render defaults");
+                    _workspaceNativeSettings.Add(0, 205, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Save runtime configuration");
+                    _workspaceNativeSettings.Add(0, 206, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Reload saved configuration");
                     _workspaceNativeSettings.Add(0, 90, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Changes apply to the active scene.");
+                    _workspaceNativeSettings.Add(0, 94, DesktopNativeSettingsWindow.ControlKind.Label,
+                        "Configuration status unavailable.");
                     _workspaceNativeSettings.Add(1, 2, DesktopNativeSettingsWindow.ControlKind.Label,
                         "VRM model management");
                     _workspaceNativeSettings.Add(1, 12, DesktopNativeSettingsWindow.ControlKind.Edit,
@@ -507,6 +515,7 @@ namespace VCR.Runtime.UI
                 _workspaceNativeSettings.SetText(12,
                     _modelPathInput != null ? _modelPathInput.value ?? "" :
                     PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
+                RefreshWorkspaceConfigurationStatus();
                 RefreshWorkspaceOverlayStatus();
                 if (!_workspaceNativeSettings.IsVisible)
                 {
@@ -569,6 +578,11 @@ namespace VCR.Runtime.UI
                 if (action >= 401 && action <= 403)
                 {
                     ApplyWorkspaceOverlayAction(action);
+                    continue;
+                }
+                if (action == 205 || action == 206)
+                {
+                    ApplyWorkspaceConfigurationAction(action);
                     continue;
                 }
                 if (action == 300)
@@ -826,6 +840,7 @@ namespace VCR.Runtime.UI
                 }
             }) { text = "Apply" };
             panel.Add(apply);
+            BuildWorkspaceConfigurationFallback(panel);
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
             _workspaceRoot.Add(panel);
         }
