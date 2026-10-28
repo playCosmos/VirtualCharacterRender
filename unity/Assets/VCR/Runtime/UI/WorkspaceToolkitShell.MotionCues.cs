@@ -207,7 +207,7 @@ namespace VCR.Runtime.UI
             try
             {
                 var signature = new StringBuilder();
-                var entries = new System.Collections.Generic.List<string>();
+                var entries = new System.Collections.Generic.List<(string RuntimeId, string CueId)>();
                 var visible = 0;
                 var total = 0;
                 foreach (var behaviour in FindObjectsByType<MonoBehaviour>(
@@ -228,7 +228,7 @@ namespace VCR.Runtime.UI
                     {
                         signature.Append('|').Append(id);
                         if (visible++ >= WorkspaceMotionCueVisibleLimit) continue;
-                        entries.Add(status.RuntimeId + "\u001f" + id);
+                        entries.Add((status.RuntimeId, id));
                     }
                 }
                 _workspaceCueStatus.text = total == 0 ?
@@ -244,9 +244,8 @@ namespace VCR.Runtime.UI
                 _workspaceCueList.Clear();
                 foreach (var entry in entries)
                 {
-                    var split = entry.IndexOf('\u001f');
-                    var runtimeId = entry.Substring(0, split);
-                    var cueId = entry.Substring(split + 1);
+                    var runtimeId = entry.RuntimeId;
+                    var cueId = entry.CueId;
                     _workspaceCueList.Add(new Button(() =>
                     {
                         _workspaceCueRuntimeInput.SetValueWithoutNotify(runtimeId);
