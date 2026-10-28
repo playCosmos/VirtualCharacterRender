@@ -68,7 +68,8 @@ namespace VCR.Runtime.UI
                     // A recovered/failed configuration is deliberately protected
                     // against automatic saves. Require a second explicit click.
                     if (bootstrap.AutomaticConfigurationSaveSuppressed &&
-                        Time.unscaledTime > _workspaceSaveConfirmUntil)
+                        (_workspaceSaveConfirmUntil <= 0f ||
+                         Time.unscaledTime > _workspaceSaveConfirmUntil))
                     {
                         _workspaceSaveConfirmUntil = Time.unscaledTime +
                             ConfigurationConfirmSeconds;
@@ -87,7 +88,8 @@ namespace VCR.Runtime.UI
                 {
                     // Reload replaces live runtime settings, so guard against
                     // accidental loss of unsaved configuration changes.
-                    if (Time.unscaledTime > _workspaceReloadConfirmUntil)
+                    if (_workspaceReloadConfirmUntil <= 0f ||
+                        Time.unscaledTime > _workspaceReloadConfirmUntil)
                     {
                         _workspaceReloadConfirmUntil = Time.unscaledTime +
                             ConfigurationConfirmSeconds;
