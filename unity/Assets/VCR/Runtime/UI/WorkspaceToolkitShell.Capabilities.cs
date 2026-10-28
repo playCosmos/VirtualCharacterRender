@@ -24,6 +24,10 @@ namespace VCR.Runtime.UI
 
         private void BuildWorkspaceCapabilitiesPanel(VisualElement container)
         {
+            // The new panel has no children even if the registry snapshot has
+            // not changed since the previous layout.
+            _workspaceCapabilitySignature = null;
+            _nextWorkspaceCapabilityRefresh = 0f;
             _workspaceCapabilityFeedback = new Label("Runtime modules and installed providers.");
             container.Add(_workspaceCapabilityFeedback);
             container.Add(new Button(() =>
