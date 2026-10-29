@@ -22,6 +22,7 @@ namespace VCR.Runtime.UI
         private Label _workspaceLogSummary;
         private bool _workspaceErrorsOnly;
         private bool _workspaceLogSubscribed;
+        private long _workspaceInventoryCursor;
         private int _workspacePendingLogCount;
         private int _workspaceDroppedLogCount;
         private RuntimeDiagnostics _workspaceDiagnostics;
@@ -50,6 +51,12 @@ namespace VCR.Runtime.UI
                 Timestamp = DateTime.UtcNow.ToString("HH:mm:ss");
             }
 
+            public WorkspaceLogEvent(string message, LogType type, string timestamp)
+                : this(message, type)
+            {
+                Timestamp = timestamp ?? Timestamp;
+            }
+
             public string Message { get; }
             public LogType Type { get; }
             public string Timestamp { get; }
@@ -71,6 +78,10 @@ namespace VCR.Runtime.UI
 
         private void OnWorkspaceLogReceived(string condition, string stackTrace, LogType type)
         {
+            // Startup inventory is captured independently before scene load.
+            // Do not duplicate it when the UI and the early hook overlap.
+            if (WorkspaceStartupInventoryBuffer.IsInventory(condition))
+                return;
             // Unity invokes this from arbitrary threads. No UI or Unity object access here.
             if (Interlocked.Increment(ref _workspacePendingLogCount) > MaxWorkspaceLogPending)
             {
@@ -98,6 +109,7 @@ namespace VCR.Runtime.UI
             _workspaceDiagnosticsCsvButton = null;
             _workspaceDiagnosticsConsoleButton = null;
             _workspaceErrorsOnly = false;
+            _workspaceInventoryCursor = 0;
             _workspaceLogHistory.Clear();
             while (_workspacePendingLogs.TryDequeue(out _)) { }
             Interlocked.Exchange(ref _workspacePendingLogCount, 0);
@@ -120,6 +132,9 @@ namespace VCR.Runtime.UI
             controls.Add(new Button(() =>
             {
                 _workspaceLogHistory.Clear();
+                // Clear means cleared: never replay the same early inventory
+                // messages on the next Update. A shell re-enable can replay.
+                _workspaceInventoryCursor = WorkspaceStartupInventoryBuffer.LatestSequence;
                 _workspaceLogList?.Clear();
                 if (_workspaceLogSummary != null) _workspaceLogSummary.text = "Log cleared.";
             }) { text = "Clear" });
@@ -153,6 +168,16 @@ namespace VCR.Runtime.UI
         {
             if (_workspaceLogList == null) return;
             var changed = false;
+            foreach (var inventory in WorkspaceStartupInventoryBuffer.SnapshotAfter(
+                         _workspaceInventoryCursor))
+            {
+                _workspaceInventoryCursor = inventory.Sequence;
+                _workspaceLogHistory.Enqueue(new WorkspaceLogEvent(
+                    inventory.Message, inventory.Type, inventory.Timestamp));
+                if (_workspaceLogHistory.Count > MaxWorkspaceLogHistory)
+                    _workspaceLogHistory.Dequeue();
+                changed = true;
+            }
             for (var i = 0; i < 128 && _workspacePendingLogs.TryDequeue(out var evt); i++)
             {
                 Interlocked.Decrement(ref _workspacePendingLogCount);
@@ -456,6 +481,86 @@ namespace VCR.Runtime.UI
                     exception.Message;
                 _workspaceDiagnosticsMetricList.Clear();
                 Debug.LogException(exception, this);
+            }
+        }
+    }
+
+    // Captures only VCR's bounded startup inventory before any scene UI
+    // subscribes. It cannot display camera frames, plugin secrets or stack traces.
+    // Unity can invoke logMessageReceivedThreaded on worker threads.
+    internal static class WorkspaceStartupInventoryBuffer
+    {
+        internal readonly struct Entry
+        {
+            internal Entry(long sequence, string message, LogType type, string timestamp)
+            {
+                Sequence = sequence;
+                Message = message;
+                Type = type;
+                Timestamp = timestamp;
+            }
+            internal long Sequence { get; }
+            internal string Message { get; }
+            internal LogType Type { get; }
+            internal string Timestamp { get; }
+        }
+
+        private const int MaxBufferedEntries = 160;
+        private const int MaxEntryCharacters = 4096;
+        private static readonly object Sync = new object();
+        private static readonly Queue<Entry> Recent = new Queue<Entry>();
+        private static long _sequence;
+
+        internal static bool IsInventory(string message)
+        {
+            return message != null &&
+                message.StartsWith("VCR inventory:", StringComparison.Ordinal);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void RegisterBeforeScene()
+        {
+            // Idempotent even when Editor play mode retains static fields.
+            Application.logMessageReceivedThreaded -= OnLogReceived;
+            lock (Sync)
+            {
+                Recent.Clear();
+                _sequence = 0;
+            }
+            Application.logMessageReceivedThreaded += OnLogReceived;
+        }
+
+        private static void OnLogReceived(string condition, string stackTrace, LogType type)
+        {
+            if (!IsInventory(condition)) return;
+            var text = condition.Length <= MaxEntryCharacters
+                ? condition : condition.Substring(0, MaxEntryCharacters) + "…";
+            var stamp = DateTime.UtcNow.ToString("HH:mm:ss");
+            lock (Sync)
+            {
+                Recent.Enqueue(new Entry(++_sequence, text, type, stamp));
+                if (Recent.Count > MaxBufferedEntries)
+                    Recent.Dequeue();
+            }
+        }
+
+        internal static long LatestSequence
+        {
+            get
+            {
+                lock (Sync) return _sequence;
+            }
+        }
+
+        internal static Entry[] SnapshotAfter(long cursor)
+        {
+            lock (Sync)
+            {
+                var result = new List<Entry>();
+                foreach (var entry in Recent)
+                    if (entry.Sequence > cursor)
+                        result.Add(entry);
+                return result.ToArray();
             }
         }
     }
