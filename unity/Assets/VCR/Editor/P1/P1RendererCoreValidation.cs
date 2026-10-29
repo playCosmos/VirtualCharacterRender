@@ -47,6 +47,11 @@ namespace VCR.Editor.P1
                 // Assemble the fixture before any Awake-driven initialization.
                 root.SetActive(false);
 
+                Expect(
+                    P1WorkspaceLogValidation.RunChecks(),
+                    "UI Toolkit threaded log queue must stay bounded and correct across reset/clear",
+                    failures);
+
                 var characterRoot =
                     new GameObject("Character");
                 characterRoot.transform.SetParent(
