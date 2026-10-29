@@ -726,6 +726,43 @@ namespace VCR.Editor.P1
                     "scene runtime must resolve the primary camera adapter",
                     failures);
 
+                // The UI Toolkit Inspector must change only the camera's FOV.
+                // It must reject invalid input before the camera adapter's
+                // sanitization could silently clamp it to another value.
+                var beforeInspectorCamera = cameraController.Settings;
+                var beforeInspectorLight = lightController.Settings;
+                var beforeInspectorRender = scene.CaptureRenderSettings();
+                scene.SetCameraFieldOfView(62.5f);
+                Expect(
+                    Approximately(cameraController.Settings.FieldOfView, 62.5f) &&
+                    Approximately(camera.fieldOfView, 62.5f) &&
+                    Approximately(cameraController.Settings.NearClipPlane,
+                        beforeInspectorCamera.NearClipPlane) &&
+                    Approximately(cameraController.Settings.FarClipPlane,
+                        beforeInspectorCamera.FarClipPlane) &&
+                    Approximately(lightController.Settings.Intensity,
+                        beforeInspectorLight.Intensity) &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        beforeInspectorRender.TargetFrameRate,
+                    "U1 camera FOV edit must apply without changing clips, lighting or render pacing",
+                    failures);
+                foreach (var invalidFov in new[] { float.NaN, float.PositiveInfinity, 0f, 180f })
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetCameraFieldOfView(invalidFov);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(rejected && Approximately(camera.fieldOfView, 62.5f),
+                        "U1 camera FOV must reject nonfinite/out-of-range values without mutation",
+                        failures);
+                }
+                scene.SetCameraFieldOfView(beforeInspectorCamera.FieldOfView);
+
                 Expect(
                     ReferenceEquals(
                         scene.LightController,
