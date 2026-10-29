@@ -1929,6 +1929,20 @@ namespace VCR.Runtime.UI
                     _cameraFarClipInput == null)
                     throw new InvalidOperationException("Primary camera inputs are unavailable.");
 
+                // The operator can click Apply before the next periodic UI
+                // refresh notices a retargeted adapter. Never submit fields
+                // from a previous scene/camera to the new live target.
+                if (_cameraDraftRuntime != sceneRuntime ||
+                    _cameraDraftOwner != camera ||
+                    _cameraDraftTarget != camera.TargetCamera)
+                {
+                    SynchronizeCameraInspectorInputs();
+                    if (_inspectorFeedback != null)
+                        _inspectorFeedback.text =
+                            "Primary camera changed. Fields refreshed; review and apply again.";
+                    return;
+                }
+
                 // The scene runtime validates the complete snapshot atomically
                 // before changing the camera. Never silently clamp a draft.
                 var next = camera.Settings;
@@ -2033,6 +2047,18 @@ namespace VCR.Runtime.UI
                     _primaryLightRotationInput == null || _primaryLightRgbInput == null ||
                     _primaryLightAlphaInput == null || _primaryLightShadowsInput == null)
                     throw new InvalidOperationException("Primary light inputs are unavailable.");
+                // A rapid Apply must not commit old light values to a new
+                // target before the scheduled Inspector refresh runs.
+                if (_primaryLightDraftRuntime != sceneRuntime ||
+                    _primaryLightDraftOwner != light ||
+                    _primaryLightDraftTarget != light.TargetLight)
+                {
+                    SynchronizePrimaryLightInputs();
+                    if (_inspectorFeedback != null)
+                        _inspectorFeedback.text =
+                            "Primary light changed. Fields refreshed; review and apply again.";
+                    return;
+                }
                 var rgb = _primaryLightRgbInput.value;
                 var next = light.Settings;
                 next.Enabled = _primaryLightEnabledInput.value;
