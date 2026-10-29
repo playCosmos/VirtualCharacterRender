@@ -16,12 +16,15 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
+import tempfile
 import time
 
 
 WM_CLOSE = 0x0010
 EXPECTED_CLASS = "UnityWndClass"
 QUIT_MARKER = "VCR exit: OnApplicationQuit finished"
+RUNTIME_STARTUP_MARKER = (
+    "VCR inventory: stage=startup category=module id=application status=started")
 
 
 def sha256(path):
@@ -86,6 +89,65 @@ def request_normal_close(hwnd):
         raise OSError("Could not post WM_CLOSE to Unity main window")
 
 
+def runtime_startup_logged(player_log):
+    """Do not mistake early window creation for completed managed startup."""
+    try:
+        return RUNTIME_STARTUP_MARKER in player_log.read_text(
+            encoding="utf-8", errors="replace")
+    except OSError:
+        # Unity may still hold or have not created the Player log.
+        return False
+
+
+def require_runtime_startup(process, player_log, deadline):
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(
+                "GUI Player exited before managed runtime startup completed")
+        if runtime_startup_logged(player_log):
+            return
+        time.sleep(0.25)
+    raise RuntimeError(
+        "Visible GUI window did not reach managed runtime startup; "
+        "normal-close observation was not attempted")
+
+
+def run_self_test():
+    class Process:
+        def __init__(self, exit_code=None):
+            self.exit_code = exit_code
+
+        def poll(self):
+            return self.exit_code
+
+    with tempfile.TemporaryDirectory() as directory:
+        log = Path(directory) / "Player.log"
+        if runtime_startup_logged(log):
+            raise RuntimeError("Missing Player log accepted as startup")
+        log.write_text("UnityWndClass visible; no runtime inventory yet\n",
+                       encoding="utf-8")
+        if runtime_startup_logged(log):
+            raise RuntimeError("Visible window alone accepted as startup")
+        try:
+            require_runtime_startup(Process(), log, time.monotonic() + 0.02)
+        except RuntimeError as error:
+            if "did not reach managed runtime startup" not in str(error):
+                raise
+        else:
+            raise RuntimeError("Missing runtime startup did not fail closed")
+        log.write_text(RUNTIME_STARTUP_MARKER + "\n", encoding="utf-8")
+        require_runtime_startup(Process(), log, time.monotonic() + 1)
+        try:
+            require_runtime_startup(Process(0), log, time.monotonic() + 1)
+        except RuntimeError as error:
+            if "exited before managed runtime startup" not in str(error):
+                raise
+        else:
+            raise RuntimeError("Exited Player accepted as running")
+    print("U1 GUI probe startup-readiness self-test: PASS")
+    return 0
+
+
 def run_probe(args):
     if sys.platform != "win32" or platform.machine().lower() not in (
             "amd64", "x86_64"):
@@ -110,6 +172,7 @@ def run_probe(args):
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
         "windowObserved": False,
+        "runtimeStartupObserved": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
         "exitCode": None,
@@ -151,7 +214,14 @@ def run_probe(args):
         report["windowClass"] = observed["class"]
         report["windowTitle"] = observed["title"]
         report["windowObservedAfterMs"] = round((time.monotonic() - start) * 1000)
-        # Allow one update tick before sending an ordinary OS close request.
+        # Unity can expose its top-level window before the scene/bootstrap
+        # reaches Start. Closing at that point runs OnDisable but may never
+        # invoke the managed OnApplicationQuit marker this probe requires.
+        require_runtime_startup(process, player_log, deadline)
+        report["runtimeStartupObserved"] = True
+        report["runtimeStartupObservedAfterMs"] = round(
+            (time.monotonic() - start) * 1000)
+        # Allow one update tick after managed startup before normal WM_CLOSE.
         time.sleep(1.0)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
@@ -194,6 +264,8 @@ def run_probe(args):
 
 
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
+        return run_self_test()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--player", required=True, type=Path)
     parser.add_argument("--source", required=True)
