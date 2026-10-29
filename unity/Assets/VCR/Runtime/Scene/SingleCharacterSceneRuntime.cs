@@ -502,6 +502,39 @@ namespace VCR.Runtime.Scene
             lightController.Configure(lightController.TargetLight, next);
         }
 
+        // Apply one validated primary-light snapshot, independently of camera,
+        // render, overlay or environment configuration. The U1 color editor
+        // uses normalized (non-HDR) RGBA; invalid input must never be clamped
+        // into an unexpected mutation.
+        public void SetPrimaryLightConfiguration(SceneLightSettings next)
+        {
+            static bool Finite(float value) =>
+                !float.IsNaN(value) && !float.IsInfinity(value);
+            static bool Normalized(float value) =>
+                Finite(value) && value >= 0f && value <= 1f;
+
+            if (!Finite(next.LocalEulerAngles.x) ||
+                !Finite(next.LocalEulerAngles.y) ||
+                !Finite(next.LocalEulerAngles.z) ||
+                !Normalized(next.Color.r) || !Normalized(next.Color.g) ||
+                !Normalized(next.Color.b) || !Normalized(next.Color.a) ||
+                !Finite(next.Intensity) || next.Intensity < 0f ||
+                next.Intensity > 20f ||
+                (next.Shadows != LightShadows.None &&
+                 next.Shadows != LightShadows.Hard &&
+                 next.Shadows != LightShadows.Soft))
+                throw new ArgumentOutOfRangeException(nameof(next),
+                    "Primary light requires finite Euler angles, normalized " +
+                    "RGBA, 0..20 intensity and None/Hard/Soft shadows.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (lightController == null || lightController.TargetLight == null)
+                throw new InvalidOperationException("Primary scene light is unavailable.");
+
+            lightController.Configure(lightController.TargetLight, next);
+        }
+
         public void ApplySceneViewSettings()
         {
             EnsureOperational();
