@@ -734,14 +734,14 @@ namespace VCR.Editor.P1
                 var beforeInspectorRender = scene.CaptureRenderSettings();
                 scene.SetCameraFieldOfView(62.5f);
                 Expect(
-                    Approximately(cameraController.Settings.FieldOfView, 62.5f) &&
-                    Approximately(camera.fieldOfView, 62.5f) &&
-                    Approximately(cameraController.Settings.NearClipPlane,
-                        beforeInspectorCamera.NearClipPlane) &&
-                    Approximately(cameraController.Settings.FarClipPlane,
-                        beforeInspectorCamera.FarClipPlane) &&
-                    Approximately(lightController.Settings.Intensity,
-                        beforeInspectorLight.Intensity) &&
+                    Math.Abs(cameraController.Settings.FieldOfView - 62.5f) < 0.0001f &&
+                    Math.Abs(camera.fieldOfView - 62.5f) < 0.0001f &&
+                    Math.Abs(cameraController.Settings.NearClipPlane -
+                        beforeInspectorCamera.NearClipPlane) < 0.0001f &&
+                    Math.Abs(cameraController.Settings.FarClipPlane -
+                        beforeInspectorCamera.FarClipPlane) < 0.0001f &&
+                    Math.Abs(lightController.Settings.Intensity -
+                        beforeInspectorLight.Intensity) < 0.0001f &&
                     scene.CaptureRenderSettings().TargetFrameRate ==
                         beforeInspectorRender.TargetFrameRate,
                     "U1 camera FOV edit must apply without changing clips, lighting or render pacing",
@@ -757,7 +757,7 @@ namespace VCR.Editor.P1
                     {
                         rejected = true;
                     }
-                    Expect(rejected && Approximately(camera.fieldOfView, 62.5f),
+                    Expect(rejected && Math.Abs(camera.fieldOfView - 62.5f) < 0.0001f,
                         "U1 camera FOV must reject nonfinite/out-of-range values without mutation",
                         failures);
                 }
