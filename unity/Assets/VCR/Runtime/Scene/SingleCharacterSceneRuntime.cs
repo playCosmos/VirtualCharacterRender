@@ -454,6 +454,26 @@ namespace VCR.Runtime.Scene
             cameraController.Configure(cameraController.TargetCamera, next);
         }
 
+        // Isolated primary-light edits for the U1 Inspector. Never replay
+        // unrelated environment, camera, render or overlay configuration.
+        public void SetPrimaryLightSettings(bool enabled, float intensity)
+        {
+            if (float.IsNaN(intensity) || float.IsInfinity(intensity) ||
+                intensity < 0f || intensity > 20f)
+                throw new ArgumentOutOfRangeException(nameof(intensity),
+                    "Primary light intensity must be finite and within 0..20.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (lightController == null || lightController.TargetLight == null)
+                throw new InvalidOperationException("Primary scene light is unavailable.");
+
+            var next = lightController.Settings;
+            next.Enabled = enabled;
+            next.Intensity = intensity;
+            lightController.Configure(lightController.TargetLight, next);
+        }
+
         public void ApplySceneViewSettings()
         {
             EnsureOperational();
