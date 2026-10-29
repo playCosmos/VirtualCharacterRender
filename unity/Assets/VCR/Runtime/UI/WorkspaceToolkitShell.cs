@@ -736,78 +736,119 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private void RefreshWorkspaceOverlayStatus()
+        private string GetWorkspaceOverlayStatus()
         {
-            if (_workspaceNativeSettings == null) return;
             if (sceneRuntime == null)
                 sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
             if (sceneRuntime == null)
+                return "Output runtime unavailable.";
+            try
             {
-                _workspaceNativeSettings.SetText(93, "Output runtime unavailable.");
-                return;
+                if (!sceneRuntime.TryCaptureOverlayOutput(
+                        out _, out var settings, out var error))
+                    return "Output unavailable: " + (error ?? "unknown error");
+                return "Transparent: " + (settings.Transparent ? "on" : "off") +
+                    ", click-through: " + (settings.ClickThrough ? "on" : "off");
             }
-            if (!sceneRuntime.TryCaptureOverlayOutput(out _, out var settings, out var error))
+            catch (Exception exception)
             {
-                _workspaceNativeSettings.SetText(93,
-                    "Output unavailable: " + (error ?? "unknown error"));
-                return;
+                Debug.LogException(exception, this);
+                return "Output status failed: " + exception.Message;
             }
-            _workspaceNativeSettings.SetText(93,
-                "Transparent: " + (settings.Transparent ? "on" : "off") +
-                ", click-through: " + (settings.ClickThrough ? "on" : "off"));
+        }
+
+        private void RefreshWorkspaceOverlayStatus()
+        {
+            if (_workspaceNativeSettings != null)
+                _workspaceNativeSettings.SetText(93, GetWorkspaceOverlayStatus());
+        }
+
+        // The same output service backs both native Settings and the
+        // non-native editor fallback. The latter can safely turn
+        // click-through OFF, but never enable it without an independent
+        // native Settings window to recover mouse input.
+        private string ExecuteWorkspaceOverlayAction(int action, bool nativeWindow)
+        {
+            if (action != 401 && action != 402 && action != 403 && action != 404)
+                return "Unsupported output action.";
+            if (action == 402 && !nativeWindow)
+                return "Enabling click-through requires the independent native Settings window.";
+            if (action == 404 && nativeWindow)
+                return "Unsupported native output action.";
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null)
+                return "Output runtime unavailable.";
+            try
+            {
+                if (action == 403)
+                    return sceneRuntime.TryRecoverOverlayOutput(out var recoverError)
+                        ? "Output recovery requested."
+                        : "Output recovery failed: " + (recoverError ?? "unknown error");
+
+                if (!sceneRuntime.TryCaptureOverlayOutput(
+                        out _, out var current, out var error))
+                    return "Output unavailable: " + (error ?? "unknown error");
+                if (_characterActionPending ||
+                    !ApplicationUiActionPolicy.CanApplyOverlaySetting(
+                        true, sceneRuntime.State, true))
+                    return "Output settings cannot be changed while the scene is busy.";
+
+                if (action == 404 && !current.ClickThrough)
+                    return "Click-through is already disabled.";
+
+                var next = new OverlayOutputSettings(
+                    action == 401 ? !current.Transparent : current.Transparent,
+                    false,
+                    action == 402 ? !current.ClickThrough :
+                        action == 404 ? false : current.ClickThrough);
+                sceneRuntime.ApplyOverlayOutput(next);
+                return action == 402 && next.ClickThrough
+                    ? "Click-through ON: mouse input passes through the overlay. " +
+                      "Use this independent Settings window to disable it."
+                    : "Output updated. " + GetWorkspaceOverlayStatus();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                return "Output action failed: " + exception.Message;
+            }
         }
 
         private void ApplyWorkspaceOverlayAction(int action)
         {
-            if (sceneRuntime == null)
-                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
-            if (sceneRuntime == null)
-            {
-                _workspaceNativeSettings.SetText(93, "Output runtime unavailable.");
-                return;
-            }
-            if (action == 403)
-            {
-                var recovered = sceneRuntime.TryRecoverOverlayOutput(out var recoverError);
-                _workspaceNativeSettings.SetText(93, recovered
-                    ? "Output recovery requested."
-                    : "Output recovery failed: " + (recoverError ?? "unknown error"));
-                return;
-            }
-            if (!sceneRuntime.TryCaptureOverlayOutput(
-                    out _, out var current, out var error))
-            {
-                _workspaceNativeSettings.SetText(93,
-                    "Output unavailable: " + (error ?? "unknown error"));
-                return;
-            }
-            if (!ApplicationUiActionPolicy.CanApplyOverlaySetting(
-                    true, sceneRuntime.State, true))
-            {
-                _workspaceNativeSettings.SetText(93,
-                    "Output settings cannot be changed while the scene is busy.");
-                return;
-            }
+            var result = ExecuteWorkspaceOverlayAction(action, nativeWindow: true);
+            if (_workspaceNativeSettings != null)
+                _workspaceNativeSettings.SetText(93, result);
+        }
 
-            var next = new OverlayOutputSettings(
-                action == 401 ? !current.Transparent : current.Transparent,
-                false,
-                action == 402 ? !current.ClickThrough : current.ClickThrough);
-            try
+        private void BuildWorkspaceOverlayFallback(VisualElement content)
+        {
+            var title = new Label("Output / transparent overlay");
+            title.style.marginTop = 12;
+            content.Add(title);
+            var state = new Label(GetWorkspaceOverlayStatus());
+            state.style.whiteSpace = WhiteSpace.Normal;
+            content.Add(state);
+            var feedback = new Label(
+                "Click-through can only be enabled from independent native Settings.");
+            feedback.style.whiteSpace = WhiteSpace.Normal;
+            content.Add(feedback);
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexWrap = Wrap.Wrap;
+            void Run(int action)
             {
-                sceneRuntime.ApplyOverlayOutput(next);
-                RefreshWorkspaceOverlayStatus();
-                if (action == 402 && next.ClickThrough)
-                    _workspaceNativeSettings.SetText(93,
-                        "Click-through ON: mouse input passes through the overlay. " +
-                        "Use this Settings window to disable it.");
+                feedback.text = ExecuteWorkspaceOverlayAction(action, nativeWindow: false);
+                state.text = GetWorkspaceOverlayStatus();
             }
-            catch (Exception exception)
-            {
-                _workspaceNativeSettings.SetText(93,
-                    "Output setting failed: " + exception.Message);
-                Debug.LogException(exception, this);
-            }
+            row.Add(new Button(() => Run(401)) { text = "Toggle transparency" });
+            row.Add(new Button(() => Run(404)) { text = "Disable click-through" });
+            row.Add(new Button(() => Run(403)) { text = "Recover output" });
+            row.Add(new Button(() => state.text = GetWorkspaceOverlayStatus())
+                { text = "Refresh output status" });
+            content.Add(row);
         }
 
         private void ShowWorkspaceSettingsFallback()
@@ -957,6 +998,7 @@ namespace VCR.Runtime.UI
                     background.SetValueWithoutNotify(loaded.RunInBackground);
                 }
             });
+            BuildWorkspaceOverlayFallback(content);
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
             _workspaceRoot.Add(panel);
         }
