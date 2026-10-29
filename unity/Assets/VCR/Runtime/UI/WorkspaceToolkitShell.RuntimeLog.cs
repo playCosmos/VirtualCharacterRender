@@ -16,6 +16,9 @@ namespace VCR.Runtime.UI
         private const int MaxWorkspaceLogPending = 512;
         private readonly ConcurrentQueue<WorkspaceLogEvent> _workspacePendingLogs =
             new ConcurrentQueue<WorkspaceLogEvent>();
+        // The queue and its bounded count must be updated atomically.
+        // Unity may deliver a threaded callback while OnDisable resets the UI.
+        private readonly object _workspacePendingLogSync = new object();
         private readonly Queue<WorkspaceLogEvent> _workspaceLogHistory =
             new Queue<WorkspaceLogEvent>();
         private ScrollView _workspaceLogList;
@@ -64,16 +67,22 @@ namespace VCR.Runtime.UI
 
         private void SubscribeWorkspaceLog()
         {
-            if (_workspaceLogSubscribed) return;
+            lock (_workspacePendingLogSync)
+            {
+                if (_workspaceLogSubscribed) return;
+                _workspaceLogSubscribed = true;
+            }
             UnityEngine.Application.logMessageReceivedThreaded += OnWorkspaceLogReceived;
-            _workspaceLogSubscribed = true;
         }
 
         private void UnsubscribeWorkspaceLog()
         {
-            if (!_workspaceLogSubscribed) return;
+            lock (_workspacePendingLogSync)
+            {
+                if (!_workspaceLogSubscribed) return;
+                _workspaceLogSubscribed = false;
+            }
             UnityEngine.Application.logMessageReceivedThreaded -= OnWorkspaceLogReceived;
-            _workspaceLogSubscribed = false;
         }
 
         private void OnWorkspaceLogReceived(string condition, string stackTrace, LogType type)
@@ -83,13 +92,19 @@ namespace VCR.Runtime.UI
             if (WorkspaceStartupInventoryBuffer.IsInventory(condition))
                 return;
             // Unity invokes this from arbitrary threads. No UI or Unity object access here.
-            if (Interlocked.Increment(ref _workspacePendingLogCount) > MaxWorkspaceLogPending)
+            lock (_workspacePendingLogSync)
             {
-                Interlocked.Decrement(ref _workspacePendingLogCount);
-                Interlocked.Increment(ref _workspaceDroppedLogCount);
-                return;
+                // An in-flight callback must not enqueue after the shell's
+                // log state has been reset for a disable/re-enable cycle.
+                if (!_workspaceLogSubscribed) return;
+                if (_workspacePendingLogCount >= MaxWorkspaceLogPending)
+                {
+                    _workspaceDroppedLogCount++;
+                    return;
+                }
+                _workspacePendingLogs.Enqueue(new WorkspaceLogEvent(condition, type));
+                _workspacePendingLogCount++;
             }
-            _workspacePendingLogs.Enqueue(new WorkspaceLogEvent(condition, type));
         }
 
         private void ResetWorkspaceLogPanel()
@@ -111,9 +126,12 @@ namespace VCR.Runtime.UI
             _workspaceErrorsOnly = false;
             _workspaceInventoryCursor = 0;
             _workspaceLogHistory.Clear();
-            while (_workspacePendingLogs.TryDequeue(out _)) { }
-            Interlocked.Exchange(ref _workspacePendingLogCount, 0);
-            Interlocked.Exchange(ref _workspaceDroppedLogCount, 0);
+            lock (_workspacePendingLogSync)
+            {
+                while (_workspacePendingLogs.TryDequeue(out _)) { }
+                _workspacePendingLogCount = 0;
+                _workspaceDroppedLogCount = 0;
+            }
         }
 
         private void BuildWorkspaceLogPanel(VisualElement panel)
@@ -178,9 +196,15 @@ namespace VCR.Runtime.UI
                     _workspaceLogHistory.Dequeue();
                 changed = true;
             }
-            for (var i = 0; i < 128 && _workspacePendingLogs.TryDequeue(out var evt); i++)
+            for (var i = 0; i < 128; i++)
             {
-                Interlocked.Decrement(ref _workspacePendingLogCount);
+                WorkspaceLogEvent evt;
+                lock (_workspacePendingLogSync)
+                {
+                    if (!_workspacePendingLogs.TryDequeue(out evt))
+                        break;
+                    _workspacePendingLogCount--;
+                }
                 _workspaceLogHistory.Enqueue(evt);
                 if (_workspaceLogHistory.Count > MaxWorkspaceLogHistory)
                     _workspaceLogHistory.Dequeue();
