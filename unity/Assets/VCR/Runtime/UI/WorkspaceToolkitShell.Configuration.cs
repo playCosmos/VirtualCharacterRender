@@ -104,10 +104,10 @@ namespace VCR.Runtime.UI
 
                     _renderInputsRuntime = null;
                     SynchronizeRenderInputs();
-                    // Reload replaces the persisted camera values too. A pending
-                    // Inspector FOV draft must not silently overwrite that value.
-                    _cameraFieldOfViewRuntime = null;
-                    SynchronizeCameraFieldOfView();
+                    // Reload replaces all primary-camera values. Drop drafts
+                    // before rebinding these same live fields from the saved state.
+                    _cameraDraftOwner = null;
+                    SynchronizeCameraInspectorInputs();
                     // A configuration reload replaces lighting as well as camera
                     // values; discard any stale uncommitted Inspector light draft.
                     _primaryLightDraftOwner = null;
