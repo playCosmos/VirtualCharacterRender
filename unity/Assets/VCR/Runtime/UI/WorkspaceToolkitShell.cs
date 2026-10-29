@@ -46,6 +46,8 @@ namespace VCR.Runtime.UI
         private FloatField _cameraFarClipInput;
         private FloatField _cameraFieldOfViewBoundField;
         private PrimaryCameraController _cameraDraftOwner;
+        private Camera _cameraDraftTarget;
+        private SingleCharacterSceneRuntime _cameraDraftRuntime;
         private SceneCameraSettings _cameraDraft;
         private bool _cameraDraftValid;
         private FloatField _primaryLightIntensityInput;
@@ -56,6 +58,8 @@ namespace VCR.Runtime.UI
         private DropdownField _primaryLightShadowsInput;
         private Button _applyPrimaryLightButton;
         private PrimaryLightController _primaryLightDraftOwner;
+        private Light _primaryLightDraftTarget;
+        private SingleCharacterSceneRuntime _primaryLightDraftRuntime;
         private FloatField _primaryLightBoundIntensity;
         private Toggle _primaryLightBoundEnabled;
         private SceneLightSettings _primaryLightDraft;
@@ -166,8 +170,12 @@ namespace VCR.Runtime.UI
             SubscribeWorkspaceLog();
             _cameraDraftValid = false;
             _cameraDraftOwner = null;
+            _cameraDraftTarget = null;
+            _cameraDraftRuntime = null;
             _primaryLightDraftValid = false;
             _primaryLightDraftOwner = null;
+            _primaryLightDraftTarget = null;
+            _primaryLightDraftRuntime = null;
             _primaryLightBoundIntensity = null;
             _primaryLightBoundEnabled = null;
             _cameraFieldOfViewBoundField = null;
@@ -262,8 +270,12 @@ namespace VCR.Runtime.UI
             {
                 _renderInputsRuntime = null;
                 _cameraDraftOwner = null;
+                _cameraDraftTarget = null;
+                _cameraDraftRuntime = null;
                 _cameraFieldOfViewBoundField = null;
                 _primaryLightDraftOwner = null;
+                _primaryLightDraftTarget = null;
+                _primaryLightDraftRuntime = null;
                 _primaryLightBoundIntensity = null;
                 _primaryLightBoundEnabled = null;
                 _status.text = "Scene runtime unavailable";
@@ -435,6 +447,8 @@ namespace VCR.Runtime.UI
             _cameraNearClipInput = null;
             _cameraFarClipInput = null;
             _cameraDraftOwner = null;
+            _cameraDraftTarget = null;
+            _cameraDraftRuntime = null;
             _cameraFieldOfViewBoundField = null;
             _cameraDraftValid = false;
             _primaryLightIntensityInput = null;
@@ -445,6 +459,8 @@ namespace VCR.Runtime.UI
             _primaryLightShadowsInput = null;
             _applyPrimaryLightButton = null;
             _primaryLightDraftOwner = null;
+            _primaryLightDraftTarget = null;
+            _primaryLightDraftRuntime = null;
             _primaryLightBoundIntensity = null;
             _primaryLightBoundEnabled = null;
             _primaryLightDraftValid = false;
@@ -1111,7 +1127,9 @@ namespace VCR.Runtime.UI
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             CaptureWorkspaceMaterialEditorDrafts();
             if (_cameraFieldOfViewInput != null && _cameraDraftOwner != null &&
-                sceneRuntime != null && _cameraDraftOwner == sceneRuntime.CameraController)
+                sceneRuntime != null && _cameraDraftRuntime == sceneRuntime &&
+                _cameraDraftOwner == sceneRuntime.CameraController &&
+                _cameraDraftTarget == sceneRuntime.CameraController.TargetCamera)
             {
                 _cameraDraft.LocalPosition = _cameraPositionInput.value;
                 _cameraDraft.LocalEulerAngles = _cameraRotationInput.value;
@@ -1124,7 +1142,9 @@ namespace VCR.Runtime.UI
                 _primaryLightRotationInput != null && _primaryLightRgbInput != null &&
                 _primaryLightAlphaInput != null && _primaryLightShadowsInput != null &&
                 _primaryLightDraftOwner != null && sceneRuntime != null &&
-                _primaryLightDraftOwner == sceneRuntime.LightController)
+                _primaryLightDraftRuntime == sceneRuntime &&
+                _primaryLightDraftOwner == sceneRuntime.LightController &&
+                _primaryLightDraftTarget == sceneRuntime.LightController.TargetLight)
             {
                 _primaryLightDraft.Enabled = _primaryLightEnabledInput.value;
                 _primaryLightDraft.Intensity = _primaryLightIntensityInput.value;
@@ -1867,12 +1887,16 @@ namespace VCR.Runtime.UI
                 return;
             // Retain an unsaved draft when changing layouts for the same camera,
             // but refresh from the actual camera when ownership/config changes.
-            var rebound = _cameraDraftOwner != camera;
+            var rebound = _cameraDraftOwner != camera ||
+                _cameraDraftTarget != camera.TargetCamera ||
+                _cameraDraftRuntime != sceneRuntime;
             if (rebound)
             {
                 _cameraDraft = camera.Settings;
                 _cameraDraftValid = true;
                 _cameraDraftOwner = camera;
+                _cameraDraftTarget = camera.TargetCamera;
+                _cameraDraftRuntime = sceneRuntime;
             }
             if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput && !rebound)
                 return;
@@ -1918,6 +1942,8 @@ namespace VCR.Runtime.UI
                 _cameraDraft = camera.Settings;
                 _cameraDraftValid = true;
                 _cameraDraftOwner = camera;
+                _cameraDraftTarget = camera.TargetCamera;
+                _cameraDraftRuntime = sceneRuntime;
                 _cameraPositionInput.SetValueWithoutNotify(_cameraDraft.LocalPosition);
                 _cameraRotationInput.SetValueWithoutNotify(_cameraDraft.LocalEulerAngles);
                 _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraDraft.FieldOfView);
@@ -1959,12 +1985,16 @@ namespace VCR.Runtime.UI
                 return;
             // Rebuilding the same light's dock retains all five pending edits.
             // Changing light owner or reloading config refreshes live state.
-            var lightRebound = _primaryLightDraftOwner != light;
+            var lightRebound = _primaryLightDraftOwner != light ||
+                _primaryLightDraftTarget != light.TargetLight ||
+                _primaryLightDraftRuntime != sceneRuntime;
             if (lightRebound)
             {
                 _primaryLightDraft = light.Settings;
                 _primaryLightDraftValid = true;
                 _primaryLightDraftOwner = light;
+                _primaryLightDraftTarget = light.TargetLight;
+                _primaryLightDraftRuntime = sceneRuntime;
             }
             if (_primaryLightBoundIntensity == _primaryLightIntensityInput &&
                 _primaryLightBoundEnabled == _primaryLightEnabledInput &&
@@ -2022,6 +2052,8 @@ namespace VCR.Runtime.UI
                 _primaryLightDraft = light.Settings;
                 _primaryLightDraftValid = true;
                 _primaryLightDraftOwner = light;
+                _primaryLightDraftTarget = light.TargetLight;
+                _primaryLightDraftRuntime = sceneRuntime;
                 _primaryLightEnabledInput.SetValueWithoutNotify(_primaryLightDraft.Enabled);
                 _primaryLightIntensityInput.SetValueWithoutNotify(_primaryLightDraft.Intensity);
                 _primaryLightRotationInput.SetValueWithoutNotify(_primaryLightDraft.LocalEulerAngles);
