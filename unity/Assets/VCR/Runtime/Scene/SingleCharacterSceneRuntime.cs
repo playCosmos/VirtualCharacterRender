@@ -437,6 +437,23 @@ namespace VCR.Runtime.Scene
                 settings);
         }
 
+        // Isolated camera edit for U1 Inspector. Do not replay rendering,
+        // lighting, environment or overlay configuration for an FOV change.
+        public void SetCameraFieldOfView(float fieldOfView)
+        {
+            EnsureOperational();
+            ResolveDependencies();
+            if (cameraController == null || cameraController.TargetCamera == null)
+                throw new InvalidOperationException("Primary scene camera is unavailable.");
+            if (float.IsNaN(fieldOfView) || float.IsInfinity(fieldOfView) ||
+                fieldOfView < 1f || fieldOfView > 179f)
+                throw new ArgumentOutOfRangeException(nameof(fieldOfView),
+                    "Camera FOV must be finite and between 1 and 179 degrees.");
+            var next = cameraController.Settings;
+            next.FieldOfView = fieldOfView;
+            cameraController.Configure(cameraController.TargetCamera, next);
+        }
+
         public void ApplySceneViewSettings()
         {
             EnsureOperational();
