@@ -994,12 +994,20 @@ namespace VCR.Editor.P1
                 var applyLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
                     "ApplyPrimaryLightFromInspector",
                     BindingFlags.Instance | BindingFlags.NonPublic);
+                var discardCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "RevertCameraInspectorDraft",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var discardLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "RevertLightInspectorDraft",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
                 Expect(syncCameraInspector != null && syncLightInspector != null &&
-                    applyCameraInspector != null && applyLightInspector != null,
-                    "U1 Inspector must expose synchronization and guarded Apply actions",
+                    applyCameraInspector != null && applyLightInspector != null &&
+                    discardCameraInspector != null && discardLightInspector != null,
+                    "U1 Inspector must expose sync, guarded Apply and Discard actions",
                     failures);
                 if (syncCameraInspector != null && syncLightInspector != null &&
-                    applyCameraInspector != null && applyLightInspector != null)
+                    applyCameraInspector != null && applyLightInspector != null &&
+                    discardCameraInspector != null && discardLightInspector != null)
                 {
                     syncCameraInspector.Invoke(inspectorProbe, null);
                     syncLightInspector.Invoke(inspectorProbe, null);
@@ -1014,6 +1022,31 @@ namespace VCR.Editor.P1
                         Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f,
                         "U1 Inspector must retain uncommitted drafts for unchanged target objects",
                         failures);
+
+                    // Discarding a camera draft must read the current camera,
+                    // without applying any scene changes or losing a light draft.
+                    discardCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorFovField.value -
+                            originalInspectorCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(camera.fieldOfView -
+                            originalInspectorCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f &&
+                        inspectorProbeFeedback.text.Contains("discarded"),
+                        "U1 Discard camera edits must refresh only camera fields without scene mutation",
+                        failures);
+                    inspectorFovField.SetValueWithoutNotify(111f);
+                    discardLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorLightIntensityField.value -
+                            originalInspectorLight.Intensity) < 0.0001f &&
+                        Math.Abs(light.intensity -
+                            originalInspectorLight.Intensity) < 0.0001f &&
+                        Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                        inspectorProbeFeedback.text.Contains("discarded"),
+                        "U1 Discard light edits must refresh only light fields without scene mutation",
+                        failures);
+                    inspectorLightIntensityField.SetValueWithoutNotify(11f);
 
                     var alternateCameraObject = new GameObject("Alternate P1 camera");
                     alternateCameraObject.SetActive(false);
