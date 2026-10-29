@@ -1261,16 +1261,22 @@ namespace VCR.Runtime.UI
             preview.Add(_previewImage);
             center.Add(preview);
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
+            // Camera, light and render controls exceed the 260 px advanced
+            // Inspector height. Keep every action keyboard/scroll reachable.
+            var inspectorContent = new ScrollView { name = "vcr-inspector-content" };
+            inspectorContent.style.flexGrow = 1;
+            inspectorContent.style.minHeight = 60;
+            inspector.Add(inspectorContent);
             _inspectorStatus = new Label("Waiting for scene state...");
-            inspector.Add(_inspectorStatus);
+            inspectorContent.Add(_inspectorStatus);
             _inspectorModelPath = new Label("Model path: none");
-            inspector.Add(_inspectorModelPath);
+            inspectorContent.Add(_inspectorModelPath);
             _inspectorCameraStatus = new Label("Camera: unavailable");
-            inspector.Add(_inspectorCameraStatus);
+            inspectorContent.Add(_inspectorCameraStatus);
             _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera FOV" };
             _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)");
             _cameraFieldOfViewInput.tooltip = "Camera vertical field of view in degrees (1–179).";
-            inspector.Add(_cameraFieldOfViewInput);
+            inspectorContent.Add(_cameraFieldOfViewInput);
             SynchronizeCameraFieldOfView();
             _primaryLightEnabledInput = new Toggle("Primary light enabled");
             _primaryLightIntensityInput = new FloatField("Light intensity (0-20)");
@@ -1278,9 +1284,9 @@ namespace VCR.Runtime.UI
                 "Nonnegative, finite intensity. Changing it does not affect light color or shadows.";
             _applyPrimaryLightButton = new Button(ApplyPrimaryLightFromInspector)
                 { text = "Apply primary light" };
-            inspector.Add(_primaryLightEnabledInput);
-            inspector.Add(_primaryLightIntensityInput);
-            inspector.Add(_applyPrimaryLightButton);
+            inspectorContent.Add(_primaryLightEnabledInput);
+            inspectorContent.Add(_primaryLightIntensityInput);
+            inspectorContent.Add(_applyPrimaryLightButton);
             SynchronizePrimaryLightInputs();
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
             _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
@@ -1289,14 +1295,14 @@ namespace VCR.Runtime.UI
             // Keep typed input intact for validation; silently clamping it
             // on blur hides invalid values and makes the Apply result unclear.
             _targetFrameRateInput.SetValueWithoutNotify(60);
-            inspector.Add(_targetFrameRateInput);
-            inspector.Add(_vsyncInput);
+            inspectorContent.Add(_targetFrameRateInput);
+            inspectorContent.Add(_vsyncInput);
             _renderInputsRuntime = null;
             SynchronizeRenderInputs();
-            inspector.Add(_applySceneViewButton);
-            inspector.Add(_applyRenderButton);
+            inspectorContent.Add(_applySceneViewButton);
+            inspectorContent.Add(_applyRenderButton);
             _inspectorFeedback = new Label("");
-            inspector.Add(_inspectorFeedback);
+            inspectorContent.Add(_inspectorFeedback);
             if (advancedWorkspace)
             {
                 inspector.style.height = _inspectorHeight;
