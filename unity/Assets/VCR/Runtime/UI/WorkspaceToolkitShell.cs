@@ -1790,7 +1790,8 @@ namespace VCR.Runtime.UI
             // Rebuild a dock without erasing a pending edit. When the runtime
             // changes (or configuration is reloaded), bind from its actual
             // camera settings instead of carrying a previous scene's draft.
-            if (_cameraFieldOfViewRuntime != sceneRuntime)
+            var cameraRebound = _cameraFieldOfViewRuntime != sceneRuntime;
+            if (cameraRebound)
             {
                 var camera = sceneRuntime.CameraController;
                 if (camera == null || camera.TargetCamera == null)
@@ -1799,7 +1800,7 @@ namespace VCR.Runtime.UI
                 _cameraFieldOfViewDraftValid = true;
                 _cameraFieldOfViewRuntime = sceneRuntime;
             }
-            if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput)
+            if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput && !cameraRebound)
                 return;
             if (_cameraFieldOfViewDraftValid)
                 _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraFieldOfViewDraft);
@@ -1855,7 +1856,8 @@ namespace VCR.Runtime.UI
                 return;
             // Runtime and light swaps must never reuse edits from another light.
             // Rebuilding a dock for this same light preserves uncommitted values.
-            if (_primaryLightDraftOwner != light)
+            var lightRebound = _primaryLightDraftOwner != light;
+            if (lightRebound)
             {
                 var settings = light.Settings;
                 _primaryLightIntensityDraft = settings.Intensity;
@@ -1864,7 +1866,8 @@ namespace VCR.Runtime.UI
                 _primaryLightDraftOwner = light;
             }
             if (_primaryLightBoundIntensity == _primaryLightIntensityInput &&
-                _primaryLightBoundEnabled == _primaryLightEnabledInput)
+                _primaryLightBoundEnabled == _primaryLightEnabledInput &&
+                !lightRebound)
                 return;
             if (_primaryLightDraftValid)
             {
