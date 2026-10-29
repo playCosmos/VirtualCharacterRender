@@ -50,12 +50,15 @@ namespace VCR.Runtime.UI
         private bool _cameraDraftValid;
         private FloatField _primaryLightIntensityInput;
         private Toggle _primaryLightEnabledInput;
+        private Vector3Field _primaryLightRotationInput;
+        private Vector3Field _primaryLightRgbInput;
+        private FloatField _primaryLightAlphaInput;
+        private DropdownField _primaryLightShadowsInput;
         private Button _applyPrimaryLightButton;
         private PrimaryLightController _primaryLightDraftOwner;
         private FloatField _primaryLightBoundIntensity;
         private Toggle _primaryLightBoundEnabled;
-        private float _primaryLightIntensityDraft;
-        private bool _primaryLightEnabledDraft;
+        private SceneLightSettings _primaryLightDraft;
         private bool _primaryLightDraftValid;
         private Toggle _vsyncInput;
         private SingleCharacterSceneRuntime _renderInputsRuntime;
@@ -279,6 +282,10 @@ namespace VCR.Runtime.UI
                 if (_cameraFarClipInput != null) _cameraFarClipInput.SetEnabled(false);
                 if (_primaryLightIntensityInput != null) _primaryLightIntensityInput.SetEnabled(false);
                 if (_primaryLightEnabledInput != null) _primaryLightEnabledInput.SetEnabled(false);
+                if (_primaryLightRotationInput != null) _primaryLightRotationInput.SetEnabled(false);
+                if (_primaryLightRgbInput != null) _primaryLightRgbInput.SetEnabled(false);
+                if (_primaryLightAlphaInput != null) _primaryLightAlphaInput.SetEnabled(false);
+                if (_primaryLightShadowsInput != null) _primaryLightShadowsInput.SetEnabled(false);
                 if (_applyPrimaryLightButton != null) _applyPrimaryLightButton.SetEnabled(false);
                 if (_applyRenderButton != null) _applyRenderButton.SetEnabled(false);
                 if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(false);
@@ -325,6 +332,12 @@ namespace VCR.Runtime.UI
                 _applyPrimaryLightButton.SetEnabled(hasPrimaryLight &&
                     !_characterActionPending &&
                     ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State));
+            var lightSettingsEditable = hasPrimaryLight && !_characterActionPending &&
+                ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State);
+            if (_primaryLightRotationInput != null) _primaryLightRotationInput.SetEnabled(lightSettingsEditable);
+            if (_primaryLightRgbInput != null) _primaryLightRgbInput.SetEnabled(lightSettingsEditable);
+            if (_primaryLightAlphaInput != null) _primaryLightAlphaInput.SetEnabled(lightSettingsEditable);
+            if (_primaryLightShadowsInput != null) _primaryLightShadowsInput.SetEnabled(lightSettingsEditable);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -426,6 +439,10 @@ namespace VCR.Runtime.UI
             _cameraDraftValid = false;
             _primaryLightIntensityInput = null;
             _primaryLightEnabledInput = null;
+            _primaryLightRotationInput = null;
+            _primaryLightRgbInput = null;
+            _primaryLightAlphaInput = null;
+            _primaryLightShadowsInput = null;
             _applyPrimaryLightButton = null;
             _primaryLightDraftOwner = null;
             _primaryLightBoundIntensity = null;
@@ -1104,11 +1121,19 @@ namespace VCR.Runtime.UI
                 _cameraDraftValid = true;
             }
             if (_primaryLightIntensityInput != null && _primaryLightEnabledInput != null &&
+                _primaryLightRotationInput != null && _primaryLightRgbInput != null &&
+                _primaryLightAlphaInput != null && _primaryLightShadowsInput != null &&
                 _primaryLightDraftOwner != null && sceneRuntime != null &&
                 _primaryLightDraftOwner == sceneRuntime.LightController)
             {
-                _primaryLightIntensityDraft = _primaryLightIntensityInput.value;
-                _primaryLightEnabledDraft = _primaryLightEnabledInput.value;
+                _primaryLightDraft.Enabled = _primaryLightEnabledInput.value;
+                _primaryLightDraft.Intensity = _primaryLightIntensityInput.value;
+                _primaryLightDraft.LocalEulerAngles = _primaryLightRotationInput.value;
+                var rgb = _primaryLightRgbInput.value;
+                _primaryLightDraft.Color = new Color(
+                    rgb.x, rgb.y, rgb.z, _primaryLightAlphaInput.value);
+                _primaryLightDraft.Shadows = ParseWorkspaceLightShadows(
+                    _primaryLightShadowsInput.value);
                 _primaryLightDraftValid = true;
             }
             CaptureWorkspaceEnvironmentDraft();
@@ -1310,12 +1335,25 @@ namespace VCR.Runtime.UI
             SynchronizeCameraInspectorInputs();
             _primaryLightEnabledInput = new Toggle("Primary light enabled");
             _primaryLightIntensityInput = new FloatField("Light intensity (0-20)");
-            _primaryLightIntensityInput.tooltip =
-                "Nonnegative, finite intensity. Changing it does not affect light color or shadows.";
+            _primaryLightRotationInput = new Vector3Field("Light local Euler angles");
+            _primaryLightRgbInput = new Vector3Field("Light RGB (0-1)");
+            _primaryLightAlphaInput = new FloatField("Light alpha (0-1)");
+            _primaryLightShadowsInput = new DropdownField("Light shadows")
+            {
+                choices = new System.Collections.Generic.List<string>
+                    { "None", "Hard", "Soft" }
+            };
+            _primaryLightIntensityInput.tooltip = "Finite nonnegative intensity, maximum 20.";
+            _primaryLightRgbInput.tooltip = "Normalized RGB channels. This editor does not expose HDR colors.";
+            _primaryLightAlphaInput.tooltip = "Normalized alpha, 0 to 1.";
             _applyPrimaryLightButton = new Button(ApplyPrimaryLightFromInspector)
                 { text = "Apply primary light" };
             inspectorContent.Add(_primaryLightEnabledInput);
             inspectorContent.Add(_primaryLightIntensityInput);
+            inspectorContent.Add(_primaryLightRotationInput);
+            inspectorContent.Add(_primaryLightRgbInput);
+            inspectorContent.Add(_primaryLightAlphaInput);
+            inspectorContent.Add(_primaryLightShadowsInput);
             inspectorContent.Add(_applyPrimaryLightButton);
             SynchronizePrimaryLightInputs();
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
@@ -1897,22 +1935,34 @@ namespace VCR.Runtime.UI
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
 
+        private static string FormatWorkspaceLightShadows(LightShadows value)
+        {
+            return value == LightShadows.Hard ? "Hard" :
+                value == LightShadows.Soft ? "Soft" : "None";
+        }
+
+        private static LightShadows ParseWorkspaceLightShadows(string value)
+        {
+            return value == "Hard" ? LightShadows.Hard :
+                value == "Soft" ? LightShadows.Soft : LightShadows.None;
+        }
+
         private void SynchronizePrimaryLightInputs()
         {
             if (sceneRuntime == null || _primaryLightIntensityInput == null ||
-                _primaryLightEnabledInput == null)
+                _primaryLightEnabledInput == null || _primaryLightRotationInput == null ||
+                _primaryLightRgbInput == null || _primaryLightAlphaInput == null ||
+                _primaryLightShadowsInput == null)
                 return;
             var light = sceneRuntime.LightController;
             if (light == null || light.TargetLight == null)
                 return;
-            // Runtime and light swaps must never reuse edits from another light.
-            // Rebuilding a dock for this same light preserves uncommitted values.
+            // Rebuilding the same light's dock retains all five pending edits.
+            // Changing light owner or reloading config refreshes live state.
             var lightRebound = _primaryLightDraftOwner != light;
             if (lightRebound)
             {
-                var settings = light.Settings;
-                _primaryLightIntensityDraft = settings.Intensity;
-                _primaryLightEnabledDraft = settings.Enabled;
+                _primaryLightDraft = light.Settings;
                 _primaryLightDraftValid = true;
                 _primaryLightDraftOwner = light;
             }
@@ -1922,8 +1972,15 @@ namespace VCR.Runtime.UI
                 return;
             if (_primaryLightDraftValid)
             {
-                _primaryLightIntensityInput.SetValueWithoutNotify(_primaryLightIntensityDraft);
-                _primaryLightEnabledInput.SetValueWithoutNotify(_primaryLightEnabledDraft);
+                _primaryLightEnabledInput.SetValueWithoutNotify(_primaryLightDraft.Enabled);
+                _primaryLightIntensityInput.SetValueWithoutNotify(_primaryLightDraft.Intensity);
+                _primaryLightRotationInput.SetValueWithoutNotify(_primaryLightDraft.LocalEulerAngles);
+                _primaryLightRgbInput.SetValueWithoutNotify(new Vector3(
+                    _primaryLightDraft.Color.r, _primaryLightDraft.Color.g,
+                    _primaryLightDraft.Color.b));
+                _primaryLightAlphaInput.SetValueWithoutNotify(_primaryLightDraft.Color.a);
+                _primaryLightShadowsInput.SetValueWithoutNotify(
+                    FormatWorkspaceLightShadows(_primaryLightDraft.Shadows));
             }
             _primaryLightBoundIntensity = _primaryLightIntensityInput;
             _primaryLightBoundEnabled = _primaryLightEnabledInput;
@@ -1938,38 +1995,50 @@ namespace VCR.Runtime.UI
                     _inspectorFeedback.text = "Light settings unavailable while runtime is busy.";
                 return;
             }
-            if (_primaryLightIntensityInput == null || _primaryLightEnabledInput == null ||
-                float.IsNaN(_primaryLightIntensityInput.value) ||
-                float.IsInfinity(_primaryLightIntensityInput.value) ||
-                _primaryLightIntensityInput.value < 0f ||
-                _primaryLightIntensityInput.value > 20f)
-            {
-                if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Light intensity must be finite and between 0 and 20.";
-                return;
-            }
             try
             {
-                sceneRuntime.SetPrimaryLightSettings(
-                    _primaryLightEnabledInput.value, _primaryLightIntensityInput.value);
                 var light = sceneRuntime.LightController;
-                var settings = light.Settings;
-                _primaryLightDraftOwner = light;
-                _primaryLightIntensityDraft = settings.Intensity;
-                _primaryLightEnabledDraft = settings.Enabled;
+                if (light == null || light.TargetLight == null ||
+                    _primaryLightIntensityInput == null || _primaryLightEnabledInput == null ||
+                    _primaryLightRotationInput == null || _primaryLightRgbInput == null ||
+                    _primaryLightAlphaInput == null || _primaryLightShadowsInput == null)
+                    throw new InvalidOperationException("Primary light inputs are unavailable.");
+                var rgb = _primaryLightRgbInput.value;
+                var next = light.Settings;
+                next.Enabled = _primaryLightEnabledInput.value;
+                next.Intensity = _primaryLightIntensityInput.value;
+                next.LocalEulerAngles = _primaryLightRotationInput.value;
+                next.Color = new Color(rgb.x, rgb.y, rgb.z, _primaryLightAlphaInput.value);
+                // Explicitly refuse unknown dropdown values rather than
+                // interpreting them as 'None' during an Apply operation.
+                if (_primaryLightShadowsInput.value != "None" &&
+                    _primaryLightShadowsInput.value != "Hard" &&
+                    _primaryLightShadowsInput.value != "Soft")
+                    throw new ArgumentOutOfRangeException(nameof(next.Shadows),
+                        "Choose None, Hard or Soft shadows.");
+                next.Shadows = ParseWorkspaceLightShadows(_primaryLightShadowsInput.value);
+                sceneRuntime.SetPrimaryLightConfiguration(next);
+
+                _primaryLightDraft = light.Settings;
                 _primaryLightDraftValid = true;
-                _primaryLightIntensityInput.SetValueWithoutNotify(settings.Intensity);
-                _primaryLightEnabledInput.SetValueWithoutNotify(settings.Enabled);
+                _primaryLightDraftOwner = light;
+                _primaryLightEnabledInput.SetValueWithoutNotify(_primaryLightDraft.Enabled);
+                _primaryLightIntensityInput.SetValueWithoutNotify(_primaryLightDraft.Intensity);
+                _primaryLightRotationInput.SetValueWithoutNotify(_primaryLightDraft.LocalEulerAngles);
+                _primaryLightRgbInput.SetValueWithoutNotify(new Vector3(
+                    _primaryLightDraft.Color.r, _primaryLightDraft.Color.g,
+                    _primaryLightDraft.Color.b));
+                _primaryLightAlphaInput.SetValueWithoutNotify(_primaryLightDraft.Color.a);
+                _primaryLightShadowsInput.SetValueWithoutNotify(
+                    FormatWorkspaceLightShadows(_primaryLightDraft.Shadows));
                 if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Primary light applied: " +
-                        (settings.Enabled ? "on" : "off") + ", intensity " +
-                        settings.Intensity.ToString("0.###") + ".";
+                    _inspectorFeedback.text = "Primary light settings applied.";
             }
             catch (Exception exception)
             {
                 Debug.LogException(exception, this);
                 if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Primary light failed: " + exception.Message;
+                    _inspectorFeedback.text = "Primary light rejected: " + exception.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
