@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 using VCR.Runtime.Application;
 using VCR.Runtime.Character;
 using VCR.Runtime.Environment;
@@ -12,6 +13,7 @@ using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.UI;
 using VCR.Runtime.ValidationFixtures;
 
 namespace VCR.Editor.P1
@@ -943,6 +945,104 @@ namespace VCR.Editor.P1
                         failures);
                 }
                 scene.SetPrimaryLightConfiguration(lightEditorBaseline);
+
+                // The UI Toolkit Inspector must not carry a previous Camera or
+                // Light target's unsaved values when an adapter is retargeted
+                // without replacing the adapter component itself.
+                var inspectorProbeObject = new GameObject("P1 Inspector Rebinding Probe");
+                inspectorProbeObject.SetActive(false);
+                inspectorProbeObject.transform.SetParent(root.transform, false);
+                var inspectorProbe = inspectorProbeObject.AddComponent<WorkspaceToolkitShell>();
+                SetPrivateField(inspectorProbe, "sceneRuntime", scene);
+                var inspectorPositionField = new Vector3Field();
+                var inspectorRotationField = new Vector3Field();
+                var inspectorFovField = new FloatField();
+                var inspectorNearField = new FloatField();
+                var inspectorFarField = new FloatField();
+                var inspectorLightEnabledField = new Toggle();
+                var inspectorLightIntensityField = new FloatField();
+                var inspectorLightRotationField = new Vector3Field();
+                var inspectorLightRgbField = new Vector3Field();
+                var inspectorLightAlphaField = new FloatField();
+                var inspectorLightShadowsField = new DropdownField
+                {
+                    choices = new List<string> { "None", "Hard", "Soft" }
+                };
+                SetPrivateField(inspectorProbe, "_cameraPositionInput", inspectorPositionField);
+                SetPrivateField(inspectorProbe, "_cameraRotationInput", inspectorRotationField);
+                SetPrivateField(inspectorProbe, "_cameraFieldOfViewInput", inspectorFovField);
+                SetPrivateField(inspectorProbe, "_cameraNearClipInput", inspectorNearField);
+                SetPrivateField(inspectorProbe, "_cameraFarClipInput", inspectorFarField);
+                SetPrivateField(inspectorProbe, "_primaryLightEnabledInput", inspectorLightEnabledField);
+                SetPrivateField(inspectorProbe, "_primaryLightIntensityInput", inspectorLightIntensityField);
+                SetPrivateField(inspectorProbe, "_primaryLightRotationInput", inspectorLightRotationField);
+                SetPrivateField(inspectorProbe, "_primaryLightRgbInput", inspectorLightRgbField);
+                SetPrivateField(inspectorProbe, "_primaryLightAlphaInput", inspectorLightAlphaField);
+                SetPrivateField(inspectorProbe, "_primaryLightShadowsInput", inspectorLightShadowsField);
+
+                var syncCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "SynchronizeCameraInspectorInputs",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var syncLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "SynchronizePrimaryLightInputs",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Expect(syncCameraInspector != null && syncLightInspector != null,
+                    "U1 Inspector must expose internal synchronization for camera and light",
+                    failures);
+                if (syncCameraInspector != null && syncLightInspector != null)
+                {
+                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    syncLightInspector.Invoke(inspectorProbe, null);
+                    var originalInspectorCamera = cameraController.Settings;
+                    var originalInspectorLight = lightController.Settings;
+                    inspectorFovField.SetValueWithoutNotify(111f);
+                    inspectorLightIntensityField.SetValueWithoutNotify(11f);
+                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    syncLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                        Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f,
+                        "U1 Inspector must retain uncommitted drafts for unchanged target objects",
+                        failures);
+
+                    var alternateCameraObject = new GameObject("Alternate P1 camera");
+                    alternateCameraObject.SetActive(false);
+                    alternateCameraObject.transform.SetParent(root.transform, false);
+                    var alternateCamera = alternateCameraObject.AddComponent<Camera>();
+                    var alternateCameraSettings = originalInspectorCamera;
+                    alternateCameraSettings.FieldOfView = 67f;
+                    alternateCameraSettings.LocalPosition = new Vector3(2f, 1f, -4f);
+                    cameraController.Configure(alternateCamera, alternateCameraSettings);
+                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        ReferenceEquals(GetPrivateField<Camera>(
+                            inspectorProbe, "_cameraDraftTarget"), alternateCamera) &&
+                        Math.Abs(inspectorFovField.value - 67f) < 0.0001f &&
+                        Approximately(inspectorPositionField.value,
+                            alternateCameraSettings.LocalPosition),
+                        "U1 camera Inspector must discard previous target draft on retarget",
+                        failures);
+                    cameraController.Configure(camera, originalInspectorCamera);
+
+                    var alternateLightObject = new GameObject("Alternate P1 light");
+                    alternateLightObject.SetActive(false);
+                    alternateLightObject.transform.SetParent(root.transform, false);
+                    var alternateLight = alternateLightObject.AddComponent<Light>();
+                    var alternateLightSettings = originalInspectorLight;
+                    alternateLightSettings.Intensity = 4.75f;
+                    alternateLightSettings.Shadows = LightShadows.Hard;
+                    lightController.Configure(alternateLight, alternateLightSettings);
+                    syncLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        ReferenceEquals(GetPrivateField<Light>(
+                            inspectorProbe, "_primaryLightDraftTarget"), alternateLight) &&
+                        Math.Abs(inspectorLightIntensityField.value - 4.75f) < 0.0001f &&
+                        inspectorLightShadowsField.value == "Hard",
+                        "U1 light Inspector must discard previous target draft on retarget",
+                        failures);
+                    lightController.Configure(light, originalInspectorLight);
+                }
+                UnityEngine.Object.DestroyImmediate(inspectorProbeObject);
 
                 Expect(
                     ReferenceEquals(
