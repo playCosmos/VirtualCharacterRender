@@ -875,6 +875,75 @@ namespace VCR.Editor.P1
                     failures);
                 scene.SetPrimaryLightSettings(originalLight.Enabled, originalLight.Intensity);
 
+                // U1 full primary-light editing must apply a complete snapshot,
+                // preserve unrelated scene state and reject every invalid value
+                // before the PrimaryLightController can silently sanitize it.
+                var lightEditorBaseline = lightController.Settings;
+                var lightEditorCameraBaseline = cameraController.Settings;
+                var lightEditorRenderBaseline = scene.CaptureRenderSettings();
+                var lightEditorNext = lightEditorBaseline;
+                lightEditorNext.Enabled = false;
+                lightEditorNext.Intensity = 3.25f;
+                lightEditorNext.LocalEulerAngles = new Vector3(20f, -25f, 7f);
+                lightEditorNext.Color = new Color(0.25f, 0.5f, 0.75f, 0.8f);
+                lightEditorNext.Shadows = LightShadows.Soft;
+                scene.SetPrimaryLightConfiguration(lightEditorNext);
+                Expect(
+                    !light.enabled &&
+                    Math.Abs(light.intensity - lightEditorNext.Intensity) < 0.0001f &&
+                    Approximately(light.transform.localRotation,
+                        Quaternion.Euler(lightEditorNext.LocalEulerAngles)) &&
+                    Approximately(light.color, lightEditorNext.Color) &&
+                    light.shadows == lightEditorNext.Shadows &&
+                    Math.Abs(cameraController.Settings.FieldOfView -
+                        lightEditorCameraBaseline.FieldOfView) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        lightEditorRenderBaseline.TargetFrameRate,
+                    "U1 full light edit must apply rotation, RGBA and shadows without changing camera/render",
+                    failures);
+                var lightEditorInvalid = new List<SceneLightSettings>();
+                var lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.LocalEulerAngles.y = float.NaN;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.r = float.PositiveInfinity;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.g = -0.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.a = 1.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Intensity = 20.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Shadows = (LightShadows)999;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                foreach (var invalidLightSnapshot in lightEditorInvalid)
+                {
+                    var lightRejected = false;
+                    try
+                    {
+                        scene.SetPrimaryLightConfiguration(invalidLightSnapshot);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        lightRejected = true;
+                    }
+                    Expect(
+                        lightRejected &&
+                        !light.enabled &&
+                        Math.Abs(light.intensity - 3.25f) < 0.0001f &&
+                        Approximately(light.color, lightEditorNext.Color) &&
+                        Approximately(light.transform.localRotation,
+                            Quaternion.Euler(lightEditorNext.LocalEulerAngles)) &&
+                        light.shadows == LightShadows.Soft,
+                        "U1 primary-light invalid snapshot must not cause partial mutation",
+                        failures);
+                }
+                scene.SetPrimaryLightConfiguration(lightEditorBaseline);
+
                 Expect(
                     ReferenceEquals(
                         scene.LightController,
