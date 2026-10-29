@@ -39,6 +39,11 @@ namespace VCR.Runtime.UI
         private Button _applySceneViewButton;
         private Button _applyRenderButton;
         private IntegerField _targetFrameRateInput;
+        private FloatField _cameraFieldOfViewInput;
+        private FloatField _cameraFieldOfViewBoundField;
+        private SingleCharacterSceneRuntime _cameraFieldOfViewRuntime;
+        private float _cameraFieldOfViewDraft;
+        private bool _cameraFieldOfViewDraftValid;
         private Toggle _vsyncInput;
         private SingleCharacterSceneRuntime _renderInputsRuntime;
         private Label _inspectorFeedback;
@@ -143,6 +148,9 @@ namespace VCR.Runtime.UI
             ResetWorkspaceAppearancePanel();
             ResetWorkspaceMotionPanel();
             SubscribeWorkspaceLog();
+            _cameraFieldOfViewDraftValid = false;
+            _cameraFieldOfViewRuntime = null;
+            _cameraFieldOfViewBoundField = null;
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
             // Existing PlayerPrefs layouts remain the migration fallback.
@@ -231,6 +239,8 @@ namespace VCR.Runtime.UI
             if (sceneRuntime == null)
             {
                 _renderInputsRuntime = null;
+                _cameraFieldOfViewRuntime = null;
+                _cameraFieldOfViewBoundField = null;
                 _status.text = "Scene runtime unavailable";
                 if (_sourcesStatus != null) _sourcesStatus.text = "Model: unavailable";
                 if (_inspectorStatus != null) _inspectorStatus.text = "Scene runtime unavailable";
@@ -240,6 +250,7 @@ namespace VCR.Runtime.UI
                 if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
                 if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
                 if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(false);
+                if (_cameraFieldOfViewInput != null) _cameraFieldOfViewInput.SetEnabled(false);
                 if (_applyRenderButton != null) _applyRenderButton.SetEnabled(false);
                 if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(false);
                 if (_vsyncInput != null) _vsyncInput.SetEnabled(false);
@@ -250,6 +261,7 @@ namespace VCR.Runtime.UI
             }
             TryRestoreWorkspaceCharacter();
             SynchronizeRenderInputs();
+            SynchronizeCameraFieldOfView();
             var state = sceneRuntime.Status;
             var path = sceneRuntime.CurrentCharacterPath;
             var modelName = string.IsNullOrWhiteSpace(path)
@@ -260,6 +272,11 @@ namespace VCR.Runtime.UI
             if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_vsyncInput != null) _vsyncInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
+            if (_cameraFieldOfViewInput != null)
+                _cameraFieldOfViewInput.SetEnabled(sceneRuntime.CameraController != null &&
+                    sceneRuntime.CameraController.TargetCamera != null &&
+                    ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State) &&
+                    !_characterActionPending);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -275,7 +292,8 @@ namespace VCR.Runtime.UI
             var canApplySettings = !_characterActionPending &&
                 ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State);
             if (_applySceneViewButton != null)
-                _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && canApplySettings);
+                _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null &&
+                    sceneRuntime.CameraController.TargetCamera != null && canApplySettings);
             if (_applyRenderButton != null)
                 _applyRenderButton.SetEnabled(canApplySettings);
             if (_reloadCharacterButton != null)
@@ -350,6 +368,10 @@ namespace VCR.Runtime.UI
             _applySceneViewButton = null;
             _applyRenderButton = null;
             _targetFrameRateInput = null;
+            _cameraFieldOfViewInput = null;
+            _cameraFieldOfViewRuntime = null;
+            _cameraFieldOfViewBoundField = null;
+            _cameraFieldOfViewDraftValid = false;
             _vsyncInput = null;
             _renderInputsRuntime = null;
             _inspectorFeedback = null;
@@ -1012,6 +1034,11 @@ namespace VCR.Runtime.UI
                 ? _modelPathInput.value
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             CaptureWorkspaceMaterialEditorDrafts();
+            if (_cameraFieldOfViewInput != null && _cameraFieldOfViewRuntime == sceneRuntime)
+            {
+                _cameraFieldOfViewDraft = _cameraFieldOfViewInput.value;
+                _cameraFieldOfViewDraftValid = true;
+            }
             CaptureWorkspaceEnvironmentDraft();
             CaptureWorkspaceEventRulesDraft();
             CaptureWorkspaceAppearanceDraft();
@@ -1189,7 +1216,11 @@ namespace VCR.Runtime.UI
             inspector.Add(_inspectorModelPath);
             _inspectorCameraStatus = new Label("Camera: unavailable");
             inspector.Add(_inspectorCameraStatus);
-            _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply scene camera settings" };
+            _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera FOV" };
+            _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)");
+            _cameraFieldOfViewInput.tooltip = "Camera vertical field of view in degrees (1–179).";
+            inspector.Add(_cameraFieldOfViewInput);
+            SynchronizeCameraFieldOfView();
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
             _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
             _targetFrameRateInput.tooltip = "Supported target: 30–120 FPS. Default: 60 FPS.";
@@ -1691,24 +1722,64 @@ namespace VCR.Runtime.UI
                 ? fallback : Mathf.Clamp(value, min, max);
         }
 
+        private void SynchronizeCameraFieldOfView()
+        {
+            if (sceneRuntime == null || _cameraFieldOfViewInput == null)
+                return;
+            // Rebuild a dock without erasing a pending edit. When the runtime
+            // changes (or configuration is reloaded), bind from its actual
+            // camera settings instead of carrying a previous scene's draft.
+            if (_cameraFieldOfViewRuntime != sceneRuntime)
+            {
+                var camera = sceneRuntime.CameraController;
+                if (camera == null || camera.TargetCamera == null)
+                    return;
+                _cameraFieldOfViewDraft = camera.Settings.FieldOfView;
+                _cameraFieldOfViewDraftValid = true;
+                _cameraFieldOfViewRuntime = sceneRuntime;
+            }
+            if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput)
+                return;
+            if (_cameraFieldOfViewDraftValid)
+                _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraFieldOfViewDraft);
+            _cameraFieldOfViewBoundField = _cameraFieldOfViewInput;
+        }
+
         private void ApplySceneViewFromInspector()
         {
             if (sceneRuntime == null || _characterActionPending ||
                 !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State))
             {
                 if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Scene camera settings unavailable while runtime is busy.";
+                    _inspectorFeedback.text = "Camera settings unavailable while runtime is busy.";
+                return;
+            }
+            if (_cameraFieldOfViewInput == null ||
+                float.IsNaN(_cameraFieldOfViewInput.value) ||
+                float.IsInfinity(_cameraFieldOfViewInput.value) ||
+                _cameraFieldOfViewInput.value < 1f ||
+                _cameraFieldOfViewInput.value > 179f)
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Camera FOV must be finite and between 1 and 179 degrees.";
                 return;
             }
             try
             {
-                sceneRuntime.ApplySceneViewSettings();
-                if (_inspectorFeedback != null) _inspectorFeedback.text = "Scene camera settings applied.";
+                sceneRuntime.SetCameraFieldOfView(_cameraFieldOfViewInput.value);
+                var applied = sceneRuntime.CameraController.Settings.FieldOfView;
+                _cameraFieldOfViewDraft = applied;
+                _cameraFieldOfViewDraftValid = true;
+                _cameraFieldOfViewRuntime = sceneRuntime;
+                _cameraFieldOfViewInput.SetValueWithoutNotify(applied);
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Camera FOV applied: " + applied.ToString("0.###") + " degrees.";
             }
             catch (System.Exception ex)
             {
                 Debug.LogException(ex, this);
-                if (_inspectorFeedback != null) _inspectorFeedback.text = "Camera settings failed: " + ex.Message;
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Camera FOV failed: " + ex.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
