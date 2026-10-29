@@ -108,6 +108,10 @@ namespace VCR.Runtime.UI
                     // Inspector FOV draft must not silently overwrite that value.
                     _cameraFieldOfViewRuntime = null;
                     SynchronizeCameraFieldOfView();
+                    // A configuration reload replaces lighting as well as camera
+                    // values; discard any stale uncommitted Inspector light draft.
+                    _primaryLightDraftOwner = null;
+                    SynchronizePrimaryLightInputs();
                     if (sceneRuntime.TryCaptureRenderSettings(out var settings))
                     {
                         if (_workspaceNativeSettings != null)
