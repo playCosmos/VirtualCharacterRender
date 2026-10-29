@@ -35,7 +35,8 @@ def sha256(path):
 def visible_player_windows(pid):
     """Read-only enumeration of windows owned by the exact Player process."""
     user32 = ctypes.windll.user32
-    user32.EnumWindows.argtypes = [ctypes.c_void_p, wintypes.LPARAM]
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
     user32.EnumWindows.restype = wintypes.BOOL
     user32.GetWindowThreadProcessId.argtypes = [
         wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -47,8 +48,6 @@ def visible_player_windows(pid):
     user32.GetWindowTextW.argtypes = [
         wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     result = []
-    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-
     def visitor(hwnd, _):
         if not user32.IsWindowVisible(hwnd):
             return True
@@ -154,15 +153,15 @@ def run_probe(args):
         report["windowObservedAfterMs"] = round((time.monotonic() - start) * 1000)
         # Allow one update tick before sending an ordinary OS close request.
         time.sleep(1.0)
+        close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
         try:
             report["exitCode"] = process.wait(timeout=args.quit_timeout)
         except subprocess.TimeoutExpired:
             raise RuntimeError("WM_CLOSE failed to exit Player within timeout")
-        report["quitToProcessExitMs"] = round(
-            (time.monotonic() - start) * 1000 -
-            report["windowObservedAfterMs"])
+        report["closeRequestToProcessExitMs"] = round(
+            (time.monotonic() - close_requested_at) * 1000)
         report["managedQuitObserved"] = (
             player_log.is_file() and QUIT_MARKER in
             player_log.read_text(encoding="utf-8", errors="replace"))
