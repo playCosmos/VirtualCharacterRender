@@ -763,6 +763,72 @@ namespace VCR.Editor.P1
                 }
                 scene.SetCameraFieldOfView(beforeInspectorCamera.FieldOfView);
 
+                // Full camera Inspector edits are atomic. Invalid input must
+                // not be sanitized into an unexpected change to live geometry.
+                var fullCameraBaseline = cameraController.Settings;
+                var fullCameraLightBaseline = lightController.Settings;
+                var fullCameraRenderBaseline = scene.CaptureRenderSettings();
+                var editedCamera = fullCameraBaseline;
+                editedCamera.LocalPosition = new Vector3(0.25f, 1.8f, -2.7f);
+                editedCamera.LocalEulerAngles = new Vector3(5f, 25f, -3f);
+                editedCamera.FieldOfView = 44f;
+                editedCamera.NearClipPlane = 0.08f;
+                editedCamera.FarClipPlane = 155f;
+                scene.SetPrimaryCameraSettings(editedCamera);
+                Expect(
+                    Approximately(camera.transform.localPosition, editedCamera.LocalPosition) &&
+                    Approximately(camera.transform.localRotation,
+                        Quaternion.Euler(editedCamera.LocalEulerAngles)) &&
+                    Math.Abs(camera.fieldOfView - editedCamera.FieldOfView) < 0.0001f &&
+                    Math.Abs(camera.nearClipPlane - editedCamera.NearClipPlane) < 0.0001f &&
+                    Math.Abs(camera.farClipPlane - editedCamera.FarClipPlane) < 0.0001f &&
+                    Math.Abs(lightController.Settings.Intensity -
+                        fullCameraLightBaseline.Intensity) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        fullCameraRenderBaseline.TargetFrameRate,
+                    "U1 primary camera edit must apply pose, FOV and clips without replaying light or render settings",
+                    failures);
+                var invalidCameras = new List<SceneCameraSettings>();
+                var invalidCamera = editedCamera;
+                invalidCamera.LocalPosition.x = float.NaN;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.LocalEulerAngles.y = float.PositiveInfinity;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FieldOfView = 180f;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.NearClipPlane = 0f;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FarClipPlane = editedCamera.NearClipPlane;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FarClipPlane = float.NegativeInfinity;
+                invalidCameras.Add(invalidCamera);
+                foreach (var invalidCameraEdit in invalidCameras)
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetPrimaryCameraSettings(invalidCameraEdit);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(
+                        rejected &&
+                        Approximately(camera.transform.localPosition, editedCamera.LocalPosition) &&
+                        Math.Abs(camera.fieldOfView - editedCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(camera.nearClipPlane - editedCamera.NearClipPlane) < 0.0001f &&
+                        Math.Abs(camera.farClipPlane - editedCamera.FarClipPlane) < 0.0001f,
+                        "U1 primary camera must reject invalid snapshots without partial mutation",
+                        failures);
+                }
+                scene.SetPrimaryCameraSettings(fullCameraBaseline);
+
                 // Light edits must not replay camera, render or environment state.
                 var originalLight = lightController.Settings;
                 var originalCamera = cameraController.Settings;
