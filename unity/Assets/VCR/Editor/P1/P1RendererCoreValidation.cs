@@ -979,6 +979,8 @@ namespace VCR.Editor.P1
                 SetPrivateField(inspectorProbe, "_primaryLightRgbInput", inspectorLightRgbField);
                 SetPrivateField(inspectorProbe, "_primaryLightAlphaInput", inspectorLightAlphaField);
                 SetPrivateField(inspectorProbe, "_primaryLightShadowsInput", inspectorLightShadowsField);
+                var inspectorProbeFeedback = new Label();
+                SetPrivateField(inspectorProbe, "_inspectorFeedback", inspectorProbeFeedback);
 
                 var syncCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
                     "SynchronizeCameraInspectorInputs",
@@ -986,10 +988,18 @@ namespace VCR.Editor.P1
                 var syncLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
                     "SynchronizePrimaryLightInputs",
                     BindingFlags.Instance | BindingFlags.NonPublic);
-                Expect(syncCameraInspector != null && syncLightInspector != null,
-                    "U1 Inspector must expose internal synchronization for camera and light",
+                var applyCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "ApplySceneViewFromInspector",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var applyLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "ApplyPrimaryLightFromInspector",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Expect(syncCameraInspector != null && syncLightInspector != null &&
+                    applyCameraInspector != null && applyLightInspector != null,
+                    "U1 Inspector must expose synchronization and guarded Apply actions",
                     failures);
-                if (syncCameraInspector != null && syncLightInspector != null)
+                if (syncCameraInspector != null && syncLightInspector != null &&
+                    applyCameraInspector != null && applyLightInspector != null)
                 {
                     syncCameraInspector.Invoke(inspectorProbe, null);
                     syncLightInspector.Invoke(inspectorProbe, null);
@@ -1013,14 +1023,23 @@ namespace VCR.Editor.P1
                     alternateCameraSettings.FieldOfView = 67f;
                     alternateCameraSettings.LocalPosition = new Vector3(2f, 1f, -4f);
                     cameraController.Configure(alternateCamera, alternateCameraSettings);
-                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    // Simulate a click before the periodic Inspector refresh.
+                    applyCameraInspector.Invoke(inspectorProbe, null);
                     Expect(
                         ReferenceEquals(GetPrivateField<Camera>(
                             inspectorProbe, "_cameraDraftTarget"), alternateCamera) &&
+                        Math.Abs(alternateCamera.fieldOfView - 67f) < 0.0001f &&
                         Math.Abs(inspectorFovField.value - 67f) < 0.0001f &&
                         Approximately(inspectorPositionField.value,
-                            alternateCameraSettings.LocalPosition),
-                        "U1 camera Inspector must discard previous target draft on retarget",
+                            alternateCameraSettings.LocalPosition) &&
+                        inspectorProbeFeedback.text.Contains("changed"),
+                        "U1 camera Apply must refuse stale edits on an unrefreshed retarget",
+                        failures);
+                    // With the same target, the newly reviewed input may apply.
+                    inspectorFovField.SetValueWithoutNotify(69f);
+                    applyCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(Math.Abs(alternateCamera.fieldOfView - 69f) < 0.0001f,
+                        "U1 camera Apply must work after target refresh and review",
                         failures);
                     cameraController.Configure(camera, originalInspectorCamera);
 
@@ -1032,13 +1051,21 @@ namespace VCR.Editor.P1
                     alternateLightSettings.Intensity = 4.75f;
                     alternateLightSettings.Shadows = LightShadows.Hard;
                     lightController.Configure(alternateLight, alternateLightSettings);
-                    syncLightInspector.Invoke(inspectorProbe, null);
+                    // Direct Apply before periodic refresh must be a no-op.
+                    applyLightInspector.Invoke(inspectorProbe, null);
                     Expect(
                         ReferenceEquals(GetPrivateField<Light>(
                             inspectorProbe, "_primaryLightDraftTarget"), alternateLight) &&
+                        Math.Abs(alternateLight.intensity - 4.75f) < 0.0001f &&
                         Math.Abs(inspectorLightIntensityField.value - 4.75f) < 0.0001f &&
-                        inspectorLightShadowsField.value == "Hard",
-                        "U1 light Inspector must discard previous target draft on retarget",
+                        inspectorLightShadowsField.value == "Hard" &&
+                        inspectorProbeFeedback.text.Contains("changed"),
+                        "U1 light Apply must refuse stale edits on an unrefreshed retarget",
+                        failures);
+                    inspectorLightIntensityField.SetValueWithoutNotify(6f);
+                    applyLightInspector.Invoke(inspectorProbe, null);
+                    Expect(Math.Abs(alternateLight.intensity - 6f) < 0.0001f,
+                        "U1 light Apply must work after target refresh and review",
                         failures);
                     lightController.Configure(light, originalInspectorLight);
                 }
