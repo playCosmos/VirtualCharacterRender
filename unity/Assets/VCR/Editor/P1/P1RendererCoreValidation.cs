@@ -763,6 +763,52 @@ namespace VCR.Editor.P1
                 }
                 scene.SetCameraFieldOfView(beforeInspectorCamera.FieldOfView);
 
+                // Light edits must not replay camera, render or environment state.
+                var originalLight = lightController.Settings;
+                var originalCamera = cameraController.Settings;
+                var originalRender = scene.CaptureRenderSettings();
+                var originalLightRotation = lightController.TargetLight.transform.localRotation;
+                scene.SetPrimaryLightSettings(false, 2.5f);
+                Expect(
+                    !lightController.Settings.Enabled &&
+                    !lightController.TargetLight.enabled &&
+                    Math.Abs(lightController.Settings.Intensity - 2.5f) < 0.0001f &&
+                    Math.Abs(lightController.TargetLight.intensity - 2.5f) < 0.0001f &&
+                    Approximately(lightController.Settings.Color, originalLight.Color) &&
+                    lightController.Settings.Shadows == originalLight.Shadows &&
+                    Approximately(lightController.TargetLight.transform.localRotation,
+                        originalLightRotation) &&
+                    Math.Abs(cameraController.Settings.FieldOfView -
+                        originalCamera.FieldOfView) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        originalRender.TargetFrameRate,
+                    "U1 primary light editing must change only enable/intensity",
+                    failures);
+                foreach (var invalidIntensity in new[]
+                    { float.NaN, float.PositiveInfinity, -0.01f, 20.01f })
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetPrimaryLightSettings(true, invalidIntensity);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(
+                        rejected && !lightController.TargetLight.enabled &&
+                        Math.Abs(lightController.TargetLight.intensity - 2.5f) < 0.0001f,
+                        "U1 primary light intensity must reject invalid values without mutation",
+                        failures);
+                }
+                scene.SetPrimaryLightSettings(true, 0f);
+                Expect(lightController.TargetLight.enabled &&
+                    Math.Abs(lightController.TargetLight.intensity) < 0.0001f,
+                    "U1 primary light must support enabled zero-intensity state",
+                    failures);
+                scene.SetPrimaryLightSettings(originalLight.Enabled, originalLight.Intensity);
+
                 Expect(
                     ReferenceEquals(
                         scene.LightController,
