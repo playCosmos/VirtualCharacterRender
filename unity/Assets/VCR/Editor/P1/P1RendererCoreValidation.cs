@@ -767,7 +767,7 @@ namespace VCR.Editor.P1
                 var originalLight = lightController.Settings;
                 var originalCamera = cameraController.Settings;
                 var originalRender = scene.CaptureRenderSettings();
-                var originalLightRotation = lightController.TargetLight.transform.localRotation;
+                var inspectorLightRotation = lightController.TargetLight.transform.localRotation;
                 scene.SetPrimaryLightSettings(false, 2.5f);
                 Expect(
                     !lightController.Settings.Enabled &&
@@ -777,7 +777,7 @@ namespace VCR.Editor.P1
                     Approximately(lightController.Settings.Color, originalLight.Color) &&
                     lightController.Settings.Shadows == originalLight.Shadows &&
                     Approximately(lightController.TargetLight.transform.localRotation,
-                        originalLightRotation) &&
+                        inspectorLightRotation) &&
                     Math.Abs(cameraController.Settings.FieldOfView -
                         originalCamera.FieldOfView) < 0.0001f &&
                     scene.CaptureRenderSettings().TargetFrameRate ==
