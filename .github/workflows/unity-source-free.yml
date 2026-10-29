@@ -244,6 +244,30 @@ jobs:
             --source "$env:GITHUB_SHA" `
             --output Builds/PlayerSmoke/u1-windows
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require startup inventory in actual Windows P1 Player log
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $logPath = 'Builds/PlayerSmoke/u1-windows/player.log'
+          if (-not (Test-Path -LiteralPath $logPath)) {
+            throw 'P1 Player did not produce a startup log.'
+          }
+          $log = Get-Content -LiteralPath $logPath -Raw
+          $markers = @(
+            'VCR inventory: stage=startup category=module id=application',
+            'VCR inventory: stage=startup category=module id=scene',
+            'VCR inventory: stage=startup category=capability count=',
+            'VCR inventory: stage=startup category=declarative_plugin count=',
+            'VCR inventory: stage=startup category=registered_shader count=',
+            'VCR inventory: stage=startup-pre-ui-restore category=model',
+            'VCR inventory: stage=startup-pre-ui-restore category=remembered_model'
+          )
+          foreach ($marker in $markers) {
+            if (-not $log.Contains($marker)) {
+              throw "P1 runtime startup inventory missing: $marker"
+            }
+          }
+          Write-Host 'P1 Windows bootstrap inventory: PASS'
       - name: Preserve P1 native startup and shutdown evidence
         if: always()
         uses: actions/upload-artifact@v4
