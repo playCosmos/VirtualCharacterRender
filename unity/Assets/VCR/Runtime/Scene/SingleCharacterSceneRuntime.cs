@@ -454,6 +454,34 @@ namespace VCR.Runtime.Scene
             cameraController.Configure(cameraController.TargetCamera, next);
         }
 
+        // Apply one validated primary-camera snapshot without replaying other
+        // rendering, light, environment, or overlay configuration.
+        public void SetPrimaryCameraSettings(SceneCameraSettings next)
+        {
+            static bool Finite(float value) =>
+                !float.IsNaN(value) && !float.IsInfinity(value);
+            static bool FiniteVector(Vector3 value) =>
+                Finite(value.x) && Finite(value.y) && Finite(value.z);
+
+            if (!FiniteVector(next.LocalPosition) ||
+                !FiniteVector(next.LocalEulerAngles) ||
+                !Finite(next.FieldOfView) ||
+                next.FieldOfView < 1f || next.FieldOfView > 179f ||
+                !Finite(next.NearClipPlane) || next.NearClipPlane < 0.001f ||
+                !Finite(next.FarClipPlane) ||
+                next.FarClipPlane < next.NearClipPlane + 0.01f)
+                throw new ArgumentOutOfRangeException(nameof(next),
+                    "Camera position/rotation must be finite; FOV must be 1..179, " +
+                    "near clip >= 0.001, far clip >= near clip + 0.01.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (cameraController == null || cameraController.TargetCamera == null)
+                throw new InvalidOperationException("Primary scene camera is unavailable.");
+
+            cameraController.Configure(cameraController.TargetCamera, next);
+        }
+
         // Isolated primary-light edits for the U1 Inspector. Never replay
         // unrelated environment, camera, render or overlay configuration.
         public void SetPrimaryLightSettings(bool enabled, float intensity)
