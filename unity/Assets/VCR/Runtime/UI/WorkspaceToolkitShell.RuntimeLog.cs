@@ -521,13 +521,13 @@ namespace VCR.Runtime.UI
         private static void RegisterBeforeScene()
         {
             // Idempotent even when Editor play mode retains static fields.
-            Application.logMessageReceivedThreaded -= OnLogReceived;
+            UnityEngine.Application.logMessageReceivedThreaded -= OnLogReceived;
             lock (Sync)
             {
                 Recent.Clear();
                 _sequence = 0;
             }
-            Application.logMessageReceivedThreaded += OnLogReceived;
+            UnityEngine.Application.logMessageReceivedThreaded += OnLogReceived;
         }
 
         private static void OnLogReceived(string condition, string stackTrace, LogType type)
