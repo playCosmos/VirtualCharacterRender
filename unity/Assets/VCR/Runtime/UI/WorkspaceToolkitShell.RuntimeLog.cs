@@ -107,6 +107,16 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private void ClearWorkspacePendingLogs()
+        {
+            lock (_workspacePendingLogSync)
+            {
+                while (_workspacePendingLogs.TryDequeue(out _)) { }
+                _workspacePendingLogCount = 0;
+                _workspaceDroppedLogCount = 0;
+            }
+        }
+
         private void ResetWorkspaceLogPanel()
         {
             _workspaceLogList = null;
@@ -126,12 +136,7 @@ namespace VCR.Runtime.UI
             _workspaceErrorsOnly = false;
             _workspaceInventoryCursor = 0;
             _workspaceLogHistory.Clear();
-            lock (_workspacePendingLogSync)
-            {
-                while (_workspacePendingLogs.TryDequeue(out _)) { }
-                _workspacePendingLogCount = 0;
-                _workspaceDroppedLogCount = 0;
-            }
+            ClearWorkspacePendingLogs();
         }
 
         private void BuildWorkspaceLogPanel(VisualElement panel)
@@ -150,8 +155,12 @@ namespace VCR.Runtime.UI
             controls.Add(new Button(() =>
             {
                 _workspaceLogHistory.Clear();
-                // Clear means cleared: never replay the same early inventory
-                // messages on the next Update. A shell re-enable can replay.
+                // Clear includes events still waiting in the background queue,
+                // not just currently rendered rows. The shared lock prevents a
+                // count/queue mismatch with concurrent Unity logging callbacks.
+                ClearWorkspacePendingLogs();
+                // Do not replay previously buffered early inventory messages
+                // on the next Update. A shell re-enable can replay.
                 _workspaceInventoryCursor = WorkspaceStartupInventoryBuffer.LatestSequence;
                 _workspaceLogList?.Clear();
                 if (_workspaceLogSummary != null) _workspaceLogSummary.text = "Log cleared.";
