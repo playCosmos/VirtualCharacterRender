@@ -206,8 +206,10 @@ namespace VCR.Runtime.UI
                 sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
             if (discoverCameraPreview && sceneRuntime != null)
             {
+                // PrimaryCameraController may be on a parent of its Camera.
+                // Use the adapter's resolved target, not a same-GameObject guess.
                 var runtimeCamera = sceneRuntime.CameraController != null
-                    ? sceneRuntime.CameraController.GetComponent<Camera>() : null;
+                    ? sceneRuntime.CameraController.TargetCamera : null;
                 if (runtimeCamera != previewCamera)
                 {
                     // Never replace an explicitly assigned camera with discovery.
