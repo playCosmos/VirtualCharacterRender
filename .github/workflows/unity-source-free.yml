@@ -255,3 +255,46 @@ jobs:
             Builds/PlayerSmoke/u1-windows/
           if-no-files-found: warn
           retention-days: 30
+
+  # Optional informational GUI-window evidence. The normal P1 Windows smoke
+  # must succeed first. A hosted runner may have no interactive desktop:
+  # preserve a truthful failure report rather than blocking source validation
+  # or claiming that rendered pixels/native Settings have been accepted.
+  u1-windows-gui-probe:
+    name: Observe visible P1 Windows window and normal WM_CLOSE (informational)
+    if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+    needs: [unity-source-free, u1-windows-native-smoke]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Download same-run P1 Windows development Player
+        uses: actions/download-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/P1/Windows-Development
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Observe real desktop window; fail closed if runner has no GUI session
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m py_compile tools/probe-u1-windows-gui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u1-windows-gui.py `
+            --player Builds/P1/Windows-Development/VirtualCharacterRender.exe `
+            --source "$env:GITHUB_SHA" `
+            --output Builds/GUIProbe/u1-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload honest P1 GUI-window observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-windows-gui-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/GUIProbe/u1-windows/
+          if-no-files-found: warn
+          retention-days: 14
