@@ -104,6 +104,10 @@ namespace VCR.Runtime.UI
 
                     _renderInputsRuntime = null;
                     SynchronizeRenderInputs();
+                    // Reload replaces the persisted camera values too. A pending
+                    // Inspector FOV draft must not silently overwrite that value.
+                    _cameraFieldOfViewRuntime = null;
+                    SynchronizeCameraFieldOfView();
                     if (sceneRuntime.TryCaptureRenderSettings(out var settings))
                     {
                         if (_workspaceNativeSettings != null)
