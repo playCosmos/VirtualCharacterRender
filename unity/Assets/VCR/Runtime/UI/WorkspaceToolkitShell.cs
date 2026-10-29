@@ -272,8 +272,12 @@ namespace VCR.Runtime.UI
                 _inspectorModelPath.text = "Model path: " + (string.IsNullOrWhiteSpace(path) ? "<none>" : path);
             if (_inspectorCameraStatus != null)
                 _inspectorCameraStatus.text = "Camera: " + (sceneRuntime.CameraController == null ? "unavailable" : "connected");
-            if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && !_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
-            if (_applyRenderButton != null) _applyRenderButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
+            var canApplySettings = !_characterActionPending &&
+                ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State);
+            if (_applySceneViewButton != null)
+                _applySceneViewButton.SetEnabled(sceneRuntime.CameraController != null && canApplySettings);
+            if (_applyRenderButton != null)
+                _applyRenderButton.SetEnabled(canApplySettings);
             if (_reloadCharacterButton != null)
                 _reloadCharacterButton.SetEnabled(state.HasCharacter && !_characterActionPending);
             if (_unloadCharacterButton != null)
@@ -719,6 +723,10 @@ namespace VCR.Runtime.UI
                         "FPS: " + applied.TargetFrameRate + ", VSync: " +
                         (applied.UseVSync ? "on" : "off") + ", Background: " +
                         (applied.RunInBackground ? "on" : "off"));
+                    // A native settings change must not leave the Inspector
+                    // with stale values that could be applied over this edit.
+                    _renderInputsRuntime = null;
+                    SynchronizeRenderInputs();
                 }
                 catch (Exception exception)
                 {
@@ -928,6 +936,7 @@ namespace VCR.Runtime.UI
                         ", " + applied.TargetFrameRate +
                         " FPS, VSync " + (applied.UseVSync ? "on" : "off") +
                         ", background " + (applied.RunInBackground ? "on" : "off") + ".";
+                    _renderInputsRuntime = null;
                     SynchronizeRenderInputs();
                 }
                 catch (Exception exception)
@@ -1143,10 +1152,8 @@ namespace VCR.Runtime.UI
             _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
             _targetFrameRateInput.tooltip = "Supported target: 30–120 FPS. Default: 60 FPS.";
             _vsyncInput = new Toggle("VSync");
-            _targetFrameRateInput.RegisterCallback<FocusOutEvent>(_ =>
-            {
-                _targetFrameRateInput.SetValueWithoutNotify(Mathf.Clamp(_targetFrameRateInput.value, 30, 120));
-            });
+            // Keep typed input intact for validation; silently clamping it
+            // on blur hides invalid values and makes the Apply result unclear.
             _targetFrameRateInput.SetValueWithoutNotify(60);
             inspector.Add(_targetFrameRateInput);
             inspector.Add(_vsyncInput);
@@ -1644,7 +1651,13 @@ namespace VCR.Runtime.UI
 
         private void ApplySceneViewFromInspector()
         {
-            if (sceneRuntime == null || _characterActionPending) return;
+            if (sceneRuntime == null || _characterActionPending ||
+                !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State))
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Scene camera settings unavailable while runtime is busy.";
+                return;
+            }
             try
             {
                 sceneRuntime.ApplySceneViewSettings();
@@ -1672,7 +1685,13 @@ namespace VCR.Runtime.UI
 
         private void ApplyRenderFromInspector()
         {
-            if (sceneRuntime == null || _characterActionPending) return;
+            if (sceneRuntime == null || _characterActionPending ||
+                !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State))
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Render settings unavailable while runtime is busy.";
+                return;
+            }
             SynchronizeRenderInputs();
             if (_renderInputsRuntime != sceneRuntime)
             {
@@ -1680,11 +1699,18 @@ namespace VCR.Runtime.UI
                     _inspectorFeedback.text = "Render settings unavailable: runtime not initialized.";
                 return;
             }
+            if (_targetFrameRateInput == null || _targetFrameRateInput.value < 30 ||
+                _targetFrameRateInput.value > 120)
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Target FPS must be between 30 and 120.";
+                return;
+            }
             try
             {
                 if (!sceneRuntime.TryCaptureRenderSettings(out var settings))
                     throw new System.InvalidOperationException("Render settings are unavailable.");
-                settings.TargetFrameRate = Mathf.Clamp(_targetFrameRateInput.value, 30, 120);
+                settings.TargetFrameRate = _targetFrameRateInput.value;
                 settings.UseVSync = _vsyncInput.value;
                 sceneRuntime.ApplyRenderSettings(settings);
                 if (!sceneRuntime.TryCaptureRenderSettings(out var appliedSettings))
