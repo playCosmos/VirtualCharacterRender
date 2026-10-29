@@ -37,6 +37,7 @@ namespace VCR.Runtime.UI
         private Label _inspectorModelPath;
         private Label _inspectorCameraStatus;
         private Button _applySceneViewButton;
+        private Button _revertCameraDraftButton;
         private Button _applyRenderButton;
         private IntegerField _targetFrameRateInput;
         private FloatField _cameraFieldOfViewInput;
@@ -57,6 +58,7 @@ namespace VCR.Runtime.UI
         private FloatField _primaryLightAlphaInput;
         private DropdownField _primaryLightShadowsInput;
         private Button _applyPrimaryLightButton;
+        private Button _revertLightDraftButton;
         private PrimaryLightController _primaryLightDraftOwner;
         private Light _primaryLightDraftTarget;
         private SingleCharacterSceneRuntime _primaryLightDraftRuntime;
@@ -287,6 +289,7 @@ namespace VCR.Runtime.UI
                 if (_reloadCharacterButton != null) _reloadCharacterButton.SetEnabled(false);
                 if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
                 if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(false);
+                if (_revertCameraDraftButton != null) _revertCameraDraftButton.SetEnabled(false);
                 if (_cameraFieldOfViewInput != null) _cameraFieldOfViewInput.SetEnabled(false);
                 if (_cameraPositionInput != null) _cameraPositionInput.SetEnabled(false);
                 if (_cameraRotationInput != null) _cameraRotationInput.SetEnabled(false);
@@ -299,6 +302,7 @@ namespace VCR.Runtime.UI
                 if (_primaryLightAlphaInput != null) _primaryLightAlphaInput.SetEnabled(false);
                 if (_primaryLightShadowsInput != null) _primaryLightShadowsInput.SetEnabled(false);
                 if (_applyPrimaryLightButton != null) _applyPrimaryLightButton.SetEnabled(false);
+                if (_revertLightDraftButton != null) _revertLightDraftButton.SetEnabled(false);
                 if (_applyRenderButton != null) _applyRenderButton.SetEnabled(false);
                 if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(false);
                 if (_vsyncInput != null) _vsyncInput.SetEnabled(false);
@@ -330,6 +334,7 @@ namespace VCR.Runtime.UI
             if (_cameraRotationInput != null) _cameraRotationInput.SetEnabled(canEditCamera);
             if (_cameraNearClipInput != null) _cameraNearClipInput.SetEnabled(canEditCamera);
             if (_cameraFarClipInput != null) _cameraFarClipInput.SetEnabled(canEditCamera);
+            if (_revertCameraDraftButton != null) _revertCameraDraftButton.SetEnabled(canEditCamera);
             var hasPrimaryLight = sceneRuntime.LightController != null &&
                 sceneRuntime.LightController.TargetLight != null;
             if (_primaryLightIntensityInput != null)
@@ -350,6 +355,7 @@ namespace VCR.Runtime.UI
             if (_primaryLightRgbInput != null) _primaryLightRgbInput.SetEnabled(lightSettingsEditable);
             if (_primaryLightAlphaInput != null) _primaryLightAlphaInput.SetEnabled(lightSettingsEditable);
             if (_primaryLightShadowsInput != null) _primaryLightShadowsInput.SetEnabled(lightSettingsEditable);
+            if (_revertLightDraftButton != null) _revertLightDraftButton.SetEnabled(lightSettingsEditable);
             if (_previewStatus != null)
                 _previewStatus.text = state.HasCharacter
                     ? "Model loaded: " + modelName + (_previewTexture == null ? " (viewport not connected)" : " (preview connected)")
@@ -439,6 +445,7 @@ namespace VCR.Runtime.UI
             _inspectorModelPath = null;
             _inspectorCameraStatus = null;
             _applySceneViewButton = null;
+            _revertCameraDraftButton = null;
             _applyRenderButton = null;
             _targetFrameRateInput = null;
             _cameraFieldOfViewInput = null;
@@ -458,6 +465,7 @@ namespace VCR.Runtime.UI
             _primaryLightAlphaInput = null;
             _primaryLightShadowsInput = null;
             _applyPrimaryLightButton = null;
+            _revertLightDraftButton = null;
             _primaryLightDraftOwner = null;
             _primaryLightDraftTarget = null;
             _primaryLightDraftRuntime = null;
@@ -1340,6 +1348,8 @@ namespace VCR.Runtime.UI
             _inspectorCameraStatus = new Label("Camera: unavailable");
             inspectorContent.Add(_inspectorCameraStatus);
             _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera" };
+            _revertCameraDraftButton = new Button(RevertCameraInspectorDraft)
+                { text = "Discard camera edits" };
             _cameraPositionInput = new Vector3Field("Camera local position");
             _cameraRotationInput = new Vector3Field("Camera local Euler angles");
             _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)");
@@ -1352,6 +1362,7 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_cameraNearClipInput);
             inspectorContent.Add(_cameraFarClipInput);
             inspectorContent.Add(_applySceneViewButton);
+            inspectorContent.Add(_revertCameraDraftButton);
             SynchronizeCameraInspectorInputs();
             _primaryLightEnabledInput = new Toggle("Primary light enabled");
             _primaryLightIntensityInput = new FloatField("Light intensity (0-20)");
@@ -1368,6 +1379,8 @@ namespace VCR.Runtime.UI
             _primaryLightAlphaInput.tooltip = "Normalized alpha, 0 to 1.";
             _applyPrimaryLightButton = new Button(ApplyPrimaryLightFromInspector)
                 { text = "Apply primary light" };
+            _revertLightDraftButton = new Button(RevertLightInspectorDraft)
+                { text = "Discard light edits" };
             inspectorContent.Add(_primaryLightEnabledInput);
             inspectorContent.Add(_primaryLightIntensityInput);
             inspectorContent.Add(_primaryLightRotationInput);
@@ -1375,6 +1388,7 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_primaryLightAlphaInput);
             inspectorContent.Add(_primaryLightShadowsInput);
             inspectorContent.Add(_applyPrimaryLightButton);
+            inspectorContent.Add(_revertLightDraftButton);
             SynchronizePrimaryLightInputs();
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
             _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
@@ -1911,6 +1925,28 @@ namespace VCR.Runtime.UI
             _cameraFieldOfViewBoundField = _cameraFieldOfViewInput;
         }
 
+        private void RevertCameraInspectorDraft()
+        {
+            if (sceneRuntime == null || _characterActionPending ||
+                !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State) ||
+                sceneRuntime.CameraController == null ||
+                sceneRuntime.CameraController.TargetCamera == null ||
+                _cameraFieldOfViewInput == null)
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Camera edits cannot be discarded: camera unavailable.";
+                return;
+            }
+
+            // Deliberately read only the live adapter state. Discard is not a
+            // scene mutation or configuration Reload, and must leave light
+            // drafts and runtime settings untouched.
+            _cameraDraftOwner = null;
+            SynchronizeCameraInspectorInputs();
+            if (_inspectorFeedback != null)
+                _inspectorFeedback.text = "Camera edits discarded; live settings restored.";
+        }
+
         private void ApplySceneViewFromInspector()
         {
             if (sceneRuntime == null || _characterActionPending ||
@@ -2028,6 +2064,25 @@ namespace VCR.Runtime.UI
             }
             _primaryLightBoundIntensity = _primaryLightIntensityInput;
             _primaryLightBoundEnabled = _primaryLightEnabledInput;
+        }
+
+        private void RevertLightInspectorDraft()
+        {
+            if (sceneRuntime == null || _characterActionPending ||
+                !ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State) ||
+                sceneRuntime.LightController == null ||
+                sceneRuntime.LightController.TargetLight == null ||
+                _primaryLightIntensityInput == null)
+            {
+                if (_inspectorFeedback != null)
+                    _inspectorFeedback.text = "Light edits cannot be discarded: light unavailable.";
+                return;
+            }
+
+            _primaryLightDraftOwner = null;
+            SynchronizePrimaryLightInputs();
+            if (_inspectorFeedback != null)
+                _inspectorFeedback.text = "Light edits discarded; live settings restored.";
         }
 
         private void ApplyPrimaryLightFromInspector()
