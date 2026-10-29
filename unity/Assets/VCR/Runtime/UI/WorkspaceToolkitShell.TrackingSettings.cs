@@ -48,18 +48,40 @@ namespace VCR.Runtime.UI
 
         private static List<ITrackingRuntimeControl> DiscoverWorkspaceTrackingSources()
         {
-            var found = new List<ITrackingRuntimeControl>();
-            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return DiscoverWorkspaceTrackingSources(out _);
+        }
+
+        private static List<ITrackingRuntimeControl> DiscoverWorkspaceTrackingSources(
+            out int ambiguousIdCount)
+        {
+            // A duplicate provider ID is not a valid choice. Previous code
+            // silently selected whichever component Unity enumerated first,
+            // potentially applying device settings to an unrelated source.
+            var unique = new Dictionary<string, ITrackingRuntimeControl>(
+                StringComparer.OrdinalIgnoreCase);
+            var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var behaviours = FindObjectsByType<MonoBehaviour>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (var behaviour in behaviours)
             {
-                if (behaviour == null || !(behaviour is ITrackingRuntimeControl control) ||
-                    string.IsNullOrWhiteSpace(control.ControlId) ||
-                    !ids.Add(control.ControlId))
+                // Disabled MonoBehaviours can still represent configurable
+                // inputs, but components on inactive GameObjects are not live.
+                if (behaviour == null || !behaviour.gameObject.activeInHierarchy ||
+                    !(behaviour is ITrackingRuntimeControl control))
                     continue;
-                found.Add(control);
+                var id = control.ControlId;
+                if (string.IsNullOrWhiteSpace(id) || ambiguous.Contains(id))
+                    continue;
+                if (unique.ContainsKey(id))
+                {
+                    unique.Remove(id);
+                    ambiguous.Add(id);
+                    continue;
+                }
+                unique.Add(id, control);
             }
+            ambiguousIdCount = ambiguous.Count;
+            var found = new List<ITrackingRuntimeControl>(unique.Values);
             found.Sort((a, b) => string.CompareOrdinal(a.ControlId, b.ControlId));
             return found;
         }
@@ -136,9 +158,12 @@ namespace VCR.Runtime.UI
             if (Time.unscaledTime < _nextTrackingSummaryScan)
                 return _cachedTrackingSummary;
             _nextTrackingSummaryScan = Time.unscaledTime + 2f;
-            var sources = DiscoverWorkspaceTrackingSources();
+            var sources = DiscoverWorkspaceTrackingSources(out var ambiguous);
             if (sources.Count == 0)
-                return _cachedTrackingSummary = "Tracking: no configured source found";
+                return _cachedTrackingSummary = ambiguous > 0
+                    ? "Tracking: " + ambiguous +
+                      " duplicate source ID(s) blocked; no unambiguous sources."
+                    : "Tracking: no configured source found";
 
             var enabled = 0;
             var unhealthy = 0;
@@ -150,7 +175,8 @@ namespace VCR.Runtime.UI
                     unhealthy++;
             }
             return _cachedTrackingSummary = "Tracking sources: " + sources.Count +
-                " | Enabled: " + enabled + " | Errors: " + unhealthy;
+                " | Enabled: " + enabled + " | Errors: " + unhealthy +
+                (ambiguous > 0 ? " | Duplicate IDs blocked: " + ambiguous : "");
         }
 
         private void PersistConfiguredWorkspaceTracking()
@@ -172,7 +198,11 @@ namespace VCR.Runtime.UI
                 "Tracking input sources");
             _workspaceNativeSettings.Add(2, 450, DesktopNativeSettingsWindow.ControlKind.Button,
                 "Refresh device list");
-            var sources = DiscoverWorkspaceTrackingSources();
+            var sources = DiscoverWorkspaceTrackingSources(out var ambiguous);
+            if (ambiguous > 0)
+                _workspaceNativeSettings.Add(2, 6,
+                    DesktopNativeSettingsWindow.ControlKind.Label,
+                    "Duplicate tracking source IDs blocked: " + ambiguous);
             var count = Math.Min(sources.Count, MaxNativeTrackingSources);
             for (var i = 0; i < count; i++)
             {
@@ -451,8 +481,8 @@ namespace VCR.Runtime.UI
 
             try
             {
-                var sources = DiscoverWorkspaceTrackingSources();
-                var signature = "";
+                var sources = DiscoverWorkspaceTrackingSources(out var ambiguous);
+                var signature = "blocked:" + ambiguous + ";";
                 foreach (var source in sources)
                 {
                     signature += source.ControlId + "\u001f" + source.DisplayName + "\u001f" +
@@ -464,6 +494,14 @@ namespace VCR.Runtime.UI
                     return;
                 _workspaceTrackingPanelSignature = signature;
                 _workspaceTrackingList.Clear();
+                if (ambiguous > 0)
+                {
+                    var blocked = new Label("Blocked " + ambiguous +
+                        " duplicate tracking source ID(s). Resolve provider IDs before editing.");
+                    blocked.style.whiteSpace = WhiteSpace.Normal;
+                    blocked.style.color = new Color(1f, 0.7f, 0.42f);
+                    _workspaceTrackingList.Add(blocked);
+                }
 
                 if (sources.Count == 0)
                 {
