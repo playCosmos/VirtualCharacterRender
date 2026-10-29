@@ -40,10 +40,14 @@ namespace VCR.Runtime.UI
         private Button _applyRenderButton;
         private IntegerField _targetFrameRateInput;
         private FloatField _cameraFieldOfViewInput;
+        private Vector3Field _cameraPositionInput;
+        private Vector3Field _cameraRotationInput;
+        private FloatField _cameraNearClipInput;
+        private FloatField _cameraFarClipInput;
         private FloatField _cameraFieldOfViewBoundField;
-        private SingleCharacterSceneRuntime _cameraFieldOfViewRuntime;
-        private float _cameraFieldOfViewDraft;
-        private bool _cameraFieldOfViewDraftValid;
+        private PrimaryCameraController _cameraDraftOwner;
+        private SceneCameraSettings _cameraDraft;
+        private bool _cameraDraftValid;
         private FloatField _primaryLightIntensityInput;
         private Toggle _primaryLightEnabledInput;
         private Button _applyPrimaryLightButton;
@@ -157,12 +161,12 @@ namespace VCR.Runtime.UI
             ResetWorkspaceAppearancePanel();
             ResetWorkspaceMotionPanel();
             SubscribeWorkspaceLog();
-            _cameraFieldOfViewDraftValid = false;
+            _cameraDraftValid = false;
+            _cameraDraftOwner = null;
             _primaryLightDraftValid = false;
             _primaryLightDraftOwner = null;
             _primaryLightBoundIntensity = null;
             _primaryLightBoundEnabled = null;
-            _cameraFieldOfViewRuntime = null;
             _cameraFieldOfViewBoundField = null;
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
@@ -254,7 +258,7 @@ namespace VCR.Runtime.UI
             if (sceneRuntime == null)
             {
                 _renderInputsRuntime = null;
-                _cameraFieldOfViewRuntime = null;
+                _cameraDraftOwner = null;
                 _cameraFieldOfViewBoundField = null;
                 _primaryLightDraftOwner = null;
                 _primaryLightBoundIntensity = null;
@@ -269,6 +273,10 @@ namespace VCR.Runtime.UI
                 if (_unloadCharacterButton != null) _unloadCharacterButton.SetEnabled(false);
                 if (_applySceneViewButton != null) _applySceneViewButton.SetEnabled(false);
                 if (_cameraFieldOfViewInput != null) _cameraFieldOfViewInput.SetEnabled(false);
+                if (_cameraPositionInput != null) _cameraPositionInput.SetEnabled(false);
+                if (_cameraRotationInput != null) _cameraRotationInput.SetEnabled(false);
+                if (_cameraNearClipInput != null) _cameraNearClipInput.SetEnabled(false);
+                if (_cameraFarClipInput != null) _cameraFarClipInput.SetEnabled(false);
                 if (_primaryLightIntensityInput != null) _primaryLightIntensityInput.SetEnabled(false);
                 if (_primaryLightEnabledInput != null) _primaryLightEnabledInput.SetEnabled(false);
                 if (_applyPrimaryLightButton != null) _applyPrimaryLightButton.SetEnabled(false);
@@ -282,7 +290,7 @@ namespace VCR.Runtime.UI
             }
             TryRestoreWorkspaceCharacter();
             SynchronizeRenderInputs();
-            SynchronizeCameraFieldOfView();
+            SynchronizeCameraInspectorInputs();
             SynchronizePrimaryLightInputs();
             var state = sceneRuntime.Status;
             var path = sceneRuntime.CurrentCharacterPath;
@@ -294,11 +302,15 @@ namespace VCR.Runtime.UI
             if (_loadModelButton != null) _loadModelButton.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_targetFrameRateInput != null) _targetFrameRateInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
             if (_vsyncInput != null) _vsyncInput.SetEnabled(!_characterActionPending && sceneRuntime.State != SceneRuntimeState.Faulted);
-            if (_cameraFieldOfViewInput != null)
-                _cameraFieldOfViewInput.SetEnabled(sceneRuntime.CameraController != null &&
-                    sceneRuntime.CameraController.TargetCamera != null &&
-                    ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State) &&
-                    !_characterActionPending);
+            var canEditCamera = sceneRuntime.CameraController != null &&
+                sceneRuntime.CameraController.TargetCamera != null &&
+                ApplicationUiActionPolicy.CanApplyRuntimeSettings(true, sceneRuntime.State) &&
+                !_characterActionPending;
+            if (_cameraFieldOfViewInput != null) _cameraFieldOfViewInput.SetEnabled(canEditCamera);
+            if (_cameraPositionInput != null) _cameraPositionInput.SetEnabled(canEditCamera);
+            if (_cameraRotationInput != null) _cameraRotationInput.SetEnabled(canEditCamera);
+            if (_cameraNearClipInput != null) _cameraNearClipInput.SetEnabled(canEditCamera);
+            if (_cameraFarClipInput != null) _cameraFarClipInput.SetEnabled(canEditCamera);
             var hasPrimaryLight = sceneRuntime.LightController != null &&
                 sceneRuntime.LightController.TargetLight != null;
             if (_primaryLightIntensityInput != null)
@@ -405,9 +417,13 @@ namespace VCR.Runtime.UI
             _applyRenderButton = null;
             _targetFrameRateInput = null;
             _cameraFieldOfViewInput = null;
-            _cameraFieldOfViewRuntime = null;
+            _cameraPositionInput = null;
+            _cameraRotationInput = null;
+            _cameraNearClipInput = null;
+            _cameraFarClipInput = null;
+            _cameraDraftOwner = null;
             _cameraFieldOfViewBoundField = null;
-            _cameraFieldOfViewDraftValid = false;
+            _cameraDraftValid = false;
             _primaryLightIntensityInput = null;
             _primaryLightEnabledInput = null;
             _applyPrimaryLightButton = null;
@@ -1077,10 +1093,15 @@ namespace VCR.Runtime.UI
                 ? _modelPathInput.value
                 : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
             CaptureWorkspaceMaterialEditorDrafts();
-            if (_cameraFieldOfViewInput != null && _cameraFieldOfViewRuntime == sceneRuntime)
+            if (_cameraFieldOfViewInput != null && _cameraDraftOwner != null &&
+                sceneRuntime != null && _cameraDraftOwner == sceneRuntime.CameraController)
             {
-                _cameraFieldOfViewDraft = _cameraFieldOfViewInput.value;
-                _cameraFieldOfViewDraftValid = true;
+                _cameraDraft.LocalPosition = _cameraPositionInput.value;
+                _cameraDraft.LocalEulerAngles = _cameraRotationInput.value;
+                _cameraDraft.FieldOfView = _cameraFieldOfViewInput.value;
+                _cameraDraft.NearClipPlane = _cameraNearClipInput.value;
+                _cameraDraft.FarClipPlane = _cameraFarClipInput.value;
+                _cameraDraftValid = true;
             }
             if (_primaryLightIntensityInput != null && _primaryLightEnabledInput != null &&
                 _primaryLightDraftOwner != null && sceneRuntime != null &&
@@ -1273,11 +1294,20 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_inspectorModelPath);
             _inspectorCameraStatus = new Label("Camera: unavailable");
             inspectorContent.Add(_inspectorCameraStatus);
-            _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera FOV" };
+            _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera" };
+            _cameraPositionInput = new Vector3Field("Camera local position");
+            _cameraRotationInput = new Vector3Field("Camera local Euler angles");
             _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)");
+            _cameraNearClipInput = new FloatField("Near clip (>=0.001)");
+            _cameraFarClipInput = new FloatField("Far clip (>=near + 0.01)");
             _cameraFieldOfViewInput.tooltip = "Camera vertical field of view in degrees (1–179).";
+            inspectorContent.Add(_cameraPositionInput);
+            inspectorContent.Add(_cameraRotationInput);
             inspectorContent.Add(_cameraFieldOfViewInput);
-            SynchronizeCameraFieldOfView();
+            inspectorContent.Add(_cameraNearClipInput);
+            inspectorContent.Add(_cameraFarClipInput);
+            inspectorContent.Add(_applySceneViewButton);
+            SynchronizeCameraInspectorInputs();
             _primaryLightEnabledInput = new Toggle("Primary light enabled");
             _primaryLightIntensityInput = new FloatField("Light intensity (0-20)");
             _primaryLightIntensityInput.tooltip =
@@ -1299,7 +1329,6 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_vsyncInput);
             _renderInputsRuntime = null;
             SynchronizeRenderInputs();
-            inspectorContent.Add(_applySceneViewButton);
             inspectorContent.Add(_applyRenderButton);
             _inspectorFeedback = new Label("");
             inspectorContent.Add(_inspectorFeedback);
@@ -1789,27 +1818,34 @@ namespace VCR.Runtime.UI
                 ? fallback : Mathf.Clamp(value, min, max);
         }
 
-        private void SynchronizeCameraFieldOfView()
+        private void SynchronizeCameraInspectorInputs()
         {
-            if (sceneRuntime == null || _cameraFieldOfViewInput == null)
+            if (sceneRuntime == null || _cameraFieldOfViewInput == null ||
+                _cameraPositionInput == null || _cameraRotationInput == null ||
+                _cameraNearClipInput == null || _cameraFarClipInput == null)
                 return;
-            // Rebuild a dock without erasing a pending edit. When the runtime
-            // changes (or configuration is reloaded), bind from its actual
-            // camera settings instead of carrying a previous scene's draft.
-            var cameraRebound = _cameraFieldOfViewRuntime != sceneRuntime;
-            if (cameraRebound)
+            var camera = sceneRuntime.CameraController;
+            if (camera == null || camera.TargetCamera == null)
+                return;
+            // Retain an unsaved draft when changing layouts for the same camera,
+            // but refresh from the actual camera when ownership/config changes.
+            var rebound = _cameraDraftOwner != camera;
+            if (rebound)
             {
-                var camera = sceneRuntime.CameraController;
-                if (camera == null || camera.TargetCamera == null)
-                    return;
-                _cameraFieldOfViewDraft = camera.Settings.FieldOfView;
-                _cameraFieldOfViewDraftValid = true;
-                _cameraFieldOfViewRuntime = sceneRuntime;
+                _cameraDraft = camera.Settings;
+                _cameraDraftValid = true;
+                _cameraDraftOwner = camera;
             }
-            if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput && !cameraRebound)
+            if (_cameraFieldOfViewBoundField == _cameraFieldOfViewInput && !rebound)
                 return;
-            if (_cameraFieldOfViewDraftValid)
-                _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraFieldOfViewDraft);
+            if (_cameraDraftValid)
+            {
+                _cameraPositionInput.SetValueWithoutNotify(_cameraDraft.LocalPosition);
+                _cameraRotationInput.SetValueWithoutNotify(_cameraDraft.LocalEulerAngles);
+                _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraDraft.FieldOfView);
+                _cameraNearClipInput.SetValueWithoutNotify(_cameraDraft.NearClipPlane);
+                _cameraFarClipInput.SetValueWithoutNotify(_cameraDraft.FarClipPlane);
+            }
             _cameraFieldOfViewBoundField = _cameraFieldOfViewInput;
         }
 
@@ -1822,32 +1858,41 @@ namespace VCR.Runtime.UI
                     _inspectorFeedback.text = "Camera settings unavailable while runtime is busy.";
                 return;
             }
-            if (_cameraFieldOfViewInput == null ||
-                float.IsNaN(_cameraFieldOfViewInput.value) ||
-                float.IsInfinity(_cameraFieldOfViewInput.value) ||
-                _cameraFieldOfViewInput.value < 1f ||
-                _cameraFieldOfViewInput.value > 179f)
-            {
-                if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Camera FOV must be finite and between 1 and 179 degrees.";
-                return;
-            }
             try
             {
-                sceneRuntime.SetCameraFieldOfView(_cameraFieldOfViewInput.value);
-                var applied = sceneRuntime.CameraController.Settings.FieldOfView;
-                _cameraFieldOfViewDraft = applied;
-                _cameraFieldOfViewDraftValid = true;
-                _cameraFieldOfViewRuntime = sceneRuntime;
-                _cameraFieldOfViewInput.SetValueWithoutNotify(applied);
+                var camera = sceneRuntime.CameraController;
+                if (camera == null || camera.TargetCamera == null ||
+                    _cameraPositionInput == null || _cameraRotationInput == null ||
+                    _cameraFieldOfViewInput == null || _cameraNearClipInput == null ||
+                    _cameraFarClipInput == null)
+                    throw new InvalidOperationException("Primary camera inputs are unavailable.");
+
+                // The scene runtime validates the complete snapshot atomically
+                // before changing the camera. Never silently clamp a draft.
+                var next = camera.Settings;
+                next.LocalPosition = _cameraPositionInput.value;
+                next.LocalEulerAngles = _cameraRotationInput.value;
+                next.FieldOfView = _cameraFieldOfViewInput.value;
+                next.NearClipPlane = _cameraNearClipInput.value;
+                next.FarClipPlane = _cameraFarClipInput.value;
+                sceneRuntime.SetPrimaryCameraSettings(next);
+
+                _cameraDraft = camera.Settings;
+                _cameraDraftValid = true;
+                _cameraDraftOwner = camera;
+                _cameraPositionInput.SetValueWithoutNotify(_cameraDraft.LocalPosition);
+                _cameraRotationInput.SetValueWithoutNotify(_cameraDraft.LocalEulerAngles);
+                _cameraFieldOfViewInput.SetValueWithoutNotify(_cameraDraft.FieldOfView);
+                _cameraNearClipInput.SetValueWithoutNotify(_cameraDraft.NearClipPlane);
+                _cameraFarClipInput.SetValueWithoutNotify(_cameraDraft.FarClipPlane);
                 if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Camera FOV applied: " + applied.ToString("0.###") + " degrees.";
+                    _inspectorFeedback.text = "Primary camera settings applied.";
             }
-            catch (System.Exception ex)
+            catch (Exception exception)
             {
-                Debug.LogException(ex, this);
+                Debug.LogException(exception, this);
                 if (_inspectorFeedback != null)
-                    _inspectorFeedback.text = "Camera FOV failed: " + ex.Message;
+                    _inspectorFeedback.text = "Camera settings rejected: " + exception.Message;
             }
             _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
         }
