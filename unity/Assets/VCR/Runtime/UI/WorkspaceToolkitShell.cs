@@ -233,7 +233,8 @@ namespace VCR.Runtime.UI
             // Require a laid-out, attached UI tree with actual Inspector and
             // Sources controls, not only a UIDocument or GameObject reference.
             var bounds = _workspaceRoot.worldBound;
-            if (!float.IsFinite(bounds.width) || !float.IsFinite(bounds.height) ||
+            if (float.IsNaN(bounds.width) || float.IsInfinity(bounds.width) ||
+                float.IsNaN(bounds.height) || float.IsInfinity(bounds.height) ||
                 bounds.width < 256f || bounds.height < 180f ||
                 _applySceneViewButton.panel != _workspaceRoot.panel ||
                 _applyPrimaryLightButton.panel != _workspaceRoot.panel ||
