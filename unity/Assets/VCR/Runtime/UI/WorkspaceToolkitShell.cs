@@ -29,6 +29,7 @@ namespace VCR.Runtime.UI
         // creates a synthetic UI or changes runtime configuration.
         private bool _guiProbeRequested;
         private bool _guiProbeReported;
+        private string _guiProbeScreenshotPath;
         private VisualElement _root;
         private VisualElement _workspaceRoot;
         private VisualElement _dockHost;
@@ -160,9 +161,24 @@ namespace VCR.Runtime.UI
 
         private void OnEnable()
         {
-            _guiProbeRequested = Array.Exists(
-                System.Environment.GetCommandLineArgs(),
+            var launchArgs = System.Environment.GetCommandLineArgs();
+            _guiProbeRequested = Array.Exists(launchArgs,
                 arg => string.Equals(arg, "--vcr-ui-probe", StringComparison.Ordinal));
+            _guiProbeScreenshotPath = null;
+            if (_guiProbeRequested)
+            {
+                const string screenshotArg = "--vcr-ui-probe-image=";
+                foreach (var arg in launchArgs)
+                    if (arg.StartsWith(screenshotArg, StringComparison.Ordinal))
+                    {
+                        var candidate = arg.Substring(screenshotArg.Length);
+                        if (System.IO.Path.IsPathRooted(candidate) &&
+                            string.Equals(System.IO.Path.GetExtension(candidate),
+                                ".png", StringComparison.OrdinalIgnoreCase))
+                            _guiProbeScreenshotPath = candidate;
+                        break;
+                    }
+            }
             _guiProbeReported = false;
             InitializeWorkspaceTrackingRestore();
             ResetWorkspaceTrackingPanel();
@@ -249,6 +265,28 @@ namespace VCR.Runtime.UI
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " camera_apply_attached=true light_apply_attached=true " +
                 "model_path_attached=true", this);
+            if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    _guiProbeScreenshotPath));
+        }
+
+        // ScreenCapture reads Unity's own frame before the native window's
+        // desktop transparency/BitBlt path. It is an independent diagnostic
+        // of a real Player and is never run outside the explicit CLI probe.
+        private System.Collections.IEnumerator CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+            string outputPath)
+        {
+            yield return new WaitForEndOfFrame();
+            try
+            {
+                ScreenCapture.CaptureScreenshot(outputPath);
+                Debug.Log("VCR U1 GUI probe: unity_screenshot_requested=true", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("VCR U1 GUI probe: unity_screenshot_request_failed=" +
+                    exception.Message, this);
+            }
         }
 
         private void Update()
