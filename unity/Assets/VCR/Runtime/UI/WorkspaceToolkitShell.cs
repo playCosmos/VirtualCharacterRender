@@ -27,6 +27,7 @@ namespace VCR.Runtime.UI
         // Throttle repeated UI-only failures without concealing their stack.
         // A failing dock must not block the model/scene status refresh.
         private readonly float[] _nextWorkspaceRefreshErrorAt = new float[15];
+        private bool _usingCompactHeight;
         private UIDocument _document;
         // Opt-in, read-only evidence for CI's real visible Player. This never
         // creates a synthetic UI or changes runtime configuration.
@@ -294,6 +295,12 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
+            // Rebuild only when crossing the compact-height threshold.
+            // A resize must restore the user's original stacked/tabbed layout
+            // without rewriting saved preferences.
+            if (_workspaceRoot != null &&
+                (Screen.height < 640) != _usingCompactHeight)
+                Build();
             ReportWorkspaceGuiProbeIfReady();
             RefreshWorkspacePanelsSafely();
             try
@@ -1300,6 +1307,7 @@ namespace VCR.Runtime.UI
             _workspaceRoot.style.color = new Color(0.91f, 0.94f, 0.97f);
 
             var compactHeight = Screen.height < 640;
+            _usingCompactHeight = compactHeight;
             var effectiveTabMode = _tabMode || compactHeight;
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
