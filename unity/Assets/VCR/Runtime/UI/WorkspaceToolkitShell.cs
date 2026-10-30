@@ -281,6 +281,27 @@ namespace VCR.Runtime.UI
                     bottomBounds.yMax > statusBounds.yMin + 1.5f ||
                     bottomBounds.yMax > bounds.yMax + 1.5f)
                     return;
+                // Checking only dock bounds missed the real bug: a wrapped
+                // dock-actions footer could render below its own panel and
+                // over the status bar. Require each visible footer to fit.
+                foreach (var dock in new[] { _leftDock, _rightDock, _bottomDock })
+                {
+                    if (dock == null) continue;
+                    foreach (var child in dock.Children())
+                    {
+                        if (child.name == null ||
+                            !child.name.StartsWith("vcr-panel-", StringComparison.Ordinal) ||
+                            child.resolvedStyle.display == DisplayStyle.None)
+                            continue;
+                        var footer = child.Q<VisualElement>(
+                            "vcr-dock-actions-" +
+                            child.name.Substring("vcr-panel-".Length));
+                        if (footer != null &&
+                            footer.resolvedStyle.display != DisplayStyle.None &&
+                            footer.worldBound.yMax > child.worldBound.yMax + 1.5f)
+                            return;
+                    }
+                }
             }
 
             _guiProbeReported = true;
@@ -1843,6 +1864,15 @@ namespace VCR.Runtime.UI
             {
                 panel.style.height = StyleKeyword.Auto;
                 panel.style.flexGrow = 1;
+                // Compact dock tabs already expose drag-to-move and Ctrl+arrow
+                // reorder. A second dock-actions footer wraps to multiple
+                // rows and covers the bottom status bar at 960x520.
+                if (_usingCompactHeight)
+                {
+                    var id = panel.name.Substring("vcr-panel-".Length);
+                    var actions = panel.Q<VisualElement>("vcr-dock-actions-" + id);
+                    if (actions != null) actions.style.display = DisplayStyle.None;
+                }
             }
             var tabs = new VisualElement();
             tabs.style.flexDirection = FlexDirection.Row;
@@ -1973,14 +2003,16 @@ namespace VCR.Runtime.UI
             var dockActions = new VisualElement { name = "vcr-dock-actions-" + id };
             dockActions.style.flexDirection = FlexDirection.Row;
             dockActions.style.flexShrink = 0;
-            dockActions.style.flexWrap = Wrap.Wrap;
+            // A dock containing only one panel has no tab strip; keep its
+            // Move/Up/Down controls reachable in one compact row.
+            dockActions.style.flexWrap = _usingCompactHeight ? Wrap.NoWrap : Wrap.Wrap;
             var move = new Button(() =>
             {
                 var next = currentDock == "left" ? "right" :
                     currentDock == "right" ? "bottom" : "left";
                 MovePanelToDock(panel, id, next);
-            }) { text = "Move: " + currentDock };
-            move.tooltip = "Move this panel to the next dock.";
+            }) { text = _usingCompactHeight ? "Move" : "Move: " + currentDock };
+            move.tooltip = "Move this panel to the next dock (current: " + currentDock + ").";
             dockActions.Add(move);
             var dragHandle = new Label("Drag");
             dragHandle.tooltip = "Drag this label to move or reorder the panel.";
