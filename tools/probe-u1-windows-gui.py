@@ -107,6 +107,28 @@ def intersect_window_desktop(window, desktop):
     return x1, y1, x2, y2
 
 
+def analyze_frame_interior(raw, width, height):
+    """Sample the upper central Player region, excluding taskbar/borders.
+
+    This only identifies likely uniform/blank evidence; nonuniform content
+    still cannot confirm UI pixels or an interactive UI.
+    """
+    pixels = Counter()
+    for y in range(height // 10, height * 3 // 4, max(1, height // 64)):
+        for x in range(width // 10, width * 9 // 10,
+                       max(1, width // 64)):
+            offset = (y * width + x) * 4
+            pixels[raw[offset:offset+4]] += 1
+    total = sum(pixels.values())
+    dominant = max(pixels.values()) / total if total else 1.0
+    return {
+        "interiorSampledDistinctPixels": len(pixels),
+        "interiorDominantPixelFraction": round(dominant, 6),
+        "blankOrUniformPossible": len(pixels) <= 3 or dominant >= 0.98,
+        "uiPixelsConfirmed": False,
+    }
+
+
 def capture_foreground_player_frame(hwnd, destination):
     """Capture only foreground Player window pixels via the Windows desktop.
 
@@ -210,19 +232,7 @@ def capture_foreground_player_frame(hwnd, destination):
         destination.write_bytes(bmp + header + raw)
         sampled = {raw[i:i+4] for i in range(
             0, len(raw), max(4, len(raw) // 1024 // 4 * 4))}
-        # Avoid counting Windows taskbar/borders as actual workspace pixels:
-        # evaluate the interior of the captured top viewport separately.
-        interior_pixels = Counter()
-        for y in range(height // 10, height * 3 // 4, max(1, height // 64)):
-            for x in range(width // 10, width * 9 // 10,
-                           max(1, width // 64)):
-                offset = (y * width + x) * 4
-                interior_pixels[raw[offset:offset+4]] += 1
-        total_interior = sum(interior_pixels.values())
-        dominant_fraction = (max(interior_pixels.values()) / total_interior
-                             if total_interior else 1.0)
-        possible_uniform = (
-            len(interior_pixels) <= 3 or dominant_fraction >= 0.98)
+        interior_quality = analyze_frame_interior(raw, width, height)
         return {
             "file": destination.name,
             "sha256": sha256(destination),
@@ -233,10 +243,7 @@ def capture_foreground_player_frame(hwnd, destination):
             "captureBounds": list(capture_bounds),
             "partialWindow": cropped,
             "sampledDistinctPixels": len(sampled),
-            "interiorSampledDistinctPixels": len(interior_pixels),
-            "interiorDominantPixelFraction": round(dominant_fraction, 6),
-            "blankOrUniformPossible": possible_uniform,
-            "uiPixelsConfirmed": False,
+            **interior_quality,
         }
     finally:
         if previous is not None and compatible_dc:
@@ -320,7 +327,22 @@ def run_self_test():
         if result != expected:
             raise RuntimeError(
                 f"Window/desktop clip mismatch: {window} {desktop} {result}")
-    print("U1 GUI probe startup-readiness and viewport-clip self-test: PASS")
+    # A busy Windows taskbar must not rescue a completely blank Player
+    # viewport from the "possibly uniform" finding.
+    width, height = 128, 128
+    uniform_frame = bytes((31, 31, 32, 0)) * (width * height)
+    uniform = analyze_frame_interior(uniform_frame, width, height)
+    if not uniform["blankOrUniformPossible"] or uniform["interiorSampledDistinctPixels"] != 1:
+        raise RuntimeError("Uniform GUI viewport misclassified as useful pixels")
+    varied_frame = bytearray(uniform_frame)
+    for y in range(height // 10, height * 3 // 4):
+        for x in range(width // 10, width * 9 // 10):
+            offset = (y * width + x) * 4
+            varied_frame[offset:offset+4] = bytes((x % 255, y % 255, 100, 0))
+    varied = analyze_frame_interior(varied_frame, width, height)
+    if varied["blankOrUniformPossible"] or varied["uiPixelsConfirmed"]:
+        raise RuntimeError("Nonuniform sample incorrectly accepted as UI")
+    print("U1 GUI probe startup, clipping and pixel-quality self-test: PASS")
     return 0
 
 
