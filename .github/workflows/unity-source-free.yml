@@ -353,6 +353,18 @@ jobs:
           if (-not $probe.workspaceUiTreeReady) {
             throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
           }
+          # A fresh P1 config must not silently re-enable the P0 transparent
+          # borderless output; check the real JSON written by this Player.
+          $configPath = 'Builds/GUIProbe/u1-windows/gui-probe-config.json'
+          if (-not (Test-Path -LiteralPath $configPath)) {
+            throw 'P1 visible Player did not persist its isolated configuration.'
+          }
+          $configuration = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+          if ($null -eq $configuration.Scene -or
+              $null -eq $configuration.Scene.Overlay -or
+              $configuration.Scene.Overlay.Transparent -ne $false) {
+            throw 'Fresh P1 Player incorrectly activated legacy transparent/borderless output.'
+          }
           if (-not $probe.managedQuitObserved -or $probe.exitCode -ne 0) {
             throw 'P1 visible Windows Player failed its normal managed quit.'
           }
