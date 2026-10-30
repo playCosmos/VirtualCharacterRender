@@ -1822,18 +1822,28 @@ namespace VCR.Runtime.UI
             }
             if (target == null) return;
             var currentDock = dock;
+            // One compact toolbar prevents four full-width dock controls
+            // from covering the panel's actual content on short windows.
+            var dockActions = new VisualElement { name = "vcr-dock-actions-" + id };
+            dockActions.style.flexDirection = FlexDirection.Row;
+            dockActions.style.flexShrink = 0;
+            dockActions.style.flexWrap = Wrap.Wrap;
             var move = new Button(() =>
             {
                 var next = currentDock == "left" ? "right" :
                     currentDock == "right" ? "bottom" : "left";
                 MovePanelToDock(panel, id, next);
             }) { text = "Move: " + currentDock };
-            panel.Add(move);
-            var dragHandle = new Label("Drag panel to left / right / bottom");
+            move.tooltip = "Move this panel to the next dock.";
+            dockActions.Add(move);
+            var dragHandle = new Label("Drag");
+            dragHandle.tooltip = "Drag this label to move or reorder the panel.";
+            dragHandle.style.paddingLeft = 5;
+            dragHandle.style.paddingRight = 5;
             dragHandle.style.paddingTop = 5;
             dragHandle.style.paddingBottom = 5;
             dragHandle.style.color = new Color(0.68f, 0.77f, 0.85f);
-            panel.Add(dragHandle);
+            dockActions.Add(dragHandle);
             var dragging = false;
             var activePointerId = -1;
             dragHandle.focusable = true;
@@ -1908,8 +1918,13 @@ namespace VCR.Runtime.UI
             });
             target.Add(panel);
             // The final SortDockPanels pass restores the persisted order.
-            panel.Add(new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up / Earlier" });
-            panel.Add(new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down / Later" });
+            var up = new Button(() => MovePanelOrder(panel, id, -1)) { text = "Up" };
+            up.tooltip = "Move this panel earlier in the dock.";
+            dockActions.Add(up);
+            var down = new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down" };
+            down.tooltip = "Move this panel later in the dock.";
+            dockActions.Add(down);
+            panel.Add(dockActions);
         }
 
         private void MovePanelToDock(VisualElement panel, string id, string destination)
