@@ -281,6 +281,29 @@ namespace VCR.Runtime.UI
                     bottomBounds.yMax > statusBounds.yMin + 1.5f ||
                     bottomBounds.yMax > bounds.yMax + 1.5f)
                     return;
+                // The bottom tab strip must span the dock horizontally and
+                // sit ABOVE its active panel. A Row-oriented bottom dock
+                // incorrectly puts them side by side while still appearing
+                // "attached" to the UI tree.
+                var bottomTabs = _bottomDock.Q<VisualElement>("vcr-dock-tabs-bottom");
+                if (bottomTabs != null &&
+                    bottomTabs.resolvedStyle.display != DisplayStyle.None)
+                {
+                    var tabBounds = bottomTabs.worldBound;
+                    if (tabBounds.width < bottomBounds.width * 0.75f ||
+                        tabBounds.height < 15f ||
+                        tabBounds.height > bottomBounds.height * 0.55f ||
+                        tabBounds.yMin < bottomBounds.yMin - 1.5f)
+                        return;
+                    foreach (var child in _bottomDock.Children())
+                    {
+                        if (child.name != null &&
+                            child.name.StartsWith("vcr-panel-", StringComparison.Ordinal) &&
+                            child.resolvedStyle.display != DisplayStyle.None &&
+                            child.worldBound.yMin < tabBounds.yMax - 1.5f)
+                            return;
+                    }
+                }
                 // Checking only dock bounds missed the real bug: a wrapped
                 // dock-actions footer could render below its own panel and
                 // over the status bar. Require each visible footer to fit.
@@ -1493,7 +1516,12 @@ namespace VCR.Runtime.UI
             // Adapt only the presentation; never overwrite the operator's
             // saved tab/stack preference.
             var bottom = new VisualElement { name = "vcr-bottom" };
-            bottom.style.flexDirection = FlexDirection.Row;
+            // Stacked mode places several panels side-by-side. Tabbed mode
+            // needs a horizontal tab strip ABOVE the active panel instead.
+            // Keeping Row here made the tab strip a tall left-side column,
+            // squeezing Tracking/Actions/Events into a narrow right panel.
+            bottom.style.flexDirection = effectiveTabMode
+                ? FlexDirection.Column : FlexDirection.Row;
             // Reserve the bottom dock's allocated height in compact windows.
             // Otherwise the central Preview's legacy minimum height can
             // squeeze the bottom tab strip under the status bar.
