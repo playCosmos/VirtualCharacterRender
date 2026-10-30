@@ -107,16 +107,7 @@ namespace VCR.Runtime.UI
                         return "Configuration reload failed: " +
                             (loadError ?? "unknown error");
 
-                    _renderInputsRuntime = null;
-                    SynchronizeRenderInputs();
-                    // Reload replaces all primary-camera values. Drop drafts
-                    // before rebinding these same live fields from the saved state.
-                    _cameraDraftOwner = null;
-                    SynchronizeCameraInspectorInputs();
-                    // A configuration reload replaces lighting as well as camera
-                    // values; discard any stale uncommitted Inspector light draft.
-                    _primaryLightDraftOwner = null;
-                    SynchronizePrimaryLightInputs();
+                    RefreshWorkspaceInspectorAfterConfigurationReload();
                     if (sceneRuntime.TryCaptureRenderSettings(out var settings))
                     {
                         if (_workspaceNativeSettings != null)
@@ -146,6 +137,20 @@ namespace VCR.Runtime.UI
                 Debug.LogException(exception, this);
                 return "Configuration action failed: " + exception.Message;
             }
+        }
+
+        // A successful config Reload must replace any pending edits even if
+        // the scene, controller and target objects are the very same instances.
+        // Keeping this reset in one place also makes its draft-rejection
+        // behavior independently regression-testable.
+        private void RefreshWorkspaceInspectorAfterConfigurationReload()
+        {
+            _renderInputsRuntime = null;
+            SynchronizeRenderInputs();
+            _cameraDraftOwner = null;
+            SynchronizeCameraInspectorInputs();
+            _primaryLightDraftOwner = null;
+            SynchronizePrimaryLightInputs();
         }
 
         private void ApplyWorkspaceConfigurationActionWithNativeFeedback(int action)
