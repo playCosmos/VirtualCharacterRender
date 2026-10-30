@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import struct
 import subprocess
 import sys
 import tempfile
@@ -87,6 +88,113 @@ def request_normal_close(hwnd):
         raise RuntimeError("Unity window vanished before the close request")
     if not user32.PostMessageW(hwnd, WM_CLOSE, 0, 0):
         raise OSError("Could not post WM_CLOSE to Unity main window")
+
+
+def capture_foreground_player_frame(hwnd, destination):
+    """Capture only foreground Player window pixels via the Windows desktop.
+
+    This produces reviewable visual evidence, NOT proof that specific buttons,
+    model pixels, native Settings or interactive behavior work. GPU surfaces
+    may be blank on hosted/remote desktops, which is reported separately.
+    """
+    user32 = ctypes.windll.user32
+    gdi32 = ctypes.windll.gdi32
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowRect.restype = wintypes.BOOL
+    user32.GetDC.argtypes = [wintypes.HWND]
+    user32.GetDC.restype = wintypes.HDC
+    user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+    gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+    gdi32.CreateCompatibleDC.restype = wintypes.HDC
+    gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+    gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+    gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+    gdi32.SelectObject.restype = wintypes.HGDIOBJ
+    gdi32.BitBlt.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int,
+                             ctypes.c_int, ctypes.c_int, wintypes.HDC,
+                             ctypes.c_int, ctypes.c_int, wintypes.DWORD]
+    gdi32.BitBlt.restype = wintypes.BOOL
+    gdi32.GetDIBits.argtypes = [
+        wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+    gdi32.GetDIBits.restype = ctypes.c_int
+    gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+    gdi32.DeleteDC.argtypes = [wintypes.HDC]
+
+    if user32.GetForegroundWindow() != hwnd:
+        raise RuntimeError("Player window is not foreground; desktop capture skipped")
+    rect = wintypes.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        raise OSError("GetWindowRect failed")
+    width = rect.right - rect.left
+    height = rect.bottom - rect.top
+    if not 64 <= width <= 4096 or not 64 <= height <= 4096:
+        raise RuntimeError("Player window has unsupported screenshot dimensions")
+    x_virtual = user32.GetSystemMetrics(76)
+    y_virtual = user32.GetSystemMetrics(77)
+    w_virtual = user32.GetSystemMetrics(78)
+    h_virtual = user32.GetSystemMetrics(79)
+    if (rect.left < x_virtual or rect.top < y_virtual or
+        rect.right > x_virtual + w_virtual or
+        rect.bottom > y_virtual + h_virtual):
+        raise RuntimeError("Player window extends outside captured desktop")
+
+    desktop_dc = user32.GetDC(None)
+    if not desktop_dc:
+        raise OSError("GetDC failed")
+    compatible_dc = None
+    bitmap = None
+    previous = None
+    try:
+        compatible_dc = gdi32.CreateCompatibleDC(desktop_dc)
+        if not compatible_dc:
+            raise OSError("CreateCompatibleDC failed")
+        bitmap = gdi32.CreateCompatibleBitmap(desktop_dc, width, height)
+        if not bitmap:
+            raise OSError("CreateCompatibleBitmap failed")
+        previous = gdi32.SelectObject(compatible_dc, bitmap)
+        if not previous:
+            raise OSError("SelectObject failed")
+        # SRCCOPY | CAPTUREBLT: include layered windows; only the
+        # previously verified foreground Player rectangle is captured.
+        if not gdi32.BitBlt(
+                compatible_dc, 0, 0, width, height,
+                desktop_dc, rect.left, rect.top, 0x40CC0020):
+            raise OSError("BitBlt failed")
+        # Top-down 32-bit BI_RGB avoids flipping the Unity frame.
+        row_bytes = width * 4
+        header = struct.pack(
+            "<IiiHHIIiiII", 40, width, -height, 1, 32, 0,
+            row_bytes * height, 0, 0, 0, 0)
+        pixels = (ctypes.c_ubyte * (row_bytes * height))()
+        info = ctypes.create_string_buffer(header + bytes(16))
+        rows = gdi32.GetDIBits(
+            compatible_dc, bitmap, 0, height,
+            ctypes.cast(pixels, ctypes.c_void_p), ctypes.byref(info), 0)
+        if rows != height:
+            raise OSError("GetDIBits did not return full Player frame")
+        raw = bytes(pixels)
+        # BMP file header is 14 bytes, followed by BITMAPINFOHEADER and pixels.
+        bmp = struct.pack("<2sIHHI", b"BM", 54 + len(raw), 0, 0, 54)
+        destination.write_bytes(bmp + header + raw)
+        sampled = {raw[i:i+4] for i in range(0, len(raw), max(4, len(raw) // 1024 // 4 * 4))}
+        return {
+            "file": destination.name,
+            "sha256": sha256(destination),
+            "width": width,
+            "height": height,
+            "sampledDistinctPixels": len(sampled),
+            "blankOrUniformPossible": len(sampled) <= 2,
+        }
+    finally:
+        if previous is not None and compatible_dc:
+            gdi32.SelectObject(compatible_dc, previous)
+        if bitmap:
+            gdi32.DeleteObject(bitmap)
+        if compatible_dc:
+            gdi32.DeleteDC(compatible_dc)
+        user32.ReleaseDC(None, desktop_dc)
 
 
 def runtime_startup_logged(player_log):
@@ -167,12 +275,14 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v1",
+        "suite": "u1-windows-visible-window-probe-v2",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
         "windowObserved": False,
         "runtimeStartupObserved": False,
+        "windowFrameCaptured": False,
+        "windowFrameIsInteractiveAcceptance": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
         "exitCode": None,
@@ -221,8 +331,20 @@ def run_probe(args):
         report["runtimeStartupObserved"] = True
         report["runtimeStartupObservedAfterMs"] = round(
             (time.monotonic() - start) * 1000)
-        # Allow one update tick after managed startup before normal WM_CLOSE.
+        # Allow one update tick after managed startup. Capture the real
+        # foreground Player rectangle for manual pixel inspection. Desktop
+        # capture is optional: a hosted runner may not expose readable GPU
+        # pixels, and this never elevates the result to UI acceptance.
         time.sleep(1.0)
+        try:
+            frame = capture_foreground_player_frame(
+                observed["hwnd"], output / "player-window.bmp")
+            report["windowFrameCaptured"] = True
+            report["windowFrame"] = frame
+        except Exception as capture_error:
+            report["windowFrameError"] = str(capture_error)
+            print("U1 Player frame evidence unavailable: " +
+                  str(capture_error), file=sys.stderr, flush=True)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
