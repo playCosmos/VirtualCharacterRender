@@ -161,7 +161,7 @@ namespace VCR.Runtime.UI
         private void OnEnable()
         {
             _guiProbeRequested = Array.Exists(
-                Environment.GetCommandLineArgs(),
+                System.Environment.GetCommandLineArgs(),
                 arg => string.Equals(arg, "--vcr-ui-probe", StringComparison.Ordinal));
             _guiProbeReported = false;
             InitializeWorkspaceTrackingRestore();
