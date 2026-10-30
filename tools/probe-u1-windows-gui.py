@@ -42,7 +42,7 @@ def inspect_unity_screenshot(path):
     if not path.is_file():
         return None
     data = path.read_bytes()
-    if len(data) < 69 or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+    if len(data) < 69 or data[:8] != b"\x89PNG\r\n\x1a\n":
         return None
     if data[12:16] != b"IHDR" or data[-8:-4] != b"IEND":
         return None
