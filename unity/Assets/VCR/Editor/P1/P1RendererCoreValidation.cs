@@ -1023,6 +1023,47 @@ namespace VCR.Editor.P1
                         "U1 Inspector must retain uncommitted drafts for unchanged target objects",
                         failures);
 
+                    // Saving the runtime snapshot to a real versioned JSON file
+                    // must never serialize pending UI Toolkit Inspector edits.
+                    // Neither saving nor reading the file may apply the draft.
+                    var inspectorDraftPath = Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p1-inspector-draft-" + Guid.NewGuid().ToString("N") + ".json");
+                    try
+                    {
+                        var inspectorDraftStore =
+                            new RuntimeConfigurationStore(inspectorDraftPath);
+                        var inspectorLiveBeforeSave = scene.CaptureConfiguration();
+                        var inspectorDraftSaved = inspectorDraftStore.TrySave(
+                            inspectorLiveBeforeSave, out var inspectorDraftSaveError);
+                        var inspectorDiskValues = SceneRuntimeConfiguration.Default;
+                        string inspectorDraftLoadError = null;
+                        var inspectorDraftLoaded = inspectorDraftSaved &&
+                            inspectorDraftStore.TryLoad(
+                                out inspectorDiskValues, out inspectorDraftLoadError);
+                        Expect(
+                            inspectorDraftSaved && inspectorDraftLoaded &&
+                            string.IsNullOrEmpty(inspectorDraftSaveError) &&
+                            string.IsNullOrEmpty(inspectorDraftLoadError) &&
+                            Math.Abs(inspectorDiskValues.Camera.FieldOfView -
+                                inspectorLiveBeforeSave.Camera.FieldOfView) < 0.0001f &&
+                            Math.Abs(inspectorDiskValues.Light.Intensity -
+                                inspectorLiveBeforeSave.Light.Intensity) < 0.0001f &&
+                            Math.Abs(inspectorDiskValues.Camera.FieldOfView - 111f) > 0.01f &&
+                            Math.Abs(inspectorDiskValues.Light.Intensity - 11f) > 0.01f &&
+                            Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                            Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f,
+                            "U1 pending camera/light Inspector drafts must not leak into saved configuration or mutate during save",
+                            failures);
+                    }
+                    finally
+                    {
+                        if (File.Exists(inspectorDraftPath))
+                            File.Delete(inspectorDraftPath);
+                        if (File.Exists(inspectorDraftPath + ".bak"))
+                            File.Delete(inspectorDraftPath + ".bak");
+                    }
+
                     // Discarding a camera draft must read the current camera,
                     // without applying any scene changes or losing a light draft.
                     discardCameraInspector.Invoke(inspectorProbe, null);
