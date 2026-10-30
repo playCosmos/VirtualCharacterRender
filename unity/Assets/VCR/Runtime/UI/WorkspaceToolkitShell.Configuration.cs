@@ -81,7 +81,12 @@ namespace VCR.Runtime.UI
                     if (!bootstrap.SaveConfiguration(out var saveError))
                         return "Configuration save failed: " +
                             (saveError ?? "unknown error");
-                    return "Runtime configuration saved: " + bootstrap.ConfigurationPath;
+                    // SaveConfiguration serializes the applied scene runtime,
+                    // never the UI Toolkit Inspector's pending camera/light drafts.
+                    // State this explicitly so Save is not mistaken for Apply.
+                    return "Runtime configuration saved (applied values only; " +
+                        "pending Inspector camera/light edits excluded): " +
+                        bootstrap.ConfigurationPath;
                 }
 
                 if (action == 206)
