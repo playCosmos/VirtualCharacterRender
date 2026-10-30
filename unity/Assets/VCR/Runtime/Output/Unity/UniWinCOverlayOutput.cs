@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 using Kirurobo;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -29,6 +30,9 @@ namespace VCR.Runtime.Output.Unity
         [Header("Overlay")]
         [SerializeField] private bool transparent = true;
         [SerializeField] private bool clickThrough = false;
+        // P1 is a standard desktop application. UniWinC's transparent mode
+        // intentionally strips the native caption; restore it when opaque.
+        [SerializeField] private bool preserveDesktopWindowFrame = false;
         [SerializeField, Min(0.5f)] private float nativeApplyTimeoutSeconds = 5f;
 
         private UniWindowController _controller;
@@ -149,6 +153,7 @@ namespace VCR.Runtime.Output.Unity
             targetCamera = camera;
             transparent = true;
             clickThrough = false;
+            preserveDesktopWindowFrame = false;
         }
 
         // U1/P1 is a normal interactive editor window by default. Transparent
@@ -159,6 +164,7 @@ namespace VCR.Runtime.Output.Unity
             targetCamera = camera;
             transparent = false;
             clickThrough = false;
+            preserveDesktopWindowFrame = true;
         }
 
         public void Apply(OverlayOutputSettings settings)
@@ -244,6 +250,12 @@ namespace VCR.Runtime.Output.Unity
             if (!IsNativeWindowAttached())
                 return;
 
+            // On Windows, an old P0 borderless window can survive a transition
+            // back to opaque. Restore standard OS non-client controls only for
+            // P1's opaque workspace, never while a transparent overlay is on.
+            if (preserveDesktopWindowFrame && !transparent)
+                RestoreWindowsDesktopFrameIfMissing();
+
             var topmostApplied =
                 !_controller.isTopmost;
 
@@ -255,6 +267,70 @@ namespace VCR.Runtime.Output.Unity
             _nativeApplied = true;
             _pendingNativeApply = false;
             _nativeApplySuccesses++;
+        }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private const int GwlStyle = -16;
+        private const uint WsPopup = 0x80000000;
+        private const uint WsOverlappedWindow = 0x00CF0000;
+        private const uint SwpNoMoveNoSizeNoZOrderFrameChanged =
+            0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020;
+
+        private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr param);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr param);
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int length);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowLongW(IntPtr hwnd, int index);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int SetWindowLongW(IntPtr hwnd, int index, int value);
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after,
+            int x, int y, int width, int height, uint flags);
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
+#endif
+
+        private void RestoreWindowsDesktopFrameIfMissing()
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            var myPid = GetCurrentProcessId();
+            EnumWindows((hwnd, _) =>
+            {
+                GetWindowThreadProcessId(hwnd, out var windowPid);
+                if (windowPid != myPid) return true;
+                var name = new StringBuilder(64);
+                GetClassNameW(hwnd, name, name.Capacity);
+                if (!string.Equals(name.ToString(), "UnityWndClass",
+                    StringComparison.Ordinal))
+                    return true;
+
+                var style = (uint)GetWindowLongW(hwnd, GwlStyle);
+                if ((style & WsOverlappedWindow) != WsOverlappedWindow ||
+                    (style & WsPopup) != 0)
+                {
+                    var next = (style | WsOverlappedWindow) & ~WsPopup;
+                    SetLastError(0);
+                    var previous = SetWindowLongW(hwnd, GwlStyle,
+                        unchecked((int)next));
+                    var error = Marshal.GetLastWin32Error();
+                    if (previous == 0 && error != 0 ||
+                        !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                            SwpNoMoveNoSizeNoZOrderFrameChanged))
+                        Debug.LogWarning("VCR P1: Windows desktop title bar " +
+                            "restoration failed; inspect native window style.", this);
+                    else
+                        Debug.Log("VCR P1: restored native title bar and resize frame.", this);
+                }
+                return false;
+            }, IntPtr.Zero);
+#endif
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)
