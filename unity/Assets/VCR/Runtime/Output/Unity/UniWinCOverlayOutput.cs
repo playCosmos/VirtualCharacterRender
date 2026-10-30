@@ -43,6 +43,12 @@ namespace VCR.Runtime.Output.Unity
         private long _applyAttempts;
         private long _applyFailures;
         private long _nativeApplySuccesses;
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        // A Unity window can remain popup-styled after UniWinC's initial
+        // attach. Opaque P1 must not depend on the plugin reporting Active.
+        private float _nextDesktopFrameCheckAt;
+        private float _nextDesktopFrameWarningAt;
+#endif
 
         private CameraClearFlags _originalClearFlags;
         private Color _originalBackground;
@@ -127,6 +133,18 @@ namespace VCR.Runtime.Output.Unity
 
         private void Update()
         {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            // Check the *actual* UnityWndClass style even when UniWinC has
+            // not attached or its one-time native Apply already completed.
+            // Unity/UniWinC may replace the HWND style after startup; the
+            // opaque interactive P1 workspace must keep its OS controls.
+            if (preserveDesktopWindowFrame && !transparent &&
+                Time.realtimeSinceStartup >= _nextDesktopFrameCheckAt)
+            {
+                _nextDesktopFrameCheckAt = Time.realtimeSinceStartup + 0.5f;
+                RestoreWindowsDesktopFrameIfMissing();
+            }
+#endif
             if (Application.isEditor ||
                 !_pendingNativeApply ||
                 _controller == null ||
@@ -249,16 +267,16 @@ namespace VCR.Runtime.Output.Unity
             _controller.isClickThrough = clickThrough;
             _controller.isTopmost = false;
 
-            // Do not signal Active until UniWinC has attached the actual
-            // desktop window. Keep retrying (with the existing timeout).
-            if (!IsNativeWindowAttached())
-                return;
-
-            // On Windows, an old P0 borderless window can survive a transition
-            // back to opaque. Restore standard OS non-client controls only for
-            // P1's opaque workspace, never while a transparent overlay is on.
+            // A normal P1 editor window needs native caption and thickframe
+            // even when UniWinC's independent overlay attachment is delayed
+            // or unavailable. This must precede the attachment early return.
             if (preserveDesktopWindowFrame && !transparent)
                 RestoreWindowsDesktopFrameIfMissing();
+
+            // Do not signal the *overlay* Active until UniWinC has attached.
+            // Opaque Windows frame repair remains independent of this status.
+            if (!IsNativeWindowAttached())
+                return;
 
             var topmostApplied =
                 !_controller.isTopmost;
@@ -326,8 +344,16 @@ namespace VCR.Runtime.Output.Unity
                         (actualStyle & WsPopup) != 0 ||
                         !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
                             SwpNoMoveNoSizeNoZOrderFrameChanged))
-                        Debug.LogWarning("VCR P1: Windows desktop title bar " +
-                            "restoration failed; inspect native window style.", this);
+                    {
+                        if (Time.realtimeSinceStartup >= _nextDesktopFrameWarningAt)
+                        {
+                            _nextDesktopFrameWarningAt = Time.realtimeSinceStartup + 5f;
+                            Debug.LogWarning("VCR P1: Windows desktop title bar " +
+                                "restoration failed; inspect native window style " +
+                                "(before=0x" + style.ToString("X8") +
+                                ", after=0x" + actualStyle.ToString("X8") + ").", this);
+                        }
+                    }
                     else
                         Debug.Log("VCR P1: restored native title bar and resize frame.", this);
                 }
