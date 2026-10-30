@@ -100,6 +100,77 @@ def visible_player_windows(pid):
     return result
 
 
+def classify_window_style(style):
+    """Describe native Win32 non-client controls, not rendered Unity pixels."""
+    return {
+        "styleHex": f"0x{style & 0xffffffff:08X}",
+        "hasNativeTitleBar": style & 0x00C00000 == 0x00C00000,
+        "resizableFrame": bool(style & 0x00040000),
+        "hasSystemMenu": bool(style & 0x00080000),
+        "hasMinimizeBox": bool(style & 0x00020000),
+        "hasMaximizeBox": bool(style & 0x00010000),
+        "borderlessPopup": bool(style & 0x80000000),
+    }
+
+
+def inspect_native_window_frame(hwnd):
+    """Read the actual Unity top-level HWND style and client rectangle."""
+    user32 = ctypes.windll.user32
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.GetWindowLongW.restype = ctypes.c_long
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowRect.restype = wintypes.BOOL
+    user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetClientRect.restype = wintypes.BOOL
+    outer = wintypes.RECT()
+    client = wintypes.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(outer)) or not (
+            user32.GetClientRect(hwnd, ctypes.byref(client))):
+        raise OSError("Unable to inspect real Player window rectangles")
+    result = classify_window_style(user32.GetWindowLongW(hwnd, -16))
+    result["windowRect"] = [outer.left, outer.top, outer.right, outer.bottom]
+    result["outerSize"] = [outer.right - outer.left, outer.bottom - outer.top]
+    result["clientSize"] = [client.right - client.left, client.bottom - client.top]
+    return result
+
+
+def probe_free_resize(hwnd, before):
+    """Try an independent width/height OS resize, then restore original size."""
+    user32 = ctypes.windll.user32
+    user32.SetWindowPos.argtypes = [
+        wintypes.HWND, wintypes.HWND,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user32.SetWindowPos.restype = wintypes.BOOL
+    flags = 0x0002 | 0x0004 | 0x0010  # NOMOVE | NOZORDER | NOACTIVATE
+    width, height = before["outerSize"]
+    target = [max(640, width - 120), min(680, height + 90)]
+    result = {"originalOuterSize": [width, height],
+              "requestedOuterSize": target, "restored": False}
+    try:
+        if not user32.SetWindowPos(hwnd, None, 0, 0,
+                                   target[0], target[1], flags):
+            raise OSError("SetWindowPos refused non-proportional Player resize")
+        deadline = time.monotonic() + 2
+        after = inspect_native_window_frame(hwnd)
+        while time.monotonic() < deadline:
+            if all(abs(after["outerSize"][i] - target[i]) <= 8
+                   for i in range(2)):
+                break
+            time.sleep(0.15)
+            after = inspect_native_window_frame(hwnd)
+        result["observedOuterSize"] = after["outerSize"]
+        result["observedClientSize"] = after["clientSize"]
+        original_ratio = before["clientSize"][0] / max(1, before["clientSize"][1])
+        new_ratio = after["clientSize"][0] / max(1, after["clientSize"][1])
+        result["clientAspectChanged"] = abs(original_ratio - new_ratio) > 0.10
+        result["reachedIndependentSize"] = all(
+            abs(after["outerSize"][i] - target[i]) <= 8 for i in range(2))
+        return result
+    finally:
+        result["restored"] = bool(user32.SetWindowPos(
+            hwnd, None, 0, 0, width, height, flags))
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
@@ -371,7 +442,15 @@ def run_self_test():
         png.write_bytes(b"not a valid PNG")
         if inspect_unity_screenshot(png) is not None:
             raise RuntimeError("Invalid screenshot accepted")
-    print("U1 GUI probe startup, clipping and pixel-quality self-test: PASS")
+    native = classify_window_style(0x00CF0000)
+    if not (native["hasNativeTitleBar"] and native["resizableFrame"] and
+            native["hasSystemMenu"] and native["hasMinimizeBox"] and
+            native["hasMaximizeBox"] and not native["borderlessPopup"]):
+        raise RuntimeError("Standard overlapped Windows title bar rejected")
+    popup = classify_window_style(0x90000000)
+    if popup["hasNativeTitleBar"] or popup["resizableFrame"] or not popup["borderlessPopup"]:
+        raise RuntimeError("Borderless popup incorrectly classified as normal window")
+    print("U1 GUI probe startup, clipping, window styles and pixel-quality self-test: PASS")
     return 0
 
 
@@ -395,13 +474,15 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path, unity_image_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v6",
+        "suite": "u1-windows-visible-window-probe-v7",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
         "requestedPlayerSize": [args.screen_width, args.screen_height],
         "windowObserved": False,
         "runtimeStartupObserved": False,
+        "nativeFramePassed": False,
+        "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
         "workspaceUiTreeReady": False,
@@ -509,6 +590,29 @@ def run_probe(args):
                 "Unity did not produce a complete opt-in screenshot")
             if unity_image_path.exists():
                 unity_image_path.unlink()
+        # Win32 style and non-proportional resize evidence is independent
+        # from the CI desktop's unreliable GPU pixel readback.
+        frame = inspect_native_window_frame(observed["hwnd"])
+        report["nativeFrame"] = frame
+        report["nativeFramePassed"] = all((
+            frame["hasNativeTitleBar"], frame["resizableFrame"],
+            frame["hasSystemMenu"], frame["hasMinimizeBox"],
+            frame["hasMaximizeBox"], not frame["borderlessPopup"]))
+        print("U1 native Windows frame: " +
+              f"style={frame['styleHex']}, nativeTitle={frame['hasNativeTitleBar']}, " +
+              f"resizable={frame['resizableFrame']}", flush=True)
+        try:
+            resize = probe_free_resize(observed["hwnd"], frame)
+            report["windowResize"] = resize
+            report["freeResizePassed"] = (
+                resize["reachedIndependentSize"] and
+                resize["clientAspectChanged"] and resize["restored"])
+            print("U1 native independent aspect resize: " +
+                  f"target={resize['requestedOuterSize']}, " +
+                  f"actual={resize['observedOuterSize']}, " +
+                  f"passed={report['freeResizePassed']}", flush=True)
+        except Exception as error:
+            report["windowResizeError"] = str(error)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
@@ -531,6 +635,9 @@ def run_probe(args):
         if not report["managedQuitObserved"]:
             raise RuntimeError(
                 "GUI Player did not emit managed normal quit completion marker")
+        if not report["nativeFramePassed"] or not report["freeResizePassed"]:
+            raise RuntimeError(
+                "P1 native Windows title bar or free aspect resize validation failed")
         report["passed"] = True
         print("U1 Windows visible-window/normal-quit probe PASS "
               "(interactive UI not accepted)", flush=True)
