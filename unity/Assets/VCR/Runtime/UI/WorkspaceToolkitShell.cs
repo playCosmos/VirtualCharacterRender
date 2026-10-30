@@ -297,11 +297,29 @@ namespace VCR.Runtime.UI
                         return;
                     foreach (var child in _bottomDock.Children())
                     {
-                        if (child.name != null &&
-                            child.name.StartsWith("vcr-panel-", StringComparison.Ordinal) &&
-                            child.resolvedStyle.display != DisplayStyle.None &&
-                            child.worldBound.yMin < tabBounds.yMax - 1.5f)
+                        if (child.name == null ||
+                            !child.name.StartsWith("vcr-panel-", StringComparison.Ordinal) ||
+                            child.resolvedStyle.display == DisplayStyle.None)
+                            continue;
+                        var panelBounds = child.worldBound;
+                        if (panelBounds.yMin < tabBounds.yMax - 1.5f ||
+                            panelBounds.yMax > bottomBounds.yMax + 1.5f)
                             return;
+                        // A ScrollView's minimum size can exceed its parent
+                        // even though the tab strip and dock bounds are valid.
+                        // The native GUI readiness probe must catch this
+                        // actual footer-overlap regression in compact mode.
+                        foreach (var descendant in child.Children())
+                        {
+                            if (!(descendant is ScrollView) ||
+                                descendant.resolvedStyle.display == DisplayStyle.None)
+                                continue;
+                            var scrollBounds = descendant.worldBound;
+                            if (scrollBounds.height < 8f ||
+                                scrollBounds.yMax > panelBounds.yMax + 1.5f ||
+                                scrollBounds.yMax > statusBounds.yMin + 1.5f)
+                                return;
+                        }
                     }
                 }
                 // Checking only dock bounds missed the real bug: a wrapped
@@ -1732,7 +1750,11 @@ namespace VCR.Runtime.UI
             // remain reachable at the compact 150 px bottom-dock height.
             var trackingScroll = new ScrollView { name = "vcr-tracking-content" };
             trackingScroll.style.flexGrow = 1;
-            trackingScroll.style.minHeight = 60;
+            trackingScroll.style.flexShrink = 1;
+            // A compact tab dock has less room after its tab strip and status.
+            // Preserve the ScrollView, not its 60px minimum, so content scrolls
+            // inside the panel instead of painting over the workspace footer.
+            trackingScroll.style.minHeight = compactHeight ? 0 : 60;
             tracking.Add(trackingScroll);
             BuildWorkspaceTrackingCameraPreview(trackingScroll);
             BuildWorkspaceTrackingPanel(trackingScroll);
@@ -1742,7 +1764,8 @@ namespace VCR.Runtime.UI
             // and broadcast controls reachable instead of clipping the latter.
             var actionsScroll = new ScrollView { name = "vcr-actions-content" };
             actionsScroll.style.flexGrow = 1;
-            actionsScroll.style.minHeight = 60;
+            actionsScroll.style.flexShrink = 1;
+            actionsScroll.style.minHeight = compactHeight ? 0 : 60;
             _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
             _unloadCharacterButton = new Button(UnloadActiveCharacter) { text = "Unload active VRM" };
             _reloadCharacterButton.SetEnabled(false);
@@ -1762,7 +1785,8 @@ namespace VCR.Runtime.UI
             // one content area instead of clipping the controls below it.
             var eventsContent = new ScrollView { name = "vcr-events-content" };
             eventsContent.style.flexGrow = 1;
-            eventsContent.style.minHeight = 60;
+            eventsContent.style.flexShrink = 1;
+            eventsContent.style.minHeight = compactHeight ? 0 : 60;
             BuildWorkspaceEventRulesPanel(eventsContent);
             BuildWorkspaceLogPanel(eventsContent);
             events.Add(eventsContent);
