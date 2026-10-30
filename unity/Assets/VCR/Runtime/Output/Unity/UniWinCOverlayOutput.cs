@@ -53,6 +53,10 @@ namespace VCR.Runtime.Output.Unity
         public OverlayOutputSettings Settings =>
             CurrentSettings();
 
+        // Used by the P1 scene upgrader to migrate older saved desktop scenes
+        // even when they were already opaque but lacked the native-frame guard.
+        public bool PreservesDesktopWindowFrame => preserveDesktopWindowFrame;
+
         public OverlayOutputStatus Status
         {
             get
