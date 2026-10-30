@@ -37,6 +37,28 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def inspect_unity_screenshot(path):
+    """Read an actual completed Unity PNG, not a fabricated UI screenshot."""
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    if len(data) < 69 or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+        return None
+    if data[12:16] != b"IHDR" or data[-8:-4] != b"IEND":
+        return None
+    width, height = struct.unpack(">II", data[16:24])
+    if not 64 <= width <= 8192 or not 64 <= height <= 8192:
+        return None
+    return {
+        "file": path.name,
+        "sha256": sha256(path),
+        "width": width,
+        "height": height,
+        "bytes": len(data),
+        "uiPixelsConfirmed": False,
+    }
+
+
 def visible_player_windows(pid):
     """Read-only enumeration of windows owned by the exact Player process."""
     user32 = ctypes.windll.user32
@@ -342,6 +364,13 @@ def run_self_test():
     varied = analyze_frame_interior(varied_frame, width, height)
     if varied["blankOrUniformPossible"] or varied["uiPixelsConfirmed"]:
         raise RuntimeError("Nonuniform sample incorrectly accepted as UI")
+    with tempfile.TemporaryDirectory() as d:
+        png = Path(d) / "unity.png"
+        if inspect_unity_screenshot(png) is not None:
+            raise RuntimeError("Missing Unity screenshot accepted")
+        png.write_bytes(b"not a valid PNG")
+        if inspect_unity_screenshot(png) is not None:
+            raise RuntimeError("Invalid screenshot accepted")
     print("U1 GUI probe startup, clipping and pixel-quality self-test: PASS")
     return 0
 
@@ -362,10 +391,11 @@ def run_probe(args):
     player_log = output / "Player.log"
     report_path = output / "gui-probe.json"
     config_path = output / "gui-probe-config.json"
-    for stale in (player_log, report_path, config_path):
+    unity_image_path = output / "unity-frame.png"
+    for stale in (player_log, report_path, config_path, unity_image_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v4",
+        "suite": "u1-windows-visible-window-probe-v5",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
@@ -374,6 +404,7 @@ def run_probe(args):
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
         "workspaceUiTreeReady": False,
+        "unityFrameCaptured": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
         "exitCode": None,
@@ -390,6 +421,7 @@ def run_probe(args):
             "-logFile", str(player_log),
             "--vcr-config=" + str(config_path),
             "--vcr-ui-probe",
+            "--vcr-ui-probe-image=" + str(unity_image_path),
         ]
         # Deliberately omit -batchmode, -nographics and smoke-report switches.
         process = subprocess.Popen(
@@ -456,6 +488,25 @@ def run_probe(args):
             report["windowFrameError"] = str(capture_error)
             print("U1 Player frame evidence unavailable: " +
                   str(capture_error), file=sys.stderr, flush=True)
+        # Unity ScreenCapture is independent of Windows desktop BitBlt.
+        # Keep a completed PNG only when the actual Player produces it;
+        # it is still visual evidence, not proof of interactive controls.
+        unity_deadline = time.monotonic() + 2.5
+        while time.monotonic() < unity_deadline:
+            unity_frame = inspect_unity_screenshot(unity_image_path)
+            if unity_frame is not None:
+                report["unityFrameCaptured"] = True
+                report["unityFrame"] = unity_frame
+                print("U1 Unity frame evidence captured: " +
+                      f"{unity_frame['width']}x{unity_frame['height']}, " +
+                      f"sha256={unity_frame['sha256']}", flush=True)
+                break
+            time.sleep(0.2)
+        if not report["unityFrameCaptured"]:
+            report["unityFrameError"] = (
+                "Unity did not produce a complete opt-in screenshot")
+            if unity_image_path.exists():
+                unity_image_path.unlink()
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
