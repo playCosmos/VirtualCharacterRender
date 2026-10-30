@@ -316,11 +316,10 @@ namespace VCR.Runtime.Output.Unity
                     (style & WsPopup) != 0)
                 {
                     var next = (style | WsOverlappedWindow) & ~WsPopup;
-                    SetLastError(0);
-                    var previous = SetWindowLongW(hwnd, GwlStyle,
-                        unchecked((int)next));
-                    var error = Marshal.GetLastWin32Error();
-                    if (previous == 0 && error != 0 ||
+                    SetWindowLongW(hwnd, GwlStyle, unchecked((int)next));
+                    var actualStyle = (uint)GetWindowLongW(hwnd, GwlStyle);
+                    if ((actualStyle & WsOverlappedWindow) != WsOverlappedWindow ||
+                        (actualStyle & WsPopup) != 0 ||
                         !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
                             SwpNoMoveNoSizeNoZOrderFrameChanged))
                         Debug.LogWarning("VCR P1: Windows desktop title bar " +
