@@ -24,6 +24,9 @@ namespace VCR.Runtime.UI
         private string _nativeModelPathOverride;
         [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
         private float _nextStatusRefresh;
+        // Throttle repeated UI-only failures without concealing their stack.
+        // A failing dock must not block the model/scene status refresh.
+        private readonly float[] _nextWorkspaceRefreshErrorAt = new float[15];
         private UIDocument _document;
         // Opt-in, read-only evidence for CI's real visible Player. This never
         // creates a synthetic UI or changes runtime configuration.
@@ -292,20 +295,64 @@ namespace VCR.Runtime.UI
         private void Update()
         {
             ReportWorkspaceGuiProbeIfReady();
-            PumpWorkspaceNativeSettings();
-            RestoreWorkspaceTrackingPreferences();
-            RefreshWorkspaceTrackingPanel();
-            RefreshWorkspaceCapabilitiesPanel();
-            RefreshWorkspaceMaterialsPanel();
-            DrainWorkspaceLog();
-            RefreshWorkspaceDiagnosticsPanel();
-            RefreshWorkspaceScenesPanel();
-            RefreshWorkspaceBroadcastStatus();
-            RefreshWorkspaceEnvironmentPanel();
-            RefreshWorkspaceEventRulesPanel();
-            RefreshWorkspaceAppearancePanel();
-            RefreshWorkspaceMotionPanel();
-            PersistLayoutIfChanged();
+            RefreshWorkspacePanelsSafely();
+            try
+            {
+                UpdateWorkspaceRuntimeStatus();
+            }
+            catch (Exception exception)
+            {
+                ReportWorkspaceRefreshException(14, "RuntimeStatus", exception);
+            }
+        }
+
+        private void RefreshWorkspacePanelsSafely()
+        {
+            // These are UI-only refresh operations. Failures are isolated so
+            // that scene status, camera input, and other docks remain usable.
+            // A fixed switch avoids allocating delegates each frame.
+            for (var stage = 0; stage < 14; stage++)
+            {
+                try
+                {
+                    switch (stage)
+                    {
+                        case 0: PumpWorkspaceNativeSettings(); break;
+                        case 1: RestoreWorkspaceTrackingPreferences(); break;
+                        case 2: RefreshWorkspaceTrackingPanel(); break;
+                        case 3: RefreshWorkspaceCapabilitiesPanel(); break;
+                        case 4: RefreshWorkspaceMaterialsPanel(); break;
+                        case 5: DrainWorkspaceLog(); break;
+                        case 6: RefreshWorkspaceDiagnosticsPanel(); break;
+                        case 7: RefreshWorkspaceScenesPanel(); break;
+                        case 8: RefreshWorkspaceBroadcastStatus(); break;
+                        case 9: RefreshWorkspaceEnvironmentPanel(); break;
+                        case 10: RefreshWorkspaceEventRulesPanel(); break;
+                        case 11: RefreshWorkspaceAppearancePanel(); break;
+                        case 12: RefreshWorkspaceMotionPanel(); break;
+                        case 13: PersistLayoutIfChanged(); break;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    ReportWorkspaceRefreshException(stage, "WorkspacePanels", exception);
+                }
+            }
+        }
+
+        private void ReportWorkspaceRefreshException(
+            int stage, string category, Exception exception)
+        {
+            var now = Time.unscaledTime;
+            if (now < _nextWorkspaceRefreshErrorAt[stage]) return;
+            _nextWorkspaceRefreshErrorAt[stage] = now + 15f;
+            Debug.LogError("VCR U1 " + category + " refresh stage " + stage +
+                " failed (additional occurrences suppressed for 15s): " +
+                exception, this);
+        }
+
+        private void UpdateWorkspaceRuntimeStatus()
+        {
             // Resolve the runtime before camera discovery. The runtime may be
             // created after the shell, including on a delayed startup path.
             if (sceneRuntime == null && Time.unscaledTime >= _nextStatusRefresh)
