@@ -162,6 +162,11 @@ def capture_foreground_player_frame(hwnd, destination):
                 compatible_dc, 0, 0, width, height,
                 desktop_dc, rect.left, rect.top, 0x40CC0020):
             raise OSError("BitBlt failed")
+        # GetDIBits requires the bitmap NOT to be selected into any DC.
+        # Deselect after BitBlt or Windows can return zero scanlines.
+        if not gdi32.SelectObject(compatible_dc, previous):
+            raise OSError("Failed to deselect screenshot bitmap")
+        previous = None
         # Top-down 32-bit BI_RGB avoids flipping the Unity frame.
         row_bytes = width * 4
         header = struct.pack(
