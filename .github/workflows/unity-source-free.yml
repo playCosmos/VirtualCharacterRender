@@ -309,11 +309,16 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python -m py_compile tools/probe-u1-windows-gui.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u1-windows-gui.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/probe-u1-windows-gui.py `
             --player Builds/P1/Windows-Development/VirtualCharacterRender.exe `
             --source "$env:GITHUB_SHA" `
             --output Builds/GUIProbe/u1-windows
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # gui-probe.json records whether actual Player-window pixels were
+      # captured. A bitmap may be blank on hosted GPU/desktop environments;
+      # neither a screenshot nor a passing WM_CLOSE probe is UI acceptance.
       - name: Upload honest P1 GUI-window observation
         if: always()
         uses: actions/upload-artifact@v4
