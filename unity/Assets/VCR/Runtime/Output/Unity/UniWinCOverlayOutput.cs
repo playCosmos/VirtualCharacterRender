@@ -283,11 +283,11 @@ namespace VCR.Runtime.Output.Unity
         private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr param);
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int length);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern int GetWindowLongW(IntPtr hwnd, int index);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
         private static extern int SetWindowLongW(IntPtr hwnd, int index, int value);
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
