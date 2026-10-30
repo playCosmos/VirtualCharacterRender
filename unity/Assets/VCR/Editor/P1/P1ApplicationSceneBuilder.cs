@@ -4,6 +4,9 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using VCR.Editor.P0;
 using VCR.Runtime.Application;
+using VCR.Runtime.Diagnostics;
+using VCR.Runtime.Output.Unity;
+using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Runtime.UI;
 using VCR.Runtime.Scene;
 
@@ -313,6 +316,28 @@ namespace VCR.Editor.P1
                 Debug.LogError("VCR P1: generated scene has no application bootstrap.");
                 return;
             }
+            // The P0 base scene deliberately exercises transparent output
+            // and live webcam startup. P1 is an ordinary interactive
+            // application: neither should be activated without an operator
+            // explicitly enabling it in Settings / Tracking.
+            var p1Output = bootstrap.GetComponent<UniWinCOverlayOutput>();
+            var p1Camera = bootstrap.GetComponentInChildren<Camera>(true);
+            if (p1Output == null || p1Camera == null)
+            {
+                Debug.LogError("VCR P1: missing overlay adapter or scene camera.");
+                return;
+            }
+            p1Camera.backgroundColor = new Color(0.105f, 0.12f, 0.14f, 1f);
+            p1Output.ConfigureForP1Workspace(p1Camera);
+
+            var trackingRunner =
+                bootstrap.GetComponentInChildren<MediaPipeWebcamTrackingRunner>(true);
+            if (trackingRunner != null)
+                trackingRunner.enabled = false;
+            var diagnostics = bootstrap.GetComponent<RuntimeDiagnostics>();
+            if (diagnostics != null)
+                diagnostics.ConfigureForP1Workspace();
+
             if (bootstrap.GetComponent<PlayerStartupSmoke>() == null)
                 bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
 
