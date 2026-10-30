@@ -314,6 +314,8 @@ jobs:
           python tools/probe-u1-windows-gui.py `
             --player Builds/P1/Windows-Development/VirtualCharacterRender.exe `
             --source "$env:GITHUB_SHA" `
+            --screen-width 960 `
+            --screen-height 520 `
             --output Builds/GUIProbe/u1-windows
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # gui-probe.json records whether actual Player-window pixels were
