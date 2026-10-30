@@ -25,6 +25,10 @@ namespace VCR.Runtime.UI
         [SerializeField, Min(0.1f)] private float statusRefreshSeconds = 0.5f;
         private float _nextStatusRefresh;
         private UIDocument _document;
+        // Opt-in, read-only evidence for CI's real visible Player. This never
+        // creates a synthetic UI or changes runtime configuration.
+        private bool _guiProbeRequested;
+        private bool _guiProbeReported;
         private VisualElement _root;
         private VisualElement _workspaceRoot;
         private VisualElement _dockHost;
@@ -156,6 +160,10 @@ namespace VCR.Runtime.UI
 
         private void OnEnable()
         {
+            _guiProbeRequested = Array.Exists(
+                Environment.GetCommandLineArgs(),
+                arg => string.Equals(arg, "--vcr-ui-probe", StringComparison.Ordinal));
+            _guiProbeReported = false;
             InitializeWorkspaceTrackingRestore();
             ResetWorkspaceTrackingPanel();
             ResetWorkspaceTrackingCameraPreview();
@@ -214,8 +222,37 @@ namespace VCR.Runtime.UI
             _nextLayoutPersistenceCheck = Time.unscaledTime + 2f;
         }
 
+        private void ReportWorkspaceGuiProbeIfReady()
+        {
+            if (!_guiProbeRequested || _guiProbeReported ||
+                _workspaceRoot == null || _workspaceRoot.panel == null ||
+                _applySceneViewButton == null || _applyPrimaryLightButton == null ||
+                _modelPathInput == null)
+                return;
+
+            // Require a laid-out, attached UI tree with actual Inspector and
+            // Sources controls, not only a UIDocument or GameObject reference.
+            var bounds = _workspaceRoot.worldBound;
+            if (!float.IsFinite(bounds.width) || !float.IsFinite(bounds.height) ||
+                bounds.width < 256f || bounds.height < 180f ||
+                _applySceneViewButton.panel != _workspaceRoot.panel ||
+                _applyPrimaryLightButton.panel != _workspaceRoot.panel ||
+                _modelPathInput.panel != _workspaceRoot.panel)
+                return;
+
+            _guiProbeReported = true;
+            Debug.Log("VCR U1 GUI probe: workspace_tree_ready=true " +
+                "width=" + bounds.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " height=" + bounds.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " camera_apply_attached=true light_apply_attached=true " +
+                "model_path_attached=true", this);
+        }
+
         private void Update()
         {
+            ReportWorkspaceGuiProbeIfReady();
             PumpWorkspaceNativeSettings();
             RestoreWorkspaceTrackingPreferences();
             RefreshWorkspaceTrackingPanel();
