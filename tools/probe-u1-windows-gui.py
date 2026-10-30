@@ -118,7 +118,7 @@ def analyze_frame_interior(raw, width, height):
         for x in range(width // 10, width * 9 // 10,
                        max(1, width // 64)):
             offset = (y * width + x) * 4
-            pixels[raw[offset:offset+4]] += 1
+            pixels[bytes(raw[offset:offset+4])] += 1
     total = sum(pixels.values())
     dominant = max(pixels.values()) / total if total else 1.0
     return {
