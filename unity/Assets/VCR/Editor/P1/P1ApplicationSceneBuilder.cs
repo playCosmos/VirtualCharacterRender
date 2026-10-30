@@ -182,17 +182,37 @@ namespace VCR.Editor.P1
                         Debug.LogError("VCR P1: existing workspace is disabled; refusing to build a player with no visible shell.");
                         return false;
                     }
-                    if (currentSmoke == null)
+                    // Older P1 scenes inherited P0's borderless transparent
+                    // window. Correct only the desktop-output defaults on an
+                    // otherwise clean saved scene; keep authored objects,
+                    // tracking and model contents intact.
+                    var output = runtime.GetComponent<UniWinCOverlayOutput>();
+                    if (output == null)
                     {
-                        // Existing UI scenes need the same opt-in startup/quit
-                        // evidence as freshly generated scenes. Never modify
-                        // unsaved scenes or replace unrelated runtime objects.
+                        Debug.LogError("VCR P1: workspace has no desktop output adapter.");
+                        return false;
+                    }
+                    var needsOpaqueMigration =
+                        output.Settings.Transparent || output.Settings.ClickThrough ||
+                        mainCamera.backgroundColor.a < 0.99f;
+                    if (needsOpaqueMigration)
+                    {
+                        output.ConfigureForP1Workspace(mainCamera);
+                        var background = mainCamera.backgroundColor;
+                        background.a = 1f;
+                        mainCamera.backgroundColor = background;
+                        EditorUtility.SetDirty(output);
+                        EditorUtility.SetDirty(mainCamera);
+                        Debug.Log("VCR P1: migrated saved workspace to normal opaque Windows window " +
+                            "(OS title bar and free resize preserved).");
+                    }
+                    if (currentSmoke == null)
                         bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
-                        if (!EditorSceneManager.SaveScene(scene))
-                        {
-                            Debug.LogError("VCR P1: failed to upgrade Player smoke evidence component.");
-                            return false;
-                        }
+                    if ((currentSmoke == null || needsOpaqueMigration) &&
+                        !EditorSceneManager.SaveScene(scene))
+                    {
+                        Debug.LogError("VCR P1: failed to save workspace desktop-window migration.");
+                        return false;
                     }
                     return true;
                 }
