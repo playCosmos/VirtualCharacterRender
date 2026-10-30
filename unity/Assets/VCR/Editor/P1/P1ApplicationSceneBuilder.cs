@@ -332,11 +332,25 @@ namespace VCR.Editor.P1
 
             var trackingRunner =
                 bootstrap.GetComponentInChildren<MediaPipeWebcamTrackingRunner>(true);
-            if (trackingRunner != null)
-                trackingRunner.enabled = false;
             var diagnostics = bootstrap.GetComponent<RuntimeDiagnostics>();
-            if (diagnostics != null)
-                diagnostics.ConfigureForP1Workspace();
+            if (trackingRunner == null || diagnostics == null)
+            {
+                Debug.LogError("VCR P1: missing tracking or diagnostics base service.");
+                return;
+            }
+            trackingRunner.enabled = false;
+            diagnostics.ConfigureForP1Workspace();
+
+            // Fail scene generation rather than silently shipping the P0
+            // transparency/webcam defaults into the interactive U1 workspace.
+            if (p1Output.Settings.Transparent ||
+                p1Output.Settings.ClickThrough ||
+                p1Camera.backgroundColor.a < 0.99f ||
+                trackingRunner.enabled || diagnostics.ConsoleLoggingEnabled)
+            {
+                Debug.LogError("VCR P1: interactive workspace defaults were not applied.");
+                return;
+            }
 
             if (bootstrap.GetComponent<PlayerStartupSmoke>() == null)
                 bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
