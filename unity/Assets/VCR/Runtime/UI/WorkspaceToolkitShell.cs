@@ -269,6 +269,20 @@ namespace VCR.Runtime.UI
                 _modelPathInput.panel != _workspaceRoot.panel)
                 return;
 
+            // The UI may be attached while its central Preview forces the
+            // bottom dock beneath the visible window. Treat that layout as
+            // NOT ready in the real short-height Windows GUI smoke test.
+            if (_usingCompactHeight && _bottomVisible)
+            {
+                if (_bottomDock == null || _status == null) return;
+                var bottomBounds = _bottomDock.worldBound;
+                var statusBounds = _status.worldBound;
+                if (bottomBounds.height < 95f ||
+                    bottomBounds.yMax > statusBounds.yMin + 1.5f ||
+                    bottomBounds.yMax > bounds.yMax + 1.5f)
+                    return;
+            }
+
             _guiProbeReported = true;
             Debug.Log("VCR U1 GUI probe: workspace_tree_ready=true " +
                 "width=" + bounds.width.ToString("0.##",
@@ -1459,6 +1473,10 @@ namespace VCR.Runtime.UI
             // saved tab/stack preference.
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
+            // Reserve the bottom dock's allocated height in compact windows.
+            // Otherwise the central Preview's legacy minimum height can
+            // squeeze the bottom tab strip under the status bar.
+            if (compactHeight) bottom.style.flexShrink = 0;
             bottom.style.height = compactHeight
                 ? Mathf.Min(_bottomHeight, Mathf.Max(120f, Screen.height * 0.25f))
                 : _bottomHeight;
@@ -1468,12 +1486,19 @@ namespace VCR.Runtime.UI
             _dockHost = new VisualElement();
             _dockHost.style.flexGrow = 1;
             _dockHost.style.flexDirection = FlexDirection.Row;
+            if (compactHeight) _dockHost.style.minHeight = 0;
             _workspaceRoot.Add(_dockHost);
 
             var left = Column(_leftWidth);
             var center = Column(0);
             center.style.flexGrow = 1;
             var right = Column(_rightWidth);
+            if (compactHeight)
+            {
+                left.style.minHeight = 0;
+                center.style.minHeight = 0;
+                right.style.minHeight = 0;
+            }
             _leftDock = left;
             _rightDock = right;
             left.style.display = _leftVisible ? DisplayStyle.Flex : DisplayStyle.None;
@@ -1534,8 +1559,11 @@ namespace VCR.Runtime.UI
             _sourcesFeedback = new Label("");
             sourcesContent.Add(_sourcesFeedback);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
-            var preview = Panel(WorkspacePanelCatalog.Preview,
-                "Preview — runtime viewport integration pending", 360);
+            var preview = Panel(WorkspacePanelCatalog.Preview, "Preview", 360);
+            // Preview is outside the tabbed side docks. It must release its
+            // fixed 360px minimum too, or short (e.g. 960x520) windows
+            // overflow the bottom dock despite compact tab mode.
+            if (compactHeight) preview.style.minHeight = 0;
             _previewStatus = new Label("Waiting for model state...");
             preview.Add(_previewStatus);
             _previewImage = new Image();
@@ -1728,6 +1756,7 @@ namespace VCR.Runtime.UI
             _status.style.paddingLeft = 12;
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
+            if (compactHeight) _status.style.flexShrink = 0;
             _workspaceRoot.Add(_status);
             _dragOverlay = new Label("Drop onto left, right or bottom dock");
             _dragOverlay.style.position = Position.Absolute;
