@@ -1390,7 +1390,7 @@ namespace VCR.Runtime.UI
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
             bottom.style.height = compactHeight
-                ? Mathf.Min(_bottomHeight, Mathf.Max(85f, Screen.height * 0.22f))
+                ? Mathf.Min(_bottomHeight, Mathf.Max(120f, Screen.height * 0.25f))
                 : _bottomHeight;
             bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _bottomDock = bottom;
