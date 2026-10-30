@@ -7,6 +7,7 @@ successful GUI evidence when Windows runners lack an interactive session.
 No third-party Python modules, synthetic window fixtures, or forced-success.
 """
 import argparse
+from collections import Counter
 import ctypes
 from ctypes import wintypes
 import hashlib
@@ -207,7 +208,21 @@ def capture_foreground_player_frame(hwnd, destination):
         # BMP file header is 14 bytes, followed by BITMAPINFOHEADER and pixels.
         bmp = struct.pack("<2sIHHI", b"BM", 54 + len(raw), 0, 0, 54)
         destination.write_bytes(bmp + header + raw)
-        sampled = {raw[i:i+4] for i in range(0, len(raw), max(4, len(raw) // 1024 // 4 * 4))}
+        sampled = {raw[i:i+4] for i in range(
+            0, len(raw), max(4, len(raw) // 1024 // 4 * 4))}
+        # Avoid counting Windows taskbar/borders as actual workspace pixels:
+        # evaluate the interior of the captured top viewport separately.
+        interior_pixels = Counter()
+        for y in range(height // 10, height * 3 // 4, max(1, height // 64)):
+            for x in range(width // 10, width * 9 // 10,
+                           max(1, width // 64)):
+                offset = (y * width + x) * 4
+                interior_pixels[raw[offset:offset+4]] += 1
+        total_interior = sum(interior_pixels.values())
+        dominant_fraction = (max(interior_pixels.values()) / total_interior
+                             if total_interior else 1.0)
+        possible_uniform = (
+            len(interior_pixels) <= 3 or dominant_fraction >= 0.98)
         return {
             "file": destination.name,
             "sha256": sha256(destination),
@@ -218,7 +233,10 @@ def capture_foreground_player_frame(hwnd, destination):
             "captureBounds": list(capture_bounds),
             "partialWindow": cropped,
             "sampledDistinctPixels": len(sampled),
-            "blankOrUniformPossible": len(sampled) <= 2,
+            "interiorSampledDistinctPixels": len(interior_pixels),
+            "interiorDominantPixelFraction": round(dominant_fraction, 6),
+            "blankOrUniformPossible": possible_uniform,
+            "uiPixelsConfirmed": False,
         }
     finally:
         if previous is not None and compatible_dc:
@@ -325,7 +343,7 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v3",
+        "suite": "u1-windows-visible-window-probe-v4",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
@@ -333,6 +351,7 @@ def run_probe(args):
         "runtimeStartupObserved": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
+        "workspaceUiTreeReady": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
         "exitCode": None,
@@ -348,6 +367,7 @@ def run_probe(args):
             "-screen-width", "1280", "-screen-height", "720",
             "-logFile", str(player_log),
             "--vcr-config=" + str(config_path),
+            "--vcr-ui-probe",
         ]
         # Deliberately omit -batchmode, -nographics and smoke-report switches.
         process = subprocess.Popen(
@@ -381,11 +401,22 @@ def run_probe(args):
         report["runtimeStartupObserved"] = True
         report["runtimeStartupObservedAfterMs"] = round(
             (time.monotonic() - start) * 1000)
-        # Allow one update tick after managed startup. Capture the real
-        # foreground Player rectangle for manual pixel inspection. Desktop
-        # capture is optional: a hosted runner may not expose readable GPU
-        # pixels, and this never elevates the result to UI acceptance.
-        time.sleep(1.0)
+        # Wait briefly for an opt-in marker from a real, laid-out
+        # UIDocument and attached workspace controls. Startup alone does not
+        # establish UI rendering and a missing marker is preserved honestly.
+        ui_tree_deadline = min(deadline, time.monotonic() + 3.0)
+        while time.monotonic() < ui_tree_deadline:
+            try:
+                if ("VCR U1 GUI probe: workspace_tree_ready=true" in
+                    player_log.read_text(encoding="utf-8", errors="replace")):
+                    report["workspaceUiTreeReady"] = True
+                    break
+            except OSError:
+                pass
+            time.sleep(0.2)
+        # Capture the real foreground Player rectangle for manual review.
+        # The screenshot can include the desktop/taskbar or miss GPU pixels;
+        # its interior-quality metrics cannot certify visible UI.
         try:
             frame = capture_foreground_player_frame(
                 observed["hwnd"], output / "player-window.bmp")
@@ -395,6 +426,9 @@ def run_probe(args):
                   f"{frame['width']}x{frame['height']}, " +
                   f"partial={frame['partialWindow']}, " +
                   f"sampledDistinctPixels={frame['sampledDistinctPixels']}, " +
+                  f"interiorDominant={frame['interiorDominantPixelFraction']:.3f}, " +
+                  f"possibleUniform={frame['blankOrUniformPossible']}, " +
+                  f"uiTreeReady={report['workspaceUiTreeReady']}, " +
                   f"sha256={frame['sha256']}", flush=True)
         except Exception as capture_error:
             report["windowFrameError"] = str(capture_error)
