@@ -151,6 +151,16 @@ namespace VCR.Runtime.Output.Unity
             clickThrough = false;
         }
 
+        // U1/P1 is a normal interactive editor window by default. Transparent
+        // desktop output remains opt-in through Settings. Do not change the
+        // P0 transparent-alpha validation scene's default.
+        public void ConfigureForP1Workspace(Camera camera)
+        {
+            targetCamera = camera;
+            transparent = false;
+            clickThrough = false;
+        }
+
         public void Apply(OverlayOutputSettings settings)
         {
             _shutdownApplied = false;
