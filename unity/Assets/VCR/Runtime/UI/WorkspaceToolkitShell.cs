@@ -1067,6 +1067,36 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private string RestoreOpaqueWorkspaceOutput()
+        {
+            if (sceneRuntime == null)
+                sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
+            if (sceneRuntime == null)
+                return "Output runtime unavailable.";
+            try
+            {
+                if (!sceneRuntime.TryCaptureOverlayOutput(
+                        out _, out var current, out var error))
+                    return "Output unavailable: " + (error ?? "unknown error");
+                if (!current.Transparent && !current.ClickThrough)
+                    return "Window is already opaque and interactive.";
+                if (_characterActionPending ||
+                    !ApplicationUiActionPolicy.CanApplyOverlaySetting(
+                        true, sceneRuntime.State, true))
+                    return "Cannot recover an opaque window while the scene is busy.";
+                // Explicitly set both flags: a toggle could accidentally enable
+                // transparency in an already-opaque window.
+                sceneRuntime.ApplyOverlayOutput(new OverlayOutputSettings(
+                    transparent: false, topmost: false, clickThrough: false));
+                return "Opaque interactive window restored.";
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                return "Opaque window recovery failed: " + exception.Message;
+            }
+        }
+
         private void ApplyWorkspaceOverlayAction(int action)
         {
             var result = ExecuteWorkspaceOverlayAction(action, nativeWindow: true);
@@ -1315,12 +1345,22 @@ namespace VCR.Runtime.UI
             header.style.paddingTop = 8;
             header.style.paddingBottom = 8;
             header.style.backgroundColor = new Color(0.15f, 0.17f, 0.19f);
-            var title = new Label(advancedWorkspace
-                ? "VirtualCharacterRender  /  Advanced"
-                : "VirtualCharacterRender  /  Live");
-            title.style.flexGrow = 1;
+            var title = new Label(compactHeight ? "VCR" :
+                advancedWorkspace
+                    ? "VirtualCharacterRender  /  Advanced"
+                    : "VirtualCharacterRender  /  Live");
+            title.style.flexShrink = 0;
+            title.style.marginRight = 12;
             title.style.color = Color.white;
             header.Add(title);
+            // Wide buttons previously overlapped the right docks on small
+            // screens. Keep the toolbar on one horizontally scrollable row.
+            var headerActions = new ScrollView(ScrollViewMode.Horizontal)
+                { name = "vcr-header-actions" };
+            headerActions.style.flexGrow = 1;
+            headerActions.style.flexShrink = 1;
+            headerActions.contentContainer.style.flexDirection = FlexDirection.Row;
+            header.Add(headerActions);
 
             var toggle = new Button(() =>
             {
@@ -1329,7 +1369,7 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.Save();
                 Build();
             }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
-            header.Add(toggle);
+            headerActions.Add(toggle);
             var settingsButton = new Button(() =>
             {
                 if (DesktopNativeSettingsWindow.Supported)
@@ -1340,7 +1380,15 @@ namespace VCR.Runtime.UI
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
                 ? "Open native settings or the workspace render settings"
                 : "Open workspace render settings";
-            header.Add(settingsButton);
+            headerActions.Add(settingsButton);
+            var recoverOpaque = new Button(() =>
+            {
+                var result = RestoreOpaqueWorkspaceOutput();
+                if (_status != null) _status.text = result;
+            }) { text = "Opaque window" };
+            recoverOpaque.tooltip =
+                "Disable transparency and click-through without changing camera or model.";
+            headerActions.Add(recoverOpaque);
             var tabButton = new Button(() =>
             {
                 _tabMode = !_tabMode;
@@ -1353,34 +1401,34 @@ namespace VCR.Runtime.UI
                 ? "Compact windows use tabs automatically. Resize taller to change this preference."
                 : "Switch between stacked dock panels and tabs.";
             tabButton.SetEnabled(!compactHeight);
-            header.Add(tabButton);
-            header.Add(new Button(() =>
+            headerActions.Add(tabButton);
+            headerActions.Add(new Button(() =>
             {
                 _bottomVisible = !_bottomVisible;
                 PlayerPrefs.SetInt(BottomVisibleKey, _bottomVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
             }) { text = _bottomVisible ? "Hide bottom" : "Show bottom" });
-            header.Add(new Button(() =>
+            headerActions.Add(new Button(() =>
             {
                 _leftVisible = !_leftVisible;
                 PlayerPrefs.SetInt(LeftVisibleKey, _leftVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
             }) { text = _leftVisible ? "Hide left" : "Show left" });
-            header.Add(new Button(() =>
+            headerActions.Add(new Button(() =>
             {
                 _rightVisible = !_rightVisible;
                 PlayerPrefs.SetInt(RightVisibleKey, _rightVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
             }) { text = _rightVisible ? "Hide right" : "Show right" });
-            header.Add(new Button(() =>
+            headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Save())
                     Debug.LogWarning("Workspace layout snapshot could not be saved.");
             }) { text = "Save layout" });
-            header.Add(new Button(() =>
+            headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Load()) return;
                 advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, 0) != 0;
@@ -1395,7 +1443,7 @@ namespace VCR.Runtime.UI
                 _inspectorHeight = ReadSize(RightInspectorHeightKey, 260f, 140f, 520f);
                 Build();
             }) { text = "Restore layout" });
-            header.Add(new Button(ResetLayout) { text = "Reset layout" });
+            headerActions.Add(new Button(ResetLayout) { text = "Reset layout" });
             _workspaceRoot.Add(header);
 
             // Short player windows cannot display stacked fixed-height docks.
