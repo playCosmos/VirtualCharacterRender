@@ -1064,6 +1064,32 @@ namespace VCR.Editor.P1
                             File.Delete(inspectorDraftPath + ".bak");
                     }
 
+                    // Reload on the same scene/controllers must override
+                    // unsaved text even when object identity did not change.
+                    var configReloadReadback = typeof(WorkspaceToolkitShell).GetMethod(
+                        "RefreshWorkspaceInspectorAfterConfigurationReload",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    Expect(configReloadReadback != null,
+                        "U1 configuration Reload must expose Inspector draft invalidation",
+                        failures);
+                    if (configReloadReadback != null)
+                    {
+                        configReloadReadback.Invoke(inspectorProbe, null);
+                        Expect(
+                            Math.Abs(inspectorFovField.value -
+                                originalInspectorCamera.FieldOfView) < 0.0001f &&
+                            Math.Abs(inspectorLightIntensityField.value -
+                                originalInspectorLight.Intensity) < 0.0001f &&
+                            Math.Abs(camera.fieldOfView -
+                                originalInspectorCamera.FieldOfView) < 0.0001f &&
+                            Math.Abs(light.intensity -
+                                originalInspectorLight.Intensity) < 0.0001f,
+                            "U1 configuration Reload must reset both Inspector drafts to live values without mutation",
+                            failures);
+                        inspectorFovField.SetValueWithoutNotify(111f);
+                        inspectorLightIntensityField.SetValueWithoutNotify(11f);
+                    }
+
                     // Discarding a camera draft must read the current camera,
                     // without applying any scene changes or losing a light draft.
                     discardCameraInspector.Invoke(inspectorProbe, null);
