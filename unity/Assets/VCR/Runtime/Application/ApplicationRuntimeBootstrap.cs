@@ -177,7 +177,19 @@ namespace VCR.Runtime.Application
             {
                 if (loadSavedConfiguration)
                 {
-                    if (startupConfigurationStore.TryLoad(
+                    // The configuration store returns a generic compatibility
+                    // default when both files are absent. A *fresh* P1
+                    // workspace must keep the scene's opaque OS window,
+                    // instead of inheriting the legacy transparent P0 default.
+                    // Do not bypass TryLoad when a backup exists: missing
+                    // primary + valid .bak is an intentional recovery path.
+                    if (!File.Exists(startupConfigurationStore.Path) &&
+                        !File.Exists(startupConfigurationStore.Path + ".bak"))
+                    {
+                        Debug.Log("VCR configuration: first launch; " +
+                            "retaining scene-authored runtime defaults.", this);
+                    }
+                    else if (startupConfigurationStore.TryLoad(
                             out var configuration,
                             out var loadError))
                     {
