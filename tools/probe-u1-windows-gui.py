@@ -90,6 +90,22 @@ def request_normal_close(hwnd):
         raise OSError("Could not post WM_CLOSE to Unity main window")
 
 
+def intersect_window_desktop(window, desktop):
+    """Return the on-screen rectangle or None, without moving the Player.
+
+    Rectangles are (left, top, right, bottom) in virtual-desktop coordinates.
+    The result records an honest partial frame when the Player is bigger than
+    the hosted runner's desktop; no offscreen pixels are fabricated.
+    """
+    x1 = max(window[0], desktop[0])
+    y1 = max(window[1], desktop[1])
+    x2 = min(window[2], desktop[2])
+    y2 = min(window[3], desktop[3])
+    if x2 - x1 < 64 or y2 - y1 < 64:
+        return None
+    return x1, y1, x2, y2
+
+
 def capture_foreground_player_frame(hwnd, destination):
     """Capture only foreground Player window pixels via the Windows desktop.
 
@@ -135,10 +151,18 @@ def capture_foreground_player_frame(hwnd, destination):
     y_virtual = user32.GetSystemMetrics(77)
     w_virtual = user32.GetSystemMetrics(78)
     h_virtual = user32.GetSystemMetrics(79)
-    if (rect.left < x_virtual or rect.top < y_virtual or
-        rect.right > x_virtual + w_virtual or
-        rect.bottom > y_virtual + h_virtual):
-        raise RuntimeError("Player window extends outside captured desktop")
+    window_bounds = (rect.left, rect.top, rect.right, rect.bottom)
+    desktop_bounds = (x_virtual, y_virtual,
+                      x_virtual + w_virtual, y_virtual + h_virtual)
+    capture_bounds = intersect_window_desktop(window_bounds, desktop_bounds)
+    if capture_bounds is None:
+        raise RuntimeError(
+            "Player window has no usable visible desktop intersection: " +
+            f"window={window_bounds}, desktop={desktop_bounds}")
+    cropped = capture_bounds != window_bounds
+    capture_left, capture_top, capture_right, capture_bottom = capture_bounds
+    width = capture_right - capture_left
+    height = capture_bottom - capture_top
 
     desktop_dc = user32.GetDC(None)
     if not desktop_dc:
@@ -160,7 +184,7 @@ def capture_foreground_player_frame(hwnd, destination):
         # previously verified foreground Player rectangle is captured.
         if not gdi32.BitBlt(
                 compatible_dc, 0, 0, width, height,
-                desktop_dc, rect.left, rect.top, 0x40CC0020):
+                desktop_dc, capture_left, capture_top, 0x40CC0020):
             raise OSError("BitBlt failed")
         # GetDIBits requires the bitmap NOT to be selected into any DC.
         # Deselect after BitBlt or Windows can return zero scanlines.
@@ -189,6 +213,10 @@ def capture_foreground_player_frame(hwnd, destination):
             "sha256": sha256(destination),
             "width": width,
             "height": height,
+            "windowBounds": list(window_bounds),
+            "desktopBounds": list(desktop_bounds),
+            "captureBounds": list(capture_bounds),
+            "partialWindow": cropped,
             "sampledDistinctPixels": len(sampled),
             "blankOrUniformPossible": len(sampled) <= 2,
         }
@@ -257,7 +285,24 @@ def run_self_test():
                 raise
         else:
             raise RuntimeError("Exited Player accepted as running")
-    print("U1 GUI probe startup-readiness self-test: PASS")
+
+    # Hosted desktops often cannot contain a requested 1280x720 window.
+    # Accept only the real overlap; never report full-frame coverage.
+    test_cases = [
+        ((0, 0, 800, 600), (0, 0, 1024, 768), (0, 0, 800, 600)),
+        ((0, 0, 1296, 760), (0, 0, 1024, 768), (0, 0, 1024, 760)),
+        ((-100, -50, 950, 700), (0, 0, 1024, 768), (0, 0, 950, 700)),
+        ((-1920, 0, -640, 720), (-1920, 0, 0, 1080),
+         (-1920, 0, -640, 720)),
+        ((100, 100, 120, 120), (0, 0, 1024, 768), None),
+        ((1200, 0, 1500, 500), (0, 0, 1024, 768), None),
+    ]
+    for window, desktop, expected in test_cases:
+        result = intersect_window_desktop(window, desktop)
+        if result != expected:
+            raise RuntimeError(
+                f"Window/desktop clip mismatch: {window} {desktop} {result}")
+    print("U1 GUI probe startup-readiness and viewport-clip self-test: PASS")
     return 0
 
 
@@ -280,7 +325,7 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v2",
+        "suite": "u1-windows-visible-window-probe-v3",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
@@ -346,6 +391,11 @@ def run_probe(args):
                 observed["hwnd"], output / "player-window.bmp")
             report["windowFrameCaptured"] = True
             report["windowFrame"] = frame
+            print("U1 Player frame evidence captured: " +
+                  f"{frame['width']}x{frame['height']}, " +
+                  f"partial={frame['partialWindow']}, " +
+                  f"sampledDistinctPixels={frame['sampledDistinctPixels']}, " +
+                  f"sha256={frame['sha256']}", flush=True)
         except Exception as capture_error:
             report["windowFrameError"] = str(capture_error)
             print("U1 Player frame evidence unavailable: " +
