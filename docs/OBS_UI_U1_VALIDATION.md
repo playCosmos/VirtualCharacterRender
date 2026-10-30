@@ -81,4 +81,10 @@ Do not blindly delete the Unity `com.unity.modules.ui` package: UI Toolkit itsel
 8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
 9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
 
+## Real Windows U1 screenshot regression (2026-10-30)
+
+A manual Windows P1 screenshot at approximately 1621×474 showed stacked Scenes/Sources and inspector controls overlapping or clipping, dark-on-dark labels, and a Development Console filled with repeated `NullReferenceException` messages. The screenshot alone has no stack trace and does **not** establish the exception's exact source. The UI now uses readable default labels, scrollable Scenes/Sources, a single compact dock toolbar, and automatically uses visual tabs (without changing saved preference) in Player windows shorter than 640 pixels. Compact bottom height still preserves enough room for scrollable content. The source-free Windows GUI probe requests a 960×520 viewport to exercise this short-window layout and archives a genuine Unity screenshot as evidence. The opt-in probe reconciles the live UI tree marker against the final Player.log after normal exit, without claiming interactive acceptance.
+
+The UI refresh loop now isolates its own stage exceptions and logs the exact stage plus full stack at most once per 15 seconds; a failing panel refresh must not freeze unrelated model/scene status updates. It does **not** claim to have repaired the underlying machine-specific NullReferenceException. Inspect the affected operator's complete Unity Player.log to identify and resolve the originating stack before this issue is closed. On Windows the standard log is under `%USERPROFILE%\\AppData\\LocalLow\\playCosmos\\Virtual Character Renderer\\Player.log`. Confirm the installed product/company names if Unity uses an alternate folder. Retest a short window, restore the full Player size, move panels, and check that the Development Console stays free of repeated exceptions.
+
 Do not merge PR #44 or publish a U1 release until the above evidence is collected.
