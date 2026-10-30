@@ -395,10 +395,11 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path, unity_image_path):
         stale.unlink(missing_ok=True)
     report = {
-        "suite": "u1-windows-visible-window-probe-v5",
+        "suite": "u1-windows-visible-window-probe-v6",
         "sourceSha": args.source,
         "playerExecutableSha256": sha256(executable),
         "runnerPlatform": platform.platform(),
+        "requestedPlayerSize": [args.screen_width, args.screen_height],
         "windowObserved": False,
         "runtimeStartupObserved": False,
         "windowFrameCaptured": False,
@@ -417,7 +418,8 @@ def run_probe(args):
         command = [
             str(executable),
             "-screen-fullscreen", "0",
-            "-screen-width", "1280", "-screen-height", "720",
+            "-screen-width", str(args.screen_width),
+            "-screen-height", str(args.screen_height),
             "-logFile", str(player_log),
             "--vcr-config=" + str(config_path),
             "--vcr-ui-probe",
@@ -516,9 +518,14 @@ def run_probe(args):
             raise RuntimeError("WM_CLOSE failed to exit Player within timeout")
         report["closeRequestToProcessExitMs"] = round(
             (time.monotonic() - close_requested_at) * 1000)
-        report["managedQuitObserved"] = (
-            player_log.is_file() and QUIT_MARKER in
-            player_log.read_text(encoding="utf-8", errors="replace"))
+        final_log = player_log.read_text(
+            encoding="utf-8", errors="replace") if player_log.is_file() else ""
+        report["managedQuitObserved"] = QUIT_MARKER in final_log
+        # The U1 tree can finish layout after the early polling deadline.
+        # Re-read after normal exit rather than freezing a false negative;
+        # this only establishes tree attachment, not interactive acceptance.
+        report["workspaceUiTreeReady"] = (
+            "VCR U1 GUI probe: workspace_tree_ready=true" in final_log)
         if report["exitCode"] != 0:
             raise RuntimeError("GUI Player exited with " + str(report["exitCode"]))
         if not report["managedQuitObserved"]:
@@ -554,9 +561,14 @@ def main():
     parser.add_argument("--player", required=True, type=Path)
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--screen-width", type=int, default=1280)
+    parser.add_argument("--screen-height", type=int, default=720)
     parser.add_argument("--startup-timeout", type=int, default=50)
     parser.add_argument("--quit-timeout", type=int, default=45)
     args = parser.parse_args()
+    if not (640 <= args.screen_width <= 2560 and
+            400 <= args.screen_height <= 1440):
+        parser.error("GUI dimensions must be 640..2560 x 400..1440")
     if not 5 <= args.startup_timeout <= 120 or not 5 <= args.quit_timeout <= 120:
         parser.error("Timeouts must be in the 5..120 second range")
     try:
