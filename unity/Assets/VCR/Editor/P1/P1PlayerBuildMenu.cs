@@ -80,6 +80,19 @@ namespace VCR.Editor.P1
             }
 
             P0TransparentOutputMenu.ConfigureProjectBaseline();
+            // P0 transparency is a separate output mode. The P1 editor
+            // starts as a standard decorated, freely resizable desktop
+            // window; never package it as fullscreen/popup-only.
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.defaultScreenWidth = 1280;
+            PlayerSettings.defaultScreenHeight = 800;
+            if (PlayerSettings.fullScreenMode != FullScreenMode.Windowed ||
+                !PlayerSettings.resizableWindow)
+            {
+                Debug.LogError("VCR P1: native window must be windowed and resizable.");
+                return false;
+            }
             AssetDatabase.SaveAssets();
 
             var directory =
