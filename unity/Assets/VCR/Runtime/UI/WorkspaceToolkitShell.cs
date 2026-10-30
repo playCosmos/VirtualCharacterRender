@@ -169,7 +169,7 @@ namespace VCR.Runtime.UI
             // Override stale Unity fullscreen preferences on launch, never in
             // P0's standalone transparent-alpha test scene. Windowed mode
             // keeps the operating-system caption and independent-axis resize.
-            if (!Application.isEditor &&
+            if (!UnityEngine.Application.isEditor &&
                 Screen.fullScreenMode != FullScreenMode.Windowed)
                 Screen.fullScreenMode = FullScreenMode.Windowed;
 
