@@ -329,3 +329,31 @@ jobs:
           path: Builds/GUIProbe/u1-windows/
           if-no-files-found: warn
           retention-days: 14
+      # A hosted runner with no interactive desktop may legitimately have no
+      # visible Unity HWND. Once a real HWND was observed, however, a popup
+      # without caption/resize frame is a proven defect, not "informational".
+      # Upload the original probe evidence before enforcing the gate.
+      - name: Require native frame and attached workspace on observed Windows GUI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportPath = 'Builds/GUIProbe/u1-windows/gui-probe.json'
+          if (-not (Test-Path -LiteralPath $reportPath)) {
+            Write-Host 'GUI probe produced no report; interactive desktop not verified.'
+            exit 0
+          }
+          $probe = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          if (-not $probe.windowObserved) {
+            Write-Host 'No real Unity HWND observed; GUI acceptance remains unverified.'
+            exit 0
+          }
+          if (-not $probe.nativeFramePassed -or -not $probe.freeResizePassed) {
+            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), style=$($probe.nativeFrame.styleHex)"
+          }
+          if (-not $probe.workspaceUiTreeReady) {
+            throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
+          }
+          if (-not $probe.managedQuitObserved -or $probe.exitCode -ne 0) {
+            throw 'P1 visible Windows Player failed its normal managed quit.'
+          }
+          Write-Host 'P1 observed Windows native frame, free resize, workspace tree and quit: PASS (interactive UI remains unverified).'
