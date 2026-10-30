@@ -315,7 +315,10 @@ namespace VCR.Runtime.UI
                                 descendant.resolvedStyle.display == DisplayStyle.None)
                                 continue;
                             var scrollBounds = descendant.worldBound;
-                            if (scrollBounds.height < 8f ||
+                            // An 8px viewport technically fits but is not
+                            // operable. Require a minimal scrollable area in
+                            // the actual short-window Windows GUI probe.
+                            if (scrollBounds.height < 36f ||
                                 scrollBounds.yMax > panelBounds.yMax + 1.5f ||
                                 scrollBounds.yMax > statusBounds.yMin + 1.5f)
                                 return;
@@ -1544,8 +1547,14 @@ namespace VCR.Runtime.UI
             // Otherwise the central Preview's legacy minimum height can
             // squeeze the bottom tab strip under the status bar.
             if (compactHeight) bottom.style.flexShrink = 0;
+            // A 960x520 window leaves only a few pixels for Tracking's
+            // ScrollView at the old 25% bottom height. Reserve roughly a
+            // third of compact windows for the tab strip and usable content,
+            // but cap the dock so the central Preview remains visible.
+            // Keep the persisted operator height unchanged.
             bottom.style.height = compactHeight
-                ? Mathf.Min(_bottomHeight, Mathf.Max(120f, Screen.height * 0.25f))
+                ? Mathf.Min(Mathf.Max(_bottomHeight, Screen.height * 0.34f),
+                    Mathf.Max(120f, Screen.height * 0.44f))
                 : _bottomHeight;
             bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _bottomDock = bottom;
