@@ -1248,6 +1248,9 @@ namespace VCR.Runtime.UI
             _workspaceRoot.Clear();
             _workspaceRoot.style.flexGrow = 1;
             _workspaceRoot.style.backgroundColor = new Color(0.105f, 0.12f, 0.14f);
+            // The workspace backgrounds are dark. Runtime UI Toolkit's default
+            // label color can otherwise remain black without a custom theme.
+            _workspaceRoot.style.color = new Color(0.91f, 0.94f, 0.97f);
 
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
@@ -1332,9 +1335,16 @@ namespace VCR.Runtime.UI
             header.Add(new Button(ResetLayout) { text = "Reset layout" });
             _workspaceRoot.Add(header);
 
+            // Short player windows cannot display stacked fixed-height docks.
+            // Adapt only the presentation; never overwrite the operator's
+            // saved tab/stack preference.
+            var compactHeight = Screen.height < 640;
+            var effectiveTabMode = _tabMode || compactHeight;
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
-            bottom.style.height = _bottomHeight;
+            bottom.style.height = compactHeight
+                ? Mathf.Min(_bottomHeight, Mathf.Max(85f, Screen.height * 0.22f))
+                : _bottomHeight;
             bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _bottomDock = bottom;
 
@@ -1370,7 +1380,11 @@ namespace VCR.Runtime.UI
             _dockHost.Add(right);
 
             var scenes = Panel(WorkspacePanelCatalog.Scenes, "Scenes", 100);
-            BuildWorkspaceScenesPanel(scenes);
+            var scenesContent = new ScrollView { name = "vcr-scenes-content" };
+            scenesContent.style.flexGrow = 1;
+            scenesContent.style.minHeight = 0;
+            scenes.Add(scenesContent);
+            BuildWorkspaceScenesPanel(scenesContent);
             scenes.style.height = _scenesHeight;
             scenes.style.flexGrow = 0;
             PlacePanel(scenes, WorkspacePanelCatalog.Scenes, "left");
@@ -1380,24 +1394,28 @@ namespace VCR.Runtime.UI
                 scenes.style.height = value;
             }, ScenesHeightKey);
             scenesSplitter.name = "vcr-splitter-scenes";
-            scenesSplitter.style.display = !_tabMode && scenes.parent == left ? DisplayStyle.Flex : DisplayStyle.None;
+            scenesSplitter.style.display = !effectiveTabMode && scenes.parent == left ? DisplayStyle.Flex : DisplayStyle.None;
             left.Add(scenesSplitter);
             var sources = Panel(WorkspacePanelCatalog.Sources, "Sources / Models", 220);
+            var sourcesContent = new ScrollView { name = "vcr-sources-content" };
+            sourcesContent.style.flexGrow = 1;
+            sourcesContent.style.minHeight = 0;
+            sources.Add(sourcesContent);
             _sourcesStatus = new Label("Waiting for model state...");
-            sources.Add(_sourcesStatus);
+            sourcesContent.Add(_sourcesStatus);
             _modelPathInput = new TextField("VRM file path");
             _modelPathInput.value = modelPathDraft;
             _modelPathInput.tooltip = "Absolute path to a local .vrm file. FBX runtime import is not available.";
-            sources.Add(_modelPathInput);
+            sourcesContent.Add(_modelPathInput);
             var sourceActions = new VisualElement();
             sourceActions.style.flexDirection = FlexDirection.Row;
             sourceActions.style.flexWrap = Wrap.Wrap;
             sourceActions.Add(new Button(BrowseWorkspaceCharacterFile) { text = "Browse VRM..." });
             _loadModelButton = new Button(LoadModelFromPath) { text = "Load VRM" };
             sourceActions.Add(_loadModelButton);
-            sources.Add(sourceActions);
+            sourcesContent.Add(sourceActions);
             _sourcesFeedback = new Label("");
-            sources.Add(_sourcesFeedback);
+            sourcesContent.Add(_sourcesFeedback);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview,
                 "Preview — runtime viewport integration pending", 360);
@@ -1494,7 +1512,7 @@ namespace VCR.Runtime.UI
                     inspector.style.height = value;
                 }, RightInspectorHeightKey);
                 inspectorSplitter.name = "vcr-splitter-inspector";
-                inspectorSplitter.style.display = !_tabMode && inspector.parent == right
+                inspectorSplitter.style.display = !effectiveTabMode && inspector.parent == right
                     ? DisplayStyle.Flex : DisplayStyle.None;
                 right.Add(inspectorSplitter);
                 var materials = Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 200);
@@ -1559,15 +1577,35 @@ namespace VCR.Runtime.UI
             SortDockPanels(left);
             SortDockPanels(right);
             SortDockPanels(bottom);
-            PositionPanelSplitter(left, WorkspacePanelCatalog.Scenes, "vcr-splitter-scenes", _tabMode);
-            PositionPanelSplitter(right, WorkspacePanelCatalog.Inspector, "vcr-splitter-inspector", _tabMode);
-            if (_tabMode)
+            PositionPanelSplitter(left, WorkspacePanelCatalog.Scenes, "vcr-splitter-scenes", effectiveTabMode);
+            PositionPanelSplitter(right, WorkspacePanelCatalog.Inspector, "vcr-splitter-inspector", effectiveTabMode);
+            if (effectiveTabMode)
             {
                 ApplyDockTabs(left, "left");
                 ApplyDockTabs(right, "right");
                 ApplyDockTabs(bottom, "bottom");
+                if (compactHeight)
+                {
+                    // The old minimum panel heights are for the stacked view;
+                    // retaining them in a 400px-high window makes panels
+                    // overflow the bottom dock. All substantive content has
+                    // scrollable containers.
+                    foreach (var dock in new[] { left, right, bottom })
+                        foreach (var child in dock.Children())
+                            if (child.name != null &&
+                                child.name.StartsWith("vcr-panel-", StringComparison.Ordinal))
+                                child.style.minHeight = 0;
+                }
             }
 
+            // Apply a readable default to all otherwise unstyled text labels,
+            // including nested BaseField labels. Explicit warning/drag/title
+            // colors remain untouched. Buttons keep their own contrast.
+            _workspaceRoot.Query<Label>().ForEach(label =>
+            {
+                if (label.style.color.keyword == StyleKeyword.Null)
+                    label.style.color = new Color(0.91f, 0.94f, 0.97f);
+            });
             _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
             _status.style.paddingLeft = 12;
