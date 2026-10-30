@@ -81,6 +81,14 @@ Do not blindly delete the Unity `com.unity.modules.ui` package: UI Toolkit itsel
 8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
 9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
 
+## Windows native window frame / independent resize acceptance
+
+The U1/P1 dashboard is a **standard OS-decorated desktop window**, not an always-borderless avatar overlay. Unity P1 builds now explicitly select `FullScreenMode.Windowed` and `PlayerSettings.resizableWindow = true`, while the project-wide P0 alpha-output build retains its transparency test. The P1 scene generator and upgrade path set opaque/clickable output by default and migrate older clean P1 workspace scenes away from inherited P0 borderless-alpha settings. Existing non-window objects and saved scene content are preserved. The P1 UniWinC adapter, **only while the output is opaque**, repairs absent Windows `WS_CAPTION`, `WS_THICKFRAME`, `WS_SYSMENU`, minimize and maximize native style bits without creating a fake Unity title bar. This is a fallback; the ordinary native Unity window remains the primary implementation.
+
+The source-matched Windows GUI probe collects the actual `UnityWndClass` window style and client/outer rectangles, checks the OS caption/system buttons and resizable border, then attempts an independent width/height resize via Win32 before restoring the original window size. It records `nativeFramePassed`, `freeResizePassed` and `windowResize` with actual measured client dimensions. A GUI probe with valid Unity rendering but a borderless/fixed-aspect window must be reported as **failed**, not accepted because the process started and exited successfully. These automated measurements are not a substitute for actual mouse-drag edge resizing and minimize/maximize/restore tests on an operator Windows PC.
+
+The optional **transparent overlay** intentionally switches UniWinC to a borderless nonrectangular window; it is not the default dashboard. When selected, the user can return to a decorated window via **Opaque window**, which disables transparency and click-through. Running two independent dashboard and avatar-output windows requires a future separate-window architecture, not an imitation Windows title bar layered over the Unity viewport.
+
 ## P1 operator startup defaults and opaque recovery
 
 The earlier generated P1 Player reused the P0 transparent-alpha test defaults, enabling desktop transparency and starting MediaPipe webcam capture before any device had been configured. Actual Windows log evidence recorded `output.overlay.transparent=1`, `VCR MediaPipe: No webcam devices were found`, and large diagnostics reports every few seconds. These were confirmed startup/usability issues, but **no NullReferenceException stack trace was recorded in the supplied 701-line log**, so the NRE root cause remains unproven.
