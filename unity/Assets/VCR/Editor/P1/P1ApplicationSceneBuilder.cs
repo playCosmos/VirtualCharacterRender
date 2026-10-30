@@ -193,6 +193,7 @@ namespace VCR.Editor.P1
                         return false;
                     }
                     var needsOpaqueMigration =
+                        !output.PreservesDesktopWindowFrame ||
                         output.Settings.Transparent || output.Settings.ClickThrough ||
                         mainCamera.backgroundColor.a < 0.99f;
                     if (needsOpaqueMigration)
