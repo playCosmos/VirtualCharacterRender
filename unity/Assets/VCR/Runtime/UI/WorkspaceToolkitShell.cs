@@ -1299,6 +1299,8 @@ namespace VCR.Runtime.UI
             // label color can otherwise remain black without a custom theme.
             _workspaceRoot.style.color = new Color(0.91f, 0.94f, 0.97f);
 
+            var compactHeight = Screen.height < 640;
+            var effectiveTabMode = _tabMode || compactHeight;
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.paddingLeft = 12;
@@ -1331,13 +1333,19 @@ namespace VCR.Runtime.UI
                 ? "Open native settings or the workspace render settings"
                 : "Open workspace render settings";
             header.Add(settingsButton);
-            header.Add(new Button(() =>
+            var tabButton = new Button(() =>
             {
                 _tabMode = !_tabMode;
                 PlayerPrefs.SetInt(TabModeKey, _tabMode ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = _tabMode ? "Stack panels" : "Tab panels" });
+            }) { text = compactHeight ? "Tabs (compact)" :
+                (_tabMode ? "Stack panels" : "Tab panels") };
+            tabButton.tooltip = compactHeight
+                ? "Compact windows use tabs automatically. Resize taller to change this preference."
+                : "Switch between stacked dock panels and tabs.";
+            tabButton.SetEnabled(!compactHeight);
+            header.Add(tabButton);
             header.Add(new Button(() =>
             {
                 _bottomVisible = !_bottomVisible;
@@ -1385,8 +1393,6 @@ namespace VCR.Runtime.UI
             // Short player windows cannot display stacked fixed-height docks.
             // Adapt only the presentation; never overwrite the operator's
             // saved tab/stack preference.
-            var compactHeight = Screen.height < 640;
-            var effectiveTabMode = _tabMode || compactHeight;
             var bottom = new VisualElement { name = "vcr-bottom" };
             bottom.style.flexDirection = FlexDirection.Row;
             bottom.style.height = compactHeight
