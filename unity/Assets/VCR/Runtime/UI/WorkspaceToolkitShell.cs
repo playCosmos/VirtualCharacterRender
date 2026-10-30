@@ -165,6 +165,14 @@ namespace VCR.Runtime.UI
 
         private void OnEnable()
         {
+            // This component exists only in the P1 application dashboard.
+            // Override stale Unity fullscreen preferences on launch, never in
+            // P0's standalone transparent-alpha test scene. Windowed mode
+            // keeps the operating-system caption and independent-axis resize.
+            if (!Application.isEditor &&
+                Screen.fullScreenMode != FullScreenMode.Windowed)
+                Screen.fullScreenMode = FullScreenMode.Windowed;
+
             var launchArgs = System.Environment.GetCommandLineArgs();
             _guiProbeRequested = Array.Exists(launchArgs,
                 arg => string.Equals(arg, "--vcr-ui-probe", StringComparison.Ordinal));
