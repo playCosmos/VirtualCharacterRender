@@ -2223,7 +2223,10 @@ namespace VCR.Runtime.UI
             // Up/Down controls consumed two rows and clipped the ScrollView.
             // Keep the single row horizontally scrollable instead: each
             // operator action remains available without increasing dock height.
-            var scrollableFooter = currentDock == "bottom" && !_usingCompactHeight;
+            // Side docks are also narrow in the expanded 1024px layout.
+            // A wrapped Move/Drag/Up/Down footer consumed two rows in Scenes,
+            // Sources and Inspector. Keep it on one horizontally scrollable row.
+            var scrollableFooter = !_usingCompactHeight;
             var dockActions = scrollableFooter
                 ? (VisualElement)new ScrollView(ScrollViewMode.Horizontal)
                 : new VisualElement();
@@ -2234,19 +2237,19 @@ namespace VCR.Runtime.UI
                 var footerScroll = (ScrollView)dockActions;
                 footerScroll.contentContainer.style.flexDirection = FlexDirection.Row;
                 footerScroll.contentContainer.style.flexWrap = Wrap.NoWrap;
-                footerScroll.style.maxHeight = 58;
+                footerScroll.style.maxHeight = currentDock == "bottom" ? 58 : 52;
             }
             else
             {
                 dockActions.style.flexDirection = FlexDirection.Row;
-                dockActions.style.flexWrap = _usingCompactHeight ? Wrap.NoWrap : Wrap.Wrap;
+                dockActions.style.flexWrap = Wrap.NoWrap;
             }
             var move = new Button(() =>
             {
                 var next = currentDock == "left" ? "right" :
                     currentDock == "right" ? "bottom" : "left";
                 MovePanelToDock(panel, id, next);
-            }) { text = _usingCompactHeight ? "Move" : "Move: " + currentDock };
+            }) { text = "Move" };
             move.tooltip = "Move this panel to the next dock (current: " + currentDock + ").";
             dockActions.Add(move);
             var dragHandle = new Label("Drag");
@@ -2343,7 +2346,7 @@ namespace VCR.Runtime.UI
             // inside an otherwise valid 150px dock (Windows CI #41197636101).
             // Moving the actions into the existing vertical scrolling content
             // preserves keyboard/mouse reachability without stealing height.
-            if (scrollableFooter)
+            if (scrollableFooter && currentDock == "bottom")
             {
                 ScrollView contentScroll = null;
                 foreach (var child in panel.Children())
@@ -2358,7 +2361,7 @@ namespace VCR.Runtime.UI
                 {
                     // Panels without scrolling content retain direct controls.
                     // Do not exceed one toolbar row in their narrow bottom dock.
-                    dockActions.style.maxHeight = 36;
+                    dockActions.style.maxHeight = 52;
                     panel.Add(dockActions);
                 }
             }
