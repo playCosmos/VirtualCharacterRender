@@ -64,6 +64,14 @@ def read_compact_layout_evidence(player_log_text):
     return values if len(values) == len(COMPACT_LAYOUT_FIELDS) else None
 
 
+def find_workspace_runtime_exceptions(log_text):
+    """The actual P1 log must not hide UI exceptions behind green HWND checks."""
+    return [line.strip()[:512] for line in log_text.splitlines()
+            if line.strip().startswith("NullReferenceException:") or
+            ("VCR U1 " in line and " refresh stage " in line and
+             " failed " in line)]
+
+
 def compact_layout_usable(measurements):
     """Attached controls are insufficient without a usable scroll viewport."""
     return bool(measurements and
@@ -679,6 +687,15 @@ def run_self_test():
             start_offset=len("stale-prefix " + compact)) is not None:
         raise RuntimeError("Pre-transition marker accepted as new transition")
 
+    if find_workspace_runtime_exceptions("VCR U1 GUI probe: workspace_tree_ready=true"):
+        raise RuntimeError("Normal workspace marker misclassified as exception")
+    if not find_workspace_runtime_exceptions(
+            "NullReferenceException: Object reference not set"):
+        raise RuntimeError("NullReferenceException silently accepted")
+    if not find_workspace_runtime_exceptions(
+            "VCR U1 WorkspacePanels refresh stage 5 failed (additional occurrences suppressed)"):
+        raise RuntimeError("Suppressed UI refresh failure silently accepted")
+
     # Hosted desktops often cannot contain a requested 1280x720 window.
     # Accept only the real overlap; never report full-frame coverage.
     test_cases = [
@@ -777,6 +794,8 @@ def run_probe(args):
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
         "workspaceUiTreeReady": False,
+        "runtimeExceptionFree": False,
+        "runtimeExceptions": [],
         "compactLayout": None,
         "compactLayoutPassed": False,
         "unityFrameCaptured": False,
@@ -945,6 +964,8 @@ def run_probe(args):
         final_log = player_log.read_text(
             encoding="utf-8", errors="replace") if player_log.is_file() else ""
         report["managedQuitObserved"] = QUIT_MARKER in final_log
+        report["runtimeExceptions"] = find_workspace_runtime_exceptions(final_log)
+        report["runtimeExceptionFree"] = not report["runtimeExceptions"]
         # The U1 tree can finish layout after the early polling deadline.
         # Re-read after normal exit rather than freezing a false negative;
         # this only establishes tree attachment, not interactive acceptance.
@@ -964,6 +985,10 @@ def run_probe(args):
         if not report["managedQuitObserved"]:
             raise RuntimeError(
                 "GUI Player did not emit managed normal quit completion marker")
+        if not report["runtimeExceptionFree"]:
+            raise RuntimeError(
+                "P1 GUI runtime emitted an exception: " +
+                report["runtimeExceptions"][0])
         if not (report["nativeFramePassed"] and
                 report["nativeInputTargetsPassed"] and
                 report["nativeWindowControlsPassed"] and
