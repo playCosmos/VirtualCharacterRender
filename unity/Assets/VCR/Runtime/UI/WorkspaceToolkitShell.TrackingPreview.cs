@@ -76,7 +76,10 @@ namespace VCR.Runtime.UI
                 var fullLabel = _workspaceTrackingCameraRequested
                     ? "Hide tracking camera preview"
                     : "Show tracking camera preview";
-                _workspaceTrackingCameraToggle.text = _usingCompactHeight
+                // Auto-tabs also give Tracking the full dock width in
+                // narrow-but-tall windows, so no abbreviated label is needed.
+                _workspaceTrackingCameraToggle.text =
+                    (_usingCompactHeight || _usingNarrowWidth)
                     ? fullLabel
                     : (_workspaceTrackingCameraRequested
                         ? "Hide preview" : "Show preview");
