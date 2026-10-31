@@ -735,6 +735,41 @@ def require_runtime_startup(process, player_log, deadline):
 
 
 def run_self_test():
+    # Use real decodable PNG fixtures (no Pillow dependency) to prove a blank
+    # screenshot fails while a diverse RGB screenshot passes.
+    with tempfile.TemporaryDirectory() as directory:
+        def png_chunk(name, payload):
+            return (struct.pack(">I", len(payload)) + name + payload +
+                    struct.pack(">I", zlib.crc32(name + payload) & 0xffffffff))
+
+        def write_png(path, colorful):
+            rows = bytearray()
+            for y in range(96):
+                rows.append(0)  # PNG None filter
+                for x in range(96):
+                    rows.extend((x * 2, y * 2, (x + y) % 256)
+                                if colorful else (25, 25, 25))
+            header = struct.pack(">IIBBBBB", 96, 96, 8, 2, 0, 0, 0)
+            path.write_bytes(
+                b"\x89PNG\r\n\x1a\n" +
+                png_chunk(b"IHDR", header) +
+                png_chunk(b"IDAT", zlib.compress(rows)) +
+                png_chunk(b"IEND", b""))
+
+        flat = Path(directory) / "uniform.png"
+        varied = Path(directory) / "diverse.png"
+        write_png(flat, False)
+        write_png(varied, True)
+        flat_result = inspect_unity_screenshot(flat)
+        varied_result = inspect_unity_screenshot(varied)
+        if flat_result is None or flat_result["pixelDiversityPassed"]:
+            raise RuntimeError("Uniform PNG falsely accepted as rendered UI")
+        if varied_result is None or not varied_result["pixelDiversityPassed"]:
+            raise RuntimeError("Diverse PNG falsely rejected")
+        flat.write_bytes(flat.read_bytes()[:-20])
+        if inspect_unity_screenshot(flat) is not None:
+            raise RuntimeError("Truncated PNG incorrectly accepted")
+
     class Process:
         def __init__(self, exit_code=None):
             self.exit_code = exit_code
