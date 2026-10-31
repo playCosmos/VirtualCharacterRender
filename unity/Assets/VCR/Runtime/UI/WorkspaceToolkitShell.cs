@@ -469,7 +469,10 @@ namespace VCR.Runtime.UI
                             descendant.resolvedStyle.display == DisplayStyle.None)
                             continue;
                         var scroll = descendant.worldBound;
-                        if (scroll.height < 20f ||
+                        // Match the proven compact viewport usability
+                        // floor. A 20px area can pass geometry while its
+                        // Tracking controls remain practically inaccessible.
+                        if (scroll.height < 36f ||
                             scroll.yMin < panelBounds.yMin - 1.5f ||
                             scroll.yMax > panelBounds.yMax + 1.5f)
                         {
