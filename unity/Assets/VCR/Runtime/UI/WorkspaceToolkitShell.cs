@@ -28,6 +28,8 @@ namespace VCR.Runtime.UI
         // A failing dock must not block the model/scene status refresh.
         private readonly float[] _nextWorkspaceRefreshErrorAt = new float[15];
         private bool _usingCompactHeight;
+        private bool _usingNarrowWidth;
+        private const int NarrowWorkspaceWidth = 1100;
         private UIDocument _document;
         // Opt-in, read-only evidence for CI's real visible Player. This never
         // creates a synthetic UI or changes runtime configuration.
@@ -539,7 +541,8 @@ namespace VCR.Runtime.UI
             // A resize must restore the user's original stacked/tabbed layout
             // without rewriting saved preferences.
             if (_workspaceRoot != null &&
-                (Screen.height < 640) != _usingCompactHeight)
+                ((Screen.height < 640) != _usingCompactHeight ||
+                 (Screen.width < NarrowWorkspaceWidth) != _usingNarrowWidth))
             {
                 Build();
                 if (_guiProbeRequested)
@@ -1582,8 +1585,14 @@ namespace VCR.Runtime.UI
             _workspaceRoot.style.color = new Color(0.91f, 0.94f, 0.97f);
 
             var compactHeight = Screen.height < 640;
+            var narrowWidth = Screen.width < NarrowWorkspaceWidth;
             _usingCompactHeight = compactHeight;
-            var effectiveTabMode = _tabMode || compactHeight;
+            _usingNarrowWidth = narrowWidth;
+            // A tall but narrow Player still has too little horizontal room
+            // for three parallel bottom panes. Tabs are presentation-only;
+            // never overwrite the operator's persisted tab/stack preference.
+            var automaticTabMode = compactHeight || narrowWidth;
+            var effectiveTabMode = _tabMode || automaticTabMode;
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.paddingLeft = 12;
@@ -1640,12 +1649,12 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(TabModeKey, _tabMode ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = compactHeight ? "Tabs (compact)" :
+            }) { text = automaticTabMode ? "Tabs (auto)" :
                 (_tabMode ? "Stack panels" : "Tab panels") };
-            tabButton.tooltip = compactHeight
-                ? "Compact windows use tabs automatically. Resize taller to change this preference."
+            tabButton.tooltip = automaticTabMode
+                ? "Short or narrow windows use tabs automatically. Resize taller and wider to change this preference."
                 : "Switch between stacked dock panels and tabs.";
-            tabButton.SetEnabled(!compactHeight);
+            tabButton.SetEnabled(!automaticTabMode);
             headerActions.Add(tabButton);
             headerActions.Add(new Button(() =>
             {
@@ -2088,7 +2097,7 @@ namespace VCR.Runtime.UI
                 // Compact dock tabs already expose drag-to-move and Ctrl+arrow
                 // reorder. A second dock-actions footer wraps to multiple
                 // rows and covers the bottom status bar at 960x520.
-                if (_usingCompactHeight)
+                if (_usingCompactHeight || _usingNarrowWidth)
                 {
                     var id = panel.name.Substring("vcr-panel-".Length);
                     var actions = panel.Q<VisualElement>("vcr-dock-actions-" + id);
