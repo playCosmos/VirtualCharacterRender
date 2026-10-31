@@ -1862,7 +1862,7 @@ namespace VCR.Runtime.UI
             }, BottomHeightKey, true);
             bottomSplitter.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _workspaceRoot.Add(bottomSplitter);
-            var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 150);
+            var tracking = Panel(WorkspacePanelCatalog.Tracking, "Tracking", 0);
             _trackingStatus = new Label("Waiting for runtime...");
             tracking.Add(_trackingStatus);
             // Both the opt-in video surface and the device controls need to
@@ -1873,18 +1873,18 @@ namespace VCR.Runtime.UI
             // A compact tab dock has less room after its tab strip and status.
             // Preserve the ScrollView, not its 60px minimum, so content scrolls
             // inside the panel instead of painting over the workspace footer.
-            trackingScroll.style.minHeight = compactHeight ? 0 : 60;
+            trackingScroll.style.minHeight = 0;
             tracking.Add(trackingScroll);
             BuildWorkspaceTrackingCameraPreview(trackingScroll);
             BuildWorkspaceTrackingPanel(trackingScroll);
             PlacePanel(tracking, WorkspacePanelCatalog.Tracking, "bottom");
-            var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 150);
+            var actions = Panel(WorkspacePanelCatalog.Actions, "Actions", 0);
             // The bottom dock defaults to 150 px. Keep both model actions
             // and broadcast controls reachable instead of clipping the latter.
             var actionsScroll = new ScrollView { name = "vcr-actions-content" };
             actionsScroll.style.flexGrow = 1;
             actionsScroll.style.flexShrink = 1;
-            actionsScroll.style.minHeight = compactHeight ? 0 : 60;
+            actionsScroll.style.minHeight = 0;
             _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
             _unloadCharacterButton = new Button(UnloadActiveCharacter) { text = "Unload active VRM" };
             _reloadCharacterButton.SetEnabled(false);
@@ -1899,13 +1899,13 @@ namespace VCR.Runtime.UI
             BuildWorkspaceMotionPanel(actionsScroll);
             actions.Add(actionsScroll);
             PlacePanel(actions, WorkspacePanelCatalog.Actions, "bottom");
-            var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 150);
+            var events = Panel(WorkspacePanelCatalog.Events, "Log / Events", 0);
             // The bottom dock is compact: scroll rule controls and logs as
             // one content area instead of clipping the controls below it.
             var eventsContent = new ScrollView { name = "vcr-events-content" };
             eventsContent.style.flexGrow = 1;
             eventsContent.style.flexShrink = 1;
-            eventsContent.style.minHeight = compactHeight ? 0 : 60;
+            eventsContent.style.minHeight = 0;
             BuildWorkspaceEventRulesPanel(eventsContent);
             BuildWorkspaceLogPanel(eventsContent);
             events.Add(eventsContent);
@@ -2170,14 +2170,28 @@ namespace VCR.Runtime.UI
             }
             if (target == null) return;
             var currentDock = dock;
-            // One compact toolbar prevents four full-width dock controls
-            // from covering the panel's actual content on short windows.
-            var dockActions = new VisualElement { name = "vcr-dock-actions-" + id };
-            dockActions.style.flexDirection = FlexDirection.Row;
+            // In the 150px expanded bottom dock, four wrapped Move/Drag/
+            // Up/Down controls consumed two rows and clipped the ScrollView.
+            // Keep the single row horizontally scrollable instead: each
+            // operator action remains available without increasing dock height.
+            var scrollableFooter = currentDock == "bottom" && !_usingCompactHeight;
+            var dockActions = scrollableFooter
+                ? (VisualElement)new ScrollView(ScrollViewMode.Horizontal)
+                : new VisualElement();
+            dockActions.name = "vcr-dock-actions-" + id;
             dockActions.style.flexShrink = 0;
-            // A dock containing only one panel has no tab strip; keep its
-            // Move/Up/Down controls reachable in one compact row.
-            dockActions.style.flexWrap = _usingCompactHeight ? Wrap.NoWrap : Wrap.Wrap;
+            if (scrollableFooter)
+            {
+                var footerScroll = (ScrollView)dockActions;
+                footerScroll.contentContainer.style.flexDirection = FlexDirection.Row;
+                footerScroll.contentContainer.style.flexWrap = Wrap.NoWrap;
+                footerScroll.style.maxHeight = 58;
+            }
+            else
+            {
+                dockActions.style.flexDirection = FlexDirection.Row;
+                dockActions.style.flexWrap = _usingCompactHeight ? Wrap.NoWrap : Wrap.Wrap;
+            }
             var move = new Button(() =>
             {
                 var next = currentDock == "left" ? "right" :
