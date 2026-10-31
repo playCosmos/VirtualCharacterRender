@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 using VCR.Runtime.Application;
 using VCR.Runtime.Character;
 using VCR.Runtime.Environment;
@@ -12,6 +13,7 @@ using VCR.Runtime.Output;
 using VCR.Runtime.Rendering;
 using VCR.Runtime.Scene;
 using VCR.Runtime.Tracking;
+using VCR.Runtime.UI;
 using VCR.Runtime.ValidationFixtures;
 
 namespace VCR.Editor.P1
@@ -46,6 +48,11 @@ namespace VCR.Editor.P1
                     "VCR P1 Renderer Core Validation");
                 // Assemble the fixture before any Awake-driven initialization.
                 root.SetActive(false);
+
+                Expect(
+                    P1WorkspaceLogValidation.RunChecks(),
+                    "UI Toolkit threaded log queue must stay bounded and correct across reset/clear",
+                    failures);
 
                 var characterRoot =
                     new GameObject("Character");
@@ -407,7 +414,7 @@ namespace VCR.Editor.P1
                         1f) <
                         0.0001f &&
                     render.TargetFrameRate ==
-                        240,
+                        120,
                     "render settings must sanitize non-finite scale and unsupported resolution preset before applying globals",
                     failures);
 
@@ -720,6 +727,449 @@ namespace VCR.Editor.P1
                         cameraController),
                     "scene runtime must resolve the primary camera adapter",
                     failures);
+
+                // The UI Toolkit Inspector must change only the camera's FOV.
+                // It must reject invalid input before the camera adapter's
+                // sanitization could silently clamp it to another value.
+                var beforeInspectorCamera = cameraController.Settings;
+                var beforeInspectorLight = lightController.Settings;
+                var beforeInspectorRender = scene.CaptureRenderSettings();
+                scene.SetCameraFieldOfView(62.5f);
+                Expect(
+                    Math.Abs(cameraController.Settings.FieldOfView - 62.5f) < 0.0001f &&
+                    Math.Abs(camera.fieldOfView - 62.5f) < 0.0001f &&
+                    Math.Abs(cameraController.Settings.NearClipPlane -
+                        beforeInspectorCamera.NearClipPlane) < 0.0001f &&
+                    Math.Abs(cameraController.Settings.FarClipPlane -
+                        beforeInspectorCamera.FarClipPlane) < 0.0001f &&
+                    Math.Abs(lightController.Settings.Intensity -
+                        beforeInspectorLight.Intensity) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        beforeInspectorRender.TargetFrameRate,
+                    "U1 camera FOV edit must apply without changing clips, lighting or render pacing",
+                    failures);
+                foreach (var invalidFov in new[] { float.NaN, float.PositiveInfinity, 0f, 180f })
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetCameraFieldOfView(invalidFov);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(rejected && Math.Abs(camera.fieldOfView - 62.5f) < 0.0001f,
+                        "U1 camera FOV must reject nonfinite/out-of-range values without mutation",
+                        failures);
+                }
+                scene.SetCameraFieldOfView(beforeInspectorCamera.FieldOfView);
+
+                // Full camera Inspector edits are atomic. Invalid input must
+                // not be sanitized into an unexpected change to live geometry.
+                var fullCameraBaseline = cameraController.Settings;
+                var fullCameraLightBaseline = lightController.Settings;
+                var fullCameraRenderBaseline = scene.CaptureRenderSettings();
+                var editedCamera = fullCameraBaseline;
+                editedCamera.LocalPosition = new Vector3(0.25f, 1.8f, -2.7f);
+                editedCamera.LocalEulerAngles = new Vector3(5f, 25f, -3f);
+                editedCamera.FieldOfView = 44f;
+                editedCamera.NearClipPlane = 0.08f;
+                editedCamera.FarClipPlane = 155f;
+                scene.SetPrimaryCameraSettings(editedCamera);
+                Expect(
+                    Approximately(camera.transform.localPosition, editedCamera.LocalPosition) &&
+                    Approximately(camera.transform.localRotation,
+                        Quaternion.Euler(editedCamera.LocalEulerAngles)) &&
+                    Math.Abs(camera.fieldOfView - editedCamera.FieldOfView) < 0.0001f &&
+                    Math.Abs(camera.nearClipPlane - editedCamera.NearClipPlane) < 0.0001f &&
+                    Math.Abs(camera.farClipPlane - editedCamera.FarClipPlane) < 0.0001f &&
+                    Math.Abs(lightController.Settings.Intensity -
+                        fullCameraLightBaseline.Intensity) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        fullCameraRenderBaseline.TargetFrameRate,
+                    "U1 primary camera edit must apply pose, FOV and clips without replaying light or render settings",
+                    failures);
+                var invalidCameras = new List<SceneCameraSettings>();
+                var invalidCamera = editedCamera;
+                invalidCamera.LocalPosition.x = float.NaN;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.LocalEulerAngles.y = float.PositiveInfinity;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FieldOfView = 180f;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.NearClipPlane = 0f;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FarClipPlane = editedCamera.NearClipPlane;
+                invalidCameras.Add(invalidCamera);
+                invalidCamera = editedCamera;
+                invalidCamera.FarClipPlane = float.NegativeInfinity;
+                invalidCameras.Add(invalidCamera);
+                foreach (var invalidCameraEdit in invalidCameras)
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetPrimaryCameraSettings(invalidCameraEdit);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(
+                        rejected &&
+                        Approximately(camera.transform.localPosition, editedCamera.LocalPosition) &&
+                        Math.Abs(camera.fieldOfView - editedCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(camera.nearClipPlane - editedCamera.NearClipPlane) < 0.0001f &&
+                        Math.Abs(camera.farClipPlane - editedCamera.FarClipPlane) < 0.0001f,
+                        "U1 primary camera must reject invalid snapshots without partial mutation",
+                        failures);
+                }
+                scene.SetPrimaryCameraSettings(fullCameraBaseline);
+
+                // Light edits must not replay camera, render or environment state.
+                var originalLight = lightController.Settings;
+                var originalCamera = cameraController.Settings;
+                var originalRender = scene.CaptureRenderSettings();
+                var inspectorLightRotation = lightController.TargetLight.transform.localRotation;
+                scene.SetPrimaryLightSettings(false, 2.5f);
+                Expect(
+                    !lightController.Settings.Enabled &&
+                    !lightController.TargetLight.enabled &&
+                    Math.Abs(lightController.Settings.Intensity - 2.5f) < 0.0001f &&
+                    Math.Abs(lightController.TargetLight.intensity - 2.5f) < 0.0001f &&
+                    Approximately(lightController.Settings.Color, originalLight.Color) &&
+                    lightController.Settings.Shadows == originalLight.Shadows &&
+                    Approximately(lightController.TargetLight.transform.localRotation,
+                        inspectorLightRotation) &&
+                    Math.Abs(cameraController.Settings.FieldOfView -
+                        originalCamera.FieldOfView) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        originalRender.TargetFrameRate,
+                    "U1 primary light editing must change only enable/intensity",
+                    failures);
+                foreach (var invalidIntensity in new[]
+                    { float.NaN, float.PositiveInfinity, -0.01f, 20.01f })
+                {
+                    var rejected = false;
+                    try
+                    {
+                        scene.SetPrimaryLightSettings(true, invalidIntensity);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        rejected = true;
+                    }
+                    Expect(
+                        rejected && !lightController.TargetLight.enabled &&
+                        Math.Abs(lightController.TargetLight.intensity - 2.5f) < 0.0001f,
+                        "U1 primary light intensity must reject invalid values without mutation",
+                        failures);
+                }
+                scene.SetPrimaryLightSettings(true, 0f);
+                Expect(lightController.TargetLight.enabled &&
+                    Math.Abs(lightController.TargetLight.intensity) < 0.0001f,
+                    "U1 primary light must support enabled zero-intensity state",
+                    failures);
+                scene.SetPrimaryLightSettings(originalLight.Enabled, originalLight.Intensity);
+
+                // U1 full primary-light editing must apply a complete snapshot,
+                // preserve unrelated scene state and reject every invalid value
+                // before the PrimaryLightController can silently sanitize it.
+                var lightEditorBaseline = lightController.Settings;
+                var lightEditorCameraBaseline = cameraController.Settings;
+                var lightEditorRenderBaseline = scene.CaptureRenderSettings();
+                var lightEditorNext = lightEditorBaseline;
+                lightEditorNext.Enabled = false;
+                lightEditorNext.Intensity = 3.25f;
+                lightEditorNext.LocalEulerAngles = new Vector3(20f, -25f, 7f);
+                lightEditorNext.Color = new Color(0.25f, 0.5f, 0.75f, 0.8f);
+                lightEditorNext.Shadows = LightShadows.Soft;
+                scene.SetPrimaryLightConfiguration(lightEditorNext);
+                Expect(
+                    !light.enabled &&
+                    Math.Abs(light.intensity - lightEditorNext.Intensity) < 0.0001f &&
+                    Approximately(light.transform.localRotation,
+                        Quaternion.Euler(lightEditorNext.LocalEulerAngles)) &&
+                    Approximately(light.color, lightEditorNext.Color) &&
+                    light.shadows == lightEditorNext.Shadows &&
+                    Math.Abs(cameraController.Settings.FieldOfView -
+                        lightEditorCameraBaseline.FieldOfView) < 0.0001f &&
+                    scene.CaptureRenderSettings().TargetFrameRate ==
+                        lightEditorRenderBaseline.TargetFrameRate,
+                    "U1 full light edit must apply rotation, RGBA and shadows without changing camera/render",
+                    failures);
+                var lightEditorInvalid = new List<SceneLightSettings>();
+                var lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.LocalEulerAngles.y = float.NaN;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.r = float.PositiveInfinity;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.g = -0.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Color.a = 1.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Intensity = 20.01f;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                lightEditorCandidate = lightEditorNext;
+                lightEditorCandidate.Shadows = (LightShadows)999;
+                lightEditorInvalid.Add(lightEditorCandidate);
+                foreach (var invalidLightSnapshot in lightEditorInvalid)
+                {
+                    var lightRejected = false;
+                    try
+                    {
+                        scene.SetPrimaryLightConfiguration(invalidLightSnapshot);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        lightRejected = true;
+                    }
+                    Expect(
+                        lightRejected &&
+                        !light.enabled &&
+                        Math.Abs(light.intensity - 3.25f) < 0.0001f &&
+                        Approximately(light.color, lightEditorNext.Color) &&
+                        Approximately(light.transform.localRotation,
+                            Quaternion.Euler(lightEditorNext.LocalEulerAngles)) &&
+                        light.shadows == LightShadows.Soft,
+                        "U1 primary-light invalid snapshot must not cause partial mutation",
+                        failures);
+                }
+                scene.SetPrimaryLightConfiguration(lightEditorBaseline);
+
+                // The UI Toolkit Inspector must not carry a previous Camera or
+                // Light target's unsaved values when an adapter is retargeted
+                // without replacing the adapter component itself.
+                var inspectorProbeObject = new GameObject("P1 Inspector Rebinding Probe");
+                inspectorProbeObject.SetActive(false);
+                inspectorProbeObject.transform.SetParent(root.transform, false);
+                var inspectorProbe = inspectorProbeObject.AddComponent<WorkspaceToolkitShell>();
+                SetPrivateField(inspectorProbe, "sceneRuntime", scene);
+                var inspectorPositionField = new Vector3Field();
+                var inspectorRotationField = new Vector3Field();
+                var inspectorFovField = new FloatField();
+                var inspectorNearField = new FloatField();
+                var inspectorFarField = new FloatField();
+                var inspectorLightEnabledField = new Toggle();
+                var inspectorLightIntensityField = new FloatField();
+                var inspectorLightRotationField = new Vector3Field();
+                var inspectorLightRgbField = new Vector3Field();
+                var inspectorLightAlphaField = new FloatField();
+                var inspectorLightShadowsField = new DropdownField
+                {
+                    choices = new List<string> { "None", "Hard", "Soft" }
+                };
+                SetPrivateField(inspectorProbe, "_cameraPositionInput", inspectorPositionField);
+                SetPrivateField(inspectorProbe, "_cameraRotationInput", inspectorRotationField);
+                SetPrivateField(inspectorProbe, "_cameraFieldOfViewInput", inspectorFovField);
+                SetPrivateField(inspectorProbe, "_cameraNearClipInput", inspectorNearField);
+                SetPrivateField(inspectorProbe, "_cameraFarClipInput", inspectorFarField);
+                SetPrivateField(inspectorProbe, "_primaryLightEnabledInput", inspectorLightEnabledField);
+                SetPrivateField(inspectorProbe, "_primaryLightIntensityInput", inspectorLightIntensityField);
+                SetPrivateField(inspectorProbe, "_primaryLightRotationInput", inspectorLightRotationField);
+                SetPrivateField(inspectorProbe, "_primaryLightRgbInput", inspectorLightRgbField);
+                SetPrivateField(inspectorProbe, "_primaryLightAlphaInput", inspectorLightAlphaField);
+                SetPrivateField(inspectorProbe, "_primaryLightShadowsInput", inspectorLightShadowsField);
+                var inspectorProbeFeedback = new Label();
+                SetPrivateField(inspectorProbe, "_inspectorFeedback", inspectorProbeFeedback);
+
+                var syncCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "SynchronizeCameraInspectorInputs",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var syncLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "SynchronizePrimaryLightInputs",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var applyCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "ApplySceneViewFromInspector",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var applyLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "ApplyPrimaryLightFromInspector",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var discardCameraInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "RevertCameraInspectorDraft",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var discardLightInspector = typeof(WorkspaceToolkitShell).GetMethod(
+                    "RevertLightInspectorDraft",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Expect(syncCameraInspector != null && syncLightInspector != null &&
+                    applyCameraInspector != null && applyLightInspector != null &&
+                    discardCameraInspector != null && discardLightInspector != null,
+                    "U1 Inspector must expose sync, guarded Apply and Discard actions",
+                    failures);
+                if (syncCameraInspector != null && syncLightInspector != null &&
+                    applyCameraInspector != null && applyLightInspector != null &&
+                    discardCameraInspector != null && discardLightInspector != null)
+                {
+                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    syncLightInspector.Invoke(inspectorProbe, null);
+                    var originalInspectorCamera = cameraController.Settings;
+                    var originalInspectorLight = lightController.Settings;
+                    inspectorFovField.SetValueWithoutNotify(111f);
+                    inspectorLightIntensityField.SetValueWithoutNotify(11f);
+                    syncCameraInspector.Invoke(inspectorProbe, null);
+                    syncLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                        Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f,
+                        "U1 Inspector must retain uncommitted drafts for unchanged target objects",
+                        failures);
+
+                    // Saving the runtime snapshot to a real versioned JSON file
+                    // must never serialize pending UI Toolkit Inspector edits.
+                    // Neither saving nor reading the file may apply the draft.
+                    var inspectorDraftPath = Path.Combine(
+                        Path.GetTempPath(),
+                        "vcr-p1-inspector-draft-" + Guid.NewGuid().ToString("N") + ".json");
+                    try
+                    {
+                        var inspectorDraftStore =
+                            new RuntimeConfigurationStore(inspectorDraftPath);
+                        var inspectorLiveBeforeSave = scene.CaptureConfiguration();
+                        var inspectorDraftSaved = inspectorDraftStore.TrySave(
+                            inspectorLiveBeforeSave, out var inspectorDraftSaveError);
+                        var inspectorDiskValues = SceneRuntimeConfiguration.Default;
+                        string inspectorDraftLoadError = null;
+                        var inspectorDraftLoaded = inspectorDraftSaved &&
+                            inspectorDraftStore.TryLoad(
+                                out inspectorDiskValues, out inspectorDraftLoadError);
+                        Expect(
+                            inspectorDraftSaved && inspectorDraftLoaded &&
+                            string.IsNullOrEmpty(inspectorDraftSaveError) &&
+                            string.IsNullOrEmpty(inspectorDraftLoadError) &&
+                            Math.Abs(inspectorDiskValues.Camera.FieldOfView -
+                                inspectorLiveBeforeSave.Camera.FieldOfView) < 0.0001f &&
+                            Math.Abs(inspectorDiskValues.Light.Intensity -
+                                inspectorLiveBeforeSave.Light.Intensity) < 0.0001f &&
+                            Math.Abs(inspectorDiskValues.Camera.FieldOfView - 111f) > 0.01f &&
+                            Math.Abs(inspectorDiskValues.Light.Intensity - 11f) > 0.01f &&
+                            Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                            Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f,
+                            "U1 pending camera/light Inspector drafts must not leak into saved configuration or mutate during save",
+                            failures);
+                    }
+                    finally
+                    {
+                        if (File.Exists(inspectorDraftPath))
+                            File.Delete(inspectorDraftPath);
+                        if (File.Exists(inspectorDraftPath + ".bak"))
+                            File.Delete(inspectorDraftPath + ".bak");
+                    }
+
+                    // Reload on the same scene/controllers must override
+                    // unsaved text even when object identity did not change.
+                    var configReloadReadback = typeof(WorkspaceToolkitShell).GetMethod(
+                        "RefreshWorkspaceInspectorAfterConfigurationReload",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    Expect(configReloadReadback != null,
+                        "U1 configuration Reload must expose Inspector draft invalidation",
+                        failures);
+                    if (configReloadReadback != null)
+                    {
+                        configReloadReadback.Invoke(inspectorProbe, null);
+                        Expect(
+                            Math.Abs(inspectorFovField.value -
+                                originalInspectorCamera.FieldOfView) < 0.0001f &&
+                            Math.Abs(inspectorLightIntensityField.value -
+                                originalInspectorLight.Intensity) < 0.0001f &&
+                            Math.Abs(camera.fieldOfView -
+                                originalInspectorCamera.FieldOfView) < 0.0001f &&
+                            Math.Abs(light.intensity -
+                                originalInspectorLight.Intensity) < 0.0001f,
+                            "U1 configuration Reload must reset both Inspector drafts to live values without mutation",
+                            failures);
+                        inspectorFovField.SetValueWithoutNotify(111f);
+                        inspectorLightIntensityField.SetValueWithoutNotify(11f);
+                    }
+
+                    // Discarding a camera draft must read the current camera,
+                    // without applying any scene changes or losing a light draft.
+                    discardCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorFovField.value -
+                            originalInspectorCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(camera.fieldOfView -
+                            originalInspectorCamera.FieldOfView) < 0.0001f &&
+                        Math.Abs(inspectorLightIntensityField.value - 11f) < 0.0001f &&
+                        inspectorProbeFeedback.text.Contains("discarded"),
+                        "U1 Discard camera edits must refresh only camera fields without scene mutation",
+                        failures);
+                    inspectorFovField.SetValueWithoutNotify(111f);
+                    discardLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        Math.Abs(inspectorLightIntensityField.value -
+                            originalInspectorLight.Intensity) < 0.0001f &&
+                        Math.Abs(light.intensity -
+                            originalInspectorLight.Intensity) < 0.0001f &&
+                        Math.Abs(inspectorFovField.value - 111f) < 0.0001f &&
+                        inspectorProbeFeedback.text.Contains("discarded"),
+                        "U1 Discard light edits must refresh only light fields without scene mutation",
+                        failures);
+                    inspectorLightIntensityField.SetValueWithoutNotify(11f);
+
+                    var alternateCameraObject = new GameObject("Alternate P1 camera");
+                    alternateCameraObject.SetActive(false);
+                    alternateCameraObject.transform.SetParent(root.transform, false);
+                    var alternateCamera = alternateCameraObject.AddComponent<Camera>();
+                    var alternateCameraSettings = originalInspectorCamera;
+                    alternateCameraSettings.FieldOfView = 67f;
+                    alternateCameraSettings.LocalPosition = new Vector3(2f, 1f, -4f);
+                    cameraController.Configure(alternateCamera, alternateCameraSettings);
+                    // Simulate a click before the periodic Inspector refresh.
+                    applyCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        ReferenceEquals(GetPrivateField<Camera>(
+                            inspectorProbe, "_cameraDraftTarget"), alternateCamera) &&
+                        Math.Abs(alternateCamera.fieldOfView - 67f) < 0.0001f &&
+                        Math.Abs(inspectorFovField.value - 67f) < 0.0001f &&
+                        Approximately(inspectorPositionField.value,
+                            alternateCameraSettings.LocalPosition) &&
+                        inspectorProbeFeedback.text.Contains("changed"),
+                        "U1 camera Apply must refuse stale edits on an unrefreshed retarget",
+                        failures);
+                    // With the same target, the newly reviewed input may apply.
+                    inspectorFovField.SetValueWithoutNotify(69f);
+                    applyCameraInspector.Invoke(inspectorProbe, null);
+                    Expect(Math.Abs(alternateCamera.fieldOfView - 69f) < 0.0001f,
+                        "U1 camera Apply must work after target refresh and review",
+                        failures);
+                    cameraController.Configure(camera, originalInspectorCamera);
+
+                    var alternateLightObject = new GameObject("Alternate P1 light");
+                    alternateLightObject.SetActive(false);
+                    alternateLightObject.transform.SetParent(root.transform, false);
+                    var alternateLight = alternateLightObject.AddComponent<Light>();
+                    var alternateLightSettings = originalInspectorLight;
+                    alternateLightSettings.Intensity = 4.75f;
+                    alternateLightSettings.Shadows = LightShadows.Hard;
+                    lightController.Configure(alternateLight, alternateLightSettings);
+                    // Direct Apply before periodic refresh must be a no-op.
+                    applyLightInspector.Invoke(inspectorProbe, null);
+                    Expect(
+                        ReferenceEquals(GetPrivateField<Light>(
+                            inspectorProbe, "_primaryLightDraftTarget"), alternateLight) &&
+                        Math.Abs(alternateLight.intensity - 4.75f) < 0.0001f &&
+                        Math.Abs(inspectorLightIntensityField.value - 4.75f) < 0.0001f &&
+                        inspectorLightShadowsField.value == "Hard" &&
+                        inspectorProbeFeedback.text.Contains("changed"),
+                        "U1 light Apply must refuse stale edits on an unrefreshed retarget",
+                        failures);
+                    inspectorLightIntensityField.SetValueWithoutNotify(6f);
+                    applyLightInspector.Invoke(inspectorProbe, null);
+                    Expect(Math.Abs(alternateLight.intensity - 6f) < 0.0001f,
+                        "U1 light Apply must work after target refresh and review",
+                        failures);
+                    lightController.Configure(light, originalInspectorLight);
+                }
+                UnityEngine.Object.DestroyImmediate(inspectorProbeObject);
 
                 Expect(
                     ReferenceEquals(

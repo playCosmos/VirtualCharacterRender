@@ -437,6 +437,104 @@ namespace VCR.Runtime.Scene
                 settings);
         }
 
+        // Isolated camera edit for U1 Inspector. Do not replay rendering,
+        // lighting, environment or overlay configuration for an FOV change.
+        public void SetCameraFieldOfView(float fieldOfView)
+        {
+            EnsureOperational();
+            ResolveDependencies();
+            if (cameraController == null || cameraController.TargetCamera == null)
+                throw new InvalidOperationException("Primary scene camera is unavailable.");
+            if (float.IsNaN(fieldOfView) || float.IsInfinity(fieldOfView) ||
+                fieldOfView < 1f || fieldOfView > 179f)
+                throw new ArgumentOutOfRangeException(nameof(fieldOfView),
+                    "Camera FOV must be finite and between 1 and 179 degrees.");
+            var next = cameraController.Settings;
+            next.FieldOfView = fieldOfView;
+            cameraController.Configure(cameraController.TargetCamera, next);
+        }
+
+        // Apply one validated primary-camera snapshot without replaying other
+        // rendering, light, environment, or overlay configuration.
+        public void SetPrimaryCameraSettings(SceneCameraSettings next)
+        {
+            static bool Finite(float value) =>
+                !float.IsNaN(value) && !float.IsInfinity(value);
+            static bool FiniteVector(Vector3 value) =>
+                Finite(value.x) && Finite(value.y) && Finite(value.z);
+
+            if (!FiniteVector(next.LocalPosition) ||
+                !FiniteVector(next.LocalEulerAngles) ||
+                !Finite(next.FieldOfView) ||
+                next.FieldOfView < 1f || next.FieldOfView > 179f ||
+                !Finite(next.NearClipPlane) || next.NearClipPlane < 0.001f ||
+                !Finite(next.FarClipPlane) ||
+                next.FarClipPlane < next.NearClipPlane + 0.01f)
+                throw new ArgumentOutOfRangeException(nameof(next),
+                    "Camera position/rotation must be finite; FOV must be 1..179, " +
+                    "near clip >= 0.001, far clip >= near clip + 0.01.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (cameraController == null || cameraController.TargetCamera == null)
+                throw new InvalidOperationException("Primary scene camera is unavailable.");
+
+            cameraController.Configure(cameraController.TargetCamera, next);
+        }
+
+        // Isolated primary-light edits for the U1 Inspector. Never replay
+        // unrelated environment, camera, render or overlay configuration.
+        public void SetPrimaryLightSettings(bool enabled, float intensity)
+        {
+            if (float.IsNaN(intensity) || float.IsInfinity(intensity) ||
+                intensity < 0f || intensity > 20f)
+                throw new ArgumentOutOfRangeException(nameof(intensity),
+                    "Primary light intensity must be finite and within 0..20.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (lightController == null || lightController.TargetLight == null)
+                throw new InvalidOperationException("Primary scene light is unavailable.");
+
+            var next = lightController.Settings;
+            next.Enabled = enabled;
+            next.Intensity = intensity;
+            lightController.Configure(lightController.TargetLight, next);
+        }
+
+        // Apply one validated primary-light snapshot, independently of camera,
+        // render, overlay or environment configuration. The U1 color editor
+        // uses normalized (non-HDR) RGBA; invalid input must never be clamped
+        // into an unexpected mutation.
+        public void SetPrimaryLightConfiguration(SceneLightSettings next)
+        {
+            static bool Finite(float value) =>
+                !float.IsNaN(value) && !float.IsInfinity(value);
+            static bool Normalized(float value) =>
+                Finite(value) && value >= 0f && value <= 1f;
+
+            if (!Finite(next.LocalEulerAngles.x) ||
+                !Finite(next.LocalEulerAngles.y) ||
+                !Finite(next.LocalEulerAngles.z) ||
+                !Normalized(next.Color.r) || !Normalized(next.Color.g) ||
+                !Normalized(next.Color.b) || !Normalized(next.Color.a) ||
+                !Finite(next.Intensity) || next.Intensity < 0f ||
+                next.Intensity > 20f ||
+                (next.Shadows != LightShadows.None &&
+                 next.Shadows != LightShadows.Hard &&
+                 next.Shadows != LightShadows.Soft))
+                throw new ArgumentOutOfRangeException(nameof(next),
+                    "Primary light requires finite Euler angles, normalized " +
+                    "RGBA, 0..20 intensity and None/Hard/Soft shadows.");
+
+            EnsureOperational();
+            ResolveDependencies();
+            if (lightController == null || lightController.TargetLight == null)
+                throw new InvalidOperationException("Primary scene light is unavailable.");
+
+            lightController.Configure(lightController.TargetLight, next);
+        }
+
         public void ApplySceneViewSettings()
         {
             EnsureOperational();

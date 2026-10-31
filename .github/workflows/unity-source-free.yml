@@ -5,6 +5,8 @@ on:
     branches:
       - develop
       - ci/unity-p0-p13-source-free
+      # U1 must compile in Unity, not just pass repository lint.
+      - feature/obs-ui-u1-layout-contract-20261026
   pull_request:
     branches:
       - develop
@@ -69,6 +71,90 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      - name: Generate and validate P1 UI Toolkit workspace
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require generated P1 workspace assets
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Assets/VCR/P1/P1Runtime.unity
+          test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "P1 UI Toolkit workspace generation: PASS"
+
+      - name: Build P1 Windows development player
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildWindowsMonoCiAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Restore pinned IL2CPP project settings after Mono smoke build
+        if: always() && github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- unity/ProjectSettings/ProjectSettings.asset; then
+            echo "Restoring checked-in IL2CPP project baseline after CI-only Mono build."
+            git diff -- unity/ProjectSettings/ProjectSettings.asset
+            git restore --source=HEAD -- unity/ProjectSettings/ProjectSettings.asset
+          fi
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+
+      - name: Require P1 Windows player output
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Builds/P1/Windows-Development/VirtualCharacterRender.exe
+          test -d unity/Builds/P1/Windows-Development/VirtualCharacterRender_Data
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "P1 Windows development player: PASS"
+
+      - name: Archive P1 Windows development player
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: unity/Builds/P1/Windows-Development/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Diagnose Unity package lock drift
+        if: always()
+        shell: bash
+        run: |
+          if ! git diff --quiet -- unity/Packages/packages-lock.json; then
+            echo "::warning::Unity rewrote packages-lock.json; inspect the patch artifact before updating the pinned lock."
+            git diff -- unity/Packages/packages-lock.json | tee "$RUNNER_TEMP/unity-package-lock-diff.patch"
+          fi
+
       - name: Require actual PASS report and unchanged lock/settings
         shell: bash
         run: |
@@ -76,6 +162,15 @@ jobs:
           python3 tools/verify-unity-source-free-report.py Builds/Validation/p0-p13-source-free.json
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
           echo "Unity P0-P13 source-free evidence: PASS for $GITHUB_SHA"
+
+      - name: Archive Unity package lock drift
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-lock-drift-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/unity-package-lock-diff.patch
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Archive source-free validation evidence
         if: always()
@@ -85,3 +180,201 @@ jobs:
           path: Builds/Validation/p0-p13-source-free.json
           if-no-files-found: warn
           retention-days: 30
+
+  # Build success on Ubuntu is not proof that the P1 Player starts on Windows.
+  # This headless gate tests the exact P1 scene/Player produced above, including
+  # its opt-in PlayerStartupSmoke report and real normal shutdown. It does NOT
+  # claim that the native Settings UI, click-through or rendered GUI was tested.
+  u1-windows-native-smoke:
+    name: Run P1 Windows Player startup/quit smoke
+    if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+    needs: unity-source-free
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+      - name: Download exact P1 Windows development Player
+        uses: actions/download-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/P1/Windows-Development
+      - name: Use pinned Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Package P1 Player with SHA-256 and exact-source sidecars
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import hashlib
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path("Builds/P1/Windows-Development")
+          if not (root / "VirtualCharacterRender.exe").is_file():
+              raise SystemExit("P1 Windows Player executable missing")
+          if not (root / "VirtualCharacterRender_Data").is_dir():
+              raise SystemExit("P1 Windows Player data missing")
+          target = Path("player-artifacts")
+          target.mkdir(exist_ok=True)
+          archive = target / "windows.zip"
+          with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=1, allowZip64=True) as z:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      z.write(file, file.relative_to(root).as_posix())
+          sha = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  sha.update(chunk)
+          (target / "windows.sha256").write_text(
+              sha.hexdigest() + "  windows.zip\n", encoding="utf-8")
+          (target / "windows.source-sha").write_text(
+              os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
+          print("P1 Windows Player archive SHA-256:", sha.hexdigest())
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Execute P1 Player on native Windows and verify quit/config restore
+        shell: pwsh
+        run: |
+          python tools/run-player-smoke.py `
+            --platform windows `
+            --archive player-artifacts/windows.zip `
+            --source "$env:GITHUB_SHA" `
+            --output Builds/PlayerSmoke/u1-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require startup inventory in actual Windows P1 Player log
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $logPath = 'Builds/PlayerSmoke/u1-windows/player.log'
+          if (-not (Test-Path -LiteralPath $logPath)) {
+            throw 'P1 Player did not produce a startup log.'
+          }
+          $log = Get-Content -LiteralPath $logPath -Raw
+          $markers = @(
+            'VCR inventory: stage=startup category=module id=application',
+            'VCR inventory: stage=startup category=module id=scene',
+            'VCR inventory: stage=startup category=capability count=',
+            'VCR inventory: stage=startup category=declarative_plugin count=',
+            'VCR inventory: stage=startup category=registered_shader count=',
+            'VCR inventory: stage=startup-pre-ui-restore category=model',
+            'VCR inventory: stage=startup-pre-ui-restore category=remembered_model'
+          )
+          foreach ($marker in $markers) {
+            if (-not $log.Contains($marker)) {
+              throw "P1 runtime startup inventory missing: $marker"
+            }
+          }
+          Write-Host 'P1 Windows bootstrap inventory: PASS'
+      - name: Preserve P1 native startup and shutdown evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-windows-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            player-artifacts/windows.sha256
+            player-artifacts/windows.source-sha
+            Builds/PlayerSmoke/u1-windows/
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Optional informational GUI-window evidence. The normal P1 Windows smoke
+  # must succeed first. A hosted runner may have no interactive desktop:
+  # preserve a truthful failure report rather than blocking source validation
+  # or claiming that rendered pixels/native Settings have been accepted.
+  u1-windows-gui-probe:
+    name: Observe visible P1 Windows window and normal WM_CLOSE (informational)
+    if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+    needs: [unity-source-free, u1-windows-native-smoke]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Download same-run P1 Windows development Player
+        uses: actions/download-artifact@v4
+        with:
+          name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/P1/Windows-Development
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Observe real desktop window; fail closed if runner has no GUI session
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m py_compile tools/probe-u1-windows-gui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u1-windows-gui.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u1-windows-gui.py `
+            --player Builds/P1/Windows-Development/VirtualCharacterRender.exe `
+            --source "$env:GITHUB_SHA" `
+            --screen-width 960 `
+            --screen-height 520 `
+            --output Builds/GUIProbe/u1-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # gui-probe.json records whether actual Player-window pixels were
+      # captured. A bitmap may be blank on hosted GPU/desktop environments;
+      # neither a screenshot nor a passing WM_CLOSE probe is UI acceptance.
+      - name: Upload honest P1 GUI-window observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-windows-gui-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/GUIProbe/u1-windows/
+          if-no-files-found: warn
+          retention-days: 14
+      # A hosted runner with no interactive desktop may legitimately have no
+      # visible Unity HWND. Once a real HWND was observed, however, a popup
+      # without caption/resize frame is a proven defect, not "informational".
+      # Upload the original probe evidence before enforcing the gate.
+      - name: Require native frame and attached workspace on observed Windows GUI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportPath = 'Builds/GUIProbe/u1-windows/gui-probe.json'
+          if (-not (Test-Path -LiteralPath $reportPath)) {
+            Write-Host 'GUI probe produced no report; interactive desktop not verified.'
+            exit 0
+          }
+          $probe = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          if (-not $probe.windowObserved) {
+            Write-Host 'No real Unity HWND observed; GUI acceptance remains unverified.'
+            exit 0
+          }
+          if (-not $probe.nativeFramePassed -or -not $probe.freeResizePassed -or
+              -not $probe.nativeInputTargetsPassed -or
+              -not $probe.nativeWindowControlsPassed) {
+            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), mouseHitTargets=$($probe.nativeInputTargetsPassed), maximizeMinimizeRestore=$($probe.nativeWindowControlsPassed), style=$($probe.nativeFrame.styleHex)"
+          }
+          if (-not $probe.workspaceUiTreeReady) {
+            throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
+          }
+          # The 960x520 hosted Player must expose quantitative, usable
+          # measured compact dock geometry; tree attachment alone can hide
+          # an entirely collapsed Tracking/Actions/Events scroll viewport.
+          if ($probe.requestedPlayerSize[1] -lt 640 -and
+              (-not $probe.compactLayoutPassed -or $null -eq $probe.compactLayout)) {
+            throw 'P1 compact GUI dock geometry missing or unusable; review Player.log and GUI artifact.'
+          }
+          # A fresh P1 config must not silently re-enable the P0 transparent
+          # borderless output; check the real JSON written by this Player.
+          $configPath = 'Builds/GUIProbe/u1-windows/gui-probe-config.json'
+          if (-not (Test-Path -LiteralPath $configPath)) {
+            throw 'P1 visible Player did not persist its isolated configuration.'
+          }
+          $configuration = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+          if ($null -eq $configuration.Scene -or
+              $null -eq $configuration.Scene.Overlay -or
+              $configuration.Scene.Overlay.Transparent -ne $false) {
+            throw 'Fresh P1 Player incorrectly activated legacy transparent/borderless output.'
+          }
+          if (-not $probe.managedQuitObserved -or $probe.exitCode -ne 0) {
+            throw 'P1 visible Windows Player failed its normal managed quit.'
+          }
+          Write-Host 'P1 observed Windows native frame, free resize, workspace tree and quit: PASS (interactive UI remains unverified).'
