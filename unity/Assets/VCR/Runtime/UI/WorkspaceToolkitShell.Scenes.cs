@@ -27,7 +27,12 @@ namespace VCR.Runtime.UI
 
         private void BuildWorkspaceScenesPanel(VisualElement panel)
         {
-            panel.Add(new Label("Active scene (single-scene runtime)"));
+            // On narrow auto-tab side docks, a no-wrap header extends beyond
+            // the 220px Scenes viewport. Keep the full descriptive label
+            // reachable by wrapping instead of truncating its right half.
+            var sceneHeading = new Label("Active scene (single-scene runtime)");
+            sceneHeading.style.whiteSpace = WhiteSpace.Normal;
+            panel.Add(sceneHeading);
             _workspaceSceneSummary = new Label("Waiting for scene runtime...");
             _workspaceSceneSummary.style.whiteSpace = WhiteSpace.Normal;
             panel.Add(_workspaceSceneSummary);
