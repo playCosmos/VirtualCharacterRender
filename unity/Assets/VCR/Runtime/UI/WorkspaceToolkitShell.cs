@@ -1629,10 +1629,11 @@ namespace VCR.Runtime.UI
             // squeezing Tracking/Actions/Events into a narrow right panel.
             bottom.style.flexDirection = effectiveTabMode
                 ? FlexDirection.Column : FlexDirection.Row;
-            // Reserve the bottom dock's allocated height in compact windows.
-            // Otherwise the central Preview's legacy minimum height can
-            // squeeze the bottom tab strip under the status bar.
-            if (compactHeight) bottom.style.flexShrink = 0;
+            // Preserve the bottom dock height in both compact and expanded
+            // windows. The previously default shrink=1 let tall dock content
+            // squeeze a requested 150px expanded dock to 62px at 697px tall.
+            // Let the scrollable center/side contents shrink instead.
+            bottom.style.flexShrink = 0;
             // A 960x520 window leaves only a few pixels for Tracking's
             // ScrollView at the old 25% bottom height. Reserve roughly a
             // third of compact windows for the tab strip and usable content,
@@ -1648,19 +1649,18 @@ namespace VCR.Runtime.UI
             _dockHost = new VisualElement();
             _dockHost.style.flexGrow = 1;
             _dockHost.style.flexDirection = FlexDirection.Row;
-            if (compactHeight) _dockHost.style.minHeight = 0;
+            // A flex item with its content-driven minimum can steal the
+            // bottom dock's reserved height in an ordinary sized window.
+            _dockHost.style.minHeight = 0;
             _workspaceRoot.Add(_dockHost);
 
             var left = Column(_leftWidth);
             var center = Column(0);
             center.style.flexGrow = 1;
             var right = Column(_rightWidth);
-            if (compactHeight)
-            {
-                left.style.minHeight = 0;
-                center.style.minHeight = 0;
-                right.style.minHeight = 0;
-            }
+            left.style.minHeight = 0;
+            center.style.minHeight = 0;
+            right.style.minHeight = 0;
             _leftDock = left;
             _rightDock = right;
             left.style.display = _leftVisible ? DisplayStyle.Flex : DisplayStyle.None;
@@ -1722,10 +1722,11 @@ namespace VCR.Runtime.UI
             sourcesContent.Add(_sourcesFeedback);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview, "Preview", 360);
-            // Preview is outside the tabbed side docks. It must release its
-            // fixed 360px minimum too, or short (e.g. 960x520) windows
-            // overflow the bottom dock despite compact tab mode.
-            if (compactHeight) preview.style.minHeight = 0;
+            // The central Preview is flexible in all window sizes. A hard
+            // 360px minimum plus dock minimums can steal room from the
+            // expanded bottom panel after maximize/restore or user resize.
+            // The image itself already scales to fit its available viewport.
+            preview.style.minHeight = 0;
             _previewStatus = new Label("Waiting for model state...");
             preview.Add(_previewStatus);
             _previewImage = new Image();
@@ -1924,7 +1925,8 @@ namespace VCR.Runtime.UI
             _status.style.paddingLeft = 12;
             _status.style.paddingTop = 5;
             _status.style.paddingBottom = 5;
-            if (compactHeight) _status.style.flexShrink = 0;
+            // Do not silently trade footer readability for preview height.
+            _status.style.flexShrink = 0;
             _workspaceRoot.Add(_status);
             _dragOverlay = new Label("Drop onto left, right or bottom dock");
             _dragOverlay.style.position = Position.Absolute;
