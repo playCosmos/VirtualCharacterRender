@@ -233,6 +233,81 @@ def probe_native_input_targets(hwnd, frame):
     return result
 
 
+def probe_native_window_controls(hwnd, before):
+    """Exercise actual OS maximize/minimize/restore controls on the P1 HWND.
+
+    This checks native window-state transitions, not user mouse interaction.
+    Always restore the original normal window before the GUI close probe.
+    """
+    user32 = ctypes.windll.user32
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.ShowWindow.restype = wintypes.BOOL
+    user32.IsZoomed.argtypes = [wintypes.HWND]
+    user32.IsZoomed.restype = wintypes.BOOL
+    user32.IsIconic.argtypes = [wintypes.HWND]
+    user32.IsIconic.restype = wintypes.BOOL
+    sw_maximize, sw_minimize, sw_restore = 3, 6, 9
+    result = {
+        "initialOuterSize": before["outerSize"],
+        "maximized": False,
+        "restoredFromMaximize": False,
+        "minimized": False,
+        "restoredFromMinimize": False,
+        "restoredOriginalSize": False,
+        "passed": False,
+    }
+
+    def wait_until(predicate, label):
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            time.sleep(0.1)
+        raise RuntimeError("Native window " + label + " timed out")
+
+    def is_normal():
+        return not user32.IsZoomed(hwnd) and not user32.IsIconic(hwnd)
+
+    try:
+        user32.ShowWindow(hwnd, sw_maximize)
+        wait_until(lambda: bool(user32.IsZoomed(hwnd)), "maximize")
+        result["maximized"] = True
+        result["maximizedOuterSize"] = inspect_native_window_frame(hwnd)["outerSize"]
+
+        user32.ShowWindow(hwnd, sw_restore)
+        wait_until(is_normal, "restore after maximize")
+        result["restoredFromMaximize"] = True
+
+        user32.ShowWindow(hwnd, sw_minimize)
+        wait_until(lambda: bool(user32.IsIconic(hwnd)), "minimize")
+        result["minimized"] = True
+
+        user32.ShowWindow(hwnd, sw_restore)
+        wait_until(is_normal, "restore after minimize")
+        result["restoredFromMinimize"] = True
+        deadline = time.monotonic() + 3
+        after = inspect_native_window_frame(hwnd)
+        while time.monotonic() < deadline:
+            if all(abs(after["outerSize"][i] - before["outerSize"][i]) <= 12
+                   for i in range(2)):
+                break
+            time.sleep(0.1)
+            after = inspect_native_window_frame(hwnd)
+        result["finalOuterSize"] = after["outerSize"]
+        result["restoredOriginalSize"] = all(
+            abs(after["outerSize"][i] - before["outerSize"][i]) <= 12
+            for i in range(2))
+        result["passed"] = all((result["maximized"],
+                                result["restoredFromMaximize"],
+                                result["minimized"],
+                                result["restoredFromMinimize"],
+                                result["restoredOriginalSize"]))
+        return result
+    finally:
+        # Do not leave the hosted Player minimized/maximized after failure.
+        user32.ShowWindow(hwnd, sw_restore)
+
+
 def probe_free_resize(hwnd, before):
     """Try an independent width/height OS resize, then restore original size."""
     user32 = ctypes.windll.user32
@@ -617,6 +692,7 @@ def run_probe(args):
         "runtimeStartupObserved": False,
         "nativeFramePassed": False,
         "nativeInputTargetsPassed": False,
+        "nativeWindowControlsPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -761,6 +837,19 @@ def run_probe(args):
                   f"passed={report['freeResizePassed']}", flush=True)
         except Exception as error:
             report["windowResizeError"] = str(error)
+        # The presence of min/max WS_* flags does not prove Windows can
+        # actually perform these state transitions on the Unity HWND.
+        try:
+            controls = probe_native_window_controls(observed["hwnd"], frame)
+            report["nativeWindowControls"] = controls
+            report["nativeWindowControlsPassed"] = controls["passed"]
+            print("U1 native window maximize/minimize/restore: " +
+                  f"maximized={controls['maximized']}, " +
+                  f"minimized={controls['minimized']}, " +
+                  f"restored={controls['restoredOriginalSize']}, " +
+                  f"passed={controls['passed']}", flush=True)
+        except Exception as error:
+            report["nativeWindowControlsError"] = str(error)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
@@ -794,10 +883,11 @@ def run_probe(args):
                 "GUI Player did not emit managed normal quit completion marker")
         if not (report["nativeFramePassed"] and
                 report["nativeInputTargetsPassed"] and
+                report["nativeWindowControlsPassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
-                "P1 native Windows caption, mouse resize edge or free "
-                "aspect resize validation failed")
+                "P1 native Windows caption, mouse resize edge, window "
+                "state transitions or free aspect resize validation failed")
         report["passed"] = True
         print("U1 Windows visible-window/normal-quit probe PASS "
               "(interactive UI not accepted)", flush=True)
