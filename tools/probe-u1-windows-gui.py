@@ -74,6 +74,53 @@ def compact_layout_usable(measurements):
                 measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
+def parse_workspace_resize_transition(log_text, mode, start_offset=0):
+    """Require measured Unity layout after a real compact/expanded transition."""
+    marker = "VCR U1 GUI probe: resize_layout_ready=true mode=" + mode
+    for line in log_text[start_offset:].splitlines():
+        if marker not in line:
+            continue
+        values = {}
+        for token in line.split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            if key not in ("width", "height", "bottom_h"):
+                continue
+            try:
+                parsed = float(value)
+            except ValueError:
+                return None
+            if not math.isfinite(parsed):
+                return None
+            values[key] = parsed
+        if len(values) != 3 or values["width"] < 256 or values["bottom_h"] < 95:
+            return None
+        if mode == "expanded" and values["height"] < 640:
+            return None
+        if mode == "compact" and not 180 <= values["height"] < 640:
+            return None
+        return values
+    return None
+
+
+def await_workspace_resize_transition(player_log, mode, start_offset):
+    deadline = time.monotonic() + 6
+    while time.monotonic() < deadline:
+        try:
+            log_text = player_log.read_text(encoding="utf-8", errors="replace")
+            found = parse_workspace_resize_transition(
+                log_text, mode, start_offset)
+            if found is not None:
+                return found
+        except OSError:
+            pass
+        time.sleep(0.15)
+    raise RuntimeError(
+        "Unity workspace failed to rebuild after native Windows " +
+        mode + " transition")
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -233,7 +280,7 @@ def probe_native_input_targets(hwnd, frame):
     return result
 
 
-def probe_native_window_controls(hwnd, before):
+def probe_native_window_controls(hwnd, before, player_log):
     """Exercise actual OS maximize/minimize/restore controls on the P1 HWND.
 
     This checks native window-state transitions, not user mouse interaction.
@@ -254,6 +301,8 @@ def probe_native_window_controls(hwnd, before):
         "minimized": False,
         "restoredFromMinimize": False,
         "restoredOriginalSize": False,
+        "expandedLayout": None,
+        "compactRestoredLayout": None,
         "passed": False,
     }
 
@@ -269,14 +318,24 @@ def probe_native_window_controls(hwnd, before):
         return not user32.IsZoomed(hwnd) and not user32.IsIconic(hwnd)
 
     try:
+        # Read the log before each transition to avoid accepting markers
+        # from earlier GUI startup or a previous window-size change.
+        log_offset = len(player_log.read_text(
+            encoding="utf-8", errors="replace"))
         user32.ShowWindow(hwnd, sw_maximize)
         wait_until(lambda: bool(user32.IsZoomed(hwnd)), "maximize")
         result["maximized"] = True
         result["maximizedOuterSize"] = inspect_native_window_frame(hwnd)["outerSize"]
+        result["expandedLayout"] = await_workspace_resize_transition(
+            player_log, "expanded", log_offset)
 
+        log_offset = len(player_log.read_text(
+            encoding="utf-8", errors="replace"))
         user32.ShowWindow(hwnd, sw_restore)
         wait_until(is_normal, "restore after maximize")
         result["restoredFromMaximize"] = True
+        result["compactRestoredLayout"] = await_workspace_resize_transition(
+            player_log, "compact", log_offset)
 
         user32.ShowWindow(hwnd, sw_minimize)
         wait_until(lambda: bool(user32.IsIconic(hwnd)), "minimize")
@@ -301,7 +360,9 @@ def probe_native_window_controls(hwnd, before):
                                 result["restoredFromMaximize"],
                                 result["minimized"],
                                 result["restoredFromMinimize"],
-                                result["restoredOriginalSize"]))
+                                result["restoredOriginalSize"],
+                                result["expandedLayout"] is not None,
+                                result["compactRestoredLayout"] is not None))
         return result
     finally:
         # Do not leave the hosted Player minimized/maximized after failure.
@@ -599,6 +660,25 @@ def run_self_test():
     if read_compact_layout_evidence("VCR U1 GUI probe: something_else=true") is not None:
         raise RuntimeError("Unattached workspace accepted as geometry")
 
+    transition = ("VCR U1 GUI probe: resize_layout_ready=true" +
+                  " mode=expanded width=962 height=730 bottom_h=150")
+    if parse_workspace_resize_transition(transition, "expanded") is None:
+        raise RuntimeError("Valid expanded transition marker rejected")
+    if parse_workspace_resize_transition(transition, "compact") is not None:
+        raise RuntimeError("Expanded marker accepted as compact")
+    compact = transition.replace("expanded", "compact").replace(
+        "height=730", "height=520")
+    if parse_workspace_resize_transition(compact, "compact") is None:
+        raise RuntimeError("Valid compact restore marker rejected")
+    if parse_workspace_resize_transition(
+            transition.replace("height=730", "height=NaN"),
+            "expanded") is not None:
+        raise RuntimeError("Invalid transition geometry accepted")
+    if parse_workspace_resize_transition(
+            "stale-prefix " + compact, "compact",
+            start_offset=len("stale-prefix " + compact)) is not None:
+        raise RuntimeError("Pre-transition marker accepted as new transition")
+
     # Hosted desktops often cannot contain a requested 1280x720 window.
     # Accept only the real overlap; never report full-frame coverage.
     test_cases = [
@@ -840,13 +920,16 @@ def run_probe(args):
         # The presence of min/max WS_* flags does not prove Windows can
         # actually perform these state transitions on the Unity HWND.
         try:
-            controls = probe_native_window_controls(observed["hwnd"], frame)
+            controls = probe_native_window_controls(
+                observed["hwnd"], frame, player_log)
             report["nativeWindowControls"] = controls
             report["nativeWindowControlsPassed"] = controls["passed"]
             print("U1 native window maximize/minimize/restore: " +
                   f"maximized={controls['maximized']}, " +
                   f"minimized={controls['minimized']}, " +
                   f"restored={controls['restoredOriginalSize']}, " +
+                  f"expandedLayout={controls['expandedLayout'] is not None}, " +
+                  f"compactRestored={controls['compactRestoredLayout'] is not None}, " +
                   f"passed={controls['passed']}", flush=True)
         except Exception as error:
             report["nativeWindowControlsError"] = str(error)
