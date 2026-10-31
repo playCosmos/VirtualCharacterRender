@@ -382,7 +382,7 @@ def wait_for_workspace_screenshot(path, expected_layout, mode):
     last = None
     while time.monotonic() < deadline:
         last = inspect_unity_screenshot(path)
-        if last is not None and all(
+        if last is not None and last["pixelDiversityPassed"] and all(
                 abs(last[key] - expected_layout[key]) <= 8
                 for key in ("width", "height")):
             return last
@@ -1026,6 +1026,9 @@ def run_probe(args):
                 report["unityFrame"] = unity_frame
                 print("U1 Unity frame evidence captured: " +
                       f"{unity_frame['width']}x{unity_frame['height']}, " +
+                      f"distinct={unity_frame['sampledDistinctPixels']}, " +
+                      f"dominant={unity_frame['sampledDominantFraction']:.3f}, " +
+                      f"diverse={unity_frame['pixelDiversityPassed']}, " +
                       f"sha256={unity_frame['sha256']}", flush=True)
                 break
             time.sleep(0.2)
@@ -1123,6 +1126,11 @@ def run_probe(args):
             raise RuntimeError(
                 "P1 GUI runtime emitted an exception: " +
                 report["runtimeExceptions"][0])
+        if not (report["unityFrameCaptured"] and
+                report["unityFrame"]["pixelDiversityPassed"]):
+            raise RuntimeError(
+                "P1 Unity startup frame missing or blank/uniform; " +
+                "see Unity PNG pixel diversity metrics")
         if not (report["nativeFramePassed"] and
                 report["nativeInputTargetsPassed"] and
                 report["nativeWindowControlsPassed"] and
