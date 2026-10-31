@@ -453,6 +453,34 @@ namespace VCR.Runtime.UI
                 if (tabs == null || tabs.worldBound.width < bottom.width * 0.75f)
                     yield break;
             }
+            // Narrow-but-tall windows must actually show usable horizontal
+            // dock tabs, not merely report that the new mode was selected.
+            if (!expectedCompact && _usingNarrowWidth)
+            {
+                foreach (var dock in new[] { _leftDock, _rightDock, _bottomDock })
+                {
+                    if (dock == null || dock.resolvedStyle.display == DisplayStyle.None)
+                        continue;
+                    var panelCount = 0;
+                    foreach (var child in dock.Children())
+                        if (child.name != null &&
+                            child.name.StartsWith("vcr-panel-", StringComparison.Ordinal))
+                            panelCount++;
+                    if (panelCount < 2) continue;
+                    var tabs = dock.Q<VisualElement>(
+                        dock == _leftDock ? "vcr-dock-tabs-left" :
+                        dock == _rightDock ? "vcr-dock-tabs-right" :
+                        "vcr-dock-tabs-bottom");
+                    if (tabs == null ||
+                        tabs.worldBound.width < dock.worldBound.width * 0.75f ||
+                        tabs.worldBound.height < 15f)
+                    {
+                        Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                            "mode=expanded reason=narrow_tabs_missing", this);
+                        yield break;
+                    }
+                }
+            }
             if (!expectedCompact && _bottomVisible)
             {
                 // The dock's outer rectangle may be valid while wrapped
@@ -509,7 +537,8 @@ namespace VCR.Runtime.UI
                 " height=" + root.height.ToString("0.##",
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " bottom_h=" + bottom.height.ToString("0.##",
-                    System.Globalization.CultureInfo.InvariantCulture), this);
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " narrow_tabs=" + (_usingNarrowWidth ? "true" : "false"), this);
             // The compact startup screenshot alone does not show whether the
             // rebuilt expanded dashboard clips or overlaps after maximize.
             // Capture both real rendered transition frames as separate evidence.
