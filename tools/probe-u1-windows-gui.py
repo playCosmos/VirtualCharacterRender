@@ -24,6 +24,10 @@ import time
 
 
 WM_CLOSE = 0x0010
+WM_NCHITTEST = 0x0084
+HTCAPTION = 2
+HTLEFT = 10
+HTRIGHT = 11
 EXPECTED_CLASS = "UnityWndClass"
 QUIT_MARKER = "VCR exit: OnApplicationQuit finished"
 RUNTIME_STARTUP_MARKER = (
@@ -172,6 +176,60 @@ def inspect_native_window_frame(hwnd):
     result["windowRect"] = [outer.left, outer.top, outer.right, outer.bottom]
     result["outerSize"] = [outer.right - outer.left, outer.bottom - outer.top]
     result["clientSize"] = [client.right - client.left, client.bottom - client.top]
+    return result
+
+
+def classify_native_input_targets(samples):
+    """A native caption and both horizontal resize edges must be hit-testable."""
+    left = any(item["result"] == HTLEFT for item in samples
+               if item["target"] == "left")
+    right = any(item["result"] == HTRIGHT for item in samples
+                if item["target"] == "right")
+    caption = any(item["result"] == HTCAPTION for item in samples
+                  if item["target"] == "caption")
+    return {
+        "leftResizeHit": left,
+        "rightResizeHit": right,
+        "captionDragHit": caption,
+        "passed": left and right and caption,
+    }
+
+
+def probe_native_input_targets(hwnd, frame):
+    """Query live Win32 WM_NCHITTEST; no synthetic mouse click or drag.
+
+    SetWindowPos can resize a non-interactively resizable window. These
+    independent edge/title hit tests establish OS-recognized mouse targets,
+    but do not replace an operator physically dragging the window.
+    """
+    user32 = ctypes.windll.user32
+    user32.SendMessageTimeoutW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+        wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
+    user32.SendMessageTimeoutW.restype = wintypes.LPARAM
+    left, top, right, bottom = frame["windowRect"]
+    midpoint_y = (top + bottom) // 2
+    midpoint_x = (left + right) // 2
+    samples = []
+    positions = [
+        ("caption", midpoint_x, top + 20),
+        *[("left", left + offset, midpoint_y) for offset in (2, 5, 8)],
+        *[("right", right - offset, midpoint_y) for offset in (2, 5, 8)],
+    ]
+    for target, x, y in positions:
+        # WM_NCHITTEST LPARAM carries signed screen coordinates in 16-bit
+        # halves. Encode negative multi-monitor coordinates without overflow.
+        coords = ((y & 0xffff) << 16) | (x & 0xffff)
+        outcome = ctypes.c_size_t(0)
+        ok = user32.SendMessageTimeoutW(
+            hwnd, WM_NCHITTEST, 0, coords, 0x0002, 800,
+            ctypes.byref(outcome))
+        if not ok:
+            raise OSError("WM_NCHITTEST timed out on live Unity title/frame")
+        samples.append({"target": target, "x": x, "y": y,
+                        "result": ctypes.c_ssize_t(outcome.value).value})
+    result = classify_native_input_targets(samples)
+    result["samples"] = samples
     return result
 
 
@@ -512,6 +570,20 @@ def run_self_test():
     popup = classify_window_style(0x90000000)
     if popup["hasNativeTitleBar"] or popup["resizableFrame"] or not popup["borderlessPopup"]:
         raise RuntimeError("Borderless popup incorrectly classified as normal window")
+    hit_samples = [
+        {"target": "caption", "result": HTCAPTION},
+        {"target": "left", "result": HTLEFT},
+        {"target": "right", "result": HTRIGHT},
+    ]
+    if not classify_native_input_targets(hit_samples)["passed"]:
+        raise RuntimeError("Valid OS frame mouse targets rejected")
+    if classify_native_input_targets(hit_samples[:2])["passed"]:
+        raise RuntimeError("Missing right-edge mouse resize accepted")
+    if classify_native_input_targets([
+            {"target": "caption", "result": 1},
+            {"target": "left", "result": 1},
+            {"target": "right", "result": 1}])["passed"]:
+        raise RuntimeError("Client-area-only window accepted as native frame")
     print("U1 GUI probe startup, clipping, window styles and pixel-quality self-test: PASS")
     return 0
 
@@ -544,6 +616,7 @@ def run_probe(args):
         "windowObserved": False,
         "runtimeStartupObserved": False,
         "nativeFramePassed": False,
+        "nativeInputTargetsPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -666,6 +739,17 @@ def run_probe(args):
               f"style={frame['styleHex']}, nativeTitle={frame['hasNativeTitleBar']}, " +
               f"resizable={frame['resizableFrame']}", flush=True)
         try:
+            native_targets = probe_native_input_targets(observed["hwnd"], frame)
+            report["nativeInputTargets"] = native_targets
+            report["nativeInputTargetsPassed"] = native_targets["passed"]
+            print("U1 native input targets: " +
+                  f"caption={native_targets['captionDragHit']}, " +
+                  f"left={native_targets['leftResizeHit']}, " +
+                  f"right={native_targets['rightResizeHit']}, " +
+                  f"passed={native_targets['passed']}", flush=True)
+        except Exception as error:
+            report["nativeInputTargetsError"] = str(error)
+        try:
             resize = probe_free_resize(observed["hwnd"], frame)
             report["windowResize"] = resize
             report["freeResizePassed"] = (
@@ -708,9 +792,12 @@ def run_probe(args):
         if not report["managedQuitObserved"]:
             raise RuntimeError(
                 "GUI Player did not emit managed normal quit completion marker")
-        if not report["nativeFramePassed"] or not report["freeResizePassed"]:
+        if not (report["nativeFramePassed"] and
+                report["nativeInputTargetsPassed"] and
+                report["freeResizePassed"]):
             raise RuntimeError(
-                "P1 native Windows title bar or free aspect resize validation failed")
+                "P1 native Windows caption, mouse resize edge or free "
+                "aspect resize validation failed")
         report["passed"] = True
         print("U1 Windows visible-window/normal-quit probe PASS "
               "(interactive UI not accepted)", flush=True)
