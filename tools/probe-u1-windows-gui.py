@@ -112,6 +112,11 @@ def parse_workspace_resize_transition(log_text, mode, start_offset=0):
             return None
         if mode == "expanded" and values["height"] < 640:
             return None
+        # A responsive tab strip consumes additional vertical space. Never
+        # accept an expanded narrow layout with the old 150px dock.
+        if mode == "expanded" and values.get("narrow_tabs") is True and \
+                values["bottom_h"] < 180:
+            return None
         if mode == "compact" and not 180 <= values["height"] < 640:
             return None
         return values
@@ -717,6 +722,10 @@ def run_self_test():
             transition.replace("narrow_tabs=true", "narrow_tabs=maybe"),
             "expanded") is not None:
         raise RuntimeError("Invalid narrow-tab evidence accepted")
+    if parse_workspace_resize_transition(
+            transition.replace("bottom_h=150", "bottom_h=179"),
+            "expanded") is not None:
+        raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
     compact = transition.replace("expanded", "compact").replace(
