@@ -131,4 +131,33 @@ Tracking pane. The hosted desktop BitBlt was still uniform on that run. Manual W
 interaction and the original operator-specific NullReferenceException investigation
 remain unaccepted, regardless of green CI status.
 
+## Maximized-window UI rebuild and confirmed CI NullReferenceException (2026-10-31)
+
+Source-matched [CI #41168456575](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41168456575)
+at `588dcd3` **failed**, while inherited P0–P13, Windows startup/quit,
+native caption and both resize-edge hit tests, independent aspect resizing
+and initial compact dock measurements passed. The new maximize-to-expanded
+GUI gate failed because no completed expanded layout marker was emitted.
+
+The archived **real P1 Player.log** from that failing run includes a concrete
+`NullReferenceException` at `UnityEngine.UIElements.ScrollView.ShouldDeferScrollTo`,
+called by `ScrollView.ScrollTo` at
+`WorkspaceToolkitShell.RuntimeLog.cs:253` during both
+`BuildWorkspaceLogPanel` and the stage-5 log refresh. On resize,
+`Build()` creates the log ScrollView before the new control is attached
+to the UI Toolkit panel, so immediately calling `ScrollTo` throws,
+aborts the workspace rebuild and prevents the expanded layout marker.
+This is a *reproduced CI exception path*; it is not proof that the
+original operator's unaccompanied NRE screenshot came from the same path.
+
+The fix replaces immediate `ScrollTo` with scheduled, attachment-checked,
+geometry-based scroll offsets and protects against callbacks referring to
+a replaced log ScrollView. The native Windows GUI probe now fails when
+the actual Player.log contains a `NullReferenceException` or a failed
+U1 panel refresh, instead of allowing a successful titlebar/resize check
+to hide runtime errors. Verify the fix with a **new exact-source Windows
+Player log**, including both `mode=expanded` and restored
+`mode=compact` layout markers, clean managed quit and no NRE.
+Until then, do not mark the UI rebuild regression closed.
+
 Do not merge PR #44 or publish a U1 release until the above evidence is collected.
