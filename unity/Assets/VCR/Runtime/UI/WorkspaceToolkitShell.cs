@@ -269,6 +269,13 @@ namespace VCR.Runtime.UI
                 _modelPathInput.panel != _workspaceRoot.panel)
                 return;
 
+            // Record measured compact geometry in the real Player log, not
+            // only a boolean tree-attachment marker. The Windows probe can
+            // independently archive and verify these measured dimensions.
+            float compactDockHeight = -1f;
+            float compactTabsHeight = -1f;
+            float compactPanelHeight = -1f;
+            float compactScrollHeight = -1f;
             // The UI may be attached while its central Preview forces the
             // bottom dock beneath the visible window. Treat that layout as
             // NOT ready in the real short-height Windows GUI smoke test.
@@ -277,6 +284,7 @@ namespace VCR.Runtime.UI
                 if (_bottomDock == null || _status == null) return;
                 var bottomBounds = _bottomDock.worldBound;
                 var statusBounds = _status.worldBound;
+                compactDockHeight = bottomBounds.height;
                 if (bottomBounds.height < 95f ||
                     bottomBounds.yMax > statusBounds.yMin + 1.5f ||
                     bottomBounds.yMax > bounds.yMax + 1.5f)
@@ -290,6 +298,7 @@ namespace VCR.Runtime.UI
                     bottomTabs.resolvedStyle.display != DisplayStyle.None)
                 {
                     var tabBounds = bottomTabs.worldBound;
+                    compactTabsHeight = tabBounds.height;
                     if (tabBounds.width < bottomBounds.width * 0.75f ||
                         tabBounds.height < 15f ||
                         tabBounds.height > bottomBounds.height * 0.55f ||
@@ -302,6 +311,7 @@ namespace VCR.Runtime.UI
                             child.resolvedStyle.display == DisplayStyle.None)
                             continue;
                         var panelBounds = child.worldBound;
+                        compactPanelHeight = panelBounds.height;
                         if (panelBounds.yMin < tabBounds.yMax - 1.5f ||
                             panelBounds.yMax > bottomBounds.yMax + 1.5f)
                             return;
@@ -315,6 +325,9 @@ namespace VCR.Runtime.UI
                                 descendant.resolvedStyle.display == DisplayStyle.None)
                                 continue;
                             var scrollBounds = descendant.worldBound;
+                            compactScrollHeight = compactScrollHeight < 0f
+                                ? scrollBounds.height
+                                : Mathf.Min(compactScrollHeight, scrollBounds.height);
                             // An 8px viewport technically fits but is not
                             // operable. Require a minimal scrollable area in
                             // the actual short-window Windows GUI probe.
@@ -355,7 +368,15 @@ namespace VCR.Runtime.UI
                 " height=" + bounds.height.ToString("0.##",
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " camera_apply_attached=true light_apply_attached=true " +
-                "model_path_attached=true", this);
+                "model_path_attached=true" +
+                " compact_bottom_dock_h=" + compactDockHeight.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " compact_bottom_tabs_h=" + compactTabsHeight.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " compact_bottom_panel_h=" + compactPanelHeight.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " compact_bottom_scroll_h=" + compactScrollHeight.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture), this);
             if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                 StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                     _guiProbeScreenshotPath));
