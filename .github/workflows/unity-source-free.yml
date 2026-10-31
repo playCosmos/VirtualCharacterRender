@@ -347,8 +347,9 @@ jobs:
             Write-Host 'No real Unity HWND observed; GUI acceptance remains unverified.'
             exit 0
           }
-          if (-not $probe.nativeFramePassed -or -not $probe.freeResizePassed) {
-            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), style=$($probe.nativeFrame.styleHex)"
+          if (-not $probe.nativeFramePassed -or -not $probe.freeResizePassed -or
+              -not $probe.nativeInputTargetsPassed) {
+            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), mouseHitTargets=$($probe.nativeInputTargetsPassed), style=$($probe.nativeFrame.styleHex)"
           }
           if (-not $probe.workspaceUiTreeReady) {
             throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
