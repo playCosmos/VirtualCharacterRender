@@ -401,6 +401,39 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private System.Collections.IEnumerator ReportWorkspaceResizeTransitionAfterLayout(
+            bool expectedCompact)
+        {
+            // Wait for the real UIDocument to lay out its rebuilt workspace.
+            // Only the explicit Windows GUI probe records this evidence.
+            yield return new WaitForEndOfFrame();
+            if (_workspaceRoot == null || _workspaceRoot.panel == null ||
+                _usingCompactHeight != expectedCompact || _status == null)
+                yield break;
+            var root = _workspaceRoot.worldBound;
+            var status = _status.worldBound;
+            var bottom = _bottomDock != null ? _bottomDock.worldBound : default(Rect);
+            if (root.height < 180f || root.width < 256f ||
+                status.yMax > root.yMax + 1.5f ||
+                (_bottomVisible &&
+                 (bottom.height < 95f || bottom.yMax > status.yMin + 1.5f)))
+                yield break;
+            if (expectedCompact && _bottomVisible)
+            {
+                var tabs = _bottomDock.Q<VisualElement>("vcr-dock-tabs-bottom");
+                if (tabs == null || tabs.worldBound.width < bottom.width * 0.75f)
+                    yield break;
+            }
+            Debug.Log("VCR U1 GUI probe: resize_layout_ready=true mode=" +
+                (expectedCompact ? "compact" : "expanded") +
+                " width=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " height=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " bottom_h=" + bottom.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture), this);
+        }
+
         private void Update()
         {
             // Rebuild only when crossing the compact-height threshold.
@@ -408,7 +441,12 @@ namespace VCR.Runtime.UI
             // without rewriting saved preferences.
             if (_workspaceRoot != null &&
                 (Screen.height < 640) != _usingCompactHeight)
+            {
                 Build();
+                if (_guiProbeRequested)
+                    StartCoroutine(ReportWorkspaceResizeTransitionAfterLayout(
+                        _usingCompactHeight));
+            }
             ReportWorkspaceGuiProbeIfReady();
             RefreshWorkspacePanelsSafely();
             try
