@@ -155,9 +155,40 @@ geometry-based scroll offsets and protects against callbacks referring to
 a replaced log ScrollView. The native Windows GUI probe now fails when
 the actual Player.log contains a `NullReferenceException` or a failed
 U1 panel refresh, instead of allowing a successful titlebar/resize check
-to hide runtime errors. Verify the fix with a **new exact-source Windows
-Player log**, including both `mode=expanded` and restored
-`mode=compact` layout markers, clean managed quit and no NRE.
-Until then, do not mark the UI rebuild regression closed.
+to hide runtime errors. The original crash path was subsequently
+re-tested in exact-source Windows GUI CI with both expanded and compact
+rebuild markers and no runtime exceptions; this closes the reproduced
+CI ScrollView regression, but not the operator screenshot's untraced NRE.
 
-Do not merge PR #44 or publish a U1 release until the above evidence is collected.
+## Narrow-window automatic tabs: actual Windows evidence (2026-11-01)
+
+The 1024px-wide, 697px-high maximized Windows Player initially compressed
+a newly tabbed Tracking scroll viewport below its minimum usable height.
+The source-matched [CI #41213541652](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41213541652)
+correctly failed with `reason=bottom_scroll_clipped` and 31px of
+Tracking viewport because the dock still reserved only 150px.
+The responsive fix reserves
+`max(savedBottomHeight, min(240px, Screen.height * 0.30))` in
+narrow-but-tall windows; compact-height and wide-window saved heights
+remain unchanged. The validation additionally rejects a narrow expanded
+dock below 180px and a direct content scroll viewport below 36px.
+
+Exact-source [CI #41217453942](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41217453942)
+at `98daa23` **passed** inherited Unity P0–P13, Windows P1 build/startup
+and managed quit, native caption and resize hit tests, independent-axis
+window resizing, maximize/minimize/restore, both UI transitions, and
+the repository validators. Downloaded `u1-p1-windows-gui-probe-41217453942-1`
+records expanded UI **1024×697, bottom dock 209px, narrow_tabs=true** and
+restored compact UI **962×520, bottom dock 177px**. The
+`unity-expanded.png` and `unity-restored.png` frames are valid and have
+been visually inspected, with no dock/status overlap. The actual
+`Player.log` and probe report have **no runtime exceptions** and exit code 0.
+The narrow Scenes header still had clipped descriptive text and now uses
+wrapping rather than one-line overflow; that cosmetic follow-up requires
+its own exact-source screenshot verification.
+
+**CI success is not physical Windows operator acceptance.** Native
+mouse dragging, actual dock and Settings interactions, model loading,
+tracking/VRM behavior, DPI/multiple monitors, macOS, and the original
+operator-specific NRE report remain unaccepted. Keep PR #44 Draft
+and do not merge or release U1 before those checks are completed.
