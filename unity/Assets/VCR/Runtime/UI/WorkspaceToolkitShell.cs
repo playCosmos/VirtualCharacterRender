@@ -405,18 +405,45 @@ namespace VCR.Runtime.UI
             bool expectedCompact)
         {
             // Wait for the real UIDocument to lay out its rebuilt workspace.
-            // Only the explicit Windows GUI probe records this evidence.
+            // Keep diagnostic evidence even when an oversized panel prevents
+            // acceptance, so a CI failure reveals the actual offending bounds.
             yield return new WaitForEndOfFrame();
+            var mode = expectedCompact ? "compact" : "expanded";
             if (_workspaceRoot == null || _workspaceRoot.panel == null ||
                 _usingCompactHeight != expectedCompact || _status == null)
+            {
+                Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true mode=" +
+                    mode + " reason=detached_or_mode_changed screen_h=" +
+                    Screen.height, this);
                 yield break;
+            }
             var root = _workspaceRoot.worldBound;
             var status = _status.worldBound;
             var bottom = _bottomDock != null ? _bottomDock.worldBound : default(Rect);
-            if (root.height < 180f || root.width < 256f ||
-                status.yMax > root.yMax + 1.5f ||
-                (_bottomVisible &&
-                 (bottom.height < 95f || bottom.yMax > status.yMin + 1.5f)))
+            var reason = root.height < 180f || root.width < 256f
+                ? "root_too_small"
+                : status.yMax > root.yMax + 1.5f
+                    ? "status_outside_root"
+                    : _bottomVisible && bottom.height < 95f
+                        ? "bottom_too_small"
+                        : _bottomVisible && bottom.yMax > status.yMin + 1.5f
+                            ? "bottom_overlaps_status" : "none";
+            Debug.Log("VCR U1 GUI probe: resize_layout_observed=true mode=" +
+                mode + " screen_h=" + Screen.height +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " status_y=" + status.yMin.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " status_bottom=" + status.yMax.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " bottom_y=" + bottom.yMin.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " bottom_end=" + bottom.yMax.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " bottom_h=" + bottom.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " reject=" + reason, this);
+            if (reason != "none")
                 yield break;
             if (expectedCompact && _bottomVisible)
             {
