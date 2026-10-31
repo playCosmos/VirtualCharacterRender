@@ -288,7 +288,23 @@ def probe_native_input_targets(hwnd, frame):
     return result
 
 
-def probe_native_window_controls(hwnd, before, player_log):
+def wait_for_workspace_screenshot(path, expected_layout, mode):
+    """Require an actual PNG rendered by Unity at the measured layout size."""
+    deadline = time.monotonic() + 5
+    last = None
+    while time.monotonic() < deadline:
+        last = inspect_unity_screenshot(path)
+        if last is not None and all(
+                abs(last[key] - expected_layout[key]) <= 8
+                for key in ("width", "height")):
+            return last
+        time.sleep(0.15)
+    raise RuntimeError(
+        "Unity did not capture the " + mode +
+        " layout at its measured dimensions: " + str(last))
+
+
+def probe_native_window_controls(hwnd, before, player_log, output):
     """Exercise actual OS maximize/minimize/restore controls on the P1 HWND.
 
     This checks native window-state transitions, not user mouse interaction.
@@ -311,6 +327,8 @@ def probe_native_window_controls(hwnd, before, player_log):
         "restoredOriginalSize": False,
         "expandedLayout": None,
         "compactRestoredLayout": None,
+        "expandedUnityFrame": None,
+        "compactRestoredUnityFrame": None,
         "passed": False,
     }
 
@@ -336,6 +354,8 @@ def probe_native_window_controls(hwnd, before, player_log):
         result["maximizedOuterSize"] = inspect_native_window_frame(hwnd)["outerSize"]
         result["expandedLayout"] = await_workspace_resize_transition(
             player_log, "expanded", log_offset)
+        result["expandedUnityFrame"] = wait_for_workspace_screenshot(
+            output / "unity-expanded.png", result["expandedLayout"], "expanded")
 
         log_offset = len(player_log.read_text(
             encoding="utf-8", errors="replace"))
@@ -344,6 +364,8 @@ def probe_native_window_controls(hwnd, before, player_log):
         result["restoredFromMaximize"] = True
         result["compactRestoredLayout"] = await_workspace_resize_transition(
             player_log, "compact", log_offset)
+        result["compactRestoredUnityFrame"] = wait_for_workspace_screenshot(
+            output / "unity-restored.png", result["compactRestoredLayout"], "restored")
 
         user32.ShowWindow(hwnd, sw_minimize)
         wait_until(lambda: bool(user32.IsIconic(hwnd)), "minimize")
@@ -370,7 +392,9 @@ def probe_native_window_controls(hwnd, before, player_log):
                                 result["restoredFromMinimize"],
                                 result["restoredOriginalSize"],
                                 result["expandedLayout"] is not None,
-                                result["compactRestoredLayout"] is not None))
+                                result["compactRestoredLayout"] is not None,
+                                result["expandedUnityFrame"] is not None,
+                                result["compactRestoredUnityFrame"] is not None))
         return result
     finally:
         # Do not leave the hosted Player minimized/maximized after failure.
@@ -777,7 +801,8 @@ def run_probe(args):
     report_path = output / "gui-probe.json"
     config_path = output / "gui-probe-config.json"
     unity_image_path = output / "unity-frame.png"
-    for stale in (player_log, report_path, config_path, unity_image_path):
+    for stale in (player_log, report_path, config_path, unity_image_path,
+                  output / "unity-expanded.png", output / "unity-restored.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
@@ -940,7 +965,7 @@ def run_probe(args):
         # actually perform these state transitions on the Unity HWND.
         try:
             controls = probe_native_window_controls(
-                observed["hwnd"], frame, player_log)
+                observed["hwnd"], frame, player_log, output)
             report["nativeWindowControls"] = controls
             report["nativeWindowControlsPassed"] = controls["passed"]
             print("U1 native window maximize/minimize/restore: " +
@@ -949,6 +974,8 @@ def run_probe(args):
                   f"restored={controls['restoredOriginalSize']}, " +
                   f"expandedLayout={controls['expandedLayout'] is not None}, " +
                   f"compactRestored={controls['compactRestoredLayout'] is not None}, " +
+                  f"expandedFrame={controls['expandedUnityFrame'] is not None}, " +
+                  f"restoredFrame={controls['compactRestoredUnityFrame'] is not None}, " +
                   f"passed={controls['passed']}", flush=True)
         except Exception as error:
             report["nativeWindowControlsError"] = str(error)
