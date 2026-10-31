@@ -712,7 +712,7 @@ def run_self_test():
         raise RuntimeError("Unattached workspace accepted as geometry")
 
     transition = ("VCR U1 GUI probe: resize_layout_ready=true" +
-                  " mode=expanded width=962 height=730 bottom_h=150 narrow_tabs=true")
+                  " mode=expanded width=962 height=730 bottom_h=210 narrow_tabs=true")
     if parse_workspace_resize_transition(transition, "expanded") is None:
         raise RuntimeError("Valid expanded transition marker rejected")
     if parse_workspace_resize_transition(transition, "expanded")[
@@ -723,7 +723,7 @@ def run_self_test():
             "expanded") is not None:
         raise RuntimeError("Invalid narrow-tab evidence accepted")
     if parse_workspace_resize_transition(
-            transition.replace("bottom_h=150", "bottom_h=179"),
+            transition.replace("bottom_h=210", "bottom_h=179"),
             "expanded") is not None:
         raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
