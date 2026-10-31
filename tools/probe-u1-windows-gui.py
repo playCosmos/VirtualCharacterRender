@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zlib
 
 
 WM_CLOSE = 0x0010
@@ -149,26 +150,102 @@ def sha256(path):
 
 
 def inspect_unity_screenshot(path):
-    """Read an actual completed Unity PNG, not a fabricated UI screenshot."""
+    """Inspect real PNG pixels without external image packages.
+
+    A valid PNG header and dimensions alone can pass even if the Player
+    captured a blank frame. Diversity is only a render-quality smoke
+    signal, never proof of correct widgets or interactive acceptance.
+    """
     if not path.is_file():
         return None
     data = path.read_bytes()
-    if len(data) < 69 or data[:8] != b"\x89PNG\r\n\x1a\n":
+    if len(data) < 69 or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
         return None
     if data[12:16] != b"IHDR" or data[-8:-4] != b"IEND":
         return None
-    width, height = struct.unpack(">II", data[16:24])
+    width, height, depth, color, compression, filtering, interlace = struct.unpack(
+        ">IIBBBBB", data[16:29])
     if not 64 <= width <= 8192 or not 64 <= height <= 8192:
         return None
+    if (depth, color, compression, filtering, interlace) not in (
+            (8, 2, 0, 0, 0), (8, 6, 0, 0, 0)):
+        return None
+    bpp = 3 if color == 2 else 4
+    stride = width * bpp
+    if height * (stride + 1) > 64 * 1024 * 1024:
+        return None
+    offset = 8
+    compressed = []
+    has_end = False
+    while offset + 12 <= len(data):
+        size = struct.unpack_from(">I", data, offset)[0]
+        if size > len(data) - offset - 12:
+            return None
+        name = data[offset + 4:offset + 8]
+        chunk = data[offset + 8:offset + 8 + size]
+        if name == b"IDAT":
+            compressed.append(chunk)
+        if name == b"IEND":
+            has_end = True
+            break
+        offset += size + 12
+    if not has_end or not compressed:
+        return None
+    try:
+        pixels = zlib.decompress(b"".join(compressed))
+    except zlib.error:
+        return None
+    if len(pixels) != height * (stride + 1):
+        return None
+
+    sample_x = sorted({min(width - 1, (2 * i + 1) * width // 80)
+                       for i in range(40)})
+    sample_y = {min(height - 1, (2 * j + 1) * height // 60)
+                for j in range(30)}
+    previous = bytearray(stride)
+    sampled = Counter()
+    offset = 0
+    for y in range(height):
+        filter_type = pixels[offset]
+        current = bytearray(pixels[offset + 1:offset + 1 + stride])
+        offset += stride + 1
+        if filter_type not in (0, 1, 2, 3, 4):
+            return None
+        if filter_type:
+            for i in range(stride):
+                left = current[i - bpp] if i >= bpp else 0
+                above = previous[i]
+                upper_left = previous[i - bpp] if i >= bpp else 0
+                if filter_type == 1:
+                    predictor = left
+                elif filter_type == 2:
+                    predictor = above
+                elif filter_type == 3:
+                    predictor = (left + above) // 2
+                else:
+                    p = left + above - upper_left
+                    da, db, dc = abs(p-left), abs(p-above), abs(p-upper_left)
+                    predictor = (left if da <= db and da <= dc else
+                                 above if db <= dc else upper_left)
+                current[i] = (current[i] + predictor) & 255
+        if y in sample_y:
+            for x in sample_x:
+                sampled[bytes(current[x * bpp:x * bpp + 3])] += 1
+        previous = current
+    total = sum(sampled.values())
+    dominant = max(sampled.values()) / total if total else 1.0
+    diverse = len(sampled) >= 10 and dominant < 0.95
     return {
         "file": path.name,
         "sha256": sha256(path),
         "width": width,
         "height": height,
         "bytes": len(data),
+        "sampledDistinctPixels": len(sampled),
+        "sampledDominantFraction": round(dominant, 4),
+        "pixelDiversityPassed": diverse,
         "uiPixelsConfirmed": False,
     }
-
 
 def visible_player_windows(pid):
     """Read-only enumeration of windows owned by the exact Player process."""
