@@ -93,6 +93,11 @@ def parse_workspace_resize_transition(log_text, mode, start_offset=0):
             if "=" not in token:
                 continue
             key, value = token.split("=", 1)
+            if key == "narrow_tabs":
+                if value not in ("true", "false"):
+                    return None
+                values[key] = value == "true"
+                continue
             if key not in ("width", "height", "bottom_h"):
                 continue
             try:
@@ -102,7 +107,8 @@ def parse_workspace_resize_transition(log_text, mode, start_offset=0):
             if not math.isfinite(parsed):
                 return None
             values[key] = parsed
-        if len(values) != 3 or values["width"] < 256 or values["bottom_h"] < 95:
+        if not all(k in values for k in ("width", "height", "bottom_h")) or \
+                values["width"] < 256 or values["bottom_h"] < 95:
             return None
         if mode == "expanded" and values["height"] < 640:
             return None
@@ -351,9 +357,17 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         user32.ShowWindow(hwnd, sw_maximize)
         wait_until(lambda: bool(user32.IsZoomed(hwnd)), "maximize")
         result["maximized"] = True
-        result["maximizedOuterSize"] = inspect_native_window_frame(hwnd)["outerSize"]
+        maximized_frame = inspect_native_window_frame(hwnd)
+        result["maximizedOuterSize"] = maximized_frame["outerSize"]
+        result["maximizedClientSize"] = maximized_frame["clientSize"]
         result["expandedLayout"] = await_workspace_resize_transition(
             player_log, "expanded", log_offset)
+        # An expanded window that is tall but narrower than the responsive
+        # breakpoint must actually have passed Unity's live auto-tab check.
+        if maximized_frame["clientSize"][0] < 1100 and \
+                result["expandedLayout"].get("narrow_tabs") is not True:
+            raise RuntimeError(
+                "Expanded narrow Unity workspace did not expose verified dock tabs")
         result["expandedUnityFrame"] = wait_for_workspace_screenshot(
             output / "unity-expanded.png", result["expandedLayout"], "expanded")
 
@@ -693,9 +707,16 @@ def run_self_test():
         raise RuntimeError("Unattached workspace accepted as geometry")
 
     transition = ("VCR U1 GUI probe: resize_layout_ready=true" +
-                  " mode=expanded width=962 height=730 bottom_h=150")
+                  " mode=expanded width=962 height=730 bottom_h=150 narrow_tabs=true")
     if parse_workspace_resize_transition(transition, "expanded") is None:
         raise RuntimeError("Valid expanded transition marker rejected")
+    if parse_workspace_resize_transition(transition, "expanded")[
+            "narrow_tabs"] is not True:
+        raise RuntimeError("Narrow automatic tab evidence missing")
+    if parse_workspace_resize_transition(
+            transition.replace("narrow_tabs=true", "narrow_tabs=maybe"),
+            "expanded") is not None:
+        raise RuntimeError("Invalid narrow-tab evidence accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
     compact = transition.replace("expanded", "compact").replace(
