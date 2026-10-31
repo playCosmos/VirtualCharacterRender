@@ -457,6 +457,13 @@ namespace VCR.Runtime.UI
             // dock tabs, not merely report that the new mode was selected.
             if (!expectedCompact && _usingNarrowWidth)
             {
+                if (_bottomVisible && bottom.height < 180f)
+                {
+                    Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                        "mode=expanded reason=narrow_bottom_too_small " +
+                        "bottom_h=" + bottom.height, this);
+                    yield break;
+                }
                 foreach (var dock in new[] { _leftDock, _rightDock, _bottomDock })
                 {
                     if (dock == null || dock.resolvedStyle.display == DisplayStyle.None)
@@ -1752,7 +1759,14 @@ namespace VCR.Runtime.UI
             bottom.style.height = compactHeight
                 ? Mathf.Min(Mathf.Max(_bottomHeight, Screen.height * 0.34f),
                     Mathf.Max(120f, Screen.height * 0.44f))
-                : _bottomHeight;
+                // A narrow but tall window automatically adds a tab strip,
+                // which must not consume the same 150px bottom allocation as
+                // three side-by-side panels. Reserve scrolling room, but cap
+                // the auto increase to keep the central Preview usable.
+                : narrowWidth
+                    ? Mathf.Max(_bottomHeight,
+                        Mathf.Min(240f, Screen.height * 0.30f))
+                    : _bottomHeight;
             bottom.style.display = _bottomVisible ? DisplayStyle.Flex : DisplayStyle.None;
             _bottomDock = bottom;
 
@@ -2008,12 +2022,11 @@ namespace VCR.Runtime.UI
                 ApplyDockTabs(left, "left");
                 ApplyDockTabs(right, "right");
                 ApplyDockTabs(bottom, "bottom");
-                if (compactHeight)
+                if (automaticTabMode)
                 {
-                    // The old minimum panel heights are for the stacked view;
-                    // retaining them in a 400px-high window makes panels
-                    // overflow the bottom dock. All substantive content has
-                    // scrollable containers.
+                    // Stacked-pane minimum heights must never constrain an
+                    // automatically tabbed dock, whether the window is short
+                    // or only narrow. All substantive content can scroll.
                     foreach (var dock in new[] { left, right, bottom })
                         foreach (var child in dock.Children())
                             if (child.name != null &&
