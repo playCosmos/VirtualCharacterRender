@@ -451,6 +451,48 @@ namespace VCR.Runtime.UI
                 if (tabs == null || tabs.worldBound.width < bottom.width * 0.75f)
                     yield break;
             }
+            if (!expectedCompact && _bottomVisible)
+            {
+                // The dock's outer rectangle may be valid while wrapped
+                // operator controls cover its actual Tracking/Actions/Events
+                // ScrollViews. Reject any visible child outside its panel.
+                foreach (var child in _bottomDock.Children())
+                {
+                    if (child.name == null ||
+                        !child.name.StartsWith("vcr-panel-", StringComparison.Ordinal) ||
+                        child.resolvedStyle.display == DisplayStyle.None)
+                        continue;
+                    var panelBounds = child.worldBound;
+                    foreach (var descendant in child.Children())
+                    {
+                        if (!(descendant is ScrollView) ||
+                            descendant.resolvedStyle.display == DisplayStyle.None)
+                            continue;
+                        var scroll = descendant.worldBound;
+                        if (scroll.height < 20f ||
+                            scroll.yMin < panelBounds.yMin - 1.5f ||
+                            scroll.yMax > panelBounds.yMax + 1.5f)
+                        {
+                            Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                                "mode=expanded reason=bottom_scroll_clipped panel=" +
+                                child.name + " scroll_h=" + scroll.height.ToString("0.##",
+                                    System.Globalization.CultureInfo.InvariantCulture), this);
+                            yield break;
+                        }
+                    }
+                    var footer = child.Q<VisualElement>("vcr-dock-actions-" +
+                        child.name.Substring("vcr-panel-".Length));
+                    if (footer != null &&
+                        footer.resolvedStyle.display != DisplayStyle.None &&
+                        footer.worldBound.yMax > panelBounds.yMax + 1.5f)
+                    {
+                        Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                            "mode=expanded reason=bottom_actions_clipped panel=" +
+                            child.name, this);
+                        yield break;
+                    }
+                }
+            }
             Debug.Log("VCR U1 GUI probe: resize_layout_ready=true mode=" +
                 (expectedCompact ? "compact" : "expanded") +
                 " width=" + root.width.ToString("0.##",
