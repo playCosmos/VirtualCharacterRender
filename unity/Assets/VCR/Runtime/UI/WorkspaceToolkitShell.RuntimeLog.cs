@@ -250,7 +250,32 @@ namespace VCR.Runtime.UI
             _workspaceLogSummary.text = "Recent logs: " + _workspaceLogHistory.Count +
                 " | Dropped during overload: " + Volatile.Read(ref _workspaceDroppedLogCount);
             if (last != null)
-                _workspaceLogList.ScrollTo(last);
+            {
+                // RefreshWorkspaceLogView is also called inside Build(),
+                // before the new ScrollView joins a UIDocument panel.
+                // ScrollTo() invokes Unity UI Toolkit's ShouldDeferScrollTo
+                // on that detached control, raising NullReferenceException
+                // and aborting the entire workspace resize rebuild.
+                // Schedule a geometry-based bottom offset after attachment;
+                // guard stale callbacks when Build() replaces this ScrollView.
+                var currentList = _workspaceLogList;
+                currentList.schedule.Execute(() =>
+                {
+                    if (!ReferenceEquals(_workspaceLogList, currentList) ||
+                        currentList.panel == null ||
+                        currentList.contentViewport == null)
+                        return;
+                    var contentHeight = currentList.contentContainer.resolvedStyle.height;
+                    var viewportHeight = currentList.contentViewport.resolvedStyle.height;
+                    if (float.IsNaN(contentHeight) || float.IsInfinity(contentHeight) ||
+                        float.IsNaN(viewportHeight) || float.IsInfinity(viewportHeight) ||
+                        viewportHeight <= 0f)
+                        return;
+                    currentList.scrollOffset = new Vector2(
+                        currentList.scrollOffset.x,
+                        Mathf.Max(0f, contentHeight - viewportHeight));
+                }).ExecuteLater(0);
+            }
         }
 
         private RuntimeDiagnostics ResolveWorkspaceDiagnostics()
