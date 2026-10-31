@@ -12,6 +12,7 @@ import ctypes
 from ctypes import wintypes
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -27,6 +28,46 @@ EXPECTED_CLASS = "UnityWndClass"
 QUIT_MARKER = "VCR exit: OnApplicationQuit finished"
 RUNTIME_STARTUP_MARKER = (
     "VCR inventory: stage=startup category=module id=application status=started")
+WORKSPACE_LAYOUT_MARKER = "VCR U1 GUI probe: workspace_tree_ready=true"
+COMPACT_LAYOUT_FIELDS = {
+    "compact_bottom_dock_h": "dockHeight",
+    "compact_bottom_tabs_h": "tabsHeight",
+    "compact_bottom_panel_h": "panelHeight",
+    "compact_bottom_scroll_h": "scrollHeight",
+}
+
+
+def read_compact_layout_evidence(player_log_text):
+    """Parse actual measured UIDocument bounds from the exact Player log."""
+    lines = [line for line in player_log_text.splitlines()
+             if WORKSPACE_LAYOUT_MARKER in line]
+    if not lines:
+        return None
+    values = {}
+    for token in lines[-1].split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        if key not in COMPACT_LAYOUT_FIELDS:
+            continue
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        if not math.isfinite(number):
+            return None
+        values[COMPACT_LAYOUT_FIELDS[key]] = number
+    return values if len(values) == len(COMPACT_LAYOUT_FIELDS) else None
+
+
+def compact_layout_usable(measurements):
+    """Attached controls are insufficient without a usable scroll viewport."""
+    return bool(measurements and
+                measurements["dockHeight"] >= 120 and
+                15 <= measurements["tabsHeight"] <= 75 and
+                measurements["panelHeight"] >= 70 and
+                measurements["scrollHeight"] >= 36 and
+                measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
 def sha256(path):
@@ -404,6 +445,27 @@ def run_self_test():
         else:
             raise RuntimeError("Exited Player accepted as running")
 
+    sample = (WORKSPACE_LAYOUT_MARKER +
+              " width=962 height=520 compact_bottom_dock_h=176.8"
+              " compact_bottom_tabs_h=39.2 compact_bottom_panel_h=130"
+              " compact_bottom_scroll_h=51.5")
+    parsed = read_compact_layout_evidence(sample)
+    if not compact_layout_usable(parsed):
+        raise RuntimeError("Valid compact layout measurements rejected")
+    if compact_layout_usable(read_compact_layout_evidence(
+            sample.replace("compact_bottom_scroll_h=51.5",
+                           "compact_bottom_scroll_h=8"))):
+        raise RuntimeError("Unusable compact scroll viewport accepted")
+    if read_compact_layout_evidence(sample.replace(
+            "compact_bottom_scroll_h=51.5",
+            "compact_bottom_scroll_h=NaN")) is not None:
+        raise RuntimeError("Nonfinite compact geometry accepted")
+    if read_compact_layout_evidence(sample.replace(
+            "compact_bottom_tabs_h=39.2", "")) is not None:
+        raise RuntimeError("Incomplete compact geometry accepted")
+    if read_compact_layout_evidence("VCR U1 GUI probe: something_else=true") is not None:
+        raise RuntimeError("Unattached workspace accepted as geometry")
+
     # Hosted desktops often cannot contain a requested 1280x720 window.
     # Accept only the real overlap; never report full-frame coverage.
     test_cases = [
@@ -486,6 +548,8 @@ def run_probe(args):
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
         "workspaceUiTreeReady": False,
+        "compactLayout": None,
+        "compactLayoutPassed": False,
         "unityFrameCaptured": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
@@ -628,8 +692,17 @@ def run_probe(args):
         # The U1 tree can finish layout after the early polling deadline.
         # Re-read after normal exit rather than freezing a false negative;
         # this only establishes tree attachment, not interactive acceptance.
-        report["workspaceUiTreeReady"] = (
-            "VCR U1 GUI probe: workspace_tree_ready=true" in final_log)
+        report["workspaceUiTreeReady"] = WORKSPACE_LAYOUT_MARKER in final_log
+        report["compactLayout"] = read_compact_layout_evidence(final_log)
+        report["compactLayoutPassed"] = compact_layout_usable(
+            report["compactLayout"])
+        if args.screen_height < 640 and not report["compactLayoutPassed"]:
+            raise RuntimeError(
+                "Compact UI tree attached without measured, usable bottom dock")
+        if report["compactLayout"] is not None:
+            print("U1 measured compact layout: " +
+                  json.dumps(report["compactLayout"], sort_keys=True) +
+                  f", passed={report['compactLayoutPassed']}", flush=True)
         if report["exitCode"] != 0:
             raise RuntimeError("GUI Player exited with " + str(report["exitCode"]))
         if not report["managedQuitObserved"]:
