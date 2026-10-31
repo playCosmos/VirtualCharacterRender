@@ -101,4 +101,34 @@ A manual Windows P1 screenshot at approximately 1621×474 showed stacked Scenes/
 
 The UI refresh loop now isolates its own stage exceptions and logs the exact stage plus full stack at most once per 15 seconds; a failing panel refresh must not freeze unrelated model/scene status updates. It does **not** claim to have repaired the underlying machine-specific NullReferenceException. Inspect the affected operator's complete Unity Player.log to identify and resolve the originating stack before this issue is closed. On Windows the standard log is under `%USERPROFILE%\\AppData\\LocalLow\\playCosmos\\Virtual Character Renderer\\Player.log`. Confirm the installed product/company names if Unity uses an alternate folder. Retest a short window, restore the full Player size, move panels, and check that the Development Console stays free of repeated exceptions.
 
+## P1 compact Windows GUI quantitative regression evidence (2026-10-31)
+
+At 960×520, U1 must preserve an ordinary captioned, independently resizable Windows
+dashboard while keeping the bottom Tracking/Actions/Events tab strip **above** the active
+panel and its ScrollView **inside** that panel (without covering the status footer).
+Visual review of a prior source-matched Unity screenshot uncovered three separate
+regressions that passed tree-attachment-only checks: an unshrinkable Preview, a bottom
+tab strip placed at the left of its panel, and a nearly collapsed Tracking ScrollView.
+The bottom dock now reserves approximately 34% of the compact window height, capped at
+44%, while full-size layout and saved operator preferences remain unchanged.
+
+The opt-in real Player log emits `VCR U1 GUI probe: workspace_tree_ready=true` **only
+after** the live UIDocument bounds checks pass. That line also records four measurements:
+`compact_bottom_dock_h`, `compact_bottom_tabs_h`,
+`compact_bottom_panel_h` and `compact_bottom_scroll_h`. The Windows
+`tools/probe-u1-windows-gui.py` extracts those values into `gui-probe.json` as
+`compactLayout` and requires `compactLayoutPassed=true` on short-screen probes
+(dock ≥120, tab 15–75, panel ≥70 and usable ScrollView ≥36 UI units). The CI
+step following artifact upload fails if an observed GUI has no usable measurements.
+Inspect the actual screenshot as well: these numerical gates do **not** certify readable
+controls, clicking, keyboard focus, dock resizing or VRM/tracking behavior.
+
+The previous source-matched Unity/Windows run
+[#41147254847](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41147254847)
+at `7bf647c` passed native frame, independent resize, workspace attachment, scene
+configuration and normal-quit checks; its 962×520 Unity screenshot showed the expanded
+Tracking pane. The hosted desktop BitBlt was still uniform on that run. Manual Windows
+interaction and the original operator-specific NullReferenceException investigation
+remain unaccepted, regardless of green CI status.
+
 Do not merge PR #44 or publish a U1 release until the above evidence is collected.
