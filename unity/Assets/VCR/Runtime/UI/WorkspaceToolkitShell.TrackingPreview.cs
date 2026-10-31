@@ -67,10 +67,21 @@ namespace VCR.Runtime.UI
         private void RefreshWorkspaceTrackingCameraPreview()
         {
             if (_workspaceTrackingCameraToggle != null)
-                _workspaceTrackingCameraToggle.text =
-                    _workspaceTrackingCameraRequested
-                        ? "Hide tracking camera preview"
-                        : "Show tracking camera preview";
+            {
+                // A stacked 1024px workspace divides the bottom dock into
+                // narrow panels. The old full caption overflowed Tracking's
+                // scroll viewport, forcing a horizontal scrollbar and making
+                // the button label unreadable. Preserve the full wording in
+                // the wide compact-tab layout and in the tooltip.
+                var fullLabel = _workspaceTrackingCameraRequested
+                    ? "Hide tracking camera preview"
+                    : "Show tracking camera preview";
+                _workspaceTrackingCameraToggle.text = _usingCompactHeight
+                    ? fullLabel
+                    : (_workspaceTrackingCameraRequested
+                        ? "Hide preview" : "Show preview");
+                _workspaceTrackingCameraToggle.tooltip = fullLabel;
+            }
 
             // Clearing the Image's source is intentional; hiding only its
             // container would retain a sensitive texture as drawable UI data.
