@@ -459,6 +459,29 @@ namespace VCR.Runtime.UI
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " bottom_h=" + bottom.height.ToString("0.##",
                     System.Globalization.CultureInfo.InvariantCulture), this);
+            // The compact startup screenshot alone does not show whether the
+            // rebuilt expanded dashboard clips or overlaps after maximize.
+            // Capture both real rendered transition frames as separate evidence.
+            if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+            {
+                var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    var imagePath = System.IO.Path.Combine(directory,
+                        expectedCompact ? "unity-restored.png" : "unity-expanded.png");
+                    try
+                    {
+                        ScreenCapture.CaptureScreenshot(imagePath);
+                        Debug.Log("VCR U1 GUI probe: resize_screenshot_requested=true mode=" +
+                            mode, this);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning("VCR U1 GUI probe: resize_screenshot_failed mode=" +
+                            mode + " reason=" + exception.Message, this);
+                    }
+                }
+            }
         }
 
         private void Update()
