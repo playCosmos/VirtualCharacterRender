@@ -353,6 +353,13 @@ jobs:
           if (-not $probe.workspaceUiTreeReady) {
             throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
           }
+          # The 960x520 hosted Player must expose quantitative, usable
+          # measured compact dock geometry; tree attachment alone can hide
+          # an entirely collapsed Tracking/Actions/Events scroll viewport.
+          if ($probe.requestedPlayerSize[1] -lt 640 -and
+              (-not $probe.compactLayoutPassed -or $null -eq $probe.compactLayout)) {
+            throw 'P1 compact GUI dock geometry missing or unusable; review Player.log and GUI artifact.'
+          }
           # A fresh P1 config must not silently re-enable the P0 transparent
           # borderless output; check the real JSON written by this Player.
           $configPath = 'Builds/GUIProbe/u1-windows/gui-probe-config.json'
