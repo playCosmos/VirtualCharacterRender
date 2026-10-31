@@ -348,8 +348,9 @@ jobs:
             exit 0
           }
           if (-not $probe.nativeFramePassed -or -not $probe.freeResizePassed -or
-              -not $probe.nativeInputTargetsPassed) {
-            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), mouseHitTargets=$($probe.nativeInputTargetsPassed), style=$($probe.nativeFrame.styleHex)"
+              -not $probe.nativeInputTargetsPassed -or
+              -not $probe.nativeWindowControlsPassed) {
+            throw "P1 native Windows frame FAILED: titlebar=$($probe.nativeFramePassed), freeResize=$($probe.freeResizePassed), mouseHitTargets=$($probe.nativeInputTargetsPassed), maximizeMinimizeRestore=$($probe.nativeWindowControlsPassed), style=$($probe.nativeFrame.styleHex)"
           }
           if (-not $probe.workspaceUiTreeReady) {
             throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
