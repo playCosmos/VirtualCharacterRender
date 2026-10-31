@@ -482,7 +482,11 @@ namespace VCR.Runtime.UI
                     }
                     var footer = child.Q<VisualElement>("vcr-dock-actions-" +
                         child.name.Substring("vcr-panel-".Length));
-                    if (footer != null &&
+                    // Controls inside a ScrollView can legitimately lie
+                    // outside its visible clip until the operator scrolls.
+                    // Check only directly allocated, non-scrollable footers
+                    // for overlap; the parent ScrollView bounds were checked.
+                    if (footer != null && footer.parent == child &&
                         footer.resolvedStyle.display != DisplayStyle.None &&
                         footer.worldBound.yMax > panelBounds.yMax + 1.5f)
                     {
@@ -2330,7 +2334,33 @@ namespace VCR.Runtime.UI
             var down = new Button(() => MovePanelOrder(panel, id, 1)) { text = "Down" };
             down.tooltip = "Move this panel later in the dock.";
             dockActions.Add(down);
-            panel.Add(dockActions);
+            // When bottom panels are stacked in an expanded window, their
+            // dedicated ScrollViews must own the action row. A separate
+            // 58px-high footer squeezed the real Tracking viewport to 16px
+            // inside an otherwise valid 150px dock (Windows CI #41197636101).
+            // Moving the actions into the existing vertical scrolling content
+            // preserves keyboard/mouse reachability without stealing height.
+            if (scrollableFooter)
+            {
+                ScrollView contentScroll = null;
+                foreach (var child in panel.Children())
+                    if (child is ScrollView childScroll)
+                    {
+                        contentScroll = childScroll;
+                        break;
+                    }
+                if (contentScroll != null)
+                    contentScroll.Add(dockActions);
+                else
+                {
+                    // Panels without scrolling content retain direct controls.
+                    // Do not exceed one toolbar row in their narrow bottom dock.
+                    dockActions.style.maxHeight = 36;
+                    panel.Add(dockActions);
+                }
+            }
+            else
+                panel.Add(dockActions);
         }
 
         private void MovePanelToDock(VisualElement panel, string id, string destination)
