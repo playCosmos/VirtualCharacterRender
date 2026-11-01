@@ -83,6 +83,25 @@ def compact_layout_usable(measurements):
                 measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
+def parse_inspector_axes_evidence(log_text, start_offset=0):
+    """Require the actual expanded Inspector's three visible editable axes."""
+    marker = "VCR U1 GUI probe: inspector_axes_ready=true"
+    for line in log_text[start_offset:].splitlines():
+        if marker not in line:
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            count = int(values["count"])
+            width = float(values["axis_w"])
+        except (KeyError, ValueError):
+            return None
+        if count != 3 or not math.isfinite(width) or width < 40:
+            return None
+        return {"count": count, "axisWidth": width}
+    return None
+
+
 def parse_workspace_resize_transition(log_text, mode, start_offset=0):
     """Require measured Unity layout after a real compact/expanded transition."""
     marker = "VCR U1 GUI probe: resize_layout_ready=true mode=" + mode
@@ -414,6 +433,7 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         "restoredFromMinimize": False,
         "restoredOriginalSize": False,
         "expandedLayout": None,
+        "inspectorAxes": None,
         "compactRestoredLayout": None,
         "expandedUnityFrame": None,
         "compactRestoredUnityFrame": None,
@@ -444,6 +464,18 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         result["maximizedClientSize"] = maximized_frame["clientSize"]
         result["expandedLayout"] = await_workspace_resize_transition(
             player_log, "expanded", log_offset)
+        # Read only the marker emitted before this transition's ready marker.
+        # Otherwise a prior probe or unrelated hidden Inspector can silently
+        # pass the geometry gate without testing any editable X/Y/Z control.
+        expanded_log = player_log.read_text(encoding="utf-8", errors="replace")
+        expanded_log = expanded_log[log_offset:]
+        ready_at = expanded_log.find(
+            "VCR U1 GUI probe: resize_layout_ready=true mode=expanded")
+        result["inspectorAxes"] = parse_inspector_axes_evidence(
+            expanded_log[:ready_at] if ready_at >= 0 else "")
+        if result["inspectorAxes"] is None:
+            raise RuntimeError(
+                "Expanded Inspector X/Y/Z axes were not visibly measured")
         # An expanded window that is tall but narrower than the responsive
         # breakpoint must actually have passed Unity's live auto-tab check.
         if maximized_frame["clientSize"][0] < 1100 and \
@@ -488,6 +520,7 @@ def probe_native_window_controls(hwnd, before, player_log, output):
                                 result["restoredFromMinimize"],
                                 result["restoredOriginalSize"],
                                 result["expandedLayout"] is not None,
+                                result["inspectorAxes"] is not None,
                                 result["compactRestoredLayout"] is not None,
                                 result["expandedUnityFrame"] is not None,
                                 result["compactRestoredUnityFrame"] is not None))
@@ -840,6 +873,24 @@ def run_self_test():
         raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
+    valid_axes = ("VCR U1 GUI probe: inspector_axes_ready=true "
+                  "count=3 axis_w=65")
+    if parse_inspector_axes_evidence(valid_axes) != {
+            "count": 3, "axisWidth": 65.0}:
+        raise RuntimeError("Visible Inspector axis evidence rejected")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace("count=3", "count=2")) is not None:
+        raise RuntimeError("Incomplete Inspector axis count accepted")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace("axis_w=65", "axis_w=29")) is not None:
+        raise RuntimeError("Clipped Inspector numeric inputs accepted")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace("axis_w=65", "axis_w=NaN")) is not None:
+        raise RuntimeError("Nonfinite Inspector axis width accepted")
+    if parse_inspector_axes_evidence(
+            "stale-prefix " + valid_axes,
+            start_offset=len("stale-prefix " + valid_axes)) is not None:
+        raise RuntimeError("Stale Inspector marker accepted")
     compact = transition.replace("expanded", "compact").replace(
         "height=730", "height=520")
     if parse_workspace_resize_transition(compact, "compact") is None:
@@ -1118,6 +1169,7 @@ def run_probe(args):
                   f"minimized={controls['minimized']}, " +
                   f"restored={controls['restoredOriginalSize']}, " +
                   f"expandedLayout={controls['expandedLayout'] is not None}, " +
+                  f"inspectorAxes={controls['inspectorAxes']}, " +
                   f"compactRestored={controls['compactRestoredLayout'] is not None}, " +
                   f"expandedFrame={controls['expandedUnityFrame'] is not None}, " +
                   f"restoredFrame={controls['compactRestoredUnityFrame'] is not None}, " +
