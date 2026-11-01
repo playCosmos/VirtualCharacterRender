@@ -488,6 +488,59 @@ namespace VCR.Runtime.UI
                     }
                 }
             }
+            // Validate the editable axes, not just the outer Inspector
+            // rectangle. Earlier source-matched green CI had three narrow
+            // X/Y/Z rows whose number boxes overflowed the right-hand dock.
+            if (!expectedCompact && _rightVisible && _cameraPositionInput != null)
+            {
+                var inspectorPanel = _rightDock.Q<VisualElement>(
+                    "vcr-panel-" + WorkspacePanelCatalog.Inspector);
+                var inspectorScroll = inspectorPanel != null
+                    ? inspectorPanel.Q<ScrollView>("vcr-inspector-content")
+                    : null;
+                if (inspectorPanel != null &&
+                    inspectorPanel.resolvedStyle.display != DisplayStyle.None &&
+                    inspectorScroll != null)
+                {
+                    var axes = new System.Collections.Generic.List<FloatField>();
+                    _cameraPositionInput.Query<FloatField>().ForEach(
+                        axis => axes.Add(axis));
+                    var clip = inspectorScroll.worldBound;
+                    var validAxes = axes.Count == 3;
+                    if (validAxes)
+                    {
+                        var axisY = axes[0].worldBound.yMin;
+                        foreach (var axis in axes)
+                        {
+                            var rect = axis.worldBound;
+                            if (rect.width < 40f ||
+                                Mathf.Abs(rect.yMin - axisY) > 4f ||
+                                rect.xMin < clip.xMin - 1.5f ||
+                                rect.xMax > clip.xMax + 1.5f)
+                            {
+                                validAxes = false;
+                                break;
+                            }
+                        }
+                        if (validAxes && (axes[0].worldBound.xMin >=
+                            axes[1].worldBound.xMin - 2f ||
+                            axes[1].worldBound.xMin >=
+                            axes[2].worldBound.xMin - 2f))
+                            validAxes = false;
+                    }
+                    if (!validAxes)
+                    {
+                        Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                            "mode=expanded reason=inspector_axes_clipped " +
+                            "count=" + axes.Count, this);
+                        yield break;
+                    }
+                    Debug.Log("VCR U1 GUI probe: inspector_axes_ready=true " +
+                        "count=3 axis_w=" + axes[0].worldBound.width.ToString(
+                            "0.##", System.Globalization.CultureInfo.InvariantCulture),
+                        this);
+                }
+            }
             if (!expectedCompact && _bottomVisible)
             {
                 // The dock's outer rectangle may be valid while wrapped
