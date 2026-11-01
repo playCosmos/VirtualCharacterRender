@@ -1590,6 +1590,59 @@ namespace VCR.Runtime.UI
             field.tooltip = title;
             field.style.minWidth = 0;
             field.style.width = Length.Percent(100);
+            field.style.flexDirection = FlexDirection.Row;
+            // Unity's nested FloatFields have independent label/input
+            // flex-bases; removing only the composite label did not prevent
+            // X/Y/Z from rendering as three tall rows with offscreen inputs.
+            // Constrain every nested level, rather than relying on the
+            // editor default inspector stylesheet at a 260px runtime dock.
+            var input = field.Q<VisualElement>(
+                className: "unity-composite-field__input");
+            if (input != null)
+            {
+                input.style.flexDirection = FlexDirection.Row;
+                input.style.flexWrap = Wrap.NoWrap;
+                input.style.flexGrow = 1;
+                input.style.flexShrink = 1;
+                input.style.minWidth = 0;
+                input.style.width = Length.Percent(100);
+            }
+            var group = field.Q<VisualElement>(
+                className: "unity-composite-field__field-group");
+            if (group != null)
+            {
+                group.style.flexDirection = FlexDirection.Row;
+                group.style.flexWrap = Wrap.NoWrap;
+                group.style.flexGrow = 1;
+                group.style.flexShrink = 1;
+                group.style.minWidth = 0;
+                group.style.width = Length.Percent(100);
+            }
+            field.Query<FloatField>().ForEach(axis =>
+            {
+                axis.style.flexDirection = FlexDirection.Row;
+                axis.style.flexGrow = 1;
+                axis.style.flexShrink = 1;
+                axis.style.flexBasis = 0;
+                axis.style.minWidth = 0;
+                var axisLabel = axis.labelElement;
+                if (axisLabel != null)
+                {
+                    axisLabel.style.width = 14;
+                    axisLabel.style.minWidth = 0;
+                    axisLabel.style.flexBasis = 14;
+                    axisLabel.style.flexGrow = 0;
+                    axisLabel.style.flexShrink = 0;
+                }
+                var axisInput = axis.Q<VisualElement>(
+                    className: "unity-base-field__input");
+                if (axisInput != null)
+                {
+                    axisInput.style.flexGrow = 1;
+                    axisInput.style.flexShrink = 1;
+                    axisInput.style.minWidth = 0;
+                }
+            });
             container.Add(field);
         }
 
