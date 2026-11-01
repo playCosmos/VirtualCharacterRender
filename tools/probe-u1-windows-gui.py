@@ -83,6 +83,14 @@ def compact_layout_usable(measurements):
                 measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
+def parse_single_panel_move_evidence(log_text, mode, start_offset=0):
+    """Only a live compact/expanded Inspector header Move qualifies."""
+    marker = ("VCR U1 GUI probe: single_panel_move_ready=true " +
+              "mode=" + mode + " panel=inspector")
+    return any(line.strip() == marker
+               for line in log_text[start_offset:].splitlines())
+
+
 def parse_inspector_axes_evidence(log_text, start_offset=0):
     """Require the actual expanded Inspector's three visible editable axes."""
     marker = "VCR U1 GUI probe: inspector_axes_ready=true"
@@ -443,7 +451,9 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         "restoredOriginalSize": False,
         "expandedLayout": None,
         "inspectorAxes": None,
+        "expandedSinglePanelMove": False,
         "compactRestoredLayout": None,
+        "compactSinglePanelMove": False,
         "expandedUnityFrame": None,
         "compactRestoredUnityFrame": None,
         "passed": False,
@@ -485,6 +495,11 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         if result["inspectorAxes"] is None:
             raise RuntimeError(
                 "Expanded Inspector X/Y/Z axes were not visibly measured")
+        result["expandedSinglePanelMove"] = parse_single_panel_move_evidence(
+            expanded_log[:ready_at] if ready_at >= 0 else "", "expanded")
+        if not result["expandedSinglePanelMove"]:
+            raise RuntimeError(
+                "Expanded single Inspector header Move control not verified")
         # An expanded window that is tall but narrower than the responsive
         # breakpoint must actually have passed Unity's live auto-tab check.
         if maximized_frame["clientSize"][0] < 1100 and \
@@ -501,6 +516,15 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         result["restoredFromMaximize"] = True
         result["compactRestoredLayout"] = await_workspace_resize_transition(
             player_log, "compact", log_offset)
+        compact_log = player_log.read_text(encoding="utf-8", errors="replace")
+        compact_log = compact_log[log_offset:]
+        ready_at = compact_log.find(
+            "VCR U1 GUI probe: resize_layout_ready=true mode=compact")
+        result["compactSinglePanelMove"] = parse_single_panel_move_evidence(
+            compact_log[:ready_at] if ready_at >= 0 else "", "compact")
+        if not result["compactSinglePanelMove"]:
+            raise RuntimeError(
+                "Restored compact single Inspector header Move not verified")
         result["compactRestoredUnityFrame"] = wait_for_workspace_screenshot(
             output / "unity-restored.png", result["compactRestoredLayout"], "restored")
 
@@ -530,6 +554,8 @@ def probe_native_window_controls(hwnd, before, player_log, output):
                                 result["restoredOriginalSize"],
                                 result["expandedLayout"] is not None,
                                 result["inspectorAxes"] is not None,
+                                result["expandedSinglePanelMove"],
+                                result["compactSinglePanelMove"],
                                 result["compactRestoredLayout"] is not None,
                                 result["expandedUnityFrame"] is not None,
                                 result["compactRestoredUnityFrame"] is not None))
@@ -882,6 +908,22 @@ def run_self_test():
         raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
+    move_marker = ("VCR U1 GUI probe: single_panel_move_ready=true "
+                   "mode=expanded panel=inspector")
+    if not parse_single_panel_move_evidence(move_marker, "expanded"):
+        raise RuntimeError("Expanded Inspector header Move evidence rejected")
+    if parse_single_panel_move_evidence(move_marker, "compact"):
+        raise RuntimeError("Wrong-mode header Move evidence accepted")
+    if parse_single_panel_move_evidence(
+            move_marker.replace("panel=inspector", "panel=preview"),
+            "expanded"):
+        raise RuntimeError("Wrong-panel Move evidence accepted")
+    if parse_single_panel_move_evidence(
+            "previous " + move_marker, "expanded"):
+        raise RuntimeError("Malformed header Move evidence accepted")
+    if parse_single_panel_move_evidence(
+            move_marker, "expanded", start_offset=len(move_marker)):
+        raise RuntimeError("Stale header Move marker accepted")
     valid_axes = ("VCR U1 GUI probe: inspector_axes_ready=true "
                   "count=3 axis_w=65 horizontal_hidden=true "
                   "content_w=199 viewport_w=200")
@@ -1192,6 +1234,7 @@ def run_probe(args):
                   f"restored={controls['restoredOriginalSize']}, " +
                   f"expandedLayout={controls['expandedLayout'] is not None}, " +
                   f"inspectorAxes={controls['inspectorAxes']}, " +
+                  f"singleMove={controls['expandedSinglePanelMove'] and controls['compactSinglePanelMove']}, " +
                   f"compactRestored={controls['compactRestoredLayout'] is not None}, " +
                   f"expandedFrame={controls['expandedUnityFrame'] is not None}, " +
                   f"restoredFrame={controls['compactRestoredUnityFrame'] is not None}, " +
