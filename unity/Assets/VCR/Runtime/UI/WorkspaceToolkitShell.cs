@@ -1569,6 +1569,24 @@ namespace VCR.Runtime.UI
             _workspaceRoot.Add(panel);
         }
 
+        // A Vector3Field's default inline label reserves most of the 220px
+        // side-dock content width and can push the X/Y/Z number inputs out
+        // of view. Keep the semantic title on a wrapping line above the
+        // unchanged editable field so all three axes stay in the viewport.
+        private static void AddInspectorVector3Field(
+            VisualElement container, Vector3Field field, string title)
+        {
+            var caption = new Label(title);
+            caption.style.whiteSpace = WhiteSpace.Normal;
+            caption.style.marginTop = 4;
+            container.Add(caption);
+            field.labelElement.style.display = DisplayStyle.None;
+            field.tooltip = title;
+            field.style.minWidth = 0;
+            field.style.width = Length.Percent(100);
+            container.Add(field);
+        }
+
         private void Build()
         {
             // Layout/mode changes rebuild the whole UI tree. Keep the
@@ -1882,8 +1900,10 @@ namespace VCR.Runtime.UI
             _cameraNearClipInput = new FloatField("Near clip (>=0.001)");
             _cameraFarClipInput = new FloatField("Far clip (>=near + 0.01)");
             _cameraFieldOfViewInput.tooltip = "Camera vertical field of view in degrees (1–179).";
-            inspectorContent.Add(_cameraPositionInput);
-            inspectorContent.Add(_cameraRotationInput);
+            AddInspectorVector3Field(inspectorContent, _cameraPositionInput,
+                "Camera local position");
+            AddInspectorVector3Field(inspectorContent, _cameraRotationInput,
+                "Camera local Euler angles");
             inspectorContent.Add(_cameraFieldOfViewInput);
             inspectorContent.Add(_cameraNearClipInput);
             inspectorContent.Add(_cameraFarClipInput);
@@ -1909,8 +1929,10 @@ namespace VCR.Runtime.UI
                 { text = "Discard light edits" };
             inspectorContent.Add(_primaryLightEnabledInput);
             inspectorContent.Add(_primaryLightIntensityInput);
-            inspectorContent.Add(_primaryLightRotationInput);
-            inspectorContent.Add(_primaryLightRgbInput);
+            AddInspectorVector3Field(inspectorContent, _primaryLightRotationInput,
+                "Light local Euler angles");
+            AddInspectorVector3Field(inspectorContent, _primaryLightRgbInput,
+                "Light RGB (0-1)");
             inspectorContent.Add(_primaryLightAlphaInput);
             inspectorContent.Add(_primaryLightShadowsInput);
             inspectorContent.Add(_applyPrimaryLightButton);
