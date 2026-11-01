@@ -505,7 +505,26 @@ namespace VCR.Runtime.UI
                     var axes = new System.Collections.Generic.List<FloatField>();
                     _cameraPositionInput.Query<FloatField>().ForEach(
                         axis => axes.Add(axis));
-                    var clip = inspectorScroll.worldBound;
+                    // A visible field can still be hidden behind the
+                    // vertical scrollbar. Validate against the actual
+                    // content viewport, not the outer ScrollView border.
+                    var clip = inspectorScroll.contentViewport.worldBound;
+                    var contentRect = inspectorScroll.contentContainer.worldBound;
+                    var horizontal = inspectorScroll.horizontalScroller;
+                    var horizontalHidden = horizontal != null &&
+                        horizontal.resolvedStyle.display == DisplayStyle.None;
+                    var contentFits = clip.width >= 150f &&
+                        contentRect.width <= clip.width + 1.5f &&
+                        contentRect.xMin >= clip.xMin - 1.5f;
+                    if (!horizontalHidden || !contentFits)
+                    {
+                        Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                            "mode=expanded reason=inspector_horizontal_overflow " +
+                            "scroller_hidden=" + horizontalHidden +
+                            " content_w=" + contentRect.width + " viewport_w=" + clip.width,
+                            this);
+                        yield break;
+                    }
                     var validAxes = axes.Count == 3;
                     if (validAxes)
                     {
@@ -513,7 +532,11 @@ namespace VCR.Runtime.UI
                         foreach (var axis in axes)
                         {
                             var rect = axis.worldBound;
+                            var inputBox = axis.Q<VisualElement>(
+                                className: "unity-base-field__input");
                             if (rect.width < 40f ||
+                                inputBox == null || inputBox.worldBound.width < 28f ||
+                                inputBox.worldBound.xMax > clip.xMax + 1.5f ||
                                 Mathf.Abs(rect.yMin - axisY) > 4f ||
                                 rect.xMin < clip.xMin - 1.5f ||
                                 rect.xMax > clip.xMax + 1.5f)
@@ -537,8 +560,12 @@ namespace VCR.Runtime.UI
                     }
                     Debug.Log("VCR U1 GUI probe: inspector_axes_ready=true " +
                         "count=3 axis_w=" + axes[0].worldBound.width.ToString(
-                            "0.##", System.Globalization.CultureInfo.InvariantCulture),
-                        this);
+                            "0.##", System.Globalization.CultureInfo.InvariantCulture) +
+                        " horizontal_hidden=true content_w=" +
+                        contentRect.width.ToString("0.##",
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        " viewport_w=" + clip.width.ToString("0.##",
+                            System.Globalization.CultureInfo.InvariantCulture), this);
                 }
             }
             if (!expectedCompact && _bottomVisible)
@@ -1997,6 +2024,12 @@ namespace VCR.Runtime.UI
             // can hide the right-most Z input in the narrow 260px dock.
             var inspectorContent = new ScrollView(ScrollViewMode.Vertical)
                 { name = "vcr-inspector-content" };
+            // Vertical mode alone does not suppress Unity's auto horizontal
+            // scroller when an Inspector child reports an oversized width.
+            // Preserve the full X/Y/Z edit row without a misleading side pan.
+            inspectorContent.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            inspectorContent.contentContainer.style.minWidth = 0;
+            inspectorContent.contentContainer.style.width = Length.Percent(100);
             inspectorContent.style.flexGrow = 1;
             inspectorContent.style.minHeight = 60;
             inspector.Add(inspectorContent);
