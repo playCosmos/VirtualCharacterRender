@@ -2296,7 +2296,39 @@ namespace VCR.Runtime.UI
             foreach (var child in dock.Children())
                 if (child.name != null && child.name.StartsWith("vcr-panel-"))
                     panels.Add(child);
-            if (panels.Count < 2) return;
+            if (panels.Count < 2)
+            {
+                // A single panel has no tab strip to move from. In the
+                // responsive workspace keep its Move control at the title,
+                // but remove the full Drag/Up/Down footer that otherwise
+                // consumes the last usable Inspector rows.
+                if (panels.Count == 1 && (_usingCompactHeight || _usingNarrowWidth))
+                {
+                    var panel = panels[0];
+                    var id = panel.name.Substring("vcr-panel-".Length);
+                    var actions = panel.Q<VisualElement>("vcr-dock-actions-" + id);
+                    var move = actions != null
+                        ? actions.Q<Button>("vcr-dock-move-" + id) : null;
+                    var title = panel.childCount > 0 ? panel.ElementAt(0) as Label : null;
+                    if (move != null && title != null)
+                    {
+                        title.RemoveFromHierarchy();
+                        move.RemoveFromHierarchy();
+                        var heading = new VisualElement
+                            { name = "vcr-single-panel-heading-" + id };
+                        heading.style.flexDirection = FlexDirection.Row;
+                        heading.style.alignItems = Align.Center;
+                        heading.style.flexShrink = 0;
+                        title.style.flexGrow = 1;
+                        title.style.minWidth = 0;
+                        heading.Add(title);
+                        heading.Add(move);
+                        panel.Insert(0, heading);
+                        actions.style.display = DisplayStyle.None;
+                    }
+                }
+                return;
+            }
             // Tabbed panels share the same dock; drag onto a tab to reorder.
             var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
             var selectedId = PlayerPrefs.GetString(key, panels[0].name);
@@ -2470,7 +2502,7 @@ namespace VCR.Runtime.UI
                 var next = currentDock == "left" ? "right" :
                     currentDock == "right" ? "bottom" : "left";
                 MovePanelToDock(panel, id, next);
-            }) { text = "Move" };
+            }) { text = "Move", name = "vcr-dock-move-" + id };
             move.tooltip = "Move this panel to the next dock (current: " + currentDock + ").";
             dockActions.Add(move);
             var dragHandle = new Label("Drag");
