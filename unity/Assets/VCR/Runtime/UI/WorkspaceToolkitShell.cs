@@ -1993,7 +1993,10 @@ namespace VCR.Runtime.UI
             var inspector = Panel(WorkspacePanelCatalog.Inspector, "Inspector", 260);
             // Camera, light and render controls exceed the 260 px advanced
             // Inspector height. Keep every action keyboard/scroll reachable.
-            var inspectorContent = new ScrollView { name = "vcr-inspector-content" };
+            // Inspector edits are vertically scrollable. A horizontal scrollbar
+            // can hide the right-most Z input in the narrow 260px dock.
+            var inspectorContent = new ScrollView(ScrollViewMode.Vertical)
+                { name = "vcr-inspector-content" };
             inspectorContent.style.flexGrow = 1;
             inspectorContent.style.minHeight = 60;
             inspector.Add(inspectorContent);
