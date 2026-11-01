@@ -568,6 +568,49 @@ namespace VCR.Runtime.UI
                             System.Globalization.CultureInfo.InvariantCulture), this);
                 }
             }
+            // A side dock with only one panel has no tab strip. Its Move
+            // action must remain accessible in the header, while the old
+            // Drag/Up/Down footer must not consume compact Inspector height.
+            if (expectedCompact || _usingNarrowWidth)
+            {
+                foreach (var side in new[] { _leftDock, _rightDock })
+                {
+                    if (side == null ||
+                        side.resolvedStyle.display == DisplayStyle.None) continue;
+                    VisualElement single = null;
+                    var count = 0;
+                    foreach (var child in side.Children())
+                        if (child.name != null && child.name.StartsWith(
+                                "vcr-panel-", StringComparison.Ordinal))
+                        {
+                            single = child;
+                            count++;
+                        }
+                    if (count != 1 || single == null) continue;
+                    var id = single.name.Substring("vcr-panel-".Length);
+                    var heading = single.Q<VisualElement>(
+                        "vcr-single-panel-heading-" + id);
+                    var move = heading != null ? heading.Q<Button>(
+                        "vcr-dock-move-" + id) : null;
+                    var footer = single.Q<VisualElement>("vcr-dock-actions-" + id);
+                    var valid = heading != null && move != null &&
+                        move.panel == _workspaceRoot.panel &&
+                        footer != null &&
+                        footer.resolvedStyle.display == DisplayStyle.None &&
+                        move.worldBound.width >= 40f &&
+                        move.worldBound.xMax <= single.worldBound.xMax + 1.5f &&
+                        move.worldBound.yMax <= single.worldBound.yMax + 1.5f;
+                    if (!valid)
+                    {
+                        Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                            "mode=" + mode + " reason=single_panel_actions_clipped " +
+                            "panel=" + id, this);
+                        yield break;
+                    }
+                    Debug.Log("VCR U1 GUI probe: single_panel_move_ready=true " +
+                        "mode=" + mode + " panel=" + id, this);
+                }
+            }
             if (!expectedCompact && _bottomVisible)
             {
                 // The dock's outer rectangle may be valid while wrapped
