@@ -1580,7 +1580,13 @@ namespace VCR.Runtime.UI
             caption.style.whiteSpace = WhiteSpace.Normal;
             caption.style.marginTop = 4;
             container.Add(caption);
-            field.labelElement.style.display = DisplayStyle.None;
+            // Hiding labelElement with display:none is insufficient: UI
+            // Toolkit still treats the Vector3Field as a labeled composite
+            // control and reserves its inline label width. That pushed the
+            // X/Y/Z number boxes to the right edge of the narrow Inspector.
+            // Clearing BaseField.label removes the label from the hierarchy
+            // and enables the built-in no-label layout variant.
+            field.label = string.Empty;
             field.tooltip = title;
             field.style.minWidth = 0;
             field.style.width = Length.Percent(100);
