@@ -907,33 +907,48 @@ def probe_native_settings_open(player_hwnd, pid, player_log, start_offset):
     if not user32.GetCursorPos(ctypes.byref(previous)):
         raise OSError("GetCursorPos failed before Settings click")
     offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    marker = "VCR U1 GUI probe: settings_action_clicked=true native_visible=true"
+    negative = "VCR U1 GUI probe: settings_action_clicked=true native_visible=false"
+    window = None
+    attempts = []
     try:
-        user32.SetForegroundWindow(player_hwnd)
-        if not user32.SetCursorPos(pt.x, pt.y):
-            raise OSError("Cannot position cursor over Settings button")
-        time.sleep(0.15)
-        hit = user32.WindowFromPoint(pt)
-        if not hit or user32.GetAncestor(hit, 2) != player_hwnd:
-            raise RuntimeError("Settings button covered by another OS window")
-        user32.mouse_event(0x0002, 0, 0, 0, 0)
-        time.sleep(0.06)
-        user32.mouse_event(0x0004, 0, 0, 0, 0)
+        # A hosted desktop can consume the first OS click to reactivate the
+        # Player after screen capture. Exercise the same real mouse path at
+        # most three times and require the actual Unity callback AND the real
+        # native Settings HWND. Never synthesize a callback or a window.
+        for attempt in range(1, 4):
+            user32.SetForegroundWindow(player_hwnd)
+            if not user32.SetCursorPos(pt.x, pt.y):
+                raise OSError("Cannot position cursor over Settings button")
+            time.sleep(0.25)
+            hit = user32.WindowFromPoint(pt)
+            if not hit or user32.GetAncestor(hit, 2) != player_hwnd:
+                raise RuntimeError("Settings button covered by another OS window")
+            user32.mouse_event(0x0002, 0, 0, 0, 0)
+            time.sleep(0.09)
+            user32.mouse_event(0x0004, 0, 0, 0, 0)
+            attempts.append(attempt)
+            deadline = time.monotonic() + 2.5
+            while time.monotonic() < deadline:
+                log = player_log.read_text(encoding="utf-8", errors="replace")
+                events = [line.strip() for line in log[offset:].splitlines()]
+                if negative in events:
+                    raise RuntimeError(
+                        "Settings callback ran but native window was not visible; " +
+                        "inspect Player.log for native Settings fallback")
+                candidates = visible_native_settings_windows(pid)
+                if marker in events and len(candidates) == 1:
+                    window = candidates[0]
+                    break
+                time.sleep(0.12)
+            if window is not None:
+                break
     finally:
         user32.SetCursorPos(previous.x, previous.y)
-    marker = "VCR U1 GUI probe: settings_action_clicked=true native_visible=true"
-    window = None
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        log = player_log.read_text(encoding="utf-8", errors="replace")
-        candidates = visible_native_settings_windows(pid)
-        if (any(line.strip() == marker for line in log[offset:].splitlines())
-                and len(candidates) == 1):
-            window = candidates[0]
-            break
-        time.sleep(0.15)
     if window is None:
         raise RuntimeError(
-            "OS click did not create one visible native Settings window")
+            "OS Settings click did not invoke callback and show native HWND " +
+            "after " + str(len(attempts)) + " real click attempts")
     hwnd = window["hwnd"]
     rect = inspect_native_window_frame(hwnd)["windowRect"]
     class Rect(ctypes.Structure):
@@ -962,6 +977,7 @@ def probe_native_settings_open(player_hwnd, pid, player_log, start_offset):
     return {"passed": True, "window": window, "rect": rect,
             "monitorWorkArea": work, "withinWorkArea": True,
             "target": target, "screenPoint": [pt.x, pt.y],
+            "clickAttempts": len(attempts),
             "physicalHumanAcceptance": False}
 
 
