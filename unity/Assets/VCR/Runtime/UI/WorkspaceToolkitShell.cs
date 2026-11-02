@@ -1379,6 +1379,12 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.SelectCategory(action - 100);
                     if (action == 102) RebuildWorkspaceNativeTrackingSources();
                     if (action == 103) RefreshWorkspaceOverlayStatus();
+                    if (_guiProbeRequested)
+                        Debug.Log("VCR U1 GUI probe: native_settings_category_selected=true " +
+                            "category=" + (action - 100) +
+                            " native_visible=" +
+                            (_workspaceNativeSettings.IsVisible ? "true" : "false"),
+                            this);
                     continue;
                 }
                 // A third-party tracking source can throw while toggling or applying
