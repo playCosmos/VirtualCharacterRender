@@ -1768,6 +1768,28 @@ def run_probe(args):
                       flush=True)
             except Exception as error:
                 report["workspaceMouseClickError"] = str(error)
+        if report["workspaceMouseClickPassed"] and not report["nativeInputTargetsPassed"]:
+            # All startup WM_NCHITTEST samples can time out while Unity is
+            # taking its first GPU screenshots. Retry the *real* HWND after
+            # a successful OS mouse click proves the Player is processing
+            # input. Do not accept style bits or the click as a substitute
+            # for actual HTCAPTION/HTLEFT/HTRIGHT return values.
+            try:
+                report["nativeInputTargetsStartup"] = report.get(
+                    "nativeInputTargets")
+                stable_frame = inspect_native_window_frame(observed["hwnd"])
+                stable_targets = probe_native_input_targets(
+                    observed["hwnd"], stable_frame)
+                report["nativeInputTargets"] = stable_targets
+                report["nativeInputTargetsPassed"] = stable_targets["passed"]
+                print("U1 native input targets after real workspace click: " +
+                      f"caption={stable_targets['captionDragHit']} " +
+                      f"left={stable_targets['leftResizeHit']} " +
+                      f"right={stable_targets['rightResizeHit']} " +
+                      f"attempts={stable_targets['attempts']} " +
+                      f"passed={stable_targets['passed']}", flush=True)
+            except Exception as error:
+                report["nativeInputTargetsRetryError"] = str(error)
         if report["workspaceMouseClickPassed"]:
             try:
                 native_settings = probe_native_settings_open(
