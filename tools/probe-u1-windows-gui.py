@@ -87,7 +87,7 @@ def parse_compact_header_evidence(log_text, mode, start_offset=0):
     """Accept only the live, fully visible first three toolbar actions."""
     marker = ("VCR U1 GUI probe: compact_header_ready=true " +
               "mode=" + mode +
-              " primary_actions=3 auto_tabs_hidden=true")
+              " primary_actions=3 auto_tabs_hidden=true pointer_targets=3")
     return any(line.strip() == marker
                for line in log_text[start_offset:].splitlines())
 
@@ -95,7 +95,7 @@ def parse_compact_header_evidence(log_text, mode, start_offset=0):
 def parse_single_panel_move_evidence(log_text, mode, start_offset=0):
     """Only a live compact/expanded Inspector header Move qualifies."""
     marker = ("VCR U1 GUI probe: single_panel_move_ready=true " +
-              "mode=" + mode + " panel=inspector")
+              "mode=" + mode + " panel=inspector pointer_target=true")
     return any(line.strip() == marker
                for line in log_text[start_offset:].splitlines())
 
@@ -991,7 +991,7 @@ def run_self_test():
         raise RuntimeError("Expanded marker accepted as compact")
     toolbar_marker = ("VCR U1 GUI probe: compact_header_ready=true "
                       "mode=expanded primary_actions=3 "
-                      "auto_tabs_hidden=true")
+                      "auto_tabs_hidden=true pointer_targets=3")
     if not parse_compact_header_evidence(toolbar_marker, "expanded"):
         raise RuntimeError("Valid compact toolbar evidence rejected")
     if parse_compact_header_evidence(toolbar_marker, "compact"):
@@ -1005,10 +1005,18 @@ def run_self_test():
                                    "auto_tabs_hidden=false"), "expanded"):
         raise RuntimeError("Disabled tab toggle in toolbar accepted")
     if parse_compact_header_evidence(
+            toolbar_marker.replace("pointer_targets=3",
+                                   "pointer_targets=2"), "expanded"):
+        raise RuntimeError("Clipped or occluded toolbar pointer targets accepted")
+    if parse_compact_header_evidence(
+            toolbar_marker.replace(" pointer_targets=3", ""),
+            "expanded"):
+        raise RuntimeError("Toolbar geometry without pointer evidence accepted")
+    if parse_compact_header_evidence(
             toolbar_marker, "expanded", len(toolbar_marker)):
         raise RuntimeError("Stale compact toolbar marker accepted")
     move_marker = ("VCR U1 GUI probe: single_panel_move_ready=true "
-                   "mode=expanded panel=inspector")
+                   "mode=expanded panel=inspector pointer_target=true")
     if not parse_single_panel_move_evidence(move_marker, "expanded"):
         raise RuntimeError("Expanded Inspector header Move evidence rejected")
     if parse_single_panel_move_evidence(move_marker, "compact"):
@@ -1020,6 +1028,14 @@ def run_self_test():
     if parse_single_panel_move_evidence(
             "previous " + move_marker, "expanded"):
         raise RuntimeError("Malformed header Move evidence accepted")
+    if parse_single_panel_move_evidence(
+            move_marker.replace("pointer_target=true",
+                                "pointer_target=false"), "expanded"):
+        raise RuntimeError("Unpickable Inspector Move control accepted")
+    if parse_single_panel_move_evidence(
+            move_marker.replace(" pointer_target=true", ""),
+            "expanded"):
+        raise RuntimeError("Move geometry without pointer evidence accepted")
     if parse_single_panel_move_evidence(
             move_marker, "expanded", start_offset=len(move_marker)):
         raise RuntimeError("Stale header Move marker accepted")
