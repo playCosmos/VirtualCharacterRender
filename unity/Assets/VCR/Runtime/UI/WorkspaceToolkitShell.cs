@@ -423,6 +423,30 @@ namespace VCR.Runtime.UI
             return false;
         }
 
+        private System.Collections.IEnumerator ReportNativeSettingsClickTargetAfterLayout()
+        {
+            yield return new WaitForEndOfFrame();
+            if (_workspaceRoot == null || _workspaceRoot.panel == null)
+                yield break;
+            var settings = _workspaceRoot.Q<Button>("vcr-header-settings");
+            if (!WorkspaceButtonReceivesPointer(settings))
+            {
+                Debug.Log("VCR U1 GUI probe: settings_click_target_rejected=true", this);
+                yield break;
+            }
+            var point = settings.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: settings_click_target_ready=true " +
+                "x=" + point.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + point.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture), this);
+        }
+
         private System.Collections.IEnumerator ReportWorkspaceResizeTransitionAfterLayout(
             bool expectedCompact)
         {
@@ -1972,6 +1996,7 @@ namespace VCR.Runtime.UI
                 {
                     Debug.Log("VCR U1 GUI probe: workspace_toggle_clicked=true " +
                         "mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                    StartCoroutine(ReportNativeSettingsClickTargetAfterLayout());
                     if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                     {
                         var directory = System.IO.Path.GetDirectoryName(
@@ -1994,6 +2019,11 @@ namespace VCR.Runtime.UI
                     OpenWorkspaceNativeSettings();
                 else
                     ShowWorkspaceSettingsFallback();
+                if (_guiProbeRequested)
+                    Debug.Log("VCR U1 GUI probe: settings_action_clicked=true " +
+                        "native_visible=" +
+                        (_workspaceNativeSettings != null &&
+                         _workspaceNativeSettings.IsVisible ? "true" : "false"), this);
             }) { text = "Settings", name = "vcr-header-settings" };
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
                 ? "Open native settings or the workspace render settings"
