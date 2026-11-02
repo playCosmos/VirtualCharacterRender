@@ -734,6 +734,10 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
         wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
         wintypes.DWORD, ctypes.c_size_t]
     user32.mouse_event.restype = None
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
     frame = inspect_native_window_frame(hwnd)
     width, height = frame["clientSize"]
     scale_x = width / target["rootWidth"]
@@ -762,6 +766,10 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
         if not user32.SetCursorPos(point.x, point.y):
             raise OSError("SetCursorPos rejected live Unity mouse target")
         time.sleep(0.15)
+        hit_hwnd = user32.WindowFromPoint(point)
+        if not hit_hwnd or user32.GetAncestor(hit_hwnd, 2) != hwnd:
+            raise RuntimeError(
+                "Workspace mouse target is covered by a non-Unity window")
         user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
         time.sleep(0.06)
         user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
