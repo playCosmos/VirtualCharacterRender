@@ -2248,13 +2248,20 @@ namespace VCR.Runtime.UI
                 }
             }
 
-            // Apply a readable default to all otherwise unstyled text labels,
-            // including nested BaseField labels. Explicit warning/drag/title
-            // colors remain untouched. Buttons keep their own contrast.
+            // Use light labels on the dark workspace, but dark button text
+            // against Unity Player's light default button background. Without
+            // this explicit contrast, inherited white captions make Settings,
+            // tabs and the compact Inspector Move button hard to read.
+            // Respect buttons with an intentional explicit foreground color.
             _workspaceRoot.Query<Label>().ForEach(label =>
             {
                 if (label.style.color.keyword == StyleKeyword.Null)
                     label.style.color = new Color(0.91f, 0.94f, 0.97f);
+            });
+            _workspaceRoot.Query<Button>().ForEach(button =>
+            {
+                if (button.style.color.keyword == StyleKeyword.Null)
+                    button.style.color = new Color(0.12f, 0.16f, 0.20f);
             });
             _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
