@@ -106,6 +106,27 @@ def parse_workspace_click_target_evidence(log_text, start_offset=0):
     return None
 
 
+def parse_settings_click_target_evidence(log_text, start_offset=0):
+    """Require a real, post-workspace-switch Settings button location."""
+    marker = "VCR U1 GUI probe: settings_click_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (not all(map(math.isfinite, (x, y, w, h))) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w, "rootHeight": h}
+    return None
+
+
 def parse_compact_header_evidence(log_text, mode, start_offset=0):
     """Accept only the live, fully visible first three toolbar actions."""
     marker = ("VCR U1 GUI probe: compact_header_ready=true " +
@@ -1126,6 +1147,21 @@ def run_self_test():
     if parse_workspace_click_target_evidence(
             click_marker, len(click_marker)) is not None:
         raise RuntimeError("Stale workspace click target accepted")
+    native_settings_marker = ("VCR U1 GUI probe: settings_click_target_ready=true "
+                              "x=210 y=29.5 root_w=962 root_h=520")
+    if parse_settings_click_target_evidence(native_settings_marker) != {
+            "x": 210.0, "y": 29.5, "rootWidth": 962.0,
+            "rootHeight": 520.0}:
+        raise RuntimeError("Valid Settings native click target rejected")
+    if parse_settings_click_target_evidence(
+            native_settings_marker.replace("x=210", "x=NaN")) is not None:
+        raise RuntimeError("Invalid Settings click target accepted")
+    if parse_settings_click_target_evidence(
+            native_settings_marker.replace("x=210", "x=1000")) is not None:
+        raise RuntimeError("Offscreen Settings click target accepted")
+    if parse_settings_click_target_evidence(
+            native_settings_marker, len(native_settings_marker)) is not None:
+        raise RuntimeError("Stale Settings click target accepted")
     toolbar_marker = ("VCR U1 GUI probe: compact_header_ready=true "
                       "mode=expanded primary_actions=3 "
                       "auto_tabs_hidden=true pointer_targets=3")
