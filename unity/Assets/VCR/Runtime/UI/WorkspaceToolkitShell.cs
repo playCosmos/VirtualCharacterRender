@@ -447,6 +447,47 @@ namespace VCR.Runtime.UI
                 " reject=" + reason, this);
             if (reason != "none")
                 yield break;
+            if (_usingCompactHeight || _usingNarrowWidth)
+            {
+                // The short-window toolbar must retain its three recovery
+                // actions without scrolling, and must not waste space on
+                // the disabled automatic Tabs preference.
+                var toolbar = _workspaceRoot.Q<ScrollView>("vcr-header-actions");
+                var viewport = toolbar != null ? toolbar.contentViewport : null;
+                var workspace = toolbar != null ? toolbar.Q<Button>(
+                    "vcr-header-workspace") : null;
+                var settings = toolbar != null ? toolbar.Q<Button>(
+                    "vcr-header-settings") : null;
+                var opaque = toolbar != null ? toolbar.Q<Button>(
+                    "vcr-header-opaque") : null;
+                var autoTabs = toolbar != null ? toolbar.Q<Button>(
+                    "vcr-header-tab-mode") : null;
+                var visible = viewport != null && workspace != null &&
+                    settings != null && opaque != null && autoTabs == null;
+                if (visible)
+                {
+                    var clip = viewport.worldBound;
+                    foreach (var button in new[] { workspace, settings, opaque })
+                    {
+                        if (button.worldBound.width < 38f ||
+                            button.worldBound.xMin < clip.xMin - 1.5f ||
+                            button.worldBound.xMax > clip.xMax + 1.5f)
+                        {
+                            visible = false;
+                            break;
+                        }
+                    }
+                }
+                if (!visible)
+                {
+                    Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                        "mode=" + mode + " reason=compact_header_actions_clipped",
+                        this);
+                    yield break;
+                }
+                Debug.Log("VCR U1 GUI probe: compact_header_ready=true mode=" +
+                    mode + " primary_actions=3 auto_tabs_hidden=true", this);
+            }
             if (expectedCompact && _bottomVisible)
             {
                 var tabs = _bottomDock.Q<VisualElement>("vcr-dock-tabs-bottom");
