@@ -744,6 +744,30 @@ namespace VCR.Runtime.UI
                     }
                 }
             }
+            if (expectedCompact && _guiProbeRequested)
+            {
+                // Report the actual UI Toolkit hit target for a native-input
+                // smoke click after Windows restores the normal window.
+                var action = _workspaceRoot.Q<Button>("vcr-header-workspace");
+                if (!WorkspaceButtonReceivesPointer(action))
+                {
+                    Debug.Log("VCR U1 GUI probe: resize_layout_rejected=true " +
+                        "mode=compact reason=workspace_click_target_unavailable", this);
+                    yield break;
+                }
+                var point = action.worldBound.center;
+                Debug.Log("VCR U1 GUI probe: workspace_click_target_ready=true " +
+                    "mode=compact x=" + point.x.ToString("0.##",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " y=" + point.y.ToString("0.##",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " root_w=" + root.width.ToString("0.##",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " root_h=" + root.height.ToString("0.##",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " initial_mode=" + (advancedWorkspace ? "advanced" : "live"),
+                    this);
+            }
             Debug.Log("VCR U1 GUI probe: resize_layout_ready=true mode=" +
                 (expectedCompact ? "compact" : "expanded") +
                 " width=" + root.width.ToString("0.##",
@@ -1944,6 +1968,20 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
+                if (_guiProbeRequested)
+                {
+                    Debug.Log("VCR U1 GUI probe: workspace_toggle_clicked=true " +
+                        "mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                    if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                    {
+                        var directory = System.IO.Path.GetDirectoryName(
+                            _guiProbeScreenshotPath);
+                        if (!string.IsNullOrEmpty(directory))
+                            StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                                System.IO.Path.Combine(directory,
+                                    "unity-workspace-clicked.png")));
+                    }
+                }
             }) { text = automaticTabMode
                 ? (advancedWorkspace ? "Live" : "Advanced")
                 : (advancedWorkspace ? "Live workspace" : "Advanced workspace"),
