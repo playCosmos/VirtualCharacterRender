@@ -398,20 +398,45 @@ def probe_native_input_targets(hwnd, frame):
         *[("left", left + offset, midpoint_y) for offset in (2, 5, 8)],
         *[("right", right - offset, midpoint_y) for offset in (2, 5, 8)],
     ]
-    for target, x, y in positions:
-        # WM_NCHITTEST LPARAM carries signed screen coordinates in 16-bit
-        # halves. Encode negative multi-monitor coordinates without overflow.
-        coords = ((y & 0xffff) << 16) | (x & 0xffff)
-        outcome = ctypes.c_size_t(0)
-        ok = user32.SendMessageTimeoutW(
-            hwnd, WM_NCHITTEST, 0, coords, 0x0002, 800,
-            ctypes.byref(outcome))
-        if not ok:
-            raise OSError("WM_NCHITTEST timed out on live Unity title/frame")
-        samples.append({"target": target, "x": x, "y": y,
-                        "result": ctypes.c_ssize_t(outcome.value).value})
+    # Unity may be busy submitting its first GPU screenshot when the CI
+    # probes the caption. A single 800ms SendMessageTimeout does not prove
+    # mouse hit testing is broken. Retry *live* OS responses with a finite
+    # bound; never infer a passing result from window style/SetWindowPos.
+    timeouts = []
+    attempts = 0
+    for attempt in range(3):
+        attempts = attempt + 1
+        evidence = classify_native_input_targets(samples)
+        for target, x, y in positions:
+            # Once a target has a genuine HT* response, avoid unnecessary
+            # messages to Unity's render thread during startup.
+            if (attempt > 0 and (
+                    (target == "caption" and evidence["captionDragHit"]) or
+                    (target == "left" and evidence["leftResizeHit"]) or
+                    (target == "right" and evidence["rightResizeHit"]))):
+                continue
+            # WM_NCHITTEST LPARAM carries signed screen coordinates in
+            # 16-bit halves, including negative multi-monitor coordinates.
+            coords = ((y & 0xffff) << 16) | (x & 0xffff)
+            outcome = ctypes.c_size_t(0)
+            ok = user32.SendMessageTimeoutW(
+                hwnd, WM_NCHITTEST, 0, coords, 0x0002, 1200,
+                ctypes.byref(outcome))
+            if not ok:
+                timeouts.append({"target": target, "x": x, "y": y,
+                                 "attempt": attempts})
+                continue
+            samples.append({"target": target, "x": x, "y": y,
+                            "attempt": attempts,
+                            "result": ctypes.c_ssize_t(outcome.value).value})
+        if classify_native_input_targets(samples)["passed"]:
+            break
+        if attempt < 2:
+            time.sleep(0.2)
     result = classify_native_input_targets(samples)
     result["samples"] = samples
+    result["timeouts"] = timeouts
+    result["attempts"] = attempts
     return result
 
 
