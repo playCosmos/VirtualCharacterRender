@@ -593,7 +593,14 @@ namespace VCR.Runtime.UI
                     var move = heading != null ? heading.Q<Button>(
                         "vcr-dock-move-" + id) : null;
                     var footer = single.Q<VisualElement>("vcr-dock-actions-" + id);
+                    // Test rendered foreground against the actual Unity button
+                    // background: white-on-gray text previously looked valid
+                    // to geometry-only tests despite being unreadable.
+                    var moveContrast = move != null ? Mathf.Abs(
+                        move.resolvedStyle.color.grayscale -
+                        move.resolvedStyle.backgroundColor.grayscale) : 0f;
                     var valid = heading != null && move != null &&
+                        moveContrast >= 0.35f &&
                         move.panel == _workspaceRoot.panel &&
                         footer != null &&
                         footer.resolvedStyle.display == DisplayStyle.None &&
