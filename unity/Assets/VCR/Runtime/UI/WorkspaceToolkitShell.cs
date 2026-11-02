@@ -1868,6 +1868,8 @@ namespace VCR.Runtime.UI
                 { name = "vcr-header-actions" };
             headerActions.style.flexGrow = 1;
             headerActions.style.flexShrink = 1;
+            headerActions.horizontalScrollerVisibility = ScrollerVisibility.Auto;
+            headerActions.verticalScrollerVisibility = ScrollerVisibility.Hidden;
             headerActions.contentContainer.style.flexDirection = FlexDirection.Row;
             header.Add(headerActions);
 
@@ -1877,7 +1879,11 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = advancedWorkspace ? "Live workspace" : "Advanced workspace" };
+            }) { text = automaticTabMode
+                ? (advancedWorkspace ? "Live" : "Advanced")
+                : (advancedWorkspace ? "Live workspace" : "Advanced workspace"),
+                name = "vcr-header-workspace" };
+            toggle.tooltip = "Switch between Live and Advanced workspaces.";
             headerActions.Add(toggle);
             var settingsButton = new Button(() =>
             {
@@ -1885,7 +1891,7 @@ namespace VCR.Runtime.UI
                     OpenWorkspaceNativeSettings();
                 else
                     ShowWorkspaceSettingsFallback();
-            }) { text = "Settings" };
+            }) { text = "Settings", name = "vcr-header-settings" };
             settingsButton.tooltip = DesktopNativeSettingsWindow.Supported
                 ? "Open native settings or the workspace render settings"
                 : "Open workspace render settings";
@@ -1894,7 +1900,8 @@ namespace VCR.Runtime.UI
             {
                 var result = RestoreOpaqueWorkspaceOutput();
                 if (_status != null) _status.text = result;
-            }) { text = "Opaque window" };
+            }) { text = automaticTabMode ? "Opaque" : "Opaque window",
+                name = "vcr-header-opaque" };
             recoverOpaque.tooltip =
                 "Disable transparency and click-through without changing camera or model.";
             headerActions.Add(recoverOpaque);
@@ -1905,12 +1912,16 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.Save();
                 Build();
             }) { text = automaticTabMode ? "Tabs (auto)" :
-                (_tabMode ? "Stack panels" : "Tab panels") };
+                (_tabMode ? "Stack panels" : "Tab panels"),
+                name = "vcr-header-tab-mode" };
             tabButton.tooltip = automaticTabMode
                 ? "Short or narrow windows use tabs automatically. Resize taller and wider to change this preference."
                 : "Switch between stacked dock panels and tabs.";
-            tabButton.SetEnabled(!automaticTabMode);
-            headerActions.Add(tabButton);
+            // Automatic tab mode is not actionable at this window size.
+            // Avoid allocating 120px to a disabled button in the compact
+            // toolbar; the preference remains persisted for wide layouts.
+            if (!automaticTabMode)
+                headerActions.Add(tabButton);
             headerActions.Add(new Button(() =>
             {
                 _bottomVisible = !_bottomVisible;
