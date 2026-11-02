@@ -526,6 +526,7 @@ namespace VCR.Runtime.UI
                         yield break;
                     }
                     var validAxes = axes.Count == 3;
+                    var minInputContrast = 1f;
                     if (validAxes)
                     {
                         var axisY = axes[0].worldBound.yMin;
@@ -534,8 +535,16 @@ namespace VCR.Runtime.UI
                             var rect = axis.worldBound;
                             var inputBox = axis.Q<VisualElement>(
                                 className: "unity-base-field__input");
+                            var textInput = axis.Q<VisualElement>(
+                                className: "unity-base-text-field__input");
+                            var contrast = textInput == null ? 0f : Mathf.Abs(
+                                textInput.resolvedStyle.backgroundColor.grayscale -
+                                textInput.resolvedStyle.color.grayscale);
+                            minInputContrast = Mathf.Min(minInputContrast, contrast);
                             if (rect.width < 40f ||
                                 inputBox == null || inputBox.worldBound.width < 28f ||
+                                textInput == null || contrast < 0.40f ||
+                                textInput.worldBound.width < 22f ||
                                 inputBox.worldBound.xMax > clip.xMax + 1.5f ||
                                 Mathf.Abs(rect.yMin - axisY) > 4f ||
                                 rect.xMin < clip.xMin - 1.5f ||
@@ -565,7 +574,10 @@ namespace VCR.Runtime.UI
                         contentRect.width.ToString("0.##",
                             System.Globalization.CultureInfo.InvariantCulture) +
                         " viewport_w=" + clip.width.ToString("0.##",
-                            System.Globalization.CultureInfo.InvariantCulture), this);
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        " text_contrast=" + minInputContrast.ToString("0.###",
+                            System.Globalization.CultureInfo.InvariantCulture),
+                        this);
                 }
             }
             // A side dock with only one panel has no tab strip. Its Move
@@ -2269,6 +2281,17 @@ namespace VCR.Runtime.UI
             {
                 if (button.style.color.keyword == StyleKeyword.Null)
                     button.style.color = new Color(0.12f, 0.16f, 0.20f);
+            });
+            // Unity's light Player theme gives text/number edit boxes a
+            // pale background. Applying white to all Label descendants
+            // leaves editable values (including nested Vector3 axes) nearly
+            // invisible; style the actual input element after label defaults.
+            // Keep the input/background pair explicit across Player themes.
+            _workspaceRoot.Query<VisualElement>(
+                className: "unity-base-text-field__input").ForEach(input =>
+            {
+                input.style.color = new Color(0.12f, 0.16f, 0.20f);
+                input.style.backgroundColor = new Color(0.83f, 0.86f, 0.89f);
             });
             _status = new Label("Waiting for scene runtime status...");
             _status.style.color = new Color(0.75f, 0.8f, 0.85f);
