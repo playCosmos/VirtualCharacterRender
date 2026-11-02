@@ -981,6 +981,115 @@ def probe_native_settings_open(player_hwnd, pid, player_log, start_offset):
             "physicalHumanAcceptance": False}
 
 
+def native_settings_page_visibility(selected, controls):
+    """Only the selected native page's representative child may be visible."""
+    return (selected in (0, 1, 2, 3) and
+            all(bool(controls.get(category)) == (category == selected)
+                for category in range(4)))
+
+
+def probe_native_settings_navigation(settings_hwnd, player_log):
+    """Click all four real Win32 sidebar tabs and verify native page contents.
+
+    Event evidence comes from Unity handling actual WM_COMMAND messages after
+    OS mouse input. Child visibility comes independently from user32, so
+    a logged action cannot mask an unchanged or obscured Settings page.
+    """
+    user32 = ctypes.windll.user32
+    user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.GetDlgItem.restype = wintypes.HWND
+    user32.GetWindowRect.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowRect.restype = wintypes.BOOL
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
+    user32.mouse_event.argtypes = [
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, ctypes.c_size_t]
+
+    # Render-scale EDIT, model-path EDIT, Refresh tracking, output toggle.
+    page_ids = (10, 12, 450, 401)
+    def page_visibility():
+        controls = {}
+        for category, child_id in enumerate(page_ids):
+            handle = user32.GetDlgItem(settings_hwnd, child_id)
+            if not handle:
+                raise RuntimeError(
+                    "Native Settings has no page control " + str(child_id))
+            controls[category] = bool(user32.IsWindowVisible(handle))
+        return controls
+
+    initial = page_visibility()
+    if not native_settings_page_visibility(0, initial):
+        raise RuntimeError("Native Settings did not open on Render page: " +
+                           str(initial))
+    cursor = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(cursor)):
+        raise OSError("Cannot preserve cursor before Settings tab navigation")
+    result = []
+    try:
+        for category in (1, 2, 3, 0):
+            button = user32.GetDlgItem(settings_hwnd, 100 + category)
+            if not button or not user32.IsWindowVisible(button):
+                raise RuntimeError(
+                    "Native Settings sidebar tab missing: " + str(category))
+            bounds = wintypes.RECT()
+            if not user32.GetWindowRect(button, ctypes.byref(bounds)):
+                raise OSError("Cannot measure native Settings sidebar button")
+            point = wintypes.POINT((bounds.left + bounds.right) // 2,
+                                   (bounds.top + bounds.bottom) // 2)
+            if bounds.right - bounds.left < 40 or bounds.bottom - bounds.top < 24:
+                raise RuntimeError("Native Settings sidebar tab is clipped")
+            before = len(player_log.read_text(
+                encoding="utf-8", errors="replace"))
+            marker = ("VCR U1 GUI probe: native_settings_category_selected=true " +
+                      "category=" + str(category) + " native_visible=true")
+            user32.SetForegroundWindow(settings_hwnd)
+            if not user32.SetCursorPos(point.x, point.y):
+                raise OSError("Cannot place mouse over native Settings tab")
+            time.sleep(0.12)
+            hit = user32.WindowFromPoint(point)
+            if not hit or hit != button:
+                raise RuntimeError(
+                    "Native Settings sidebar covered or cannot receive click: " +
+                    str(category))
+            user32.mouse_event(0x0002, 0, 0, 0, 0)
+            time.sleep(0.07)
+            user32.mouse_event(0x0004, 0, 0, 0, 0)
+            deadline = time.monotonic() + 4
+            evidence = None
+            while time.monotonic() < deadline:
+                log = player_log.read_text(encoding="utf-8", errors="replace")
+                if any(line.strip() == marker
+                       for line in log[before:].splitlines()):
+                    controls = page_visibility()
+                    if native_settings_page_visibility(category, controls):
+                        evidence = {"page": category, "callbackObserved": True,
+                                    "controlsVisible": controls,
+                                    "screenPoint": [point.x, point.y]}
+                        break
+                time.sleep(0.1)
+            if evidence is None:
+                raise RuntimeError(
+                    "Actual native Settings tab click did not switch page " +
+                    str(category) + " and show its own controls")
+            result.append(evidence)
+    finally:
+        user32.SetCursorPos(cursor.x, cursor.y)
+    return {"passed": True, "visitedPages": [x["page"] for x in result],
+            "steps": result, "physicalHumanAcceptance": False}
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
@@ -1530,6 +1639,18 @@ def run_self_test():
     if window_fits_work_area(
             [42, 4, 982, 730], [0, 0, 1024, 728]):
         raise RuntimeError("Taskbar-obscured native Settings accepted")
+    pages = {0: False, 1: True, 2: False, 3: False}
+    if not native_settings_page_visibility(1, pages):
+        raise RuntimeError("Valid native Settings page visibility rejected")
+    if native_settings_page_visibility(2, pages):
+        raise RuntimeError("Wrong native Settings page accepted")
+    pages[2] = True
+    if native_settings_page_visibility(1, pages):
+        raise RuntimeError("Two visible native Settings pages accepted")
+    pages[2] = False
+    pages[1] = False
+    if native_settings_page_visibility(1, pages):
+        raise RuntimeError("Invisible native Settings contents accepted")
     hit_samples = [
         {"target": "caption", "result": HTCAPTION},
         {"target": "left", "result": HTLEFT},
@@ -1582,6 +1703,7 @@ def run_probe(args):
         "nativeWindowControlsPassed": False,
         "workspaceMouseClickPassed": False,
         "nativeSettingsOpenPassed": False,
+        "nativeSettingsNavigationPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -1801,6 +1923,13 @@ def run_probe(args):
                       f"bounds={native_settings['rect']} " +
                       f"work={native_settings['monitorWorkArea']}",
                       flush=True)
+                navigation = probe_native_settings_navigation(
+                    native_settings["window"]["hwnd"], player_log)
+                report["nativeSettingsNavigation"] = navigation
+                report["nativeSettingsNavigationPassed"] = navigation["passed"]
+                print("U1 native Settings OS-clicked page navigation: " +
+                      f"pages={navigation['visitedPages']}, " +
+                      f"passed={navigation['passed']}", flush=True)
             except Exception as error:
                 report["nativeSettingsOpenError"] = str(error)
         close_requested_at = time.monotonic()
@@ -1850,6 +1979,7 @@ def run_probe(args):
                 report["nativeWindowControlsPassed"] and
                 report["workspaceMouseClickPassed"] and
                 report["nativeSettingsOpenPassed"] and
+                report["nativeSettingsNavigationPassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
