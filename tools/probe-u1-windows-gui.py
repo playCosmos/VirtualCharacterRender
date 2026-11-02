@@ -104,6 +104,7 @@ def parse_inspector_axes_evidence(log_text, start_offset=0):
             width = float(values["axis_w"])
             content_width = float(values["content_w"])
             viewport_width = float(values["viewport_w"])
+            contrast = float(values["text_contrast"])
         except (KeyError, ValueError):
             return None
         if (count != 3 or not math.isfinite(width) or width < 40 or
@@ -111,11 +112,13 @@ def parse_inspector_axes_evidence(log_text, start_offset=0):
                 not math.isfinite(content_width) or
                 not math.isfinite(viewport_width) or
                 viewport_width < 150 or content_width < 0 or
-                content_width > viewport_width + 1.5):
+                content_width > viewport_width + 1.5 or
+                not math.isfinite(contrast) or contrast < 0.40):
             return None
         return {"count": count, "axisWidth": width,
                 "horizontalHidden": True,
-                "contentWidth": content_width, "viewportWidth": viewport_width}
+                "contentWidth": content_width, "viewportWidth": viewport_width,
+                "textContrast": contrast}
     return None
 
 
@@ -926,11 +929,12 @@ def run_self_test():
         raise RuntimeError("Stale header Move marker accepted")
     valid_axes = ("VCR U1 GUI probe: inspector_axes_ready=true "
                   "count=3 axis_w=65 horizontal_hidden=true "
-                  "content_w=199 viewport_w=200")
+                  "content_w=199 viewport_w=200 text_contrast=0.72")
     if parse_inspector_axes_evidence(valid_axes) != {
             "count": 3, "axisWidth": 65.0,
             "horizontalHidden": True,
-            "contentWidth": 199.0, "viewportWidth": 200.0}:
+            "contentWidth": 199.0, "viewportWidth": 200.0,
+            "textContrast": 0.72}:
         raise RuntimeError("Visible Inspector axis evidence rejected")
     if parse_inspector_axes_evidence(
             valid_axes.replace("count=3", "count=2")) is not None:
@@ -951,6 +955,17 @@ def run_self_test():
     if parse_inspector_axes_evidence(
             valid_axes.replace("viewport_w=200", "viewport_w=NaN")) is not None:
         raise RuntimeError("Nonfinite Inspector viewport width accepted")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace("text_contrast=0.72",
+                               "text_contrast=0.12")) is not None:
+        raise RuntimeError("Unreadable Inspector number text accepted")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace("text_contrast=0.72",
+                               "text_contrast=NaN")) is not None:
+        raise RuntimeError("Nonfinite Inspector contrast accepted")
+    if parse_inspector_axes_evidence(
+            valid_axes.replace(" text_contrast=0.72", "")) is not None:
+        raise RuntimeError("Missing Inspector contrast accepted")
     if parse_inspector_axes_evidence(
             "stale-prefix " + valid_axes,
             start_offset=len("stale-prefix " + valid_axes)) is not None:
