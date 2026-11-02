@@ -83,6 +83,29 @@ def compact_layout_usable(measurements):
                 measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
+def parse_workspace_click_target_evidence(log_text, start_offset=0):
+    """Only the current compact transition's measured Unity target qualifies."""
+    marker = "VCR U1 GUI probe: workspace_click_target_ready=true mode=compact "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(t.split("=", 1) for t in line.split() if "=" in t)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            width, height = float(values["root_w"]), float(values["root_h"])
+            initial = values["initial_mode"]
+        except (KeyError, ValueError):
+            return None
+        if not all(map(math.isfinite, (x, y, width, height))) or not (
+                256 <= width <= 2560 and 400 <= height <= 1440 and
+                8 <= x <= width - 8 and 8 <= y <= height - 8 and
+                initial in ("live", "advanced")):
+            return None
+        return {"x": x, "y": y, "rootWidth": width,
+                "rootHeight": height, "initialMode": initial}
+    return None
+
+
 def parse_compact_header_evidence(log_text, mode, start_offset=0):
     """Accept only the live, fully visible first three toolbar actions."""
     marker = ("VCR U1 GUI probe: compact_header_ready=true " +
@@ -518,6 +541,7 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         "compactRestoredLayout": None,
         "compactSinglePanelMove": False,
         "compactHeaderReady": False,
+        "compactWorkspaceClickTarget": None,
         "expandedUnityFrame": None,
         "compactRestoredUnityFrame": None,
         "passed": False,
@@ -604,6 +628,11 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         if not result["compactHeaderReady"]:
             raise RuntimeError(
                 "Compact toolbar clipped primary actions or showed disabled tabs")
+        result["compactWorkspaceClickTarget"] = parse_workspace_click_target_evidence(
+            compact_log[:ready_at] if ready_at >= 0 else "")
+        if result["compactWorkspaceClickTarget"] is None:
+            raise RuntimeError(
+                "Restored UI Toolkit workspace button has no measured click target")
         result["compactRestoredUnityFrame"] = wait_for_workspace_screenshot(
             output / "unity-restored.png", result["compactRestoredLayout"], "restored")
 
@@ -637,6 +666,7 @@ def probe_native_window_controls(hwnd, before, player_log, output):
                                 result["expandedCompactHeaderReady"],
                                 result["compactSinglePanelMove"],
                                 result["compactHeaderReady"],
+                                result["compactWorkspaceClickTarget"] is not None,
                                 result["compactRestoredLayout"] is not None,
                                 result["expandedUnityFrame"] is not None,
                                 result["compactRestoredUnityFrame"] is not None))
@@ -989,6 +1019,30 @@ def run_self_test():
         raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
+    click_marker = ("VCR U1 GUI probe: workspace_click_target_ready=true " +
+                    "mode=compact x=290 y=30 root_w=962 root_h=520 " +
+                    "initial_mode=live")
+    expected_target = {"x": 290.0, "y": 30.0,
+                       "rootWidth": 962.0, "rootHeight": 520.0,
+                       "initialMode": "live"}
+    if parse_workspace_click_target_evidence(click_marker) != expected_target:
+        raise RuntimeError("Valid Unity workspace click target rejected")
+    if parse_workspace_click_target_evidence(
+            click_marker.replace("mode=compact", "mode=expanded")) is not None:
+        raise RuntimeError("Wrong-mode Unity click target accepted")
+    if parse_workspace_click_target_evidence(
+            click_marker.replace("x=290", "x=NaN")) is not None:
+        raise RuntimeError("Nonfinite Unity click point accepted")
+    if parse_workspace_click_target_evidence(
+            click_marker.replace("x=290", "x=1000")) is not None:
+        raise RuntimeError("Offscreen Unity click point accepted")
+    if parse_workspace_click_target_evidence(
+            click_marker.replace("initial_mode=live",
+                                 "initial_mode=unknown")) is not None:
+        raise RuntimeError("Invalid initial workspace mode accepted")
+    if parse_workspace_click_target_evidence(
+            click_marker, len(click_marker)) is not None:
+        raise RuntimeError("Stale workspace click target accepted")
     toolbar_marker = ("VCR U1 GUI probe: compact_header_ready=true "
                       "mode=expanded primary_actions=3 "
                       "auto_tabs_hidden=true pointer_targets=3")
