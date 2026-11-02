@@ -817,6 +817,13 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
             "physicalHumanAcceptance": False}
 
 
+def window_fits_work_area(rect, work):
+    """Window must be entirely within the actual monitor's taskbar-free area."""
+    return (len(rect) == 4 and len(work) == 4 and
+            work[0] <= rect[0] < rect[2] <= work[2] and
+            work[1] <= rect[1] < rect[3] <= work[3])
+
+
 def visible_native_settings_windows(pid):
     """Find only the independently created Settings HWND from this Player."""
     user32 = ctypes.windll.user32
@@ -947,8 +954,7 @@ def probe_native_settings_open(player_hwnd, pid, player_log, start_offset):
     if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
         raise OSError("Cannot verify Settings monitor work area")
     work = [info.work.left, info.work.top, info.work.right, info.work.bottom]
-    inside = (work[0] <= rect[0] and work[1] <= rect[1] and
-              rect[2] <= work[2] and rect[3] <= work[3])
+    inside = window_fits_work_area(rect, work)
     if not inside:
         raise RuntimeError(
             "Native Settings window clipped by monitor work area: " +
@@ -1499,6 +1505,15 @@ def run_self_test():
             "unityFrameCaptured": True,
             "unityFrame": {"pixelDiversityPassed": False}}) is not None:
         raise RuntimeError("Blank startup screenshot accepted")
+    if not window_fits_work_area(
+            [42, 4, 982, 724], [0, 0, 1024, 728]):
+        raise RuntimeError("Visible native Settings window rejected")
+    if window_fits_work_area(
+            [160, 120, 1100, 840], [0, 0, 1024, 728]):
+        raise RuntimeError("Clipped native Settings window accepted")
+    if window_fits_work_area(
+            [42, 4, 982, 730], [0, 0, 1024, 728]):
+        raise RuntimeError("Taskbar-obscured native Settings accepted")
     hit_samples = [
         {"target": "caption", "result": HTCAPTION},
         {"target": "left", "result": HTLEFT},
@@ -1550,6 +1565,7 @@ def run_probe(args):
         "nativeInputTargetsPassed": False,
         "nativeWindowControlsPassed": False,
         "workspaceMouseClickPassed": False,
+        "nativeSettingsOpenPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -1721,6 +1737,8 @@ def run_probe(args):
             report["nativeWindowControlsError"] = str(error)
         if report["nativeWindowControlsPassed"]:
             try:
+                settings_log_offset = len(player_log.read_text(
+                    encoding="utf-8", errors="replace"))
                 target = report["nativeWindowControls"][
                     "compactWorkspaceClickTarget"]
                 click = probe_real_workspace_mouse_click(
@@ -1734,6 +1752,19 @@ def run_probe(args):
                       flush=True)
             except Exception as error:
                 report["workspaceMouseClickError"] = str(error)
+        if report["workspaceMouseClickPassed"]:
+            try:
+                native_settings = probe_native_settings_open(
+                    observed["hwnd"], process.pid, player_log,
+                    settings_log_offset)
+                report["nativeSettingsOpen"] = native_settings
+                report["nativeSettingsOpenPassed"] = native_settings["passed"]
+                print("U1 native Settings opened inside monitor work area: " +
+                      f"bounds={native_settings['rect']} " +
+                      f"work={native_settings['monitorWorkArea']}",
+                      flush=True)
+            except Exception as error:
+                report["nativeSettingsOpenError"] = str(error)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
@@ -1780,6 +1811,7 @@ def run_probe(args):
                 report["nativeInputTargetsPassed"] and
                 report["nativeWindowControlsPassed"] and
                 report["workspaceMouseClickPassed"] and
+                report["nativeSettingsOpenPassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
