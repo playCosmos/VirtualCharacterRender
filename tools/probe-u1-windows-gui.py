@@ -361,6 +361,31 @@ def inspect_native_window_frame(hwnd):
     return result
 
 
+def validated_visible_unity_frames(report):
+    """Require live diverse pixels: startup OR BOTH measured resize frames.
+
+    Hosted Unity can delay its initial opt-in Screenshot capture until after
+    frame/UI initialization. Two fresh maximize/restore screenshots from the
+    same actual Player process are stronger evidence than a missing startup
+    shot. Never accept Win32 style, blank bitmap, or geometry alone.
+    """
+    startup = report.get("unityFrame") if report.get("unityFrameCaptured") else None
+    if startup and startup.get("pixelDiversityPassed") is True:
+        return "startup"
+    controls = report.get("nativeWindowControls") or {}
+    expanded = controls.get("expandedUnityFrame") or {}
+    restored = controls.get("compactRestoredUnityFrame") or {}
+    if (report.get("nativeWindowControlsPassed") is True and
+            controls.get("passed") is True and
+            expanded.get("pixelDiversityPassed") is True and
+            restored.get("pixelDiversityPassed") is True and
+            expanded.get("sha256") and restored.get("sha256") and
+            expanded.get("file") == "unity-expanded.png" and
+            restored.get("file") == "unity-restored.png"):
+        return "maximized+restored"
+    return None
+
+
 def classify_native_input_targets(samples):
     """A native caption and both horizontal resize edges must be hit-testable."""
     left = any(item["result"] == HTLEFT for item in samples
@@ -1063,6 +1088,40 @@ def run_self_test():
     popup = classify_window_style(0x90000000)
     if popup["hasNativeTitleBar"] or popup["resizableFrame"] or not popup["borderlessPopup"]:
         raise RuntimeError("Borderless popup incorrectly classified as normal window")
+    # A missing startup PNG is permissible only if both real window
+    # transition screenshots were independently captured and diverse.
+    render = {"nativeWindowControlsPassed": True,
+              "nativeWindowControls": {
+                  "passed": True,
+                  "expandedUnityFrame": {
+                      "file": "unity-expanded.png", "sha256": "a",
+                      "pixelDiversityPassed": True},
+                  "compactRestoredUnityFrame": {
+                      "file": "unity-restored.png", "sha256": "b",
+                      "pixelDiversityPassed": True}}}
+    if validated_visible_unity_frames(render) != "maximized+restored":
+        raise RuntimeError("Valid post-transition Unity frames rejected")
+    render["nativeWindowControls"]["compactRestoredUnityFrame"][
+        "pixelDiversityPassed"] = False
+    if validated_visible_unity_frames(render) is not None:
+        raise RuntimeError("Blank restored Unity frame accepted")
+    render["nativeWindowControls"]["compactRestoredUnityFrame"][
+        "pixelDiversityPassed"] = True
+    render["nativeWindowControlsPassed"] = False
+    if validated_visible_unity_frames(render) is not None:
+        raise RuntimeError("Unvalidated window transitions accepted")
+    render["nativeWindowControlsPassed"] = True
+    render["nativeWindowControls"]["expandedUnityFrame"]["file"] = "stale.png"
+    if validated_visible_unity_frames(render) is not None:
+        raise RuntimeError("Unmatched Unity transition screenshot accepted")
+    if validated_visible_unity_frames({
+            "unityFrameCaptured": True,
+            "unityFrame": {"pixelDiversityPassed": True}}) != "startup":
+        raise RuntimeError("Valid startup screenshot rejected")
+    if validated_visible_unity_frames({
+            "unityFrameCaptured": True,
+            "unityFrame": {"pixelDiversityPassed": False}}) is not None:
+        raise RuntimeError("Blank startup screenshot accepted")
     hit_samples = [
         {"target": "caption", "result": HTCAPTION},
         {"target": "left", "result": HTLEFT},
@@ -1318,11 +1377,11 @@ def run_probe(args):
             raise RuntimeError(
                 "P1 GUI runtime emitted an exception: " +
                 report["runtimeExceptions"][0])
-        if not (report["unityFrameCaptured"] and
-                report["unityFrame"]["pixelDiversityPassed"]):
+        report["verifiedUnityFrameSource"] = validated_visible_unity_frames(report)
+        if report["verifiedUnityFrameSource"] is None:
             raise RuntimeError(
-                "P1 Unity startup frame missing or blank/uniform; " +
-                "see Unity PNG pixel diversity metrics")
+                "P1 Unity GUI pixels missing: require diverse startup image " +
+                "or BOTH source-matched maximize/restore screenshots")
         if not (report["nativeFramePassed"] and
                 report["nativeInputTargetsPassed"] and
                 report["nativeWindowControlsPassed"] and
