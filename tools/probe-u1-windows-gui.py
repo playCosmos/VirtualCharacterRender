@@ -83,6 +83,15 @@ def compact_layout_usable(measurements):
                 measurements["scrollHeight"] <= measurements["panelHeight"])
 
 
+def parse_compact_header_evidence(log_text, mode, start_offset=0):
+    """Accept only the live, fully visible first three toolbar actions."""
+    marker = ("VCR U1 GUI probe: compact_header_ready=true " +
+              "mode=" + mode +
+              " primary_actions=3 auto_tabs_hidden=true")
+    return any(line.strip() == marker
+               for line in log_text[start_offset:].splitlines())
+
+
 def parse_single_panel_move_evidence(log_text, mode, start_offset=0):
     """Only a live compact/expanded Inspector header Move qualifies."""
     marker = ("VCR U1 GUI probe: single_panel_move_ready=true " +
@@ -505,8 +514,10 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         "expandedLayout": None,
         "inspectorAxes": None,
         "expandedSinglePanelMove": False,
+        "expandedCompactHeaderReady": False,
         "compactRestoredLayout": None,
         "compactSinglePanelMove": False,
+        "compactHeaderReady": False,
         "expandedUnityFrame": None,
         "compactRestoredUnityFrame": None,
         "passed": False,
@@ -553,6 +564,16 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         if not result["expandedSinglePanelMove"]:
             raise RuntimeError(
                 "Expanded single Inspector header Move control not verified")
+        # At the narrow expanded breakpoint, verify the compact toolbar
+        # *in this transition*, not a marker from startup/another resize.
+        result["expandedCompactHeaderReady"] = (
+            maximized_frame["clientSize"][0] >= 1100 or
+            parse_compact_header_evidence(
+                expanded_log[:ready_at] if ready_at >= 0 else "",
+                "expanded"))
+        if not result["expandedCompactHeaderReady"]:
+            raise RuntimeError(
+                "Expanded narrow toolbar clipped primary actions or showed disabled tabs")
         # An expanded window that is tall but narrower than the responsive
         # breakpoint must actually have passed Unity's live auto-tab check.
         if maximized_frame["clientSize"][0] < 1100 and \
@@ -578,6 +599,11 @@ def probe_native_window_controls(hwnd, before, player_log, output):
         if not result["compactSinglePanelMove"]:
             raise RuntimeError(
                 "Restored compact single Inspector header Move not verified")
+        result["compactHeaderReady"] = parse_compact_header_evidence(
+            compact_log[:ready_at] if ready_at >= 0 else "", "compact")
+        if not result["compactHeaderReady"]:
+            raise RuntimeError(
+                "Compact toolbar clipped primary actions or showed disabled tabs")
         result["compactRestoredUnityFrame"] = wait_for_workspace_screenshot(
             output / "unity-restored.png", result["compactRestoredLayout"], "restored")
 
@@ -608,7 +634,9 @@ def probe_native_window_controls(hwnd, before, player_log, output):
                                 result["expandedLayout"] is not None,
                                 result["inspectorAxes"] is not None,
                                 result["expandedSinglePanelMove"],
+                                result["expandedCompactHeaderReady"],
                                 result["compactSinglePanelMove"],
+                                result["compactHeaderReady"],
                                 result["compactRestoredLayout"] is not None,
                                 result["expandedUnityFrame"] is not None,
                                 result["compactRestoredUnityFrame"] is not None))
@@ -961,6 +989,24 @@ def run_self_test():
         raise RuntimeError("Narrow layout with unusably short dock accepted")
     if parse_workspace_resize_transition(transition, "compact") is not None:
         raise RuntimeError("Expanded marker accepted as compact")
+    toolbar_marker = ("VCR U1 GUI probe: compact_header_ready=true "
+                      "mode=expanded primary_actions=3 "
+                      "auto_tabs_hidden=true")
+    if not parse_compact_header_evidence(toolbar_marker, "expanded"):
+        raise RuntimeError("Valid compact toolbar evidence rejected")
+    if parse_compact_header_evidence(toolbar_marker, "compact"):
+        raise RuntimeError("Wrong-mode compact toolbar marker accepted")
+    if parse_compact_header_evidence(
+            toolbar_marker.replace("primary_actions=3",
+                                   "primary_actions=2"), "expanded"):
+        raise RuntimeError("Partially hidden toolbar actions accepted")
+    if parse_compact_header_evidence(
+            toolbar_marker.replace("auto_tabs_hidden=true",
+                                   "auto_tabs_hidden=false"), "expanded"):
+        raise RuntimeError("Disabled tab toggle in toolbar accepted")
+    if parse_compact_header_evidence(
+            toolbar_marker, "expanded", len(toolbar_marker)):
+        raise RuntimeError("Stale compact toolbar marker accepted")
     move_marker = ("VCR U1 GUI probe: single_panel_move_ready=true "
                    "mode=expanded panel=inspector")
     if not parse_single_panel_move_evidence(move_marker, "expanded"):
