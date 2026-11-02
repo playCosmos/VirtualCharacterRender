@@ -817,6 +817,148 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
             "physicalHumanAcceptance": False}
 
 
+def visible_native_settings_windows(pid):
+    """Find only the independently created Settings HWND from this Player."""
+    user32 = ctypes.windll.user32
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+    user32.EnumWindows.restype = wintypes.BOOL
+    user32.GetWindowThreadProcessId.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    found = []
+    def visitor(hwnd, _):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value != pid or not user32.IsWindowVisible(hwnd):
+            return True
+        name = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, name, len(name))
+        if name.value != "VCR.NativeSettings.Window.1":
+            return True
+        title = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(hwnd, title, len(title))
+        found.append({"hwnd": int(hwnd), "title": title.value,
+                      "class": name.value})
+        return True
+    if not user32.EnumWindows(callback_type(visitor), 0):
+        raise OSError("Cannot enumerate native Settings windows")
+    return found
+
+
+def probe_native_settings_open(player_hwnd, pid, player_log, start_offset):
+    """Exercise Settings through Win32 mouse input; require visible, on-screen HWND.
+
+    This verifies the real native window independently of a Unity callback.
+    It intentionally does not edit settings, depend on a screen bitmap, or
+    claim physical operator interaction.
+    """
+    deadline = time.monotonic() + 4
+    target = None
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        target = parse_settings_click_target_evidence(log, start_offset)
+        if target is not None:
+            break
+        time.sleep(0.1)
+    if target is None:
+        raise RuntimeError("No fresh Unity Settings button coordinates after switch")
+    user32 = ctypes.windll.user32
+    user32.ClientToScreen.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user32.ClientToScreen.restype = wintypes.BOOL
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.mouse_event.argtypes = [
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, ctypes.c_size_t]
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
+    frame = inspect_native_window_frame(player_hwnd)
+    w, h = frame["clientSize"]
+    scale_x = w / target["rootWidth"]
+    scale_y = h / target["rootHeight"]
+    if not 0.5 <= scale_x <= 3 or not 0.5 <= scale_y <= 3:
+        raise RuntimeError("Settings click target scale differs from Unity viewport")
+    pt = wintypes.POINT(round(target["x"] * scale_x),
+                        round(target["y"] * scale_y))
+    if not (8 <= pt.x < w - 8 and 8 <= pt.y < h - 8):
+        raise RuntimeError("Settings click point outside Unity viewport")
+    if not user32.ClientToScreen(player_hwnd, ctypes.byref(pt)):
+        raise OSError("ClientToScreen failed for Settings button")
+    previous = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(previous)):
+        raise OSError("GetCursorPos failed before Settings click")
+    offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    try:
+        user32.SetForegroundWindow(player_hwnd)
+        if not user32.SetCursorPos(pt.x, pt.y):
+            raise OSError("Cannot position cursor over Settings button")
+        time.sleep(0.15)
+        hit = user32.WindowFromPoint(pt)
+        if not hit or user32.GetAncestor(hit, 2) != player_hwnd:
+            raise RuntimeError("Settings button covered by another OS window")
+        user32.mouse_event(0x0002, 0, 0, 0, 0)
+        time.sleep(0.06)
+        user32.mouse_event(0x0004, 0, 0, 0, 0)
+    finally:
+        user32.SetCursorPos(previous.x, previous.y)
+    marker = "VCR U1 GUI probe: settings_action_clicked=true native_visible=true"
+    window = None
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        candidates = visible_native_settings_windows(pid)
+        if (any(line.strip() == marker for line in log[offset:].splitlines())
+                and len(candidates) == 1):
+            window = candidates[0]
+            break
+        time.sleep(0.15)
+    if window is None:
+        raise RuntimeError(
+            "OS click did not create one visible native Settings window")
+    hwnd = window["hwnd"]
+    rect = inspect_native_window_frame(hwnd)["windowRect"]
+    class Rect(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                    ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+    class MonitorInfo(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD),
+                    ("monitor", Rect), ("work", Rect),
+                    ("flags", wintypes.DWORD)]
+    user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+    user32.MonitorFromWindow.restype = wintypes.HANDLE
+    user32.GetMonitorInfoW.argtypes = [
+        wintypes.HANDLE, ctypes.POINTER(MonitorInfo)]
+    user32.GetMonitorInfoW.restype = wintypes.BOOL
+    monitor = user32.MonitorFromWindow(hwnd, 2)
+    info = MonitorInfo()
+    info.cbSize = ctypes.sizeof(info)
+    if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+        raise OSError("Cannot verify Settings monitor work area")
+    work = [info.work.left, info.work.top, info.work.right, info.work.bottom]
+    inside = (work[0] <= rect[0] and work[1] <= rect[1] and
+              rect[2] <= work[2] and rect[3] <= work[3])
+    if not inside:
+        raise RuntimeError(
+            "Native Settings window clipped by monitor work area: " +
+            str({"window": rect, "work": work}))
+    return {"passed": True, "window": window, "rect": rect,
+            "monitorWorkArea": work, "withinWorkArea": True,
+            "target": target, "screenPoint": [pt.x, pt.y],
+            "physicalHumanAcceptance": False}
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
