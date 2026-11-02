@@ -713,6 +713,81 @@ def probe_free_resize(hwnd, before):
             hwnd, None, 0, 0, width, height, flags))
 
 
+def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
+    """Send a genuine desktop left-click to the measured Unity Button center.
+
+    Unlike Panel.Pick, this crosses Win32 input routing and Unity's UI Toolkit
+    event callback. It remains a narrowly scoped hosted-desktop smoke test,
+    NOT human physical interaction or full operator acceptance.
+    """
+    user32 = ctypes.windll.user32
+    user32.ClientToScreen.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user32.ClientToScreen.restype = wintypes.BOOL
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.mouse_event.argtypes = [
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, ctypes.c_size_t]
+    user32.mouse_event.restype = None
+    frame = inspect_native_window_frame(hwnd)
+    width, height = frame["clientSize"]
+    scale_x = width / target["rootWidth"]
+    scale_y = height / target["rootHeight"]
+    if not (0.5 <= scale_x <= 3 and 0.5 <= scale_y <= 3):
+        raise RuntimeError("Window/client size cannot map Unity click coordinates")
+    point = wintypes.POINT(round(target["x"] * scale_x),
+                           round(target["y"] * scale_y))
+    if not (8 <= point.x < width - 8 and 8 <= point.y < height - 8):
+        raise RuntimeError("Workspace click point falls outside Player client")
+    if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
+        raise OSError("ClientToScreen failed for Player mouse target")
+    previous = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(previous)):
+        raise OSError("GetCursorPos failed before real desktop mouse click")
+    expected_mode = ("advanced" if target["initialMode"] == "live" else "live")
+    marker = ("VCR U1 GUI probe: workspace_toggle_clicked=true " +
+              "mode=" + expected_mode)
+    offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    clicked = False
+    try:
+        # The hosted Windows GUI runner exposes a real visible Unity HWND.
+        # A synthetic pointer event is sent through the OS (not Unity's
+        # Click() helper), so an occluded/disabled control cannot pass.
+        user32.SetForegroundWindow(hwnd)
+        if not user32.SetCursorPos(point.x, point.y):
+            raise OSError("SetCursorPos rejected live Unity mouse target")
+        time.sleep(0.15)
+        user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
+        time.sleep(0.06)
+        user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            log = player_log.read_text(encoding="utf-8", errors="replace")
+            if any(line.strip() == marker for line in log[offset:].splitlines()):
+                clicked = True
+                break
+            time.sleep(0.15)
+    finally:
+        user32.SetCursorPos(previous.x, previous.y)
+    if not clicked:
+        raise RuntimeError(
+            "Real desktop click did not invoke UI Toolkit workspace toggle: " +
+            expected_mode)
+    screenshot = wait_for_workspace_screenshot(
+        output / "unity-workspace-clicked.png",
+        {"width": target["rootWidth"], "height": target["rootHeight"]},
+        "workspace click")
+    return {"passed": True, "target": target, "clientSize": [width, height],
+            "screenPoint": [point.x, point.y],
+            "observedNewMode": expected_mode, "unityFrame": screenshot,
+            "physicalHumanAcceptance": False}
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
@@ -1274,7 +1349,8 @@ def run_probe(args):
     config_path = output / "gui-probe-config.json"
     unity_image_path = output / "unity-frame.png"
     for stale in (player_log, report_path, config_path, unity_image_path,
-                  output / "unity-expanded.png", output / "unity-restored.png"):
+                  output / "unity-expanded.png", output / "unity-restored.png",
+                  output / "unity-workspace-clicked.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
@@ -1287,6 +1363,7 @@ def run_probe(args):
         "nativeFramePassed": False,
         "nativeInputTargetsPassed": False,
         "nativeWindowControlsPassed": False,
+        "workspaceMouseClickPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -1456,6 +1533,21 @@ def run_probe(args):
                   f"passed={controls['passed']}", flush=True)
         except Exception as error:
             report["nativeWindowControlsError"] = str(error)
+        if report["nativeWindowControlsPassed"]:
+            try:
+                target = report["nativeWindowControls"][
+                    "compactWorkspaceClickTarget"]
+                click = probe_real_workspace_mouse_click(
+                    observed["hwnd"], target, player_log, output)
+                report["workspaceMouseClick"] = click
+                report["workspaceMouseClickPassed"] = click["passed"]
+                print("U1 desktop mouse click invoked workspace toggle: " +
+                      f"newMode={click['observedNewMode']} " +
+                      f"screen={click['screenPoint']}, " +
+                      f"rendered={click['unityFrame']['pixelDiversityPassed']}",
+                      flush=True)
+            except Exception as error:
+                report["workspaceMouseClickError"] = str(error)
         close_requested_at = time.monotonic()
         request_normal_close(observed["hwnd"])
         report["normalCloseRequested"] = True
@@ -1501,6 +1593,7 @@ def run_probe(args):
         if not (report["nativeFramePassed"] and
                 report["nativeInputTargetsPassed"] and
                 report["nativeWindowControlsPassed"] and
+                report["workspaceMouseClickPassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
