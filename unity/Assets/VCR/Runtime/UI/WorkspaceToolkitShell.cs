@@ -403,6 +403,26 @@ namespace VCR.Runtime.UI
             }
         }
 
+        // Runtime UI Toolkit can display a Button whose center actually
+        // picks an overlapping element. Checking geometry alone does not
+        // prove the operator can target the intended control with a mouse.
+        // This is a hit-test smoke check, not a synthetic click or evidence
+        // that the button's action completed successfully.
+        private static bool WorkspaceButtonReceivesPointer(Button button)
+        {
+            if (button == null || button.panel == null ||
+                !button.enabledInHierarchy ||
+                button.resolvedStyle.display == DisplayStyle.None)
+                return false;
+            var picked = button.panel.Pick(button.worldBound.center);
+            while (picked != null)
+            {
+                if (picked == button) return true;
+                picked = picked.parent;
+            }
+            return false;
+        }
+
         private System.Collections.IEnumerator ReportWorkspaceResizeTransitionAfterLayout(
             bool expectedCompact)
         {
@@ -471,7 +491,8 @@ namespace VCR.Runtime.UI
                     {
                         if (button.worldBound.width < 38f ||
                             button.worldBound.xMin < clip.xMin - 1.5f ||
-                            button.worldBound.xMax > clip.xMax + 1.5f)
+                            button.worldBound.xMax > clip.xMax + 1.5f ||
+                            !WorkspaceButtonReceivesPointer(button))
                         {
                             visible = false;
                             break;
@@ -486,7 +507,8 @@ namespace VCR.Runtime.UI
                     yield break;
                 }
                 Debug.Log("VCR U1 GUI probe: compact_header_ready=true mode=" +
-                    mode + " primary_actions=3 auto_tabs_hidden=true", this);
+                    mode + " primary_actions=3 auto_tabs_hidden=true " +
+                    "pointer_targets=3", this);
             }
             if (expectedCompact && _bottomVisible)
             {
@@ -654,6 +676,7 @@ namespace VCR.Runtime.UI
                         move.resolvedStyle.backgroundColor.grayscale) : 0f;
                     var valid = heading != null && move != null &&
                         moveContrast >= 0.35f &&
+                        WorkspaceButtonReceivesPointer(move) &&
                         move.panel == _workspaceRoot.panel &&
                         footer != null &&
                         footer.resolvedStyle.display == DisplayStyle.None &&
@@ -668,7 +691,8 @@ namespace VCR.Runtime.UI
                         yield break;
                     }
                     Debug.Log("VCR U1 GUI probe: single_panel_move_ready=true " +
-                        "mode=" + mode + " panel=" + id, this);
+                        "mode=" + mode + " panel=" + id +
+                        " pointer_target=true", this);
                 }
             }
             if (!expectedCompact && _bottomVisible)
