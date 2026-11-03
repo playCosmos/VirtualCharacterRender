@@ -129,6 +129,29 @@ def parse_feature_search_workspace_target(log_text, start_offset=0):
     return None
 
 
+def parse_feature_search_hide_left_target(log_text, start_offset=0):
+    """Accept only fresh, on-screen coordinates of the Advanced Hide left button."""
+    marker = "VCR U1 GUI probe: feature_search_hide_left_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (values.get("mode") != "advanced" or
+                not all(math.isfinite(v) for v in (x, y, w, h)) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w,
+                "rootHeight": h, "initialMode": "advanced"}
+    return None
+
+
 def parse_settings_click_target_evidence(log_text, start_offset=0):
     """Require a real, post-workspace-switch Settings button location."""
     marker = "VCR U1 GUI probe: settings_click_target_ready=true "
@@ -758,7 +781,8 @@ def probe_free_resize(hwnd, before):
 
 
 def probe_real_workspace_mouse_click(hwnd, target, player_log, output,
-                                     screenshot_name="unity-workspace-clicked.png"):
+                                     screenshot_name="unity-workspace-clicked.png",
+                                     expected_marker=None):
     """Send a genuine desktop left-click to the measured Unity Button center.
 
     Unlike Panel.Pick, this crosses Win32 input routing and Unity's UI Toolkit
@@ -799,8 +823,9 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output,
     if not user32.GetCursorPos(ctypes.byref(previous)):
         raise OSError("GetCursorPos failed before real desktop mouse click")
     expected_mode = ("advanced" if target["initialMode"] == "live" else "live")
-    marker = ("VCR U1 GUI probe: workspace_toggle_clicked=true " +
-              "mode=" + expected_mode)
+    marker = (expected_marker or
+              ("VCR U1 GUI probe: workspace_toggle_clicked=true " +
+               "mode=" + expected_mode))
     offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
     clicked = False
     try:
@@ -1769,6 +1794,22 @@ def run_self_test():
     if parse_feature_search_workspace_target(
             back_marker, len(back_marker)) is not None:
         raise RuntimeError("Stale return-to-Live target accepted")
+    hidden_left_marker = (
+        "VCR U1 GUI probe: feature_search_hide_left_target_ready=true " +
+        "x=502 y=29.5 root_w=962 root_h=520 mode=advanced")
+    hidden_left_target = {"x": 502.0, "y": 29.5, "rootWidth": 962.0,
+                          "rootHeight": 520.0, "initialMode": "advanced"}
+    if parse_feature_search_hide_left_target(hidden_left_marker) != hidden_left_target:
+        raise RuntimeError("Valid Hide left OS target rejected")
+    if parse_feature_search_hide_left_target(
+            hidden_left_marker.replace("mode=advanced", "mode=live")) is not None:
+        raise RuntimeError("Wrong-mode Hide left target accepted")
+    if parse_feature_search_hide_left_target(
+            hidden_left_marker.replace("x=502", "x=NaN")) is not None:
+        raise RuntimeError("Nonfinite Hide left target accepted")
+    if parse_feature_search_hide_left_target(
+            hidden_left_marker, len(hidden_left_marker)) is not None:
+        raise RuntimeError("Stale Hide left target accepted")
     native_settings_marker = ("VCR U1 GUI probe: settings_click_target_ready=true "
                               "x=210 y=29.5 root_w=962 root_h=520")
     if parse_settings_click_target_evidence(native_settings_marker) != {
@@ -2041,7 +2082,9 @@ def run_probe(args):
                   output / "unity-feature-searched.png",
                   output / "unity-feature-materials.png",
                   output / "unity-feature-live.png",
-                  output / "unity-feature-materials-from-live.png"):
+                  output / "unity-feature-materials-from-live.png",
+                  output / "unity-feature-left-hidden.png",
+                  output / "unity-feature-scenes-revealed.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
