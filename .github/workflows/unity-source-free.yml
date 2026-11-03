@@ -339,8 +339,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $reportPath = 'Builds/GUIProbe/u1-windows/gui-probe.json'
           if (-not (Test-Path -LiteralPath $reportPath)) {
-            Write-Host 'GUI probe produced no report; interactive desktop not verified.'
-            exit 0
+            # The probe always writes its failure/availability report in
+            # finally, including a truly headless runner. No report means
+            # an unexpected probe crash or a missing artifact, not success.
+            throw 'P1 GUI probe produced no report; cannot distinguish headless runner from a failed probe.'
           }
           $probe = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
           if (-not $probe.windowObserved) {
