@@ -351,6 +351,25 @@ namespace VCR.Runtime.UI
                             (visible ? "true" : "false") + " dock_visible=" +
                             (dockVisible ? "true" : "false") +
                             " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                        var contents = target.Q<ScrollView>("vcr-materials-content");
+                        var viewport = contents != null ? contents.contentViewport : null;
+                        var panelBounds = target.worldBound;
+                        var clipped = viewport != null &&
+                            viewport.resolvedStyle.display != DisplayStyle.None &&
+                            viewport.worldBound.height >= 35f &&
+                            viewport.worldBound.yMin >= panelBounds.yMin - 1f &&
+                            viewport.worldBound.yMax <= panelBounds.yMax + 1f;
+                        var aboveBottom = _bottomDock != null &&
+                            panelBounds.yMax <= _bottomDock.worldBound.yMin + 1f;
+                        Debug.Log("VCR U1 GUI probe: feature_search_materials_layout_ready=" +
+                            (visible && dockVisible && clipped && aboveBottom
+                                ? "true" : "false") +
+                            " viewport_clipped=" + (clipped ? "true" : "false") +
+                            " panel_above_bottom=" + (aboveBottom ? "true" : "false") +
+                            " scroll_height=" + (viewport != null
+                                ? viewport.worldBound.height.ToString("0.##",
+                                    System.Globalization.CultureInfo.InvariantCulture)
+                                : "0"), this);
                     }
                     if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                     {
