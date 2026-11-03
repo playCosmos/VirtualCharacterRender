@@ -2358,7 +2358,12 @@ namespace VCR.Runtime.UI
                 inspectorSplitter.style.display = !effectiveTabMode && inspector.parent == right
                     ? DisplayStyle.Flex : DisplayStyle.None;
                 right.Add(inspectorSplitter);
-                var materials = Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 200);
+                var materials = Panel(WorkspacePanelCatalog.Materials, "Materials / Shaders", 0);
+                // In automatic tabs, the right dock may be shorter than the
+                // full editor. Scroll inside the panel instead of preserving
+                // a 200px panel minimum that overlaps the bottom dock.
+                materials.style.minHeight = 0;
+                materials.style.overflow = Overflow.Hidden;
                 BuildWorkspaceMaterialsPanel(materials);
                 PlacePanel(materials, WorkspacePanelCatalog.Materials, "right");
                 var modules = Panel(WorkspacePanelCatalog.Capabilities, "Modules", 120);
