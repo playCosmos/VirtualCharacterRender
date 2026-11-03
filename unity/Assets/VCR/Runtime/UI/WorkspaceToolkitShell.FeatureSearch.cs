@@ -278,6 +278,8 @@ namespace VCR.Runtime.UI
         private void NavigateToWorkspaceFeature(WorkspaceFeature feature)
         {
             if (feature == null) return;
+            var savedLayoutBeforeSearch = _guiProbeRequested
+                ? CaptureLayoutSignature() : null;
             CloseWorkspaceFeatureSearch();
             if (feature.NativeSettingsCategory >= 0)
             {
@@ -318,6 +320,15 @@ namespace VCR.Runtime.UI
                 // Rebuild once to handle mode, hidden docks and auto-tabs
                 // consistently; existing Build() preserves editor drafts.
                 Build();
+                if (_guiProbeRequested && feature.Id == "materials")
+                {
+                    var layoutPreserved = string.Equals(
+                        savedLayoutBeforeSearch, CaptureLayoutSignature(),
+                        StringComparison.Ordinal);
+                    Debug.Log("VCR U1 GUI probe: feature_search_layout_preserved=" +
+                        (layoutPreserved ? "true" : "false") +
+                        " id=materials", this);
+                }
             }
 
             var targetName = !string.IsNullOrEmpty(feature.TargetName)
