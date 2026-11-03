@@ -1260,16 +1260,34 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     visible = (
         "VCR U1 GUI probe: feature_search_panel_visible=true "
         "id=materials target_visible=true dock_visible=true mode=advanced")
+    viewport_marker = (
+        "VCR U1 GUI probe: feature_search_materials_layout_ready=true "
+        "viewport_clipped=true panel_above_bottom=true scroll_height=")
+    viewport_height = None
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         log = player_log.read_text(encoding="utf-8", errors="replace")
         lines = [line.strip() for line in log[offset2:].splitlines()]
-        if materials_navigation in lines and visible in lines:
+        metrics = [
+            line for line in lines if line.startswith(viewport_marker)]
+        if metrics:
+            try:
+                viewport_height = float(
+                    metrics[-1][len(viewport_marker):])
+            except ValueError:
+                viewport_height = None
+        if (materials_navigation in lines and visible in lines and
+                viewport_height is not None and
+                math.isfinite(viewport_height) and viewport_height >= 35):
             break
         time.sleep(0.12)
     else:
         raise RuntimeError(
-            "Advanced Materials search did not activate a visible right-dock tab")
+            "Advanced Materials search did not activate a clipped right-dock "
+            "viewport wholly above bottom dock: " +
+            str({"navigation": materials_navigation in lines,
+                 "tab": visible in lines, "viewportHeight": viewport_height,
+                 "viewportEvidence": metrics[-1] if metrics else None}))
     materials_screenshot = wait_for_workspace_screenshot(
         output / "unity-feature-materials.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
@@ -1280,7 +1298,9 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
             "advancedPanelSearch": {
                 "query": "materials", "resultId": "materials",
                 "targetName": "vcr-panel-materials",
-                "visibleRightDock": True, "postSearchFrame": materials_screenshot},
+                "visibleRightDock": True, "scrollClippedAboveBottom": True,
+                "viewportHeight": viewport_height,
+                "postSearchFrame": materials_screenshot},
             "physicalHumanAcceptance": False}
 
 
