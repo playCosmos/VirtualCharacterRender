@@ -1368,20 +1368,22 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     preserved = (
         "VCR U1 GUI probe: feature_search_mode_preserved=true "
         "id=materials from=live to=advanced persisted=live")
+    layout_preserved = (
+        "VCR U1 GUI probe: feature_search_layout_preserved=true id=materials")
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         log = player_log.read_text(encoding="utf-8", errors="replace")
         lines = [line.strip() for line in log[offset3:].splitlines()]
         metrics = [
             line for line in lines if line.startswith(viewport_marker)]
-        if (preserved in lines and materials_navigation in lines and
-                visible in lines and metrics):
+        if (preserved in lines and layout_preserved in lines and
+                materials_navigation in lines and visible in lines and metrics):
             break
         time.sleep(0.12)
     else:
         raise RuntimeError(
             "Materials from Live failed to reveal Advanced without changing "
-            "the persisted Live mode or right-dock viewport")
+            "the persisted Live mode, dock layout or right-dock viewport")
     from_live_screenshot = wait_for_workspace_screenshot(
         output / "unity-feature-materials-from-live.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
@@ -1397,6 +1399,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "postSearchFrame": materials_screenshot},
             "liveToAdvancedSearch": {
                 "liveClickObserved": True, "modePersistedLive": True,
+                "fullLayoutSignaturePreserved": True,
                 "advancedPanelRevealed": True,
                 "liveFrame": back_click["unityFrame"],
                 "postSearchFrame": from_live_screenshot},
