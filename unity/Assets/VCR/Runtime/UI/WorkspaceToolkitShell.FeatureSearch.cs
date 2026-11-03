@@ -294,7 +294,8 @@ namespace VCR.Runtime.UI
                 }
                 return;
             }
-            if (feature.RequiresAdvanced && !advancedWorkspace)
+            var autoAdvanced = feature.RequiresAdvanced && !advancedWorkspace;
+            if (autoAdvanced)
                 advancedWorkspace = true; // Session-only; do not alter PlayerPrefs.
 
             if (!string.IsNullOrEmpty(feature.PanelId))
@@ -336,11 +337,23 @@ namespace VCR.Runtime.UI
                 if (target.panel == null) return;
                 if (_guiProbeRequested)
                 {
+                    if (autoAdvanced)
+                    {
+                        var persisted = PlayerPrefs.GetInt(WorkspaceModeKey, -1);
+                        Debug.Log("VCR U1 GUI probe: feature_search_mode_preserved=" +
+                            (persisted == 0 ? "true" : "false") +
+                            " id=" + feature.Id +
+                            " from=live to=advanced persisted=" +
+                            (persisted == 0 ? "live" : persisted == 1 ? "advanced" : "missing"),
+                            this);
+                    }
                     Debug.Log("VCR U1 GUI probe: feature_search_navigated=true id=" +
                         feature.Id + " target=" + targetName +
                         " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
                     if (feature.Id == "materials")
                     {
+                        if (!autoAdvanced)
+                            StartCoroutine(ReportFeatureSearchReturnToLiveTarget());
                         var visible = target.resolvedStyle.display != DisplayStyle.None &&
                             target.worldBound.width > 120 && target.worldBound.height > 40;
                         var dockVisible = _rightDock != null &&
@@ -379,7 +392,9 @@ namespace VCR.Runtime.UI
                             StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                                 System.IO.Path.Combine(directory,
                                     feature.Id == "materials"
-                                        ? "unity-feature-materials.png"
+                                        ? autoAdvanced
+                                            ? "unity-feature-materials-from-live.png"
+                                            : "unity-feature-materials.png"
                                         : "unity-feature-searched.png")));
                     }
                 }
@@ -398,6 +413,30 @@ namespace VCR.Runtime.UI
                     target.style.borderLeftColor = previousColor;
                 }).ExecuteLater(1600);
             }).ExecuteLater(90);
+        }
+        private System.Collections.IEnumerator ReportFeatureSearchReturnToLiveTarget()
+        {
+            yield return new WaitForEndOfFrame();
+            if (_workspaceRoot == null || _workspaceRoot.panel == null ||
+                !advancedWorkspace) yield break;
+            var toggle = _workspaceRoot.Q<Button>("vcr-header-workspace");
+            if (!WorkspaceButtonReceivesPointer(toggle))
+            {
+                Debug.Log("VCR U1 GUI probe: feature_search_workspace_target_rejected=true", this);
+                yield break;
+            }
+            var center = toggle.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: feature_search_workspace_target_ready=true " +
+                "x=" + center.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + center.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " current_mode=advanced", this);
         }
     }
 }
