@@ -1330,11 +1330,19 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         time.sleep(0.12)
     if back_target is None:
         raise RuntimeError("No visible/OS-hit-testable Live toolbar target")
+    back_click_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
     back_click = probe_real_workspace_mouse_click(
         player_hwnd, back_target, player_log, output,
         screenshot_name="unity-feature-live.png")
     if back_click["observedNewMode"] != "live":
         raise RuntimeError("Cannot establish real Live starting state")
+    log = player_log.read_text(encoding="utf-8", errors="replace")
+    focus_marker = "VCR U1 GUI probe: workspace_focus_restored=true"
+    if not any(line.strip() == focus_marker
+               for line in log[back_click_offset:].splitlines()):
+        raise RuntimeError(
+            "Workspace mode rebuild left no stable UI Toolkit keyboard focus")
 
     # Search Advanced-only Materials from Live. The UI must reveal it but
     # leave the operator's persisted WorkspaceModeKey set to Live.
@@ -2292,15 +2300,18 @@ def run_probe(args):
                 print("U1 native Settings WM_CLOSE/hide/reopen: " +
                       f"sameHandle={lifecycle['reusedWindow']} " +
                       f"reopenClicks={lifecycle['reopenClickAttempts']}", flush=True)
-                searched = probe_feature_search_keyboard(
-                    observed["hwnd"], native_settings["window"]["hwnd"],
-                    player_log, output)
-                report["featureSearchKeyboard"] = searched
-                report["featureSearchKeyboardPassed"] = searched["passed"]
-                print("U1 OS-keyboard palette search: " +
-                      f"query={searched['query']} " +
-                      f"result={searched['resultId']} " +
-                      f"passed={searched['passed']}", flush=True)
+                try:
+                    searched = probe_feature_search_keyboard(
+                        observed["hwnd"], native_settings["window"]["hwnd"],
+                        player_log, output)
+                    report["featureSearchKeyboard"] = searched
+                    report["featureSearchKeyboardPassed"] = searched["passed"]
+                    print("U1 OS-keyboard palette search: " +
+                          f"query={searched['query']} " +
+                          f"result={searched['resultId']} " +
+                          f"passed={searched['passed']}", flush=True)
+                except Exception as search_error:
+                    report["featureSearchKeyboardError"] = str(search_error)
             except Exception as error:
                 report["nativeSettingsOpenError"] = str(error)
         close_requested_at = time.monotonic()
