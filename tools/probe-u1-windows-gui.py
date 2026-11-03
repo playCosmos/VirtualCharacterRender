@@ -862,8 +862,9 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output,
         "workspace click")
     return {"passed": True, "target": target, "clientSize": [width, height],
             "screenPoint": [point.x, point.y],
-            "observedNewMode": expected_mode, "unityFrame": screenshot,
-            "physicalHumanAcceptance": False}
+            "observedNewMode": (expected_mode if expected_marker is None
+                                else target["initialMode"]),
+            "unityFrame": screenshot, "physicalHumanAcceptance": False}
 
 
 def window_fits_work_area(rect, work):
