@@ -1316,6 +1316,76 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         output / "unity-feature-materials.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
         "Materials feature navigation")
+
+    # Start from an OS-confirmed Live mode, not an inferred default.
+    # The first Materials result is already visible; Unity publishes the
+    # measured live toolbar button center at the end of the real UI layout.
+    back_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        back_target = parse_feature_search_workspace_target(log, offset2)
+        if back_target is not None:
+            break
+        time.sleep(0.12)
+    if back_target is None:
+        raise RuntimeError("No visible/OS-hit-testable Live toolbar target")
+    back_click = probe_real_workspace_mouse_click(
+        player_hwnd, back_target, player_log, output,
+        screenshot_name="unity-feature-live.png")
+    if back_click["observedNewMode"] != "live":
+        raise RuntimeError("Cannot establish real Live starting state")
+
+    # Search Advanced-only Materials from Live. The UI must reveal it but
+    # leave the operator's persisted WorkspaceModeKey set to Live.
+    offset3 = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    user32.SetForegroundWindow(player_hwnd)
+    user32.keybd_event(0x11, 0, 0, 0)
+    key(0x4b)
+    user32.keybd_event(0x11, 0, 0x0002, 0)
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == opened
+               for line in log[offset3:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Ctrl+K did not open palette from Live")
+    time.sleep(0.30)
+    for vk in (0x4d, 0x41, 0x54, 0x45, 0x52, 0x49, 0x41, 0x4c, 0x53):
+        key(vk)
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == materials_query
+               for line in log[offset3:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("MATERIALS query from Live did not select Materials")
+    key(0x0d)
+    preserved = (
+        "VCR U1 GUI probe: feature_search_mode_preserved=true "
+        "id=materials from=live to=advanced persisted=live")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        lines = [line.strip() for line in log[offset3:].splitlines()]
+        metrics = [
+            line for line in lines if line.startswith(viewport_marker)]
+        if (preserved in lines and materials_navigation in lines and
+                visible in lines and metrics):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Materials from Live failed to reveal Advanced without changing "
+            "the persisted Live mode or right-dock viewport")
+    from_live_screenshot = wait_for_workspace_screenshot(
+        output / "unity-feature-materials-from-live.png",
+        {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
+        "Materials auto Advanced navigation")
     return {"passed": True, "shortcut": "Ctrl+K", "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
             "postSearchFrame": screenshot,
@@ -1325,6 +1395,11 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "visibleRightDock": True, "scrollClippedAboveBottom": True,
                 "viewportHeight": viewport_height,
                 "postSearchFrame": materials_screenshot},
+            "liveToAdvancedSearch": {
+                "liveClickObserved": True, "modePersistedLive": True,
+                "advancedPanelRevealed": True,
+                "liveFrame": back_click["unityFrame"],
+                "postSearchFrame": from_live_screenshot},
             "physicalHumanAcceptance": False}
 
 
@@ -1928,7 +2003,9 @@ def run_probe(args):
                   output / "unity-expanded.png", output / "unity-restored.png",
                   output / "unity-workspace-clicked.png",
                   output / "unity-feature-searched.png",
-                  output / "unity-feature-materials.png"):
+                  output / "unity-feature-materials.png",
+                  output / "unity-feature-live.png",
+                  output / "unity-feature-materials-from-live.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
