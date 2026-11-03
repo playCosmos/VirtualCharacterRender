@@ -2029,7 +2029,27 @@ namespace VCR.Runtime.UI
                 // focus to a live element the following OS Ctrl+K may never
                 // reach UI Toolkit's root KeyDown handler.
                 if (_workspaceRoot != null && _workspaceRoot.panel != null)
+                {
                     _workspaceRoot.Focus();
+                    // UI Toolkit can finish dispatching the click on the
+                    // removed Button after this callback returns. Recover
+                    // keyboard focus on the next panel update if it was
+                    // displaced, without stealing focus from a new control.
+                    var stableRoot = _workspaceRoot;
+                    stableRoot.schedule.Execute(() =>
+                    {
+                        if (stableRoot.panel == null) return;
+                        var focused = stableRoot.panel.focusController.focusedElement
+                            as VisualElement;
+                        if (focused == null || focused.panel == null)
+                            stableRoot.Focus();
+                        if (_guiProbeRequested)
+                            Debug.Log(
+                                "VCR U1 GUI probe: workspace_focus_post_dispatch=" +
+                                (stableRoot.panel.focusController.focusedElement != null
+                                    ? "true" : "false"), this);
+                    }).ExecuteLater(1);
+                }
                 if (_guiProbeRequested)
                 {
                     Debug.Log("VCR U1 GUI probe: workspace_focus_restored=" +
