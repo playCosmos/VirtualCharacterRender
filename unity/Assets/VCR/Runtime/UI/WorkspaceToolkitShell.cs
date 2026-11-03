@@ -2136,9 +2136,20 @@ namespace VCR.Runtime.UI
                 Build();
                 RestoreWorkspaceKeyboardFocusAfterRebuild();
                 if (_guiProbeRequested && !_leftVisible)
+                {
                     Debug.Log("VCR U1 GUI probe: left_dock_hidden=true persisted_hidden=" +
                         (PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0
                             ? "true" : "false"), this);
+                    if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                    {
+                        var directory = System.IO.Path.GetDirectoryName(
+                            _guiProbeScreenshotPath);
+                        if (!string.IsNullOrEmpty(directory))
+                            StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                                System.IO.Path.Combine(directory,
+                                    "unity-feature-left-hidden.png")));
+                    }
+                }
             }) { text = _leftVisible ? "Hide left" : "Show left",
                 name = "vcr-header-toggle-left" });
             headerActions.Add(new Button(() =>
