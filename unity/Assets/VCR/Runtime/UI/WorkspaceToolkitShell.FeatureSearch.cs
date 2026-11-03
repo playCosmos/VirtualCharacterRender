@@ -318,9 +318,20 @@ namespace VCR.Runtime.UI
             {
                 if (target.panel == null) return;
                 if (_guiProbeRequested)
+                {
                     Debug.Log("VCR U1 GUI probe: feature_search_navigated=true id=" +
                         feature.Id + " target=" + targetName +
                         " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                    if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                    {
+                        var directory = System.IO.Path.GetDirectoryName(
+                            _guiProbeScreenshotPath);
+                        if (!string.IsNullOrEmpty(directory))
+                            StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                                System.IO.Path.Combine(directory,
+                                    "unity-feature-searched.png")));
+                    }
+                }
                 var scroll = target.GetFirstAncestorOfType<ScrollView>();
                 if (scroll != null) scroll.ScrollTo(target);
                 target.focusable = true;
