@@ -75,11 +75,23 @@ namespace VCR.Runtime.UI
             // and material slots. Force a first render on every new tree.
             _workspaceMaterialSignature = null;
             _nextWorkspaceMaterialsRefresh = 0f;
+            // Material controls are much taller than the compact Advanced
+            // right dock. Scroll the controls inside the assigned panel;
+            // without this viewport they paint over bottom docks and footer.
+            var content = new ScrollView(ScrollViewMode.Vertical)
+                { name = "vcr-materials-content" };
+            content.style.flexGrow = 1;
+            content.style.flexShrink = 1;
+            content.style.minHeight = 0;
+            content.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            content.contentContainer.style.minWidth = 0;
+            content.contentContainer.style.width = Length.Percent(100);
+            panel.Add(content);
             _workspaceMaterialsSummary = new Label("Material runtime not yet discovered.");
-            panel.Add(_workspaceMaterialsSummary);
+            content.Add(_workspaceMaterialsSummary);
             _workspaceMaterialsFeedback = new Label(
                 "Select a material slot before applying a compiled shader.");
-            panel.Add(_workspaceMaterialsFeedback);
+            content.Add(_workspaceMaterialsFeedback);
             var refresh = new VisualElement();
             refresh.style.flexDirection = FlexDirection.Row;
             refresh.style.flexWrap = Wrap.Wrap;
@@ -94,54 +106,54 @@ namespace VCR.Runtime.UI
                 text = "Rescan slots (resets overrides)",
                 tooltip = "Rescanning restores the source materials and clears overrides."
             });
-            panel.Add(refresh);
+            content.Add(refresh);
 
             _workspaceMaterialSlots = new ScrollView();
             _workspaceMaterialSlots.name = "vcr-material-slots";
             _workspaceMaterialSlots.style.minHeight = 55;
             _workspaceMaterialSlots.style.maxHeight = 185;
-            panel.Add(_workspaceMaterialSlots);
+            content.Add(_workspaceMaterialSlots);
 
             _workspaceMaterialSlotInput = new TextField("Material slot ID");
             if (_workspaceDraftMaterialSlot != null)
                 _workspaceMaterialSlotInput.SetValueWithoutNotify(_workspaceDraftMaterialSlot);
             _workspaceMaterialSlotInput.tooltip = "Pick an existing slot from the list above.";
-            panel.Add(_workspaceMaterialSlotInput);
+            content.Add(_workspaceMaterialSlotInput);
             _workspaceMaterialShaderInput = new TextField("Compiled shader ID");
             if (_workspaceDraftMaterialShader != null)
                 _workspaceMaterialShaderInput.SetValueWithoutNotify(_workspaceDraftMaterialShader);
             _workspaceMaterialShaderInput.tooltip =
                 "Registered or built-in compiled shader ID; raw shader source is not supported.";
-            panel.Add(_workspaceMaterialShaderInput);
+            content.Add(_workspaceMaterialShaderInput);
 
             var shaderActions = new VisualElement();
             shaderActions.style.flexDirection = FlexDirection.Row;
             shaderActions.Add(new Button(ApplyWorkspaceMaterialShader) { text = "Apply shader" });
             shaderActions.Add(new Button(ClearWorkspaceMaterialOverride) { text = "Clear override" });
-            panel.Add(shaderActions);
+            content.Add(shaderActions);
 
             _workspaceMaterialPropertyInput = new TextField("Float property");
             _workspaceMaterialPropertyInput.value = _workspaceDraftMaterialProperty ?? "_Smoothness";
-            panel.Add(_workspaceMaterialPropertyInput);
+            content.Add(_workspaceMaterialPropertyInput);
             _workspaceMaterialValueInput = new TextField("Float value");
             _workspaceMaterialValueInput.value = _workspaceDraftMaterialValue ?? "0.5";
-            panel.Add(_workspaceMaterialValueInput);
-            panel.Add(new Button(ApplyWorkspaceMaterialFloat) { text = "Set float property" });
+            content.Add(_workspaceMaterialValueInput);
+            content.Add(new Button(ApplyWorkspaceMaterialFloat) { text = "Set float property" });
 
-            panel.Add(new Label("Shader packages (precompiled, validated)"));
+            content.Add(new Label("Shader packages (precompiled, validated)"));
             _workspacePackagePathInput = new TextField("Package directory");
             if (_workspaceDraftPackageRoot != null)
                 _workspacePackagePathInput.SetValueWithoutNotify(_workspaceDraftPackageRoot);
             _workspacePackagePathInput.tooltip =
                 "Path to an existing declarative shader package root containing manifest.json.";
-            panel.Add(_workspacePackagePathInput);
+            content.Add(_workspacePackagePathInput);
             var packageActions = new VisualElement();
             packageActions.style.flexDirection = FlexDirection.Row;
             packageActions.style.flexWrap = Wrap.Wrap;
             packageActions.Add(new Button(LoadWorkspaceShaderPackage) { text = "Load package" });
             packageActions.Add(new Button(ReloadWorkspaceShaderPackage) { text = "Reload" });
             packageActions.Add(new Button(UnloadWorkspaceShaderPackage) { text = "Unload" });
-            panel.Add(packageActions);
+            content.Add(packageActions);
 
             RefreshWorkspaceMaterialsPanel();
         }
