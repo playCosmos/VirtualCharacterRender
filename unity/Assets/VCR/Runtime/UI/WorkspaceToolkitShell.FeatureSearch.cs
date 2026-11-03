@@ -22,6 +22,9 @@ namespace VCR.Runtime.UI
         private Label _featureSearchStatus;
         private int _featureSearchSelectedIndex;
         private bool _featureSearchIsOpen;
+        // Remember only the current modal session's focus, not a persisted
+        // feature target. A dock rebuild invalidates this reference.
+        private VisualElement _featureSearchPreviousFocus;
 
         private void HandleWorkspaceFeatureShortcut(KeyDownEvent evt)
         {
@@ -45,6 +48,7 @@ namespace VCR.Runtime.UI
         private void BuildWorkspaceFeatureSearchOverlay()
         {
             _featureSearchIsOpen = false;
+            _featureSearchPreviousFocus = null;
             _featureSearchSelectedIndex = 0;
             _featureSearchResults = new List<WorkspaceFeature>();
             _featureResultButtons.Clear();
@@ -120,6 +124,8 @@ namespace VCR.Runtime.UI
         {
             if (_featureSearchOverlay == null || _featureSearchOverlay.panel == null)
                 return;
+            _featureSearchPreviousFocus =
+                _workspaceRoot.panel.focusController.focusedElement as VisualElement;
             _featureSearchIsOpen = true;
             _featureSearchOverlay.style.display = DisplayStyle.Flex;
             _featureSearchInput.SetValueWithoutNotify("");
@@ -149,6 +155,14 @@ namespace VCR.Runtime.UI
             _featureSearchIsOpen = false;
             if (_featureSearchOverlay != null)
                 _featureSearchOverlay.style.display = DisplayStyle.None;
+            // Avoid leaving keyboard input on an invisible TextField after Esc,
+            // or the operator may appear to lose keyboard shortcuts.
+            if (_featureSearchInput != null)
+                _featureSearchInput.Blur();
+            var previous = _featureSearchPreviousFocus;
+            _featureSearchPreviousFocus = null;
+            if (previous != null && previous.panel != null)
+                previous.Focus();
         }
 
         private void HandleWorkspaceFeatureSearchKeys(KeyDownEvent evt)
