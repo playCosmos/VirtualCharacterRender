@@ -242,7 +242,8 @@ namespace VCR.Runtime.UI
             {
                 var probeQuery = query == null ? "" :
                     query.Trim().ToLowerInvariant();
-                if (probeQuery == "fov" || probeQuery == "materials")
+                if (probeQuery == "fov" || probeQuery == "materials" ||
+                    probeQuery == "scene management")
                     Debug.Log("VCR U1 GUI probe: feature_search_query_ready=true " +
                         "query=" + probeQuery + " first=" +
                         (_featureSearchResults.Count != 0
@@ -320,14 +321,15 @@ namespace VCR.Runtime.UI
                 // Rebuild once to handle mode, hidden docks and auto-tabs
                 // consistently; existing Build() preserves editor drafts.
                 Build();
-                if (_guiProbeRequested && feature.Id == "materials")
+                if (_guiProbeRequested &&
+                    (feature.Id == "materials" || feature.Id == "scene.list"))
                 {
                     var layoutPreserved = string.Equals(
                         savedLayoutBeforeSearch, CaptureLayoutSignature(),
                         StringComparison.Ordinal);
                     Debug.Log("VCR U1 GUI probe: feature_search_layout_preserved=" +
                         (layoutPreserved ? "true" : "false") +
-                        " id=materials", this);
+                        " id=" + feature.Id, this);
                 }
             }
 
@@ -364,7 +366,9 @@ namespace VCR.Runtime.UI
                         " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
                     if (feature.Id == "materials")
                     {
-                        if (!autoAdvanced)
+                        if (autoAdvanced)
+                            StartCoroutine(ReportFeatureSearchHiddenLeftToggleTarget());
+                        else
                             StartCoroutine(ReportFeatureSearchReturnToLiveTarget());
                         var visible = target.resolvedStyle.display != DisplayStyle.None &&
                             target.worldBound.width > 120 && target.worldBound.height > 40;
@@ -396,6 +400,21 @@ namespace VCR.Runtime.UI
                                     System.Globalization.CultureInfo.InvariantCulture)
                                 : "0"), this);
                     }
+                    if (feature.Id == "scene.list")
+                    {
+                        var visible = target.resolvedStyle.display != DisplayStyle.None &&
+                            target.worldBound.width > 120f &&
+                            target.worldBound.height > 40f &&
+                            _leftDock != null &&
+                            _leftDock.resolvedStyle.display == DisplayStyle.Flex &&
+                            _leftDock.worldBound.width > 120f;
+                        var persistedHidden = PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+                        Debug.Log("VCR U1 GUI probe: feature_search_hidden_left_revealed=" +
+                            (visible && persistedHidden ? "true" : "false") +
+                            " visual_visible=" + (visible ? "true" : "false") +
+                            " persisted_hidden=" + (persistedHidden ? "true" : "false"),
+                            this);
+                    }
                     if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                     {
                         var directory = System.IO.Path.GetDirectoryName(
@@ -407,7 +426,9 @@ namespace VCR.Runtime.UI
                                         ? autoAdvanced
                                             ? "unity-feature-materials-from-live.png"
                                             : "unity-feature-materials.png"
-                                        : "unity-feature-searched.png")));
+                                        : feature.Id == "scene.list"
+                                            ? "unity-feature-scenes-revealed.png"
+                                            : "unity-feature-searched.png")));
                     }
                 }
                 var scroll = target.GetFirstAncestorOfType<ScrollView>();
@@ -451,5 +472,31 @@ namespace VCR.Runtime.UI
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " current_mode=advanced", this);
         }
+        private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()
+        {
+            yield return new WaitForEndOfFrame();
+            if (_workspaceRoot == null || _workspaceRoot.panel == null ||
+                !advancedWorkspace || !_leftVisible) yield break;
+            var toggle = _workspaceRoot.Q<Button>("vcr-header-toggle-left");
+            if (!WorkspaceButtonReceivesPointer(toggle))
+            {
+                Debug.Log("VCR U1 GUI probe: feature_search_hide_left_target_rejected=true",
+                    this);
+                yield break;
+            }
+            var center = toggle.worldBound.center;
+            var bounds = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: feature_search_hide_left_target_ready=true " +
+                "x=" + center.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + center.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + bounds.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + bounds.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " mode=advanced", this);
+        }
+
     }
 }
