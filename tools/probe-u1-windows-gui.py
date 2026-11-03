@@ -106,6 +106,29 @@ def parse_workspace_click_target_evidence(log_text, start_offset=0):
     return None
 
 
+def parse_feature_search_workspace_target(log_text, start_offset=0):
+    """Only a fresh, measured Advanced toolbar target may return to Live."""
+    marker = "VCR U1 GUI probe: feature_search_workspace_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (values.get("current_mode") != "advanced" or
+                not all(math.isfinite(v) for v in (x, y, w, h)) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w,
+                "rootHeight": h, "initialMode": "advanced"}
+    return None
+
+
 def parse_settings_click_target_evidence(log_text, start_offset=0):
     """Require a real, post-workspace-switch Settings button location."""
     marker = "VCR U1 GUI probe: settings_click_target_ready=true "
@@ -734,7 +757,8 @@ def probe_free_resize(hwnd, before):
             hwnd, None, 0, 0, width, height, flags))
 
 
-def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
+def probe_real_workspace_mouse_click(hwnd, target, player_log, output,
+                                     screenshot_name="unity-workspace-clicked.png"):
     """Send a genuine desktop left-click to the measured Unity Button center.
 
     Unlike Panel.Pick, this crosses Win32 input routing and Unity's UI Toolkit
@@ -808,7 +832,7 @@ def probe_real_workspace_mouse_click(hwnd, target, player_log, output):
             "Real desktop click did not invoke UI Toolkit workspace toggle: " +
             expected_mode)
     screenshot = wait_for_workspace_screenshot(
-        output / "unity-workspace-clicked.png",
+        output / screenshot_name,
         {"width": target["rootWidth"], "height": target["rootHeight"]},
         "workspace click")
     return {"passed": True, "target": target, "clientSize": [width, height],
