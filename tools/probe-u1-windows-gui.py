@@ -1733,6 +1733,22 @@ def run_self_test():
     if parse_workspace_click_target_evidence(
             click_marker, len(click_marker)) is not None:
         raise RuntimeError("Stale workspace click target accepted")
+    back_marker = (
+        "VCR U1 GUI probe: feature_search_workspace_target_ready=true " +
+        "x=149.5 y=29.5 root_w=962 root_h=520 current_mode=advanced")
+    back_target = {"x": 149.5, "y": 29.5, "rootWidth": 962.0,
+                   "rootHeight": 520.0, "initialMode": "advanced"}
+    if parse_feature_search_workspace_target(back_marker) != back_target:
+        raise RuntimeError("Valid return-to-Live OS target rejected")
+    if parse_feature_search_workspace_target(
+            back_marker.replace("current_mode=advanced", "current_mode=live")) is not None:
+        raise RuntimeError("Non-Advanced return-to-Live target accepted")
+    if parse_feature_search_workspace_target(
+            back_marker.replace("x=149.5", "x=NaN")) is not None:
+        raise RuntimeError("Nonfinite return-to-Live target accepted")
+    if parse_feature_search_workspace_target(
+            back_marker, len(back_marker)) is not None:
+        raise RuntimeError("Stale return-to-Live target accepted")
     native_settings_marker = ("VCR U1 GUI probe: settings_click_target_ready=true "
                               "x=210 y=29.5 root_w=962 root_h=520")
     if parse_settings_click_target_evidence(native_settings_marker) != {
