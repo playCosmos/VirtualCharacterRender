@@ -1170,7 +1170,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         time.sleep(0.10)
 
     opened = "VCR U1 GUI probe: feature_search_opened=true"
-    indexed = "VCR U1 GUI probe: feature_search_registry_ready=true indexed=23"
+    indexed_prefix = "VCR U1 GUI probe: feature_search_registry_ready=true indexed="
     offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
     user32.keybd_event(0x11, 0, 0, 0)  # Ctrl DOWN
     key(0x4b)  # K
@@ -1179,7 +1179,11 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     while time.monotonic() < deadline:
         log = player_log.read_text(encoding="utf-8", errors="replace")
         lines = [line.strip() for line in log[offset:].splitlines()]
-        if opened in lines and indexed in lines:
+        index_ready = any(
+            line.startswith(indexed_prefix) and
+            line[len(indexed_prefix):].isdigit() and
+            int(line[len(indexed_prefix):]) >= 20 for line in lines)
+        if opened in lines and index_ready:
             break
         time.sleep(0.12)
     else:
