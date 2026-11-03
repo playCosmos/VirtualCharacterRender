@@ -246,6 +246,8 @@ namespace VCR.Runtime.UI
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
             _workspaceRoot.style.flexGrow = 1;
             _root.Add(_workspaceRoot);
+            _root.RegisterCallback<KeyDownEvent>(HandleWorkspaceFeatureShortcut,
+                TrickleDown.TrickleDown);
             Build();
             // First run and legacy PlayerPrefs migration need an initial JSON snapshot.
             _lastPersistedLayoutSignature = restoredSnapshot ? CaptureLayoutSignature() : null;
@@ -1082,6 +1084,16 @@ namespace VCR.Runtime.UI
 
         private void OnDisable()
         {
+            if (_root != null)
+                _root.UnregisterCallback<KeyDownEvent>(HandleWorkspaceFeatureShortcut,
+                    TrickleDown.TrickleDown);
+            _featureSearchIsOpen = false;
+            _featureSearchOverlay = null;
+            _featureSearchInput = null;
+            _featureSearchResultsHost = null;
+            _featureSearchStatus = null;
+            _featureResultButtons.Clear();
+            _featureTemporaryTabs.Clear();
             UnsubscribeWorkspaceLog();
             ResetWorkspaceTrackingCameraPreview();
             ResetWorkspaceCapabilitiesPanel();
@@ -1981,6 +1993,15 @@ namespace VCR.Runtime.UI
             title.style.marginRight = 12;
             title.style.color = Color.white;
             header.Add(title);
+            // Keep a fixed-width search entry outside the scrolling action
+            // toolbar; compact desktop widths retain the primary controls.
+            var featureSearchButton = new Button(OpenWorkspaceFeatureSearch)
+                { text = "Find", name = "vcr-header-feature-search" };
+            featureSearchButton.style.width = 52;
+            featureSearchButton.style.flexShrink = 0;
+            featureSearchButton.style.marginRight = 6;
+            featureSearchButton.tooltip = "Find a feature or browse all features (Ctrl+K / Cmd+K).";
+            header.Add(featureSearchButton);
             // Wide buttons previously overlapped the right docks on small
             // screens. Keep the toolbar on one horizontally scrollable row.
             var headerActions = new ScrollView(ScrollViewMode.Horizontal)
@@ -2200,7 +2221,8 @@ namespace VCR.Runtime.UI
             sources.Add(sourcesContent);
             _sourcesStatus = new Label("Waiting for model state...");
             sourcesContent.Add(_sourcesStatus);
-            _modelPathInput = new TextField("VRM file path");
+            _modelPathInput = new TextField("VRM file path")
+                { name = "vcr-search-model-path" };
             _modelPathInput.value = modelPathDraft;
             _modelPathInput.tooltip = "Absolute path to a local .vrm file. FBX runtime import is not available.";
             sourcesContent.Add(_modelPathInput);
@@ -2254,10 +2276,13 @@ namespace VCR.Runtime.UI
             _applySceneViewButton = new Button(ApplySceneViewFromInspector) { text = "Apply camera" };
             _revertCameraDraftButton = new Button(RevertCameraInspectorDraft)
                 { text = "Discard camera edits" };
-            _cameraPositionInput = new Vector3Field("Camera local position");
+            _cameraPositionInput = new Vector3Field("Camera local position")
+                { name = "vcr-search-camera-position" };
             _cameraRotationInput = new Vector3Field("Camera local Euler angles");
-            _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)");
-            _cameraNearClipInput = new FloatField("Near clip (>=0.001)");
+            _cameraFieldOfViewInput = new FloatField("Camera FOV (1-179)")
+                { name = "vcr-search-camera-fov" };
+            _cameraNearClipInput = new FloatField("Near clip (>=0.001)")
+                { name = "vcr-search-camera-near" };
             _cameraFarClipInput = new FloatField("Far clip (>=near + 0.01)");
             _cameraFieldOfViewInput.tooltip = "Camera vertical field of view in degrees (1–179).";
             AddInspectorVector3Field(inspectorContent, _cameraPositionInput,
@@ -2271,7 +2296,8 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_revertCameraDraftButton);
             SynchronizeCameraInspectorInputs();
             _primaryLightEnabledInput = new Toggle("Primary light enabled");
-            _primaryLightIntensityInput = new FloatField("Light intensity (0-20)");
+            _primaryLightIntensityInput = new FloatField("Light intensity (0-20)")
+                { name = "vcr-search-light-intensity" };
             _primaryLightRotationInput = new Vector3Field("Light local Euler angles");
             _primaryLightRgbInput = new Vector3Field("Light RGB (0-1)");
             _primaryLightAlphaInput = new FloatField("Light alpha (0-1)");
@@ -2299,7 +2325,8 @@ namespace VCR.Runtime.UI
             inspectorContent.Add(_revertLightDraftButton);
             SynchronizePrimaryLightInputs();
             _applyRenderButton = new Button(ApplyRenderFromInspector) { text = "Apply current render settings" };
-            _targetFrameRateInput = new IntegerField("Target FPS (30–120)");
+            _targetFrameRateInput = new IntegerField("Target FPS (30–120)")
+                { name = "vcr-search-render-fps" };
             _targetFrameRateInput.tooltip = "Supported target: 30–120 FPS. Default: 60 FPS.";
             _vsyncInput = new Toggle("VSync");
             // Keep typed input intact for validation; silently clamping it
@@ -2368,8 +2395,10 @@ namespace VCR.Runtime.UI
             actionsScroll.style.flexGrow = 1;
             actionsScroll.style.flexShrink = 1;
             actionsScroll.style.minHeight = 0;
-            _reloadCharacterButton = new Button(ReloadActiveCharacter) { text = "Reload active VRM" };
-            _unloadCharacterButton = new Button(UnloadActiveCharacter) { text = "Unload active VRM" };
+            _reloadCharacterButton = new Button(ReloadActiveCharacter)
+                { text = "Reload active VRM", name = "vcr-search-reload-model" };
+            _unloadCharacterButton = new Button(UnloadActiveCharacter)
+                { text = "Unload active VRM", name = "vcr-search-unload-model" };
             _reloadCharacterButton.SetEnabled(false);
             _unloadCharacterButton.SetEnabled(false);
             actionsScroll.Add(_reloadCharacterButton);
@@ -2477,6 +2506,7 @@ namespace VCR.Runtime.UI
             _dockTargetLabel.style.display = DisplayStyle.None;
             _dockTargetLabel.pickingMode = PickingMode.Ignore;
             _workspaceRoot.Add(_dockTargetLabel);
+            BuildWorkspaceFeatureSearchOverlay();
         }
 
         private static void SortDockPanels(VisualElement dock)
@@ -2561,7 +2591,9 @@ namespace VCR.Runtime.UI
             }
             // Tabbed panels share the same dock; drag onto a tab to reorder.
             var key = "VCR.UI.Workspace.ActiveTab." + dockId + ".v1";
-            var selectedId = PlayerPrefs.GetString(key, panels[0].name);
+            var selectedId = _featureTemporaryTabs.TryGetValue(dockId,
+                out var temporarySelection) ? temporarySelection :
+                PlayerPrefs.GetString(key, panels[0].name);
             var active = panels.FindIndex(p => p.name == selectedId);
             if (active < 0) active = 0;
             foreach (var panel in panels)
@@ -2593,6 +2625,7 @@ namespace VCR.Runtime.UI
                     if (suppressClick) { suppressClick = false; return; }
                     for (var j = 0; j < panels.Count; j++)
                         panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
+                    _featureTemporaryTabs.Remove(dockId);
                     PlayerPrefs.SetString(key, panel.name);
                     PlayerPrefs.Save();
                 }) { text = name };
