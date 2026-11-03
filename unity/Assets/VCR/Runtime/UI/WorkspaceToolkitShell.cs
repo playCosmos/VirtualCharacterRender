@@ -2031,9 +2031,14 @@ namespace VCR.Runtime.UI
                         var directory = System.IO.Path.GetDirectoryName(
                             _guiProbeScreenshotPath);
                         if (!string.IsNullOrEmpty(directory))
+                        {
+                            var screenshotName = _featureSearchProbeReturnToLive &&
+                                !advancedWorkspace
+                                ? "unity-feature-live.png" : "unity-workspace-clicked.png";
+                            _featureSearchProbeReturnToLive = false;
                             StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
-                                System.IO.Path.Combine(directory,
-                                    "unity-workspace-clicked.png")));
+                                System.IO.Path.Combine(directory, screenshotName)));
+                        }
                     }
                 }
             }) { text = automaticTabMode
