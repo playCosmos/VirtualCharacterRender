@@ -1222,9 +1222,66 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         output / "unity-feature-searched.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
         "feature search")
+    # The Inspector is initially the active right-hand tab in the hosted
+    # compact layout. Search must select an actually hidden Advanced tab,
+    # not merely find the text of a detached Materials panel.
+    offset2 = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    user32.keybd_event(0x11, 0, 0, 0)  # Ctrl DOWN
+    key(0x4b)  # K
+    user32.keybd_event(0x11, 0, 0x0002, 0)  # Ctrl UP
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == opened
+               for line in log[offset2:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Real Ctrl+K did not reopen feature search")
+    time.sleep(0.3)
+    for vk in (0x4d, 0x41, 0x54, 0x45, 0x52, 0x49, 0x41, 0x4c, 0x53):
+        key(vk)  # MATERIALS
+    materials_query = (
+        "VCR U1 GUI probe: feature_search_query_ready=true "
+        "query=materials first=materials")
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == materials_query
+               for line in log[offset2:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("OS keyboard MATERIALS did not find Advanced panel")
+    key(0x0d)
+    materials_navigation = (
+        "VCR U1 GUI probe: feature_search_navigated=true "
+        "id=materials target=vcr-panel-materials mode=advanced")
+    visible = (
+        "VCR U1 GUI probe: feature_search_panel_visible=true "
+        "id=materials target_visible=true dock_visible=true mode=advanced")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        lines = [line.strip() for line in log[offset2:].splitlines()]
+        if materials_navigation in lines and visible in lines:
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Advanced Materials search did not activate a visible right-dock tab")
+    materials_screenshot = wait_for_workspace_screenshot(
+        output / "unity-feature-materials.png",
+        {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
+        "Materials feature navigation")
     return {"passed": True, "shortcut": "Ctrl+K", "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
-            "postSearchFrame": screenshot, "physicalHumanAcceptance": False}
+            "postSearchFrame": screenshot,
+            "advancedPanelSearch": {
+                "query": "materials", "resultId": "materials",
+                "targetName": "vcr-panel-materials",
+                "visibleRightDock": True, "postSearchFrame": materials_screenshot},
+            "physicalHumanAcceptance": False}
 
 
 def request_normal_close(hwnd):
@@ -1826,7 +1883,8 @@ def run_probe(args):
     for stale in (player_log, report_path, config_path, unity_image_path,
                   output / "unity-expanded.png", output / "unity-restored.png",
                   output / "unity-workspace-clicked.png",
-                  output / "unity-feature-searched.png"):
+                  output / "unity-feature-searched.png",
+                  output / "unity-feature-materials.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
