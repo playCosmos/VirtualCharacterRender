@@ -1923,6 +1923,27 @@ namespace VCR.Runtime.UI
             container.Add(field);
         }
 
+        private void RestoreWorkspaceKeyboardFocusAfterRebuild()
+        {
+            // Every header dock/mode toggle destroys the clicked Button.
+            // Restore keyboard focus only if no replacement control owns it.
+            var root = _workspaceRoot;
+            if (root == null || root.panel == null) return;
+            root.Focus();
+            root.schedule.Execute(() =>
+            {
+                if (root.panel == null) return;
+                var focused = root.panel.focusController.focusedElement
+                    as VisualElement;
+                if (focused == null || focused.panel == null)
+                    root.Focus();
+                if (_guiProbeRequested)
+                    Debug.Log("VCR U1 GUI probe: workspace_focus_post_dispatch=" +
+                        (root.panel.focusController.focusedElement != null
+                            ? "true" : "false"), this);
+            }).ExecuteLater(1);
+        }
+
         private void Build()
         {
             // Layout/mode changes rebuild the whole UI tree. Keep the
@@ -2025,31 +2046,7 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-                // The clicked button is removed by Build(). Without moving
-                // focus to a live element the following OS Ctrl+K may never
-                // reach UI Toolkit's root KeyDown handler.
-                if (_workspaceRoot != null && _workspaceRoot.panel != null)
-                {
-                    _workspaceRoot.Focus();
-                    // UI Toolkit can finish dispatching the click on the
-                    // removed Button after this callback returns. Recover
-                    // keyboard focus on the next panel update if it was
-                    // displaced, without stealing focus from a new control.
-                    var stableRoot = _workspaceRoot;
-                    stableRoot.schedule.Execute(() =>
-                    {
-                        if (stableRoot.panel == null) return;
-                        var focused = stableRoot.panel.focusController.focusedElement
-                            as VisualElement;
-                        if (focused == null || focused.panel == null)
-                            stableRoot.Focus();
-                        if (_guiProbeRequested)
-                            Debug.Log(
-                                "VCR U1 GUI probe: workspace_focus_post_dispatch=" +
-                                (stableRoot.panel.focusController.focusedElement != null
-                                    ? "true" : "false"), this);
-                    }).ExecuteLater(1);
-                }
+                RestoreWorkspaceKeyboardFocusAfterRebuild();
                 if (_guiProbeRequested)
                 {
                     Debug.Log("VCR U1 GUI probe: workspace_focus_restored=" +
@@ -2128,21 +2125,31 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(BottomVisibleKey, _bottomVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = _bottomVisible ? "Hide bottom" : "Show bottom" });
+                RestoreWorkspaceKeyboardFocusAfterRebuild();
+            }) { text = _bottomVisible ? "Hide bottom" : "Show bottom",
+                name = "vcr-header-toggle-bottom" });
             headerActions.Add(new Button(() =>
             {
                 _leftVisible = !_leftVisible;
                 PlayerPrefs.SetInt(LeftVisibleKey, _leftVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = _leftVisible ? "Hide left" : "Show left" });
+                RestoreWorkspaceKeyboardFocusAfterRebuild();
+                if (_guiProbeRequested && !_leftVisible)
+                    Debug.Log("VCR U1 GUI probe: left_dock_hidden=true persisted_hidden=" +
+                        (PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0
+                            ? "true" : "false"), this);
+            }) { text = _leftVisible ? "Hide left" : "Show left",
+                name = "vcr-header-toggle-left" });
             headerActions.Add(new Button(() =>
             {
                 _rightVisible = !_rightVisible;
                 PlayerPrefs.SetInt(RightVisibleKey, _rightVisible ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
-            }) { text = _rightVisible ? "Hide right" : "Show right" });
+                RestoreWorkspaceKeyboardFocusAfterRebuild();
+            }) { text = _rightVisible ? "Hide right" : "Show right",
+                name = "vcr-header-toggle-right" });
             headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Save())
