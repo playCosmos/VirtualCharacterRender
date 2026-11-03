@@ -124,6 +124,19 @@ namespace VCR.Runtime.UI
             _featureSearchOverlay.style.display = DisplayStyle.Flex;
             _featureSearchInput.SetValueWithoutNotify("");
             RefreshWorkspaceFeatureSearchResults("");
+            if (_guiProbeRequested)
+            {
+                var korean = _featureRegistry.Search("시야각", 3);
+                var english = _featureRegistry.Search("fov", 3);
+                var absent = _featureRegistry.Search("zqxyz_unknown_feature", 3);
+                var valid = korean.Count > 0 && english.Count > 0 &&
+                    korean[0].Id == "camera.fov" && english[0].Id == "camera.fov" &&
+                    absent.Count == 0;
+                Debug.Log("VCR U1 GUI probe: feature_search_registry_ready=" +
+                    (valid ? "true" : "false") +
+                    " indexed=" + _featureRegistry.All.Count, this);
+                Debug.Log("VCR U1 GUI probe: feature_search_opened=true", this);
+            }
             _featureSearchInput.schedule.Execute(() =>
             {
                 if (_featureSearchIsOpen && _featureSearchInput.panel != null)
@@ -210,6 +223,13 @@ namespace VCR.Runtime.UI
                         ? "No matching features. Try a shorter name or keyword."
                         : _featureSearchResults.Count + " matching features";
             HighlightWorkspaceFeatureResult();
+            if (_guiProbeRequested &&
+                string.Equals(query != null ? query.Trim() : "",
+                    "fov", StringComparison.OrdinalIgnoreCase))
+                Debug.Log("VCR U1 GUI probe: feature_search_query_ready=true " +
+                    "query=fov first=" +
+                    (_featureSearchResults.Count != 0
+                        ? _featureSearchResults[0].Id : "none"), this);
         }
 
         private void HighlightWorkspaceFeatureResult()
@@ -297,6 +317,10 @@ namespace VCR.Runtime.UI
             target.schedule.Execute(() =>
             {
                 if (target.panel == null) return;
+                if (_guiProbeRequested)
+                    Debug.Log("VCR U1 GUI probe: feature_search_navigated=true id=" +
+                        feature.Id + " target=" + targetName +
+                        " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
                 var scroll = target.GetFirstAncestorOfType<ScrollView>();
                 if (scroll != null) scroll.ScrollTo(target);
                 target.focusable = true;
