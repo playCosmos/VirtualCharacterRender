@@ -1090,6 +1090,46 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
             "steps": result, "physicalHumanAcceptance": False}
 
 
+def probe_native_settings_close_reopen(player_hwnd, pid, player_log,
+                                      target_log_offset, opened):
+    """Close the real native window, then re-open it using the Unity button.
+
+    WM_CLOSE must hide, not destroy or duplicate, the independent Settings
+    window. Do not apply/edit runtime configuration during this smoke.
+    """
+    user32 = ctypes.windll.user32
+    user32.IsWindow.argtypes = [wintypes.HWND]
+    user32.IsWindow.restype = wintypes.BOOL
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    hwnd = opened["window"]["hwnd"]
+    if not user32.IsWindow(hwnd) or not user32.IsWindowVisible(hwnd):
+        raise RuntimeError("Native Settings missing before WM_CLOSE lifecycle test")
+    if not user32.PostMessageW(hwnd, WM_CLOSE, 0, 0):
+        raise OSError("Unable to post native Settings WM_CLOSE")
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline and user32.IsWindowVisible(hwnd):
+        time.sleep(0.10)
+    if user32.IsWindowVisible(hwnd) or not user32.IsWindow(hwnd):
+        raise RuntimeError(
+            "Native Settings WM_CLOSE did not hide and preserve its HWND")
+    if visible_native_settings_windows(pid):
+        raise RuntimeError("Native Settings window still visible after WM_CLOSE")
+    reopened = probe_native_settings_open(
+        player_hwnd, pid, player_log, target_log_offset)
+    if reopened["window"]["hwnd"] != hwnd:
+        raise RuntimeError(
+            "Settings reopen created a duplicate native HWND instead of reusing it")
+    return {"passed": True, "hiddenByNativeClose": True,
+            "reopenedByRealMouse": True, "reusedWindow": True,
+            "reopenClickAttempts": reopened["clickAttempts"],
+            "reopenedRect": reopened["rect"],
+            "physicalHumanAcceptance": False}
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
@@ -1704,6 +1744,7 @@ def run_probe(args):
         "workspaceMouseClickPassed": False,
         "nativeSettingsOpenPassed": False,
         "nativeSettingsNavigationPassed": False,
+        "nativeSettingsLifecyclePassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -1930,6 +1971,30 @@ def run_probe(args):
                 print("U1 native Settings OS-clicked page navigation: " +
                       f"pages={navigation['visitedPages']}, " +
                       f"passed={navigation['passed']}", flush=True)
+                # Actual Win32 desktop pixels for operator review; never
+                # confuse dark-theme sample diversity with click acceptance.
+                try:
+                    user32 = ctypes.windll.user32
+                    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+                    user32.SetForegroundWindow.restype = wintypes.BOOL
+                    user32.SetForegroundWindow(native_settings["window"]["hwnd"])
+                    time.sleep(0.15)
+                    report["nativeSettingsFrame"] = capture_foreground_player_frame(
+                        native_settings["window"]["hwnd"],
+                        output / "native-settings-window.bmp")
+                    print("U1 captured native Settings desktop BMP: " +
+                          str(report["nativeSettingsFrame"]["sampledDistinctPixels"]) +
+                          " sampled colors", flush=True)
+                except Exception as capture_error:
+                    report["nativeSettingsFrameError"] = str(capture_error)
+                lifecycle = probe_native_settings_close_reopen(
+                    observed["hwnd"], process.pid, player_log,
+                    settings_log_offset, native_settings)
+                report["nativeSettingsLifecycle"] = lifecycle
+                report["nativeSettingsLifecyclePassed"] = lifecycle["passed"]
+                print("U1 native Settings WM_CLOSE/hide/reopen: " +
+                      f"sameHandle={lifecycle['reusedWindow']} " +
+                      f"reopenClicks={lifecycle['reopenClickAttempts']}", flush=True)
             except Exception as error:
                 report["nativeSettingsOpenError"] = str(error)
         close_requested_at = time.monotonic()
@@ -1980,6 +2045,7 @@ def run_probe(args):
                 report["workspaceMouseClickPassed"] and
                 report["nativeSettingsOpenPassed"] and
                 report["nativeSettingsNavigationPassed"] and
+                report["nativeSettingsLifecyclePassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
