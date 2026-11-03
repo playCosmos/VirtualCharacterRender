@@ -1998,6 +1998,8 @@ namespace VCR.Runtime.UI
             var featureSearchButton = new Button(OpenWorkspaceFeatureSearch)
                 { text = "Find", name = "vcr-header-feature-search" };
             featureSearchButton.style.width = 52;
+            featureSearchButton.style.height = 32;
+            featureSearchButton.style.alignSelf = Align.Center;
             featureSearchButton.style.flexShrink = 0;
             featureSearchButton.style.marginRight = 6;
             featureSearchButton.tooltip = "Find a feature or browse all features (Ctrl+K / Cmd+K).";
