@@ -244,6 +244,10 @@ namespace VCR.Runtime.UI
             _previewExplicitlyBound = previewRenderTexture != null;
             _root = _document.rootVisualElement;
             _workspaceRoot = new VisualElement { name = "vcr-workspace-shell" };
+            // The mode switch destroys the previously focused toolbar button.
+            // Keep a stable keyboard-focus fallback so Ctrl+K still works
+            // immediately after Build() replaces all child controls.
+            _workspaceRoot.focusable = true;
             _workspaceRoot.style.flexGrow = 1;
             _root.Add(_workspaceRoot);
             _root.RegisterCallback<KeyDownEvent>(HandleWorkspaceFeatureShortcut,
@@ -2021,8 +2025,17 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
                 PlayerPrefs.Save();
                 Build();
+                // The clicked button is removed by Build(). Without moving
+                // focus to a live element the following OS Ctrl+K may never
+                // reach UI Toolkit's root KeyDown handler.
+                if (_workspaceRoot != null && _workspaceRoot.panel != null)
+                    _workspaceRoot.Focus();
                 if (_guiProbeRequested)
                 {
+                    Debug.Log("VCR U1 GUI probe: workspace_focus_restored=" +
+                        (_workspaceRoot != null && _workspaceRoot.panel != null &&
+                         _workspaceRoot.panel.focusController.focusedElement == _workspaceRoot
+                            ? "true" : "false"), this);
                     Debug.Log("VCR U1 GUI probe: workspace_toggle_clicked=true " +
                         "mode=" + (advancedWorkspace ? "advanced" : "live"), this);
                     StartCoroutine(ReportNativeSettingsClickTargetAfterLayout());
