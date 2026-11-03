@@ -223,13 +223,16 @@ namespace VCR.Runtime.UI
                         ? "No matching features. Try a shorter name or keyword."
                         : _featureSearchResults.Count + " matching features";
             HighlightWorkspaceFeatureResult();
-            if (_guiProbeRequested &&
-                string.Equals(query != null ? query.Trim() : "",
-                    "fov", StringComparison.OrdinalIgnoreCase))
-                Debug.Log("VCR U1 GUI probe: feature_search_query_ready=true " +
-                    "query=fov first=" +
-                    (_featureSearchResults.Count != 0
-                        ? _featureSearchResults[0].Id : "none"), this);
+            if (_guiProbeRequested)
+            {
+                var probeQuery = query == null ? "" :
+                    query.Trim().ToLowerInvariant();
+                if (probeQuery == "fov" || probeQuery == "materials")
+                    Debug.Log("VCR U1 GUI probe: feature_search_query_ready=true " +
+                        "query=" + probeQuery + " first=" +
+                        (_featureSearchResults.Count != 0
+                            ? _featureSearchResults[0].Id : "none"), this);
+            }
         }
 
         private void HighlightWorkspaceFeatureResult()
@@ -322,6 +325,19 @@ namespace VCR.Runtime.UI
                     Debug.Log("VCR U1 GUI probe: feature_search_navigated=true id=" +
                         feature.Id + " target=" + targetName +
                         " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                    if (feature.Id == "materials")
+                    {
+                        var visible = target.resolvedStyle.display != DisplayStyle.None &&
+                            target.worldBound.width > 120 && target.worldBound.height > 40;
+                        var dockVisible = _rightDock != null &&
+                            _rightDock.resolvedStyle.display != DisplayStyle.None &&
+                            _rightDock.worldBound.width > 120;
+                        Debug.Log("VCR U1 GUI probe: feature_search_panel_visible=true " +
+                            "id=materials target_visible=" +
+                            (visible ? "true" : "false") + " dock_visible=" +
+                            (dockVisible ? "true" : "false") +
+                            " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                    }
                     if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                     {
                         var directory = System.IO.Path.GetDirectoryName(
@@ -329,7 +345,9 @@ namespace VCR.Runtime.UI
                         if (!string.IsNullOrEmpty(directory))
                             StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                                 System.IO.Path.Combine(directory,
-                                    "unity-feature-searched.png")));
+                                    feature.Id == "materials"
+                                        ? "unity-feature-materials.png"
+                                        : "unity-feature-searched.png")));
                     }
                 }
                 var scroll = target.GetFirstAncestorOfType<ScrollView>();
