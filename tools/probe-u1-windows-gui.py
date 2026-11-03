@@ -1430,6 +1430,90 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         output / "unity-feature-materials-from-live.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
         "Materials auto Advanced navigation")
+    # Hide the actual left dock using its measured, pointer-receiving
+    # toolbar button. Search must reveal the Scenes panel WITHOUT altering
+    # the user's saved hidden-dock or active-tab preference.
+    hide_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        hide_target = parse_feature_search_hide_left_target(log, offset3)
+        if hide_target is not None:
+            break
+        time.sleep(0.12)
+    if hide_target is None:
+        raise RuntimeError("No visible OS-hit-testable Hide left button after Materials search")
+    hide_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    hidden_click = probe_real_workspace_mouse_click(
+        player_hwnd, hide_target, player_log, output,
+        screenshot_name="unity-feature-left-hidden.png",
+        expected_marker=(
+            "VCR U1 GUI probe: left_dock_hidden=true persisted_hidden=true"))
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == focus_marker
+               for line in log[hide_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Hide left rebuild lost keyboard focus after OS click")
+
+    query_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    user32.SetForegroundWindow(player_hwnd)
+    user32.keybd_event(0x11, 0, 0, 0)
+    key(0x4b)
+    user32.keybd_event(0x11, 0, 0x0002, 0)
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == opened
+               for line in log[query_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Ctrl+K did not reopen search with left dock hidden")
+    time.sleep(0.30)
+    for vk in (0x53, 0x43, 0x45, 0x4e, 0x45, 0x20,
+               0x4d, 0x41, 0x4e, 0x41, 0x47, 0x45, 0x4d, 0x45, 0x4e, 0x54):
+        key(vk)  # SCENE MANAGEMENT
+    scene_query = (
+        "VCR U1 GUI probe: feature_search_query_ready=true "
+        "query=scene management first=scene.list")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == scene_query
+               for line in log[query_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Hidden dock search did not rank Scene management first")
+    key(0x0d)
+    expected_scene = (
+        "VCR U1 GUI probe: feature_search_navigated=true "
+        "id=scene.list target=vcr-panel-scenes mode=advanced")
+    expected_revealed = (
+        "VCR U1 GUI probe: feature_search_hidden_left_revealed=true "
+        "visual_visible=true persisted_hidden=true")
+    scene_preserved = (
+        "VCR U1 GUI probe: feature_search_layout_preserved=true id=scene.list")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        lines = [line.strip() for line in log[query_offset:].splitlines()]
+        if (expected_scene in lines and expected_revealed in lines and
+                scene_preserved in lines):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Hidden left dock search did not reveal Scenes while preserving "
+            "the operator's saved hidden-dock and active-tab layout")
+    scene_screenshot = wait_for_workspace_screenshot(
+        output / "unity-feature-scenes-revealed.png",
+        {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
+        "Scenes revealed from hidden left dock")
     return {"passed": True, "shortcut": "Ctrl+K", "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
             "postSearchFrame": screenshot,
@@ -1445,6 +1529,15 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "advancedPanelRevealed": True,
                 "liveFrame": back_click["unityFrame"],
                 "postSearchFrame": from_live_screenshot},
+            "hiddenDockSearch": {
+                "realHideLeftClick": True,
+                "query": "scene management",
+                "resultId": "scene.list",
+                "persistedHidden": True,
+                "fullLayoutSignaturePreserved": True,
+                "leftDockRevealedInSession": True,
+                "hiddenFrame": hidden_click["unityFrame"],
+                "revealedFrame": scene_screenshot},
             "physicalHumanAcceptance": False}
 
 
