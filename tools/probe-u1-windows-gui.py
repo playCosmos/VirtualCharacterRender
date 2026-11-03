@@ -1337,12 +1337,21 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         screenshot_name="unity-feature-live.png")
     if back_click["observedNewMode"] != "live":
         raise RuntimeError("Cannot establish real Live starting state")
-    log = player_log.read_text(encoding="utf-8", errors="replace")
-    focus_marker = "VCR U1 GUI probe: workspace_focus_restored=true"
-    if not any(line.strip() == focus_marker
+    # Build() replaces the clicked Button while its click event is still
+    # dispatching. An immediate focus query can legitimately be false;
+    # the shell retries focus after dispatch. Only the settled focus counts.
+    focus_marker = "VCR U1 GUI probe: workspace_focus_post_dispatch=true"
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == focus_marker
                for line in log[back_click_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
         raise RuntimeError(
-            "Workspace mode rebuild left no stable UI Toolkit keyboard focus")
+            "Workspace mode rebuild failed to restore keyboard focus "
+            "after click dispatch")
 
     # Search Advanced-only Materials from Live. The UI must reveal it but
     # leave the operator's persisted WorkspaceModeKey set to Live.
