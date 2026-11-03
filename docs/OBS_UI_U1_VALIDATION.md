@@ -2,6 +2,12 @@
 
 U1 is implemented in source but **not accepted as a production UI** until Unity compilation, player builds and interactive desktop checks pass. GitHub repository CI success alone does not establish Unity compatibility.
 
+## Feature search M1–M3
+
+- [Feature search M1–M3 UX/navigation contract](FEATURE_SEARCH_M1_M3.md) documents the U1 `Find` / `Ctrl+K` / `Cmd+K` overlay, stable Korean/English feature index, temporary Dock/Advanced navigation, and non-executing search results.
+- `WorkspaceFeatureRegistry.cs` holds stable IDs and aliases; `WorkspaceToolkitShell.FeatureSearch.cs` resolves *current* `VisualElement` targets after rebuilds, rather than retaining stale references. Search must never write saved dock visibility, active tab, or Advanced-mode preferences merely to navigate.
+- The hosted Windows GUI probe checks source-matched Ctrl+K, the `fov` search result, Enter navigation to Camera FOV, and actual post-navigation Unity screenshots. This is automated keyboard evidence, not user acceptance; Korean IME, macOS Cmd+K, advanced-only routing, actual hardware and complete keyboard accessibility still require operator tests.
+
 ## Integration and validation
 
 - `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts. When no active model is present and a saved valid `.vrm` path exists, the shell now attempts startup restoration without the legacy uGUI controller, logging restore attempts/results. Explicit Unload clears the saved restoration path. The Sources panel and native Settings model page expose **Browse VRM**, reusing the built-in `DesktopCharacterFileSelectionAdapter`, with no new dependency. Selection updates the path without automatically loading the file. Unsupported FBX import is not implied.
