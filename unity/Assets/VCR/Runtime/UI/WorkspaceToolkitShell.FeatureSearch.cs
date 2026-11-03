@@ -25,6 +25,7 @@ namespace VCR.Runtime.UI
         // Remember only the current modal session's focus, not a persisted
         // feature target. A dock rebuild invalidates this reference.
         private VisualElement _featureSearchPreviousFocus;
+        private bool _featureSearchProbeReturnToLive;
 
         private void HandleWorkspaceFeatureShortcut(KeyDownEvent evt)
         {
@@ -427,6 +428,7 @@ namespace VCR.Runtime.UI
             }
             var center = toggle.worldBound.center;
             var root = _workspaceRoot.worldBound;
+            _featureSearchProbeReturnToLive = true;
             Debug.Log("VCR U1 GUI probe: feature_search_workspace_target_ready=true " +
                 "x=" + center.x.ToString("0.##",
                     System.Globalization.CultureInfo.InvariantCulture) +
