@@ -355,6 +355,18 @@ jobs:
           if (-not $probe.workspaceUiTreeReady) {
             throw 'P1 GUI window was visible but UI Toolkit workspace tree was not attached.'
           }
+          # When a real visible desktop/Unity HWND exists, every enforced
+          # automated GUI assertion must pass. A green Actions run must not
+          # conceal failed OS-keyboard navigation or a false gui-probe.passed.
+          # Truly headless runners remain informational above (no HWND).
+          if ($probe.passed -ne $true) {
+            throw ("P1 real Windows GUI regression FAILED: passed=$($probe.passed), " +
+                   "search=$($probe.featureSearchKeyboardPassed), " +
+                   "settings=$($probe.nativeSettingsOpenPassed), " +
+                   "navigation=$($probe.nativeSettingsNavigationPassed), " +
+                   "lifecycle=$($probe.nativeSettingsLifecyclePassed), " +
+                   "details=$($probe.featureSearchKeyboardError) $($probe.nativeSettingsOpenError) $($probe.error)")
+          }
           # The 960x520 hosted Player must expose quantitative, usable
           # measured compact dock geometry; tree attachment alone can hide
           # an entirely collapsed Tracking/Actions/Events scroll viewport.
