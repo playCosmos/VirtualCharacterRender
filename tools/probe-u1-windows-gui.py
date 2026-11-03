@@ -1130,6 +1130,99 @@ def probe_native_settings_close_reopen(player_hwnd, pid, player_log,
             "physicalHumanAcceptance": False}
 
 
+def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output):
+    """Press real Ctrl+K, type fov, and navigate by Enter on the hosted desktop.
+
+    The registry, palette, filtered result and target all must provide fresh
+    Unity markers. The post-search Unity screenshot must also contain diverse
+    pixels. This is automated OS keyboard input, NOT human/IME acceptance.
+    """
+    user32 = ctypes.windll.user32
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.keybd_event.argtypes = [
+        wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_size_t]
+    user32.keybd_event.restype = None
+    if not user32.PostMessageW(settings_hwnd, WM_CLOSE, 0, 0):
+        raise OSError("Cannot hide native Settings before palette keyboard test")
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline and user32.IsWindowVisible(settings_hwnd):
+        time.sleep(0.1)
+    if user32.IsWindowVisible(settings_hwnd):
+        raise RuntimeError("Native Settings covered the Unity search shortcut")
+    user32.SetForegroundWindow(player_hwnd)
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline and user32.GetForegroundWindow() != player_hwnd:
+        time.sleep(0.1)
+    if user32.GetForegroundWindow() != player_hwnd:
+        raise RuntimeError("Player never received foreground keyboard focus")
+
+    def key(vk):
+        user32.keybd_event(vk, 0, 0, 0)
+        time.sleep(0.06)
+        user32.keybd_event(vk, 0, 0x0002, 0)
+        time.sleep(0.10)
+
+    opened = "VCR U1 GUI probe: feature_search_opened=true"
+    indexed = "VCR U1 GUI probe: feature_search_registry_ready=true indexed=23"
+    offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    user32.keybd_event(0x11, 0, 0, 0)  # Ctrl DOWN
+    key(0x4b)  # K
+    user32.keybd_event(0x11, 0, 0x0002, 0)  # Ctrl UP
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        lines = [line.strip() for line in log[offset:].splitlines()]
+        if opened in lines and indexed in lines:
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Real Ctrl+K did not open and validate feature palette")
+    # UI Toolkit's focus scheduling occurs after the shortcut event dispatch.
+    time.sleep(0.30)
+    query_marker = ("VCR U1 GUI probe: feature_search_query_ready=true "
+                    "query=fov first=camera.fov")
+    for vk in (0x46, 0x4f, 0x56):  # F, O, V
+        key(vk)
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == query_marker
+               for line in log[offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "OS keyboard 'fov' did not filter palette to camera.fov")
+    key(0x0d)  # Enter: navigation, never Apply or model unload.
+    navigated = ("VCR U1 GUI probe: feature_search_navigated=true "
+                 "id=camera.fov target=vcr-search-camera-fov mode=advanced")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == navigated
+               for line in log[offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Real Enter did not navigate to current Camera FOV control")
+    frame = inspect_native_window_frame(player_hwnd)
+    screenshot = wait_for_workspace_screenshot(
+        output / "unity-feature-searched.png",
+        {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
+        "feature search")
+    return {"passed": True, "shortcut": "Ctrl+K", "query": "fov",
+            "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
+            "postSearchFrame": screenshot, "physicalHumanAcceptance": False}
+
+
 def request_normal_close(hwnd):
     user32 = ctypes.windll.user32
     user32.IsWindow.argtypes = [wintypes.HWND]
@@ -1728,7 +1821,8 @@ def run_probe(args):
     unity_image_path = output / "unity-frame.png"
     for stale in (player_log, report_path, config_path, unity_image_path,
                   output / "unity-expanded.png", output / "unity-restored.png",
-                  output / "unity-workspace-clicked.png"):
+                  output / "unity-workspace-clicked.png",
+                  output / "unity-feature-searched.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",
@@ -1745,6 +1839,7 @@ def run_probe(args):
         "nativeSettingsOpenPassed": False,
         "nativeSettingsNavigationPassed": False,
         "nativeSettingsLifecyclePassed": False,
+        "featureSearchKeyboardPassed": False,
         "freeResizePassed": False,
         "windowFrameCaptured": False,
         "windowFrameIsInteractiveAcceptance": False,
@@ -1995,6 +2090,15 @@ def run_probe(args):
                 print("U1 native Settings WM_CLOSE/hide/reopen: " +
                       f"sameHandle={lifecycle['reusedWindow']} " +
                       f"reopenClicks={lifecycle['reopenClickAttempts']}", flush=True)
+                searched = probe_feature_search_keyboard(
+                    observed["hwnd"], native_settings["window"]["hwnd"],
+                    player_log, output)
+                report["featureSearchKeyboard"] = searched
+                report["featureSearchKeyboardPassed"] = searched["passed"]
+                print("U1 OS-keyboard palette search: " +
+                      f"query={searched['query']} " +
+                      f"result={searched['resultId']} " +
+                      f"passed={searched['passed']}", flush=True)
             except Exception as error:
                 report["nativeSettingsOpenError"] = str(error)
         close_requested_at = time.monotonic()
@@ -2046,6 +2150,7 @@ def run_probe(args):
                 report["nativeSettingsOpenPassed"] and
                 report["nativeSettingsNavigationPassed"] and
                 report["nativeSettingsLifecyclePassed"] and
+                report["featureSearchKeyboardPassed"] and
                 report["freeResizePassed"]):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
