@@ -2726,10 +2726,11 @@ namespace VCR.Runtime.UI
                 var panel = panels[i];
                 panel.style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
                 var name = panel.name.Substring("vcr-panel-".Length);
-                var suppressClick = false;
+                // Button.Clickable has its own pointer capture lifecycle.
+                // Keep selection on the Button and drag capture on a separate
+                // grip so click/release cannot cancel an in-progress dock drag.
                 var tab = new Button(() =>
                 {
-                    if (suppressClick) { suppressClick = false; return; }
                     for (var j = 0; j < panels.Count; j++)
                         panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
                     _featureTemporaryTabs.Remove(dockId);
@@ -2740,54 +2741,79 @@ namespace VCR.Runtime.UI
                         StartCoroutine(ReportFeatureSearchTrackingTabClicked());
                 }) { text = name };
                 tab.name = "vcr-tab-" + name;
-                tab.tooltip = "Click to activate. Drag to reorder or move to another dock.";
+                tab.tooltip = "Click to activate. Ctrl+Left/Right to reorder; drag adjacent grip to move.";
+                tab.style.minWidth = 0;
+                tab.style.flexShrink = 1;
                 tab.RegisterCallback<KeyDownEvent>(evt =>
                 {
                     if (!evt.ctrlKey || (evt.keyCode != KeyCode.LeftArrow && evt.keyCode != KeyCode.RightArrow)) return;
                     MovePanelOrder(panel, name, evt.keyCode == KeyCode.LeftArrow ? -1 : 1);
                     evt.StopPropagation();
                 });
-                // Tab drag works even when its panel body is hidden.
+
+                var grip = new Label("⋮")
+                    { name = "vcr-tab-drag-" + name, focusable = true };
+                grip.tooltip = "Drag this handle to reorder or move " + name + " to another dock.";
+                grip.style.unityTextAlign = TextAnchor.MiddleCenter;
+                grip.style.minWidth = 16;
+                grip.style.flexShrink = 0;
+                grip.style.paddingLeft = 2;
+                grip.style.paddingRight = 2;
+                grip.style.backgroundColor = new Color(0.29f, 0.34f, 0.39f);
+                grip.style.color = Color.white;
                 var draggingTab = false;
                 var tabPointer = -1;
                 var tabStart = Vector2.zero;
                 var tabMoved = false;
-                tab.RegisterCallback<KeyDownEvent>(evt =>
+                grip.RegisterCallback<KeyDownEvent>(evt =>
                 {
                     if (evt.keyCode != KeyCode.Escape || !draggingTab) return;
                     draggingTab = false;
-                    suppressClick = true;
-                    if (tab.HasPointerCapture(tabPointer)) tab.ReleasePointer(tabPointer);
+                    if (grip.HasPointerCapture(tabPointer)) grip.ReleasePointer(tabPointer);
                     tabPointer = -1;
                     evt.StopPropagation();
                 });
-                tab.RegisterCallback<PointerDownEvent>(evt =>
+                grip.RegisterCallback<PointerDownEvent>(evt =>
                 {
-                    if (evt.button != 0) return;
+                    if (evt.button != 0 || draggingTab) return;
                     draggingTab = true;
                     tabPointer = evt.pointerId;
                     tabStart = evt.position;
                     tabMoved = false;
-                    suppressClick = false;
-                    tab.CapturePointer(tabPointer);
+                    grip.CapturePointer(tabPointer);
+                    if (_guiProbeRequested && dockId == "bottom" &&
+                        name == WorkspacePanelCatalog.Inspector)
+                        Debug.Log("VCR U1 GUI probe: inspector_grip_down=true", this);
+                    evt.StopPropagation();
                 });
-                tab.RegisterCallback<PointerMoveEvent>(evt =>
+                grip.RegisterCallback<PointerMoveEvent>(evt =>
                 {
                     if (!draggingTab || evt.pointerId != tabPointer) return;
                     if (((Vector2)evt.position - tabStart).sqrMagnitude > 64f)
+                    {
+                        if (!tabMoved && _guiProbeRequested && dockId == "bottom" &&
+                            name == WorkspacePanelCatalog.Inspector)
+                            Debug.Log("VCR U1 GUI probe: inspector_grip_threshold=true", this);
                         tabMoved = true;
+                    }
+                    evt.StopPropagation();
                 });
-                tab.RegisterCallback<PointerUpEvent>(evt =>
+                grip.RegisterCallback<PointerUpEvent>(evt =>
                 {
                     if (!draggingTab || evt.pointerId != tabPointer) return;
                     draggingTab = false;
                     var drop = evt.position;
-                    var moved = tabMoved;
-                    suppressClick = moved;
-                    if (tab.HasPointerCapture(evt.pointerId))
-                        tab.ReleasePointer(evt.pointerId);
-                    if (!moved) return;
-                    var destination = DockAt(drop);
+                    var moved = tabMoved ||
+                        ((Vector2)evt.position - tabStart).sqrMagnitude > 64f;
+                    var destination = moved ? DockAt(drop) : null;
+                    if (_guiProbeRequested && dockId == "bottom" &&
+                        name == WorkspacePanelCatalog.Inspector)
+                        Debug.Log("VCR U1 GUI probe: inspector_grip_up=true moved=" +
+                            (moved ? "true" : "false") +
+                            " destination=" + (destination ?? "none"), this);
+                    if (grip.HasPointerCapture(evt.pointerId))
+                        grip.ReleasePointer(evt.pointerId);
+                    if (!moved) { evt.StopPropagation(); return; }
                     if (destination != null && destination != dockId)
                     {
                         MovePanelToDock(panel, name, destination);
@@ -2799,7 +2825,10 @@ namespace VCR.Runtime.UI
                         {
                             foreach (var candidate in tabStrip.Children())
                             {
-                                if (candidate == tab || !candidate.worldBound.Contains(drop)) continue;
+                                if (candidate == tab || candidate.name == null ||
+                                    !candidate.name.StartsWith("vcr-tab-", StringComparison.Ordinal) ||
+                                    candidate.name.StartsWith("vcr-tab-drag-", StringComparison.Ordinal) ||
+                                    !candidate.worldBound.Contains(drop)) continue;
                                 var other = dock.Q<VisualElement>("vcr-panel-" +
                                     candidate.name.Substring("vcr-tab-".Length));
                                 if (other == null) break;
@@ -2817,12 +2846,16 @@ namespace VCR.Runtime.UI
                     }
                     evt.StopPropagation();
                 });
-                tab.RegisterCallback<PointerCaptureOutEvent>(_ =>
+                grip.RegisterCallback<PointerCaptureOutEvent>(_ =>
                 {
+                    if (draggingTab && _guiProbeRequested && dockId == "bottom" &&
+                        name == WorkspacePanelCatalog.Inspector)
+                        Debug.Log("VCR U1 GUI probe: inspector_grip_capture_lost=true", this);
                     draggingTab = false;
                     tabPointer = -1;
                 });
                 tabs.Add(tab);
+                tabs.Add(grip);
             }
             tabs.name = "vcr-dock-tabs-" + dockId;
             dock.Insert(0, tabs);

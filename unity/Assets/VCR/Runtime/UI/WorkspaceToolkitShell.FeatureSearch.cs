@@ -618,17 +618,22 @@ namespace VCR.Runtime.UI
             if (!passed) yield break;
             // The hidden Inspector body still has a visible, draggable tab.
             // The right rail is narrow but must accept real pointer drops.
-            var inspectorTab = _workspaceRoot.Q<Button>("vcr-tab-inspector");
+            var inspectorGrip = _workspaceRoot.Q<Label>("vcr-tab-drag-inspector");
+            var picked = inspectorGrip != null && inspectorGrip.panel != null
+                ? inspectorGrip.panel.Pick(inspectorGrip.worldBound.center) : null;
+            while (picked != null && picked != inspectorGrip)
+                picked = picked.parent;
+            var gripReady = picked == inspectorGrip;
             var rightRail = _rightDock != null && _rightVisible &&
                 _rightDock.Q<Label>("vcr-empty-right-dock-drop-target") != null &&
                 _rightDock.worldBound.width >= 22f &&
                 _rightDock.worldBound.width <= 32f;
-            if (!WorkspaceButtonReceivesPointer(inspectorTab) || !rightRail)
+            if (!gripReady || !rightRail)
             {
                 Debug.Log("VCR U1 GUI probe: feature_search_inspector_drag_target_rejected=true", this);
                 yield break;
             }
-            var source = inspectorTab.worldBound.center;
+            var source = inspectorGrip.worldBound.center;
             var destination = _rightDock.worldBound.center;
             var root = _workspaceRoot.worldBound;
             Debug.Log("VCR U1 GUI probe: feature_search_inspector_drag_target_ready=true " +

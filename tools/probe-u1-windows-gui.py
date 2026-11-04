@@ -935,7 +935,14 @@ def probe_real_workspace_mouse_drag(hwnd, target, player_log, output,
                         "destinationScreenPoint": [end.x, end.y],
                         "unityFrame": frame, "physicalHumanAcceptance": False}
             time.sleep(0.12)
-        raise RuntimeError("Real mouse drag did not restore Inspector to right Dock")
+        evidence = [line.strip() for line in
+                    player_log.read_text(encoding="utf-8", errors="replace")[
+                        log_offset:].splitlines()
+                    if "inspector_grip_" in line or
+                    "feature_search_inspector_drag_restored=" in line]
+        raise RuntimeError(
+            "Real mouse drag did not restore Inspector to right Dock; " +
+            "inputEvidence=" + repr(evidence[-12:]))
     finally:
         if left_down:
             user32.mouse_event(0x0004, 0, 0, 0, 0)
