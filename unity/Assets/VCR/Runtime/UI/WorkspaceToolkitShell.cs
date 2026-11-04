@@ -2705,6 +2705,9 @@ namespace VCR.Runtime.UI
                     _featureTemporaryTabs.Remove(dockId);
                     PlayerPrefs.SetString(key, panel.name);
                     PlayerPrefs.Save();
+                    if (_guiProbeRequested && dockId == "bottom" &&
+                        name == WorkspacePanelCatalog.Tracking)
+                        StartCoroutine(ReportFeatureSearchTrackingTabClicked());
                 }) { text = name };
                 tab.name = "vcr-tab-" + name;
                 tab.tooltip = "Click to activate. Drag to reorder or move to another dock.";

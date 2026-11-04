@@ -129,6 +129,29 @@ def parse_feature_search_workspace_target(log_text, start_offset=0):
     return None
 
 
+def parse_feature_search_tracking_tab_target(log_text, start_offset=0):
+    """Accept only a new on-screen Tracking tab on the moved Bottom dock."""
+    marker = "VCR U1 GUI probe: feature_search_tracking_tab_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (values.get("mode") != "live" or
+                not all(math.isfinite(v) for v in (x, y, w, h)) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w,
+                "rootHeight": h, "initialMode": "live"}
+    return None
+
+
 def parse_feature_search_inspector_move_target(log_text, start_offset=0):
     """Read a fresh visible Inspector Move button after manual Live restoration."""
     marker = "VCR U1 GUI probe: feature_search_inspector_move_target_ready=true "
@@ -1616,10 +1639,31 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         "VCR U1 GUI probe: feature_search_inspector_moved=true "
         "destination=bottom panel_visible=true persisted_dock=true "
         "selected_tab=true temporary_tabs=0 hidden_left_preserved=true")
+    moved_log_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
     moved = probe_real_workspace_mouse_click(
         player_hwnd, move_target, player_log, output,
         screenshot_name="unity-feature-inspector-moved.png",
         expected_marker=expected_move)
+    tracking_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        tracking_target = parse_feature_search_tracking_tab_target(
+            log, moved_log_offset)
+        if tracking_target is not None:
+            break
+        time.sleep(0.12)
+    if tracking_target is None:
+        raise RuntimeError("Tracking tab is not clickable after Inspector moved")
+    expected_tab = (
+        "VCR U1 GUI probe: feature_search_tracking_tab_clicked=true "
+        "visible=true inspector_hidden=true persisted=true "
+        "temporary_tabs=0 hidden_left_preserved=true")
+    tracking_click = probe_real_workspace_mouse_click(
+        player_hwnd, tracking_target, player_log, output,
+        screenshot_name="unity-feature-tracking-tab.png",
+        expected_marker=expected_tab)
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1653,6 +1697,10 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "destinationTabSelected": True,
                 "searchOverrideCleared": True,
                 "hiddenLeftPreserved": True,
+                "trackingTabClicked": True,
+                "trackingTabPersisted": True,
+                "trackingTabVisible": True,
+                "trackingTabFrame": tracking_click["unityFrame"],
                 "movedFrame": moved["unityFrame"]},
             "physicalHumanAcceptance": False}
 

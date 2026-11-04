@@ -552,11 +552,61 @@ namespace VCR.Runtime.UI
                 " selected_tab=" + (selectedTab ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
                 " hidden_left_preserved=" + (leftStillHidden ? "true" : "false"), this);
+            if (!passed) yield break;
+            var trackingTab = _workspaceRoot.Q<Button>("vcr-tab-tracking");
+            if (!WorkspaceButtonReceivesPointer(trackingTab))
+            {
+                Debug.Log("VCR U1 GUI probe: feature_search_tracking_tab_target_rejected=true", this);
+                yield break;
+            }
+            var center = trackingTab.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: feature_search_tracking_tab_target_ready=true " +
+                "x=" + center.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + center.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " mode=live", this);
             if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
             var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
             if (!string.IsNullOrEmpty(directory))
                 StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                     System.IO.Path.Combine(directory, "unity-feature-inspector-moved.png")));
+        }
+
+        private System.Collections.IEnumerator ReportFeatureSearchTrackingTabClicked()
+        {
+            yield return new WaitForEndOfFrame();
+            var tracking = _workspaceRoot.Q<VisualElement>("vcr-panel-tracking");
+            var inspector = _workspaceRoot.Q<VisualElement>("vcr-panel-inspector");
+            var visible = tracking != null && tracking.parent == _bottomDock &&
+                tracking.resolvedStyle.display != DisplayStyle.None &&
+                tracking.worldBound.width > 120f && tracking.worldBound.height > 32f;
+            var inspectorHidden = inspector != null &&
+                inspector.resolvedStyle.display == DisplayStyle.None;
+            var persisted = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.bottom.v1", "") == "vcr-panel-tracking";
+            var hiddenLeft = !_leftVisible && _leftDock != null &&
+                _leftDock.resolvedStyle.display == DisplayStyle.None &&
+                PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var passed = visible && inspectorHidden && persisted && hiddenLeft &&
+                _featureTemporaryTabs.Count == 0;
+            Debug.Log("VCR U1 GUI probe: feature_search_tracking_tab_clicked=" +
+                (passed ? "true" : "false") +
+                " visible=" + (visible ? "true" : "false") +
+                " inspector_hidden=" + (inspectorHidden ? "true" : "false") +
+                " persisted=" + (persisted ? "true" : "false") +
+                " temporary_tabs=" + _featureTemporaryTabs.Count +
+                " hidden_left_preserved=" + (hiddenLeft ? "true" : "false"), this);
+            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+            if (!string.IsNullOrEmpty(directory))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    System.IO.Path.Combine(directory, "unity-feature-tracking-tab.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()
