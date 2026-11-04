@@ -2042,6 +2042,8 @@ namespace VCR.Runtime.UI
 
             var toggle = new Button(() =>
             {
+                // Manual mode selection overrides temporary search navigation.
+                DiscardTransientFeatureSearchNavigation();
                 advancedWorkspace = !advancedWorkspace;
                 PlayerPrefs.SetInt(WorkspaceModeKey, advancedWorkspace ? 1 : 0);
                 PlayerPrefs.Save();
@@ -2104,6 +2106,7 @@ namespace VCR.Runtime.UI
             headerActions.Add(recoverOpaque);
             var tabButton = new Button(() =>
             {
+                DiscardTransientFeatureSearchNavigation();
                 _tabMode = !_tabMode;
                 PlayerPrefs.SetInt(TabModeKey, _tabMode ? 1 : 0);
                 PlayerPrefs.Save();
@@ -2121,6 +2124,7 @@ namespace VCR.Runtime.UI
                 headerActions.Add(tabButton);
             headerActions.Add(new Button(() =>
             {
+                _featureTemporaryTabs.Remove("bottom");
                 _bottomVisible = !_bottomVisible;
                 PlayerPrefs.SetInt(BottomVisibleKey, _bottomVisible ? 1 : 0);
                 PlayerPrefs.Save();
@@ -2130,6 +2134,7 @@ namespace VCR.Runtime.UI
                 name = "vcr-header-toggle-bottom" });
             headerActions.Add(new Button(() =>
             {
+                _featureTemporaryTabs.Remove("left");
                 _leftVisible = !_leftVisible;
                 PlayerPrefs.SetInt(LeftVisibleKey, _leftVisible ? 1 : 0);
                 PlayerPrefs.Save();
@@ -2154,6 +2159,7 @@ namespace VCR.Runtime.UI
                 name = "vcr-header-toggle-left" });
             headerActions.Add(new Button(() =>
             {
+                _featureTemporaryTabs.Remove("right");
                 _rightVisible = !_rightVisible;
                 PlayerPrefs.SetInt(RightVisibleKey, _rightVisible ? 1 : 0);
                 PlayerPrefs.Save();
@@ -2169,6 +2175,8 @@ namespace VCR.Runtime.UI
             headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Load()) return;
+                // Restored persisted tabs supersede any search-only selection.
+                _featureTemporaryTabs.Clear();
                 advancedWorkspace = PlayerPrefs.GetInt(WorkspaceModeKey, 0) != 0;
                 _tabMode = PlayerPrefs.GetInt(TabModeKey, 0) != 0;
                 _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
@@ -3537,6 +3545,7 @@ namespace VCR.Runtime.UI
 
         private void ResetLayout()
         {
+            _featureTemporaryTabs.Clear();
             PlayerPrefs.DeleteKey(LeftWidthKey);
             PlayerPrefs.DeleteKey(ScenesHeightKey);
             PlayerPrefs.DeleteKey(RightInspectorHeightKey);

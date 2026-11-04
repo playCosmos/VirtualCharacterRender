@@ -278,6 +278,16 @@ namespace VCR.Runtime.UI
             }
         }
 
+        // Clear transient search tabs and reveal-only visibility on explicit
+        // layout actions without modifying persisted preferences.
+        private void DiscardTransientFeatureSearchNavigation()
+        {
+            _featureTemporaryTabs.Clear();
+            _leftVisible = PlayerPrefs.GetInt(LeftVisibleKey, 1) != 0;
+            _rightVisible = PlayerPrefs.GetInt(RightVisibleKey, 1) != 0;
+            _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
+        }
+
         private void NavigateToWorkspaceFeature(WorkspaceFeature feature)
         {
             if (feature == null) return;

@@ -954,6 +954,49 @@ namespace VCR.Editor.P1
                 inspectorProbeObject.transform.SetParent(root.transform, false);
                 var inspectorProbe = inspectorProbeObject.AddComponent<WorkspaceToolkitShell>();
                 SetPrivateField(inspectorProbe, "sceneRuntime", scene);
+                // Search-only panel/visibility overrides must never supersede
+                // the saved layout after an explicit workspace command.
+                var tempTabsField = typeof(WorkspaceToolkitShell).GetField(
+                    "_featureTemporaryTabs", BindingFlags.Instance | BindingFlags.NonPublic);
+                var discardSearch = typeof(WorkspaceToolkitShell).GetMethod(
+                    "DiscardTransientFeatureSearchNavigation",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var leftVisibleField = typeof(WorkspaceToolkitShell).GetField(
+                    "_leftVisible", BindingFlags.Instance | BindingFlags.NonPublic);
+                var rightVisibleField = typeof(WorkspaceToolkitShell).GetField(
+                    "_rightVisible", BindingFlags.Instance | BindingFlags.NonPublic);
+                var bottomVisibleField = typeof(WorkspaceToolkitShell).GetField(
+                    "_bottomVisible", BindingFlags.Instance | BindingFlags.NonPublic);
+                Expect(tempTabsField != null && discardSearch != null &&
+                    leftVisibleField != null && rightVisibleField != null &&
+                    bottomVisibleField != null,
+                    "U1 must discard search-only panel visibility/tab overrides", failures);
+                if (tempTabsField != null && discardSearch != null &&
+                    leftVisibleField != null && rightVisibleField != null &&
+                    bottomVisibleField != null)
+                {
+                    var tempTabs = tempTabsField.GetValue(inspectorProbe)
+                        as Dictionary<string, string>;
+                    var savedLeft = PlayerPrefs.GetInt("VCR.UI.Workspace.LeftVisible.v1", 1) != 0;
+                    var savedRight = PlayerPrefs.GetInt("VCR.UI.Workspace.RightVisible.v1", 1) != 0;
+                    var savedBottom = PlayerPrefs.GetInt("VCR.UI.Workspace.BottomVisible.v1", 1) != 0;
+                    Expect(tempTabs != null, "U1 search override dictionary must exist", failures);
+                    if (tempTabs != null)
+                    {
+                        tempTabs["left"] = "vcr-panel-scenes";
+                        tempTabs["right"] = "vcr-panel-materials";
+                        SetPrivateField(inspectorProbe, "_leftVisible", !savedLeft);
+                        SetPrivateField(inspectorProbe, "_rightVisible", !savedRight);
+                        SetPrivateField(inspectorProbe, "_bottomVisible", !savedBottom);
+                        discardSearch.Invoke(inspectorProbe, null);
+                        Expect(tempTabs.Count == 0 &&
+                            (bool)leftVisibleField.GetValue(inspectorProbe) == savedLeft &&
+                            (bool)rightVisibleField.GetValue(inspectorProbe) == savedRight &&
+                            (bool)bottomVisibleField.GetValue(inspectorProbe) == savedBottom,
+                            "U1 discarded search navigation must restore saved dock visibility",
+                            failures);
+                    }
+                }
                 var inspectorPositionField = new Vector3Field();
                 var inspectorRotationField = new Vector3Field();
                 var inspectorFovField = new FloatField();
