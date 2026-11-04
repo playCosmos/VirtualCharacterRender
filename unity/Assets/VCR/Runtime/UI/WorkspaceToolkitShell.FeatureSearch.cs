@@ -543,15 +543,28 @@ namespace VCR.Runtime.UI
             var leftStillHidden = !_leftVisible && _leftDock != null &&
                 _leftDock.resolvedStyle.display == DisplayStyle.None &&
                 PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            // The old full-width empty right dock must not waste Preview space.
+            // It remains a narrow drag-and-drop target, not an invisible dock.
+            var rightRail = _rightDock != null && _rightVisible &&
+                _rightDock.Q<Label>("vcr-empty-right-dock-drop-target") != null &&
+                _rightDock.resolvedStyle.display != DisplayStyle.None &&
+                _rightDock.worldBound.width >= 22f &&
+                _rightDock.worldBound.width <= 32f;
+            var preview = _workspaceRoot.Q<VisualElement>("vcr-panel-preview");
+            var previewExpanded = preview != null &&
+                preview.worldBound.width >= _workspaceRoot.worldBound.width * 0.75f;
             var passed = panelVisible && persistedDock && selectedTab &&
-                _featureTemporaryTabs.Count == 0 && leftStillHidden;
+                _featureTemporaryTabs.Count == 0 && leftStillHidden &&
+                rightRail && previewExpanded;
             Debug.Log("VCR U1 GUI probe: feature_search_inspector_moved=" +
                 (passed ? "true" : "false") +
                 " destination=bottom panel_visible=" + (panelVisible ? "true" : "false") +
                 " persisted_dock=" + (persistedDock ? "true" : "false") +
                 " selected_tab=" + (selectedTab ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
-                " hidden_left_preserved=" + (leftStillHidden ? "true" : "false"), this);
+                " hidden_left_preserved=" + (leftStillHidden ? "true" : "false") +
+                " empty_right_rail=" + (rightRail ? "true" : "false") +
+                " preview_expanded=" + (previewExpanded ? "true" : "false"), this);
             if (!passed) yield break;
             var trackingTab = _workspaceRoot.Q<Button>("vcr-tab-tracking");
             if (!WorkspaceButtonReceivesPointer(trackingTab))

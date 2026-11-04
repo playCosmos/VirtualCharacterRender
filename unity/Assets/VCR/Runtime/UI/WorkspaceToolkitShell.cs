@@ -2503,6 +2503,13 @@ namespace VCR.Runtime.UI
             SortDockPanels(left);
             SortDockPanels(right);
             SortDockPanels(bottom);
+            // Reclaim the preview space when a user moves the last side panel
+            // away. Keep a narrow drop rail rather than removing the dock:
+            // drag-to-empty-dock and the persisted visibility preference must
+            // remain functional. A later Build restores the full dock width
+            // automatically when a panel returns.
+            UseEmptySideDockRail(left, leftSplitter, "left", _leftVisible);
+            UseEmptySideDockRail(right, rightSplitter, "right", _rightVisible);
             PositionPanelSplitter(left, WorkspacePanelCatalog.Scenes, "vcr-splitter-scenes", effectiveTabMode);
             PositionPanelSplitter(right, WorkspacePanelCatalog.Inspector, "vcr-splitter-inspector", effectiveTabMode);
             if (effectiveTabMode)
@@ -2584,6 +2591,29 @@ namespace VCR.Runtime.UI
             _dockTargetLabel.pickingMode = PickingMode.Ignore;
             _workspaceRoot.Add(_dockTargetLabel);
             BuildWorkspaceFeatureSearchOverlay();
+        }
+
+        private static void UseEmptySideDockRail(
+            VisualElement dock, VisualElement splitter, string dockId, bool enabled)
+        {
+            if (!enabled || dock == null) return;
+            foreach (var child in dock.Children())
+                if (child.name != null &&
+                    child.name.StartsWith("vcr-panel-", StringComparison.Ordinal))
+                    return;
+            // The 26px rail stays in the hit-test domain of DockAt(), so a
+            // dragged panel can still return to an otherwise empty side dock.
+            dock.style.width = 26f;
+            dock.style.backgroundColor = new Color(0.15f, 0.18f, 0.21f);
+            if (splitter != null) splitter.style.display = DisplayStyle.None;
+            var dropTarget = new Label("+")
+                { name = "vcr-empty-" + dockId + "-dock-drop-target" };
+            dropTarget.style.unityTextAlign = TextAnchor.MiddleCenter;
+            dropTarget.style.color = new Color(0.80f, 0.89f, 0.97f);
+            dropTarget.tooltip = "Empty " + dockId +
+                " dock. Drag a panel here or use its Move control.";
+            dropTarget.pickingMode = PickingMode.Ignore;
+            dock.Add(dropTarget);
         }
 
         private static void SortDockPanels(VisualElement dock)

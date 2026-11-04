@@ -1638,7 +1638,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     expected_move = (
         "VCR U1 GUI probe: feature_search_inspector_moved=true "
         "destination=bottom panel_visible=true persisted_dock=true "
-        "selected_tab=true temporary_tabs=0 hidden_left_preserved=true")
+        "selected_tab=true temporary_tabs=0 hidden_left_preserved=true "
+        "empty_right_rail=true preview_expanded=true")
     moved_log_offset = len(player_log.read_text(
         encoding="utf-8", errors="replace"))
     moved = probe_real_workspace_mouse_click(
@@ -1697,6 +1698,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "destinationTabSelected": True,
                 "searchOverrideCleared": True,
                 "hiddenLeftPreserved": True,
+                "emptyRightDockRail": True,
+                "previewExpanded": True,
                 "trackingTabClicked": True,
                 "trackingTabPersisted": True,
                 "trackingTabVisible": True,

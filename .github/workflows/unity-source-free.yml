@@ -393,6 +393,8 @@ jobs:
               $search.manualPanelMove.destinationTabSelected -ne $true -or
               $search.manualPanelMove.searchOverrideCleared -ne $true -or
               $search.manualPanelMove.hiddenLeftPreserved -ne $true -or
+              $search.manualPanelMove.emptyRightDockRail -ne $true -or
+              $search.manualPanelMove.previewExpanded -ne $true -or
               $search.manualPanelMove.trackingTabClicked -ne $true -or
               $search.manualPanelMove.trackingTabPersisted -ne $true -or
               $search.manualPanelMove.trackingTabVisible -ne $true) {
