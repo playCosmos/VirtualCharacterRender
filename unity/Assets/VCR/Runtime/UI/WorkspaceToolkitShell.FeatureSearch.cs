@@ -41,6 +41,8 @@ namespace VCR.Runtime.UI
             else if (_featureSearchIsOpen && evt.keyCode == KeyCode.Escape)
             {
                 CloseWorkspaceFeatureSearch();
+                if (_guiProbeRequested)
+                    Debug.Log("VCR U1 GUI probe: feature_search_esc_closed=true", this);
                 evt.StopPropagation();
                 evt.PreventDefault();
             }

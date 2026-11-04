@@ -1238,6 +1238,35 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         time.sleep(0.12)
     else:
         raise RuntimeError("Real Ctrl+K did not open and validate feature palette")
+    # Exercise the real ESC handler and return to the same palette by the
+    # native Ctrl+K shortcut; do not treat a prior 'opened' log as a reopen.
+    escape_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    key(0x1b)  # Esc
+    escaped = "VCR U1 GUI probe: feature_search_esc_closed=true"
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == escaped
+               for line in log[escape_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Real Esc failed to close the feature palette")
+
+    reopen_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    user32.keybd_event(0x11, 0, 0, 0)  # Ctrl DOWN
+    key(0x4b)  # K
+    user32.keybd_event(0x11, 0, 0x0002, 0)  # Ctrl UP
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == opened
+               for line in log[reopen_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError("Ctrl+K did not reopen feature search after real Esc")
+    offset = reopen_offset
     # UI Toolkit's focus scheduling occurs after the shortcut event dispatch.
     time.sleep(0.30)
     query_marker = ("VCR U1 GUI probe: feature_search_query_ready=true "
@@ -1515,7 +1544,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         output / "unity-feature-scenes-revealed.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
         "Scenes revealed from hidden left dock")
-    return {"passed": True, "shortcut": "Ctrl+K", "query": "fov",
+    return {"passed": True, "shortcut": "Ctrl+K",
+            "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
             "postSearchFrame": screenshot,
             "advancedPanelSearch": {

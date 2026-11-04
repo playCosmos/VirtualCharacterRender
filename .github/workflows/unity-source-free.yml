@@ -375,6 +375,7 @@ jobs:
           $search = $probe.featureSearchKeyboard
           if ($probe.featureSearchKeyboardPassed -ne $true -or
               $null -eq $search -or $search.passed -ne $true -or
+              $search.escapeReopenPassed -ne $true -or
               $null -eq $search.liveToAdvancedSearch -or
               $search.liveToAdvancedSearch.liveClickObserved -ne $true -or
               $search.liveToAdvancedSearch.modePersistedLive -ne $true -or
