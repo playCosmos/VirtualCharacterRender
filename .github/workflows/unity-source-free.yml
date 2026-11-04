@@ -397,8 +397,12 @@ jobs:
               $search.manualPanelMove.previewExpanded -ne $true -or
               $search.manualPanelMove.trackingTabClicked -ne $true -or
               $search.manualPanelMove.trackingTabPersisted -ne $true -or
-              $search.manualPanelMove.trackingTabVisible -ne $true) {
-            throw 'P1 Windows feature search subcase missing/failed: Live-to-Advanced, hidden-left-dock restoration or Inspector panel Move.'
+              $search.manualPanelMove.trackingTabVisible -ne $true -or
+              $search.manualPanelMove.dragBackToEmptyRight -ne $true -or
+              $search.manualPanelMove.rightDockWidthRestored -ne $true -or
+              $search.manualPanelMove.rightDockTabSelected -ne $true -or
+              $search.manualPanelMove.leftHiddenAfterDrag -ne $true) {
+            throw 'P1 Windows feature search subcase missing/failed: search, Inspector move, Tracking tab or real drag to empty Right dock.'
           }
           Write-Host 'P1 Windows feature search subcases PASS: Live-to-Advanced preference preservation and hidden-left-dock restoration.'
           # The 960x520 hosted Player must expose quantitative, usable

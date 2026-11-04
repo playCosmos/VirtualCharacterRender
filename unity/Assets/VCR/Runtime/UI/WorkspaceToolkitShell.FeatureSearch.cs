@@ -615,11 +615,79 @@ namespace VCR.Runtime.UI
                 " persisted=" + (persisted ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
                 " hidden_left_preserved=" + (hiddenLeft ? "true" : "false"), this);
-            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            if (!passed) yield break;
+            // The hidden Inspector body still has a visible, draggable tab.
+            // The right rail is narrow but must accept real pointer drops.
+            var inspectorTab = _workspaceRoot.Q<Button>("vcr-tab-inspector");
+            var rightRail = _rightDock != null && _rightVisible &&
+                _rightDock.Q<Label>("vcr-empty-right-dock-drop-target") != null &&
+                _rightDock.worldBound.width >= 22f &&
+                _rightDock.worldBound.width <= 32f;
+            if (!WorkspaceButtonReceivesPointer(inspectorTab) || !rightRail)
+            {
+                Debug.Log("VCR U1 GUI probe: feature_search_inspector_drag_target_rejected=true", this);
+                yield break;
+            }
+            var source = inspectorTab.worldBound.center;
+            var destination = _rightDock.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: feature_search_inspector_drag_target_ready=true " +
+                "sx=" + source.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " sy=" + source.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " dx=" + destination.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " dy=" + destination.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " from=bottom to=right", this);
+            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
             var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
             if (!string.IsNullOrEmpty(directory))
                 StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                     System.IO.Path.Combine(directory, "unity-feature-tracking-tab.png")));
+        }
+
+        private System.Collections.IEnumerator ReportFeatureSearchInspectorReturnedToRight()
+        {
+            yield return new WaitForEndOfFrame();
+            var inspector = _workspaceRoot.Q<VisualElement>("vcr-panel-inspector");
+            var inspectorVisible = inspector != null && inspector.parent == _rightDock &&
+                inspector.resolvedStyle.display != DisplayStyle.None &&
+                inspector.worldBound.width > 120f && inspector.worldBound.height > 60f;
+            var restoredWidth = _rightDock != null &&
+                _rightDock.worldBound.width >= 160f &&
+                _rightDock.Q<Label>("vcr-empty-right-dock-drop-target") == null;
+            var persistedDock = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.Dock.inspector.v1", "") == "right";
+            var selectedTab = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.right.v1", "") == "vcr-panel-inspector";
+            var trackingSelected = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.bottom.v1", "") == "vcr-panel-tracking";
+            var leftStillHidden = !_leftVisible && _leftDock != null &&
+                _leftDock.resolvedStyle.display == DisplayStyle.None &&
+                PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var passed = inspectorVisible && restoredWidth && persistedDock &&
+                selectedTab && trackingSelected && leftStillHidden &&
+                _featureTemporaryTabs.Count == 0;
+            Debug.Log("VCR U1 GUI probe: feature_search_inspector_drag_restored=" +
+                (passed ? "true" : "false") +
+                " inspector_visible=" + (inspectorVisible ? "true" : "false") +
+                " right_width_restored=" + (restoredWidth ? "true" : "false") +
+                " persisted_dock=" + (persistedDock ? "true" : "false") +
+                " selected_tab=" + (selectedTab ? "true" : "false") +
+                " tracking_selected=" + (trackingSelected ? "true" : "false") +
+                " temporary_tabs=" + _featureTemporaryTabs.Count +
+                " hidden_left_preserved=" + (leftStillHidden ? "true" : "false"), this);
+            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+            if (!string.IsNullOrEmpty(directory))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    System.IO.Path.Combine(directory, "unity-feature-inspector-drag-restored.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()

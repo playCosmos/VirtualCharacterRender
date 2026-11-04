@@ -129,6 +129,33 @@ def parse_feature_search_workspace_target(log_text, start_offset=0):
     return None
 
 
+def parse_feature_search_inspector_drag_target(log_text, start_offset=0):
+    """Use freshly measured source tab and empty-right-rail drop coordinates."""
+    marker = "VCR U1 GUI probe: feature_search_inspector_drag_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            sx, sy = float(values["sx"]), float(values["sy"])
+            dx, dy = float(values["dx"]), float(values["dy"])
+            width, height = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (values.get("from") != "bottom" or values.get("to") != "right" or
+                not all(math.isfinite(v) for v in (
+                    sx, sy, dx, dy, width, height)) or
+                not 256 <= width <= 2560 or not 400 <= height <= 1440 or
+                not 8 <= sx <= width - 8 or not 8 <= sy <= height - 8 or
+                not 8 <= dx <= width - 8 or not 8 <= dy <= height - 8 or
+                abs(dx - sx) < 100):
+            return None
+        return {"source": [sx, sy], "destination": [dx, dy],
+                "rootWidth": width, "rootHeight": height}
+    return None
+
+
 def parse_feature_search_tracking_tab_target(log_text, start_offset=0):
     """Accept only a new on-screen Tracking tab on the moved Bottom dock."""
     marker = "VCR U1 GUI probe: feature_search_tracking_tab_target_ready=true "
@@ -824,6 +851,95 @@ def probe_free_resize(hwnd, before):
     finally:
         result["restored"] = bool(user32.SetWindowPos(
             hwnd, None, 0, 0, width, height, flags))
+
+
+def probe_real_workspace_mouse_drag(hwnd, target, player_log, output,
+                                    expected_marker):
+    """Drag via Windows desktop mouse messages, not UI Toolkit test events.
+
+    This verifies the tab's PointerDown/Move/Up path through a real Unity HWND,
+    with hit-tested endpoints. It is automated and not human acceptance.
+    """
+    user32 = ctypes.windll.user32
+    user32.ClientToScreen.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user32.ClientToScreen.restype = wintypes.BOOL
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.mouse_event.argtypes = [
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, ctypes.c_size_t]
+    user32.mouse_event.restype = None
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
+    frame = inspect_native_window_frame(hwnd)
+    width, height = frame["clientSize"]
+    sx = width / target["rootWidth"]
+    sy = height / target["rootHeight"]
+    if not (0.5 <= sx <= 3 and 0.5 <= sy <= 3):
+        raise RuntimeError("Drag coordinates cannot map Unity to Windows")
+    pts = []
+    for coords in (target["source"], target["destination"]):
+        point = wintypes.POINT(round(coords[0] * sx), round(coords[1] * sy))
+        if not (8 <= point.x < width - 8 and 8 <= point.y < height - 8):
+            raise RuntimeError("Drag endpoint lies outside Player client area")
+        if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
+            raise OSError("ClientToScreen failed for drag endpoint")
+        pts.append(point)
+    start, end = pts
+    original = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(original)):
+        raise OSError("GetCursorPos failed for drag")
+    log_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    left_down = False
+    try:
+        user32.SetForegroundWindow(hwnd)
+        if not user32.SetCursorPos(start.x, start.y):
+            raise OSError("Cannot point to draggable Inspector tab")
+        time.sleep(0.15)
+        for point in (start, end):
+            hit = user32.WindowFromPoint(point)
+            if not hit or user32.GetAncestor(hit, 2) != hwnd:
+                raise RuntimeError("Drag source or empty Dock target is covered")
+        user32.mouse_event(0x0002, 0, 0, 0, 0)  # left button down
+        left_down = True
+        time.sleep(0.18)
+        for step in range(1, 17):
+            f = step / 16
+            px = round(start.x + (end.x - start.x) * f)
+            py = round(start.y + (end.y - start.y) * f)
+            if not user32.SetCursorPos(px, py):
+                raise OSError("Cannot drag Inspector tab to right Dock rail")
+            time.sleep(0.06)
+        time.sleep(0.18)
+        user32.mouse_event(0x0004, 0, 0, 0, 0)  # left button up
+        left_down = False
+        deadline = time.monotonic() + 6
+        while time.monotonic() < deadline:
+            log = player_log.read_text(encoding="utf-8", errors="replace")
+            if any(line.strip() == expected_marker
+                   for line in log[log_offset:].splitlines()):
+                frame = wait_for_workspace_screenshot(
+                    output / "unity-feature-inspector-drag-restored.png",
+                    {"width": target["rootWidth"],
+                     "height": target["rootHeight"]},
+                    "Inspector dragged into empty right Dock")
+                return {"passed": True, "sourceScreenPoint": [
+                            start.x, start.y],
+                        "destinationScreenPoint": [end.x, end.y],
+                        "unityFrame": frame, "physicalHumanAcceptance": False}
+            time.sleep(0.12)
+        raise RuntimeError("Real mouse drag did not restore Inspector to right Dock")
+    finally:
+        if left_down:
+            user32.mouse_event(0x0004, 0, 0, 0, 0)
+        user32.SetCursorPos(original.x, original.y)
 
 
 def probe_real_workspace_mouse_click(hwnd, target, player_log, output,
@@ -1661,10 +1777,30 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         "VCR U1 GUI probe: feature_search_tracking_tab_clicked=true "
         "visible=true inspector_hidden=true persisted=true "
         "temporary_tabs=0 hidden_left_preserved=true")
+    tracking_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
     tracking_click = probe_real_workspace_mouse_click(
         player_hwnd, tracking_target, player_log, output,
         screenshot_name="unity-feature-tracking-tab.png",
         expected_marker=expected_tab)
+    drag_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        drag_target = parse_feature_search_inspector_drag_target(
+            log, tracking_offset)
+        if drag_target is not None:
+            break
+        time.sleep(0.12)
+    if drag_target is None:
+        raise RuntimeError("Inspector tab or right Dock rail cannot accept drag")
+    expected_drag = (
+        "VCR U1 GUI probe: feature_search_inspector_drag_restored=true "
+        "inspector_visible=true right_width_restored=true persisted_dock=true "
+        "selected_tab=true tracking_selected=true temporary_tabs=0 "
+        "hidden_left_preserved=true")
+    drag_restored = probe_real_workspace_mouse_drag(
+        player_hwnd, drag_target, player_log, output, expected_drag)
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1703,6 +1839,11 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "trackingTabClicked": True,
                 "trackingTabPersisted": True,
                 "trackingTabVisible": True,
+                "dragBackToEmptyRight": drag_restored["passed"],
+                "rightDockWidthRestored": True,
+                "rightDockTabSelected": True,
+                "leftHiddenAfterDrag": True,
+                "dragBackFrame": drag_restored["unityFrame"],
                 "trackingTabFrame": tracking_click["unityFrame"],
                 "movedFrame": moved["unityFrame"]},
             "physicalHumanAcceptance": False}
