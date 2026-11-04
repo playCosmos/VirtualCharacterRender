@@ -507,6 +507,56 @@ namespace VCR.Runtime.UI
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
                 " mode=" + (live ? "live" : "advanced") +
                 " persisted_mode=" + (persistedLive ? "live" : "advanced"), this);
+            if (!visualHidden || !persistedHidden || !clearedTabs ||
+                !live || !persistedLive) yield break;
+            var move = _workspaceRoot.Q<Button>("vcr-dock-move-inspector");
+            if (!WorkspaceButtonReceivesPointer(move))
+            {
+                Debug.Log("VCR U1 GUI probe: feature_search_inspector_move_target_rejected=true", this);
+                yield break;
+            }
+            var center = move.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: feature_search_inspector_move_target_ready=true " +
+                "x=" + center.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + center.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " mode=live", this);
+        }
+
+        private System.Collections.IEnumerator ReportFeatureSearchInspectorMoved()
+        {
+            yield return new WaitForEndOfFrame();
+            var panel = _workspaceRoot.Q<VisualElement>("vcr-panel-inspector");
+            var panelVisible = panel != null && panel.parent == _bottomDock &&
+                panel.resolvedStyle.display != DisplayStyle.None &&
+                panel.worldBound.width > 120f && panel.worldBound.height > 32f;
+            var persistedDock = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.Dock.inspector.v1", "") == "bottom";
+            var selectedTab = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.bottom.v1", "") == "vcr-panel-inspector";
+            var leftStillHidden = !_leftVisible && _leftDock != null &&
+                _leftDock.resolvedStyle.display == DisplayStyle.None &&
+                PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var passed = panelVisible && persistedDock && selectedTab &&
+                _featureTemporaryTabs.Count == 0 && leftStillHidden;
+            Debug.Log("VCR U1 GUI probe: feature_search_inspector_moved=" +
+                (passed ? "true" : "false") +
+                " destination=bottom panel_visible=" + (panelVisible ? "true" : "false") +
+                " persisted_dock=" + (persistedDock ? "true" : "false") +
+                " selected_tab=" + (selectedTab ? "true" : "false") +
+                " temporary_tabs=" + _featureTemporaryTabs.Count +
+                " hidden_left_preserved=" + (leftStillHidden ? "true" : "false"), this);
+            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+            if (!string.IsNullOrEmpty(directory))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    System.IO.Path.Combine(directory, "unity-feature-inspector-moved.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()

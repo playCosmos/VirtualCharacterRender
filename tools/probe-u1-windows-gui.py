@@ -129,6 +129,29 @@ def parse_feature_search_workspace_target(log_text, start_offset=0):
     return None
 
 
+def parse_feature_search_inspector_move_target(log_text, start_offset=0):
+    """Read a fresh visible Inspector Move button after manual Live restoration."""
+    marker = "VCR U1 GUI probe: feature_search_inspector_move_target_ready=true "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (values.get("mode") != "live" or
+                not all(math.isfinite(v) for v in (x, y, w, h)) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w,
+                "rootHeight": h, "initialMode": "live"}
+    return None
+
+
 def parse_feature_search_hide_left_target(log_text, start_offset=0):
     """Accept only fresh, on-screen coordinates of the Advanced Hide left button."""
     marker = "VCR U1 GUI probe: feature_search_hide_left_target_ready=true "
@@ -1575,6 +1598,28 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         raise RuntimeError(
             "Manual Live click failed to restore saved hidden Dock and "
             "discard the search-only tab selection")
+
+    # The compact Inspector Move control is an actual clickable button.
+    # Exercise it after search and require its persisted destination, active
+    # tab and the previously hidden left dock to remain consistent.
+    move_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        move_target = parse_feature_search_inspector_move_target(log, manual_offset)
+        if move_target is not None:
+            break
+        time.sleep(0.12)
+    if move_target is None:
+        raise RuntimeError("Inspector Move button is not clickable after search reset")
+    expected_move = (
+        "VCR U1 GUI probe: feature_search_inspector_moved=true "
+        "destination=bottom panel_visible=true persisted_dock=true "
+        "selected_tab=true temporary_tabs=0 hidden_left_preserved=true")
+    moved = probe_real_workspace_mouse_click(
+        player_hwnd, move_target, player_log, output,
+        screenshot_name="unity-feature-inspector-moved.png",
+        expected_marker=expected_move)
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1602,6 +1647,13 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "manualLiveFrame": manual_live["unityFrame"],
                 "hiddenFrame": hidden_click["unityFrame"],
                 "revealedFrame": scene_screenshot},
+            "manualPanelMove": {
+                "realMoveClick": True,
+                "destinationDockPersisted": True,
+                "destinationTabSelected": True,
+                "searchOverrideCleared": True,
+                "hiddenLeftPreserved": True,
+                "movedFrame": moved["unityFrame"]},
             "physicalHumanAcceptance": False}
 
 

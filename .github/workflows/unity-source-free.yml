@@ -386,8 +386,14 @@ jobs:
               $search.hiddenDockSearch.leftDockRevealedInSession -ne $true -or
               $search.hiddenDockSearch.persistedHidden -ne $true -or
               $search.hiddenDockSearch.fullLayoutSignaturePreserved -ne $true -or
-              $search.hiddenDockSearch.manualLiveRestoresSavedHidden -ne $true) {
-            throw 'P1 Windows feature search subcase missing/failed: Live-to-Advanced or hidden-left-dock restoration.'
+              $search.hiddenDockSearch.manualLiveRestoresSavedHidden -ne $true -or
+              $null -eq $search.manualPanelMove -or
+              $search.manualPanelMove.realMoveClick -ne $true -or
+              $search.manualPanelMove.destinationDockPersisted -ne $true -or
+              $search.manualPanelMove.destinationTabSelected -ne $true -or
+              $search.manualPanelMove.searchOverrideCleared -ne $true -or
+              $search.manualPanelMove.hiddenLeftPreserved -ne $true) {
+            throw 'P1 Windows feature search subcase missing/failed: Live-to-Advanced, hidden-left-dock restoration or Inspector panel Move.'
           }
           Write-Host 'P1 Windows feature search subcases PASS: Live-to-Advanced preference preservation and hidden-left-dock restoration.'
           # The 960x520 hosted Player must expose quantitative, usable

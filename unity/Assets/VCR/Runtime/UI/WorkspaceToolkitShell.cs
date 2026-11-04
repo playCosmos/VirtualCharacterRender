@@ -2998,6 +2998,9 @@ namespace VCR.Runtime.UI
             PlayerPrefs.SetInt("VCR.UI.Workspace.Order." + id + ".v1", lastOrder + 1);
             PlayerPrefs.Save();
             Build();
+            if (_guiProbeRequested && id == WorkspacePanelCatalog.Inspector &&
+                destination == "bottom")
+                StartCoroutine(ReportFeatureSearchInspectorMoved());
         }
 
         private static VisualElement PanelAt(Vector2 position, VisualElement dock, VisualElement dragged)
