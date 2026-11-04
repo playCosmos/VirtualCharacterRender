@@ -369,6 +369,25 @@ jobs:
                    "lifecycle=$($probe.nativeSettingsLifecyclePassed), " +
                    "details=$($probe.featureSearchKeyboardError) $($probe.nativeSettingsOpenError) $($probe.error)")
           }
+          # Keep the real keyboard/search subcases mandatory. The aggregate
+          # probe flag alone would not detect a future edit that silently
+          # skips Live-to-Advanced routing or the hidden-left-dock regression.
+          $search = $probe.featureSearchKeyboard
+          if ($probe.featureSearchKeyboardPassed -ne $true -or
+              $null -eq $search -or $search.passed -ne $true -or
+              $null -eq $search.liveToAdvancedSearch -or
+              $search.liveToAdvancedSearch.liveClickObserved -ne $true -or
+              $search.liveToAdvancedSearch.modePersistedLive -ne $true -or
+              $search.liveToAdvancedSearch.fullLayoutSignaturePreserved -ne $true -or
+              $search.liveToAdvancedSearch.advancedPanelRevealed -ne $true -or
+              $null -eq $search.hiddenDockSearch -or
+              $search.hiddenDockSearch.realHideLeftClick -ne $true -or
+              $search.hiddenDockSearch.leftDockRevealedInSession -ne $true -or
+              $search.hiddenDockSearch.persistedHidden -ne $true -or
+              $search.hiddenDockSearch.fullLayoutSignaturePreserved -ne $true) {
+            throw 'P1 Windows feature search subcase missing/failed: Live-to-Advanced or hidden-left-dock restoration.'
+          }
+          Write-Host 'P1 Windows feature search subcases PASS: Live-to-Advanced preference preservation and hidden-left-dock restoration.'
           # The 960x520 hosted Player must expose quantitative, usable
           # measured compact dock geometry; tree attachment alone can hide
           # an entirely collapsed Tracking/Actions/Events scroll viewport.
