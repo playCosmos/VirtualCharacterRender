@@ -2003,7 +2003,7 @@ namespace VCR.Runtime.UI
             // for three parallel bottom panes. Tabs are presentation-only;
             // never overwrite the operator's persisted tab/stack preference.
             var automaticTabMode = compactHeight || narrowWidth;
-            var effectiveTabMode = _tabMode || automaticTabMode;
+            var effectiveTabMode = UsesDockTabs(_tabMode, compactHeight, narrowWidth);
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.paddingLeft = 12;
@@ -2773,6 +2773,7 @@ namespace VCR.Runtime.UI
                                 var oldIndex = dock.IndexOf(panel);
                                 var otherIndex = dock.IndexOf(other);
                                 if (oldIndex == otherIndex) break;
+                                DiscardTransientFeatureSearchNavigation();
                                 dock.Remove(panel);
                                 dock.Insert(dock.IndexOf(other), panel);
                                 SaveDockOrder(dock);
@@ -2906,6 +2907,7 @@ namespace VCR.Runtime.UI
                     var sibling = PanelAt(position, target, panel);
                     if (sibling != null)
                     {
+                        DiscardTransientFeatureSearchNavigation();
                         target.Remove(panel);
                         target.Insert(target.IndexOf(sibling), panel);
                         SaveDockOrder(target);
@@ -2965,6 +2967,9 @@ namespace VCR.Runtime.UI
         private void MovePanelToDock(VisualElement panel, string id, string destination)
         {
             if (destination != "left" && destination != "right" && destination != "bottom") return;
+            // An explicit move must show its destination tab, not a stale
+            // search result that happened to select a different tab there.
+            DiscardTransientFeatureSearchNavigation();
             var previous = panel.parent;
             PlayerPrefs.SetString("VCR.UI.Workspace.Dock." + id + ".v1", destination);
             PlayerPrefs.SetString("VCR.UI.Workspace.ActiveTab." + destination + ".v1", panel.name);
@@ -3027,6 +3032,11 @@ namespace VCR.Runtime.UI
             return null;
         }
 
+        private static bool UsesDockTabs(bool selectedTabMode, bool compactHeight, bool narrowWidth)
+        {
+            return selectedTabMode || compactHeight || narrowWidth;
+        }
+
         private void MovePanelOrder(VisualElement panel, string id, int direction)
         {
             var parent = panel.parent;
@@ -3038,13 +3048,19 @@ namespace VCR.Runtime.UI
             if (index < 0) return;
             var next = Mathf.Clamp(index + direction, 0, panels.Count - 1);
             if (index == next) return;
+            var hadSearchOverrides = _featureTemporaryTabs.Count != 0;
+            DiscardTransientFeatureSearchNavigation();
             var neighbor = panels[next];
             parent.Remove(panel);
             var insertAt = parent.IndexOf(neighbor);
             if (direction > 0) insertAt++;
             parent.Insert(Mathf.Clamp(insertAt, 0, parent.childCount), panel);
             SaveDockOrder(parent);
-            if (_tabMode) Build();
+            // In compact/narrow windows dock tabs are automatic even when
+            // _tabMode is false. Rebuild their tab strip in the new order.
+            // Also repaint after dismissing any search-revealed hidden dock.
+            if (UsesDockTabs(_tabMode, _usingCompactHeight, _usingNarrowWidth) ||
+                hadSearchOverrides) Build();
         }
 
         private static float ReadSize(string key, float fallback, float min, float max)

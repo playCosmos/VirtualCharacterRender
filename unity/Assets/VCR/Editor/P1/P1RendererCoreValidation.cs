@@ -954,6 +954,19 @@ namespace VCR.Editor.P1
                 inspectorProbeObject.transform.SetParent(root.transform, false);
                 var inspectorProbe = inspectorProbeObject.AddComponent<WorkspaceToolkitShell>();
                 SetPrivateField(inspectorProbe, "sceneRuntime", scene);
+                var usesDockTabs = typeof(WorkspaceToolkitShell).GetMethod(
+                    "UsesDockTabs", BindingFlags.Static | BindingFlags.NonPublic);
+                Expect(usesDockTabs != null,
+                    "U1 must define the same dock-tab presentation rule for Build and reorder",
+                    failures);
+                if (usesDockTabs != null)
+                    Expect(
+                        !(bool)usesDockTabs.Invoke(null, new object[] { false, false, false }) &&
+                        (bool)usesDockTabs.Invoke(null, new object[] { true, false, false }) &&
+                        (bool)usesDockTabs.Invoke(null, new object[] { false, true, false }) &&
+                        (bool)usesDockTabs.Invoke(null, new object[] { false, false, true }),
+                        "U1 panel reorder must refresh auto-tab strips at compact height/narrow width",
+                        failures);
                 // Search-only panel/visibility overrides must never supersede
                 // the saved layout after an explicit workspace command.
                 var tempTabsField = typeof(WorkspaceToolkitShell).GetField(
