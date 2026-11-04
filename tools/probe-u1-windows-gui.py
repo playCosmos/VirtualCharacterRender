@@ -129,6 +129,39 @@ def parse_feature_search_workspace_target(log_text, start_offset=0):
     return None
 
 
+def parse_layout_snapshot_target(log_text, stage, start_offset=0):
+    """Read only a fresh, hit-tested toolbar Save/Hide/Restore target."""
+    marker = "VCR U1 GUI probe: layout_snapshot_target_ready=true stage=" + stage + " "
+    for line in reversed(log_text[start_offset:].splitlines()):
+        if not line.startswith(marker):
+            continue
+        values = dict(token.split("=", 1) for token in line.split()
+                      if "=" in token)
+        try:
+            x, y = float(values["x"]), float(values["y"])
+            w, h = float(values["root_w"]), float(values["root_h"])
+        except (KeyError, ValueError):
+            return None
+        if (not all(math.isfinite(v) for v in (x, y, w, h)) or
+                not 256 <= w <= 2560 or not 400 <= h <= 1440 or
+                not 8 <= x <= w - 8 or not 8 <= y <= h - 8):
+            return None
+        return {"x": x, "y": y, "rootWidth": w,
+                "rootHeight": h, "initialMode": "live"}
+    return None
+
+
+def wait_for_layout_snapshot_target(player_log, stage, offset):
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        target = parse_layout_snapshot_target(log, stage, offset)
+        if target is not None:
+            return target
+        time.sleep(0.12)
+    raise RuntimeError("Layout snapshot " + stage + " control not hit-testable")
+
+
 def parse_feature_search_inspector_drag_target(log_text, start_offset=0):
     """Use freshly measured source tab and empty-right-rail drop coordinates."""
     marker = "VCR U1 GUI probe: feature_search_inspector_drag_target_ready=true "
@@ -1806,8 +1839,37 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         "inspector_visible=true right_width_restored=true persisted_dock=true "
         "selected_tab=true tracking_selected=true temporary_tabs=0 "
         "hidden_left_preserved=true")
+    snapshot_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
     drag_restored = probe_real_workspace_mouse_drag(
         player_hwnd, drag_target, player_log, output, expected_drag)
+    save_target = wait_for_layout_snapshot_target(
+        player_log, "save", snapshot_offset)
+    save_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
+    saved = probe_real_workspace_mouse_click(
+        player_hwnd, save_target, player_log, output,
+        screenshot_name="unity-feature-snapshot-saved.png",
+        expected_marker="VCR U1 GUI probe: layout_snapshot_saved=true")
+    hide_target = wait_for_layout_snapshot_target(player_log, "hide", save_offset)
+    hide_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
+    hidden_right = probe_real_workspace_mouse_click(
+        player_hwnd, hide_target, player_log, output,
+        screenshot_name="unity-feature-snapshot-right-hidden.png",
+        expected_marker=("VCR U1 GUI probe: layout_snapshot_right_hidden=true "
+                         "persisted_hidden=true"))
+    restore_target = wait_for_layout_snapshot_target(
+        player_log, "restore", hide_offset)
+    restore_expected = (
+        "VCR U1 GUI probe: layout_snapshot_restored=true "
+        "inspector_visible=true full_right=true dock_persisted=true "
+        "right_tab_persisted=true tracking_tab_persisted=true "
+        "left_hidden=true temporary_tabs=0")
+    restored = probe_real_workspace_mouse_click(
+        player_hwnd, restore_target, player_log, output,
+        screenshot_name="unity-feature-snapshot-restored.png",
+        expected_marker=restore_expected)
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1850,6 +1912,13 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "rightDockWidthRestored": True,
                 "rightDockTabSelected": True,
                 "leftHiddenAfterDrag": True,
+                "snapshotSaveClicked": saved["passed"],
+                "snapshotHideRightClicked": hidden_right["passed"],
+                "snapshotRestoreClicked": restored["passed"],
+                "snapshotRightDockRestored": True,
+                "snapshotBottomTabPreserved": True,
+                "snapshotLeftHiddenPreserved": True,
+                "snapshotRestoredFrame": restored["unityFrame"],
                 "dragBackFrame": drag_restored["unityFrame"],
                 "trackingTabFrame": tracking_click["unityFrame"],
                 "movedFrame": moved["unityFrame"]},

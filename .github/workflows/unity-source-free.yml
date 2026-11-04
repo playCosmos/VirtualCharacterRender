@@ -401,7 +401,13 @@ jobs:
               $search.manualPanelMove.dragBackToEmptyRight -ne $true -or
               $search.manualPanelMove.rightDockWidthRestored -ne $true -or
               $search.manualPanelMove.rightDockTabSelected -ne $true -or
-              $search.manualPanelMove.leftHiddenAfterDrag -ne $true) {
+              $search.manualPanelMove.leftHiddenAfterDrag -ne $true -or
+              $search.manualPanelMove.snapshotSaveClicked -ne $true -or
+              $search.manualPanelMove.snapshotHideRightClicked -ne $true -or
+              $search.manualPanelMove.snapshotRestoreClicked -ne $true -or
+              $search.manualPanelMove.snapshotRightDockRestored -ne $true -or
+              $search.manualPanelMove.snapshotBottomTabPreserved -ne $true -or
+              $search.manualPanelMove.snapshotLeftHiddenPreserved -ne $true) {
             throw 'P1 Windows feature search subcase missing/failed: search, Inspector move, Tracking tab or real drag to empty Right dock.'
           }
           Write-Host 'P1 Windows feature search subcases PASS: Live-to-Advanced preference preservation and hidden-left-dock restoration.'

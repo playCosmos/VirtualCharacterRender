@@ -688,11 +688,76 @@ namespace VCR.Runtime.UI
                 " tracking_selected=" + (trackingSelected ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
                 " hidden_left_preserved=" + (leftStillHidden ? "true" : "false"), this);
-            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            if (!passed) yield break;
+            StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("save"));
+            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
             var directory = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
             if (!string.IsNullOrEmpty(directory))
                 StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                     System.IO.Path.Combine(directory, "unity-feature-inspector-drag-restored.png")));
+        }
+
+        private System.Collections.IEnumerator ReportWorkspaceLayoutSnapshotTarget(string stage)
+        {
+            yield return new WaitForEndOfFrame();
+            var name = stage == "save" ? "vcr-header-save-layout" :
+                stage == "hide" ? "vcr-header-toggle-right" :
+                "vcr-header-restore-layout";
+            var button = _workspaceRoot.Q<Button>(name);
+            if (!WorkspaceButtonReceivesPointer(button))
+            {
+                Debug.Log("VCR U1 GUI probe: layout_snapshot_target_rejected=true stage=" +
+                    stage, this);
+                yield break;
+            }
+            var center = button.worldBound.center;
+            var root = _workspaceRoot.worldBound;
+            Debug.Log("VCR U1 GUI probe: layout_snapshot_target_ready=true stage=" +
+                stage + " x=" + center.x.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " y=" + center.y.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_w=" + root.width.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " root_h=" + root.height.ToString("0.##",
+                    System.Globalization.CultureInfo.InvariantCulture), this);
+        }
+
+        private System.Collections.IEnumerator ReportWorkspaceLayoutSnapshotRestored()
+        {
+            yield return new WaitForEndOfFrame();
+            var inspector = _workspaceRoot.Q<VisualElement>("vcr-panel-inspector");
+            var inspectorVisible = _rightVisible && inspector != null &&
+                inspector.parent == _rightDock &&
+                inspector.resolvedStyle.display != DisplayStyle.None &&
+                inspector.worldBound.width > 120f;
+            var fullRight = _rightDock != null && _rightDock.worldBound.width >= 160f &&
+                PlayerPrefs.GetInt(RightVisibleKey, 0) == 1;
+            var dockPersisted = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.Dock.inspector.v1", "") == "right";
+            var tabPersisted = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.right.v1", "") == "vcr-panel-inspector";
+            var trackingPersisted = PlayerPrefs.GetString(
+                "VCR.UI.Workspace.ActiveTab.bottom.v1", "") == "vcr-panel-tracking";
+            var leftHidden = !_leftVisible &&
+                PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var passed = inspectorVisible && fullRight && dockPersisted &&
+                tabPersisted && trackingPersisted && leftHidden &&
+                _featureTemporaryTabs.Count == 0;
+            Debug.Log("VCR U1 GUI probe: layout_snapshot_restored=" +
+                (passed ? "true" : "false") +
+                " inspector_visible=" + (inspectorVisible ? "true" : "false") +
+                " full_right=" + (fullRight ? "true" : "false") +
+                " dock_persisted=" + (dockPersisted ? "true" : "false") +
+                " right_tab_persisted=" + (tabPersisted ? "true" : "false") +
+                " tracking_tab_persisted=" + (trackingPersisted ? "true" : "false") +
+                " left_hidden=" + (leftHidden ? "true" : "false") +
+                " temporary_tabs=" + _featureTemporaryTabs.Count, this);
+            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+            if (!string.IsNullOrEmpty(dir))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    System.IO.Path.Combine(dir, "unity-feature-snapshot-restored.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()

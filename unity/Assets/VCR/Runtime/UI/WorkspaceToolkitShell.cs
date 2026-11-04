@@ -2171,13 +2171,42 @@ namespace VCR.Runtime.UI
                 PlayerPrefs.Save();
                 Build();
                 RestoreWorkspaceKeyboardFocusAfterRebuild();
+                if (_guiProbeRequested && !_rightVisible)
+                {
+                    Debug.Log("VCR U1 GUI probe: layout_snapshot_right_hidden=true " +
+                        "persisted_hidden=" +
+                        (PlayerPrefs.GetInt(RightVisibleKey, 1) == 0 ? "true" : "false"), this);
+                    StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("restore"));
+                    if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                    {
+                        var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+                        if (!string.IsNullOrEmpty(dir))
+                            StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                                System.IO.Path.Combine(dir, "unity-feature-snapshot-right-hidden.png")));
+                    }
+                }
             }) { text = _rightVisible ? "Hide right" : "Show right",
                 name = "vcr-header-toggle-right" });
             headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Save())
+                {
                     Debug.LogWarning("Workspace layout snapshot could not be saved.");
-            }) { text = "Save layout" });
+                    return;
+                }
+                if (_guiProbeRequested)
+                {
+                    Debug.Log("VCR U1 GUI probe: layout_snapshot_saved=true", this);
+                    StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("hide"));
+                    if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
+                    {
+                        var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+                        if (!string.IsNullOrEmpty(dir))
+                            StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                                System.IO.Path.Combine(dir, "unity-feature-snapshot-saved.png")));
+                    }
+                }
+            }) { text = "Save layout", name = "vcr-header-save-layout" });
             headerActions.Add(new Button(() =>
             {
                 if (!WorkspaceLayoutFile.Load()) return;
@@ -2194,7 +2223,9 @@ namespace VCR.Runtime.UI
                 _scenesHeight = ReadSize(ScenesHeightKey, 180f, 100f, 400f);
                 _inspectorHeight = ReadSize(RightInspectorHeightKey, 260f, 140f, 520f);
                 Build();
-            }) { text = "Restore layout" });
+                if (_guiProbeRequested)
+                    StartCoroutine(ReportWorkspaceLayoutSnapshotRestored());
+            }) { text = "Restore layout", name = "vcr-header-restore-layout" });
             headerActions.Add(new Button(ResetLayout) { text = "Reset layout" });
             _workspaceRoot.Add(header);
 
