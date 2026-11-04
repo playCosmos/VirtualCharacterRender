@@ -2051,6 +2051,10 @@ namespace VCR.Runtime.UI
                 RestoreWorkspaceKeyboardFocusAfterRebuild();
                 if (_guiProbeRequested)
                 {
+                    var verifyHiddenSearchReset = _featureSearchProbeHiddenReturnToLive &&
+                        !advancedWorkspace;
+                    if (verifyHiddenSearchReset)
+                        StartCoroutine(ReportFeatureSearchHiddenDockReset());
                     Debug.Log("VCR U1 GUI probe: workspace_focus_restored=" +
                         (_workspaceRoot != null && _workspaceRoot.panel != null &&
                          _workspaceRoot.panel.focusController.focusedElement == _workspaceRoot
@@ -2064,14 +2068,16 @@ namespace VCR.Runtime.UI
                             _guiProbeScreenshotPath);
                         if (!string.IsNullOrEmpty(directory))
                         {
-                            var screenshotName = _featureSearchProbeReturnToLive &&
-                                !advancedWorkspace
-                                ? "unity-feature-live.png" : "unity-workspace-clicked.png";
+                            var screenshotName = verifyHiddenSearchReset
+                                ? "unity-feature-hidden-return-live.png"
+                                : _featureSearchProbeReturnToLive && !advancedWorkspace
+                                    ? "unity-feature-live.png" : "unity-workspace-clicked.png";
                             _featureSearchProbeReturnToLive = false;
                             StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                                 System.IO.Path.Combine(directory, screenshotName)));
                         }
                     }
+                    _featureSearchProbeHiddenReturnToLive = false;
                 }
             }) { text = automaticTabMode
                 ? (advancedWorkspace ? "Live" : "Advanced")

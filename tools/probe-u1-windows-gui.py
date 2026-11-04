@@ -1544,6 +1544,37 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         output / "unity-feature-scenes-revealed.png",
         {"width": frame["clientSize"][0], "height": frame["clientSize"][1]},
         "Scenes revealed from hidden left dock")
+    # Real manual Live click must supersede temporary search selection and
+    # restore the saved hidden-left preference as visible UI state.
+    manual_target = None
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        manual_target = parse_feature_search_workspace_target(log, query_offset)
+        if manual_target is not None:
+            break
+        time.sleep(0.12)
+    if manual_target is None:
+        raise RuntimeError("No visible Live toggle after hidden Scenes search")
+    manual_offset = len(player_log.read_text(encoding="utf-8", errors="replace"))
+    manual_live = probe_real_workspace_mouse_click(
+        player_hwnd, manual_target, player_log, output,
+        screenshot_name="unity-feature-hidden-return-live.png")
+    hidden_reset_marker = (
+        "VCR U1 GUI probe: feature_search_hidden_reset=true "
+        "visual_hidden=true persisted_hidden=true temporary_tabs=0 "
+        "mode=live persisted_mode=live")
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() == hidden_reset_marker
+               for line in log[manual_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Manual Live click failed to restore saved hidden Dock and "
+            "discard the search-only tab selection")
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1567,6 +1598,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "persistedHidden": True,
                 "fullLayoutSignaturePreserved": True,
                 "leftDockRevealedInSession": True,
+                "manualLiveRestoresSavedHidden": True,
+                "manualLiveFrame": manual_live["unityFrame"],
                 "hiddenFrame": hidden_click["unityFrame"],
                 "revealedFrame": scene_screenshot},
             "physicalHumanAcceptance": False}
@@ -2208,7 +2241,8 @@ def run_probe(args):
                   output / "unity-feature-live.png",
                   output / "unity-feature-materials-from-live.png",
                   output / "unity-feature-left-hidden.png",
-                  output / "unity-feature-scenes-revealed.png"):
+                  output / "unity-feature-scenes-revealed.png",
+                  output / "unity-feature-hidden-return-live.png"):
         stale.unlink(missing_ok=True)
     report = {
         "suite": "u1-windows-visible-window-probe-v7",

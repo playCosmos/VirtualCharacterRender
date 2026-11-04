@@ -26,6 +26,7 @@ namespace VCR.Runtime.UI
         // feature target. A dock rebuild invalidates this reference.
         private VisualElement _featureSearchPreviousFocus;
         private bool _featureSearchProbeReturnToLive;
+        private bool _featureSearchProbeHiddenReturnToLive;
 
         private void HandleWorkspaceFeatureShortcut(KeyDownEvent evt)
         {
@@ -426,6 +427,7 @@ namespace VCR.Runtime.UI
                             " visual_visible=" + (visible ? "true" : "false") +
                             " persisted_hidden=" + (persistedHidden ? "true" : "false"),
                             this);
+                        StartCoroutine(ReportFeatureSearchReturnToLiveTarget(true));
                     }
                     if (!string.IsNullOrEmpty(_guiProbeScreenshotPath))
                     {
@@ -459,7 +461,8 @@ namespace VCR.Runtime.UI
                 }).ExecuteLater(1600);
             }).ExecuteLater(90);
         }
-        private System.Collections.IEnumerator ReportFeatureSearchReturnToLiveTarget()
+        private System.Collections.IEnumerator ReportFeatureSearchReturnToLiveTarget(
+            bool afterHiddenDock = false)
         {
             yield return new WaitForEndOfFrame();
             if (_workspaceRoot == null || _workspaceRoot.panel == null ||
@@ -472,7 +475,10 @@ namespace VCR.Runtime.UI
             }
             var center = toggle.worldBound.center;
             var root = _workspaceRoot.worldBound;
-            _featureSearchProbeReturnToLive = true;
+            if (afterHiddenDock)
+                _featureSearchProbeHiddenReturnToLive = true;
+            else
+                _featureSearchProbeReturnToLive = true;
             Debug.Log("VCR U1 GUI probe: feature_search_workspace_target_ready=true " +
                 "x=" + center.x.ToString("0.##",
                     System.Globalization.CultureInfo.InvariantCulture) +
@@ -484,6 +490,25 @@ namespace VCR.Runtime.UI
                     System.Globalization.CultureInfo.InvariantCulture) +
                 " current_mode=advanced", this);
         }
+        private System.Collections.IEnumerator ReportFeatureSearchHiddenDockReset()
+        {
+            yield return new WaitForEndOfFrame();
+            var visualHidden = _leftDock != null && !_leftVisible &&
+                _leftDock.resolvedStyle.display == DisplayStyle.None;
+            var persistedHidden = PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var clearedTabs = _featureTemporaryTabs.Count == 0;
+            var live = !advancedWorkspace;
+            var persistedLive = PlayerPrefs.GetInt(WorkspaceModeKey, 1) == 0;
+            Debug.Log("VCR U1 GUI probe: feature_search_hidden_reset=" +
+                (visualHidden && persistedHidden && clearedTabs &&
+                 live && persistedLive ? "true" : "false") +
+                " visual_hidden=" + (visualHidden ? "true" : "false") +
+                " persisted_hidden=" + (persistedHidden ? "true" : "false") +
+                " temporary_tabs=" + _featureTemporaryTabs.Count +
+                " mode=" + (live ? "live" : "advanced") +
+                " persisted_mode=" + (persistedLive ? "live" : "advanced"), this);
+        }
+
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()
         {
             yield return new WaitForEndOfFrame();
