@@ -704,10 +704,20 @@ namespace VCR.Runtime.UI
                 stage == "hide" ? "vcr-header-toggle-right" :
                 "vcr-header-restore-layout";
             var button = _workspaceRoot.Q<Button>(name);
+            // The header actions deliberately overflow in a compact Player.
+            // An off-viewport button is not an OS mouse target until the real
+            // ScrollView brings it into view; never report a clipped center.
+            var actions = _workspaceRoot.Q<ScrollView>("vcr-header-actions");
+            if (button != null && actions != null &&
+                !WorkspaceButtonReceivesPointer(button))
+            {
+                actions.ScrollTo(button);
+                yield return new WaitForEndOfFrame();
+            }
             if (!WorkspaceButtonReceivesPointer(button))
             {
                 Debug.Log("VCR U1 GUI probe: layout_snapshot_target_rejected=true stage=" +
-                    stage, this);
+                    stage + " reason=not_clickable_after_scroll", this);
                 yield break;
             }
             var center = button.worldBound.center;
