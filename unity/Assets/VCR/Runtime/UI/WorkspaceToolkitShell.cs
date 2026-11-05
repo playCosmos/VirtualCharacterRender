@@ -161,8 +161,13 @@ namespace VCR.Runtime.UI
             var signature = CaptureLayoutSignature();
             if (signature == _lastPersistedLayoutSignature)
                 return;
-            if (WorkspaceLayoutFile.Save())
+            if (WorkspaceLayoutFile.SaveAutomatic())
+            {
                 _lastPersistedLayoutSignature = signature;
+                if (_guiProbeRequested && !_rightVisible &&
+                    PlayerPrefs.GetInt(RightVisibleKey, 1) == 0)
+                    Debug.Log("VCR U1 GUI probe: layout_snapshot_autosaved_hidden=true", this);
+            }
         }
 
         private void OnEnable()
@@ -222,7 +227,7 @@ namespace VCR.Runtime.UI
             _characterRestoreAttempted = false;
             _characterRestoreInProgress = false;
             // Existing PlayerPrefs layouts remain the migration fallback.
-            var restoredSnapshot = WorkspaceLayoutFile.Load();
+            var restoredSnapshot = WorkspaceLayoutFile.LoadForStartup();
             _document = GetComponent<UIDocument>();
             if (_document == null || _document.rootVisualElement == null)
                 return;
@@ -1078,12 +1083,12 @@ namespace VCR.Runtime.UI
 
         private void OnApplicationPause(bool paused)
         {
-            if (paused && _workspaceRoot != null) WorkspaceLayoutFile.Save();
+            if (paused && _workspaceRoot != null) WorkspaceLayoutFile.SaveAutomatic();
         }
 
         private void OnApplicationQuit()
         {
-            if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
+            if (_workspaceRoot != null) WorkspaceLayoutFile.SaveAutomatic();
         }
 
         private void OnDisable()
@@ -1115,7 +1120,7 @@ namespace VCR.Runtime.UI
             if (_nativeSettingsWasVisible)
                 UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
             _nativeSettingsWasVisible = false;
-            if (_workspaceRoot != null) WorkspaceLayoutFile.Save();
+            if (_workspaceRoot != null) WorkspaceLayoutFile.SaveAutomatic();
             if (_workspaceRoot != null)
                 _workspaceRoot.RemoveFromHierarchy();
             _workspaceRoot = null;

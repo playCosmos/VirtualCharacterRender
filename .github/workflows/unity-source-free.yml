@@ -404,6 +404,7 @@ jobs:
               $search.manualPanelMove.leftHiddenAfterDrag -ne $true -or
               $search.manualPanelMove.snapshotSaveClicked -ne $true -or
               $search.manualPanelMove.snapshotHideRightClicked -ne $true -or
+              $search.manualPanelMove.snapshotAutoSaveObserved -ne $true -or
               $search.manualPanelMove.snapshotRestoreClicked -ne $true -or
               $search.manualPanelMove.snapshotRightDockRestored -ne $true -or
               $search.manualPanelMove.snapshotBottomTabPreserved -ne $true -or

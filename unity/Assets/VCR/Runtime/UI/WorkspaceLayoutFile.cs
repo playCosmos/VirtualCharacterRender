@@ -8,7 +8,9 @@ namespace VCR.Runtime.UI
     internal static class WorkspaceLayoutFile
     {
         private const int Version = 1;
+        // A manual checkpoint must not be overwritten by periodic recovery.
         private const string FileName = "workspace-layout.v1.json";
+        private const string AutomaticFileName = "workspace-layout.autosave.v1.json";
 
         [Serializable]
         private sealed class Layout
@@ -33,8 +35,20 @@ namespace VCR.Runtime.UI
 
         private static readonly string[] Ids = WorkspacePanelCatalog.GetDefaultPanelIds(true);
         private static string PathName => Path.Combine(UnityEngine.Application.persistentDataPath, FileName);
+        private static string AutomaticPathName => Path.Combine(
+            UnityEngine.Application.persistentDataPath, AutomaticFileName);
 
+        // Explicit Save updates both the checkpoint and startup recovery.
+        // Only SaveAutomatic may run after subsequent unsaved layout changes.
         internal static bool Save()
+        {
+            if (!SaveToPath(PathName)) return false;
+            return SaveToPath(AutomaticPathName);
+        }
+
+        internal static bool SaveAutomatic() => SaveToPath(AutomaticPathName);
+
+        private static bool SaveToPath(string path)
         {
             try
             {
@@ -61,7 +75,6 @@ namespace VCR.Runtime.UI
                     layout.docks[i] = PlayerPrefs.GetString("VCR.UI.Workspace.Dock." + Ids[i] + ".v1", "");
                     layout.orders[i] = PlayerPrefs.GetInt("VCR.UI.Workspace.Order." + Ids[i] + ".v1", -1);
                 }
-                var path = PathName;
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 var temporary = path + ".tmp";
                 File.WriteAllText(temporary, JsonUtility.ToJson(layout, true));
@@ -95,9 +108,22 @@ namespace VCR.Runtime.UI
             }
         }
 
-        internal static bool Load()
+        // Startup prefers automatic recovery; existing manual v1 snapshot
+        // remains the fallback for upgrades or a damaged automatic file.
+        internal static bool LoadForStartup() => Load(true);
+
+        // Explicit Restore ignores auto-recovery and keeps the operator's
+        // deliberately saved checkpoint authoritative.
+        internal static bool Load() => Load(false);
+
+        private static bool Load(bool preferAutomatic)
         {
-            if (TryRead(PathName, out var layout) || TryRead(PathName + ".bak", out layout))
+            Layout layout;
+            if ((preferAutomatic &&
+                    (TryRead(AutomaticPathName, out layout) ||
+                     TryRead(AutomaticPathName + ".bak", out layout))) ||
+                TryRead(PathName, out layout) ||
+                TryRead(PathName + ".bak", out layout))
             {
                 PlayerPrefs.SetInt("VCR.UI.Workspace.Advanced.v1", layout.advanced ? 1 : 0);
                 PlayerPrefs.SetInt("VCR.UI.Workspace.TabMode.v1", layout.tabs ? 1 : 0);
@@ -134,12 +160,14 @@ namespace VCR.Runtime.UI
         {
             // Reset is a user-requested destructive operation. Remove both snapshots
             // so a later restore cannot resurrect the previous arrangement.
-            foreach (var path in new[] { PathName, PathName + ".bak", PathName + ".tmp" })
-            {
-                try { if (File.Exists(path)) File.Delete(path); }
-                catch (IOException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
-                catch (UnauthorizedAccessException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
-            }
+            foreach (var basePath in new[] { PathName, AutomaticPathName })
+                foreach (var suffix in new[] { "", ".bak", ".tmp" })
+                {
+                    var path = basePath + suffix;
+                    try { if (File.Exists(path)) File.Delete(path); }
+                    catch (IOException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
+                    catch (UnauthorizedAccessException ex) { Debug.LogWarning("Workspace layout reset cleanup failed: " + ex.Message); }
+                }
         }
 
         private static void SetSize(string name, float value, float min, float max)

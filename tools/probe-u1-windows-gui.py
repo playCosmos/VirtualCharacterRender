@@ -1859,6 +1859,20 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         screenshot_name="unity-feature-snapshot-right-hidden.png",
         expected_marker=("VCR U1 GUI probe: layout_snapshot_right_hidden=true "
                          "persisted_hidden=true"))
+    # Prove the hidden state was written by the periodic autosave first.
+    # Without separate checkpoint/recovery files, Restore will now revert
+    # to the hidden state and this roundtrip must fail.
+    auto_deadline = time.monotonic() + 8
+    while time.monotonic() < auto_deadline:
+        log = player_log.read_text(encoding="utf-8", errors="replace")
+        if any(line.strip() ==
+               "VCR U1 GUI probe: layout_snapshot_autosaved_hidden=true"
+               for line in log[hide_offset:].splitlines()):
+            break
+        time.sleep(0.12)
+    else:
+        raise RuntimeError(
+            "Layout hidden state was never persisted by automatic recovery")
     restore_target = wait_for_layout_snapshot_target(
         player_log, "restore", hide_offset)
     restore_expected = (
@@ -1914,6 +1928,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "leftHiddenAfterDrag": True,
                 "snapshotSaveClicked": saved["passed"],
                 "snapshotHideRightClicked": hidden_right["passed"],
+                "snapshotAutoSaveObserved": True,
                 "snapshotRestoreClicked": restored["passed"],
                 "snapshotRightDockRestored": True,
                 "snapshotBottomTabPreserved": True,
