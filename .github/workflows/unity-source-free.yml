@@ -45,9 +45,10 @@ jobs:
           test ! -e unity/Library
 
       # Unity runs three Windows-Mono editor/build operations on one Ubuntu
-      # runner. GitHub runner preinstalled Android/.NET/Haskell/PowerShell/CodeQL
-      # tools are not used by these Docker-contained Unity methods and can
-      # consume multiple GB that the final Windows Player build needs.
+      # runner. Remove large unrelated SDKs to leave room for Unity Docker.
+      # Do NOT delete the runner's /usr/share/dotnet: Unity/game-ci may invoke
+      # host-side dotnet tooling while initializing the Bee build backend.
+      # Removing it produced "No .NET SDKs were found" in Editor CI logs.
       - name: Reclaim unused Ubuntu SDK storage for Unity Docker
         if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
         shell: bash
@@ -55,7 +56,7 @@ jobs:
           set -euo pipefail
           echo 'Unity runner storage before reclaim:'
           df -h "$GITHUB_WORKSPACE"
-          for sdk in /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
+          for sdk in /usr/local/lib/android /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
             if [ -d "$sdk" ]; then
               echo "Removing unused preinstalled SDK: $sdk"
               sudo rm -rf -- "$sdk"
@@ -63,6 +64,12 @@ jobs:
           done
           echo 'Unity runner storage after reclaim:'
           df -h "$GITHUB_WORKSPACE"
+          # Fail early if an image update removes the host compilation SDK.
+          if ! command -v dotnet >/dev/null 2>&1 || [ -z "$(dotnet --list-sdks)" ]; then
+            echo "::error::Host .NET SDK is unavailable before Unity Editor compilation."
+            exit 1
+          fi
+          dotnet --list-sdks
 
       - name: Bootstrap SHA-verified MediaPipe and models
         run: bash tools/bootstrap-mediapipe.sh
