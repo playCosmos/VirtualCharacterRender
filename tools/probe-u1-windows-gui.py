@@ -1888,9 +1888,16 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         expected_marker=restore_expected)
     final_target = wait_for_layout_snapshot_target(
         player_log, "hide-final", restore_offset)
+    # The runtime intentionally uses the same screenshot filename for both
+    # Hide-right clicks. Archive the first capture and require a genuinely new
+    # PNG for the last click; never mistake an old frame for new evidence.
+    initial_hide_png = output / "unity-feature-snapshot-right-hidden.png"
+    archived_hide_png = output / "unity-feature-snapshot-right-hidden-initial.png"
+    archived_hide_png.unlink(missing_ok=True)
+    initial_hide_png.rename(archived_hide_png)
     final_hidden = probe_real_workspace_mouse_click(
         player_hwnd, final_target, player_log, output,
-        screenshot_name="unity-feature-exit-right-hidden.png",
+        screenshot_name="unity-feature-snapshot-right-hidden.png",
         expected_marker=("VCR U1 GUI probe: layout_snapshot_right_hidden=true "
                          "persisted_hidden=true"))
     return {"passed": True, "shortcut": "Ctrl+K",
