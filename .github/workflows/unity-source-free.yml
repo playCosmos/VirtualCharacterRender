@@ -361,7 +361,14 @@ jobs:
           # automated GUI assertion must pass. A green Actions run must not
           # conceal failed OS-keyboard navigation or a false gui-probe.passed.
           # Truly headless runners remain informational above (no HWND).
-          if ($probe.passed -ne $true) {
+          if ($probe.passed -ne $true -or $probe.layoutRestartPassed -ne $true -or
+              $null -eq $probe.layoutRestart -or
+              $probe.layoutRestart.autoSnapshotLoaded -ne $true -or
+              $probe.layoutRestart.hiddenRightRecovered -ne $true -or
+              $probe.layoutRestart.hiddenLeftRecovered -ne $true -or
+              $probe.layoutRestart.manualCheckpointRestored -ne $true -or
+              $probe.layoutRestart.managedQuitObserved -ne $true -or
+              $probe.layoutRestart.exitCode -ne 0) {
             throw ("P1 real Windows GUI regression FAILED: passed=$($probe.passed), " +
                    "search=$($probe.featureSearchKeyboardPassed), " +
                    "settings=$($probe.nativeSettingsOpenPassed), " +
@@ -406,6 +413,7 @@ jobs:
               $search.manualPanelMove.snapshotHideRightClicked -ne $true -or
               $search.manualPanelMove.snapshotAutoSaveObserved -ne $true -or
               $search.manualPanelMove.snapshotRestoreClicked -ne $true -or
+              $search.manualPanelMove.snapshotFinalRightHidden -ne $true -or
               $search.manualPanelMove.snapshotRightDockRestored -ne $true -or
               $search.manualPanelMove.snapshotBottomTabPreserved -ne $true -or
               $search.manualPanelMove.snapshotLeftHiddenPreserved -ne $true) {

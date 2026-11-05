@@ -34,6 +34,7 @@ namespace VCR.Runtime.UI
         // Opt-in, read-only evidence for CI's real visible Player. This never
         // creates a synthetic UI or changes runtime configuration.
         private bool _guiProbeRequested;
+        private bool _guiProbeRestartRequested;
         private bool _guiProbeReported;
         private string _guiProbeScreenshotPath;
         private VisualElement _root;
@@ -183,6 +184,8 @@ namespace VCR.Runtime.UI
             var launchArgs = System.Environment.GetCommandLineArgs();
             _guiProbeRequested = Array.Exists(launchArgs,
                 arg => string.Equals(arg, "--vcr-ui-probe", StringComparison.Ordinal));
+            _guiProbeRestartRequested = _guiProbeRequested && Array.Exists(launchArgs,
+                arg => string.Equals(arg, "--vcr-ui-probe-restart", StringComparison.Ordinal));
             _guiProbeScreenshotPath = null;
             if (_guiProbeRequested)
             {
@@ -261,6 +264,8 @@ namespace VCR.Runtime.UI
             // First run and legacy PlayerPrefs migration need an initial JSON snapshot.
             _lastPersistedLayoutSignature = restoredSnapshot ? CaptureLayoutSignature() : null;
             _nextLayoutPersistenceCheck = Time.unscaledTime + 2f;
+            if (_guiProbeRestartRequested)
+                StartCoroutine(ReportWorkspaceLayoutRestartAfterStartup(restoredSnapshot));
         }
 
         private void ReportWorkspaceGuiProbeIfReady()

@@ -1880,10 +1880,19 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         "inspector_visible=true full_right=true dock_persisted=true "
         "right_tab_persisted=true tracking_tab_persisted=true "
         "left_hidden=true temporary_tabs=0")
+    restore_offset = len(player_log.read_text(
+        encoding="utf-8", errors="replace"))
     restored = probe_real_workspace_mouse_click(
         player_hwnd, restore_target, player_log, output,
         screenshot_name="unity-feature-snapshot-restored.png",
         expected_marker=restore_expected)
+    final_target = wait_for_layout_snapshot_target(
+        player_log, "hide-final", restore_offset)
+    final_hidden = probe_real_workspace_mouse_click(
+        player_hwnd, final_target, player_log, output,
+        screenshot_name="unity-feature-exit-right-hidden.png",
+        expected_marker=("VCR U1 GUI probe: layout_snapshot_right_hidden=true "
+                         "persisted_hidden=true"))
     return {"passed": True, "shortcut": "Ctrl+K",
             "escapeReopenPassed": True, "query": "fov",
             "resultId": "camera.fov", "targetName": "vcr-search-camera-fov",
@@ -1930,6 +1939,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "snapshotHideRightClicked": hidden_right["passed"],
                 "snapshotAutoSaveObserved": True,
                 "snapshotRestoreClicked": restored["passed"],
+                "snapshotFinalRightHidden": final_hidden["passed"],
                 "snapshotRightDockRestored": True,
                 "snapshotBottomTabPreserved": True,
                 "snapshotLeftHiddenPreserved": True,
@@ -1938,6 +1948,102 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 "trackingTabFrame": tracking_click["unityFrame"],
                 "movedFrame": moved["unityFrame"]},
             "physicalHumanAcceptance": False}
+
+
+def probe_layout_restart_after_autosave(executable, args, output):
+    """Verify automatic recovery across a real Player exit/relaunch.
+
+    The first Player ends with right hidden but a manually saved right-visible
+    checkpoint. The second must load the hidden automatic file and then use
+    the real Restore button to recover the visible manual checkpoint.
+    """
+    folder = output / "restart"
+    folder.mkdir(parents=True, exist_ok=True)
+    player_log = folder / "Player.log"
+    image_path = folder / "unity-frame.png"
+    for file in folder.iterdir():
+        if file.is_file():
+            file.unlink()
+    command = [
+        str(executable),
+        "-screen-fullscreen", "0",
+        "-screen-width", str(args.screen_width),
+        "-screen-height", str(args.screen_height),
+        "-logFile", str(player_log),
+        "--vcr-config=" + str(output / "gui-probe-config.json"),
+        "--vcr-ui-probe", "--vcr-ui-probe-restart",
+        "--vcr-ui-probe-image=" + str(image_path),
+    ]
+    process = subprocess.Popen(
+        command, cwd=str(executable.parent),
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    closed = False
+    try:
+        deadline = time.monotonic() + args.startup_timeout
+        window = None
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError("Restart Player exited before its GUI appeared")
+            candidates = visible_player_windows(process.pid)
+            if candidates:
+                window = candidates[0]
+                break
+            time.sleep(0.15)
+        if window is None:
+            raise RuntimeError("Restart Player did not expose a UnityWndClass")
+        require_runtime_startup(process, player_log, deadline)
+        marker = (
+            "VCR U1 GUI probe: layout_restart_autosave_loaded=true "
+            "snapshot_loaded=true right_hidden=true left_hidden=true "
+            "inspector_right=true tracking_bottom=true")
+        while time.monotonic() < deadline:
+            log = player_log.read_text(encoding="utf-8", errors="replace")
+            if any(line.strip() == marker for line in log.splitlines()):
+                break
+            time.sleep(0.12)
+        else:
+            raise RuntimeError(
+                "Restart did not load the hidden-right automatic recovery state")
+        frame = inspect_native_window_frame(window["hwnd"])
+        bounds = dict(zip(("width", "height"), frame["clientSize"]))
+        auto_frame = wait_for_workspace_screenshot(
+            folder / "unity-feature-restart-autosave.png",
+            bounds, "restarted automatic recovery")
+        restore_target = wait_for_layout_snapshot_target(player_log, "restore", 0)
+        expected_restore = (
+            "VCR U1 GUI probe: layout_snapshot_restored=true "
+            "inspector_visible=true full_right=true dock_persisted=true "
+            "right_tab_persisted=true tracking_tab_persisted=true "
+            "left_hidden=true temporary_tabs=0")
+        restored = probe_real_workspace_mouse_click(
+            window["hwnd"], restore_target, player_log, folder,
+            screenshot_name="unity-feature-snapshot-restored.png",
+            expected_marker=expected_restore)
+        request_normal_close(window["hwnd"])
+        try:
+            returncode = process.wait(timeout=args.quit_timeout)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("Restart Player WM_CLOSE did not exit") from error
+        closed = True
+        final_log = player_log.read_text(encoding="utf-8", errors="replace")
+        if returncode != 0 or QUIT_MARKER not in final_log or (
+                find_workspace_runtime_exceptions(final_log)):
+            raise RuntimeError("Restart Player failed clean quit or emitted UI errors")
+        return {
+            "passed": True, "autoSnapshotLoaded": True,
+            "hiddenRightRecovered": True, "hiddenLeftRecovered": True,
+            "manualCheckpointRestored": restored["passed"],
+            "autoFrame": auto_frame, "restoredFrame": restored["unityFrame"],
+            "managedQuitObserved": True, "exitCode": returncode,
+            "physicalHumanAcceptance": False,
+        }
+    finally:
+        if not closed and process.poll() is None:
+            process.kill()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
 
 
 def request_normal_close(hwnd):
@@ -2603,6 +2709,7 @@ def run_probe(args):
         "runtimeExceptions": [],
         "compactLayout": None,
         "compactLayoutPassed": False,
+        "layoutRestartPassed": False,
         "unityFrameCaptured": False,
         "normalCloseRequested": False,
         "managedQuitObserved": False,
@@ -2913,6 +3020,12 @@ def run_probe(args):
             raise RuntimeError(
                 "P1 native Windows caption, mouse resize edge, window "
                 "state transitions or free aspect resize validation failed")
+        # The first Player intentionally exited with hidden Right despite
+        # a saved visible-Right manual checkpoint. Assert both persistence
+        # modes across a clean second process, not just within one session.
+        restart = probe_layout_restart_after_autosave(executable, args, output)
+        report["layoutRestart"] = restart
+        report["layoutRestartPassed"] = restart["passed"]
         report["passed"] = True
         print("U1 Windows visible-window/normal-quit probe PASS "
               "(interactive UI not accepted)", flush=True)

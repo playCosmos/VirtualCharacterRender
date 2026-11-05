@@ -701,8 +701,8 @@ namespace VCR.Runtime.UI
         {
             yield return new WaitForEndOfFrame();
             var name = stage == "save" ? "vcr-header-save-layout" :
-                stage == "hide" ? "vcr-header-toggle-right" :
-                "vcr-header-restore-layout";
+                stage == "hide" || stage == "hide-final" ?
+                    "vcr-header-toggle-right" : "vcr-header-restore-layout";
             var button = _workspaceRoot.Q<Button>(name);
             // The header actions deliberately overflow in a compact Player.
             // An off-viewport button is not an OS mouse target until the real
@@ -763,11 +763,54 @@ namespace VCR.Runtime.UI
                 " tracking_tab_persisted=" + (trackingPersisted ? "true" : "false") +
                 " left_hidden=" + (leftHidden ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count, this);
-            if (!passed || string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            if (!passed) yield break;
+            // On the initial process, deliberately exit with auto-recovery
+            // differing from the manual checkpoint. A second Player must load
+            // hidden Right, then Restore the manual visible-Right layout.
+            if (!_guiProbeRestartRequested)
+                StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("hide-final"));
+            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
             var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
             if (!string.IsNullOrEmpty(dir))
                 StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
                     System.IO.Path.Combine(dir, "unity-feature-snapshot-restored.png")));
+        }
+
+        private System.Collections.IEnumerator ReportWorkspaceLayoutRestartAfterStartup(bool snapshotLoaded)
+        {
+            yield return new WaitForEndOfFrame();
+            var inspector = _workspaceRoot.Q<VisualElement>("vcr-panel-inspector");
+            var tracking = _workspaceRoot.Q<VisualElement>("vcr-panel-tracking");
+            var hiddenRight = !_rightVisible && _rightDock != null &&
+                _rightDock.resolvedStyle.display == DisplayStyle.None &&
+                PlayerPrefs.GetInt(RightVisibleKey, 1) == 0;
+            var hiddenLeft = !_leftVisible && _leftDock != null &&
+                _leftDock.resolvedStyle.display == DisplayStyle.None &&
+                PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var inspectorRight = inspector != null && inspector.parent == _rightDock &&
+                PlayerPrefs.GetString("VCR.UI.Workspace.Dock.inspector.v1", "") == "right";
+            var trackingBottom = tracking != null && tracking.parent == _bottomDock &&
+                tracking.resolvedStyle.display != DisplayStyle.None &&
+                PlayerPrefs.GetString("VCR.UI.Workspace.ActiveTab.bottom.v1", "") ==
+                    "vcr-panel-tracking";
+            var passed = snapshotLoaded && hiddenRight && hiddenLeft &&
+                inspectorRight && trackingBottom &&
+                PlayerPrefs.GetString("VCR.UI.Workspace.ActiveTab.right.v1", "") ==
+                    "vcr-panel-inspector";
+            Debug.Log("VCR U1 GUI probe: layout_restart_autosave_loaded=" +
+                (passed ? "true" : "false") +
+                " snapshot_loaded=" + (snapshotLoaded ? "true" : "false") +
+                " right_hidden=" + (hiddenRight ? "true" : "false") +
+                " left_hidden=" + (hiddenLeft ? "true" : "false") +
+                " inspector_right=" + (inspectorRight ? "true" : "false") +
+                " tracking_bottom=" + (trackingBottom ? "true" : "false"), this);
+            if (!passed) yield break;
+            StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("restore"));
+            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
+            var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
+            if (!string.IsNullOrEmpty(dir))
+                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
+                    System.IO.Path.Combine(dir, "unity-feature-restart-autosave.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()
