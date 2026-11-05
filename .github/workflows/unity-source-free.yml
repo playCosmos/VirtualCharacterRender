@@ -44,6 +44,26 @@ jobs:
           sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/unity-reproducibility.sha256"
           test ! -e unity/Library
 
+      # Unity runs three Windows-Mono editor/build operations on one Ubuntu
+      # runner. GitHub runner preinstalled Android/.NET/Haskell/PowerShell/CodeQL
+      # tools are not used by these Docker-contained Unity methods and can
+      # consume multiple GB that the final Windows Player build needs.
+      - name: Reclaim unused Ubuntu SDK storage for Unity Docker
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Unity runner storage before reclaim:'
+          df -h "$GITHUB_WORKSPACE"
+          for sdk in /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
+            if [ -d "$sdk" ]; then
+              echo "Removing unused preinstalled SDK: $sdk"
+              sudo rm -rf -- "$sdk"
+            fi
+          done
+          echo 'Unity runner storage after reclaim:'
+          df -h "$GITHUB_WORKSPACE"
+
       - name: Bootstrap SHA-verified MediaPipe and models
         run: bash tools/bootstrap-mediapipe.sh
       - name: Bootstrap verified Pretendard UI font
@@ -97,6 +117,17 @@ jobs:
           test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
           echo "P1 UI Toolkit workspace generation: PASS"
+
+      # Preserve disk evidence before the heaviest of the three Unity runs.
+      # No pruning of Unity/Library or the source dependencies is allowed here.
+      - name: Measure disk headroom before Windows Player build
+        if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h "$GITHUB_WORKSPACE"
+          du -sh unity/Library 2>/dev/null || true
+          docker system df || true
 
       - name: Build P1 Windows development player
         if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
