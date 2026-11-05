@@ -2013,9 +2013,11 @@ def probe_layout_restart_after_autosave(executable, args, output):
                 "Restart did not load the hidden-right automatic recovery state")
         frame = inspect_native_window_frame(window["hwnd"])
         bounds = dict(zip(("width", "height"), frame["clientSize"]))
+        # Use the genuine source-matched startup screenshot, produced after
+        # workspace_tree_ready on THIS second process. The runtime marker
+        # above independently certifies the restored persisted dock state.
         auto_frame = wait_for_workspace_screenshot(
-            folder / "unity-feature-restart-autosave.png",
-            bounds, "restarted automatic recovery")
+            image_path, bounds, "restarted automatic recovery")
         restore_target = wait_for_layout_snapshot_target(player_log, "restore", 0)
         expected_restore = (
             "VCR U1 GUI probe: layout_snapshot_restored=true "

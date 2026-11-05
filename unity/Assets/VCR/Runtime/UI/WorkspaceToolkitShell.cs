@@ -419,6 +419,38 @@ namespace VCR.Runtime.UI
             }
         }
 
+        // Second-process restoration needs a completed PNG before the OS
+        // probe continues. CaptureScreenshot queues an asynchronous file write
+        // that can be dropped when the startup capture is already pending;
+        // this restart-only path captures at EndOfFrame and writes explicitly.
+        private System.Collections.IEnumerator CaptureWorkspaceGuiRestartEvidence(
+            string outputPath)
+        {
+            yield return new WaitForEndOfFrame();
+            Texture2D screenshot = null;
+            try
+            {
+                screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+                if (screenshot == null)
+                    throw new InvalidOperationException("Unity returned no screenshot texture");
+                var bytes = screenshot.EncodeToPNG();
+                if (bytes == null || bytes.Length == 0)
+                    throw new InvalidOperationException("Unity returned empty screenshot PNG");
+                System.IO.File.WriteAllBytes(outputPath, bytes);
+                Debug.Log("VCR U1 GUI probe: restart_restore_frame_written=true", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("VCR U1 GUI probe: restart_restore_frame_failed=" +
+                    exception.Message, this);
+            }
+            finally
+            {
+                if (screenshot != null)
+                    UnityEngine.Object.Destroy(screenshot);
+            }
+        }
+
         // Runtime UI Toolkit can display a Button whose center actually
         // picks an overlapping element. Checking geometry alone does not
         // prove the operator can target the intended control with a mouse.

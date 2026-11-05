@@ -772,8 +772,14 @@ namespace VCR.Runtime.UI
             if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
             var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
             if (!string.IsNullOrEmpty(dir))
-                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
-                    System.IO.Path.Combine(dir, "unity-feature-snapshot-restored.png")));
+            {
+                var imagePath = System.IO.Path.Combine(
+                    dir, "unity-feature-snapshot-restored.png");
+                if (_guiProbeRestartRequested)
+                    StartCoroutine(CaptureWorkspaceGuiRestartEvidence(imagePath));
+                else
+                    StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(imagePath));
+            }
         }
 
         private System.Collections.IEnumerator ReportWorkspaceLayoutRestartAfterStartup(bool snapshotLoaded)
@@ -805,12 +811,10 @@ namespace VCR.Runtime.UI
                 " inspector_right=" + (inspectorRight ? "true" : "false") +
                 " tracking_bottom=" + (trackingBottom ? "true" : "false"), this);
             if (!passed) yield break;
+            // The normal workspace_tree_ready startup capture already shows
+            // the measured auto-recovered layout from this second process.
+            // Do not queue a competing screenshot during startup.
             StartCoroutine(ReportWorkspaceLayoutSnapshotTarget("restore"));
-            if (string.IsNullOrEmpty(_guiProbeScreenshotPath)) yield break;
-            var dir = System.IO.Path.GetDirectoryName(_guiProbeScreenshotPath);
-            if (!string.IsNullOrEmpty(dir))
-                StartCoroutine(CaptureWorkspaceGuiScreenshotAtEndOfFrame(
-                    System.IO.Path.Combine(dir, "unity-feature-restart-autosave.png")));
         }
 
         private System.Collections.IEnumerator ReportFeatureSearchHiddenLeftToggleTarget()
