@@ -967,6 +967,22 @@ namespace VCR.Editor.P1
                         (bool)usesDockTabs.Invoke(null, new object[] { false, false, true }),
                         "U1 panel reorder must refresh auto-tab strips at compact height/narrow width",
                         failures);
+                // IME candidate arrows/Enter/Esc must remain with the text
+                // editor while it reports an active composition. This pure
+                // guard contract does not simulate a physical Korean IME.
+                var imeGuard = typeof(WorkspaceToolkitShell).GetMethod(
+                    "IsWorkspaceSearchImeComposing",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                Expect(imeGuard != null, "U1 feature search must expose an IME guard",
+                    failures);
+                if (imeGuard != null)
+                    Expect(
+                        !(bool)imeGuard.Invoke(null, new object[] { null }) &&
+                        !(bool)imeGuard.Invoke(null, new object[] { "" }) &&
+                        (bool)imeGuard.Invoke(null, new object[] { "ㅎ" }) &&
+                        (bool)imeGuard.Invoke(null, new object[] { "한" }),
+                        "U1 feature search must defer shortcuts during active IME composition",
+                        failures);
                 // Search-only panel/visibility overrides must never supersede
                 // the saved layout after an explicit workspace command.
                 var tempTabsField = typeof(WorkspaceToolkitShell).GetField(
