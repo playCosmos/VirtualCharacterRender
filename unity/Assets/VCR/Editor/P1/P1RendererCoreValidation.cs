@@ -983,6 +983,30 @@ namespace VCR.Editor.P1
                         (bool)imeGuard.Invoke(null, new object[] { "한" }),
                         "U1 feature search must defer shortcuts during active IME composition",
                         failures);
+                // UI Toolkit may dispatch the Enter which confirms a Korean
+                // IME candidate after compositionString has already cleared.
+                // One frame of grace avoids navigating on that same key.
+                var imeCommitGuard = typeof(WorkspaceToolkitShell).GetMethod(
+                    "IsWorkspaceSearchImeProtected",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                Expect(imeCommitGuard != null,
+                    "U1 feature search must guard the IME commit frame", failures);
+                if (imeCommitGuard != null)
+                {
+                    bool Deferred(string composition, int frame, int lastFrame) =>
+                        (bool)imeCommitGuard.Invoke(null,
+                            new object[] { composition, frame, lastFrame });
+                    Expect(
+                        Deferred("ㅎ", 100, -1) &&
+                        Deferred("한", 100, 100) &&
+                        Deferred("", 100, 100) &&
+                        Deferred("", 101, 100) &&
+                        !Deferred("", 102, 100) &&
+                        !Deferred("", 100, -1) &&
+                        !Deferred("", 99, 100),
+                        "U1 IME guard must cover commit Enter but release later navigation",
+                        failures);
+                }
                 // Search-only panel/visibility overrides must never supersede
                 // the saved layout after an explicit workspace command.
                 var tempTabsField = typeof(WorkspaceToolkitShell).GetField(
