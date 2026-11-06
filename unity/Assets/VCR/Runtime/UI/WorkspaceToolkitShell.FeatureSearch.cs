@@ -28,8 +28,17 @@ namespace VCR.Runtime.UI
         private bool _featureSearchProbeReturnToLive;
         private bool _featureSearchProbeHiddenReturnToLive;
 
+        // During Korean/Japanese/Chinese IME composition, navigation keys
+        // belong to the text editor/candidate window, not workspace commands.
+        // An empty composition string is still NOT proof of full platform IME
+        // parity; physical Windows/macOS composition acceptance remains open.
+        private static bool IsWorkspaceSearchImeComposing(string composition) =>
+            !string.IsNullOrEmpty(composition);
+
         private void HandleWorkspaceFeatureShortcut(KeyDownEvent evt)
         {
+            if (IsWorkspaceSearchImeComposing(UnityEngine.Input.compositionString))
+                return;
             // Trickle-down sees Ctrl+K even if a nested TextField has focus.
             // Do not swallow ordinary typing or keyboard shortcuts elsewhere.
             if ((evt.ctrlKey || evt.commandKey) && evt.keyCode == KeyCode.K)
@@ -172,6 +181,9 @@ namespace VCR.Runtime.UI
         private void HandleWorkspaceFeatureSearchKeys(KeyDownEvent evt)
         {
             if (!_featureSearchIsOpen) return;
+            // Do not consume IME candidate arrows or its commit/abort keys.
+            if (IsWorkspaceSearchImeComposing(UnityEngine.Input.compositionString))
+                return;
             if (evt.keyCode == KeyCode.DownArrow || evt.keyCode == KeyCode.UpArrow)
             {
                 if (_featureSearchResults.Count != 0)
