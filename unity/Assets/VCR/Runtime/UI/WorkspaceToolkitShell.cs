@@ -876,6 +876,9 @@ namespace VCR.Runtime.UI
 
         private void Update()
         {
+            // Sample while composing, not only at KeyDown: some IMEs clear
+            // compositionString immediately before the commit Enter event.
+            ObserveWorkspaceSearchImeComposition();
             // Rebuild only when crossing the compact-height threshold.
             // A resize must restore the user's original stacked/tabbed layout
             // without rewriting saved preferences.
