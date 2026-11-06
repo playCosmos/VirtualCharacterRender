@@ -22,6 +22,9 @@ namespace VCR.Runtime.UI
         private Label _featureSearchStatus;
         private int _featureSearchSelectedIndex;
         private bool _featureSearchIsOpen;
+        // Some Unity 6 IMEs clear compositionString before dispatching the
+        // Enter that confirms a candidate. Keep a one-frame commit grace period.
+        private int _featureSearchLastCompositionFrame = -1;
         // Remember only the current modal session's focus, not a persisted
         // feature target. A dock rebuild invalidates this reference.
         private VisualElement _featureSearchPreviousFocus;
@@ -35,9 +38,37 @@ namespace VCR.Runtime.UI
         private static bool IsWorkspaceSearchImeComposing(string composition) =>
             !string.IsNullOrEmpty(composition);
 
+        private static bool IsWorkspaceSearchImeProtected(
+            string composition, int frame, int lastCompositionFrame)
+        {
+            return IsWorkspaceSearchImeComposing(composition) ||
+                (lastCompositionFrame >= 0 && frame >= lastCompositionFrame &&
+                 frame - lastCompositionFrame <= 1);
+        }
+
+        private void ObserveWorkspaceSearchImeComposition()
+        {
+            if (_featureSearchIsOpen &&
+                IsWorkspaceSearchImeComposing(UnityEngine.Input.compositionString))
+                _featureSearchLastCompositionFrame = Time.frameCount;
+        }
+
+        private bool ShouldDeferWorkspaceFeatureKey()
+        {
+            var composition = UnityEngine.Input.compositionString;
+            if (IsWorkspaceSearchImeComposing(composition))
+                _featureSearchLastCompositionFrame = Time.frameCount;
+            // Outside the palette only an active composition blocks Ctrl+K.
+            // Within it, consume neither candidate keys nor its commit Enter.
+            return _featureSearchIsOpen
+                ? IsWorkspaceSearchImeProtected(
+                    composition, Time.frameCount, _featureSearchLastCompositionFrame)
+                : IsWorkspaceSearchImeComposing(composition);
+        }
+
         private void HandleWorkspaceFeatureShortcut(KeyDownEvent evt)
         {
-            if (IsWorkspaceSearchImeComposing(UnityEngine.Input.compositionString))
+            if (ShouldDeferWorkspaceFeatureKey())
                 return;
             // Trickle-down sees Ctrl+K even if a nested TextField has focus.
             // Do not swallow ordinary typing or keyboard shortcuts elsewhere.
@@ -61,6 +92,7 @@ namespace VCR.Runtime.UI
         private void BuildWorkspaceFeatureSearchOverlay()
         {
             _featureSearchIsOpen = false;
+            _featureSearchLastCompositionFrame = -1;
             _featureSearchPreviousFocus = null;
             _featureSearchSelectedIndex = 0;
             _featureSearchResults = new List<WorkspaceFeature>();
@@ -139,6 +171,7 @@ namespace VCR.Runtime.UI
                 return;
             _featureSearchPreviousFocus =
                 _workspaceRoot.panel.focusController.focusedElement as VisualElement;
+            _featureSearchLastCompositionFrame = -1;
             _featureSearchIsOpen = true;
             _featureSearchOverlay.style.display = DisplayStyle.Flex;
             _featureSearchInput.SetValueWithoutNotify("");
@@ -166,6 +199,7 @@ namespace VCR.Runtime.UI
         private void CloseWorkspaceFeatureSearch()
         {
             _featureSearchIsOpen = false;
+            _featureSearchLastCompositionFrame = -1;
             if (_featureSearchOverlay != null)
                 _featureSearchOverlay.style.display = DisplayStyle.None;
             // Avoid leaving keyboard input on an invisible TextField after Esc,
@@ -181,8 +215,9 @@ namespace VCR.Runtime.UI
         private void HandleWorkspaceFeatureSearchKeys(KeyDownEvent evt)
         {
             if (!_featureSearchIsOpen) return;
-            // Do not consume IME candidate arrows or its commit/abort keys.
-            if (IsWorkspaceSearchImeComposing(UnityEngine.Input.compositionString))
+            // Trickle-down occurs before TextField processes a commit key.
+            // Preserve the candidate and the next frame's commit Enter.
+            if (ShouldDeferWorkspaceFeatureKey())
                 return;
             if (evt.keyCode == KeyCode.DownArrow || evt.keyCode == KeyCode.UpArrow)
             {
