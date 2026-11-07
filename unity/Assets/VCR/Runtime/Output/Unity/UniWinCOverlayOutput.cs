@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 using Kirurobo;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -29,6 +30,9 @@ namespace VCR.Runtime.Output.Unity
         [Header("Overlay")]
         [SerializeField] private bool transparent = true;
         [SerializeField] private bool clickThrough = false;
+        // P1 is a standard desktop application. UniWinC's transparent mode
+        // intentionally strips the native caption; restore it when opaque.
+        [SerializeField] private bool preserveDesktopWindowFrame = false;
         [SerializeField, Min(0.5f)] private float nativeApplyTimeoutSeconds = 5f;
 
         private UniWindowController _controller;
@@ -39,6 +43,12 @@ namespace VCR.Runtime.Output.Unity
         private long _applyAttempts;
         private long _applyFailures;
         private long _nativeApplySuccesses;
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        // A Unity window can remain popup-styled after UniWinC's initial
+        // attach. Opaque P1 must not depend on the plugin reporting Active.
+        private float _nextDesktopFrameCheckAt;
+        private float _nextDesktopFrameWarningAt;
+#endif
 
         private CameraClearFlags _originalClearFlags;
         private Color _originalBackground;
@@ -48,6 +58,10 @@ namespace VCR.Runtime.Output.Unity
 
         public OverlayOutputSettings Settings =>
             CurrentSettings();
+
+        // Used by the P1 scene upgrader to migrate older saved desktop scenes
+        // even when they were already opaque but lacked the native-frame guard.
+        public bool PreservesDesktopWindowFrame => preserveDesktopWindowFrame;
 
         public OverlayOutputStatus Status
         {
@@ -119,6 +133,18 @@ namespace VCR.Runtime.Output.Unity
 
         private void Update()
         {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            // Check the *actual* UnityWndClass style even when UniWinC has
+            // not attached or its one-time native Apply already completed.
+            // Unity/UniWinC may replace the HWND style after startup; the
+            // opaque interactive P1 workspace must keep its OS controls.
+            if (preserveDesktopWindowFrame && !transparent &&
+                Time.realtimeSinceStartup >= _nextDesktopFrameCheckAt)
+            {
+                _nextDesktopFrameCheckAt = Time.realtimeSinceStartup + 0.5f;
+                RestoreWindowsDesktopFrameIfMissing();
+            }
+#endif
             if (Application.isEditor ||
                 !_pendingNativeApply ||
                 _controller == null ||
@@ -149,6 +175,18 @@ namespace VCR.Runtime.Output.Unity
             targetCamera = camera;
             transparent = true;
             clickThrough = false;
+            preserveDesktopWindowFrame = false;
+        }
+
+        // U1/P1 is a normal interactive editor window by default. Transparent
+        // desktop output remains opt-in through Settings. Do not change the
+        // P0 transparent-alpha validation scene's default.
+        public void ConfigureForP1Workspace(Camera camera)
+        {
+            targetCamera = camera;
+            transparent = false;
+            clickThrough = false;
+            preserveDesktopWindowFrame = true;
         }
 
         public void Apply(OverlayOutputSettings settings)
@@ -229,8 +267,14 @@ namespace VCR.Runtime.Output.Unity
             _controller.isClickThrough = clickThrough;
             _controller.isTopmost = false;
 
-            // Do not signal Active until UniWinC has attached the actual
-            // desktop window. Keep retrying (with the existing timeout).
+            // A normal P1 editor window needs native caption and thickframe
+            // even when UniWinC's independent overlay attachment is delayed
+            // or unavailable. This must precede the attachment early return.
+            if (preserveDesktopWindowFrame && !transparent)
+                RestoreWindowsDesktopFrameIfMissing();
+
+            // Do not signal the *overlay* Active until UniWinC has attached.
+            // Opaque Windows frame repair remains independent of this status.
             if (!IsNativeWindowAttached())
                 return;
 
@@ -245,6 +289,77 @@ namespace VCR.Runtime.Output.Unity
             _nativeApplied = true;
             _pendingNativeApply = false;
             _nativeApplySuccesses++;
+        }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private const int GwlStyle = -16;
+        private const uint WsPopup = 0x80000000;
+        private const uint WsOverlappedWindow = 0x00CF0000;
+        private const uint SwpNoMoveNoSizeNoZOrderFrameChanged =
+            0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020;
+
+        private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr param);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr param);
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int length);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern int GetWindowLongW(IntPtr hwnd, int index);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern int SetWindowLongW(IntPtr hwnd, int index, int value);
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after,
+            int x, int y, int width, int height, uint flags);
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
+#endif
+
+        private void RestoreWindowsDesktopFrameIfMissing()
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            var myPid = GetCurrentProcessId();
+            EnumWindows((hwnd, _) =>
+            {
+                GetWindowThreadProcessId(hwnd, out var windowPid);
+                if (windowPid != myPid) return true;
+                var name = new StringBuilder(64);
+                GetClassNameW(hwnd, name, name.Capacity);
+                if (!string.Equals(name.ToString(), "UnityWndClass",
+                    StringComparison.Ordinal))
+                    return true;
+
+                var style = (uint)GetWindowLongW(hwnd, GwlStyle);
+                if ((style & WsOverlappedWindow) != WsOverlappedWindow ||
+                    (style & WsPopup) != 0)
+                {
+                    var next = (style | WsOverlappedWindow) & ~WsPopup;
+                    SetWindowLongW(hwnd, GwlStyle, unchecked((int)next));
+                    var actualStyle = (uint)GetWindowLongW(hwnd, GwlStyle);
+                    if ((actualStyle & WsOverlappedWindow) != WsOverlappedWindow ||
+                        (actualStyle & WsPopup) != 0 ||
+                        !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                            SwpNoMoveNoSizeNoZOrderFrameChanged))
+                    {
+                        if (Time.realtimeSinceStartup >= _nextDesktopFrameWarningAt)
+                        {
+                            _nextDesktopFrameWarningAt = Time.realtimeSinceStartup + 5f;
+                            Debug.LogWarning("VCR P1: Windows desktop title bar " +
+                                "restoration failed; inspect native window style " +
+                                "(before=0x" + style.ToString("X8") +
+                                ", after=0x" + actualStyle.ToString("X8") + ").", this);
+                        }
+                    }
+                    else
+                        Debug.Log("VCR P1: restored native title bar and resize frame.", this);
+                }
+                return false;
+            }, IntPtr.Zero);
+#endif
         }
 
         public void CollectMetrics(List<RuntimeMetric> output)

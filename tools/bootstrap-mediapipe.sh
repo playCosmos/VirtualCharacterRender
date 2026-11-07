@@ -38,14 +38,34 @@ fi
 
 if [[ "${needs_download}" -eq 1 ]]; then
   echo "Downloading MediaPipeUnityPlugin ${VERSION}..."
-  curl -fL "${URL}" -o "${TARGET}"
+  # GitHub release assets occasionally return a transient 502/503/504.
+  # Retry transport failures with curl's bounded exponential backoff, while
+  # retaining the exact pinned SHA-256 as the non-negotiable integrity check.
+  # Stage the response separately so failed transfers never become a package.
+  DOWNLOAD_TMP="$(mktemp "${TARGET}.download.XXXXXX")"
+  if ! curl \
+    --fail \
+    --location \
+    --retry 5 \
+    --retry-all-errors \
+    --retry-max-time 600 \
+    --connect-timeout 20 \
+    --max-time 180 \
+    --no-progress-meter \
+    --output "${DOWNLOAD_TMP}" \
+    "${URL}"; then
+    rm -f "${DOWNLOAD_TMP}"
+    echo "MediaPipeUnityPlugin ${VERSION} download failed after retries." >&2
+    exit 1
+  fi
 
-  ACTUAL="$(sha256_file "${TARGET}")"
+  ACTUAL="$(sha256_file "${DOWNLOAD_TMP}")"
   if [[ "${ACTUAL}" != "${EXPECTED_SHA256}" ]]; then
-    rm -f "${TARGET}"
+    rm -f "${DOWNLOAD_TMP}"
     echo "SHA-256 mismatch. Expected ${EXPECTED_SHA256}, got ${ACTUAL}" >&2
     exit 1
   fi
+  mv -f "${DOWNLOAD_TMP}" "${TARGET}"
 
   echo "Verified: ${TARGET}"
 fi

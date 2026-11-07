@@ -86,6 +86,13 @@ namespace VCR.Runtime.UI
             public int left, top, right, bottom;
         }
         [StructLayout(LayoutKind.Sequential)]
+        private struct MonitorInfo
+        {
+            public uint cbSize;
+            public Rect monitor, work;
+            public uint flags;
+        }
+        [StructLayout(LayoutKind.Sequential)]
         private struct ScrollInfo
         {
             public uint cbSize, fMask;
@@ -133,6 +140,15 @@ namespace VCR.Runtime.UI
             IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(
+            IntPtr hwnd, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfoW(IntPtr monitor,
+            ref MonitorInfo info);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool SystemParametersInfoW(uint action,
+            uint param, out Rect rect, uint update);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(
@@ -381,6 +397,24 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private static Rect InitialSettingsWorkArea()
+        {
+            // Open relative to the monitor containing the foreground Unity
+            // Player, not hard-coded desktop coordinates. Work area excludes
+            // the taskbar and respects a secondary monitor's origin.
+            var monitor = MonitorFromWindow(GetForegroundWindow(), 2);
+            var info = new MonitorInfo
+                { cbSize = (uint)Marshal.SizeOf<MonitorInfo>() };
+            if (monitor != IntPtr.Zero && GetMonitorInfoW(monitor, ref info) &&
+                info.work.right > info.work.left &&
+                info.work.bottom > info.work.top)
+                return info.work;
+            if (SystemParametersInfoW(0x0030, 0, out var primary, 0) &&
+                primary.right > primary.left && primary.bottom > primary.top)
+                return primary;
+            return new Rect { left = 0, top = 0, right = 940, bottom = 720 };
+        }
+
         public DesktopNativeSettingsWindow()
         {
             instance = GetModuleHandleW(null);
@@ -397,9 +431,15 @@ namespace VCR.Runtime.UI
                 throw new InvalidOperationException("Win32 Settings window class registration failed.");
             }
             current = this;
+            var work = InitialSettingsWorkArea();
+            var windowWidth = Math.Min(940, work.right - work.left);
+            var windowHeight = Math.Min(720, work.bottom - work.top);
+            var windowX = work.left + (work.right - work.left - windowWidth) / 2;
+            var windowY = work.top + (work.bottom - work.top - windowHeight) / 2;
             hwnd = CreateWindowExW(0, ClassName, "VirtualCharacterRender - 환경설정",
-                Overlapped | WindowVerticalScroll, 160, 120, 940, 720, IntPtr.Zero, IntPtr.Zero,
-                instance, IntPtr.Zero);
+                Overlapped | WindowVerticalScroll,
+                windowX, windowY, windowWidth, windowHeight,
+                IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
             if (hwnd == IntPtr.Zero)
             {
                 current = null;

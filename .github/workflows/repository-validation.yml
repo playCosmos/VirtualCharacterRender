@@ -104,6 +104,9 @@ jobs:
       - name: Test real desktop quit evidence observer
         run: python3 tools/diagnose-gui-shutdown.py --self-test
 
+      - name: Test U1 GUI probe waits for managed startup before WM_CLOSE
+        run: python3 tools/probe-u1-windows-gui.py --self-test
+
       - name: Test native Player quit timer including timeout preservation
         run: python3 tools/run-player-smoke.py --self-test
 
