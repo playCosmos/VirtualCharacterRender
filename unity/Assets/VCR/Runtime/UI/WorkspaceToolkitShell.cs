@@ -2733,6 +2733,19 @@ namespace VCR.Runtime.UI
             dock.Insert(dock.IndexOf(panel) + 1, splitter);
         }
 
+        // Keep the three standard right-dock tabs legible at 260px without
+        // changing panel IDs or the saved selection key. The adjacent drag
+        // handles each reserve their own width.
+        private static string DockTabCaption(string dockId, string panelId, int panelCount)
+        {
+            if (dockId == "right" && panelCount >= 3)
+            {
+                if (panelId == WorkspacePanelCatalog.Inspector) return "Inspect";
+                if (panelId == WorkspacePanelCatalog.Capabilities) return "Modules";
+            }
+            return panelId;
+        }
+
         private void ApplyDockTabs(VisualElement dock, string dockId)
         {
             var panels = new System.Collections.Generic.List<VisualElement>();
@@ -2815,9 +2828,10 @@ namespace VCR.Runtime.UI
                     if (_guiProbeRequested && dockId == "bottom" &&
                         name == WorkspacePanelCatalog.Tracking)
                         StartCoroutine(ReportFeatureSearchTrackingTabClicked());
-                }) { text = name };
+                }) { text = DockTabCaption(dockId, name, panels.Count) };
                 tab.name = "vcr-tab-" + name;
-                tab.tooltip = "Click to activate. Ctrl+Left/Right to reorder; drag adjacent grip to move.";
+                tab.tooltip = name + ": click to activate. Ctrl+Left/Right to reorder; " +
+                    "drag adjacent grip to move.";
                 tab.style.minWidth = 0;
                 tab.style.flexShrink = 1;
                 tab.RegisterCallback<KeyDownEvent>(evt =>
