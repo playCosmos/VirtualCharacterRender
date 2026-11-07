@@ -967,6 +967,26 @@ namespace VCR.Editor.P1
                         (bool)usesDockTabs.Invoke(null, new object[] { false, false, true }),
                         "U1 panel reorder must refresh auto-tab strips at compact height/narrow width",
                         failures);
+                // Narrow right docks share 260px among three tabs and
+                // independent drag handles. Stable IDs remain unchanged, but
+                // captions must be short enough to identify every tab.
+                var dockTabCaption = typeof(WorkspaceToolkitShell).GetMethod(
+                    "DockTabCaption", BindingFlags.Static | BindingFlags.NonPublic);
+                Expect(dockTabCaption != null,
+                    "U1 must expose compact right-dock captions", failures);
+                if (dockTabCaption != null)
+                {
+                    string Caption(string dock, string id, int count) =>
+                        (string)dockTabCaption.Invoke(null, new object[] { dock, id, count });
+                    Expect(
+                        Caption("right", WorkspacePanelCatalog.Inspector, 3) == "Inspect" &&
+                        Caption("right", WorkspacePanelCatalog.Materials, 3) == "materials" &&
+                        Caption("right", WorkspacePanelCatalog.Capabilities, 3) == "Modules" &&
+                        Caption("right", WorkspacePanelCatalog.Inspector, 2) == "inspector" &&
+                        Caption("left", WorkspacePanelCatalog.Scenes, 3) == "scenes",
+                        "U1 right-dock captions must be compact only with 3+ tabs",
+                        failures);
+                }
                 // IME candidate arrows/Enter/Esc must remain with the text
                 // editor while it reports an active composition. This pure
                 // guard contract does not simulate a physical Korean IME.
