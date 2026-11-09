@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
+using UnityEditor.Build;
 using UnityEngine;
 using VCR.Editor.P0;
 
@@ -44,6 +45,16 @@ namespace VCR.Editor.P1
                 development: false);
         }
 
+        // The Ubuntu P1 CI intentionally uses Mono for its development
+        // smoke Player. A non-development Windows P1 Player must not silently
+        // inherit that temporary backend and be mistaken for IL2CPP evidence.
+        internal static bool AllowsPlayerBackend(
+            BuildTarget target, bool development, ScriptingImplementation backend)
+        {
+            return target != BuildTarget.StandaloneWindows64 ||
+                development || backend == ScriptingImplementation.IL2CPP;
+        }
+
         public static bool Build(
             BuildTarget target,
             string location,
@@ -58,6 +69,13 @@ namespace VCR.Editor.P1
             if (string.IsNullOrWhiteSpace(location))
             {
                 Debug.LogError("VCR P1 build: output location is required.");
+                return false;
+            }
+            if (!AllowsPlayerBackend(target, development,
+                    PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone)))
+            {
+                Debug.LogError("VCR P1 build: non-development Windows Player requires " +
+                    "IL2CPP scripting backend; refusing to package a Mono release.");
                 return false;
             }
 
