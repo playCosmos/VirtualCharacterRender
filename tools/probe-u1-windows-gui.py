@@ -1544,6 +1544,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     viewport_marker = (
         "VCR U1 GUI probe: feature_search_materials_layout_ready=true "
         "viewport_clipped=true panel_above_bottom=true scroll_height=")
+    selected_materials_visual = (
+        "VCR U1 GUI probe: feature_search_materials_selected_visual=true")
     viewport_height = None
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -1558,6 +1560,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
             except ValueError:
                 viewport_height = None
         if (materials_navigation in lines and visible in lines and
+                selected_materials_visual in lines and
                 viewport_height is not None and
                 math.isfinite(viewport_height) and viewport_height >= 35):
             break
@@ -1567,7 +1570,9 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
             "Advanced Materials search did not activate a clipped right-dock "
             "viewport wholly above bottom dock: " +
             str({"navigation": materials_navigation in lines,
-                 "tab": visible in lines, "viewportHeight": viewport_height,
+                 "tab": visible in lines,
+                 "selectedVisual": selected_materials_visual in lines,
+                 "viewportHeight": viewport_height,
                  "viewportEvidence": metrics[-1] if metrics else None}))
     materials_screenshot = wait_for_workspace_screenshot(
         output / "unity-feature-materials.png",
@@ -1651,7 +1656,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         metrics = [
             line for line in lines if line.startswith(viewport_marker)]
         if (preserved in lines and layout_preserved in lines and
-                materials_navigation in lines and visible in lines and metrics):
+                materials_navigation in lines and visible in lines and
+                selected_materials_visual in lines and metrics):
             break
         time.sleep(0.12)
     else:
@@ -1816,7 +1822,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
     expected_tab = (
         "VCR U1 GUI probe: feature_search_tracking_tab_clicked=true "
         "visible=true inspector_hidden=true persisted=true "
-        "temporary_tabs=0 hidden_left_preserved=true")
+        "temporary_tabs=0 hidden_left_preserved=true "
+        "selected_visual=true")
     tracking_offset = len(player_log.read_text(
         encoding="utf-8", errors="replace"))
     tracking_click = probe_real_workspace_mouse_click(
