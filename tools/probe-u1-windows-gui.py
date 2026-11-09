@@ -1546,6 +1546,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
         "viewport_clipped=true panel_above_bottom=true scroll_height=")
     selected_materials_visual = (
         "VCR U1 GUI probe: feature_search_materials_selected_visual=true")
+    wrapped_materials_feedback = (
+        "VCR U1 GUI probe: feature_search_materials_text_wrapped=true")
     viewport_height = None
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -1561,6 +1563,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
                 viewport_height = None
         if (materials_navigation in lines and visible in lines and
                 selected_materials_visual in lines and
+                wrapped_materials_feedback in lines and
                 viewport_height is not None and
                 math.isfinite(viewport_height) and viewport_height >= 35):
             break
@@ -1572,6 +1575,7 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
             str({"navigation": materials_navigation in lines,
                  "tab": visible in lines,
                  "selectedVisual": selected_materials_visual in lines,
+                 "wrappedFeedback": wrapped_materials_feedback in lines,
                  "viewportHeight": viewport_height,
                  "viewportEvidence": metrics[-1] if metrics else None}))
     materials_screenshot = wait_for_workspace_screenshot(
@@ -1657,7 +1661,8 @@ def probe_feature_search_keyboard(player_hwnd, settings_hwnd, player_log, output
             line for line in lines if line.startswith(viewport_marker)]
         if (preserved in lines and layout_preserved in lines and
                 materials_navigation in lines and visible in lines and
-                selected_materials_visual in lines and metrics):
+                selected_materials_visual in lines and
+                wrapped_materials_feedback in lines and metrics):
             break
         time.sleep(0.12)
     else:
