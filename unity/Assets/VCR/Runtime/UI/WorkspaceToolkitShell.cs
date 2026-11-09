@@ -2746,6 +2746,16 @@ namespace VCR.Runtime.UI
             return panelId;
         }
 
+        // Active tab state must remain visible after feature-search navigation
+        // and layout restore, not depend on the OS keyboard-focus highlight.
+        private static void SetDockTabSelectedVisual(Button tab, bool selected)
+        {
+            tab.style.backgroundColor = selected
+                ? new Color(0.49f, 0.75f, 0.89f)
+                : new Color(0.72f, 0.75f, 0.78f);
+            tab.style.color = new Color(0.10f, 0.16f, 0.21f);
+        }
+
         private void ApplyDockTabs(VisualElement dock, string dockId)
         {
             var panels = new System.Collections.Generic.List<VisualElement>();
@@ -2809,6 +2819,7 @@ namespace VCR.Runtime.UI
             var tabs = new VisualElement();
             tabs.style.flexDirection = FlexDirection.Row;
             tabs.style.flexShrink = 0;
+            var tabButtons = new System.Collections.Generic.List<Button>(panels.Count);
             for (var i = 0; i < panels.Count; i++)
             {
                 var index = i;
@@ -2821,7 +2832,10 @@ namespace VCR.Runtime.UI
                 var tab = new Button(() =>
                 {
                     for (var j = 0; j < panels.Count; j++)
+                    {
                         panels[j].style.display = j == index ? DisplayStyle.Flex : DisplayStyle.None;
+                        SetDockTabSelectedVisual(tabButtons[j], j == index);
+                    }
                     _featureTemporaryTabs.Remove(dockId);
                     PlayerPrefs.SetString(key, panel.name);
                     PlayerPrefs.Save();
@@ -2834,6 +2848,8 @@ namespace VCR.Runtime.UI
                     "drag adjacent grip to move.";
                 tab.style.minWidth = 0;
                 tab.style.flexShrink = 1;
+                SetDockTabSelectedVisual(tab, i == active);
+                tabButtons.Add(tab);
                 tab.RegisterCallback<KeyDownEvent>(evt =>
                 {
                     if (!evt.ctrlKey || (evt.keyCode != KeyCode.LeftArrow && evt.keyCode != KeyCode.RightArrow)) return;
