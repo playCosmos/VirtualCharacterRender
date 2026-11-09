@@ -162,7 +162,11 @@ jobs:
               for file in sorted(root.rglob("*")):
                   if file.is_file():
                       z.write(file, file.relative_to(root).as_posix())
-          digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+          digest_state = hashlib.sha256()
+          with archive.open("rb") as source:
+              for block in iter(lambda: source.read(1024 * 1024), b""):
+                  digest_state.update(block)
+          digest = digest_state.hexdigest()
           (target / "windows.sha256").write_text(digest + "  windows.zip\n", encoding="utf-8")
           (target / "windows.source-sha").write_text(os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
           (target / "build-evidence.txt").write_text(
