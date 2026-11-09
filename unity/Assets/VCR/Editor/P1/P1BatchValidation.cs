@@ -95,7 +95,36 @@ namespace VCR.Editor.P1
                 "Builds/P1/macOS-Development/VirtualCharacterRender.app");
         }
 
-        private static void BuildDevelopmentAndExit(BuildTarget target, string defaultOutput)
+        // P1 U1 production-path build: full UI Toolkit application scene with
+        // IL2CPP, not the P0 alpha scene or Linux-hosted Windows Mono Player.
+        // Requires a Windows host with the matching Unity IL2CPP module.
+        public static void BuildWindowsIl2CppAndExit()
+        {
+            try
+            {
+                if (PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone) !=
+                    ScriptingImplementation.IL2CPP)
+                {
+                    Debug.LogError("VCR P1 IL2CPP build: Windows standalone " +
+                        "backend is not IL2CPP.");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+                BuildDevelopmentAndExit(
+                    BuildTarget.StandaloneWindows64,
+                    "Builds/P1/Windows-IL2CPP/VirtualCharacterRender.exe",
+                    development: false);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("VCR P1 IL2CPP build: unexpected exception.");
+                Debug.LogException(exception);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        private static void BuildDevelopmentAndExit(
+            BuildTarget target, string defaultOutput, bool development = true)
         {
             try
             {
@@ -117,10 +146,12 @@ namespace VCR.Editor.P1
                     break;
                 }
 
-                var passed = P1PlayerBuildMenu.Build(target, output, development: true);
+                var passed = P1PlayerBuildMenu.Build(target, output, development);
                 Debug.Log(passed
-                    ? "VCR P1 development player build: PASS."
-                    : "VCR P1 development player build: FAIL.");
+                    ? "VCR P1 " + (development ? "development" : "IL2CPP") +
+                        " player build: PASS."
+                    : "VCR P1 " + (development ? "development" : "IL2CPP") +
+                        " player build: FAIL.");
                 EditorApplication.Exit(passed ? 0 : 1);
             }
             catch (Exception exception)
