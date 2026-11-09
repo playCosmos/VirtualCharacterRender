@@ -336,6 +336,27 @@ namespace VCR.Runtime.UI
             _bottomVisible = PlayerPrefs.GetInt(BottomVisibleKey, 1) != 0;
         }
 
+        // GUI probe checks resolved, rendered tab state instead of trusting
+        // the persisted selection or the Editor-only tint unit test.
+        private static bool HasSelectedDockTabVisual(
+            VisualElement root, string activeId, params string[] inactiveIds)
+        {
+            if (root == null) return false;
+            var active = root.Q<Button>("vcr-tab-" + activeId);
+            if (active == null || active.panel == null || active.worldBound.width <= 24f)
+                return false;
+            var activeColor = active.resolvedStyle.backgroundColor;
+            foreach (var id in inactiveIds)
+            {
+                var inactive = root.Q<Button>("vcr-tab-" + id);
+                if (inactive == null || inactive.panel == null ||
+                    inactive.worldBound.width <= 24f ||
+                    inactive.resolvedStyle.backgroundColor.Equals(activeColor))
+                    return false;
+            }
+            return true;
+        }
+
         private void NavigateToWorkspaceFeature(WorkspaceFeature feature)
         {
             if (feature == null) return;
@@ -440,6 +461,12 @@ namespace VCR.Runtime.UI
                             (visible ? "true" : "false") + " dock_visible=" +
                             (dockVisible ? "true" : "false") +
                             " mode=" + (advancedWorkspace ? "advanced" : "live"), this);
+                        var selectedVisual = HasSelectedDockTabVisual(_workspaceRoot,
+                            WorkspacePanelCatalog.Materials,
+                            WorkspacePanelCatalog.Inspector,
+                            WorkspacePanelCatalog.Capabilities);
+                        Debug.Log("VCR U1 GUI probe: feature_search_materials_selected_visual=" +
+                            (selectedVisual ? "true" : "false"), this);
                         var contents = target.Q<ScrollView>("vcr-materials-content");
                         var viewport = contents != null ? contents.contentViewport : null;
                         var panelBounds = target.worldBound;
@@ -653,15 +680,18 @@ namespace VCR.Runtime.UI
             var hiddenLeft = !_leftVisible && _leftDock != null &&
                 _leftDock.resolvedStyle.display == DisplayStyle.None &&
                 PlayerPrefs.GetInt(LeftVisibleKey, 1) == 0;
+            var selectedVisual = HasSelectedDockTabVisual(_workspaceRoot,
+                WorkspacePanelCatalog.Tracking, WorkspacePanelCatalog.Inspector);
             var passed = visible && inspectorHidden && persisted && hiddenLeft &&
-                _featureTemporaryTabs.Count == 0;
+                selectedVisual && _featureTemporaryTabs.Count == 0;
             Debug.Log("VCR U1 GUI probe: feature_search_tracking_tab_clicked=" +
                 (passed ? "true" : "false") +
                 " visible=" + (visible ? "true" : "false") +
                 " inspector_hidden=" + (inspectorHidden ? "true" : "false") +
                 " persisted=" + (persisted ? "true" : "false") +
                 " temporary_tabs=" + _featureTemporaryTabs.Count +
-                " hidden_left_preserved=" + (hiddenLeft ? "true" : "false"), this);
+                " hidden_left_preserved=" + (hiddenLeft ? "true" : "false") +
+                " selected_visual=" + (selectedVisual ? "true" : "false"), this);
             if (!passed) yield break;
             // The hidden Inspector body still has a visible, draggable tab.
             // The right rail is narrow but must accept real pointer drops.
