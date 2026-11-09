@@ -69,10 +69,23 @@ IL2CPP acceptance. The pre-existing `windows-il2cpp-build.yml` manual workflow
 targets the **Alpha** scene, not this P1 UI Toolkit workspace. Neither may be
 reported as source-matched U1 IL2CPP proof.
 
-To test on GitHub Actions **before merging PR #44**, use the existing
-`Windows IL2CPP build and native startup smoke` workflow (present on `main`):
-choose **Run workflow → branch `feature/obs-ui-u1-layout-contract-20261026`
-→ `build_target=p1`**. The existing default `build_target=alpha` is unchanged.
+To test on GitHub Actions **before merging PR #44**, dispatch the existing
+`Windows IL2CPP build and native startup smoke` workflow (registered on `main`)
+against the exact U1 feature branch. GitHub CLI is the unambiguous path when
+the web UI does not display feature-branch-only workflow inputs:
+
+```bash
+gh workflow run windows-il2cpp-build.yml \
+  --repo playCosmos/VirtualCharacterRender \
+  --ref feature/obs-ui-u1-layout-contract-20261026 \
+  -f build_target=p1
+```
+
+In the GitHub Actions web UI, select that workflow and feature branch, then
+`build_target=p1` **if** the new input is visible. A new input may not appear
+in the default-branch-sourced form until the workflow is merged; do not run
+with `alpha` and mistake its result for P1 acceptance. The existing default
+`build_target=alpha` is unchanged.
 The registered workflow calls the branch-local reusable
 `u1-p1-windows-il2cpp.yml`, generates the real P1 scene, builds it with
 IL2CPP and runs `windows-nodebug` smoke using a SHA-256/source-bound archive.
