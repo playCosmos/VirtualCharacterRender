@@ -61,6 +61,44 @@ Both commands return exit code 0 only if the Unity BuildPipeline reports success
 
 The workspace check returns exit code 0 on success, 1 on failure. It may upgrade an older P1 scene and save the result; run on a clean working tree or review the changes afterwards. It does **not** test rendering, native window behavior, mouse input, or GPU compatibility. `RunSourceFreeAndExit` is a separate source-free P0/P1 check that does not require a generated P1 scene.
 
+## Windows P1 IL2CPP release-path validation (not yet accepted)
+
+The U1 branch's routine Linux Unity CI intentionally generates a **Windows
+Mono development Player** for source-free/hosted GUI checks. It is not Windows
+IL2CPP acceptance. The pre-existing `windows-il2cpp-build.yml` manual workflow
+targets the **Alpha** scene, not this P1 UI Toolkit workspace. Neither may be
+reported as source-matched U1 IL2CPP proof.
+
+On a **Windows** host with the pinned **Unity 6000.3.25f1** Windows IL2CPP
+module and all repository-pinned dependencies bootstrapped, start from an
+isolated checkout of the exact PR commit and no generated P1 scene. Run these
+commands in sequence using that Unity executable (replace the paths):
+
+```powershell
+$unity = "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.25f1\\Editor\\Unity.exe"
+$project = (Resolve-Path ".\\unity").Path
+& $unity -batchmode -nographics -quit -projectPath $project -executeMethod VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit -logFile "$PWD\\p1-generate.log"
+if ($LASTEXITCODE -ne 0) { throw "P1 generation failed" }
+& $unity -batchmode -nographics -quit -projectPath $project -executeMethod VCR.Editor.P1.P1BatchValidation.BuildWindowsIl2CppAndExit -logFile "$PWD\\p1-il2cpp-build.log"
+if ($LASTEXITCODE -ne 0) { throw "P1 IL2CPP build failed" }
+$player = ".\\unity\\Builds\\P1\\Windows-IL2CPP"
+foreach ($path in @("VirtualCharacterRender.exe", "GameAssembly.dll", "UnityPlayer.dll", "VirtualCharacterRender_Data\\il2cpp_data\\Metadata\\global-metadata.dat")) {
+    if (-not (Test-Path (Join-Path $player $path))) { throw "Missing IL2CPP artifact: $path" }
+}
+if (Test-Path (Join-Path $player "MonoBleedingEdge")) { throw "Unexpected Mono runtime in IL2CPP artifact" }
+```
+
+This uses `BuildOptions.None` and rejects a Windows standalone scripting
+backend other than IL2CPP before packaging. The output is **P1**, not Alpha.
+A successful compilation alone is still not an acceptance result. Package
+the exact Player contents, record their SHA-256 and source SHA, and run the
+existing `tools/run-player-smoke.py` with `--platform windows-nodebug`;
+then exercise native Settings, real VRM model loading/tracking, overlay
+recovery, dock persistence, DPI/multiple-monitor and Korean IME on an actual
+desktop. Retain both build logs, `Player.log`, the source commit, screen
+capture and results before considering PR #44 for merge. Do not publish the
+built Player or call it a release without separate approval.
+
 ## U1 completion and mandatory legacy uGUI retirement
 
 The U1 milestone is **not complete** merely because CI builds a Windows Mono player. Complete the interactive Windows GUI checks, native Settings window integration, model restore, startup diagnostics, and the supported-platform player checks before retiring the old UI. The CI Mono smoke build does not replace a Windows IL2CPP release build.
