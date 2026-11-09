@@ -987,6 +987,26 @@ namespace VCR.Editor.P1
                         "U1 right-dock captions must be compact only with 3+ tabs",
                         failures);
                 }
+                // Selected dock tabs must show a persistent visual state.
+                // Focus alone cannot distinguish a tab reached through feature
+                // search, restored layout, or a mouse click elsewhere.
+                var dockTabVisual = typeof(WorkspaceToolkitShell).GetMethod(
+                    "SetDockTabSelectedVisual",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                Expect(dockTabVisual != null,
+                    "U1 dock tabs must visibly distinguish their selected state",
+                    failures);
+                if (dockTabVisual != null)
+                {
+                    var visualProbeTab = new Button();
+                    dockTabVisual.Invoke(null, new object[] { visualProbeTab, false });
+                    var inactiveTint = visualProbeTab.style.backgroundColor.value;
+                    dockTabVisual.Invoke(null, new object[] { visualProbeTab, true });
+                    var activeTint = visualProbeTab.style.backgroundColor.value;
+                    Expect(!activeTint.Equals(inactiveTint) && activeTint.a > 0.99f,
+                        "U1 dock tab active indicator must be opaque and distinct",
+                        failures);
+                }
                 // IME candidate arrows/Enter/Esc must remain with the text
                 // editor while it reports an active composition. This pure
                 // guard contract does not simulate a physical Korean IME.
