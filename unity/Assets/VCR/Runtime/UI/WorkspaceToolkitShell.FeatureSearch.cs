@@ -469,6 +469,18 @@ namespace VCR.Runtime.UI
                             (selectedVisual ? "true" : "false"), this);
                         var contents = target.Q<ScrollView>("vcr-materials-content");
                         var viewport = contents != null ? contents.contentViewport : null;
+                        // Measure real post-layout wrapping at 960px, not just
+                        // the style property: a long status was visibly clipped
+                        // even when native frame and tab-selection probes passed.
+                        var textWrapped = _workspaceMaterialsSummary != null &&
+                            _workspaceMaterialsFeedback != null &&
+                            _workspaceMaterialsSummary.resolvedStyle.whiteSpace == WhiteSpace.Normal &&
+                            _workspaceMaterialsFeedback.resolvedStyle.whiteSpace == WhiteSpace.Normal &&
+                            viewport != null &&
+                            _workspaceMaterialsFeedback.worldBound.width <= viewport.worldBound.width + 1f &&
+                            _workspaceMaterialsFeedback.worldBound.height >= 26f;
+                        Debug.Log("VCR U1 GUI probe: feature_search_materials_text_wrapped=" +
+                            (textWrapped ? "true" : "false"), this);
                         var panelBounds = target.worldBound;
                         var clipped = viewport != null &&
                             viewport.resolvedStyle.display != DisplayStyle.None &&
