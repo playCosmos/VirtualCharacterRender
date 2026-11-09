@@ -967,6 +967,22 @@ namespace VCR.Editor.P1
                         (bool)usesDockTabs.Invoke(null, new object[] { false, false, true }),
                         "U1 panel reorder must refresh auto-tab strips at compact height/narrow width",
                         failures);
+                // The native P1 release artifact must use IL2CPP; only
+                // development Mono builds are valid diagnostic smoke inputs.
+                Expect(
+                    P1PlayerBuildMenu.AllowsPlayerBackend(
+                        BuildTarget.StandaloneWindows64, true,
+                        ScriptingImplementation.Mono2x) &&
+                    P1PlayerBuildMenu.AllowsPlayerBackend(
+                        BuildTarget.StandaloneWindows64, false,
+                        ScriptingImplementation.IL2CPP) &&
+                    !P1PlayerBuildMenu.AllowsPlayerBackend(
+                        BuildTarget.StandaloneWindows64, false,
+                        ScriptingImplementation.Mono2x) &&
+                    typeof(P1BatchValidation).GetMethod("BuildWindowsIl2CppAndExit",
+                        BindingFlags.Public | BindingFlags.Static) != null,
+                    "P1 must reject Mono Windows release builds and expose IL2CPP batch entry",
+                    failures);
                 // Narrow right docks share 260px among three tabs and
                 // independent drag handles. Stable IDs remain unchanged, but
                 // captions must be short enough to identify every tab.
