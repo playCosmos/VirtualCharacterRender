@@ -69,6 +69,17 @@ IL2CPP acceptance. The pre-existing `windows-il2cpp-build.yml` manual workflow
 targets the **Alpha** scene, not this P1 UI Toolkit workspace. Neither may be
 reported as source-matched U1 IL2CPP proof.
 
+To test on GitHub Actions **before merging PR #44**, use the existing
+`Windows IL2CPP build and native startup smoke` workflow (present on `main`):
+choose **Run workflow → branch `feature/obs-ui-u1-layout-contract-20261026`
+→ `build_target=p1`**. The existing default `build_target=alpha` is unchanged.
+The registered workflow calls the branch-local reusable
+`u1-p1-windows-il2cpp.yml`, generates the real P1 scene, builds it with
+IL2CPP and runs `windows-nodebug` smoke using a SHA-256/source-bound archive.
+Review the `u1-p1-windows-il2cpp-<run>-<attempt>` artifact and exact-source
+result. This path is **manual**, and its build/runtime success is not yet
+established by the routine Linux Mono CI.
+
 On a **Windows** host with the pinned **Unity 6000.3.25f1** Windows IL2CPP
 module and all repository-pinned dependencies bootstrapped, start from an
 isolated checkout of the exact PR commit and no generated P1 scene. Run these
