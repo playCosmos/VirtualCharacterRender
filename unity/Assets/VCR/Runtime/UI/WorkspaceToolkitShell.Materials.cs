@@ -88,9 +88,15 @@ namespace VCR.Runtime.UI
             content.contentContainer.style.width = Length.Percent(100);
             panel.Add(content);
             _workspaceMaterialsSummary = new Label("Material runtime not yet discovered.");
+            // The 260px right dock must wrap long runtime status and feedback.
+            // With horizontal scrolling disabled, single-line labels are clipped.
+            _workspaceMaterialsSummary.style.whiteSpace = WhiteSpace.Normal;
+            _workspaceMaterialsSummary.style.minWidth = 0;
             content.Add(_workspaceMaterialsSummary);
             _workspaceMaterialsFeedback = new Label(
                 "Select a material slot before applying a compiled shader.");
+            _workspaceMaterialsFeedback.style.whiteSpace = WhiteSpace.Normal;
+            _workspaceMaterialsFeedback.style.minWidth = 0;
             content.Add(_workspaceMaterialsFeedback);
             var refresh = new VisualElement();
             refresh.style.flexDirection = FlexDirection.Row;
