@@ -1403,20 +1403,22 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
                  "clientBottom": client_bottom,
                  "scrollDistance": initial_top - after.top}))
 
-    # Observe the *actual child control text*, not only the presence of
-    # a multiline EDIT. The CI P1 Player should publish its configuration
-    # path and the final automatic-save state in the same native control.
-    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
-    user32.GetWindowTextLengthW.restype = ctypes.c_int
-    user32.GetWindowTextW.argtypes = [
-        wintypes.HWND, ctypes.c_wchar_p, ctypes.c_int]
-    user32.GetWindowTextW.restype = ctypes.c_int
-    length = user32.GetWindowTextLengthW(status)
-    if length < 32 or length > 32767:
-        raise RuntimeError("Native configuration status text length is invalid")
-    status_text = ctypes.create_unicode_buffer(length + 1)
-    copied = user32.GetWindowTextW(status, status_text, len(status_text))
-    if (copied != length or
+    # This is a foreign-process child EDIT. GetWindowTextW cannot read
+    # child controls belonging to another process (unlike window captions).
+    # WM_GETTEXT is a system-marshalled message; bound the call with
+    # SendMessageTimeoutW to avoid hanging if the Player stops responding.
+    user32.SendMessageTimeoutW.argtypes = [
+        wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_void_p,
+        wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
+    user32.SendMessageTimeoutW.restype = ctypes.c_void_p
+    status_text = ctypes.create_unicode_buffer(8192)
+    copied = ctypes.c_size_t()
+    if not user32.SendMessageTimeoutW(
+            status, 0x000D, len(status_text),
+            ctypes.cast(status_text, ctypes.c_void_p),
+            0x0002, 1500, ctypes.byref(copied)):
+        raise RuntimeError("Native Settings WM_GETTEXT timed out or failed")
+    if (copied.value < 32 or copied.value >= len(status_text) - 1 or
             not status_text.value.startswith("Configuration: ") or
             "Automatic save: enabled" not in status_text.value):
         raise RuntimeError(
