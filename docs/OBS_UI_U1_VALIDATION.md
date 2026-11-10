@@ -1,6 +1,6 @@
 # UI Toolkit U1 integration gate
 
-U1 is implemented in source but **not accepted as a production UI** until Unity compilation, player builds and interactive desktop checks pass. GitHub repository CI success alone does not establish Unity compatibility.
+U1 is implemented in source and its Unity P0–P13 checks, Windows Mono Player GUI and Windows nondevelopment P1 IL2CPP build/native GUI smoke have passed at the source commits documented below. **U1 is still not accepted as a production UI** until interactive Windows/macOS hardware, IME and desktop checks pass. GitHub-hosted CI success alone is not operator acceptance.
 
 ## Feature search M1–M3
 
@@ -61,18 +61,41 @@ Both commands return exit code 0 only if the Unity BuildPipeline reports success
 
 The workspace check returns exit code 0 on success, 1 on failure. It may upgrade an older P1 scene and save the result; run on a clean working tree or review the changes afterwards. It does **not** test rendering, native window behavior, mouse input, or GPU compatibility. `RunSourceFreeAndExit` is a separate source-free P0/P1 check that does not require a generated P1 scene.
 
-## Windows P1 IL2CPP release-path validation (not yet accepted)
+## Windows P1 IL2CPP release-path validation (CI PASS; physical acceptance pending)
 
-The U1 branch's routine Linux Unity CI intentionally generates a **Windows
-Mono development Player** for source-free/hosted GUI checks. It is not Windows
-IL2CPP acceptance. The pre-existing `windows-il2cpp-build.yml` manual workflow
-targets the **Alpha** scene, not this P1 UI Toolkit workspace. Neither may be
-reported as source-matched U1 IL2CPP proof.
+The routine Unity P0–P13 workflow generates a **Windows Mono development**
+Player and tests source-free Unity compilation, actual Windows startup/quit
+and hosted GUI interaction. It does **not** prove Windows IL2CPP compatibility.
 
-To test on GitHub Actions **before merging PR #44**, dispatch the existing
-`Windows IL2CPP build and native startup smoke` workflow (registered on `main`)
-against the exact U1 feature branch. GitHub CLI is the unambiguous path when
-the web UI does not display feature-branch-only workflow inputs:
+The feature branch also has a separate **source-bound P1/UI Toolkit Windows
+IL2CPP** workflow, `.github/workflows/u1-p1-windows-il2cpp.yml`, using Unity
+6000.3.25f1 and a real nondevelopment P1 Player (`BuildOptions.None`). The
+workflow checks `GameAssembly.dll`, `UnityPlayer.dll`, IL2CPP metadata,
+absence of the Mono runtime, source SHA and SHA-256 of the tested Player ZIP.
+It then runs real native startup/quit, persisted-config relaunch, four
+fail-closed recovery cases and two operator-save recovery confirmations.
+
+- On commit `68c2232888bce5b8f0aa78ae0ef069fcdb5519de`,
+  [Windows IL2CPP run #42777614980](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42777614980)
+  passed build and native configuration recovery. This resolved the
+  AOT-incompatible captured `EnumWindows` callback discovered by the earlier
+  failed IL2CPP relaunch.
+- On commit `4bf22cf223c6acd95142178c3e5de72f77e00d2e`,
+  [Windows IL2CPP run #42805535645](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42805535645)
+  **passed both the native recovery suite and the real nondevelopment
+  IL2CPP GUI probe**. The latter exercises Win32 titlebar/independent
+  resize, native Settings, OS keyboard/feature search, dock/restart
+  persistence, managed quit and runtime exception checks. The packaged
+  Player ZIP SHA-256 for that run is
+  `fc1aa073ffb5d3dd569903a6e51cd45c2e0ced3dc1be5644a23903503a41442a`.
+  Its [source-bound diagnostic artifact](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42805535645/artifacts/13762389589)
+  is **CI evidence only**, not a published release.
+
+This workflow supports both `workflow_dispatch` and a reusable
+`workflow_call`. For PR #44 only, a path-filtered branch `push` trigger
+also runs it when the P1 IL2CPP workflow file changes, so ordinary source
+commits do not repeatedly incur a costly Windows Docker/Unity image build.
+The manual route via the main-registered entry workflow remains available:
 
 ```bash
 gh workflow run windows-il2cpp-build.yml \
@@ -81,17 +104,13 @@ gh workflow run windows-il2cpp-build.yml \
   -f build_target=p1
 ```
 
-In the GitHub Actions web UI, select that workflow and feature branch, then
-`build_target=p1` **if** the new input is visible. A new input may not appear
-in the default-branch-sourced form until the workflow is merged; do not run
-with `alpha` and mistake its result for P1 acceptance. The existing default
-`build_target=alpha` is unchanged.
-The registered workflow calls the branch-local reusable
-`u1-p1-windows-il2cpp.yml`, generates the real P1 scene, builds it with
-IL2CPP and runs `windows-nodebug` smoke using a SHA-256/source-bound archive.
-Review the `u1-p1-windows-il2cpp-<run>-<attempt>` artifact and exact-source
-result. This path is **manual**, and its build/runtime success is not yet
-established by the routine Linux Mono CI.
+The default `build_target=alpha` runs the *different* P0 Alpha scene; never
+count that as P1 UI Toolkit evidence. A completed hosted GUI probe and a
+normal nondevelopment IL2CPP process **do not constitute physical operator
+acceptance**: Korean IME, real display scaling/compositor, loaded VRM,
+tracking devices, native overlay click-through/recovery and macOS AppKit
+still require actual human tests. Keep PR #44 Draft/unmerged until those
+checks are evidenced.
 
 On a **Windows** host with the pinned **Unity 6000.3.25f1** Windows IL2CPP
 module and all repository-pinned dependencies bootstrapped, start from an
@@ -114,14 +133,41 @@ if (Test-Path (Join-Path $player "MonoBleedingEdge")) { throw "Unexpected Mono r
 
 This uses `BuildOptions.None` and rejects a Windows standalone scripting
 backend other than IL2CPP before packaging. The output is **P1**, not Alpha.
-A successful compilation alone is still not an acceptance result. Package
-the exact Player contents, record their SHA-256 and source SHA, and run the
-existing `tools/run-player-smoke.py` with `--platform windows-nodebug`;
-then exercise native Settings, real VRM model loading/tracking, overlay
-recovery, dock persistence, DPI/multiple-monitor and Korean IME on an actual
-desktop. Retain both build logs, `Player.log`, the source commit, screen
-capture and results before considering PR #44 for merge. Do not publish the
-built Player or call it a release without separate approval.
+The CI binary and native smoke were successfully tested at the commit
+listed above; a subsequent code change needs fresh source-matched CI evidence.
+To run the **actual IL2CPP** P1 build on a physical Windows machine, use
+`tools/run-p1-player.ps1 -Mode IL2CPP`, not the generic `Release` mode
+(which follows the active Unity scripting backend). Both Windows/macOS
+launchers resolve Player output relative to `unity/Builds/P1`.
+
+For example, after building locally with the commands above:
+
+```powershell
+.\tools\run-p1-player.ps1 -Mode IL2CPP `
+  -EvidenceDirectory ".\u1-physical-evidence"
+```
+
+To test the exact **CI-built Player**, download its Actions artifact,
+verify `windows.zip` against `windows.sha256` and
+`windows.source-sha` against the expected commit, and extract
+`windows.zip` into a directory of its own. Then run:
+
+```powershell
+.\tools\run-p1-player.ps1 -Mode IL2CPP `
+  -PlayerDirectory "C:\path\to\extracted-player" `
+  -EvidenceDirectory ".\u1-physical-evidence"
+```
+
+The launcher rejects a missing `GameAssembly.dll`, `UnityPlayer.dll`,
+IL2CPP metadata or unexpected `MonoBleedingEdge`. Its optional local
+evidence directory stores a `Player.log`, executable SHA-256 and process
+exit code; `physicalHumanAcceptance` remains **false** in machine-generated
+JSON. A human must separately record native Settings, real VRM/tracking,
+overlay recovery, dock persistence, Korean IME, multiple DPI/monitors,
+macOS AppKit and actual rendered pixels. Retain screenshots and device
+results, and explicitly approve the physical acceptance gate before merging
+PR #44. Do not publish the tested Player as a release without separate
+approval.
 
 ## U1 completion and mandatory legacy uGUI retirement
 
