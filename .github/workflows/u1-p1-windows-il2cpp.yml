@@ -3,6 +3,13 @@ name: U1 P1 Windows IL2CPP build and native smoke (manual)
 # Deliberately manual: the Windows IL2CPP editor image is expensive. This
 # checks the actual P1/U1 scene, not the existing Alpha release candidate.
 on:
+  # One isolated premerge P1 IL2CPP gate on edits to this workflow only.
+  # Ordinary U1 source pushes still run the lighter Linux Mono GUI suite.
+  push:
+    branches:
+      - feature/obs-ui-u1-layout-contract-20261026
+    paths:
+      - .github/workflows/u1-p1-windows-il2cpp.yml
   workflow_dispatch:
   workflow_call:
 
