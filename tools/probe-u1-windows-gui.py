@@ -1338,8 +1338,26 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
             result.append(evidence)
     finally:
         user32.SetCursorPos(cursor.x, cursor.y)
+
+    # The General page's full configuration path/recovery message used to be
+    # a 36px STATIC clipped at the bottom of the 720px native Settings window.
+    # Verify a real Win32 read-only, multiline, scrollable status control.
+    status = user32.GetDlgItem(settings_hwnd, 94)
+    if not status or not user32.IsWindowVisible(status):
+        raise RuntimeError("General Settings configuration status is missing")
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.GetWindowLongW.restype = ctypes.c_long
+    style = user32.GetWindowLongW(status, -16) & 0xffffffff
+    required = 0x0004 | 0x0040 | 0x0800 | 0x00200000
+    bounds = wintypes.RECT()
+    if (style & required) != required or not user32.GetWindowRect(
+            status, ctypes.byref(bounds)) or bounds.bottom - bounds.top < 80:
+        raise RuntimeError(
+            "Configuration status must support multiline read-only scrolling: " +
+            str({"style": hex(style), "height": bounds.bottom - bounds.top}))
     return {"passed": True, "visitedPages": [x["page"] for x in result],
-            "steps": result, "physicalHumanAcceptance": False}
+            "steps": result, "configurationStatusScrollable": True,
+            "physicalHumanAcceptance": False}
 
 
 def probe_native_settings_close_reopen(player_hwnd, pid, player_log,
