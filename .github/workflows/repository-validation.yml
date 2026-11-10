@@ -110,6 +110,9 @@ jobs:
       - name: Test native Player quit timer including timeout preservation
         run: python3 tools/run-player-smoke.py --self-test
 
+      - name: Reject instance-capturing Win32 callbacks incompatible with IL2CPP
+        run: python3 tools/test-il2cpp-window-frame-callback.py
+
       # Unused LeapC hint connection is blocked by VCR-owned runtime policy.
       # Static source checks verify it; external package modification is not needed.
 
