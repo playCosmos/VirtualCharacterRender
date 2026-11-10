@@ -48,10 +48,10 @@ done
 
 case "$MODE" in
   development)
-    APP="$REPO_ROOT/Builds/P1/macOS-Development/VirtualCharacterRender.app"
+    APP="$REPO_ROOT/unity/Builds/P1/macOS-Development/VirtualCharacterRender.app"
     ;;
   release)
-    APP="$REPO_ROOT/Builds/P1/macOS/VirtualCharacterRender.app"
+    APP="$REPO_ROOT/unity/Builds/P1/macOS/VirtualCharacterRender.app"
     ;;
   *)
     echo "--mode must be development or release." >&2
