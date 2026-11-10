@@ -193,6 +193,55 @@ jobs:
             --source "$GITHUB_SHA" \
             --output Builds/PlayerSmoke/p1-windows-il2cpp
 
+      # The Mono development Player already gets OS GUI probing in the
+      # source-free workflow. Probe the actual nondevelopment IL2CPP Player,
+      # too: this catches AOT-only window/frame/settings failures that do
+      # not surface in the headless startup/config smoke.
+      - name: Exercise actual P1 IL2CPP native GUI and dock persistence
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $player = 'unity/Builds/P1/Windows-IL2CPP/VirtualCharacterRender.exe'
+          $reportPath = 'Builds/GUIProbe/p1-windows-il2cpp/gui-probe.json'
+          if (-not (Test-Path -LiteralPath $player)) {
+            throw 'Source-built P1 IL2CPP executable missing'
+          }
+          python -m py_compile tools/probe-u1-windows-gui.py
+          if ($LASTEXITCODE -ne 0) { throw 'GUI probe syntax validation failed' }
+          python tools/probe-u1-windows-gui.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'GUI probe self-test failed' }
+          python tools/probe-u1-windows-gui.py `
+            --player $player `
+            --source "$env:GITHUB_SHA" `
+            --screen-width 960 `
+            --screen-height 520 `
+            --output Builds/GUIProbe/p1-windows-il2cpp
+          if ($LASTEXITCODE -ne 0) {
+            throw 'P1 IL2CPP GUI probe failed; inspect archived gui-probe.json and Player.log'
+          }
+          if (-not (Test-Path -LiteralPath $reportPath)) {
+            throw 'P1 IL2CPP GUI probe produced no JSON evidence'
+          }
+          $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          if ($report.windowObserved -ne $true -or $report.passed -ne $true -or
+              $report.nativeFramePassed -ne $true -or
+              $report.nativeInputTargetsPassed -ne $true -or
+              $report.nativeWindowControlsPassed -ne $true -or
+              $report.freeResizePassed -ne $true -or
+              $report.nativeSettingsNavigationPassed -ne $true -or
+              $report.featureSearchKeyboardPassed -ne $true -or
+              $report.layoutRestartPassed -ne $true -or
+              $report.runtimeExceptionFree -ne $true -or
+              $report.managedQuitObserved -ne $true -or
+              $report.exitCode -ne 0) {
+            throw 'P1 IL2CPP GUI evidence is incomplete or rejected'
+          }
+          if ($report.interactiveU1Accepted -eq $true) {
+            throw 'Hosted GUI regression must not claim physical operator acceptance'
+          }
+          Write-Host 'Source-bound P1 IL2CPP native GUI regression PASS; physical acceptance remains pending'
+
       - name: Report failure details from actual Player smoke evidence
         if: failure()
         shell: bash
@@ -220,5 +269,6 @@ jobs:
           path: |
             p1-il2cpp-artifacts/
             Builds/PlayerSmoke/p1-windows-il2cpp/
+            Builds/GUIProbe/p1-windows-il2cpp/
           if-no-files-found: warn
           retention-days: 7
