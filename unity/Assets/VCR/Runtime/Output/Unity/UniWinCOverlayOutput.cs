@@ -298,7 +298,59 @@ namespace VCR.Runtime.Output.Unity
         private const uint SwpNoMoveNoSizeNoZOrderFrameChanged =
             0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020;
 
+        // Reverse P/Invoke must target an AOT-rooted static method. A lambda
+        // capturing `this` works under Mono but crashes native Windows IL2CPP
+        // as soon as startup loads a persisted overlay configuration.
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr param);
+
+        private sealed class DesktopFrameRestoreResult
+        {
+            public uint ProcessId;
+            public uint Before;
+            public uint After;
+            public bool Failed;
+            public bool Repaired;
+        }
+
+        private static readonly EnumWindowsCallback RestoreDesktopFrameCallback =
+            RestoreDesktopFrameForWindow;
+
+        [AOT.MonoPInvokeCallback(typeof(EnumWindowsCallback))]
+        private static bool RestoreDesktopFrameForWindow(IntPtr hwnd, IntPtr context)
+        {
+            // EnumWindows synchronously invokes the callback while its
+            // GCHandle is alive. No managed instance delegate crosses Win32.
+            var state = GCHandle.FromIntPtr(context).Target as DesktopFrameRestoreResult;
+            if (state == null)
+                return false;
+            GetWindowThreadProcessId(hwnd, out var windowPid);
+            if (windowPid != state.ProcessId)
+                return true;
+
+            var name = new StringBuilder(64);
+            GetClassNameW(hwnd, name, name.Capacity);
+            if (!string.Equals(name.ToString(), "UnityWndClass", StringComparison.Ordinal))
+                return true;
+
+            var style = (uint)GetWindowLongW(hwnd, GwlStyle);
+            if ((style & WsOverlappedWindow) != WsOverlappedWindow ||
+                (style & WsPopup) != 0)
+            {
+                var next = (style | WsOverlappedWindow) & ~WsPopup;
+                SetWindowLongW(hwnd, GwlStyle, unchecked((int)next));
+                var actualStyle = (uint)GetWindowLongW(hwnd, GwlStyle);
+                state.Before = style;
+                state.After = actualStyle;
+                state.Failed = (actualStyle & WsOverlappedWindow) != WsOverlappedWindow ||
+                    (actualStyle & WsPopup) != 0 ||
+                    !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                        SwpNoMoveNoSizeNoZOrderFrameChanged);
+                state.Repaired = !state.Failed;
+            }
+            return false;
+        }
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -322,43 +374,29 @@ namespace VCR.Runtime.Output.Unity
         private void RestoreWindowsDesktopFrameIfMissing()
         {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-            var myPid = GetCurrentProcessId();
-            EnumWindows((hwnd, _) =>
+            var state = new DesktopFrameRestoreResult { ProcessId = GetCurrentProcessId() };
+            var context = GCHandle.Alloc(state);
+            try
             {
-                GetWindowThreadProcessId(hwnd, out var windowPid);
-                if (windowPid != myPid) return true;
-                var name = new StringBuilder(64);
-                GetClassNameW(hwnd, name, name.Capacity);
-                if (!string.Equals(name.ToString(), "UnityWndClass",
-                    StringComparison.Ordinal))
-                    return true;
+                EnumWindows(RestoreDesktopFrameCallback, GCHandle.ToIntPtr(context));
+            }
+            finally
+            {
+                context.Free();
+            }
 
-                var style = (uint)GetWindowLongW(hwnd, GwlStyle);
-                if ((style & WsOverlappedWindow) != WsOverlappedWindow ||
-                    (style & WsPopup) != 0)
-                {
-                    var next = (style | WsOverlappedWindow) & ~WsPopup;
-                    SetWindowLongW(hwnd, GwlStyle, unchecked((int)next));
-                    var actualStyle = (uint)GetWindowLongW(hwnd, GwlStyle);
-                    if ((actualStyle & WsOverlappedWindow) != WsOverlappedWindow ||
-                        (actualStyle & WsPopup) != 0 ||
-                        !SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
-                            SwpNoMoveNoSizeNoZOrderFrameChanged))
-                    {
-                        if (Time.realtimeSinceStartup >= _nextDesktopFrameWarningAt)
-                        {
-                            _nextDesktopFrameWarningAt = Time.realtimeSinceStartup + 5f;
-                            Debug.LogWarning("VCR P1: Windows desktop title bar " +
-                                "restoration failed; inspect native window style " +
-                                "(before=0x" + style.ToString("X8") +
-                                ", after=0x" + actualStyle.ToString("X8") + ").", this);
-                        }
-                    }
-                    else
-                        Debug.Log("VCR P1: restored native title bar and resize frame.", this);
-                }
-                return false;
-            }, IntPtr.Zero);
+            // Keep Unity logging and per-instance warning throttling outside
+            // the unmanaged callback. The callback only reports the result.
+            if (state.Failed && Time.realtimeSinceStartup >= _nextDesktopFrameWarningAt)
+            {
+                _nextDesktopFrameWarningAt = Time.realtimeSinceStartup + 5f;
+                Debug.LogWarning("VCR P1: Windows desktop title bar " +
+                    "restoration failed; inspect native window style " +
+                    "(before=0x" + state.Before.ToString("X8") +
+                    ", after=0x" + state.After.ToString("X8") + ").", this);
+            }
+            else if (state.Repaired)
+                Debug.Log("VCR P1: restored native title bar and resize frame.", this);
 #endif
         }
 
