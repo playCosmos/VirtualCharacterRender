@@ -55,6 +55,10 @@ namespace VCR.Runtime.UI
         private const uint ForegroundColor = 0x00EFE8E2u;
         private const uint MutedColor = 0x00B8ABA0u;
         private const uint EditStyle = 0x00800080u;
+        // Long configuration paths/recovery diagnostics need a read-only
+        // multiline viewport rather than the standard one-row STATIC label.
+        private const uint StatusTextStyle = 0x00800000u | 0x00200000u |
+            0x0004u | 0x0040u | 0x0800u; // BORDER, VSCROLL, MULTILINE, AUTOVSCROLL, READONLY
         private const int ShowNormal = 5;
         private const int Hide = 0;
         private const int CloseMessage = 0x10;
@@ -331,12 +335,24 @@ namespace VCR.Runtime.UI
             return control;
         }
 
+        private int ContentBottomForCategory(int category)
+        {
+            // A multi-line status area may extend below its ordinary 48px
+            // row. Compute scrolling from actual child bounds, not row count.
+            var bottom = rows[category] * 48 + 120;
+            foreach (var entry in controlLayouts)
+                if (controlCategories.TryGetValue(entry.Key, out var owner) &&
+                    owner == category)
+                    bottom = Math.Max(bottom, entry.Value.Top + entry.Value.Height + 20);
+            return bottom;
+        }
+
         private void ScrollDetail(uint message, IntPtr value)
         {
             if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
                 return;
             var page = selectedCategory;
-            var max = Math.Max(0, rows[page] * 48 + 120 - area.bottom);
+            var max = Math.Max(0, ContentBottomForCategory(page) - area.bottom);
             var position = scrollOffsets[page];
             if (message == MouseWheelMessage)
             {
@@ -374,13 +390,14 @@ namespace VCR.Runtime.UI
             if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
                 return;
             var contentWidth = Math.Max(200, area.right - 300);
-            var max = Math.Max(0, rows[selectedCategory] * 48 + 120 - area.bottom);
+            var contentBottom = ContentBottomForCategory(selectedCategory);
+            var max = Math.Max(0, contentBottom - area.bottom);
             scrollOffsets[selectedCategory] = Math.Min(scrollOffsets[selectedCategory], max);
             var scroll = new ScrollInfo
             {
                 cbSize = (uint)Marshal.SizeOf<ScrollInfo>(),
                 fMask = ScrollRange,
-                nMin = 0, nMax = rows[selectedCategory] * 48 + 120,
+                nMin = 0, nMax = contentBottom,
                 nPage = (uint)Math.Max(1, area.bottom),
                 nPos = scrollOffsets[selectedCategory]
             };
@@ -508,11 +525,18 @@ namespace VCR.Runtime.UI
             }
             else
             {
+                // The last General page row contains the full path of the
+                // active configuration and may also show recovery details.
+                // A 36px STATIC clipped this at the bottom of a 720px window.
+                var statusDetails = category == 0 && id == 94 &&
+                    kind == ControlKind.Label;
                 var textHandle = NewControl(
-                    kind == ControlKind.Button ? "BUTTON" : "STATIC",
-                    label ?? "", kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
-                    id,
-                    270, top, 600, 36, expandable: true);
+                    statusDetails ? "EDIT" : kind == ControlKind.Button ? "BUTTON" : "STATIC",
+                    label ?? "",
+                    statusDetails ? StatusTextStyle :
+                        kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
+                    id, 270, top, 600, statusDetails ? 100 : 36,
+                    expandable: true);
                 handles.Add(textHandle);
                 if (kind == ControlKind.Label && id != 0)
                     textHandles[id] = textHandle;
