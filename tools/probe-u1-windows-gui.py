@@ -1380,10 +1380,54 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
             "General Settings status remains below viewport after native "
             "parent scroll: initial top=" + str(initial_top) +
             ", observed top=" + str(after.top))
+
+    # Child movement alone is insufficient if the final line still extends
+    # below the *client* viewport. Measure the real Win32 client coordinate
+    # system, not the outer titlebar/window rectangle.
+    user32.GetClientRect.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetClientRect.restype = wintypes.BOOL
+    user32.ClientToScreen.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user32.ClientToScreen.restype = wintypes.BOOL
+    client = wintypes.RECT()
+    origin = wintypes.POINT(0, 0)
+    if (not user32.GetClientRect(settings_hwnd, ctypes.byref(client)) or
+            not user32.ClientToScreen(settings_hwnd, ctypes.byref(origin))):
+        raise OSError("Cannot measure native Settings client viewport")
+    client_bottom = origin.y + client.bottom
+    if after.bottom > client_bottom + 1:
+        raise RuntimeError(
+            "Native Settings status remains clipped after page-down: " +
+            str({"statusBottom": after.bottom,
+                 "clientBottom": client_bottom,
+                 "scrollDistance": initial_top - after.top}))
+
+    # Observe the *actual child control text*, not only the presence of
+    # a multiline EDIT. The CI P1 Player should publish its configuration
+    # path and the final automatic-save state in the same native control.
+    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [
+        wintypes.HWND, ctypes.c_wchar_p, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
+    length = user32.GetWindowTextLengthW(status)
+    if length < 32 or length > 32767:
+        raise RuntimeError("Native configuration status text length is invalid")
+    status_text = ctypes.create_unicode_buffer(length + 1)
+    copied = user32.GetWindowTextW(status, status_text, len(status_text))
+    if (copied != length or
+            not status_text.value.startswith("Configuration: ") or
+            "Automatic save: enabled" not in status_text.value):
+        raise RuntimeError(
+            "Native Settings failed to display complete configuration path "
+            "and final automatic-save state")
     return {"passed": True, "visitedPages": [x["page"] for x in result],
             "steps": result, "configurationStatusScrollable": True,
             "configurationStatusParentScrolled": True,
             "configurationStatusScrollDistance": initial_top - after.top,
+            "configurationStatusInClient": True,
+            "configurationStatusTextComplete": True,
             "physicalHumanAcceptance": False}
 
 
