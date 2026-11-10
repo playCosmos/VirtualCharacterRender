@@ -193,6 +193,25 @@ jobs:
             --source "$GITHUB_SHA" \
             --output Builds/PlayerSmoke/p1-windows-il2cpp
 
+      - name: Report failure details from actual Player smoke evidence
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("Builds/PlayerSmoke/p1-windows-il2cpp")
+          for path in sorted(root.glob("*-player-smoke.json")) + [
+                  root / "player-smoke.json", root / "runner-evidence.json"]:
+              if not path.is_file():
+                  continue
+              report = json.loads(path.read_text(encoding="utf-8"))
+              print(path.name, "passed=", report.get("passed"),
+                    "exitCode=", report.get("exitCode"),
+                    "error=", report.get("error", ""))
+          PY
+
       - name: Archive tested binary and diagnostics (not a release)
         if: always()
         uses: actions/upload-artifact@v4
