@@ -72,8 +72,23 @@ if ($Vrm) { Write-Host "VRM: $vrmPath" }
 if ($Config) { Write-Host "Config: $configPath" }
 if ($evidenceRoot) { Write-Host "Local evidence directory: $evidenceRoot" }
 
-& $exe @argsList
-$exitCode = $LASTEXITCODE
+# Unity is a GUI-subsystem process. Invoke it with an explicit Wait
+# rather than assuming every Windows PowerShell host waits for native GUI
+# applications before returning an exit code.
+# Quote complete arguments so VRM/config/evidence paths may contain spaces.
+$launchOptions = @{
+    FilePath = $exe
+    WorkingDirectory = $playerRoot
+    PassThru = $true
+    Wait = $true
+}
+if ($argsList.Count -gt 0) {
+    $launchOptions.ArgumentList = @($argsList | ForEach-Object {
+        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+    })
+}
+$playerProcess = Start-Process @launchOptions
+$exitCode = $playerProcess.ExitCode
 
 if ($evidenceRoot) {
     [ordered]@{
