@@ -1355,8 +1355,35 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
         raise RuntimeError(
             "Configuration status must support multiline read-only scrolling: " +
             str({"style": hex(style), "height": bounds.bottom - bounds.top}))
+
+    # Checking WS_VSCROLL alone cannot prove the bottom status is reachable:
+    # the parent previously computed its range from row count, clipping the
+    # enlarged final control. Request an actual native SB_PAGEDOWN, then
+    # observe the child HWND move up relative to its original screen bounds.
+    user32.PostMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    initial_top = bounds.top
+    if not user32.PostMessageW(settings_hwnd, 0x0115, 3, 0):
+        raise OSError("Cannot post native Settings page-down scroll")
+    deadline = time.monotonic() + 3
+    after = wintypes.RECT()
+    moved = False
+    while time.monotonic() < deadline:
+        if user32.GetWindowRect(status, ctypes.byref(after)) and (
+                after.top < initial_top - 5):
+            moved = True
+            break
+        time.sleep(0.1)
+    if not moved:
+        raise RuntimeError(
+            "General Settings status remains below viewport after native "
+            "parent scroll: initial top=" + str(initial_top) +
+            ", observed top=" + str(after.top))
     return {"passed": True, "visitedPages": [x["page"] for x in result],
             "steps": result, "configurationStatusScrollable": True,
+            "configurationStatusParentScrolled": True,
+            "configurationStatusScrollDistance": initial_top - after.top,
             "physicalHumanAcceptance": False}
 
 
