@@ -205,9 +205,13 @@ per attempt), run the machine-evidence preflight:
 
 The preflight fails closed when the source-bound payload check was omitted,
 `Player.log` is missing, empty or hash-mismatched, the Player exited nonzero,
+the log lacks the real managed `application status=started` and
+`OnApplicationQuit finished` markers in chronological order,
 the log contains a recognized runtime exception or failed U1 refresh, or the
-launcher JSON falsely claims human approval. A successful preflight reports
-`machineEvidencePreflightPassed=true` and still reports
+launcher JSON falsely claims human approval. The startup and managed shutdown
+markers match the requirements used in the hosted native GUI probe; a
+synthetic nonempty log with valid hashes is not sufficient. A successful
+preflight reports `machineEvidencePreflightPassed=true` and still reports
 `physicalHumanAcceptance=false`. This cannot infer whether an actual GPU
 frame was correct, the operator interacted with controls, or a device worked.
 The expected commit SHA must be independently checked against the source
