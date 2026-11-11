@@ -208,6 +208,55 @@ class MockP1Player {
         'Mock test Player') {
         throw 'Mock Player log was not directed to the evidence folder'
     }
+    # A mock process returning 17 is not a successful physical run, even
+    # when it produced internally consistent hashes and a source manifest.
+    $inspector = Join-Path $PSScriptRoot 'inspect-p1-physical-evidence.ps1'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted a nonzero native mock exit'
+    }
+
+    # Synthetic clean evidence exercises the independent post-run inspector
+    # without misrepresenting the real mock Player as Unity/hardware evidence.
+    $syntheticLog = Join-Path $evidence 'Player.log'
+    Set-Content -LiteralPath $syntheticLog -Value 'Synthetic ordinary startup and quit' -Encoding UTF8
+    $record.exitCode = 0
+    $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
+    $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
+    $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -ne 0) {
+        throw 'P1 physical inspector rejected internally consistent synthetic clean evidence'
+    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha ('b' * 40)
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted wrong source SHA'
+    }
+
+    Set-Content -LiteralPath $syntheticLog -Value 'NullReferenceException: synthetic regression' -Encoding UTF8
+    $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
+    $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
+    $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted a hash-consistent runtime exception log'
+    }
+
+    Set-Content -LiteralPath $syntheticLog -Value 'Synthetic ordinary startup and quit' -Encoding UTF8
+    $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
+    $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
+    $record.physicalHumanAcceptance = $true
+    $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted self-asserted human approval'
+    }
+
     # A previous Player.log and launch JSON must not be treated as fresh
     # evidence when a subsequent process exits without writing a new log.
     $env:VCR_P1_MOCK_NO_LOG = '1'
