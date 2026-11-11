@@ -38,7 +38,7 @@ jobs:
           retention-days: 7
 
   build-p1-macos:
-    name: Build actual U1 P1 macOS non-development Player
+    name: Build actual U1 P1 macOS nondevelopment Mono Player
     needs: appkit-plugin
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -102,7 +102,7 @@ jobs:
           set -euo pipefail
           test -s unity/Assets/VCR/P1/P1Runtime.unity
           test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
-      - name: Build actual non-development P1 macOS Player
+      - name: Build actual non-development P1 macOS Mono Player
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -112,7 +112,7 @@ jobs:
           projectPath: unity
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneOSX
-          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildMacReleaseAndExit
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildMacMonoCiAndExit
           customImage: unityci/editor:6000.3.25f1-mac-mono-3
           manualExit: true
           versioning: None
@@ -159,7 +159,7 @@ jobs:
           (target / "macos.source-sha").write_text(
               os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
           (target / "build-evidence.txt").write_text(
-              "scene=P1/U1\nplatform=macOS\nmode=nondevelopment\n"
+              "scene=P1/U1\nplatform=macOS\nmode=nondevelopment\nbackend=Mono\n"
               "unity=6000.3.25f1\nsource_sha=" + os.environ["GITHUB_SHA"] +
               "\narchive_sha256=" + digest.hexdigest() + "\n", encoding="utf-8")
           print("P1 macOS Player archive SHA-256:", digest.hexdigest())
