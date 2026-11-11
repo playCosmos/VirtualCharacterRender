@@ -258,6 +258,59 @@ PR #44 remains Draft until the actual operator and macOS acceptance requirements
 are explicitly satisfied. Successful CI and machine preflight do **not** authorize
 merging, uGUI retirement or release.
 
+## macOS P1 native Player launch and evidence boundary
+
+The macOS P1 launcher is `tools/run-p1-player.sh`. In ordinary use,
+`--mode release` / `--mode development` resolves the matching locally built
+`.app` under `unity/Builds/P1`, then opens it via LaunchServices (`open -W`).
+That is useful for normal GUI interaction but **does not reliably report
+the app's actual native process exit code**.
+
+For a real macOS hardware/operator test, supply a fresh unique evidence
+folder to run `CFBundleExecutable` directly and collect its exit status and
+isolated Unity `Player.log`:
+
+```bash
+bash tools/run-p1-player.sh \
+  --mode release \
+  --evidence-dir "./u1-macos-physical-01"
+```
+
+To test a manually located macOS `.app` bundle and optional existing VRM
+and configuration, use:
+
+```bash
+bash tools/run-p1-player.sh \
+  --app "/path/to/VirtualCharacterRender.app" \
+  --vrm "/path/to/character.vrm" \
+  --config "/path/to/config.json" \
+  --evidence-dir "./u1-macos-physical-02"
+```
+
+The launcher resolves the app's executable from `Contents/Info.plist`
+rather than assuming its name, rejects missing/config-directory and VRM
+inputs before launch, and refuses to reuse an existing evidence directory.
+The resulting `launch-evidence.json` records the executable and log SHA-256,
+log byte count and actual process exit code; a zero-exit process missing
+a fresh nonempty `Player.log` is rejected. Machine-generated records contain
+`sourceBound=false` and `physicalHumanAcceptance=false`, since this launcher
+does **not** yet independently match a packaged macOS P1 binary against a
+source-bound CI artifact. Running directly can differ from normal
+LaunchServices activation; test both routes during real AppKit acceptance.
+
+The `tools/test-p1-macos-launcher.py` fixture exercises the same launch
+contract without Unity, including missing inputs, an unsafe `Info.plist`
+executable path, native mock exit 17, paths with spaces, missing Player.log
+and stale-evidence rejection. Green Ubuntu or macOS CI here means only that
+the **launcher contract** works, not that macOS UI, Settings or real trackers
+were successfully exercised.
+
+macOS physical acceptance still requires an actual P1 build on the supported
+Apple hardware, the AppKit native Settings and window behaviors, rendered
+VRM, working devices, Retina/keyboard behavior and manual confirmation.
+Keep that decision separate from Windows CI and never treat a successful
+mock or alpha Player as P1 macOS acceptance.
+
 ## U1 completion and mandatory legacy uGUI retirement
 
 The U1 milestone is **not complete** merely because CI builds a Windows Mono player. Complete the interactive Windows GUI checks, native Settings window integration, model restore, startup diagnostics, and the supported-platform player checks before retiring the old UI. The CI Mono smoke build does not replace a Windows IL2CPP release build.
