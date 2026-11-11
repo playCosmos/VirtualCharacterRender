@@ -210,6 +210,14 @@ jobs:
           }
           Write-Host "P1 IL2CPP payload hash verification PASS: $($evidence.fileCount) files"
 
+      - name: Verify packaged IL2CPP ZIP against complete manifest and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/verify-p1-il2cpp-archive.py \
+            --artifact-dir p1-il2cpp-artifacts \
+            --source "$GITHUB_SHA"
+
       - name: Run native P1 IL2CPP startup/shutdown and config relaunch smoke
         shell: bash
         run: |
