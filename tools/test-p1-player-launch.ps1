@@ -220,15 +220,42 @@ class MockP1Player {
     # Synthetic clean evidence exercises the independent post-run inspector
     # without misrepresenting the real mock Player as Unity/hardware evidence.
     $syntheticLog = Join-Path $evidence 'Player.log'
-    Set-Content -LiteralPath $syntheticLog -Value 'Synthetic ordinary startup and quit' -Encoding UTF8
+    $startupMarker = 'VCR inventory: stage=startup category=module id=application status=started'
+    $quitMarker = 'VCR exit: OnApplicationQuit finished'
     $record.exitCode = 0
+
+    # A non-empty valid-hash log lacking managed bootstrap and shutdown is
+    # not real startup/quit proof. Hash consistency alone is insufficient.
+    Set-Content -LiteralPath $syntheticLog -Value 'Synthetic ordinary startup and quit' -Encoding UTF8
+    $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
+    $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
+    $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted a hash-valid log without Unity lifecycle markers'
+    }
+
+    @($quitMarker, $startupMarker) |
+        Set-Content -LiteralPath $syntheticLog -Encoding UTF8
+    $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
+    $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
+    $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
+        -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0) {
+        throw 'P1 physical inspector accepted shutdown before bootstrap'
+    }
+
+    @($startupMarker, 'Synthetic ordinary runtime', $quitMarker) |
+        Set-Content -LiteralPath $syntheticLog -Encoding UTF8
     $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
     $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
     $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
         -EvidenceDirectory $evidence -ExpectedSourceSha $sourceSha
     if ($LASTEXITCODE -ne 0) {
-        throw 'P1 physical inspector rejected internally consistent synthetic clean evidence'
+        throw 'P1 physical inspector rejected internally consistent synthetic clean managed startup/quit'
     }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inspector `
         -EvidenceDirectory $evidence -ExpectedSourceSha ('b' * 40)
@@ -236,7 +263,8 @@ class MockP1Player {
         throw 'P1 physical inspector accepted wrong source SHA'
     }
 
-    Set-Content -LiteralPath $syntheticLog -Value 'NullReferenceException: synthetic regression' -Encoding UTF8
+    @($startupMarker, 'NullReferenceException: synthetic regression', $quitMarker) |
+        Set-Content -LiteralPath $syntheticLog -Encoding UTF8
     $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
     $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
     $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Encoding UTF8
@@ -246,7 +274,8 @@ class MockP1Player {
         throw 'P1 physical inspector accepted a hash-consistent runtime exception log'
     }
 
-    Set-Content -LiteralPath $syntheticLog -Value 'Synthetic ordinary startup and quit' -Encoding UTF8
+    @($startupMarker, 'Synthetic ordinary runtime', $quitMarker) |
+        Set-Content -LiteralPath $syntheticLog -Encoding UTF8
     $record.playerLogBytes = (Get-Item -LiteralPath $syntheticLog).Length
     $record.playerLogSha256 = (Get-FileHash -LiteralPath $syntheticLog -Algorithm SHA256).Hash
     $record.physicalHumanAcceptance = $true
