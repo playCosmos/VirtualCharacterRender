@@ -32,6 +32,9 @@ jobs:
       - name: Launch native mock Player and inspect diagnostic ZIP
         shell: powershell
         run: .\\tools\\test-exit-collector.ps1
+      - name: Verify P1 operator launcher with real native mock process
+        shell: powershell
+        run: .\\tools\\test-p1-player-launch.ps1
 
   repository-structure:
     runs-on: ubuntu-latest
