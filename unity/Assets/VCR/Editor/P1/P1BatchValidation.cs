@@ -105,6 +105,29 @@ namespace VCR.Editor.P1
                 development: false);
         }
 
+        // The Linux Unity editor has the macOS Mono module but not Xcode
+        // for macOS IL2CPP. Build an actual non-development U1/P1 macOS
+        // Player for native Mac smoke, without modifying the committed
+        // standalone scripting backend used by Windows IL2CPP builds.
+        public static void BuildMacMonoCiAndExit()
+        {
+            var target = NamedBuildTarget.Standalone;
+            var original = PlayerSettings.GetScriptingBackend(target);
+            try
+            {
+                PlayerSettings.SetScriptingBackend(target, ScriptingImplementation.Mono2x);
+                BuildDevelopmentAndExit(
+                    BuildTarget.StandaloneOSX,
+                    "Builds/P1/macOS/VirtualCharacterRender.app",
+                    development: false);
+            }
+            finally
+            {
+                PlayerSettings.SetScriptingBackend(target, original);
+                AssetDatabase.SaveAssets();
+            }
+        }
+
         // P1 U1 production-path build: full UI Toolkit application scene with
         // IL2CPP, not the P0 alpha scene or Linux-hosted Windows Mono Player.
         // Requires a Windows host with the matching Unity IL2CPP module.
