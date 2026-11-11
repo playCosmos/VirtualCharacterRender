@@ -52,8 +52,8 @@ $runtimeFault = Select-String -LiteralPath $logPath -Quiet -Pattern @(
 )
 $exitClean = ($record.exitCode -is [int] -and $record.exitCode -eq 0)
 if (-not $exitClean -or $runtimeFault) {
-    throw ("P1 operator preflight rejected: exitCode={0}, runtimeFault={1}; inspect Player.log. " +
-        "Do not approve this physical run.") -f $record.exitCode, [bool]$runtimeFault
+    throw (("P1 operator preflight rejected: exitCode={0}, runtimeFault={1}; inspect Player.log. " +
+        "Do not approve this physical run.") -f $record.exitCode, [bool]$runtimeFault)
 }
 
 [pscustomobject]@{
