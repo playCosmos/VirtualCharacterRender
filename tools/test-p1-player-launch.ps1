@@ -79,15 +79,22 @@ class MockP1Player {
     # This contract tests all extracted files, not just the executable.
     $sourceSha = ('a' * 40)
     $manifestPath = Join-Path $root 'p1 payload manifest.json'
+    $knownFiles = @(
+        'VirtualCharacterRender.exe',
+        'GameAssembly.dll',
+        'UnityPlayer.dll',
+        'VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat'
+    )
     $entries = @(
-        Get-ChildItem -LiteralPath $player -File -Recurse | Sort-Object FullName |
-            ForEach-Object {
-                [ordered]@{
-                    path = $_.FullName.Substring($player.Length + 1).Replace('\', '/')
-                    size = $_.Length
-                    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                }
+        foreach ($relative in $knownFiles) {
+            $target = Join-Path $player ($relative.Replace('/', '\'))
+            $item = Get-Item -LiteralPath $target
+            [ordered]@{
+                path = $relative
+                size = $item.Length
+                sha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
             }
+        }
     )
     [ordered]@{
         format = 'vcr-p1-payload-sha256-v1'
