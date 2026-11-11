@@ -85,14 +85,30 @@ class MockP1Player {
               (Get-FileHash -LiteralPath $vrm -Algorithm SHA256).Hash) {
         $argumentFailures += 'vrm-file-hash'
     }
-    if ("--vcr-config=$config" -notin $actualArgs) {
+    $configArgs = @($actualArgs | Where-Object { $_ -like '--vcr-config=*' })
+    $forwardedConfig = if ($configArgs.Count -eq 1) {
+        $configArgs[0].Substring('--vcr-config='.Length)
+    } else { '' }
+    if ($configArgs.Count -ne 1 -or
+        -not (Test-Path -LiteralPath $forwardedConfig -PathType Leaf)) {
         $argumentFailures += 'config-argument'
+    } elseif ((Get-FileHash -LiteralPath $forwardedConfig -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash) {
+        $argumentFailures += 'config-file-hash'
     }
-    if ('-logFile' -notin $actualArgs) {
-        $argumentFailures += 'log-option'
-    }
-    if ((Join-Path $evidence 'Player.log') -notin $actualArgs) {
+
+    $logOptionIndex = [Array]::IndexOf([string[]]$actualArgs, '-logFile')
+    $forwardedLog = if ($logOptionIndex -ge 0 -and
+                        $logOptionIndex + 1 -lt $actualArgs.Count) {
+        $actualArgs[$logOptionIndex + 1]
+    } else { '' }
+    if ($logOptionIndex -lt 0) { $argumentFailures += 'log-option' }
+    if (-not (Test-Path -LiteralPath $forwardedLog -PathType Leaf) -or
+        [IO.Path]::GetFileName($forwardedLog) -ne 'Player.log') {
         $argumentFailures += 'log-path'
+    } elseif ((Get-FileHash -LiteralPath $forwardedLog -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath (Join-Path $evidence 'Player.log') -Algorithm SHA256).Hash) {
+        $argumentFailures += 'log-file-hash'
     }
     if ($argumentFailures.Count -gt 0) {
         throw ("P1 GUI launcher argument failures: " +
