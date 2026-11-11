@@ -67,12 +67,17 @@ class MockP1Player {
     }
 
     $actualArgs = @(Get-Content -LiteralPath $argsFile)
-    # Resolve-Path can return the short-form user profile (RUNNER~1) on
-    # Windows. Match the launcher's own resolved VRM path, not the caller's
-    # syntactically different but identical absolute pathname.
-    $resolvedVrm = (Resolve-Path -LiteralPath $vrm).Path
-    if ($actualArgs.Count -ne 4 -or
-        "--vcr-vrm=$resolvedVrm" -notin $actualArgs -or
+    # Windows PowerShell can use the 8.3 path RUNNER~1 in the child
+    # process even when the parent resolves the same file to runneradmin.
+    # Compare the actual target file and hash, not string spellings.
+    $vrmArgs = @($actualArgs | Where-Object { $_ -like '--vcr-vrm=*' })
+    $forwardedVrm = if ($vrmArgs.Count -eq 1) {
+        $vrmArgs[0].Substring('--vcr-vrm='.Length)
+    } else { '' }
+    if ($actualArgs.Count -ne 4 -or $vrmArgs.Count -ne 1 -or
+        -not (Test-Path -LiteralPath $forwardedVrm -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $forwardedVrm -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $vrm -Algorithm SHA256).Hash -or
         "--vcr-config=$config" -notin $actualArgs -or
         '-logFile' -notin $actualArgs -or
         (Join-Path $evidence 'Player.log') -notin $actualArgs) {
