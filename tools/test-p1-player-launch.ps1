@@ -23,7 +23,8 @@ class MockP1Player {
         File.WriteAllLines(sink, args);
         int index = Array.IndexOf(args, "-logFile");
         if (index < 0 || index + 1 == args.Length) return 81;
-        File.WriteAllText(args[index + 1], "Mock test Player - NOT Unity evidence\n");
+        if (Environment.GetEnvironmentVariable("VCR_P1_MOCK_NO_LOG") != "1")
+            File.WriteAllText(args[index + 1], "Mock test Player - NOT Unity evidence\n");
         return 17;
     }
 }
@@ -75,11 +76,58 @@ class MockP1Player {
         throw 'P1 launcher started despite a directory-valued config'
     }
 
+    # This contract tests all extracted files, not just the executable.
+    $sourceSha = ('a' * 40)
+    $manifestPath = Join-Path $root 'p1 payload manifest.json'
+    $entries = @(
+        Get-ChildItem -LiteralPath $player -File -Recurse | Sort-Object FullName |
+            ForEach-Object {
+                [ordered]@{
+                    path = $_.FullName.Substring($player.Length + 1).Replace('\', '/')
+                    size = $_.Length
+                    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                }
+            }
+    )
+    [ordered]@{
+        format = 'vcr-p1-payload-sha256-v1'
+        sourceSha = $sourceSha
+        files = $entries
+    } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -ManifestFile $manifestPath -ExpectedSourceSha ('b' * 40)
+    if ($LASTEXITCODE -eq 17 -or (Test-Path -LiteralPath $argsFile)) {
+        throw 'P1 launcher accepted a source SHA mismatch'
+    }
+
+    $dll = Join-Path $player 'GameAssembly.dll'
+    Add-Content -LiteralPath $dll -Value 'tampered'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -ManifestFile $manifestPath -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 17 -or (Test-Path -LiteralPath $argsFile)) {
+        throw 'P1 launcher accepted modified IL2CPP DLL bytes'
+    }
+    Set-Content -LiteralPath $dll -Value 'mock binary marker' -Encoding UTF8
+
+    $extra = Join-Path $player 'unexpected.txt'
+    Set-Content -LiteralPath $extra -Value 'untracked file' -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -ManifestFile $manifestPath -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 17 -or (Test-Path -LiteralPath $argsFile)) {
+        throw 'P1 launcher accepted an untracked payload file'
+    }
+    Remove-Item -LiteralPath $extra -Force
+
     # The mock returns 17. The launcher must wait for it and preserve 17,
     # instead of treating GUI launch as a successful asynchronous spawn.
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
         -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
-        -Vrm $vrm -Config $config
+        -Vrm $vrm -Config $config `
+        -ManifestFile $manifestPath -ExpectedSourceSha $sourceSha
     if ($LASTEXITCODE -ne 17) {
         throw "Expected native mock exit 17; got $LASTEXITCODE"
     }
@@ -140,6 +188,12 @@ class MockP1Player {
     if ($record.mode -ne 'IL2CPP' -or $record.exitCode -ne 17 -or
         $record.physicalHumanAcceptance -ne $false -or
         $record.playerExecutableSha256 -ne $hash -or
+        $record.payloadManifestVerified -ne $true -or
+        $record.expectedSourceSha -ne $sourceSha -or
+        $record.payloadFileCount -ne $entries.Count -or
+        $record.payloadManifestSha256 -ne (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash -or
+        $record.playerLogBytes -le 0 -or
+        $record.playerLogSha256 -ne (Get-FileHash -LiteralPath (Join-Path $evidence "Player.log") -Algorithm SHA256).Hash -or
         -not (Test-Path -LiteralPath (Join-Path $evidence 'Player.log'))) {
         throw 'P1 physical operator launch evidence was incorrect'
     }
@@ -147,9 +201,22 @@ class MockP1Player {
         'Mock test Player') {
         throw 'Mock Player log was not directed to the evidence folder'
     }
+    # A previous Player.log and launch JSON must not be treated as fresh
+    # evidence when a subsequent process exits without writing a new log.
+    $env:VCR_P1_MOCK_NO_LOG = '1'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -ManifestFile $manifestPath -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 0 -or
+        (Test-Path -LiteralPath (Join-Path $evidence 'Player.log')) -or
+        (Test-Path -LiteralPath (Join-Path $evidence 'launch-evidence.json'))) {
+        throw 'P1 launcher accepted a missing Player.log or retained stale evidence'
+    }
+    Remove-Item Env:\VCR_P1_MOCK_NO_LOG -ErrorAction SilentlyContinue
     Write-Host 'P1 Windows operator launcher mock: PASS (not physical UI acceptance)'
 } finally {
     Remove-Item Env:\VCR_P1_MOCK_ARGUMENTS -ErrorAction SilentlyContinue
+    Remove-Item Env:\VCR_P1_MOCK_NO_LOG -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue
 }
 # An expected mock exit code 17 must not leak into GitHub Actions' own exit.
