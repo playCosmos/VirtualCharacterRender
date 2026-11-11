@@ -36,6 +36,26 @@ jobs:
         shell: powershell
         run: .\\tools\\test-p1-player-launch.ps1
 
+  macos-p1-launcher:
+    name: Validate P1 macOS native launcher contract
+    # Scope this macOS-hosted job to U1 development, not every repository PR.
+    if: >-
+      ${{
+        github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' ||
+        github.head_ref == 'feature/obs-ui-u1-layout-contract-20261026'
+      }}
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exercise native mock .app and capture actual process exit evidence
+        run: python3 tools/test-p1-macos-launcher.py
+
   repository-structure:
     runs-on: ubuntu-latest
     timeout-minutes: 5
