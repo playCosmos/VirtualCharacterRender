@@ -134,3 +134,6 @@ class MockP1Player {
     Remove-Item Env:\VCR_P1_MOCK_ARGUMENTS -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue
 }
+# An expected mock exit code 17 must not leak into GitHub Actions' own exit.
+# Every assertion above throws on failure; a completed test is success.
+exit 0
