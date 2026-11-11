@@ -183,6 +183,60 @@ results, and explicitly approve the physical acceptance gate before merging
 PR #44. Do not publish the tested Player as a release without separate
 approval.
 
+### Source-bound physical Windows evidence inspection
+
+The exact-source hosted Windows IL2CPP workflow
+[#42992199162](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42992199162)
+**passed** at source commit `e26d4d0385f8839372ecd843bc71ad5787304f5e`:
+the IL2CPP build, all 888 extracted payload file hashes, actual packaged
+`windows.zip` member hashes/source sidecars, native startup/relaunch and
+normal quit, and hosted interactive GUI probe. This establishes a source-bound
+CI binary, not an operator-approved release.
+
+After running `run-p1-player.ps1` on a real Windows desktop with a separately
+verified CI manifest and a **fresh unique** `-EvidenceDirectory` (one folder
+per attempt), run the machine-evidence preflight:
+
+```powershell
+.\tools\inspect-p1-physical-evidence.ps1 `
+  -EvidenceDirectory ".\u1-physical-evidence" `
+  -ExpectedSourceSha "e26d4d0385f8839372ecd843bc71ad5787304f5e"
+```
+
+The preflight fails closed when the source-bound payload check was omitted,
+`Player.log` is missing, empty or hash-mismatched, the Player exited nonzero,
+the log contains a recognized runtime exception or failed U1 refresh, or the
+launcher JSON falsely claims human approval. A successful preflight reports
+`machineEvidencePreflightPassed=true` and still reports
+`physicalHumanAcceptance=false`. This cannot infer whether an actual GPU
+frame was correct, the operator interacted with controls, or a device worked.
+The expected commit SHA must be independently checked against the source
+of the downloaded Actions artifact. Player.log and screenshots can contain
+local paths/model names: review before sharing.
+
+The operator must independently record **pass/fail/not tested**, operating
+system and display scale, reproduction steps and screenshots for each of:
+
+- Native caption/titlebar; normal minimize/maximize/restore/close; width-only
+  and height-only resizing without a forced aspect ratio; restore after a
+  compact approximately 960×520 dashboard and after maximizing
+- Dock drag/reorder/resize, short-window clipping and scroll behavior,
+  settings and layout persistence after a fresh restart
+- Actual native Settings pages, model loading/reload/unload with a real VRM,
+  opaque/transparent/click-through window modes and visible recovery
+- Keyboard focus, feature search and Korean IME composition/commit; all UI
+  labels readable at 100%, 150% and available high-DPI/multiple-monitor modes
+- Real camera/tracking discovery, enable/disable/recovery and absent-device
+  behavior; check Player.log for recurring exceptions
+- macOS AppKit caption/input/overlay behavior and supported macOS hardware
+  **separately**, using a source-matched macOS Player
+
+Do not turn skipped/unavailable real hardware checks into PASS. Keep screenshots
+and device-specific results separately from the machine-generated launch JSON.
+PR #44 remains Draft until the actual operator and macOS acceptance requirements
+are explicitly satisfied. Successful CI and machine preflight do **not** authorize
+merging, uGUI retirement or release.
+
 ## U1 completion and mandatory legacy uGUI retirement
 
 The U1 milestone is **not complete** merely because CI builds a Windows Mono player. Complete the interactive Windows GUI checks, native Settings window integration, model restore, startup diagnostics, and the supported-platform player checks before retiring the old UI. The CI Mono smoke build does not replace a Windows IL2CPP release build.
