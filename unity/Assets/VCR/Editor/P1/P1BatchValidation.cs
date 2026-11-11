@@ -95,6 +95,16 @@ namespace VCR.Editor.P1
                 "Builds/P1/macOS-Development/VirtualCharacterRender.app");
         }
 
+        // Real U1/P1 macOS non-development path. Unlike the Alpha CI
+        // scene, this builds the generated UI Toolkit workspace.
+        public static void BuildMacReleaseAndExit()
+        {
+            BuildDevelopmentAndExit(
+                BuildTarget.StandaloneOSX,
+                "Builds/P1/macOS/VirtualCharacterRender.app",
+                development: false);
+        }
+
         // P1 U1 production-path build: full UI Toolkit application scene with
         // IL2CPP, not the P0 alpha scene or Linux-hosted Windows Mono Player.
         // Requires a Windows host with the matching Unity IL2CPP module.
@@ -147,11 +157,12 @@ namespace VCR.Editor.P1
                 }
 
                 var passed = P1PlayerBuildMenu.Build(target, output, development);
+                var variant = development
+                    ? "development"
+                    : target == BuildTarget.StandaloneWindows64 ? "IL2CPP" : "release";
                 Debug.Log(passed
-                    ? "VCR P1 " + (development ? "development" : "IL2CPP") +
-                        " player build: PASS."
-                    : "VCR P1 " + (development ? "development" : "IL2CPP") +
-                        " player build: FAIL.");
+                    ? "VCR P1 " + variant + " player build: PASS."
+                    : "VCR P1 " + variant + " player build: FAIL.");
                 EditorApplication.Exit(passed ? 0 : 1);
             }
             catch (Exception exception)
