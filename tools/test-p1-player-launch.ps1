@@ -57,6 +57,24 @@ class MockP1Player {
     }
     Remove-Item -LiteralPath (Join-Path $player 'MonoBleedingEdge') -Force -Recurse
 
+    # A missing or directory-valued -Config must fail before process start.
+    # Otherwise a manual test could silently run with default configuration.
+    $missingConfig = Join-Path $root 'missing config.json'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -Config $missingConfig
+    if ($LASTEXITCODE -eq 17 -or (Test-Path -LiteralPath $argsFile)) {
+        throw 'P1 launcher started despite a missing config file'
+    }
+    $configDirectory = Join-Path $root 'directory is not a config.json'
+    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -Config $configDirectory
+    if ($LASTEXITCODE -eq 17 -or (Test-Path -LiteralPath $argsFile)) {
+        throw 'P1 launcher started despite a directory-valued config'
+    }
+
     # The mock returns 17. The launcher must wait for it and preserve 17,
     # instead of treating GUI launch as a successful asynchronous spawn.
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
