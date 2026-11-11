@@ -51,9 +51,24 @@ $runtimeFault = Select-String -LiteralPath $logPath -Quiet -Pattern @(
     'Mock test Player - NOT Unity evidence'
 )
 $exitClean = ($record.exitCode -is [int] -and $record.exitCode -eq 0)
-if (-not $exitClean -or $runtimeFault) {
-    throw (("P1 operator preflight rejected: exitCode={0}, runtimeFault={1}; inspect Player.log. " +
-        "Do not approve this physical run.") -f $record.exitCode, [bool]$runtimeFault)
+
+# Log hashes establish byte consistency, not proof the Unity runtime reached
+# bootstrap or completed a managed shutdown. Both markers are emitted during
+# ordinary P1 runs (GUI probe uses the same exact strings).
+$startupMarker = 'VCR inventory: stage=startup category=module id=application status=started'
+$quitMarker = 'VCR exit: OnApplicationQuit finished'
+$startupLine = Select-String -LiteralPath $logPath -SimpleMatch -Pattern $startupMarker |
+    Select-Object -First 1
+$quitLine = Select-String -LiteralPath $logPath -SimpleMatch -Pattern $quitMarker |
+    Select-Object -Last 1
+$managedLifecycleObserved = ($null -ne $startupLine -and
+    $null -ne $quitLine -and
+    $startupLine.LineNumber -lt $quitLine.LineNumber)
+
+if (-not $exitClean -or $runtimeFault -or -not $managedLifecycleObserved) {
+    throw (("P1 operator preflight rejected: exitCode={0}, runtimeFault={1}, " +
+        "managedLifecycleObserved={2}; inspect Player.log. Do not approve this physical run.") -f
+        $record.exitCode, [bool]$runtimeFault, [bool]$managedLifecycleObserved)
 }
 
 [pscustomobject]@{
@@ -62,6 +77,8 @@ if (-not $exitClean -or $runtimeFault) {
     payloadFileCount = $record.payloadFileCount
     playerLogSha256 = $record.playerLogSha256
     exitCode = $record.exitCode
+    managedStartupObserved = $true
+    managedQuitObserved = $true
     machineEvidencePreflightPassed = $true
     physicalHumanAcceptance = $false
 }
