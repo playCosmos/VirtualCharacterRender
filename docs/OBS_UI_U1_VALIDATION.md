@@ -147,11 +147,28 @@ For example, after building locally with the commands above:
   -EvidenceDirectory ".\u1-physical-evidence"
 ```
 
-To test the exact **CI-built Player**, download its Actions artifact,
-independently verify `windows.zip` against `windows.sha256` and
-`windows.source-sha` against the expected commit, and extract
-`windows.zip` into a directory of its own. Keep the companion
-`windows.payload-sha256.json` outside the extracted Player. Then run:
+To test the exact **CI-built Player**, download the verified
+[Actions run #42992199162](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42992199162)
+artifact `u1-p1-windows-il2cpp-42992199162-1` (retained for seven days),
+and expand the **outer Actions artifact ZIP** into a local directory. Independently
+confirm that this successful run's source SHA is
+`e26d4d0385f8839372ecd843bc71ad5787304f5e`. Use the portable
+Python preparation helper to verify ZIP hash, full internal payload hashes,
+manifest and source sidecars before extracting into a **new, empty path**:
+
+```powershell
+python .\tools\prepare-p1-physical-player.py `
+  --artifact-dir "C:\vcr-p1-artifact\p1-il2cpp-artifacts" `
+  --source "e26d4d0385f8839372ecd843bc71ad5787304f5e" `
+  --output "C:\vcr-p1-player-e26d"
+```
+
+The helper refuses an existing output directory, invalid or mismatched bytes,
+path traversal and unsafe ZIP entries; it re-hashes data while extracting
+and does not insert verification metadata into the Player directory.
+It does not download the artifact or authenticate its publisher. Keep
+`windows.payload-sha256.json` in the downloaded artifact directory,
+**outside** the extracted Player. Then run:
 
 ```powershell
 .\tools\run-p1-player.ps1 -Mode IL2CPP `
