@@ -51,20 +51,30 @@ foreach ($entry in $manifest.files) {
         throw "P1 payload hash/size mismatch: $relative"
     }
 }
-$actual = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force)
-if ($actual.Count -ne $expected.Count) {
-    throw "P1 payload count mismatch: expected $($expected.Count), found $($actual.Count)"
-}
-foreach ($info in $actual) {
-    $relative = $info.FullName.Substring($prefix.Length).Replace("\", "/")
-    if (-not $expected.Contains($relative)) {
-        throw "Unexpected P1 payload file: $relative"
+# Enumerate by directory entry names instead of slicing absolute paths:
+# Windows 8.3 aliases and long paths can represent the same directory.
+$actualCount = 0
+$pending = [System.Collections.Stack]::new()
+$pending.Push([pscustomobject]@{ directory = $root; relative = "" })
+while ($pending.Count -gt 0) {
+    $node = $pending.Pop()
+    foreach ($item in (Get-ChildItem -LiteralPath $node.directory -Force)) {
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "P1 payload contains reparse point: $($item.FullName)"
+        }
+        $relative = if ($node.relative) { $node.relative + "/" + $item.Name } else { $item.Name }
+        if ($item.PSIsContainer) {
+            $pending.Push([pscustomobject]@{ directory = $item.FullName; relative = $relative })
+        } else {
+            $actualCount++
+            if (-not $expected.Contains($relative)) {
+                throw "Unexpected P1 payload file: $relative"
+            }
+        }
     }
 }
-$reparse = @(Get-ChildItem -LiteralPath $root -Recurse -Force |
-    Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 })
-if ($reparse.Count -gt 0) {
-    throw "P1 payload contains a reparse point; exact inventory is unsafe."
+if ($actualCount -ne $expected.Count) {
+    throw "P1 payload count mismatch: expected $($expected.Count), found $actualCount"
 }
 
 [pscustomobject]@{
