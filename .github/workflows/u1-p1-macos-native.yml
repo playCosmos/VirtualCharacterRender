@@ -142,7 +142,9 @@ jobs:
           executable = bundle / "Contents" / "MacOS" / executable_name
           if not executable.is_file() or executable.stat().st_size == 0:
               raise SystemExit("Actual P1 macOS native executable missing")
-          plugin = bundle / "Contents" / "Plugins" / "VcrSettingsWindow.dylib"
+          # Unity creates the case-sensitive macOS bundle directory "PlugIns".
+          # Build log confirms MacOSCodeSignDylibCopy to this exact path.
+          plugin = bundle / "Contents" / "PlugIns" / "VcrSettingsWindow.dylib"
           if not plugin.is_file() or plugin.stat().st_size == 0:
               raise SystemExit("P1 macOS Player missing its AppKit Settings dylib")
           target = Path("p1-macos-artifacts")
