@@ -101,10 +101,14 @@ def main():
         require(result.returncode == 17,
                 "Native exit 17 was lost: " + result.stdout + result.stderr)
         args = args_file.read_text(encoding="utf-8").splitlines()
-        require(args == ["--vcr-vrm=" + str(vrm),
-                         "--vcr-config=" + str(config),
-                         "-logFile", str(evidence / "Player.log")],
-                "Mock argv was not forwarded: " + repr(args))
+        # macOS /var is an alias of /private/var on CI hosts. Compare
+        # resolved file identity, not the raw spelling of an absolute path.
+        require(len(args) == 4 and args[0].startswith("--vcr-vrm=") and
+                args[1].startswith("--vcr-config=") and args[2] == "-logFile" and
+                Path(args[0].split("=", 1)[1]).resolve() == vrm.resolve() and
+                Path(args[1].split("=", 1)[1]).resolve() == config.resolve() and
+                Path(args[3]).resolve() == (evidence / "Player.log").resolve(),
+                "Mock argv does not resolve to the expected files: " + repr(args))
         record = json.loads(
             (evidence / "launch-evidence.json").read_text(encoding="utf-8"))
         log = (evidence / "Player.log").read_bytes()
