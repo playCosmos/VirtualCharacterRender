@@ -67,8 +67,12 @@ class MockP1Player {
     }
 
     $actualArgs = @(Get-Content -LiteralPath $argsFile)
+    # Resolve-Path can return the short-form user profile (RUNNER~1) on
+    # Windows. Match the launcher's own resolved VRM path, not the caller's
+    # syntactically different but identical absolute pathname.
+    $resolvedVrm = (Resolve-Path -LiteralPath $vrm).Path
     if ($actualArgs.Count -ne 4 -or
-        "--vcr-vrm=$vrm" -notin $actualArgs -or
+        "--vcr-vrm=$resolvedVrm" -notin $actualArgs -or
         "--vcr-config=$config" -notin $actualArgs -or
         '-logFile' -notin $actualArgs -or
         (Join-Path $evidence 'Player.log') -notin $actualArgs) {
