@@ -74,14 +74,30 @@ class MockP1Player {
     $forwardedVrm = if ($vrmArgs.Count -eq 1) {
         $vrmArgs[0].Substring('--vcr-vrm='.Length)
     } else { '' }
-    if ($actualArgs.Count -ne 4 -or $vrmArgs.Count -ne 1 -or
-        -not (Test-Path -LiteralPath $forwardedVrm -PathType Leaf) -or
-        (Get-FileHash -LiteralPath $forwardedVrm -Algorithm SHA256).Hash -ne
-            (Get-FileHash -LiteralPath $vrm -Algorithm SHA256).Hash -or
-        "--vcr-config=$config" -notin $actualArgs -or
-        '-logFile' -notin $actualArgs -or
-        (Join-Path $evidence 'Player.log') -notin $actualArgs) {
-        throw "P1 GUI launcher lost quoted arguments: $($actualArgs -join ' | ')"
+    # Keep failures actionable: a named assertion distinguishes an actual
+    # Win32 argument-quoting bug from short/long-path equivalence.
+    $argumentFailures = @()
+    if ($actualArgs.Count -ne 4) { $argumentFailures += 'argument-count' }
+    if ($vrmArgs.Count -ne 1) { $argumentFailures += 'vrm-argument-count' }
+    if (-not (Test-Path -LiteralPath $forwardedVrm -PathType Leaf)) {
+        $argumentFailures += 'vrm-file-missing'
+    } elseif ((Get-FileHash -LiteralPath $forwardedVrm -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $vrm -Algorithm SHA256).Hash) {
+        $argumentFailures += 'vrm-file-hash'
+    }
+    if ("--vcr-config=$config" -notin $actualArgs) {
+        $argumentFailures += 'config-argument'
+    }
+    if ('-logFile' -notin $actualArgs) {
+        $argumentFailures += 'log-option'
+    }
+    if ((Join-Path $evidence 'Player.log') -notin $actualArgs) {
+        $argumentFailures += 'log-path'
+    }
+    if ($argumentFailures.Count -gt 0) {
+        throw ("P1 GUI launcher argument failures: " +
+            ($argumentFailures -join ', ') + "; arguments=" +
+            ($actualArgs -join ' | '))
     }
 
     $record = Get-Content -LiteralPath (Join-Path $evidence 'launch-evidence.json') -Raw |
