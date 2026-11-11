@@ -77,6 +77,9 @@ jobs:
       - name: Test complete P1 IL2CPP archive and source manifest verifier
         run: python3 tools/verify-p1-il2cpp-archive.py --self-test
 
+      - name: Test safe P1 IL2CPP Player extraction for physical Windows
+        run: python3 tools/prepare-p1-physical-player.py --self-test
+
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
 
