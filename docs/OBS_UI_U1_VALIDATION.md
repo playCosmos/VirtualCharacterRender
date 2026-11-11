@@ -148,21 +148,35 @@ For example, after building locally with the commands above:
 ```
 
 To test the exact **CI-built Player**, download its Actions artifact,
-verify `windows.zip` against `windows.sha256` and
+independently verify `windows.zip` against `windows.sha256` and
 `windows.source-sha` against the expected commit, and extract
-`windows.zip` into a directory of its own. Then run:
+`windows.zip` into a directory of its own. Keep the companion
+`windows.payload-sha256.json` outside the extracted Player. Then run:
 
 ```powershell
 .\tools\run-p1-player.ps1 -Mode IL2CPP `
   -PlayerDirectory "C:\path\to\extracted-player" `
+  -ManifestFile "C:\path\to\windows.payload-sha256.json" `
+  -ExpectedSourceSha "<40-character commit SHA from verified Actions run>" `
   -EvidenceDirectory ".\u1-physical-evidence"
 ```
 
-The launcher rejects a missing `GameAssembly.dll`, `UnityPlayer.dll`,
-IL2CPP metadata or unexpected `MonoBleedingEdge`. Its optional local
-evidence directory stores a `Player.log`, executable SHA-256 and process
-exit code; `physicalHumanAcceptance` remains **false** in machine-generated
-JSON. A human must separately record native Settings, real VRM/tracking,
+The manifest verifier rejects a changed/missing DLL or asset, untracked file,
+unsafe/duplicate manifest path, count/size/hash mismatch, and a mismatched
+expected source SHA **before launch**. The manifest verifies extracted bytes
+against claimed CI inventory; it does not independently authenticate the
+artifact publisher. A locally built P1 IL2CPP Player may still be launched
+without a manifest, but the launcher explicitly warns that its complete
+payload is **unverified**, even when the executable SHA-256 is recorded.
+
+The launcher also rejects a missing `GameAssembly.dll`, `UnityPlayer.dll`,
+IL2CPP metadata or unexpected `MonoBleedingEdge`. With an evidence
+directory, stale `Player.log` and `launch-evidence.json` are cleared before
+each launched process and a fresh nonempty `Player.log` is mandatory.
+The JSON records the executable SHA-256, optional complete payload manifest
+SHA/source/file count, fresh log hash/size and exit code; a crash or missing
+log is not physical acceptance. `physicalHumanAcceptance` always remains
+**false** in machine-generated JSON. A human must separately record native Settings, real VRM/tracking,
 overlay recovery, dock persistence, Korean IME, multiple DPI/monitors,
 macOS AppKit and actual rendered pixels. Retain screenshots and device
 results, and explicitly approve the physical acceptance gate before merging
