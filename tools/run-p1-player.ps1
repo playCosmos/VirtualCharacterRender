@@ -54,7 +54,10 @@ if ($Vrm) {
     $argsList += "--vcr-vrm=$vrmPath"
 }
 if ($Config) {
-    $configPath = [System.IO.Path]::GetFullPath($Config)
+    if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
+        throw "P1 config file missing: $Config"
+    }
+    $configPath = (Resolve-Path -LiteralPath $Config -ErrorAction Stop).Path
     $argsList += "--vcr-config=$configPath"
 }
 
