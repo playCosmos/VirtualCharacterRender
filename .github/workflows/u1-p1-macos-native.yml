@@ -11,6 +11,7 @@ on:
       - native/macos/VcrSettingsWindow.mm
       - native/macos/VcrSettingsWindow.dylib.meta
       - tools/build-native-settings-macos.sh
+      - tools/verify-macos-settings-exports.py
       - unity/Assets/VCR/Editor/P1/**
       - unity/Assets/VCR/Runtime/UI/**
   workflow_dispatch:
