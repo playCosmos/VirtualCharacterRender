@@ -52,6 +52,7 @@ int main(int argc, const char *argv[]) {
         auto setText = symbol<void (*)(int, const char *)>(library, "VCR_SettingsSetText");
         auto getText = symbol<void (*)(int, char *, int)>(library, "VCR_SettingsGetText");
         auto visible = symbol<int (*)()>(library, "VCR_SettingsIsVisible");
+        auto show = symbol<void (*)()>(library, "VCR_SettingsShow");
         auto poll = symbol<int (*)()>(library, "VCR_SettingsPollAction");
 
         create();
@@ -66,6 +67,27 @@ int main(int argc, const char *argv[]) {
         require(visible() == 0, "new Settings should initially be hidden");
         NSScrollView *scroll = detailScroll(window);
         require(scroll != nil, "native Settings detail ScrollView missing");
+
+        // Exercise an actual native Settings window's visibility lifecycle.
+        // In particular, the red close control must hide, not release, this
+        // independent NSWindow. Opening it again must retain the same object.
+        show();
+        require(visible() == 1 && window.isVisible,
+                "native Settings show did not make the NSWindow visible");
+        [window performClose:nil];
+        require(visible() == 0 && !window.isVisible,
+                "native Settings close should hide, not terminate or destroy");
+        show();
+        require(visible() == 1 && window.isVisible && settingsWindow() == window,
+                "native Settings reopen failed to reuse existing window");
+
+        // The content area must stay resizable without a fixed aspect ratio.
+        [window setContentSize:NSMakeSize(1024, 760)];
+        require(std::fabs(NSWidth(window.contentView.bounds) - 1024.0) < 1.0 &&
+                std::fabs(NSHeight(window.contentView.bounds) - 760.0) < 1.0,
+                "native Settings window failed unrestricted resize");
+        require(NSWidth(scroll.frame) > 678.0,
+                "native Settings detail pane did not resize with its window");
 
         add(0, 45, 2, "한글 경로", "한글 값");
         char buffer[1024] = {};
