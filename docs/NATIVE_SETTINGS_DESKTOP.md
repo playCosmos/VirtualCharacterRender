@@ -72,14 +72,21 @@ Player CI for these changes: [Actions #43213727212](https://github.com/playCosmo
 without examining job results).
 
 
-The General configuration status (control 94) now uses a selectable, wrapping
+The General configuration feedback (control 90, matching
+`ApplicationUiController.AddNativeFeedback(0)`) now uses a selectable, wrapping
 AppKit label with measured content height and dynamic per-row layout instead of
 a fixed-height 30pt row. This prevents long configuration paths/recovery
 warnings from overlapping buttons or being clipped below the document.
 The actual macOS bridge integration fixture exercises a 3,600-character Korean
 warning and confirms no overlapping rows: status height 88pt to 928pt and
 scroll document 650pt to 1,084pt on the hosted macOS test. The full text
-remains available through the native text value and tooltip. These checks are AppKit API-level evidence only, not proof of actual
+remains available through the native text value and tooltip. An earlier
+implementation targeted control **94**, which was never created in the real
+General Settings panel: its synthetic test passed while actual feedback
+control **90** remained single-line. The runtime, Win32, AppKit and the
+AppKit integration test now all use **90**, enforced by
+`tools/test-native-settings-feedback-contract.py`. The previous green
+control-94 test is **not** valid evidence of real General feedback behavior. These checks are AppKit API-level evidence only, not proof of actual
 pointer or keyboard events within the Unity Player. Korean IME composition, Retina rendering, real VRM/tracker
 devices, z-order with a third-party app and physical operator approval remain
 manual gates.
