@@ -51,7 +51,7 @@ namespace {
         }
     }
 
-    // The General configuration status (ID 94) can contain a long path
+    // The General configuration feedback (ID 90) can contain a long path
     // or recovery warning. Reserve its *actual* text height before laying
     // out rows; a fixed 52pt row clips the message and overlaps the row above.
     void resizeConfigurationStatus(NSTextField *field) {
@@ -275,7 +275,7 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
         text.font = [NSFont systemFontOfSize:16 weight:NSFontWeightSemibold];
         text.textColor = foregroundColor();
         text.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
-        if (category == 0 && ident == 94) {
+        if (category == 0 && ident == 90) {
             // The saved configuration path and recovery errors are not
             // disposable one-line toast messages: keep them legible/copyable.
             text.font = [NSFont systemFontOfSize:13];
@@ -318,7 +318,7 @@ __attribute__((visibility("default"))) void VCR_SettingsSetText(
     NSTextField *field = fields[@(ident)];
     if (field) {
         field.stringValue = toString(value);
-        if (ident == 94 && categoryViews[@0] && fields[@94] == field) {
+        if (ident == 90 && categoryViews[@0] && fields[@90] == field) {
             resizeConfigurationStatus(field);
             layoutRows(0);
         }
