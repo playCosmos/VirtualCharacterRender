@@ -28,6 +28,26 @@ On each native desktop, check all four Settings pages; OS titlebar drag; minimiz
 
 Published alpha releases are immutable. This development change must remain on a feature branch/PR until separately approved; **do not create any additional version tag, release intent or GitHub Release without an explicit new instruction.**
 
+## P1 macOS native Settings verification (2026-11-12)
+
+The source-matched nondevelopment P1 macOS Mono Player build and native
+startup/relaunch/normal-shutdown smoke passed at commit `fd5acf8` in
+[Actions #43142149736](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43142149736).
+That job also packages the arm64 AppKit bridge. This is **not** a signed release,
+macOS IL2CPP acceptance, or a real operator-driven GUI test.
+
+Separately, Repository validation runs a real compiled AppKit bridge on the
+`macos-15` runner through `tools/test-native-settings-macos.mm`. The native
+integration test covers system titlebar, independent resize, show, close-to-hide,
+reopen, page switches, button action routing, safe destroy/recreate, Korean
+Unicode text, and bounded UTF-8 text retrieval without partial code points.
+Native code also uses `releasedWhenClosed=NO` to avoid double release under
+ARC, and resets page row counters on recreation. All these are automatic
+AppKit API-level checks, not proof of actual user pointer/keyboard events in
+the Unity Player. Korean IME composition, Retina rendering, real VRM/tracker
+devices, z-order with a third-party app and physical operator approval remain
+manual gates.
+
 ## Current Windows IL2CPP input validation boundary
 
 The Windows implementation must pump native child-control messages on Unity's main thread. Pumping only the top-level HWND leaves edit and button keyboard/mouse messages undispatched even though the controls paint and can be inspected. `DesktopNativeSettingsWindow.PumpMessages()` therefore pumps the top-level window, the four category tabs, and every category control; `PollAction()` only drains the queued commands. The category tabs are tracked separately so selecting a category does not hide them. The window procedure also carries `[AOT.MonoPInvokeCallback(typeof(WindowProcedure))]` for IL2CPP and uses `SetWindowPos(HWND_TOPMOST)` while visible so the Settings window stays above the render overlay.
