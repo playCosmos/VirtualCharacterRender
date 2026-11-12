@@ -109,6 +109,11 @@ __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
                              NSWindowStyleMaskResizable)
                     backing:NSBackingStoreBuffered
                       defer:NO];
+    // NSWindow defaults to releasedWhenClosed=YES. This auto-release
+    // conflicts with ARC's strong static window reference: Destroy calls
+    // close and then sets the reference to nil, otherwise over-releasing
+    // the window when the autorelease pool drains.
+    [settingsWindow setReleasedWhenClosed:NO];
     [settingsWindow setTitle:@"VirtualCharacterRender - 환경설정"];
     // The detail document is 660pt wide and horizontal scrolling is disabled.
     // Do not allow a narrower content area to clip its text fields/buttons.
