@@ -507,6 +507,7 @@ namespace VCR.Runtime.UI
         // exercises every managed P/Invoke declaration with the actual Unity
         // Mono marshaler and packaged AppKit dylib, not just nm exports.
         // Never used by a normal interactive Player launch.
+        [UnityEngine.Scripting.Preserve]
         internal static void VerifyMacManagedInteropSmoke()
         {
             using (var settings = new DesktopNativeSettingsWindow())
