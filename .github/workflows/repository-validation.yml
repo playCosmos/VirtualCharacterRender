@@ -55,6 +55,8 @@ jobs:
           python-version: '3.11'
       - name: Exercise native mock .app and capture actual process exit evidence
         run: python3 tools/test-p1-macos-launcher.py
+      - name: Test macOS AppKit export ABI mismatch rejection
+        run: python3 tools/verify-macos-settings-exports.py --self-test
       - name: Compile actual AppKit Settings bridge from source
         run: bash tools/build-native-settings-macos.sh
       - name: Exercise native AppKit window, Korean text and reopen layout
