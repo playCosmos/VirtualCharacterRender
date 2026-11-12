@@ -117,6 +117,9 @@ jobs:
       - name: Test macOS P1 launcher input validation and native exit evidence
         run: python3 tools/test-p1-macos-launcher.py
 
+      - name: Test source-bound macOS Player artifact selection across retries
+        run: python3 tools/select-p1-macos-player-artifact.py --self-test
+
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
 
