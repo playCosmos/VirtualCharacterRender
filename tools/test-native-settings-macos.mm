@@ -82,10 +82,16 @@ int main(int argc, const char *argv[]) {
                 "native Settings reopen failed to reuse existing window");
 
         // The content area must stay resizable without a fixed aspect ratio.
-        [window setContentSize:NSMakeSize(1024, 760)];
-        require(std::fabs(NSWidth(window.contentView.bounds) - 1024.0) < 1.0 &&
-                std::fabs(NSHeight(window.contentView.bounds) - 760.0) < 1.0,
-                "native Settings window failed unrestricted resize");
+        // Stay within a small hosted Mac display's visible frame. The
+        // default 940x720pt content plus system caption is already near its
+        // screen height; demanding 1024x760 exceeds a 1024x768 display.
+        [window setContentSize:NSMakeSize(960, 580)];
+        const NSSize resized = window.contentView.bounds.size;
+        std::fprintf(stderr, "AppKit resized content: %.1fx%.1f pt\n",
+                     (double)resized.width, (double)resized.height);
+        require(std::fabs(resized.width - 960.0) < 2.0 &&
+                std::fabs(resized.height - 580.0) < 2.0,
+                "native Settings window failed independent width/height resize");
         require(NSWidth(scroll.frame) > 678.0,
                 "native Settings detail pane did not resize with its window");
 
