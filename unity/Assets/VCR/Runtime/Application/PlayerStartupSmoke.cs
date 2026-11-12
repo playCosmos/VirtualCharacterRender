@@ -197,7 +197,8 @@ namespace VCR.Runtime.Application
             // Reflection avoids introducing a VCR.Runtime.Application ->
             // VCR.Runtime.UI assembly cycle. The target is [Preserve]d.
             // No regular Player launch instantiates a Settings window here.
-            if (Environment.GetEnvironmentVariable("VCR_SMOKE_NATIVE_SETTINGS") == "1")
+            if (Environment.GetEnvironmentVariable("VCR_SMOKE_NATIVE_SETTINGS") == "1" &&
+                string.IsNullOrEmpty(evidence.error))
             {
                 try
                 {
