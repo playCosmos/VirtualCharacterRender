@@ -74,6 +74,23 @@ def verify(legacy: str, workspace: str, config: str, bridge: str,
     require(
         r'" \| Automatic save: enabled"', config,
         "U1 no longer reports automatic-save state")
+    smoke = bridge.split("internal static void VerifyMacManagedInteropSmoke()", 1)
+    if len(smoke) != 2:
+        raise ValueError("Real Unity macOS managed P/Invoke smoke method missing")
+    smoke = smoke[1].split("#else", 1)[0]
+    for ident in (90, 94):
+        require(
+            rf"settings\.Add\(\s*0\s*,\s*{ident}\s*,\s*ControlKind\.Label",
+            smoke, f"Real Unity macOS P/Invoke smoke omits U1 status {ident}")
+        require(
+            rf"settings\.GetText\(\s*{ident}\s*\)",
+            smoke, f"Real Unity macOS P/Invoke smoke does not read status {ident}")
+    require(
+        r"new\s+string\(\s*'가'\s*,\s*3600\s*\)",
+        smoke, "Real Unity macOS P/Invoke smoke lacks long Korean recovery path")
+    require(
+        r"new\s+DesktopNativeSettingsWindow\(\)",
+        smoke, "Real Unity macOS P/Invoke smoke does not recreate native Settings")
     require(
         r"status\s*=\s*user32\.GetDlgItem\(\s*settings_hwnd\s*,\s*94\s*\)",
         windows_probe, "Windows U1 GUI probe must inspect configuration status 94")
@@ -94,6 +111,10 @@ def self_test(sources) -> None:
         ("U1 94 missing", (legacy, workspace.replace(
             "_workspaceNativeSettings.Add(0, 94", "_workspaceNativeSettings.Add(0, 95"),
             config, bridge, appkit, fixture, probe)),
+        ("macOS Unity interop omits U1 94", (legacy, workspace, config,
+            bridge.replace("settings.Add(0, 94, ControlKind.Label",
+                           "settings.Add(0, 95, ControlKind.Label"),
+            appkit, fixture, probe)),
         ("Win32 row pitch regressed", (legacy, workspace, config, bridge.replace(
             "nextRowTop[category] += statusDetails ? 112 : 48;",
             "nextRowTop[category] += 48;"),
