@@ -280,7 +280,7 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
             // disposable one-line toast messages: keep them legible/copyable.
             text.font = [NSFont systemFontOfSize:13];
             text.usesSingleLineMode = NO;
-            text.wraps = YES;
+            [(NSTextFieldCell *)text.cell setWraps:YES];
             text.lineBreakMode = NSLineBreakByWordWrapping;
             text.selectable = YES;
             resizeConfigurationStatus(text);
