@@ -149,7 +149,7 @@ int main(int argc, const char *argv[]) {
         }
         require(statusText != nil && feedbackText != nil,
                 "General configuration status controls were not created");
-        require(statusText.wraps && !statusText.usesSingleLineMode &&
+        require([(NSTextFieldCell *)statusText.cell wraps] && !statusText.usesSingleLineMode &&
                 statusText.isSelectable,
                 "General configuration status must wrap and allow copying");
         const CGFloat shortStatusHeight = NSHeight(statusText.frame);
