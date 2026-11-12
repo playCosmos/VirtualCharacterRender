@@ -134,6 +134,45 @@ int main(int argc, const char *argv[]) {
         getText(9999, missing, sizeof(missing));
         require(missing[0] == 0, "missing native Settings text must be empty");
 
+        // The General configuration path and recovery warning must not be
+        // a one-line label: it can contain a long path or backup diagnostics.
+        // Exercise the *real compiled AppKit bridge*, not a layout mock.
+        add(0, 90, 0, "Ready", "");
+        add(0, 94, 0, "Configuration status unavailable.", "");
+        select(0);
+        NSTextField *statusText = nil;
+        NSTextField *feedbackText = nil;
+        for (NSView *view in scroll.documentView.subviews) {
+            if (![view isKindOfClass:[NSTextField class]]) continue;
+            if (view.tag == 94) statusText = (NSTextField *)view;
+            if (view.tag == 90) feedbackText = (NSTextField *)view;
+        }
+        require(statusText != nil && feedbackText != nil,
+                "General configuration status controls were not created");
+        require(statusText.wraps && !statusText.usesSingleLineMode &&
+                statusText.isSelectable,
+                "General configuration status must wrap and allow copying");
+        const CGFloat shortStatusHeight = NSHeight(statusText.frame);
+        const CGFloat shortDocumentHeight = NSHeight(scroll.documentView.bounds);
+        NSString *warning = [@"복구 설정 경로: " stringByPaddingToLength:3600
+            withString:@"/아주긴폴더/백업경로/경고메시지/ " startingAtIndex:0];
+        setText(94, warning.UTF8String);
+        const CGFloat longStatusHeight = NSHeight(statusText.frame);
+        const CGFloat longDocumentHeight = NSHeight(scroll.documentView.bounds);
+        std::fprintf(stderr,
+            "AppKit status: short=%.1f long=%.1f page_short=%.1f page_long=%.1f\n",
+            (double)shortStatusHeight, (double)longStatusHeight,
+            (double)shortDocumentHeight, (double)longDocumentHeight);
+        require(longStatusHeight > shortStatusHeight + 100,
+                "long recovery status still clipped to a short label");
+        require(longDocumentHeight > shortDocumentHeight + 100,
+                "long recovery status did not expand the page scroll document");
+        require(NSMaxY(statusText.frame) + 8 <= NSMinY(feedbackText.frame),
+                "long configuration status overlaps prior feedback row");
+        require([statusText.stringValue isEqualToString:warning] &&
+                [statusText.toolTip isEqualToString:warning],
+                "full recovery text lost after multiline layout");
+
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
         clear(0);
