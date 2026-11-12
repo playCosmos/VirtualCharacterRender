@@ -190,15 +190,31 @@ jobs:
     steps:
       - name: Checkout exact source
         uses: actions/checkout@v4
-      - name: Download source-bound P1 macOS Player
+      # A cancelled smoke job can be retried without rebuilding the Player.
+      # In that case github.run_attempt increments but only the previous
+      # attempt's source-bound artifact exists. Download all matching attempt
+      # directories and select the newest <= current attempt with a strict SHA
+      # and archive digest check; do not merge artifacts from different tries.
+      - name: Download same-run P1 macOS Player attempts
         uses: actions/download-artifact@v4
         with:
-          name: u1-p1-macos-player-${{ github.run_id }}-${{ github.run_attempt }}
-          path: p1-macos-artifacts/
+          pattern: u1-p1-macos-player-${{ github.run_id }}-*
+          path: p1-macos-downloaded-artifacts/
+          merge-multiple: false
       - name: Use pinned Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Select newest source-verified Player artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-player-artifact.py \
+            --downloads p1-macos-downloaded-artifacts \
+            --output p1-macos-artifacts \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --source "$GITHUB_SHA"
       - name: Require exact artifact source and SHA-256
         shell: bash
         run: |
