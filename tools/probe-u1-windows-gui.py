@@ -1360,6 +1360,21 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
             "Configuration status must support multiline read-only scrolling: " +
             str({"style": hex(style), "height": bounds.bottom - bounds.top}))
 
+    # U1 puts feedback ID 90 immediately above config status 94. The
+    # old 48px fixed row pitch positioned TWO 100px controls on top of each
+    # other. Inspect independent real HWND rectangles, not style flags alone.
+    feedback = user32.GetDlgItem(settings_hwnd, 90)
+    feedback_bounds = wintypes.RECT()
+    if (not feedback or not user32.IsWindowVisible(feedback) or
+            not user32.GetWindowRect(feedback, ctypes.byref(feedback_bounds)) or
+            feedback_bounds.bottom - feedback_bounds.top < 80):
+        raise RuntimeError("U1 native General action feedback 90 missing or clipped")
+    if feedback_bounds.bottom + 8 > bounds.top:
+        raise RuntimeError(
+            "Native Settings feedback 90 overlaps U1 configuration status 94: " +
+            str({"feedbackBottom": feedback_bounds.bottom,
+                 "configurationTop": bounds.top}))
+
     # Checking WS_VSCROLL alone cannot prove the bottom status is reachable:
     # the parent previously computed its range from row count, clipping the
     # enlarged final control. Request an actual native SB_PAGEDOWN, then
@@ -1434,6 +1449,7 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
             "configurationStatusScrollDistance": initial_top - after.top,
             "configurationStatusInClient": True,
             "configurationStatusTextComplete": True,
+            "configurationStatusDoesNotOverlapActionFeedback": True,
             "physicalHumanAcceptance": False}
 
 
