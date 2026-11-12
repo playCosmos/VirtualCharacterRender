@@ -212,6 +212,10 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, List<IntPtr>> categoryControls =
             new Dictionary<int, List<IntPtr>>();
         private readonly int[] rows = new int[4];
+        // A fixed 48px row pitch overlays two adjacent 100px General
+        // status controls (U1 feedback 90 and configuration 94). The next
+        // row must start *after* the previous control's actual height.
+        private readonly int[] nextRowTop = { 82, 82, 82, 82 };
         private readonly int[] scrollOffsets = new int[4];
         private readonly Dictionary<IntPtr, int> controlCategories =
             new Dictionary<IntPtr, int>();
@@ -546,7 +550,11 @@ namespace VCR.Runtime.UI
                 return;
             if (!categoryControls.TryGetValue(category, out var handles))
                 categoryControls[category] = handles = new List<IntPtr>();
-            var top = 82 + 48 * rows[category]++;
+            var statusDetails = category == 0 &&
+                (id == 90 || id == 94) && kind == ControlKind.Label;
+            var top = nextRowTop[category];
+            nextRowTop[category] += statusDetails ? 112 : 48;
+            rows[category]++;
             if (kind == ControlKind.Edit)
             {
                 handles.Add(NewControl("STATIC", label, NormalTextStyle,
@@ -558,12 +566,8 @@ namespace VCR.Runtime.UI
             }
             else
             {
-                // General 90 is legacy/U1 action feedback, while U1 94
-                // carries the full configuration path and recovery state.
-                // Both can contain long warnings; keep them as separate
-                // read-only multiline EDIT controls with parent scrolling.
-                var statusDetails = category == 0 &&
-                    (id == 90 || id == 94) && kind == ControlKind.Label;
+                // Both General status controls use actual 100px child
+                // heights, accounted for by nextRowTop before creation.
                 var textHandle = NewControl(
                     statusDetails ? "EDIT" : kind == ControlKind.Button ? "BUTTON" : "STATIC",
                     label ?? "",
@@ -625,6 +629,7 @@ namespace VCR.Runtime.UI
                 handles.Clear();
             }
             rows[category] = 0;
+            nextRowTop[category] = 82;
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacClearCategory(category);
 #endif
