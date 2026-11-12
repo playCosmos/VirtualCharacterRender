@@ -502,6 +502,38 @@ namespace VCR.Runtime.UI
         private static extern void MacDestroy();
 
         public DesktopNativeSettingsWindow() { MacCreate(); }
+
+        // Only invoked by the opt-in source-bound macOS Player smoke. This
+        // exercises every managed P/Invoke declaration with the actual Unity
+        // Mono marshaler and packaged AppKit dylib, not just nm exports.
+        // Never used by a normal interactive Player launch.
+        internal static void VerifyMacManagedInteropSmoke()
+        {
+            using (var settings = new DesktopNativeSettingsWindow())
+            {
+                if (settings.IsVisible)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke expected an initially hidden window.");
+                settings.Add(0, 7100, ControlKind.Edit, "한국어 설정", "초기 값");
+                if (settings.GetText(7100) != "초기 값")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke initial UTF-8 marshal failed.");
+                settings.SetText(7100, "가나A✓");
+                if (settings.GetText(7100) != "가나A✓")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke UTF-8 roundtrip failed.");
+                settings.Add(2, 7200, ControlKind.Button, "트래킹 설정");
+                settings.SelectCategory(2);
+                if (settings.SelectedCategory != 2 || settings.PollAction() != 0)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke category/action state invalid.");
+                settings.ClearCategory(2);
+                settings.Open();
+                if (!settings.IsVisible)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke native show/visibility failed.");
+            }
+        }
 #else
         public DesktopNativeSettingsWindow() { }
 #endif
