@@ -205,6 +205,10 @@ jobs:
           (cd p1-macos-artifacts && shasum -a 256 -c macos.sha256)
       - name: Execute nondevelopment P1 macOS Player native smoke
         shell: bash
+        # The Player performs the real managed C# -> P/Invoke -> compiled
+        # AppKit bridge; the default interactive launcher never runs this.
+        env:
+          VCR_SMOKE_NATIVE_SETTINGS: '1'
         run: |
           set -euo pipefail
           python3 tools/run-player-smoke.py \
@@ -213,6 +217,24 @@ jobs:
             --source "$GITHUB_SHA" \
             --require-quit-marker \
             --output Builds/PlayerSmoke/u1-p1-macos
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          output = Path("Builds/PlayerSmoke/u1-p1-macos")
+          reports = sorted(output.glob("*player-smoke.json"))
+          if len(reports) != 8:
+              raise SystemExit(
+                  "Expected 8 real P1 startup/relaunch/recovery/acceptance " +
+                  "reports, found " + str(len(reports)))
+          for report in reports:
+              value = json.loads(report.read_text(encoding="utf-8"))
+              if value.get("nativeSettingsInteropPassed") is not True:
+                  raise SystemExit(
+                      "Unity Player did not prove managed AppKit P/Invoke: " +
+                      report.name)
+          print("Real Unity macOS managed Settings P/Invoke: PASS (8 native Player launches)")
+          PY
       - name: Archive macOS Player logs and startup/quit evidence
         if: always()
         uses: actions/upload-artifact@v4
