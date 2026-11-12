@@ -55,6 +55,15 @@ jobs:
           python-version: '3.11'
       - name: Exercise native mock .app and capture actual process exit evidence
         run: python3 tools/test-p1-macos-launcher.py
+      - name: Compile actual AppKit Settings bridge from source
+        run: bash tools/build-native-settings-macos.sh
+      - name: Exercise native AppKit window, Korean text and reopen layout
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -fobjc-arc -arch arm64 \
+            -framework AppKit -framework Foundation \
+            tools/test-native-settings-macos.mm -o "$RUNNER_TEMP/test-vcr-appkit"
+          "$RUNNER_TEMP/test-vcr-appkit" "$GITHUB_WORKSPACE/unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib"
 
   repository-structure:
     runs-on: ubuntu-latest
