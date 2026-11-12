@@ -37,9 +37,7 @@ NSScrollView *detailScroll(NSWindow *window) {
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         require(argc == 2, "usage: test-native-settings-macos <dylib>");
-        std::fprintf(stderr, "AppKit checkpoint: before NSApplication\n");
         [NSApplication sharedApplication];
-        std::fprintf(stderr, "AppKit checkpoint: after NSApplication\n");
         void *library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
         if (!library) {
             std::fprintf(stderr, "dlopen failed: %s\n", dlerror());
@@ -56,22 +54,20 @@ int main(int argc, const char *argv[]) {
         auto visible = symbol<int (*)()>(library, "VCR_SettingsIsVisible");
         auto poll = symbol<int (*)()>(library, "VCR_SettingsPollAction");
 
-        std::fprintf(stderr, "AppKit checkpoint: before Create\n");
         create();
-        std::fprintf(stderr, "AppKit checkpoint: after Create\n");
         NSWindow *window = settingsWindow();
         require(window != nil, "real NSWindow was not created");
         require((window.styleMask & NSWindowStyleMaskTitled) != 0,
                 "macOS Settings must keep system titlebar");
         require((window.styleMask & NSWindowStyleMaskResizable) != 0,
                 "macOS Settings must remain independently resizable");
+        require(![window isReleasedWhenClosed],
+                "native NSWindow must disable automatic close-release under ARC");
         require(visible() == 0, "new Settings should initially be hidden");
         NSScrollView *scroll = detailScroll(window);
         require(scroll != nil, "native Settings detail ScrollView missing");
 
-        std::fprintf(stderr, "AppKit checkpoint: before first Add\n");
         add(0, 45, 2, "한글 경로", "한글 값");
-        std::fprintf(stderr, "AppKit checkpoint: after first Add\n");
         char buffer[1024] = {};
         getText(45, buffer, sizeof(buffer));
         require(std::strcmp(buffer, "한글 값") == 0, "initial Korean UTF-8 lost");
@@ -82,9 +78,7 @@ int main(int argc, const char *argv[]) {
 
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
-        std::fprintf(stderr, "AppKit checkpoint: before Clear\n");
         clear(0);
-        std::fprintf(stderr, "AppKit checkpoint: after Clear\n");
         for (int i = 0; i < 17; ++i)
             add(0, 500 + i, 1, "Test action", "");
         select(0);
@@ -98,12 +92,26 @@ int main(int argc, const char *argv[]) {
         require(std::fabs(NSHeight(scroll.documentView.bounds) - expanded) < 1.0,
                 "category navigation lost page layout");
         require(poll() == 0, "programmatic category selection queued a click");
+        // Exercise an actual AppKit NSButton target/action path. The native
+        // sidebar must dispatch the same navigation ID to managed Unity.
+        NSButton *outputNavigation = nil;
+        for (NSView *pane in window.contentView.subviews) {
+            for (NSView *control in pane.subviews) {
+                if ([control isKindOfClass:[NSButton class]] &&
+                    [(NSButton *)control tag] == 103) {
+                    outputNavigation = (NSButton *)control;
+                    break;
+                }
+            }
+        }
+        require(outputNavigation != nil, "native Output navigation missing");
+        [outputNavigation performClick:nil];
+        require(poll() == 103 && poll() == 0,
+                "native sidebar click failed to queue exactly one action");
 
-        std::fprintf(stderr, "AppKit checkpoint: before Destroy/recreate\n");
         NSWindow *oldWindow = window;
         destroy();
         create();
-        std::fprintf(stderr, "AppKit checkpoint: after Destroy/recreate\n");
         // AppKit's NSApp.windows may still include a closed autoreleased
         // window until the next event/autorelease drain. Do not inspect
         // the old window when verifying the newly created native bridge.
@@ -130,13 +138,10 @@ int main(int argc, const char *argv[]) {
         // 17-row page from the previous window instance.
         require(recreated >= 650.0 && recreated < expanded - 100.0,
                 "stale row count survived Settings Destroy/Create");
-        std::fprintf(stderr, "AppKit checkpoint: before final Destroy\n");
         destroy();
-        std::fprintf(stderr, "AppKit checkpoint: after final Destroy\n");
         // Objective-C classes registered by a dynamically loaded dylib must
         // not be unloaded while the AppKit process is alive. Unity also keeps
         // native plugin modules loaded for the lifetime of the Player.
-        std::fprintf(stderr, "AppKit checkpoint: completed lifecycle\n");
         std::puts("P1 macOS AppKit bridge native integration: PASS (no Unity GUI acceptance)");
     }
     return 0;
