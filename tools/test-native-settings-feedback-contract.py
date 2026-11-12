@@ -11,7 +11,8 @@ import re
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def verify(managed: str, bridge: str, appkit: str, fixture: str) -> None:
+def verify(managed: str, bridge: str, appkit: str, fixture: str,
+           windows_probe: str) -> None:
     helper = re.search(
         r"private\s+void\s+AddNativeFeedback\s*\(\s*int\s+category\s*\)"
         r"\s*\{(?P<body>.*?)\n\s*\}", managed, re.DOTALL
@@ -48,6 +49,12 @@ def verify(managed: str, bridge: str, appkit: str, fixture: str) -> None:
     ):
         raise ValueError("AppKit live feedback updates cannot resize the real row")
 
+    if not re.search(
+        rf"status\s*=\s*user32\.GetDlgItem\(\s*settings_hwnd\s*,\s*{general_id}\s*\)",
+        windows_probe,
+    ):
+        raise ValueError("Windows GUI probe checks a nonexistent feedback control")
+
     # An AppKit mock using invented ID 94 is not an integration test of the
     # actual General status. Assert both creation and live SetText use ID 90.
     if not re.search(rf"\badd\(\s*0\s*,\s*{general_id}\s*,\s*0\s*,", fixture):
@@ -59,20 +66,25 @@ def verify(managed: str, bridge: str, appkit: str, fixture: str) -> None:
         raise ValueError("Native AppKit test does not update real feedback control")
 
 
-def self_test(managed: str, bridge: str, appkit: str, fixture: str) -> None:
+def self_test(managed: str, bridge: str, appkit: str, fixture: str,
+              windows_probe: str) -> None:
     changes = (
         ("Windows reverted to old 94", (managed, bridge.replace(
             "category == 0 && id == 90", "category == 0 && id == 94"
-        ), appkit, fixture)),
+        ), appkit, fixture, windows_probe)),
         ("macOS layout reverted to old 94", (managed, bridge, appkit.replace(
             "category == 0 && ident == 90", "category == 0 && ident == 94"
-        ), fixture)),
+        ), fixture, windows_probe)),
         ("macOS live updates reverted to old 94", (managed, bridge, appkit.replace(
             "ident == 90 && categoryViews[@0]", "ident == 94 && categoryViews[@0]"
-        ), fixture)),
+        ), fixture, windows_probe)),
         ("fake AppKit fixture restored", (managed, bridge, appkit, fixture.replace(
             "setText(90, warning.UTF8String)", "setText(94, warning.UTF8String)"
-        ))),
+        ), windows_probe)),
+        ("Windows GUI probe reverted to old 94", (managed, bridge, appkit,
+         fixture, windows_probe.replace(
+             "status = user32.GetDlgItem(settings_hwnd, 90)",
+             "status = user32.GetDlgItem(settings_hwnd, 94)"))),
     )
     for name, sources in changes:
         try:
@@ -89,10 +101,11 @@ def main() -> None:
               "DesktopNativeSettingsWindow.cs").read_text(encoding="utf-8")
     appkit = (ROOT / "native/macos/VcrSettingsWindow.mm").read_text(encoding="utf-8")
     fixture = (ROOT / "tools/test-native-settings-macos.mm").read_text(encoding="utf-8")
-    verify(managed, bridge, appkit, fixture)
-    self_test(managed, bridge, appkit, fixture)
+    windows_probe = (ROOT / "tools/probe-u1-windows-gui.py").read_text(encoding="utf-8")
+    verify(managed, bridge, appkit, fixture, windows_probe)
+    self_test(managed, bridge, appkit, fixture, windows_probe)
     print("Native Settings actual General feedback ID 90 contract: PASS "
-          "(Win32, AppKit, runtime and test fixture)")
+          "(Win32, AppKit, Unity, Windows GUI probe and test fixture)")
 
 
 if __name__ == "__main__":
