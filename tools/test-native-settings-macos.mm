@@ -75,6 +75,36 @@ int main(int argc, const char *argv[]) {
         getText(45, buffer, sizeof(buffer));
         require(std::strcmp(buffer, "수정된 값 ✓") == 0,
                 "updated Korean UTF-8 field lost");
+        // A caller may provide a short buffer for a Korean path. Every
+        // capacity must yield valid UTF-8, a terminating NUL and no writes
+        // past its declared boundary. Reject partially copied code points.
+        setText(45, "가나A✓");
+        const char *fullText = "가나A✓";
+        for (int capacity = 1; capacity <= 20; ++capacity) {
+            char bounded[24];
+            std::memset(bounded, 0x5a, sizeof(bounded));
+            getText(45, bounded, capacity);
+            const size_t bytes = strnlen(bounded, static_cast<size_t>(capacity));
+            require(bytes < static_cast<size_t>(capacity),
+                    "bounded text result missing NUL terminator");
+            for (size_t index = static_cast<size_t>(capacity);
+                 index < sizeof(bounded); ++index) {
+                require(bounded[index] == 0x5a,
+                        "native GetText overwrote bytes beyond capacity");
+            }
+            NSString *decoded = [[NSString alloc]
+                initWithBytes:bounded length:bytes
+                    encoding:NSUTF8StringEncoding];
+            require(decoded != nil, "bounded Korean text split a UTF-8 codepoint");
+            require(std::strncmp(bounded, fullText, bytes) == 0,
+                    "bounded text is not a complete prefix");
+            if (capacity >= static_cast<int>(std::strlen(fullText)) + 1)
+                require(std::strcmp(bounded, fullText) == 0,
+                        "full Korean text not returned at sufficient capacity");
+        }
+        char missing[3] = {'x', 'x', 'x'};
+        getText(9999, missing, sizeof(missing));
+        require(missing[0] == 0, "missing native Settings text must be empty");
 
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
