@@ -8,6 +8,11 @@ on:
       - feature/obs-ui-u1-layout-contract-20261026
     paths:
       - .github/workflows/u1-p1-macos-native.yml
+      - native/macos/VcrSettingsWindow.mm
+      - native/macos/VcrSettingsWindow.dylib.meta
+      - tools/build-native-settings-macos.sh
+      - unity/Assets/VCR/Editor/P1/**
+      - unity/Assets/VCR/Runtime/UI/**
   workflow_dispatch:
 
 permissions:
