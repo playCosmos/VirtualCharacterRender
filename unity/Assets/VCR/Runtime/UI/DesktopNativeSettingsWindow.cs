@@ -527,16 +527,52 @@ namespace VCR.Runtime.UI
                 if (settings.GetText(7100) != "가나A✓")
                     throw new InvalidOperationException(
                         "Mac Settings interop smoke UTF-8 roundtrip failed.");
+
+                // U1 owns two distinct General status controls. The earlier
+                // native-only layout test proved the AppKit geometry but the
+                // actual Unity Mono marshaler never exercised either row.
+                settings.Add(0, 90, ControlKind.Label, "작업 대기");
+                settings.Add(0, 94, ControlKind.Label, "설정 정보");
+                const string actionFeedback = "설정 저장 실패: 다시 확인하세요 ✓";
+                settings.SetText(90, actionFeedback);
+                if (settings.GetText(90) != actionFeedback)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke action feedback 90 UTF-8 failed.");
+
+                var recoveryStatus = "Configuration: /사용자/설정/" +
+                    new string('가', 3600) + " | Automatic save: enabled";
+                settings.SetText(94, recoveryStatus);
+                if (settings.GetText(94) != recoveryStatus)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke U1 configuration 94 UTF-8 failed.");
+
                 settings.Add(2, 7200, ControlKind.Button, "트래킹 설정");
                 settings.SelectCategory(2);
                 if (settings.SelectedCategory != 2 || settings.PollAction() != 0)
                     throw new InvalidOperationException(
                         "Mac Settings interop smoke category/action state invalid.");
+                settings.SelectCategory(0);
+                if (settings.GetText(94) != recoveryStatus)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke lost U1 status on page switch.");
                 settings.ClearCategory(2);
                 settings.Open();
                 if (!settings.IsVisible)
                     throw new InvalidOperationException(
                         "Mac Settings interop smoke native show/visibility failed.");
+            }
+
+            // The native bridge uses process-global AppKit state. Disposing
+            // must leave it safe to reopen from the same managed process.
+            using (var reopened = new DesktopNativeSettingsWindow())
+            {
+                if (reopened.IsVisible || reopened.GetText(94).Length != 0)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke leaked status after destroy/recreate.");
+                reopened.Add(0, 94, ControlKind.Label, "새 설정 상태");
+                if (reopened.GetText(94) != "새 설정 상태")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke failed after native recreation.");
             }
         }
 #else
