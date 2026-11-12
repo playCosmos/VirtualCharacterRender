@@ -51,19 +51,53 @@ namespace {
         }
     }
 
+    // The General configuration status (ID 94) can contain a long path
+    // or recovery warning. Reserve its *actual* text height before laying
+    // out rows; a fixed 52pt row clips the message and overlaps the row above.
+    void resizeConfigurationStatus(NSTextField *field) {
+        if (!field) return;
+        NSFont *font = field.font ?: [NSFont systemFontOfSize:13];
+        NSRect measurement = [field.stringValue boundingRectWithSize:
+            NSMakeSize(596, CGFLOAT_MAX)
+            options:NSStringDrawingUsesLineFragmentOrigin |
+                    NSStringDrawingUsesFontLeading
+            attributes:@{NSFontAttributeName: font}
+            context:nil];
+        NSRect frame = field.frame;
+        frame.size.height = std::max((CGFloat)88,
+            std::ceil(measurement.size.height) + 16);
+        field.frame = frame;
+        // Full details remain available to copy, even for long warnings.
+        field.toolTip = field.stringValue;
+    }
+
     void layoutRows(int category) {
         if (category < 0 || category >= 4 || !pages) return;
         NSView *page = pages[@(category)];
-        CGFloat height = std::max((CGFloat)650, (CGFloat)categoryRows[category] * 52 + 36);
-        page.frame = NSMakeRect(0, 0, 660, height);
         NSArray<NSArray<NSView *> *> *rows = rowGroups[@(category)];
-        for (NSUInteger index = 0; index < rows.count; ++index) {
-            CGFloat y = height - 64 - (CGFloat)index * 52;
-            for (NSView *view in rows[index]) {
+        // Use each row's intrinsic control height. A multiline status row
+        // must push earlier rows upward and expand the scroll document rather
+        // than paint over the previous button or fall below the viewport.
+        CGFloat height = 36;
+        for (NSArray<NSView *> *row in rows) {
+            CGFloat tallest = 36;
+            for (NSView *view in row)
+                tallest = std::max(tallest, NSHeight(view.frame));
+            height += std::max((CGFloat)52, tallest + 16);
+        }
+        height = std::max((CGFloat)650, height);
+        page.frame = NSMakeRect(0, 0, 660, height);
+        CGFloat top = height - 28;
+        for (NSArray<NSView *> *row in rows) {
+            CGFloat tallest = 36;
+            for (NSView *view in row)
+                tallest = std::max(tallest, NSHeight(view.frame));
+            for (NSView *view in row) {
                 NSRect frame = view.frame;
-                frame.origin.y = y;
+                frame.origin.y = top - std::max((CGFloat)36, NSHeight(frame));
                 view.frame = frame;
             }
+            top -= std::max((CGFloat)52, tallest + 16);
         }
     }
 }
@@ -236,10 +270,21 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
         [row addObject:button];
     } else {
         NSTextField *text = [NSTextField labelWithString:toString(label)];
+        text.tag = ident;
         text.frame = NSMakeRect(20, 0, 604, 30);
         text.font = [NSFont systemFontOfSize:16 weight:NSFontWeightSemibold];
         text.textColor = foregroundColor();
         text.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+        if (category == 0 && ident == 94) {
+            // The saved configuration path and recovery errors are not
+            // disposable one-line toast messages: keep them legible/copyable.
+            text.font = [NSFont systemFontOfSize:13];
+            text.usesSingleLineMode = NO;
+            text.wraps = YES;
+            text.lineBreakMode = NSLineBreakByWordWrapping;
+            text.selectable = YES;
+            resizeConfigurationStatus(text);
+        }
         [page addSubview:text];
         [views addObject:text];
         [row addObject:text];
@@ -271,7 +316,13 @@ __attribute__((visibility("default"))) void VCR_SettingsClearCategory(int catego
 __attribute__((visibility("default"))) void VCR_SettingsSetText(
     int ident, const char *value) {
     NSTextField *field = fields[@(ident)];
-    if (field) field.stringValue = toString(value);
+    if (field) {
+        field.stringValue = toString(value);
+        if (ident == 94 && categoryViews[@0] && fields[@94] == field) {
+            resizeConfigurationStatus(field);
+            layoutRows(0);
+        }
+    }
 }
 
 __attribute__((visibility("default"))) void VCR_SettingsGetText(
