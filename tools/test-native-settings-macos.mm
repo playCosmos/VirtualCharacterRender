@@ -134,61 +134,80 @@ int main(int argc, const char *argv[]) {
         getText(9999, missing, sizeof(missing));
         require(missing[0] == 0, "missing native Settings text must be empty");
 
-        // The General configuration path and recovery warning must not be
-        // a one-line label: it can contain a long path or backup diagnostics.
-        // Exercise the *real compiled AppKit bridge*, not a layout mock.
-        add(0, 89, 0, "General action status header", "");
-        // ID 90 is the actual General feedback ID emitted by
-        // ApplicationUiController.AddNativeFeedback(category). A synthetic
-        // ID 94 fixture used to pass while real recovery warnings clipped.
-        add(0, 90, 0, "Configuration status unavailable.", "");
+        // Both real General labels exist in the U1 workspace:
+        // 90 = action feedback, 94 = configuration path / recovery status.
+        // Older tests measured only synthetic 94 or only legacy 90.
+        add(0, 89, 0, "General status heading", "");
+        add(0, 90, 0, "Action feedback ready.", "");
+        add(0, 94, 0, "Configuration status unavailable.", "");
         select(0);
-        NSTextField *statusText = nil;
+        NSTextField *headingText = nil;
         NSTextField *feedbackText = nil;
+        NSTextField *configurationText = nil;
         for (NSView *view in scroll.documentView.subviews) {
             if (![view isKindOfClass:[NSTextField class]]) continue;
-            if (view.tag == 90) statusText = (NSTextField *)view;
-            if (view.tag == 89) feedbackText = (NSTextField *)view;
+            if (view.tag == 89) headingText = (NSTextField *)view;
+            if (view.tag == 90) feedbackText = (NSTextField *)view;
+            if (view.tag == 94) configurationText = (NSTextField *)view;
         }
-        require(statusText != nil && feedbackText != nil,
-                "General configuration status controls were not created");
-        require([(NSTextFieldCell *)statusText.cell wraps] && !statusText.usesSingleLineMode &&
-                statusText.isSelectable,
-                "General configuration status must wrap and allow copying");
-        const CGFloat shortStatusHeight = NSHeight(statusText.frame);
+        require(headingText != nil && feedbackText != nil &&
+                configurationText != nil, "both actual General status rows missing");
+        for (NSTextField *field in @[feedbackText, configurationText]) {
+            require([(NSTextFieldCell *)field.cell wraps] &&
+                    !field.usesSingleLineMode && field.isSelectable,
+                    "General status must support multiline wrapping and selection");
+        }
+        const CGFloat shortFeedbackHeight = NSHeight(feedbackText.frame);
+        const CGFloat shortConfigHeight = NSHeight(configurationText.frame);
         const CGFloat shortDocumentHeight = NSHeight(scroll.documentView.bounds);
         NSString *warning = [@"복구 설정 경로: " stringByPaddingToLength:3600
             withString:@"/아주긴폴더/백업경로/경고메시지/ " startingAtIndex:0];
+
+        // Legacy/U1 action feedback 90 can also be a long diagnostic.
         setText(90, warning.UTF8String);
-        const CGFloat longStatusHeight = NSHeight(statusText.frame);
-        const CGFloat longDocumentHeight = NSHeight(scroll.documentView.bounds);
+        require(NSHeight(feedbackText.frame) > shortFeedbackHeight + 100,
+                "long action feedback 90 is clipped");
+        require(NSHeight(scroll.documentView.bounds) > shortDocumentHeight + 100,
+                "long action feedback 90 did not expand scroll document");
+        require(NSMaxY(feedbackText.frame) + 8 <= NSMinY(headingText.frame),
+                "long action feedback 90 overlaps heading");
+        require([feedbackText.stringValue isEqualToString:warning] &&
+                [feedbackText.toolTip isEqualToString:warning],
+                "action feedback 90 lost full warning text");
+        setText(90, "Action feedback ready.");
+
+        // U1 control 94 is the actual GetWorkspaceConfigurationStatus() value.
+        // Test it independently of action feedback 90.
+        setText(94, warning.UTF8String);
+        const CGFloat expandedConfigHeight = NSHeight(configurationText.frame);
+        const CGFloat expandedDocumentHeight = NSHeight(scroll.documentView.bounds);
         std::fprintf(stderr,
-            "AppKit status: short=%.1f long=%.1f page_short=%.1f page_long=%.1f\n",
-            (double)shortStatusHeight, (double)longStatusHeight,
-            (double)shortDocumentHeight, (double)longDocumentHeight);
-        require(longStatusHeight > shortStatusHeight + 100,
-                "long recovery status still clipped to a short label");
-        require(longDocumentHeight > shortDocumentHeight + 100,
-                "long recovery status did not expand the page scroll document");
-        require(NSMaxY(statusText.frame) + 8 <= NSMinY(feedbackText.frame),
-                "long configuration status overlaps prior feedback row");
-        require([statusText.stringValue isEqualToString:warning] &&
-                [statusText.toolTip isEqualToString:warning],
-                "full recovery text lost after multiline layout");
-        // Real configuration file paths can be one long, unbroken token.
-        // Do not rely on spaces in the prior synthetic warning fixture.
+            "AppKit U1 config 94: short=%.1f long=%.1f page_short=%.1f page_long=%.1f\n",
+            (double)shortConfigHeight, (double)expandedConfigHeight,
+            (double)shortDocumentHeight, (double)expandedDocumentHeight);
+        require(expandedConfigHeight > shortConfigHeight + 100,
+                "long U1 configuration status 94 is clipped");
+        require(expandedDocumentHeight > shortDocumentHeight + 100,
+                "long U1 configuration status 94 did not grow scroll document");
+        require(NSMaxY(configurationText.frame) + 8 <= NSMinY(feedbackText.frame),
+                "U1 configuration status 94 overlaps action feedback 90");
+        require([configurationText.stringValue isEqualToString:warning] &&
+                [configurationText.toolTip isEqualToString:warning],
+                "U1 configuration status 94 lost complete recovery text");
+
+        // Paths with no spaces must also grow the real U1 status row.
         NSString *unbrokenPath = [@"/사용자/설정/"
             stringByPaddingToLength:3000 withString:@"한글경로" startingAtIndex:0];
-        setText(90, unbrokenPath.UTF8String);
-        require(NSHeight(statusText.frame) > shortStatusHeight + 100,
-                "unbroken Korean configuration path is still clipped");
+        setText(94, unbrokenPath.UTF8String);
+        require(NSHeight(configurationText.frame) > shortConfigHeight + 100,
+                "unbroken Korean U1 configuration path is clipped");
         require(NSHeight(scroll.documentView.bounds) > shortDocumentHeight + 100,
-                "unbroken configuration path did not grow scroll document");
-        require(NSMaxY(statusText.frame) + 8 <= NSMinY(feedbackText.frame),
-                "unbroken configuration path overlaps prior control");
-        require([statusText.stringValue isEqualToString:unbrokenPath] &&
-                [statusText.toolTip isEqualToString:unbrokenPath],
-                "unbroken configuration path lost original text");
+                "unbroken U1 configuration path did not grow scroll document");
+        require(NSMaxY(configurationText.frame) + 8 <= NSMinY(feedbackText.frame),
+                "unbroken U1 configuration path overlaps action feedback");
+        require([configurationText.stringValue isEqualToString:unbrokenPath] &&
+                [configurationText.toolTip isEqualToString:unbrokenPath],
+                "unbroken U1 configuration path lost original text");
 
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
