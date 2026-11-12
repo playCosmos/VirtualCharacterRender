@@ -66,30 +66,36 @@ Player quit report records `nativeSettingsInteropPassed`. CI rejects missing
 or false evidence in any of the expected **eight** startup/relaunch/recovery/
 acceptance reports. Regular user launches never run this test. This managed
 smoke is still a programmatic API test; it cannot substitute for GUI/IME,
-real device, Retina, multi-monitor or operator acceptance. New full native
-Player CI for these changes: [Actions #43213727212](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43213727212)
-(**pending at the time of this documentation update**, do not mark pass
-without examining job results).
+real device, Retina, multi-monitor or operator acceptance. The source-bound nondevelopment Unity/macOS Mono Player workflow
+[Actions #43213727212](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43213727212)
+**passed**: its real Player process reported managed-to-AppKit P/Invoke success
+on each of eight startup/relaunch/recovery/acceptance launches. This is still
+an API-level native integration smoke, not human GUI acceptance.
 
 
-The General configuration feedback (control 90, matching
-`ApplicationUiController.AddNativeFeedback(0)`) now uses a selectable, wrapping
-AppKit label with measured content height and dynamic per-row layout instead of
-a fixed-height 30pt row. This prevents long configuration paths/recovery
-warnings from overlapping buttons or being clipped below the document.
-The actual macOS bridge integration fixture exercises a 3,600-character Korean
-warning and confirms no overlapping rows: status height 88pt to 928pt and
-scroll document 650pt to 1,084pt on the hosted macOS test. The full text
-remains available through the native text value and tooltip. An earlier
-implementation targeted control **94**, which was never created in the real
-General Settings panel: its synthetic test passed while actual feedback
-control **90** remained single-line. The runtime, Win32, AppKit and the
-AppKit integration test now all use **90**, enforced by
-`tools/test-native-settings-feedback-contract.py`. The previous green
-control-94 test is **not** valid evidence of real General feedback behavior. These checks are AppKit API-level evidence only, not proof of actual
-pointer or keyboard events within the Unity Player. Korean IME composition, Retina rendering, real VRM/tracker
-devices, z-order with a third-party app and physical operator approval remain
-manual gates.
+The desktop Settings bridge supports **two distinct** General status
+controls. Legacy `ApplicationUiController.AddNativeFeedback(0)` uses **90**
+for operation feedback. The U1 UI Toolkit `WorkspaceToolkitShell` creates
+both operation feedback **90** and a separate configuration status **94**;
+`WorkspaceToolkitShell.GetWorkspaceConfigurationStatus()` supplies the active
+configuration file path, automatic-save state and recovery warnings to **94**.
+The real P1 Windows GUI test therefore inspects child control **94**, not
+feedback **90**. Both 90 and 94 render as scrollable, read-only multiline
+controls in Win32 and dynamically measured wrapping/selectable AppKit labels
+on macOS. AppKit `SetText` must relayout either control without overlapping
+adjacent rows.
+
+A previous investigation incorrectly concluded that 94 was a synthetic,
+nonexistent control by examining only the **legacy** UI owner. The change to
+support 90 alone broke actual U1 Windows GUI validation
+[#43223134060](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43223134060).
+This is a production regression, not merely a test mismatch. The correction
+restores **both** control IDs in the native implementations and tests; the
+cross-platform regression guard covers both UI owners, the actual U1 Windows
+GUI probe, and native AppKit integration with a long Korean warning and an
+unbroken path. None of these checks proves Korean IME composition, real
+VRM/tracker devices, Retina/multi-monitor behavior, or physical operator
+approval.
 
 ## Current Windows IL2CPP input validation boundary
 
