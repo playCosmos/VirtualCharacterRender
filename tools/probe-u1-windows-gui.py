@@ -1341,11 +1341,12 @@ def probe_native_settings_navigation(settings_hwnd, player_log):
 
     # The General page's full configuration path/recovery message used to be
     # a 36px STATIC clipped at the bottom of the 720px native Settings window.
-    # Verify the REAL General feedback control from
-    # ApplicationUiController.AddNativeFeedback(0): ID 90, not a synthetic 94.
-    # Otherwise the probe can reject a correct Player or validate a fake row.
+    # The U1 UI Toolkit WorkspaceToolkitShell creates TWO General labels:
+    # action feedback ID 90 and configuration status ID 94. This probe
+    # must inspect the *real* config path/recovery text in ID 94, not
+    # legacy ApplicationUiController's ID 90 action feedback.
     # Verify a real Win32 read-only, multiline, scrollable status control.
-    status = user32.GetDlgItem(settings_hwnd, 90)
+    status = user32.GetDlgItem(settings_hwnd, 94)
     if not status or not user32.IsWindowVisible(status):
         raise RuntimeError("General Settings configuration status is missing")
     user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
