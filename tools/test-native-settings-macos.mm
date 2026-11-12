@@ -137,15 +137,18 @@ int main(int argc, const char *argv[]) {
         // The General configuration path and recovery warning must not be
         // a one-line label: it can contain a long path or backup diagnostics.
         // Exercise the *real compiled AppKit bridge*, not a layout mock.
-        add(0, 90, 0, "Ready", "");
-        add(0, 94, 0, "Configuration status unavailable.", "");
+        add(0, 89, 0, "General action status header", "");
+        // ID 90 is the actual General feedback ID emitted by
+        // ApplicationUiController.AddNativeFeedback(category). A synthetic
+        // ID 94 fixture used to pass while real recovery warnings clipped.
+        add(0, 90, 0, "Configuration status unavailable.", "");
         select(0);
         NSTextField *statusText = nil;
         NSTextField *feedbackText = nil;
         for (NSView *view in scroll.documentView.subviews) {
             if (![view isKindOfClass:[NSTextField class]]) continue;
-            if (view.tag == 94) statusText = (NSTextField *)view;
-            if (view.tag == 90) feedbackText = (NSTextField *)view;
+            if (view.tag == 90) statusText = (NSTextField *)view;
+            if (view.tag == 89) feedbackText = (NSTextField *)view;
         }
         require(statusText != nil && feedbackText != nil,
                 "General configuration status controls were not created");
@@ -156,7 +159,7 @@ int main(int argc, const char *argv[]) {
         const CGFloat shortDocumentHeight = NSHeight(scroll.documentView.bounds);
         NSString *warning = [@"복구 설정 경로: " stringByPaddingToLength:3600
             withString:@"/아주긴폴더/백업경로/경고메시지/ " startingAtIndex:0];
-        setText(94, warning.UTF8String);
+        setText(90, warning.UTF8String);
         const CGFloat longStatusHeight = NSHeight(statusText.frame);
         const CGFloat longDocumentHeight = NSHeight(scroll.documentView.bounds);
         std::fprintf(stderr,
