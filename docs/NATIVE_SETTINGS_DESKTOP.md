@@ -42,7 +42,17 @@ integration test covers system titlebar, independent resize, show, close-to-hide
 reopen, page switches, button action routing, safe destroy/recreate, Korean
 Unicode text, and bounded UTF-8 text retrieval without partial code points.
 Native code also uses `releasedWhenClosed=NO` to avoid double release under
-ARC, and resets page row counters on recreation. All these are automatic
+ARC, and resets page row counters on recreation.
+
+The General configuration status (control 94) now uses a selectable, wrapping
+AppKit label with measured content height and dynamic per-row layout instead of
+a fixed-height 30pt row. This prevents long configuration paths/recovery
+warnings from overlapping buttons or being clipped below the document.
+The actual macOS bridge integration fixture exercises a 3,600-character Korean
+warning and confirms no overlapping rows: status height 88pt to 928pt and
+scroll document 650pt to 1,084pt on the hosted macOS test. The full text
+remains available through the native text value and tooltip. This test is
+AppKit-level evidence only, not physical Unity/macOS operator acceptance. All these are automatic
 AppKit API-level checks, not proof of actual user pointer/keyboard events in
 the Unity Player. Korean IME composition, Retina rendering, real VRM/tracker
 devices, z-order with a third-party app and physical operator approval remain
