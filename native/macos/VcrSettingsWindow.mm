@@ -96,6 +96,10 @@ namespace {
 extern "C" {
 __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
     if (settingsWindow) return;
+    // Recreating Settings after disposal must not retain the previous
+    // page's row counters: stale counts make short pages unnecessarily tall
+    // and change the scroll position on subsequent opens.
+    for (int &count : categoryRows) count = 0;
     delegate = [[VcrSettingsWindowDelegate alloc] init];
     settingsWindow = [[NSWindow alloc]
         initWithContentRect:NSMakeRect(0, 0, 940, 720)
