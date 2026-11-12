@@ -16,6 +16,9 @@ test -s "$output"
 cp "$root/native/macos/VcrSettingsWindow.dylib.meta" "$output.meta"
 file "$output"
 lipo "$output" -verify_arch arm64
-nm -gU "$output" | grep -F '_VCR_SettingsCreate'
-nm -gU "$output" | grep -F '_VCR_SettingsPollAction'
-echo "AppKit Settings native dylib built and symbols verified"
+# Verify the whole C ABI, not only Create/PollAction. An omitted export
+# otherwise survives build CI and fails only when Unity invokes that control.
+python3 "$root/tools/verify-macos-settings-exports.py" \
+  --source "$root/unity/Assets/VCR/Runtime/UI/DesktopNativeSettingsWindow.cs" \
+  --binary "$output"
+echo "AppKit Settings native dylib built; all managed EntryPoints verified"
