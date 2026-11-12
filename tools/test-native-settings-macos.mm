@@ -110,7 +110,14 @@ int main(int argc, const char *argv[]) {
         add(0, 900, 0, "재생성됨", "");
         select(0);
         require(scroll.documentView != nil, "recreated page was not attached");
-        require(std::fabs(NSHeight(scroll.documentView.bounds) - 650.0) < 1.0,
+        const CGFloat recreated = NSHeight(scroll.documentView.bounds);
+        std::fprintf(stderr, "AppKit page height: filled=%.1f recreated=%.1f\n",
+                     (double)expanded, (double)recreated);
+        // AppKit may grow a 650pt document to fill a taller scroll viewport,
+        // so absolute equality to 650pt is not a valid lifecycle assertion.
+        // A single-row fresh page must be substantially shorter than the
+        // 17-row page from the previous window instance.
+        require(recreated >= 650.0 && recreated < expanded - 100.0,
                 "stale row count survived Settings Destroy/Create");
         std::fprintf(stderr, "AppKit checkpoint: before final Destroy\n");
         destroy();
