@@ -100,11 +100,22 @@ int main(int argc, const char *argv[]) {
         require(poll() == 0, "programmatic category selection queued a click");
 
         std::fprintf(stderr, "AppKit checkpoint: before Destroy/recreate\n");
+        NSWindow *oldWindow = window;
         destroy();
         create();
         std::fprintf(stderr, "AppKit checkpoint: after Destroy/recreate\n");
-        window = settingsWindow();
-        require(window != nil, "Settings failed to recreate after Destroy");
+        // AppKit's NSApp.windows may still include a closed autoreleased
+        // window until the next event/autorelease drain. Do not inspect
+        // the old window when verifying the newly created native bridge.
+        window = nil;
+        for (NSWindow *candidate in [NSApp windows]) {
+            if (candidate != oldWindow &&
+                [candidate.title hasPrefix:@"VirtualCharacterRender -"]) {
+                window = candidate;
+                break;
+            }
+        }
+        require(window != nil, "Settings failed to recreate a distinct NSWindow");
         scroll = detailScroll(window);
         require(scroll != nil, "recreated Settings lost ScrollView");
         add(0, 900, 0, "재생성됨", "");
