@@ -54,6 +54,23 @@ the real dylib export ABI, standalone native AppKit bridge integration and
 mock launcher all passed. This checks the ABI *names*, not successful managed
 P/Invoke calls inside the Unity Player.
 
+The source-bound U1/P1 macOS Player workflow additionally enables the opt-in
+`VCR_SMOKE_NATIVE_SETTINGS=1` switch **only for the native smoke process**.
+The scene's `PlayerStartupSmoke` then invokes the preserved
+`DesktopNativeSettingsWindow.VerifyMacManagedInteropSmoke` through reflection
+(to avoid an Application/UI assembly dependency cycle). It exercises the
+actual managed-to-native P/Invoke path for **all 10** AppKit exports: native
+window creation, text control creation, Korean UTF-8 Get/Set, category
+selection/clear, action queue, show/visibility and window disposal. Each real
+Player quit report records `nativeSettingsInteropPassed`. CI rejects missing
+or false evidence in any of the expected **eight** startup/relaunch/recovery/
+acceptance reports. Regular user launches never run this test. This managed
+smoke is still a programmatic API test; it cannot substitute for GUI/IME,
+real device, Retina, multi-monitor or operator acceptance. New full native
+Player CI for these changes: [Actions #43213727212](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43213727212)
+(**pending at the time of this documentation update**, do not mark pass
+without examining job results).
+
 
 The General configuration status (control 94) now uses a selectable, wrapping
 AppKit label with measured content height and dynamic per-row layout instead of
