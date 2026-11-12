@@ -112,8 +112,13 @@ int main(int argc, const char *argv[]) {
         require(scroll.documentView != nil, "recreated page was not attached");
         require(std::fabs(NSHeight(scroll.documentView.bounds) - 650.0) < 1.0,
                 "stale row count survived Settings Destroy/Create");
+        std::fprintf(stderr, "AppKit checkpoint: before final Destroy\n");
         destroy();
-        dlclose(library);
+        std::fprintf(stderr, "AppKit checkpoint: after final Destroy\n");
+        // Objective-C classes registered by a dynamically loaded dylib must
+        // not be unloaded while the AppKit process is alive. Unity also keeps
+        // native plugin modules loaded for the lifetime of the Player.
+        std::fprintf(stderr, "AppKit checkpoint: completed lifecycle\n");
         std::puts("P1 macOS AppKit bridge native integration: PASS (no Unity GUI acceptance)");
     }
     return 0;
