@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Verify that native recovery feedback uses the ID actually emitted by Unity.
+"""Reject a mismatch between the TWO real General Settings text controls.
 
-This source-level guard complements the real AppKit test: its former synthetic
-ID 94 test passed even though ApplicationUiController writes to ID 90.
+The legacy ApplicationUiController creates action feedback 90. The U1
+WorkspaceToolkitShell creates BOTH action feedback 90 and configuration status
+94. The Windows GUI probe must inspect 94, while both labels should wrap.
+An earlier source guard incorrectly required 94 to be absent, hiding this bug.
 """
 from pathlib import Path
 import re
@@ -11,101 +13,121 @@ import re
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def verify(managed: str, bridge: str, appkit: str, fixture: str,
-           windows_probe: str) -> None:
-    helper = re.search(
+def require(pattern: str, source: str, message: str) -> None:
+    if not re.search(pattern, source, flags=re.DOTALL):
+        raise ValueError(message)
+
+
+def verify(legacy: str, workspace: str, config: str, bridge: str,
+           appkit: str, fixture: str, windows_probe: str) -> None:
+    require(
         r"private\s+void\s+AddNativeFeedback\s*\(\s*int\s+category\s*\)"
-        r"\s*\{(?P<body>.*?)\n\s*\}", managed, re.DOTALL
+        r"\s*\{.*?_nativeSettings\.Add\(\s*category\s*,\s*90\s*\+\s*category",
+        legacy, "Legacy General action feedback 90 is missing")
+    require(r"_nativeSettings\.SetText\(\s*90\s*,",
+            legacy, "Legacy recovery action no longer writes feedback 90")
+
+    for ident in (90, 94):
+        require(
+            rf"_workspaceNativeSettings\.Add\(\s*0\s*,\s*{ident}\s*,\s*"
+            r"DesktopNativeSettingsWindow\.ControlKind\.Label",
+            workspace, f"U1 workspace General label {ident} is missing")
+        require(
+            rf"\b(?:id|ident)\s*==\s*{ident}\b",
+            bridge, f"Win32 multiline row {ident} no longer exists")
+        require(
+            rf"category\s*==\s*0\s*&&\s*\(\s*ident\s*==\s*90"
+            r"\s*\|\|\s*ident\s*==\s*94\s*\)",
+            appkit, "AppKit General status layout no longer covers both rows")
+        require(
+            rf"\badd\(\s*0\s*,\s*{ident}\s*,\s*0\s*,",
+            fixture, f"Native AppKit fixture does not create actual row {ident}")
+
+    require(
+        r"statusDetails\s*=\s*category\s*==\s*0\s*&&\s*"
+        r"\(\s*id\s*==\s*90\s*\|\|\s*id\s*==\s*94\s*\)\s*&&\s*"
+        r"kind\s*==\s*ControlKind\.Label",
+        bridge, "Windows multiline configuration and feedback are not both enabled")
+    require(
+        r"if\s*\(\s*categoryViews\[@0\]\s*&&\s*"
+        r"\(\s*ident\s*==\s*90\s*\|\|\s*ident\s*==\s*94\s*\)\s*&&\s*"
+        r"fields\[@\(ident\)\]\s*==\s*field\s*\)",
+        appkit, "AppKit live updates do not recalculate both status row heights")
+    require(
+        r"_workspaceNativeSettings\.SetText\(\s*94\s*,\s*GetWorkspaceConfigurationStatus\(\)\)",
+        config, "U1 configuration path/recovery state is not bound to 94")
+    require(
+        r'return\s+"Configuration:\s*"', config,
+        "U1 no longer displays the configuration file path")
+    require(
+        r'" \| Automatic save: enabled"', config,
+        "U1 no longer reports automatic-save state")
+    require(
+        r"status\s*=\s*user32\.GetDlgItem\(\s*settings_hwnd\s*,\s*94\s*\)",
+        windows_probe, "Windows U1 GUI probe must inspect configuration status 94")
+    require(
+        r"\bsetText\(\s*90\s*,\s*warning\.UTF8String\s*\)",
+        fixture, "AppKit fixture does not resize action feedback 90")
+    require(
+        r"\bsetText\(\s*94\s*,\s*warning\.UTF8String\s*\)",
+        fixture, "AppKit fixture does not resize U1 configuration 94")
+    require(
+        r"\bsetText\(\s*94\s*,\s*unbrokenPath\.UTF8String\s*\)",
+        fixture, "AppKit fixture omits an unbroken U1 configuration path")
+
+
+def self_test(sources) -> None:
+    legacy, workspace, config, bridge, appkit, fixture, probe = sources
+    cases = (
+        ("U1 94 missing", (legacy, workspace.replace(
+            "_workspaceNativeSettings.Add(0, 94", "_workspaceNativeSettings.Add(0, 95"),
+            config, bridge, appkit, fixture, probe)),
+        ("Win32 94 disabled", (legacy, workspace, config, bridge.replace(
+            "(id == 90 || id == 94)", "(id == 90 || id == 95)"),
+            appkit, fixture, probe)),
+        ("AppKit 94 disabled", (legacy, workspace, config, bridge,
+            appkit.replace("(ident == 90 || ident == 94)",
+                           "(ident == 90 || ident == 95)"),
+            fixture, probe)),
+        ("AppKit 94 relayout disabled", (legacy, workspace, config, bridge,
+            appkit.replace("fields[@(ident)] == field",
+                           "fields[@90] == field"), fixture, probe)),
+        ("U1 writes status to wrong row", (legacy, workspace, config.replace(
+            "SetText(94, GetWorkspaceConfigurationStatus())",
+            "SetText(90, GetWorkspaceConfigurationStatus())"),
+            bridge, appkit, fixture, probe)),
+        ("U1 Windows probe inspects feedback 90", (legacy, workspace,
+            config, bridge, appkit, fixture, probe.replace(
+                "status = user32.GetDlgItem(settings_hwnd, 94)",
+                "status = user32.GetDlgItem(settings_hwnd, 90)"))),
+        ("AppKit fixture still synthetic", (legacy, workspace, config,
+            bridge, appkit, fixture.replace(
+                "setText(94, warning.UTF8String)",
+                "setText(95, warning.UTF8String)"), probe)),
     )
-    if not helper:
-        raise ValueError("ApplicationUiController.AddNativeFeedback missing")
-    emitted = re.search(
-        r"_nativeSettings\.Add\(\s*category\s*,\s*(\d+)\s*\+\s*category",
-        helper.group("body"),
-    )
-    if not emitted:
-        raise ValueError("Cannot determine native category feedback ID")
-    general_id = int(emitted.group(1))
-    if general_id != 90:
-        raise ValueError("General recovery messages target ID 90; feedback ID changed")
-    if not re.search(r"_nativeSettings\.SetText\(\s*90\s*,", managed):
-        raise ValueError("General recovery status no longer writes native ID 90")
-
-    if not re.search(
-        rf"statusDetails\s*=\s*category\s*==\s*0\s*&&\s*id\s*==\s*{general_id}"
-        rf"\s*&&\s*kind\s*==\s*ControlKind\.Label", bridge
-    ):
-        raise ValueError("Win32 multiline recovery text targets wrong control")
-
-    if not re.search(
-        rf"if\s*\(\s*category\s*==\s*0\s*&&\s*ident\s*==\s*{general_id}\s*\)",
-        appkit,
-    ):
-        raise ValueError("AppKit multiline configuration text targets wrong control")
-    if not re.search(
-        rf"if\s*\(\s*ident\s*==\s*{general_id}\s*&&\s*categoryViews\[@0\]"
-        rf"\s*&&\s*fields\[@{general_id}\]\s*==\s*field\s*\)",
-        appkit,
-    ):
-        raise ValueError("AppKit live feedback updates cannot resize the real row")
-
-    if not re.search(
-        rf"status\s*=\s*user32\.GetDlgItem\(\s*settings_hwnd\s*,\s*{general_id}\s*\)",
-        windows_probe,
-    ):
-        raise ValueError("Windows GUI probe checks a nonexistent feedback control")
-
-    # An AppKit mock using invented ID 94 is not an integration test of the
-    # actual General status. Assert both creation and live SetText use ID 90.
-    if not re.search(rf"\badd\(\s*0\s*,\s*{general_id}\s*,\s*0\s*,", fixture):
-        raise ValueError("Native AppKit test does not create real feedback control")
-    if not re.search(
-        rf"\bsetText\(\s*{general_id}\s*,\s*warning\.UTF8String\s*\)",
-        fixture,
-    ):
-        raise ValueError("Native AppKit test does not update real feedback control")
-
-
-def self_test(managed: str, bridge: str, appkit: str, fixture: str,
-              windows_probe: str) -> None:
-    changes = (
-        ("Windows reverted to old 94", (managed, bridge.replace(
-            "category == 0 && id == 90", "category == 0 && id == 94"
-        ), appkit, fixture, windows_probe)),
-        ("macOS layout reverted to old 94", (managed, bridge, appkit.replace(
-            "category == 0 && ident == 90", "category == 0 && ident == 94"
-        ), fixture, windows_probe)),
-        ("macOS live updates reverted to old 94", (managed, bridge, appkit.replace(
-            "ident == 90 && categoryViews[@0]", "ident == 94 && categoryViews[@0]"
-        ), fixture, windows_probe)),
-        ("fake AppKit fixture restored", (managed, bridge, appkit, fixture.replace(
-            "setText(90, warning.UTF8String)", "setText(94, warning.UTF8String)"
-        ), windows_probe)),
-        ("Windows GUI probe reverted to old 94", (managed, bridge, appkit,
-         fixture, windows_probe.replace(
-             "status = user32.GetDlgItem(settings_hwnd, 90)",
-             "status = user32.GetDlgItem(settings_hwnd, 94)"))),
-    )
-    for name, sources in changes:
+    for label, sources in cases:
         try:
             verify(*sources)
         except ValueError:
             continue
-        raise AssertionError("Contract verifier accepted: " + name)
+        raise AssertionError("Invalid native Settings contract accepted: " + label)
 
 
 def main() -> None:
-    managed = (ROOT / "unity/Assets/VCR/Runtime/UI/"
-               "ApplicationUiController.NativeSettings.cs").read_text(encoding="utf-8")
-    bridge = (ROOT / "unity/Assets/VCR/Runtime/UI/"
-              "DesktopNativeSettingsWindow.cs").read_text(encoding="utf-8")
-    appkit = (ROOT / "native/macos/VcrSettingsWindow.mm").read_text(encoding="utf-8")
-    fixture = (ROOT / "tools/test-native-settings-macos.mm").read_text(encoding="utf-8")
-    windows_probe = (ROOT / "tools/probe-u1-windows-gui.py").read_text(encoding="utf-8")
-    verify(managed, bridge, appkit, fixture, windows_probe)
-    self_test(managed, bridge, appkit, fixture, windows_probe)
-    print("Native Settings actual General feedback ID 90 contract: PASS "
-          "(Win32, AppKit, Unity, Windows GUI probe and test fixture)")
+    prefix = ROOT / "unity/Assets/VCR/Runtime/UI"
+    sources = (
+        (prefix / "ApplicationUiController.NativeSettings.cs").read_text(encoding="utf-8"),
+        (prefix / "WorkspaceToolkitShell.cs").read_text(encoding="utf-8"),
+        (prefix / "WorkspaceToolkitShell.Configuration.cs").read_text(encoding="utf-8"),
+        (prefix / "DesktopNativeSettingsWindow.cs").read_text(encoding="utf-8"),
+        (ROOT / "native/macos/VcrSettingsWindow.mm").read_text(encoding="utf-8"),
+        (ROOT / "tools/test-native-settings-macos.mm").read_text(encoding="utf-8"),
+        (ROOT / "tools/probe-u1-windows-gui.py").read_text(encoding="utf-8"),
+    )
+    verify(*sources)
+    self_test(sources)
+    print("Native Settings feedback 90 + U1 configuration status 94: PASS "
+          "(runtime owners, Win32/AppKit and real GUI probes)")
 
 
 if __name__ == "__main__":
