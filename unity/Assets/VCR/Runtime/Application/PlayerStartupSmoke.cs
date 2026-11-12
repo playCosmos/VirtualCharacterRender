@@ -41,6 +41,10 @@ namespace VCR.Runtime.Application
             public bool quitSaveSuppressed;
             public bool explicitSaveSucceeded;
             public bool automaticSaveReenabled;
+            // True only when Unity's managed calls reached the *packaged*
+            // AppKit dylib via all ten real P/Invoke entrypoints. Enabled
+            // solely for the opted-in native Settings smoke environment.
+            public bool nativeSettingsInteropPassed;
             // Capture the *applied* camera field of view, not just config JSON:
             // native relaunch evidence must prove settings reached the scene.
             public float observedCameraFieldOfView;
@@ -186,6 +190,41 @@ namespace VCR.Runtime.Application
                         evidence.error = "Explicit recovered settings save " +
                             "failed: " + saveError;
                     }
+                }
+            }
+
+            // Opt-in only for hosted source-bound P1/macOS native smoke.
+            // Reflection avoids introducing a VCR.Runtime.Application ->
+            // VCR.Runtime.UI assembly cycle. The target is [Preserve]d.
+            // No regular Player launch instantiates a Settings window here.
+            if (Environment.GetEnvironmentVariable("VCR_SMOKE_NATIVE_SETTINGS") == "1")
+            {
+                try
+                {
+                    if (UnityEngine.Application.platform != RuntimePlatform.OSXPlayer)
+                        throw new InvalidOperationException(
+                            "Native Settings interop smoke requires a macOS Player.");
+                    var bridge = Type.GetType(
+                        "VCR.Runtime.UI.DesktopNativeSettingsWindow, VCR.Runtime.UI",
+                        throwOnError: true);
+                    var method = bridge.GetMethod(
+                        "VerifyMacManagedInteropSmoke",
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.Static);
+                    if (method == null)
+                        throw new MissingMethodException(
+                            "Preserved managed AppKit interop smoke entry missing.");
+                    method.Invoke(null, null);
+                    evidence.nativeSettingsInteropPassed = true;
+                    Debug.Log("VCR P1 macOS managed-to-AppKit P/Invoke smoke: PASS");
+                }
+                catch (Exception exception)
+                {
+                    var underlying = exception is System.Reflection.TargetInvocationException
+                        ? exception.InnerException ?? exception : exception;
+                    evidence.error = "Native macOS Settings P/Invoke smoke failed: " +
+                        underlying;
+                    Debug.LogError(evidence.error);
                 }
             }
 
