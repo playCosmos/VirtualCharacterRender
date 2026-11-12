@@ -561,7 +561,7 @@ namespace VCR.Runtime.UI
                 // The last General page row contains the full path of the
                 // active configuration and may also show recovery details.
                 // A 36px STATIC clipped this at the bottom of a 720px window.
-                var statusDetails = category == 0 && id == 94 &&
+                var statusDetails = category == 0 && id == 90 &&
                     kind == ControlKind.Label;
                 var textHandle = NewControl(
                     statusDetails ? "EDIT" : kind == ControlKind.Button ? "BUTTON" : "STATIC",
