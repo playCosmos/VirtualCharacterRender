@@ -37,7 +37,9 @@ NSScrollView *detailScroll(NSWindow *window) {
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         require(argc == 2, "usage: test-native-settings-macos <dylib>");
+        std::fprintf(stderr, "AppKit checkpoint: before NSApplication\n");
         [NSApplication sharedApplication];
+        std::fprintf(stderr, "AppKit checkpoint: after NSApplication\n");
         void *library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
         if (!library) {
             std::fprintf(stderr, "dlopen failed: %s\n", dlerror());
@@ -54,7 +56,9 @@ int main(int argc, const char *argv[]) {
         auto visible = symbol<int (*)()>(library, "VCR_SettingsIsVisible");
         auto poll = symbol<int (*)()>(library, "VCR_SettingsPollAction");
 
+        std::fprintf(stderr, "AppKit checkpoint: before Create\n");
         create();
+        std::fprintf(stderr, "AppKit checkpoint: after Create\n");
         NSWindow *window = settingsWindow();
         require(window != nil, "real NSWindow was not created");
         require((window.styleMask & NSWindowStyleMaskTitled) != 0,
@@ -65,7 +69,9 @@ int main(int argc, const char *argv[]) {
         NSScrollView *scroll = detailScroll(window);
         require(scroll != nil, "native Settings detail ScrollView missing");
 
+        std::fprintf(stderr, "AppKit checkpoint: before first Add\n");
         add(0, 45, 2, "한글 경로", "한글 값");
+        std::fprintf(stderr, "AppKit checkpoint: after first Add\n");
         char buffer[1024] = {};
         getText(45, buffer, sizeof(buffer));
         require(std::strcmp(buffer, "한글 값") == 0, "initial Korean UTF-8 lost");
@@ -76,7 +82,9 @@ int main(int argc, const char *argv[]) {
 
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
+        std::fprintf(stderr, "AppKit checkpoint: before Clear\n");
         clear(0);
+        std::fprintf(stderr, "AppKit checkpoint: after Clear\n");
         for (int i = 0; i < 17; ++i)
             add(0, 500 + i, 1, "Test action", "");
         select(0);
@@ -91,8 +99,10 @@ int main(int argc, const char *argv[]) {
                 "category navigation lost page layout");
         require(poll() == 0, "programmatic category selection queued a click");
 
+        std::fprintf(stderr, "AppKit checkpoint: before Destroy/recreate\n");
         destroy();
         create();
+        std::fprintf(stderr, "AppKit checkpoint: after Destroy/recreate\n");
         window = settingsWindow();
         require(window != nil, "Settings failed to recreate after Destroy");
         scroll = detailScroll(window);
