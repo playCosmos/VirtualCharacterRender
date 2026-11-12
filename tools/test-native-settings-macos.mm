@@ -175,6 +175,20 @@ int main(int argc, const char *argv[]) {
         require([statusText.stringValue isEqualToString:warning] &&
                 [statusText.toolTip isEqualToString:warning],
                 "full recovery text lost after multiline layout");
+        // Real configuration file paths can be one long, unbroken token.
+        // Do not rely on spaces in the prior synthetic warning fixture.
+        NSString *unbrokenPath = [@"/사용자/설정/"
+            stringByPaddingToLength:3000 withString:@"한글경로" startingAtIndex:0];
+        setText(90, unbrokenPath.UTF8String);
+        require(NSHeight(statusText.frame) > shortStatusHeight + 100,
+                "unbroken Korean configuration path is still clipped");
+        require(NSHeight(scroll.documentView.bounds) > shortDocumentHeight + 100,
+                "unbroken configuration path did not grow scroll document");
+        require(NSMaxY(statusText.frame) + 8 <= NSMinY(feedbackText.frame),
+                "unbroken configuration path overlaps prior control");
+        require([statusText.stringValue isEqualToString:unbrokenPath] &&
+                [statusText.toolTip isEqualToString:unbrokenPath],
+                "unbroken configuration path lost original text");
 
         // Check dynamic page rows and cleanup. Without rebuilding page geometry,
         // the test would miss a stale counter that survives window recreation.
