@@ -14,6 +14,8 @@ on:
       - tools/verify-macos-settings-exports.py
       - unity/Assets/VCR/Editor/P1/**
       - unity/Assets/VCR/Runtime/UI/**
+      - unity/Assets/VCR/Runtime/Application/PlayerStartupSmoke.cs
+      - tools/run-player-smoke.py
   workflow_dispatch:
 
 permissions:
