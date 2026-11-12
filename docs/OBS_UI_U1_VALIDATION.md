@@ -311,6 +311,38 @@ VRM, working devices, Retina/keyboard behavior and manual confirmation.
 Keep that decision separate from Windows CI and never treat a successful
 mock or alpha Player as P1 macOS acceptance.
 
+### U1/P1 macOS real Player smoke and AppKit bridge lifecycle (2026-11-12)
+
+[Exact-source macOS CI #43110691033](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43110691033)
+**passed** for commit `95f3022`: arm64 project-owned AppKit compilation,
+a real U1/P1 macOS **nondevelopment Mono** Player (not the Alpha scene),
+source-bound ZIP SHA-256, native macOS process start/normal managed quit,
+relaunch with persisted configuration, four guarded corrupt/missing/future
+configuration recovery cases and two explicit confirmations. The output
+archive `u1-p1-macos-player-43110691033-1` is CI evidence, not a signed or
+notarized release. This is not macOS IL2CPP and is not GUI acceptance.
+
+Subsequent direct native AppKit inspection revealed two separate issues:
+`VCR_SettingsCreate` had preserved the previous page row counters after
+`Destroy`/recreate, and the programmatic `NSWindow` retained the default
+`releasedWhenClosed=YES` while ARC also managed a strong reference. Closing
+the window under those conditions led to a repeatable SIGSEGV during the
+native test's final autorelease-pool cleanup. The native implementation
+now resets the four row counters when recreating the window and sets
+`releasedWhenClosed=NO` before the window can be closed.
+
+A real arm64 AppKit dynamic-library integration test
+(`tools/test-native-settings-macos.mm`, executed by Repository validation
+on `macos-15`) now exercises native `NSWindow` creation and teardown,
+Korean UTF-8 text fields, native category navigation, scrolling and page
+rebuild. It verifies that a 17-row page (920pt) is replaced with a fresh
+one-row page (650pt), without a segmentation fault. The green native
+integration test is **not** a claim that the Settings button was clicked
+inside Unity, that rendered GUI pixels are correct, or that actual hardware
+was used. Any native source change requires a fresh source-matched complete
+Player build/smoke; the P1 macOS workflow is triggered on the native
+Settings implementation as well as the workflow itself.
+
 ## U1 completion and mandatory legacy uGUI retirement
 
 The U1 milestone is **not complete** merely because CI builds a Windows Mono player. Complete the interactive Windows GUI checks, native Settings window integration, model restore, startup diagnostics, and the supported-platform player checks before retiring the old UI. The CI Mono smoke build does not replace a Windows IL2CPP release build.
