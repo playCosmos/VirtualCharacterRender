@@ -49,6 +49,18 @@ def verify(legacy: str, workspace: str, config: str, bridge: str,
         r"kind\s*==\s*ControlKind\.Label",
         bridge, "Windows multiline configuration and feedback are not both enabled")
     require(
+        r"var\s+top\s*=\s*nextRowTop\[category\]\s*;",
+        bridge, "Win32 native Settings rows no longer use a running Y cursor")
+    require(
+        r"nextRowTop\[category\]\s*\+=\s*statusDetails\s*\?\s*112\s*:\s*48\s*;",
+        bridge, "Win32 tall General feedback rows have reverted to a 48px pitch")
+    require(
+        r"rows\[category\]\s*=\s*0\s*;\s*nextRowTop\[category\]\s*=\s*82\s*;",
+        bridge, "Win32 native Settings rebuild retains old row spacing")
+    require(
+        r"feedback_bounds\.bottom\s*\+\s*8\s*>\s*bounds\.top",
+        windows_probe, "Real Windows GUI probe no longer rejects status row overlaps")
+    require(
         r"if\s*\(\s*categoryViews\[@0\]\s*&&\s*"
         r"\(\s*ident\s*==\s*90\s*\|\|\s*ident\s*==\s*94\s*\)\s*&&\s*"
         r"fields\[@\(ident\)\]\s*==\s*field\s*\)",
@@ -82,6 +94,14 @@ def self_test(sources) -> None:
         ("U1 94 missing", (legacy, workspace.replace(
             "_workspaceNativeSettings.Add(0, 94", "_workspaceNativeSettings.Add(0, 95"),
             config, bridge, appkit, fixture, probe)),
+        ("Win32 row pitch regressed", (legacy, workspace, config, bridge.replace(
+            "nextRowTop[category] += statusDetails ? 112 : 48;",
+            "nextRowTop[category] += 48;"),
+            appkit, fixture, probe)),
+        ("Windows GUI overlap ignored", (legacy, workspace, config, bridge,
+            appkit, fixture, probe.replace(
+                "if feedback_bounds.bottom + 8 > bounds.top:",
+                "if False:"))),
         ("Win32 94 disabled", (legacy, workspace, config, bridge.replace(
             "(id == 90 || id == 94)", "(id == 90 || id == 95)"),
             appkit, fixture, probe)),
