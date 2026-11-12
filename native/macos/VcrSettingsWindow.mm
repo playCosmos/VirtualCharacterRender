@@ -279,8 +279,21 @@ __attribute__((visibility("default"))) void VCR_SettingsGetText(
     if (!buffer || capacity <= 0) return;
     const char *value = [fields[@(ident)].stringValue UTF8String];
     if (!value) value = "";
-    std::strncpy(buffer, value, (size_t)(capacity - 1));
-    buffer[capacity - 1] = 0;
+    // A truncated Korean/emoji path must never finish with an incomplete
+    // UTF-8 sequence: downstream C# marshaling expects valid UTF-8.
+    const size_t maxBytes = static_cast<size_t>(capacity - 1);
+    const size_t available = std::strlen(value);
+    size_t bytes = std::min(available, maxBytes);
+    if (bytes < available) {
+        // If the next source byte is a continuation, the cut is inside
+        // a multibyte code point. Backtrack to the code point's start.
+        while (bytes > 0 &&
+               (static_cast<unsigned char>(value[bytes]) & 0xC0) == 0x80) {
+            --bytes;
+        }
+    }
+    if (bytes) std::memcpy(buffer, value, bytes);
+    buffer[bytes] = '\0';
 }
 
 __attribute__((visibility("default"))) int VCR_SettingsPollAction(void) {
