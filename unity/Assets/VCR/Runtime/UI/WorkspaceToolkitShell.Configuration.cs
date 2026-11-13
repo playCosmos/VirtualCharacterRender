@@ -65,6 +65,8 @@ namespace VCR.Runtime.UI
             {
                 if (action == 205)
                 {
+                    // Switching from Reload to Save never confirms the old Reload.
+                    _workspaceReloadConfirmUntil = 0f;
                     // A recovered/failed configuration is deliberately protected
                     // against automatic saves. Require a second explicit click.
                     if (bootstrap.AutomaticConfigurationSaveSuppressed &&
@@ -91,6 +93,8 @@ namespace VCR.Runtime.UI
 
                 if (action == 206)
                 {
+                    // Switching from Save to Reload never confirms the old Save.
+                    _workspaceSaveConfirmUntil = 0f;
                     // Reload replaces live runtime settings, so guard against
                     // accidental loss of unsaved configuration changes.
                     if (_workspaceReloadConfirmUntil <= 0f ||
@@ -190,6 +194,7 @@ namespace VCR.Runtime.UI
             }) { text = "Reload config" });
             actions.Add(new Button(() =>
             {
+                ResetWorkspaceConfigurationActions();
                 status.text = GetWorkspaceConfigurationStatus();
             }) { text = "Status" });
             panel.Add(actions);
