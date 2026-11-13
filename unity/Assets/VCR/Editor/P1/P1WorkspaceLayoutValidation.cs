@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using VCR.Runtime.UI;
 
@@ -564,6 +565,8 @@ namespace VCR.Editor.P1
             // destructive confirmation armed in a previous context.
             if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
                 !pump.Contains("ResetWorkspaceConfigurationActions();") ||
+                !Regex.IsMatch(pump,
+                    @"if \(!_workspaceNativeSettings\.IsVisible\)\s*return;") ||
                 !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
