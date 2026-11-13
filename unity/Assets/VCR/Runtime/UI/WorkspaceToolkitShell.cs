@@ -1433,6 +1433,9 @@ namespace VCR.Runtime.UI
                 // Closing Settings cancels armed Save/Reload confirmations.
                 ResetWorkspaceConfigurationActions();
             }
+            // A closed native window must not dispatch queued late button events.
+            if (!_workspaceNativeSettings.IsVisible)
+                return;
             for (var i = 0; i < 48; ++i)
             {
                 var action = _workspaceNativeSettings.PollAction();
