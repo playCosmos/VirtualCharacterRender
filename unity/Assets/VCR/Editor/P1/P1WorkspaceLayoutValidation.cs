@@ -214,6 +214,8 @@ namespace VCR.Editor.P1
                     Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
                 Check(NativeSettingsActionsKeepDistinctMeanings(),
                     "native settings actions 204 and 207 must stay load and render-default");
+                Check(SettingsConfirmationLifecycle(),
+                    "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -534,9 +536,67 @@ namespace VCR.Editor.P1
             if (!restoreLabel.Contains("Restore render defaults")) return false;
             if (!shell.Contains("if (action == 204)")) return false;
             if (!shell.Contains("action != 207")) return false;
+            // Native Settings has one visible Reload action (legacy 204).
+            // Internal U1 action 206 remains supported by the fallback.
+            if (shell.Contains("Add(0, 206,")) return false;
             return legacy.Contains("AddNativeAction(0, 204") &&
                    legacy.Contains("ShowProfileLoadUnavailable");
         }
+        private static bool SettingsConfirmationLifecycle()
+        {
+            var shellSource = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+            var configSource = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/WorkspaceToolkitShell.Configuration.cs"));
+            var openAt = shellSource.IndexOf("private void OpenWorkspaceNativeSettings()",
+                StringComparison.Ordinal);
+            var pumpAt = shellSource.IndexOf("private void PumpWorkspaceNativeSettings()",
+                StringComparison.Ordinal);
+            var fallbackAt = shellSource.IndexOf("private void ShowWorkspaceSettingsFallback()",
+                StringComparison.Ordinal);
+            if (openAt < 0 || pumpAt < openAt || fallbackAt < 0) return false;
+            var open = shellSource.Substring(openAt, pumpAt - openAt);
+            var pump = shellSource.Substring(pumpAt,
+                Math.Min(8500, shellSource.Length - pumpAt));
+            var fallback = shellSource.Substring(fallbackAt,
+                Math.Min(8000, shellSource.Length - fallbackAt));
+            // A new Settings session or a different action cannot inherit
+            // destructive confirmation armed in a previous context.
+            if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
+                !pump.Contains("ResetWorkspaceConfigurationActions();") ||
+                !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
+                !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
+                !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
+                !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
+                !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
+                return false;
+
+            // Exercise the actual runtime reset method rather than checking
+            // only that its name appears in source.
+            var host = new GameObject("VCR Settings confirmation regression");
+            host.SetActive(false);
+            try
+            {
+                var shell = host.AddComponent<WorkspaceToolkitShell>();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var type = typeof(WorkspaceToolkitShell);
+                var save = type.GetField("_workspaceSaveConfirmUntil", flags);
+                var reload = type.GetField("_workspaceReloadConfirmUntil", flags);
+                var reset = type.GetMethod("ResetWorkspaceConfigurationActions", flags);
+                if (shell == null || save == null || reload == null || reset == null)
+                    return false;
+                save.SetValue(shell, 30f);
+                reload.SetValue(shell, 45f);
+                reset.Invoke(shell, null);
+                return (float)save.GetValue(shell) == 0f &&
+                       (float)reload.GetValue(shell) == 0f;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
         private static bool LegacyRestoreSkipsDestroyedRefresh()
         {
             var source = File.ReadAllText(Path.Combine(
