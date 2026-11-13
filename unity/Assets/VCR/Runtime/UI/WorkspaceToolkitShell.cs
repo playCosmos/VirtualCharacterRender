@@ -3653,6 +3653,7 @@ namespace VCR.Runtime.UI
             try
             {
                 var loaded = await sceneRuntime.LoadCharacterAsync(path);
+                if (this == null) return;
                 if (loaded == null)
                 {
                     if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load returned no model.";
@@ -3670,6 +3671,7 @@ namespace VCR.Runtime.UI
             }
             catch (System.OperationCanceledException)
             {
+                if (this == null) return;
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load canceled.";
                 if (restoringPreviousCharacter)
                     Debug.LogWarning("VCR inventory: stage=restore category=model status=canceled filename=" +
@@ -3677,6 +3679,7 @@ namespace VCR.Runtime.UI
             }
             catch (System.Exception ex)
             {
+                if (this == null) return;
                 Debug.LogException(ex, this);
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "VRM load failed: " + ex.Message;
                 if (restoringPreviousCharacter)
@@ -3685,9 +3688,12 @@ namespace VCR.Runtime.UI
             }
             finally
             {
-                _characterRestoreInProgress = false;
-                _characterActionPending = false;
-                _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+                if (this != null)
+                {
+                    _characterRestoreInProgress = false;
+                    _characterActionPending = false;
+                    _nextStatusRefresh = Time.unscaledTime + statusRefreshSeconds;
+                }
             }
         }
 
@@ -3700,22 +3706,28 @@ namespace VCR.Runtime.UI
             try
             {
                 var loaded = await sceneRuntime.ReloadCharacterAsync();
+                if (this == null) return;
                 if (_actionResult != null)
                     _actionResult.text = loaded != null ? "Active VRM reloaded." : "VRM reload returned no model.";
             }
             catch (System.OperationCanceledException)
             {
+                if (this == null) return;
                 if (_actionResult != null) _actionResult.text = "VRM reload canceled.";
             }
             catch (System.Exception ex)
             {
+                if (this == null) return;
                 Debug.LogException(ex, this);
                 if (_actionResult != null) _actionResult.text = "VRM reload failed: " + ex.Message;
             }
             finally
             {
-                _characterActionPending = false;
-                _nextStatusRefresh = 0f;
+                if (this != null)
+                {
+                    _characterActionPending = false;
+                    _nextStatusRefresh = 0f;
+                }
             }
         }
 

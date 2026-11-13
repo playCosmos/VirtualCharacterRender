@@ -54,6 +54,11 @@ namespace VCR.Editor.P1
                     "UI Toolkit threaded log queue must stay bounded and correct across reset/clear",
                     failures);
 
+                Expect(
+                    P1WorkspaceLayoutValidation.RunChecks(),
+                    "workspace layout snapshots must survive save/restore, corruption and schema migration",
+                    failures);
+
                 var characterRoot =
                     new GameObject("Character");
                 characterRoot.transform.SetParent(
