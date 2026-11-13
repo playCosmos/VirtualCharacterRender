@@ -212,6 +212,8 @@ namespace VCR.Editor.P1
 
                 var shellSource = File.ReadAllText(Path.Combine(
                     Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                Check(NativeSettingsActionsKeepDistinctMeanings(),
+                    "native settings actions 204 and 207 must stay load and render-default");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -516,6 +518,24 @@ namespace VCR.Editor.P1
             if (refresh < 0) return false;
             var guard = source.LastIndexOf("this != null", refresh, StringComparison.Ordinal);
             return guard > marker && refresh - guard < 180;
+        }
+        private static bool NativeSettingsActionsKeepDistinctMeanings()
+        {
+            var shell = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+            var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/ApplicationUiController.NativeSettings.cs"));
+            var register = shell.IndexOf("Add(0, 204,", StringComparison.Ordinal);
+            var restore = shell.IndexOf("Add(0, 207,", StringComparison.Ordinal);
+            if (register < 0 || restore < 0 || restore < register) return false;
+            var registerLabel = shell.Substring(register, Math.Min(180, shell.Length - register));
+            var restoreLabel = shell.Substring(restore, Math.Min(180, shell.Length - restore));
+            if (!registerLabel.Contains("Reload saved configuration")) return false;
+            if (!restoreLabel.Contains("Restore render defaults")) return false;
+            if (!shell.Contains("if (action == 204)")) return false;
+            if (!shell.Contains("action != 207")) return false;
+            return legacy.Contains("AddNativeAction(0, 204") &&
+                   legacy.Contains("ShowProfileLoadUnavailable");
         }
         private static bool LegacyRestoreSkipsDestroyedRefresh()
         {

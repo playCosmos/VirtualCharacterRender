@@ -1347,6 +1347,8 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.Add(0, 203, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Toggle background execution");
                     _workspaceNativeSettings.Add(0, 204, DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Reload saved configuration");
+                    _workspaceNativeSettings.Add(0, 207, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Restore render defaults");
                     _workspaceNativeSettings.Add(0, 205, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Save runtime configuration");
@@ -1469,6 +1471,7 @@ namespace VCR.Runtime.UI
                     ApplyWorkspaceOverlayAction(action);
                     continue;
                 }
+                if (action == 204)                 {                     ApplyWorkspaceConfigurationActionWithNativeFeedback(206);                     continue;                 }
                 if (action == 205 || action == 206)
                 {
                     ApplyWorkspaceConfigurationActionWithNativeFeedback(action);
@@ -1510,7 +1513,7 @@ namespace VCR.Runtime.UI
                     UnloadActiveCharacter();
                     continue;
                 }
-                if (action != 200 && action != 201 && action != 202 && action != 203 && action != 204) continue;
+                if (action != 200 && action != 201 && action != 202 && action != 203 && action != 207) continue;
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime == null || !sceneRuntime.TryCaptureRenderSettings(out var settings))

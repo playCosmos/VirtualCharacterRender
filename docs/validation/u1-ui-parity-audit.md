@@ -1,30 +1,36 @@
 # U1 UI parity audit
 
-Baseline: PR #44 head 34a8ec345170be691f86e795f3e0e567bdfb50ac (2026-11-13).
-Compared ApplicationUiController uGUI with WorkspaceToolkitShell and DesktopNativeSettingsWindow.
-Scope is code paths and the runtime service each control calls. Physical GUI, IME, real VRM files, tracking devices, and OBS capture are not closed here.
+Remote HEAD at audit update: ec676fad227c5303f256d0f72dd22bb426e53072. PR #44 remains Draft.
+CI on that SHA: Repository validation success (push and pull_request), Unity P0-P13 source-free validation success. macOS P1 Player build was still in progress and is not claimed here.
 
-## Confirmed defects fixed in the working tree
+## Action 204
 
-Layout snapshots stored docks and orders by catalog index. A reordered catalog restored those values onto different panels, and a shorter array rejected the snapshot. WorkspaceLayoutFile now uses schema version 2 and stores panel IDs. Version 1 stays positional and is rejected when longer than the current catalog. Unknown version-2 IDs are ignored. Truncated JSON has version 0 and is rejected.
+Native control IDs are not persisted. Win32 and AppKit return the ID registered by C# for the lifetime of the window. Reusing 204 for a different command would make the legacy button and the U1 button disagree.
 
-LoadCharacterAsync and ReloadCharacterAsync wrote UI labels and PlayerPrefs after await without checking that the shell still existed. The continuation now returns before those writes when the shell is destroyed. The finally blocks update pending state only while the shell exists. C# does not allow return inside finally, so the guard is a condition.
+Decision: keep 204 as reload saved configuration on both UIs. U1 render-default restore moves to new action 207. U1 205 remains save and 206 remains reload. Action 204 in U1 calls the same confirmed reload path as 206, so the overwrite confirmation stays. Legacy 204 still calls ReloadSavedConfiguration.
 
-The regression check reads WorkspaceToolkitShell.cs and requires the destroyed-shell guard on the line after each of those awaits. A missing guard fails P1WorkspaceLayoutValidation.
+P1WorkspaceLayoutValidation checks the labels and both registrations. Local Unity 6000.3.25f1 RunSourceFreeAndExit passed after the change. Log: .tmp/u1-p1-action204.log.
 
-## Local verification
+## Already verified on ec676fad
 
-Editor 6000.3.25f1, method VCR.Editor.P1.P1BatchValidation.RunSourceFreeAndExit.
-First run, process 38636, log .tmp/u1-p1-sourcefree.log: layout PASS and renderer-core PASS. This was before the async guard.
-Second run, process 42436, log .tmp/u1-p1-sourcefree-3.log: VCR P1 workspace layout persistence validation PASS, including the new guard check, and VCR P1 renderer core validation PASS. The renderer-core pass includes configuration persistence and versioning. The batch also requires P0SourceFreeValidationSuite.RunAllChecks.
-An intermediate run failed to compile because finally contained return (CS0157). That was corrected before the passing run.
-GitHub Actions was not run. Nothing was committed. PR #44 remains Draft at 34a8ec34.
+Layout schema v2 stores panel IDs. Version 1 stays positional and rejects arrays longer than the current catalog. Character load, reload, and last-model restore do not update a destroyed controller. Local source-free batches passed before that commit. GitHub Actions on ec676fad passed repository validation and Unity P0-P13.
 
-## Not closed
+## Status rules
 
-Tracking stop and reconnect, output status during capture, and closing Settings during reload have call paths but no new lifecycle regression.
-Win32, AppKit, and fallback Settings item differences are not compared control by control.
-Physical acceptance remains blocked: Windows and macOS GUI, Korean IME, a real VRM load and swap, a real tracker, OBS capture, 720p60, 1080p60, and a 4-hour run.
-Legacy uGUI was not removed. No PR comment was posted.
-Exception paths: the 2026-11-13 follow-up run, process 40388, log .tmp/u1-p1-sourcefree-4.log, also passed layout and renderer-core validation. Load and reload now return before UI writes on success, cancellation, and failure when the shell is gone. The check requires three destroyed-shell returns in each method. Configuration reload is synchronous, so it does not resume after the window closes.
-Native action 204 differs and is not changed. Legacy ApplicationUiController.NativeSettings maps 204 to ShowProfileLoadUnavailable, which calls ReloadSavedConfiguration. U1 WorkspaceToolkitShell maps 204 to restore render defaults: scale 1, 60 FPS, VSync off. U1 reload of the saved configuration is action 206, and save is 205. Actions 200-203 and 300-303 and 401-403 match. Choosing which 204 behavior is canonical needs an explicit decision because both are user-visible and changing either one breaks the other platform path.
+A row is code-complete only when the U1 control calls the same runtime service. It is verified only when a test or CI run on the current SHA exercises that behavior. Physical rows stay blocked.
+
+| Feature | Legacy | U1 | Persistence | Status | Evidence |
+|---|---|---|---|---|---|
+| Reload saved configuration | Native action 204 | Native actions 204 and 206 | Runtime configuration file and backup | Code-complete, local test | Action label test in source-free batch |
+| Save configuration | Native action 205 | Native action 205 | Same file | Code-complete, P0 suite | P0 persistence suite inside P0-P13 CI |
+| Restore render defaults | No legacy native action | Native action 207 | Not stored | Code-complete, local test | Label and dispatch test |
+| Render scale, FPS, VSync, background | 200-203 | 200-203 | Render settings in configuration | Code-complete, not separately retested on this change | Existing shell dispatch |
+| VRM browse, load, reload, unload | ApplicationUiController | WorkspaceToolkitShell and native 300-303 | Last successful path | Code-complete, lifecycle test | Destroyed-controller guards in source-free batch |
+| Layout save and restore | U1 only | WorkspaceLayoutFile v2 | workspace-layout JSON and backup | Verified | P1WorkspaceLayoutValidation and CI |
+| Tracking recover | TryRecover with visible failure | Same service | Tracking preferences | Code-complete, no device test | Failure text is not swallowed |
+| Output transparency and recover | Overlay actions | Native 401-403 and fallback | Overlay settings | Code-complete, OBS blocked | Same scene runtime |
+| Materials, appearance, motion, events, environment | ApplicationUiController sections | WorkspaceToolkitShell partials | Existing service files | Code path only | No new end-to-end test on this SHA |
+
+## Still blocked
+
+Windows and macOS physical GUI, Korean IME, a real VRM swap, a real tracking device, OBS capture, 720p60, 1080p60, and a 4-hour run. Legacy uGUI stays. PR #44 stays Draft and unmerged.
