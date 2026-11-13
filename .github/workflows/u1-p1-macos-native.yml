@@ -16,6 +16,7 @@ on:
       - unity/Assets/VCR/Runtime/UI/**
       - unity/Assets/VCR/Runtime/Application/PlayerStartupSmoke.cs
       - tools/run-player-smoke.py
+      - tools/select-p1-macos-appkit-artifact.py
   workflow_dispatch:
 
 permissions:
@@ -35,13 +36,19 @@ jobs:
         uses: actions/checkout@v4
       - name: Compile AppKit native Settings and verify arm64 exports
         run: bash tools/build-native-settings-macos.sh
+      - name: Package AppKit plugin with exact source and SHA-256 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-appkit-artifact.py --package \
+            --binary unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib \
+            --meta native/macos/VcrSettingsWindow.dylib.meta \
+            --source "$GITHUB_SHA" --output p1-macos-appkit-artifact
       - name: Save source-matched Settings plugin and Unity importer
         uses: actions/upload-artifact@v4
         with:
           name: p1-macos-appkit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib
-            unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib.meta
+          path: p1-macos-appkit-artifact/
           if-no-files-found: error
           retention-days: 7
 
@@ -84,11 +91,25 @@ jobs:
           bash tools/bootstrap-ui-fonts.sh
           bash tools/bootstrap-ultraleap.sh
           bash tools/bootstrap-uniwinc.sh
-      - name: Restore compiled AppKit Settings into Unity project
+      # A build-only rerun must reuse the earlier successful AppKit compile.
+      # Require the original run, source SHA, both file digests, and the exact
+      # repository Unity importer before exposing the binary to the build.
+      - name: Download same-run AppKit plugin attempts
         uses: actions/download-artifact@v4
         with:
-          name: p1-macos-appkit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: unity/Assets/Plugins/macOS/
+          pattern: p1-macos-appkit-${{ github.run_id }}-*
+          path: p1-macos-appkit-downloads/
+          merge-multiple: false
+      - name: Restore source-verified AppKit Settings into Unity project
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-appkit-artifact.py --select \
+            --downloads p1-macos-appkit-downloads \
+            --output unity/Assets/Plugins/macOS \
+            --expected-meta native/macos/VcrSettingsWindow.dylib.meta \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --source "$GITHUB_SHA"
       - name: Generate real U1 P1 workspace scene
         uses: game-ci/unity-builder@v4
         env:
