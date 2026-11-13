@@ -1352,8 +1352,6 @@ namespace VCR.Runtime.UI
                         "Restore render defaults");
                     _workspaceNativeSettings.Add(0, 205, DesktopNativeSettingsWindow.ControlKind.Button,
                         "Save runtime configuration");
-                    _workspaceNativeSettings.Add(0, 206, DesktopNativeSettingsWindow.ControlKind.Button,
-                        "Reload saved configuration");
                     _workspaceNativeSettings.Add(0, 90, DesktopNativeSettingsWindow.ControlKind.Label,
                         "Changes apply to the active scene.");
                     _workspaceNativeSettings.Add(0, 94, DesktopNativeSettingsWindow.ControlKind.Label,
@@ -1392,6 +1390,8 @@ namespace VCR.Runtime.UI
                 // a partially edited model path, FPS or render scale.
                 if (!_workspaceNativeSettings.IsVisible)
                 {
+                    // An earlier confirmation belongs to the previous window session.
+                    ResetWorkspaceConfigurationActions();
                     if (sceneRuntime != null && sceneRuntime.TryCaptureRenderSettings(out var settings))
                     {
                         _workspaceNativeSettings.SetText(10,
@@ -1430,11 +1430,17 @@ namespace VCR.Runtime.UI
             {
                 UnityEngine.Application.runInBackground = _runInBackgroundBeforeSettings;
                 _nativeSettingsWasVisible = false;
+                // Closing Settings cancels armed Save/Reload confirmations.
+                ResetWorkspaceConfigurationActions();
             }
             for (var i = 0; i < 48; ++i)
             {
                 var action = _workspaceNativeSettings.PollAction();
                 if (action == 0) break;
+                // Only a consecutive action may confirm a destructive operation.
+                // Navigation and other controls revoke pending confirmation.
+                if (action != 205) _workspaceSaveConfirmUntil = 0f;
+                if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;
                 // Native navigation emits 100-103; without this, model/output
                 // pages exist but cannot be reached from the sidebar.
                 if (action >= 100 && action <= 103)
@@ -1471,7 +1477,12 @@ namespace VCR.Runtime.UI
                     ApplyWorkspaceOverlayAction(action);
                     continue;
                 }
-                if (action == 204)                 {                     ApplyWorkspaceConfigurationActionWithNativeFeedback(206);                     continue;                 }
+                if (action == 204)
+                {
+                    // Keep the legacy 204 meaning; 206 is the shared guarded reload.
+                    ApplyWorkspaceConfigurationActionWithNativeFeedback(206);
+                    continue;
+                }
                 if (action == 205 || action == 206)
                 {
                     ApplyWorkspaceConfigurationActionWithNativeFeedback(action);
@@ -1745,6 +1756,8 @@ namespace VCR.Runtime.UI
         private void ShowWorkspaceSettingsFallback()
         {
             if (_workspaceRoot == null) return;
+            // Toggling the fallback closes/opens the confirmation surface.
+            ResetWorkspaceConfigurationActions();
             var existing = _workspaceRoot.Q<VisualElement>("vcr-settings-fallback");
             if (existing != null)
             {
@@ -1820,6 +1833,7 @@ namespace VCR.Runtime.UI
             content.Add(feedback);
             var apply = new Button(() =>
             {
+                ResetWorkspaceConfigurationActions();
                 if (sceneRuntime == null)
                     sceneRuntime = FindFirstObjectByType<SingleCharacterSceneRuntime>();
                 if (sceneRuntime == null ||
