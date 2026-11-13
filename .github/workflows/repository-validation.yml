@@ -120,6 +120,9 @@ jobs:
       - name: Test source-bound macOS Player artifact selection across retries
         run: python3 tools/select-p1-macos-player-artifact.py --self-test
 
+      - name: Test source-bound AppKit plugin selection across build-only retries
+        run: python3 tools/select-p1-macos-appkit-artifact.py --self-test
+
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
 
