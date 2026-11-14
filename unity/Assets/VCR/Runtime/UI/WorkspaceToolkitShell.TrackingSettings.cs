@@ -52,6 +52,17 @@ namespace VCR.Runtime.UI
             _nextTrackingSummaryScan = 0f;
         }
 
+        private string GetWorkspaceTrackingPersistenceId(string runtimeId)
+        {
+            // Registered IDs are compared without case, but PlayerPrefs
+            // keys must preserve the original registered spelling.
+            foreach (var configuredId in _workspaceConfiguredTracking)
+                if (string.Equals(configuredId, runtimeId,
+                        StringComparison.OrdinalIgnoreCase))
+                    return configuredId;
+            return runtimeId;
+        }
+
         private static List<ITrackingRuntimeControl> DiscoverWorkspaceTrackingSources()
         {
             return DiscoverWorkspaceTrackingSources(out _);
@@ -132,7 +143,9 @@ namespace VCR.Runtime.UI
                 _workspaceRestoredTracking[id] = source;
                 try
                 {
-                    var enabled = PlayerPrefs.GetInt(TrackingEnabledKey + id, 0) != 0;
+                    var persistenceId = GetWorkspaceTrackingPersistenceId(id);
+                    var enabled = PlayerPrefs.GetInt(
+                        TrackingEnabledKey + persistenceId, 0) != 0;
                     // If the saved preference is Off, stop capture before
                     // applying settings. MediaPipe may restart its webcam when
                     // capture parameters change, even if we will disable it.
@@ -163,7 +176,7 @@ namespace VCR.Runtime.UI
                             foreach (var setting in settings)
                             {
                                 if (string.IsNullOrWhiteSpace(setting.Key)) continue;
-                                var key = TrackingSettingKey + id + "." + setting.Key;
+                                var key = TrackingSettingKey + persistenceId + "." + setting.Key;
                                 values[setting.Key] = PlayerPrefs.GetString(key, setting.Value);
                                 hasPersisted |= PlayerPrefs.HasKey(key);
                             }
@@ -391,8 +404,9 @@ namespace VCR.Runtime.UI
                     return;
                 }
                 foreach (var pair in values)
-                    PlayerPrefs.SetString(TrackingSettingKey + control.ControlId + "." + pair.Key,
-                                          pair.Value ?? "");
+                    PlayerPrefs.SetString(TrackingSettingKey +
+                                          GetWorkspaceTrackingPersistenceId(control.ControlId) +
+                                          "." + pair.Key, pair.Value ?? "");
                 _workspaceConfiguredTracking.Add(control.ControlId);
                 _workspaceRestoredTracking[control.ControlId] = control;
                 PersistConfiguredWorkspaceTracking();
@@ -428,7 +442,9 @@ namespace VCR.Runtime.UI
                     return false;
                 }
                 _workspaceRestoredTracking[id] = control;
-                PlayerPrefs.SetInt(TrackingEnabledKey + id, enabled ? 1 : 0);
+                PlayerPrefs.SetInt(
+                    TrackingEnabledKey + GetWorkspaceTrackingPersistenceId(id),
+                    enabled ? 1 : 0);
                 PlayerPrefs.Save();
                 feedback = (control.DisplayName ?? id) +
                     (enabled ? " enabled." : " disabled.");
@@ -532,6 +548,8 @@ namespace VCR.Runtime.UI
             else
             {
                 var remove = _workspaceConfiguredTracking.Contains(id);
+                // Resolve before removal, before the original spelling is lost.
+                var persistenceId = GetWorkspaceTrackingPersistenceId(id);
                 if (remove && control.ControlEnabled &&
                     !control.TrySetControlEnabled(false, out var error))
                 {
@@ -542,7 +560,7 @@ namespace VCR.Runtime.UI
                 {
                     _workspaceConfiguredTracking.Remove(id);
                     _workspaceRestoredTracking.Remove(id);
-                    PlayerPrefs.SetInt(TrackingEnabledKey + id, 0);
+                    PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 else
                 {
@@ -555,7 +573,7 @@ namespace VCR.Runtime.UI
                     }
                     _workspaceConfiguredTracking.Add(id);
                     _workspaceRestoredTracking[id] = control;
-                    PlayerPrefs.SetInt(TrackingEnabledKey + id, 0);
+                    PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 PersistConfiguredWorkspaceTracking();
                 RebuildWorkspaceNativeTrackingSources();
@@ -738,6 +756,7 @@ namespace VCR.Runtime.UI
                     return;
                 }
                 var configured = _workspaceConfiguredTracking.Contains(sourceId);
+                var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
                 // Keep the former dashboard behavior: newly added devices start disabled.
                 if (source.ControlEnabled &&
                     !source.TrySetControlEnabled(false, out var error))
@@ -758,7 +777,7 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Add(sourceId);
                     _workspaceRestoredTracking[sourceId] = source;
                 }
-                PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, 0);
+                PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 PersistConfiguredWorkspaceTracking();
                 TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
                     (configured ? " removed." : " added (disabled)."));
@@ -852,8 +871,9 @@ namespace VCR.Runtime.UI
                             return;
                         }
                         foreach (var pair in values)
-                            PlayerPrefs.SetString(TrackingSettingKey + sourceId + "." + pair.Key,
-                                pair.Value);
+                            PlayerPrefs.SetString(TrackingSettingKey +
+                                GetWorkspaceTrackingPersistenceId(sourceId) +
+                                "." + pair.Key, pair.Value);
                         _workspaceConfiguredTracking.Add(sourceId);
                         _workspaceRestoredTracking[sourceId] = live;
                         PersistConfiguredWorkspaceTracking();
