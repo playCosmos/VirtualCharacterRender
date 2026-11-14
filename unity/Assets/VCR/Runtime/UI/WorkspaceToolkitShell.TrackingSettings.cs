@@ -135,7 +135,15 @@ namespace VCR.Runtime.UI
                     if (source is ITrackingRuntimeConfigurable configurable)
                     {
                         var settings = configurable.GetConfigurationSettings();
-                        if (settings != null)
+                        // A configurable provider may return no schema while
+                        // initializing. Treat null as not ready rather than
+                        // permanently skipping the saved configuration.
+                        if (settings == null)
+                        {
+                            _workspaceRestoredTracking.Remove(id);
+                            continue;
+                        }
+                        if (settings.Count > 0)
                         {
                             var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                             var hasPersisted = false;
@@ -432,15 +440,15 @@ namespace VCR.Runtime.UI
                 }
                 else
                 {
-                    _workspaceConfiguredTracking.Add(id);
-                    _workspaceRestoredTracking[id] = control;
-                    // Newly added inputs start disabled, matching the old dashboard.
+                    // Newly added inputs start disabled. Do not cache or
+                    // persist membership before the provider accepts this.
                     if (control.ControlEnabled && !control.TrySetControlEnabled(false, out var addError))
                     {
-                        _workspaceConfiguredTracking.Remove(id);
                         _workspaceNativeSettings.SetText(92, "Add failed: " + addError);
                         return true;
                     }
+                    _workspaceConfiguredTracking.Add(id);
+                    _workspaceRestoredTracking[id] = control;
                     PlayerPrefs.SetInt(TrackingEnabledKey + id, 0);
                 }
                 PersistConfiguredWorkspaceTracking();
