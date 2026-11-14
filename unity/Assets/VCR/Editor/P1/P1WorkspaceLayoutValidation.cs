@@ -697,8 +697,50 @@ namespace VCR.Editor.P1
 
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                return replacement.ToggleCalls == 1 &&
-                       replacement.ConfigurationCalls == 1;
+                if (replacement.ToggleCalls != 1 ||
+                    replacement.ConfigurationCalls != 1)
+                    return false;
+
+                // A temporary provider configuration failure must not mark
+                // the provider restored or rewrite the saved preference.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 tracking config retry provider");
+                var configRetry = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                configRetry.Id = id;
+                configRetry.FailConfigurationOnce = true;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (restored.ContainsKey(id) ||
+                    configRetry.ConfigurationCalls != 1 ||
+                    configRetry.ToggleCalls != 0 ||
+                    PlayerPrefs.GetString(settingKey) != "persisted-value")
+                    return false;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!configRetry.ControlEnabled || configRetry.ToggleCalls != 1 ||
+                    configRetry.ConfigurationCalls != 2 ||
+                    configRetry.AppliedValue != "persisted-value")
+                    return false;
+
+                // A temporary enable failure also leaves the restore pending.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 tracking enable retry provider");
+                var enableRetry = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                enableRetry.Id = id;
+                enableRetry.FailEnableOnce = true;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (restored.ContainsKey(id) || enableRetry.ControlEnabled ||
+                    enableRetry.ToggleCalls != 1 ||
+                    enableRetry.ConfigurationCalls != 1 ||
+                    PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                return enableRetry.ControlEnabled &&
+                       enableRetry.ToggleCalls == 2 &&
+                       enableRetry.ConfigurationCalls == 2 &&
+                       enableRetry.AppliedValue == "persisted-value";
             }
             finally
             {
@@ -798,6 +840,8 @@ namespace VCR.Editor.P1
         public int ToggleCalls { get; private set; }
         public int ConfigurationCalls { get; private set; }
         public string AppliedValue { get; private set; }
+        public bool FailConfigurationOnce { get; set; }
+        public bool FailEnableOnce { get; set; }
         public string ConfigurationTitle => "P1 reconnect configuration";
         public bool OpenConfigurationOnAdd => false;
 
@@ -817,17 +861,29 @@ namespace VCR.Editor.P1
                 error = "Missing persisted test value";
                 return false;
             }
-            AppliedValue = value;
             ConfigurationCalls++;
+            if (FailConfigurationOnce)
+            {
+                FailConfigurationOnce = false;
+                error = "Provider not initialized yet";
+                return false;
+            }
+            AppliedValue = value;
             error = null;
             return true;
         }
 
         public bool TrySetControlEnabled(bool enabled, out string error)
         {
+            ToggleCalls++;
+            if (FailEnableOnce)
+            {
+                FailEnableOnce = false;
+                error = "Device not available yet";
+                return false;
+            }
             error = null;
             ControlEnabled = enabled;
-            ToggleCalls++;
             return true;
         }
 
