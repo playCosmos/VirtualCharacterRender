@@ -645,6 +645,17 @@ namespace VCR.Editor.P1
                     !trackingSource.Substring(toolkitEditAt)
                         .Contains("IsWorkspaceTrackingEditorSourceCurrent("))
                     return false;
+                // Native Add may only mark a device configured/restored after
+                // disabling the source succeeds. The Toolkit path already does.
+                var nativeAddAt = trackingSource.IndexOf(
+                    "if (control.ControlEnabled && !control.TrySetControlEnabled(false",
+                    StringComparison.Ordinal);
+                if (nativeAddAt < 0 ||
+                    trackingSource.IndexOf("_workspaceConfiguredTracking.Add(id);",
+                        nativeAddAt, StringComparison.Ordinal) <= nativeAddAt ||
+                    trackingSource.IndexOf("_workspaceRestoredTracking[id] = control;",
+                        nativeAddAt, StringComparison.Ordinal) <= nativeAddAt)
+                    return false;
 
                 configured.Add(id);
                 PlayerPrefs.SetInt(enabledKey, 1);
@@ -737,10 +748,35 @@ namespace VCR.Editor.P1
                     return false;
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                return enableRetry.ControlEnabled &&
-                       enableRetry.ToggleCalls == 2 &&
-                       enableRetry.ConfigurationCalls == 2 &&
-                       enableRetry.AppliedValue == "persisted-value";
+                if (!enableRetry.ControlEnabled ||
+                    enableRetry.ToggleCalls != 2 ||
+                    enableRetry.ConfigurationCalls != 2 ||
+                    enableRetry.AppliedValue != "persisted-value")
+                    return false;
+
+                // A configurable source may not have discovered its schema
+                // yet. Null must postpone both config and enabled restoration.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 tracking delayed schema provider");
+                var delayed = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                delayed.Id = id;
+                delayed.ReturnNullSchemaOnce = true;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (restored.ContainsKey(id) ||
+                    delayed.SchemaCalls != 1 ||
+                    delayed.ConfigurationCalls != 0 ||
+                    delayed.ToggleCalls != 0 ||
+                    PlayerPrefs.GetString(settingKey) != "persisted-value")
+                    return false;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                return restored.ContainsKey(id) &&
+                       delayed.SchemaCalls == 2 &&
+                       delayed.ControlEnabled &&
+                       delayed.ToggleCalls == 1 &&
+                       delayed.ConfigurationCalls == 1 &&
+                       delayed.AppliedValue == "persisted-value";
             }
             finally
             {
@@ -842,11 +878,19 @@ namespace VCR.Editor.P1
         public string AppliedValue { get; private set; }
         public bool FailConfigurationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
+        public bool ReturnNullSchemaOnce { get; set; }
+        public int SchemaCalls { get; private set; }
         public string ConfigurationTitle => "P1 reconnect configuration";
         public bool OpenConfigurationOnAdd => false;
 
         public IReadOnlyList<TrackingRuntimeSetting> GetConfigurationSettings()
         {
+            SchemaCalls++;
+            if (ReturnNullSchemaOnce)
+            {
+                ReturnNullSchemaOnce = false;
+                return null;
+            }
             return new[]
             {
                 new TrackingRuntimeSetting("test-value", "Test value", "default-value")
