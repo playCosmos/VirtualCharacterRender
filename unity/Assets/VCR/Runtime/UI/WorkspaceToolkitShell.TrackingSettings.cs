@@ -18,8 +18,10 @@ namespace VCR.Runtime.UI
 
         private readonly HashSet<string> _workspaceConfiguredTracking =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _workspaceRestoredTracking =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // A reconnected provider may reuse the same ControlId with a new runtime
+        // component. Remember the exact provider instance, not only its ID.
+        private readonly Dictionary<string, ITrackingRuntimeControl> _workspaceRestoredTracking =
+            new Dictionary<string, ITrackingRuntimeControl>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _workspaceNativeTrackingIds =
             new Dictionary<int, string>();
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
@@ -105,8 +107,13 @@ namespace VCR.Runtime.UI
             {
                 var id = source.ControlId;
                 if (!_workspaceConfiguredTracking.Contains(id) ||
-                    !_workspaceRestoredTracking.Add(id))
+                    (_workspaceRestoredTracking.TryGetValue(id, out var previous) &&
+                     ReferenceEquals(previous, source)))
                     continue;
+                // A new component with the same ID must receive the saved
+                // settings and enabled state again. Mark before applying so a
+                // synchronous callback cannot trigger duplicate restore work.
+                _workspaceRestoredTracking[id] = source;
                 try
                 {
                     if (source is ITrackingRuntimeConfigurable configurable)
@@ -308,7 +315,7 @@ namespace VCR.Runtime.UI
                     PlayerPrefs.SetString(TrackingSettingKey + control.ControlId + "." + pair.Key,
                                           pair.Value ?? "");
                 _workspaceConfiguredTracking.Add(control.ControlId);
-                _workspaceRestoredTracking.Add(control.ControlId);
+                _workspaceRestoredTracking[control.ControlId] = control;
                 PersistConfiguredWorkspaceTracking();
                 RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, "Tracking settings applied.");
@@ -357,7 +364,7 @@ namespace VCR.Runtime.UI
                 if (control.TrySetControlEnabled(enabled, out var error))
                 {
                     _workspaceConfiguredTracking.Add(id);
-                    _workspaceRestoredTracking.Add(id);
+                    _workspaceRestoredTracking[id] = control;
                     PlayerPrefs.SetInt(TrackingEnabledKey + id, enabled ? 1 : 0);
                     PersistConfiguredWorkspaceTracking();
                     RebuildWorkspaceNativeTrackingSources();
@@ -392,7 +399,7 @@ namespace VCR.Runtime.UI
                 else
                 {
                     _workspaceConfiguredTracking.Add(id);
-                    _workspaceRestoredTracking.Add(id);
+                    _workspaceRestoredTracking[id] = control;
                     // Newly added inputs start disabled, matching the old dashboard.
                     if (control.ControlEnabled && !control.TrySetControlEnabled(false, out var addError))
                     {
@@ -601,7 +608,7 @@ namespace VCR.Runtime.UI
                 else
                 {
                     _workspaceConfiguredTracking.Add(sourceId);
-                    _workspaceRestoredTracking.Add(sourceId);
+                    _workspaceRestoredTracking[sourceId] = source;
                 }
                 PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, 0);
                 PersistConfiguredWorkspaceTracking();
@@ -635,7 +642,7 @@ namespace VCR.Runtime.UI
                     SetWorkspaceTrackingFeedback("Tracking toggle failed: " + error);
                     return;
                 }
-                _workspaceRestoredTracking.Add(sourceId);
+                _workspaceRestoredTracking[sourceId] = source;
                 PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, enabled ? 1 : 0);
                 PlayerPrefs.Save();
                 TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
@@ -727,7 +734,7 @@ namespace VCR.Runtime.UI
                             PlayerPrefs.SetString(TrackingSettingKey + sourceId + "." + pair.Key,
                                 pair.Value);
                         _workspaceConfiguredTracking.Add(sourceId);
-                        _workspaceRestoredTracking.Add(sourceId);
+                        _workspaceRestoredTracking[sourceId] = live;
                         PersistConfiguredWorkspaceTracking();
                         _workspaceTrackingEditor.Clear();
                         TrackingPanelActionFinished("Tracking settings saved and applied.");
