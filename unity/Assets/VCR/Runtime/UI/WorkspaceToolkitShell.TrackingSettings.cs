@@ -107,7 +107,19 @@ namespace VCR.Runtime.UI
                 return;
             _nextTrackingRestoreScan = Time.unscaledTime + 2f;
 
-            foreach (var source in DiscoverWorkspaceTrackingSources())
+            var sources = DiscoverWorkspaceTrackingSources();
+            // Dropped/ambiguous provider IDs must not keep destroyed Unity
+            // components alive via the restored-instance cache. Keep saved
+            // preferences so the next valid provider can still reconnect.
+            var presentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var source in sources)
+                presentIds.Add(source.ControlId);
+            foreach (var previousId in new List<string>(_workspaceRestoredTracking.Keys))
+                if (!presentIds.Contains(previousId) ||
+                    !_workspaceConfiguredTracking.Contains(previousId))
+                    _workspaceRestoredTracking.Remove(previousId);
+
+            foreach (var source in sources)
             {
                 var id = source.ControlId;
                 if (!_workspaceConfiguredTracking.Contains(id) ||
