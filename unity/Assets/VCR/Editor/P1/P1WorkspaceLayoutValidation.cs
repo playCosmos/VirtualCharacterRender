@@ -220,6 +220,8 @@ namespace VCR.Editor.P1
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
                     "recreated tracking control with same ID must restore its saved enabled state");
+                Check(TrackingEditorSchemaParity(),
+                    "native and Toolkit tracking editors must reject null/oversized schemas");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -601,6 +603,39 @@ namespace VCR.Editor.P1
             {
                 UnityEngine.Object.DestroyImmediate(host);
             }
+        }
+
+        private static bool TrackingEditorSchemaParity()
+        {
+            var shellType = typeof(WorkspaceToolkitShell);
+            var ready = shellType.GetMethod(
+                "IsWorkspaceTrackingEditableSchema", StaticPrivate);
+            if (ready == null) return false;
+            bool CanEdit(IReadOnlyList<TrackingRuntimeSetting> schema) =>
+                (bool)ready.Invoke(null, new object[] { schema });
+            if (CanEdit(null) ||
+                !CanEdit(Array.Empty<TrackingRuntimeSetting>()) ||
+                !CanEdit(new TrackingRuntimeSetting[256]) ||
+                CanEdit(new TrackingRuntimeSetting[257]))
+                return false;
+
+            var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+            var nativeAt = source.IndexOf(
+                "private void ShowWorkspaceNativeTrackingDetails(", StringComparison.Ordinal);
+            var nativeEnd = source.IndexOf(
+                "private void SaveWorkspaceNativeTrackingDetails()", StringComparison.Ordinal);
+            var toolkitAt = source.IndexOf(
+                "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+            if (nativeAt < 0 || nativeEnd <= nativeAt || toolkitAt < 0)
+                return false;
+            var native = source.Substring(nativeAt, nativeEnd - nativeAt);
+            var toolkit = source.Substring(toolkitAt);
+            return native.Contains("!IsWorkspaceTrackingEditableSchema(settings)") &&
+                   toolkit.Contains("!IsWorkspaceTrackingEditableSchema(settings)") &&
+                   native.Contains("RebuildWorkspaceNativeTrackingSources();") &&
+                   native.Contains("new HashSet<string>(StringComparer.OrdinalIgnoreCase)") &&
+                   toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)");
         }
 
         private static bool TrackingReconnectedProviderRestoresPreferences()
