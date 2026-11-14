@@ -1,0 +1,284 @@
+name: U1 P1 macOS Player build and native startup smoke (manual)
+
+# Explicitly isolated from ordinary U1 pushes: building Unity's macOS editor
+# image is expensive. This tests the actual P1/U1 scene, never the Alpha Player.
+on:
+  push:
+    branches:
+      - feature/obs-ui-u1-layout-contract-20261026
+    paths:
+      - .github/workflows/u1-p1-macos-native.yml
+      - native/macos/VcrSettingsWindow.mm
+      - native/macos/VcrSettingsWindow.dylib.meta
+      - tools/build-native-settings-macos.sh
+      - tools/verify-macos-settings-exports.py
+      - unity/Assets/VCR/Editor/P1/**
+      - unity/Assets/VCR/Runtime/UI/**
+      - unity/Assets/VCR/Runtime/Application/PlayerStartupSmoke.cs
+      - tools/run-player-smoke.py
+      - tools/select-p1-macos-appkit-artifact.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: u1-p1-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  appkit-plugin:
+    name: Compile project-owned macOS arm64 AppKit Settings
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Compile AppKit native Settings and verify arm64 exports
+        run: bash tools/build-native-settings-macos.sh
+      - name: Package AppKit plugin with exact source and SHA-256 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-appkit-artifact.py --package \
+            --binary unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib \
+            --meta native/macos/VcrSettingsWindow.dylib.meta \
+            --source "$GITHUB_SHA" --output p1-macos-appkit-artifact
+      - name: Save source-matched Settings plugin and Unity importer
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-macos-appkit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: p1-macos-appkit-artifact/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-p1-macos:
+    name: Build actual U1 P1 macOS nondevelopment Mono Player
+    needs: appkit-plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout source commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact source and pinned Unity baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          test ! -e unity/Library
+          sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/p1-mac-input.sha256"
+      - name: Preserve host dotnet SDK while reclaiming unused image storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h "$GITHUB_WORKSPACE"
+          for sdk in /usr/local/lib/android /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
+            if [ -d "$sdk" ]; then sudo rm -rf -- "$sdk"; fi
+          done
+          command -v dotnet
+          test -n "$(dotnet --list-sdks)"
+          df -h "$GITHUB_WORKSPACE"
+      - name: Bootstrap pinned Unity dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/bootstrap-mediapipe.sh
+          bash tools/bootstrap-ui-fonts.sh
+          bash tools/bootstrap-ultraleap.sh
+          bash tools/bootstrap-uniwinc.sh
+      # A build-only rerun must reuse the earlier successful AppKit compile.
+      # Require the original run, source SHA, both file digests, and the exact
+      # repository Unity importer before exposing the binary to the build.
+      - name: Download same-run AppKit plugin attempts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p1-macos-appkit-${{ github.run_id }}-*
+          path: p1-macos-appkit-downloads/
+          merge-multiple: false
+      - name: Restore source-verified AppKit Settings into Unity project
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-appkit-artifact.py --select \
+            --downloads p1-macos-appkit-downloads \
+            --output unity/Assets/Plugins/macOS \
+            --expected-meta native/macos/VcrSettingsWindow.dylib.meta \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --source "$GITHUB_SHA"
+      - name: Generate real U1 P1 workspace scene
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneOSX
+          buildMethod: VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit
+          customImage: unityci/editor:6000.3.25f1-mac-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+      - name: Require generated P1 UI Toolkit scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Assets/VCR/P1/P1Runtime.unity
+          test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
+      - name: Build actual non-development P1 macOS Mono Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneOSX
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildMacMonoCiAndExit
+          customImage: unityci/editor:6000.3.25f1-mac-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+      - name: Require P1 macOS bundle, verify source and package tested bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import plistlib
+          import subprocess
+
+          output = Path("unity/Builds/P1/macOS")
+          bundle = output / "VirtualCharacterRender.app"
+          info = bundle / "Contents" / "Info.plist"
+          if not info.is_file():
+              raise SystemExit("Actual P1 macOS Info.plist missing")
+          with info.open("rb") as file:
+              executable_name = plistlib.load(file).get("CFBundleExecutable")
+          if (not isinstance(executable_name, str) or not executable_name or
+                  any(c in executable_name for c in ("/", "\\", ":", "\x00")) or
+                  executable_name in (".", "..")):
+              raise SystemExit("Invalid P1 macOS executable name")
+          executable = bundle / "Contents" / "MacOS" / executable_name
+          if not executable.is_file() or executable.stat().st_size == 0:
+              raise SystemExit("Actual P1 macOS native executable missing")
+          # Unity creates the case-sensitive macOS bundle directory "PlugIns".
+          # Build log confirms MacOSCodeSignDylibCopy to this exact path.
+          plugin = bundle / "Contents" / "PlugIns" / "VcrSettingsWindow.dylib"
+          if not plugin.is_file() or plugin.stat().st_size == 0:
+              raise SystemExit("P1 macOS Player missing its AppKit Settings dylib")
+          target = Path("p1-macos-artifacts")
+          target.mkdir(exist_ok=True)
+          archive = target / "macos.zip"
+          subprocess.run(["zip", "-q", "-r", "-y", str(archive.resolve()),
+                          "VirtualCharacterRender.app"], cwd=output, check=True)
+          digest = hashlib.sha256()
+          with archive.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                  digest.update(chunk)
+          (target / "macos.sha256").write_text(
+              digest.hexdigest() + "  macos.zip\n", encoding="utf-8")
+          (target / "macos.source-sha").write_text(
+              os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
+          (target / "build-evidence.txt").write_text(
+              "scene=P1/U1\nplatform=macOS\nmode=nondevelopment\nbackend=Mono\n"
+              "unity=6000.3.25f1\nsource_sha=" + os.environ["GITHUB_SHA"] +
+              "\narchive_sha256=" + digest.hexdigest() + "\n", encoding="utf-8")
+          print("P1 macOS Player archive SHA-256:", digest.hexdigest())
+          PY
+      - name: Upload native P1 macOS Player for exact-source smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-macos-player-${{ github.run_id }}-${{ github.run_attempt }}
+          path: p1-macos-artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-native-smoke:
+    name: Execute exact-source P1 macOS Player and require native shutdown
+    needs: build-p1-macos
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      # A cancelled smoke job can be retried without rebuilding the Player.
+      # In that case github.run_attempt increments but only the previous
+      # attempt's source-bound artifact exists. Download all matching attempt
+      # directories and select the newest <= current attempt with a strict SHA
+      # and archive digest check; do not merge artifacts from different tries.
+      - name: Download same-run P1 macOS Player attempts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: u1-p1-macos-player-${{ github.run_id }}-*
+          path: p1-macos-downloaded-artifacts/
+          merge-multiple: false
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Select newest source-verified Player artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/select-p1-macos-player-artifact.py \
+            --downloads p1-macos-downloaded-artifacts \
+            --output p1-macos-artifacts \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --source "$GITHUB_SHA"
+      - name: Require exact artifact source and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat p1-macos-artifacts/macos.source-sha)" = "$GITHUB_SHA"
+          (cd p1-macos-artifacts && shasum -a 256 -c macos.sha256)
+      - name: Execute nondevelopment P1 macOS Player native smoke
+        shell: bash
+        # The Player performs the real managed C# -> P/Invoke -> compiled
+        # AppKit bridge; the default interactive launcher never runs this.
+        env:
+          VCR_SMOKE_NATIVE_SETTINGS: '1'
+        run: |
+          set -euo pipefail
+          python3 tools/run-player-smoke.py \
+            --platform macos-nodebug \
+            --archive p1-macos-artifacts/macos.zip \
+            --source "$GITHUB_SHA" \
+            --require-quit-marker \
+            --output Builds/PlayerSmoke/u1-p1-macos
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          output = Path("Builds/PlayerSmoke/u1-p1-macos")
+          reports = sorted(output.glob("*player-smoke.json"))
+          if len(reports) != 8:
+              raise SystemExit(
+                  "Expected 8 real P1 startup/relaunch/recovery/acceptance " +
+                  "reports, found " + str(len(reports)))
+          for report in reports:
+              value = json.loads(report.read_text(encoding="utf-8"))
+              if value.get("nativeSettingsInteropPassed") is not True:
+                  raise SystemExit(
+                      "Unity Player did not prove managed AppKit P/Invoke: " +
+                      report.name)
+          print("Real Unity macOS managed Settings P/Invoke: PASS (8 native Player launches)")
+          PY
+      - name: Archive macOS Player logs and startup/quit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-macos-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/PlayerSmoke/u1-p1-macos/
+          if-no-files-found: warn
+          retention-days: 14

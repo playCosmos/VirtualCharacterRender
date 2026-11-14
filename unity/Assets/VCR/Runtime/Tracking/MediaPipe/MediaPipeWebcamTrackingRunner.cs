@@ -203,15 +203,21 @@ namespace VCR.Runtime.Tracking.MediaPipe
                 return false;
             }
 
-            deviceName =
-                nextDevice?.Trim() ??
-                string.Empty;
+            var normalizedDevice = nextDevice?.Trim() ?? string.Empty;
+            var configurationChanged = HasCaptureConfigurationChanged(
+                normalizedDevice, nextWidth, nextHeight, nextFps);
+            deviceName = normalizedDevice;
             requestedWidth = nextWidth;
             requestedHeight = nextHeight;
             requestedFps = nextFps;
 
+            // U1 replays saved settings after Recover. Restarting again for
+            // identical values interrupts the same webcam a second time.
+            // Preserve explicit Apply as a retry when capture is faulted.
             if (enabled &&
-                Application.isPlaying)
+                Application.isPlaying &&
+                (configurationChanged ||
+                 _state == MediaPipeWebcamLifecycleState.Faulted))
             {
                 Restart();
 
@@ -226,6 +232,18 @@ namespace VCR.Runtime.Tracking.MediaPipe
             }
 
             return true;
+        }
+
+        private bool HasCaptureConfigurationChanged(
+            string nextDevice, int nextWidth, int nextHeight, int nextFps)
+        {
+            return !string.Equals(
+                       deviceName ?? string.Empty,
+                       nextDevice ?? string.Empty,
+                       StringComparison.Ordinal) ||
+                   requestedWidth != nextWidth ||
+                   requestedHeight != nextHeight ||
+                   requestedFps != nextFps;
         }
 
         private static bool TryReadBoundedInt(

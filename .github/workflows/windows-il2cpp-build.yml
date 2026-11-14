@@ -8,6 +8,14 @@ on:
         required: false
         default: '1'
         type: string
+      build_target:
+        description: Build the existing Alpha scene or the U1 P1 workspace
+        required: false
+        default: alpha
+        type: choice
+        options:
+          - alpha
+          - p1
 
 permissions:
   contents: read
@@ -17,8 +25,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The pre-existing workflow is registered on the default branch, so it
+  # can dispatch the branch-only P1 reusable workflow without merging U1.
+  # Alpha remains the unchanged default execution path.
+  p1:
+    if: github.event.inputs.build_target == 'p1'
+    uses: ./.github/workflows/u1-p1-windows-il2cpp.yml
+    secrets: inherit
+
   build:
     name: Build Windows x64 IL2CPP and execute Player
+    if: github.event.inputs.build_target != 'p1'
     runs-on: windows-2022
     timeout-minutes: 150
     env:

@@ -55,6 +55,10 @@ namespace VCR.Runtime.UI
         private const uint ForegroundColor = 0x00EFE8E2u;
         private const uint MutedColor = 0x00B8ABA0u;
         private const uint EditStyle = 0x00800080u;
+        // Long configuration paths/recovery diagnostics need a read-only
+        // multiline viewport rather than the standard one-row STATIC label.
+        private const uint StatusTextStyle = 0x00800000u | 0x00200000u |
+            0x0004u | 0x0040u | 0x0800u; // BORDER, VSCROLL, MULTILINE, AUTOVSCROLL, READONLY
         private const int ShowNormal = 5;
         private const int Hide = 0;
         private const int CloseMessage = 0x10;
@@ -84,6 +88,13 @@ namespace VCR.Runtime.UI
         private struct Rect
         {
             public int left, top, right, bottom;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MonitorInfo
+        {
+            public uint cbSize;
+            public Rect monitor, work;
+            public uint flags;
         }
         [StructLayout(LayoutKind.Sequential)]
         private struct ScrollInfo
@@ -133,6 +144,15 @@ namespace VCR.Runtime.UI
             IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(
+            IntPtr hwnd, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfoW(IntPtr monitor,
+            ref MonitorInfo info);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool SystemParametersInfoW(uint action,
+            uint param, out Rect rect, uint update);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(
@@ -192,6 +212,10 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, List<IntPtr>> categoryControls =
             new Dictionary<int, List<IntPtr>>();
         private readonly int[] rows = new int[4];
+        // A fixed 48px row pitch overlays two adjacent 100px General
+        // status controls (U1 feedback 90 and configuration 94). The next
+        // row must start *after* the previous control's actual height.
+        private readonly int[] nextRowTop = { 82, 82, 82, 82 };
         private readonly int[] scrollOffsets = new int[4];
         private readonly Dictionary<IntPtr, int> controlCategories =
             new Dictionary<IntPtr, int>();
@@ -315,12 +339,24 @@ namespace VCR.Runtime.UI
             return control;
         }
 
+        private int ContentBottomForCategory(int category)
+        {
+            // A multi-line status area may extend below its ordinary 48px
+            // row. Compute scrolling from actual child bounds, not row count.
+            var bottom = rows[category] * 48 + 120;
+            foreach (var entry in controlLayouts)
+                if (controlCategories.TryGetValue(entry.Key, out var owner) &&
+                    owner == category)
+                    bottom = Math.Max(bottom, entry.Value.Top + entry.Value.Height + 20);
+            return bottom;
+        }
+
         private void ScrollDetail(uint message, IntPtr value)
         {
             if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
                 return;
             var page = selectedCategory;
-            var max = Math.Max(0, rows[page] * 48 + 120 - area.bottom);
+            var max = Math.Max(0, ContentBottomForCategory(page) - area.bottom);
             var position = scrollOffsets[page];
             if (message == MouseWheelMessage)
             {
@@ -358,13 +394,14 @@ namespace VCR.Runtime.UI
             if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out var area))
                 return;
             var contentWidth = Math.Max(200, area.right - 300);
-            var max = Math.Max(0, rows[selectedCategory] * 48 + 120 - area.bottom);
+            var contentBottom = ContentBottomForCategory(selectedCategory);
+            var max = Math.Max(0, contentBottom - area.bottom);
             scrollOffsets[selectedCategory] = Math.Min(scrollOffsets[selectedCategory], max);
             var scroll = new ScrollInfo
             {
                 cbSize = (uint)Marshal.SizeOf<ScrollInfo>(),
                 fMask = ScrollRange,
-                nMin = 0, nMax = rows[selectedCategory] * 48 + 120,
+                nMin = 0, nMax = contentBottom,
                 nPage = (uint)Math.Max(1, area.bottom),
                 nPos = scrollOffsets[selectedCategory]
             };
@@ -379,6 +416,24 @@ namespace VCR.Runtime.UI
                         layout.Expand ? Math.Max(120, contentWidth - (layout.Left - 270)) : layout.Width,
                         layout.Height, true);
             }
+        }
+
+        private static Rect InitialSettingsWorkArea()
+        {
+            // Open relative to the monitor containing the foreground Unity
+            // Player, not hard-coded desktop coordinates. Work area excludes
+            // the taskbar and respects a secondary monitor's origin.
+            var monitor = MonitorFromWindow(GetForegroundWindow(), 2);
+            var info = new MonitorInfo
+                { cbSize = (uint)Marshal.SizeOf<MonitorInfo>() };
+            if (monitor != IntPtr.Zero && GetMonitorInfoW(monitor, ref info) &&
+                info.work.right > info.work.left &&
+                info.work.bottom > info.work.top)
+                return info.work;
+            if (SystemParametersInfoW(0x0030, 0, out var primary, 0) &&
+                primary.right > primary.left && primary.bottom > primary.top)
+                return primary;
+            return new Rect { left = 0, top = 0, right = 940, bottom = 720 };
         }
 
         public DesktopNativeSettingsWindow()
@@ -397,9 +452,15 @@ namespace VCR.Runtime.UI
                 throw new InvalidOperationException("Win32 Settings window class registration failed.");
             }
             current = this;
+            var work = InitialSettingsWorkArea();
+            var windowWidth = Math.Min(940, work.right - work.left);
+            var windowHeight = Math.Min(720, work.bottom - work.top);
+            var windowX = work.left + (work.right - work.left - windowWidth) / 2;
+            var windowY = work.top + (work.bottom - work.top - windowHeight) / 2;
             hwnd = CreateWindowExW(0, ClassName, "VirtualCharacterRender - 환경설정",
-                Overlapped | WindowVerticalScroll, 160, 120, 940, 720, IntPtr.Zero, IntPtr.Zero,
-                instance, IntPtr.Zero);
+                Overlapped | WindowVerticalScroll,
+                windowX, windowY, windowWidth, windowHeight,
+                IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
             if (hwnd == IntPtr.Zero)
             {
                 current = null;
@@ -445,6 +506,75 @@ namespace VCR.Runtime.UI
         private static extern void MacDestroy();
 
         public DesktopNativeSettingsWindow() { MacCreate(); }
+
+        // Only invoked by the opt-in source-bound macOS Player smoke. This
+        // exercises every managed P/Invoke declaration with the actual Unity
+        // Mono marshaler and packaged AppKit dylib, not just nm exports.
+        // Never used by a normal interactive Player launch.
+        [UnityEngine.Scripting.Preserve]
+        internal static void VerifyMacManagedInteropSmoke()
+        {
+            using (var settings = new DesktopNativeSettingsWindow())
+            {
+                if (settings.IsVisible)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke expected an initially hidden window.");
+                settings.Add(0, 7100, ControlKind.Edit, "한국어 설정", "초기 값");
+                if (settings.GetText(7100) != "초기 값")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke initial UTF-8 marshal failed.");
+                settings.SetText(7100, "가나A✓");
+                if (settings.GetText(7100) != "가나A✓")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke UTF-8 roundtrip failed.");
+
+                // U1 owns two distinct General status controls. The earlier
+                // native-only layout test proved the AppKit geometry but the
+                // actual Unity Mono marshaler never exercised either row.
+                settings.Add(0, 90, ControlKind.Label, "작업 대기");
+                settings.Add(0, 94, ControlKind.Label, "설정 정보");
+                const string actionFeedback = "설정 저장 실패: 다시 확인하세요 ✓";
+                settings.SetText(90, actionFeedback);
+                if (settings.GetText(90) != actionFeedback)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke action feedback 90 UTF-8 failed.");
+
+                var recoveryStatus = "Configuration: /사용자/설정/" +
+                    new string('가', 3600) + " | Automatic save: enabled";
+                settings.SetText(94, recoveryStatus);
+                if (settings.GetText(94) != recoveryStatus)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke U1 configuration 94 UTF-8 failed.");
+
+                settings.Add(2, 7200, ControlKind.Button, "트래킹 설정");
+                settings.SelectCategory(2);
+                if (settings.SelectedCategory != 2 || settings.PollAction() != 0)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke category/action state invalid.");
+                settings.SelectCategory(0);
+                if (settings.GetText(94) != recoveryStatus)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke lost U1 status on page switch.");
+                settings.ClearCategory(2);
+                settings.Open();
+                if (!settings.IsVisible)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke native show/visibility failed.");
+            }
+
+            // The native bridge uses process-global AppKit state. Disposing
+            // must leave it safe to reopen from the same managed process.
+            using (var reopened = new DesktopNativeSettingsWindow())
+            {
+                if (reopened.IsVisible || reopened.GetText(94).Length != 0)
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke leaked status after destroy/recreate.");
+                reopened.Add(0, 94, ControlKind.Label, "새 설정 상태");
+                if (reopened.GetText(94) != "새 설정 상태")
+                    throw new InvalidOperationException(
+                        "Mac Settings interop smoke failed after native recreation.");
+            }
+        }
 #else
         public DesktopNativeSettingsWindow() { }
 #endif
@@ -456,7 +586,11 @@ namespace VCR.Runtime.UI
                 return;
             if (!categoryControls.TryGetValue(category, out var handles))
                 categoryControls[category] = handles = new List<IntPtr>();
-            var top = 82 + 48 * rows[category]++;
+            var statusDetails = category == 0 &&
+                (id == 90 || id == 94) && kind == ControlKind.Label;
+            var top = nextRowTop[category];
+            nextRowTop[category] += statusDetails ? 112 : 48;
+            rows[category]++;
             if (kind == ControlKind.Edit)
             {
                 handles.Add(NewControl("STATIC", label, NormalTextStyle,
@@ -468,11 +602,15 @@ namespace VCR.Runtime.UI
             }
             else
             {
+                // Both General status controls use actual 100px child
+                // heights, accounted for by nextRowTop before creation.
                 var textHandle = NewControl(
-                    kind == ControlKind.Button ? "BUTTON" : "STATIC",
-                    label ?? "", kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
-                    id,
-                    270, top, 600, 36, expandable: true);
+                    statusDetails ? "EDIT" : kind == ControlKind.Button ? "BUTTON" : "STATIC",
+                    label ?? "",
+                    statusDetails ? StatusTextStyle :
+                        kind == ControlKind.Button ? ButtonStyle : NormalTextStyle,
+                    id, 270, top, 600, statusDetails ? 100 : 36,
+                    expandable: true);
                 handles.Add(textHandle);
                 if (kind == ControlKind.Label && id != 0)
                     textHandles[id] = textHandle;
@@ -527,6 +665,7 @@ namespace VCR.Runtime.UI
                 handles.Clear();
             }
             rows[category] = 0;
+            nextRowTop[category] = 82;
 #elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
             MacClearCategory(category);
 #endif

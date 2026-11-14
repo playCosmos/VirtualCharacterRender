@@ -1,0 +1,482 @@
+# UI Toolkit U1 integration gate
+
+U1 is implemented in source and its Unity P0–P13 checks, Windows Mono Player GUI and Windows nondevelopment P1 IL2CPP build/native GUI smoke have passed at the source commits documented below. **U1 is still not accepted as a production UI** until interactive Windows/macOS hardware, IME and desktop checks pass. GitHub-hosted CI success alone is not operator acceptance.
+
+## Feature search M1–M3
+
+- [Feature search M1–M3 UX/navigation contract](FEATURE_SEARCH_M1_M3.md) documents the U1 `Find` / `Ctrl+K` / `Cmd+K` overlay, stable Korean/English feature index, temporary Dock/Advanced navigation, and non-executing search results.
+- `WorkspaceFeatureRegistry.cs` holds stable IDs and aliases; `WorkspaceToolkitShell.FeatureSearch.cs` resolves *current* `VisualElement` targets after rebuilds, rather than retaining stale references. Search must never write saved dock visibility, active tab, or Advanced-mode preferences merely to navigate.
+- The hosted Windows GUI probe checks source-matched Ctrl+K, the `fov` search result, Enter navigation to Camera FOV, and actual post-navigation Unity screenshots. This is automated keyboard evidence, not user acceptance; Korean IME, macOS Cmd+K, advanced-only routing, actual hardware and complete keyboard accessibility still require operator tests.
+
+## Integration and validation
+
+- `WorkspaceToolkitShell.cs` supplies the UI Toolkit workspace, runtime-bound character actions, inspector controls, docking state and preview attempts. When no active model is present and a saved valid `.vrm` path exists, the shell now attempts startup restoration without the legacy uGUI controller, logging restore attempts/results. Explicit Unload clears the saved restoration path. The Sources panel and native Settings model page expose **Browse VRM**, reusing the built-in `DesktopCharacterFileSelectionAdapter`, with no new dependency. Selection updates the path without automatically loading the file. Unsupported FBX import is not implied.
+- `P1ApplicationSceneBuilder.cs` installs the shell and a persisted `PanelSettings` asset into newly generated P1 scenes; it can also upgrade existing scenes without regenerating their other objects. New and upgraded P1 scenes also install the existing opt-in `PlayerStartupSmoke` on the real `ApplicationRuntimeBootstrap` and reject ambiguous/misplaced smoke components or unsaved scene edits. Normal launches do not activate smoke-mode assertions.
+- `P1PlayerBuildMenu.cs` requires the workspace before packaging Windows/macOS players.
+- `ApplicationUiController.cs` remains the existing uGUI controller. The U1 shell independently owns a native Settings window on supported desktop Players with render scale/FPS/VSync/background controls, VRM load/reload/unload, tracking source discovery/configuration/enable-disable/recovery, and overlay transparent/click-through/recovery actions. Native navigation IDs 100–103 must switch pages. Tracking input keys remain backward-compatible with `VCR.TrackingInputs.*.v1`; stored configured inputs are restored when providers become available. Other legacy UI controls and desktop parity checks remain incomplete, so **U1 is not complete**.
+- The Inspector now edits the primary camera's **local position, local Euler rotation, vertical FOV (1–179 degrees), and near/far clip planes** through a guarded, isolated scene-runtime operation. Nonfinite values, near clip below 0.001, far clip closer than near+0.01, and out-of-range FOV are rejected before any camera mutation; render, light, output and environment settings are not replayed. Uncommitted camera drafts survive layout rebuilds only while the scene runtime, camera adapter and target Camera all remain the same; any replacement of those objects or saved configuration Reload refreshes the live fields instead of carrying stale values. An Apply click arriving before the scheduled refresh detects a retarget, refreshes values, and requires the operator to review and click Apply again without mutating the new Camera. The separate **Discard camera edits** action reads back current camera settings without mutating the scene or changing pending light edits. This does not yet constitute interactive GUI acceptance.
+- The Inspector additionally edits the primary light's **Enabled state, intensity (0–20), local Euler rotation, normalized RGBA (each 0–1) and shadow mode (None/Hard/Soft)** through an isolated validated scene-runtime snapshot. Invalid/nonfinite inputs and unsupported modes are rejected before mutation; camera, render, overlay and environment settings are not replayed. The color editor deliberately excludes HDR values. Pending edits survive workspace rebuilds only while the scene runtime, light adapter and target Light all remain unchanged; adapter/target changes and successful saved configuration Reload refresh the fields from live settings. If Apply arrives before the scheduled target refresh, it is rejected without changing the new Light; a subsequent reviewed Apply is allowed. The Inspector scrolls in the compact 260px Advanced dock so all controls remain reachable. The separate **Discard light edits** action rebinds live light values without mutating the scene or changing pending camera edits. Actual GUI visual behavior and platform-specific shadow support still require interactive acceptance.
+- On platforms where the native Settings window is unavailable (including Editor), U1 provides a scrollable in-workspace Render settings fallback for scale 0.5–2.0, FPS 30–120, VSync and run-in-background, plus runtime configuration Save/Reload/Status controls. Native and non-native render actions now force Inspector FPS/VSync readback after successful apply, so stale Inspector fields cannot silently undo changes made in Settings. Inspector explicitly rejects invalid FPS values or busy runtime states rather than silently clamping. The fallback rejects nonfinite or out-of-range scale, invalid FPS and attempts to apply settings while the scene is busy; successful apply reads back all four effective values. Reload refreshes all four fields without changing the versioned configuration store. The fallback now also exposes active overlay status, transparency toggle and output recovery through the same scene-runtime service as native Settings. It can **disable** click-through but never enable it: without an independent native window a click-through overlay could make the fallback impossible to operate. Tracking input controls remain available in the workspace Tracking panel. Overlay actions require an active compatible output adapter; click-through may disable interaction with the overlay and must be reversible through the independent native Settings window.
+- Both native and fallback Settings now route configuration save/reload through `ApplicationRuntimeBootstrap` and the existing versioned `RuntimeConfigurationStore`, not ad hoc UI file writes. **Save persists applied runtime values only:** pending camera/light Inspector edits are excluded, and the Save result explicitly says so. The P1 regression writes and reloads a real versioned JSON file with unapplied Inspector drafts to verify this isolation. After successful Reload, a shared readback path discards both camera and light drafts even when the adapters and targets remain unchanged. When corrupt/backup recovery suppresses automatic saves, the operator must confirm explicit Save with a second click within 15 seconds. Reload similarly requires a second click, since it replaces current unsaved runtime settings. On reopening native Settings, inputs are refreshed once; re-opening an already-visible window must not overwrite fields being edited.
+- Workspace rebuilds triggered by Live/Advanced, tab/stack, drag-dock and layout restoration now invalidate Tracking/Modules/Materials view signatures so that new lists immediately reflect unchanged runtime data. They preserve a pending VRM path and transient Materials/Shader editor text within the current session. Replacing/unloading the active character invalidates a previously selected material slot instead of silently applying the old slot ID to a different model.
+- The new tracking page uses `ITrackingRuntimeControl` and optional `ITrackingRuntimeConfigurable` contracts, not uGUI. The UI Toolkit Tracking panel additionally lists discovered devices and exposes Add/Remove, Enable/Disable, Recover and inline configuration without needing a native window (including the Unity Editor fallback). Both surfaces reuse the `VCR.TrackingInputs.*.v1` persistence keys. Discovery now excludes providers on inactive GameObjects while retaining disabled components on active objects for configuration; when two live providers expose the same case-insensitive `ControlId`, neither is selected, restored or edited until the ambiguity is resolved. The native Settings and workspace Tracking list show a duplicate-ID warning instead of operating on the first enumerated device. Verify input settings persistence after restart and rejection of invalid inputs in each provider. Settings are not marked supported solely by successful compilation. The Tracking dock also includes a privacy-gated camera-preview surface with explicit `WorkspaceToolkitShell.BindTrackingCameraPreviewTexture(Texture)` input, matching the legacy dashboard's manual-bind contract. Tracking video is hidden by default, binding a texture does not automatically display it, hiding clears the drawable Image source, and disabling/re-enabling the shell resets permission and texture state. Layout rebuilding retains the current opt-in, and the tracking section scrolls at compact dock height. This is *not* automatic camera discovery: without a tracking integration supplying a Texture, the panel reports that no source is connected.
+- Advanced UI Toolkit Modules panel uses `SingleCharacterSceneRuntime.Capabilities` to list and toggle executable capabilities, and shows registered declarative providers as metadata-only (not executable plugins). This does not claim to install or load third-party modules.
+- The Scenes panel now reports the **single** P1 scene runtime and active model, and exposes real suspend/resume through `ApplicationRuntimeBootstrap` (or the scene runtime in Editor). Suspend can release the overlay output and cancels a pending scene operation; it is not merely a UI visibility toggle. The buttons are disabled when startup is incomplete, a model action is pending, or the runtime state does not allow the transition. Multi-scene switching is not implemented; do not imply OBS-style scene collections are already supported.
+- The U1 Actions panel offers 720p60 and 1080p60 broadcast render targets, reusing `SingleCharacterSceneRuntime.TryApplyBroadcastCaptureTarget` and `EvaluateBroadcastCaptureTarget` exactly as the legacy UI does. This configures render resolution, FPS and background execution; it does **not** start recording or streaming. The readiness message depends on the active overlay output adapter and must never be shown as ready when the adapter is missing or not capture-ready.
+- The Actions panel also exposes environment state ID, transition mode (`Cut`, `Fade`, `Crossfade`, `Dissolve`) and duration using the existing `IEnvironmentRuntime.SetState` contract. It reports current environment/space/transition status; an absent environment provider disables Apply rather than creating one. Environment text drafts and transition mode survive workspace layout changes. Provider validation determines whether a state ID is supported. This does not imply bundled scenes or assets exist.
+- The scrollable Actions panel provides core appearance controls through the active model's `IAppearanceRuntime`: registered preset selection, outfit/accessory edits, transition selection (immediate or registered transition), default restore and cancellable-transition cancel. Status shows current preset/outfit and transition progress. UI action policy blocks edits in invalid states, an absent or ambiguous appearance provider disables actions, and model replacement clears pending model-specific fields. The user-preset section now supports save-current, delete, rename, duplicate and reorder through `IAppearanceUserPresetRegistry`. It uses the existing per-VRM `AppearanceUserPresetStore` and rolls back in-memory changes after failed persistence. An existing legacy dashboard owns startup restore when active; otherwise, profile restore occurs once per provider/path and never repeats on UI re-enable. Missing profiles clear the previous model's user presets when a scene-level provider survives a model swap. Invalid/unreadable profiles block writes instead of being silently overwritten. Transition preview now re-applies the current appearance through a selected, non-immediate transition using the same guarded runtime action as the legacy UI. This is not an isolated/offscreen preview. The Motion section exposes a bounded 0..1 primary pose-layer weight and standard manual expressions (set, clear, clear all) through the existing mixer and a layer actually wired to that mixer. Missing or ambiguous mixers, absent current VRM, missing manual-expression layer, and another VRM's components are guarded; no provider is instantiated by UI. Motion Cue playback and release have now been wired to the existing `IMotionCueRuntime` interface. Source discovery includes disabled components on active GameObjects because baked/procedural sources disable their own component when a cue is released. U1 requires an explicit runtime ID and a registered cue ID for playback; duplicate runtime IDs, providers owned by a different VRM, and missing/invalid cue IDs are rejected instead of guessing a target. Release requires an active cue and rejects mismatched cue selections. Cue draft fields survive workspace rebuilding, but are cleared on VRM replacement. Advanced pose layers remain outside this parity pass.
+- Advanced Materials / Shaders panel lists active VRM material slots and registered shader IDs, and uses the existing `MaterialOverrideController` for compiled shader apply, finite float edits, and restoring source material. It binds to the **current** `SingleCharacterSceneRuntime.CurrentCharacter` controller, not an arbitrary controller from another model. Manual slot rescan explicitly resets overrides. Package load/reload/unload delegates to the existing validated `RuntimeShaderPackageLoader`; the service is created on the scene runtime **only** after an explicit Load Package action if absent. Reload/Unload without a loader must report unavailable. This does not claim raw HLSL support.
+- Log / Events panel subscribes to Unity log callbacks, queues messages across threads with a pending bound (512), caps each entry at 4096 characters and displays up to 200 recent entries. Enqueue, drain and reset now synchronize pending queue length and counters under the same lock; a late worker callback cannot refill the queue after unsubscribe. Clear removes pending and displayed log entries together and prevents old startup inventory from replaying until a shell re-enable. P1 Unity validation includes a threaded stress regression covering overload, concurrent reset, Clear and late callbacks. The same dock's Diagnostics section now includes 12-metric paging, P95/P99 frame timing, tracking rates/ages and presence, plus CSV evidence/console logging toggles through existing `RuntimeDiagnostics` APIs. It retains capture and JSON snapshot export; Export attempts the same first-snapshot capture as the legacy UI, and successful manual Capture resets metric paging to page 1. Missing service disables toggles. Metric paging is read-only and does not change report cadence. It detaches its subscription when the shell disables. An early, domain-reload-safe static hook captures only bounded `VCR inventory:` startup records before UI creation (up to 160 records, 4096 characters each) and replays them once into the U1 log history. Later live inventory records use the same route without duplication; `Clear` prevents replay of cleared messages until UI re-enable. Other logs emitted before the live log subscription remain unavailable. `Copy visible` must honor the warning/error filter, and capture/export delegates to the existing `RuntimeDiagnostics` service (JSON in `Application.persistentDataPath`). This is not persistent log-file storage.
+- The Events dock also exposes existing `EventRuntimeHost` rule summaries, enabled-state toggles, tracing, and per-event command limits. On first host discovery it reads the legacy-compatible, versioned `VCR/event-rules.json` only if one exists and no active legacy dashboard is responsible for restoration; invalid/corrupt files report a failure and are not overwritten automatically. Re-enabling the U1 shell for an unchanged Event host must not reapply stale disk rules over unsaved live edits. Explicit Save uses the bounded atomic `EventRuntimeConfigurationStore`; explicit Reload uses a two-click confirmation because unsaved runtime edits are discarded. The rule list is capped at 80 visible entries, but any registered rule ID can be entered directly. Dock regeneration preserves rule ID and command-limit text; the control section scrolls at default bottom-dock height. This does not add an event authoring system or replace rule validation in the runtime.
+- CI on the U1 branch now additionally launches the generated P1 Windows development Player on a native Windows runner after its Unity/Mono build succeeds. The job verifies exact-commit SHA-256 provenance, real startup, normal quit, isolated configuration save and relaunch using `run-player-smoke.py`, and archives diagnostic evidence. This is a **headless** smoke and does not prove that the GUI, overlay, hardware, native Settings or VRM rendering works; it does not replace Windows IL2CPP testing.
+- The additional **informational** `u1-windows-gui-probe` CI job takes the same built P1 Player and launches it without `-batchmode` or `-nographics`. It checks for a visible Unity top-level window belonging to that exact process, waits for the managed `VCR inventory: stage=startup category=module id=application status=started` marker, then requests a normal OS `WM_CLOSE` and requires zero exit and an actual managed quit log marker. A top-level Unity window alone is not proof the application bootstrap completed; early-close attempts are rejected as unavailable rather than misreported as shutdown defects. It stores `gui-probe.json` and `Player.log` with source SHA, Player executable SHA-256, timings and any failure. The probe now **attempts to preserve actual desktop pixels from the foreground Player window** as `player-window.bmp`, including frame dimensions, SHA-256 and sampled pixel diversity in the JSON report. A real CI bitmap from run #40998973933 was manually inspected: it showed a mostly uniform dark region and the Windows taskbar rather than legible U1 controls. The previous 8 sampled pixel values did **not** establish rendered UI. The probe now separately analyzes the upper interior area for dominant/uniform pixels, and logs an opt-in Unity UI Toolkit readiness marker only after an actual attached, laid-out workspace and its key Camera/Light/Source controls are present. This distinguishes a live UI tree from an inconclusive GPU/desktop bitmap; neither automatically constitutes interactive GUI acceptance. As a second independent diagnostic, an explicit `--vcr-ui-probe-image=<absolute .png path>` alongside `--vcr-ui-probe` requests `ScreenCapture.CaptureScreenshot` from the real Unity Player after the workspace tree is ready. CI archives the resulting `unity-frame.png` separately from desktop `player-window.bmp`, validates PNG dimensions/completion, and records missing/invalid Unity screenshots without asserting that either image proves an operable UI. The GUI probe is opt-in; ordinary Player startup does not take screenshots. Capture is optional and fail-closed: the probe intersects the real Player window with the runner's virtual desktop, records the original window bounds, desktop bounds and captured bounds, and marks `partialWindow=true` when only the visible portion fits. A non-foreground window, insufficient visible overlap, inaccessible GDI frame, or blank/uniform-looking pixels must not be misreported as complete rendered UI evidence. GitHub-hosted Windows runners may lack a usable interactive desktop; in that case the probe must report failure/unavailable rather than claim success. Probe failure is nonblocking; even a nonblank bitmap never establishes GUI acceptance, Tracking video privacy, native Settings navigation, click-through recovery, VRM rendering correctness, or OBS capture correctness.
+- The generated `Assets/VCR/P1/P1Runtime.unity` scene is not committed in this branch. Generate it locally before attempting the P1 player build.
+
+## Unity 6000.3.25f1 batch checks
+
+After opening the Unity project and resolving all compilation errors, create the scene using **VCR > P1 > Create Application Runtime Scene**. For an existing scene, use **VCR > P1 > Upgrade Existing Runtime Scene With Workspace** instead of regenerating it.
+
+For a clean checkout where the generated scene does not exist, the non-overwriting batch generator can create and validate it:
+
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit -logFile <log-path>
+```
+
+The generator exits with code 1 if the P1 scene already exists. It creates scene and project assets, so review the resulting working-tree changes before committing.
+
+Run this command from the host with Unity installed (replace paths as appropriate):
+
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.RunWorkspaceAndExit -logFile <log-path>
+```
+
+After generating and validating the scene, run a real Unity development player build on a host with the matching platform module installed:
+
+```text
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.BuildWindowsDevelopmentAndExit -vcrBuildOutput <windows-output.exe> -logFile <windows-build-log>
+Unity -batchmode -nographics -quit -projectPath <unity-project-path> -executeMethod VCR.Editor.P1.P1BatchValidation.BuildMacDevelopmentAndExit -vcrBuildOutput <macos-output.app> -logFile <macos-build-log>
+```
+
+Both commands return exit code 0 only if the Unity BuildPipeline reports success, otherwise 1. Do not run both simultaneously against the same project directory; use separate checkouts or serialize the builds. Building a player does not prove its GUI or rendering works.
+
+The workspace check returns exit code 0 on success, 1 on failure. It may upgrade an older P1 scene and save the result; run on a clean working tree or review the changes afterwards. It does **not** test rendering, native window behavior, mouse input, or GPU compatibility. `RunSourceFreeAndExit` is a separate source-free P0/P1 check that does not require a generated P1 scene.
+
+## Windows P1 IL2CPP release-path validation (CI PASS; physical acceptance pending)
+
+The routine Unity P0–P13 workflow generates a **Windows Mono development**
+Player and tests source-free Unity compilation, actual Windows startup/quit
+and hosted GUI interaction. It does **not** prove Windows IL2CPP compatibility.
+
+The feature branch also has a separate **source-bound P1/UI Toolkit Windows
+IL2CPP** workflow, `.github/workflows/u1-p1-windows-il2cpp.yml`, using Unity
+6000.3.25f1 and a real nondevelopment P1 Player (`BuildOptions.None`). The
+workflow checks `GameAssembly.dll`, `UnityPlayer.dll`, IL2CPP metadata,
+absence of the Mono runtime, source SHA and SHA-256 of the tested Player ZIP.
+It then runs real native startup/quit, persisted-config relaunch, four
+fail-closed recovery cases and two operator-save recovery confirmations.
+
+- On commit `68c2232888bce5b8f0aa78ae0ef069fcdb5519de`,
+  [Windows IL2CPP run #42777614980](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42777614980)
+  passed build and native configuration recovery. This resolved the
+  AOT-incompatible captured `EnumWindows` callback discovered by the earlier
+  failed IL2CPP relaunch.
+- On commit `4bf22cf223c6acd95142178c3e5de72f77e00d2e`,
+  [Windows IL2CPP run #42805535645](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42805535645)
+  **passed both the native recovery suite and the real nondevelopment
+  IL2CPP GUI probe**. The latter exercises Win32 titlebar/independent
+  resize, native Settings, OS keyboard/feature search, dock/restart
+  persistence, managed quit and runtime exception checks. The packaged
+  Player ZIP SHA-256 for that run is
+  `fc1aa073ffb5d3dd569903a6e51cd45c2e0ced3dc1be5644a23903503a41442a`.
+  Its [source-bound diagnostic artifact](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42805535645/artifacts/13762389589)
+  is **CI evidence only**, not a published release.
+
+This workflow supports both `workflow_dispatch` and a reusable
+`workflow_call`. For PR #44 only, a path-filtered branch `push` trigger
+also runs it when the P1 IL2CPP workflow file changes, so ordinary source
+commits do not repeatedly incur a costly Windows Docker/Unity image build.
+The manual route via the main-registered entry workflow remains available:
+
+```bash
+gh workflow run windows-il2cpp-build.yml \
+  --repo playCosmos/VirtualCharacterRender \
+  --ref feature/obs-ui-u1-layout-contract-20261026 \
+  -f build_target=p1
+```
+
+The default `build_target=alpha` runs the *different* P0 Alpha scene; never
+count that as P1 UI Toolkit evidence. A completed hosted GUI probe and a
+normal nondevelopment IL2CPP process **do not constitute physical operator
+acceptance**: Korean IME, real display scaling/compositor, loaded VRM,
+tracking devices, native overlay click-through/recovery and macOS AppKit
+still require actual human tests. Keep PR #44 Draft/unmerged until those
+checks are evidenced.
+
+On a **Windows** host with the pinned **Unity 6000.3.25f1** Windows IL2CPP
+module and all repository-pinned dependencies bootstrapped, start from an
+isolated checkout of the exact PR commit and no generated P1 scene. Run these
+commands in sequence using that Unity executable (replace the paths):
+
+```powershell
+$unity = "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.25f1\\Editor\\Unity.exe"
+$project = (Resolve-Path ".\\unity").Path
+& $unity -batchmode -nographics -quit -projectPath $project -executeMethod VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit -logFile "$PWD\\p1-generate.log"
+if ($LASTEXITCODE -ne 0) { throw "P1 generation failed" }
+& $unity -batchmode -nographics -quit -projectPath $project -executeMethod VCR.Editor.P1.P1BatchValidation.BuildWindowsIl2CppAndExit -logFile "$PWD\\p1-il2cpp-build.log"
+if ($LASTEXITCODE -ne 0) { throw "P1 IL2CPP build failed" }
+$player = ".\\unity\\Builds\\P1\\Windows-IL2CPP"
+foreach ($path in @("VirtualCharacterRender.exe", "GameAssembly.dll", "UnityPlayer.dll", "VirtualCharacterRender_Data\\il2cpp_data\\Metadata\\global-metadata.dat")) {
+    if (-not (Test-Path (Join-Path $player $path))) { throw "Missing IL2CPP artifact: $path" }
+}
+if (Test-Path (Join-Path $player "MonoBleedingEdge")) { throw "Unexpected Mono runtime in IL2CPP artifact" }
+```
+
+This uses `BuildOptions.None` and rejects a Windows standalone scripting
+backend other than IL2CPP before packaging. The output is **P1**, not Alpha.
+The CI binary and native smoke were successfully tested at the commit
+listed above; a subsequent code change needs fresh source-matched CI evidence.
+To run the **actual IL2CPP** P1 build on a physical Windows machine, use
+`tools/run-p1-player.ps1 -Mode IL2CPP`, not the generic `Release` mode
+(which follows the active Unity scripting backend). Both Windows/macOS
+launchers resolve Player output relative to `unity/Builds/P1`.
+
+For example, after building locally with the commands above:
+
+```powershell
+.\tools\run-p1-player.ps1 -Mode IL2CPP `
+  -EvidenceDirectory ".\u1-physical-evidence"
+```
+
+To test the exact **CI-built Player**, download the verified
+[Actions run #42992199162](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42992199162)
+artifact `u1-p1-windows-il2cpp-42992199162-1` (retained for seven days),
+and expand the **outer Actions artifact ZIP** into a local directory. Independently
+confirm that this successful run's source SHA is
+`e26d4d0385f8839372ecd843bc71ad5787304f5e`. Use the portable
+Python preparation helper to verify ZIP hash, full internal payload hashes,
+manifest and source sidecars before extracting into a **new, empty path**:
+
+```powershell
+python .\tools\prepare-p1-physical-player.py `
+  --artifact-dir "C:\vcr-p1-artifact\p1-il2cpp-artifacts" `
+  --source "e26d4d0385f8839372ecd843bc71ad5787304f5e" `
+  --output "C:\vcr-p1-player-e26d"
+```
+
+The helper refuses an existing output directory, invalid or mismatched bytes,
+path traversal and unsafe ZIP entries; it re-hashes data while extracting
+and does not insert verification metadata into the Player directory.
+It does not download the artifact or authenticate its publisher. Keep
+`windows.payload-sha256.json` in the downloaded artifact directory,
+**outside** the extracted Player. Then run:
+
+```powershell
+.\tools\run-p1-player.ps1 -Mode IL2CPP `
+  -PlayerDirectory "C:\path\to\extracted-player" `
+  -ManifestFile "C:\path\to\windows.payload-sha256.json" `
+  -ExpectedSourceSha "<40-character commit SHA from verified Actions run>" `
+  -EvidenceDirectory ".\u1-physical-evidence"
+```
+
+The manifest verifier rejects a changed/missing DLL or asset, untracked file,
+unsafe/duplicate manifest path, count/size/hash mismatch, and a mismatched
+expected source SHA **before launch**. The manifest verifies extracted bytes
+against claimed CI inventory; it does not independently authenticate the
+artifact publisher. A locally built P1 IL2CPP Player may still be launched
+without a manifest, but the launcher explicitly warns that its complete
+payload is **unverified**, even when the executable SHA-256 is recorded.
+
+The launcher also rejects a missing `GameAssembly.dll`, `UnityPlayer.dll`,
+IL2CPP metadata or unexpected `MonoBleedingEdge`. With an evidence
+directory, stale `Player.log` and `launch-evidence.json` are cleared before
+each launched process and a fresh nonempty `Player.log` is mandatory.
+The JSON records the executable SHA-256, optional complete payload manifest
+SHA/source/file count, fresh log hash/size and exit code; a crash or missing
+log is not physical acceptance. `physicalHumanAcceptance` always remains
+**false** in machine-generated JSON. A human must separately record native Settings, real VRM/tracking,
+overlay recovery, dock persistence, Korean IME, multiple DPI/monitors,
+macOS AppKit and actual rendered pixels. Retain screenshots and device
+results, and explicitly approve the physical acceptance gate before merging
+PR #44. Do not publish the tested Player as a release without separate
+approval.
+
+### Source-bound physical Windows evidence inspection
+
+The exact-source hosted Windows IL2CPP workflow
+[#42992199162](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/42992199162)
+**passed** at source commit `e26d4d0385f8839372ecd843bc71ad5787304f5e`:
+the IL2CPP build, all 888 extracted payload file hashes, actual packaged
+`windows.zip` member hashes/source sidecars, native startup/relaunch and
+normal quit, and hosted interactive GUI probe. This establishes a source-bound
+CI binary, not an operator-approved release.
+
+After running `run-p1-player.ps1` on a real Windows desktop with a separately
+verified CI manifest and a **fresh unique** `-EvidenceDirectory` (one folder
+per attempt), run the machine-evidence preflight:
+
+```powershell
+.\tools\inspect-p1-physical-evidence.ps1 `
+  -EvidenceDirectory ".\u1-physical-evidence" `
+  -ExpectedSourceSha "e26d4d0385f8839372ecd843bc71ad5787304f5e"
+```
+
+The preflight fails closed when the source-bound payload check was omitted,
+`Player.log` is missing, empty or hash-mismatched, the Player exited nonzero,
+the log lacks the real managed `application status=started` and
+`OnApplicationQuit finished` markers in chronological order,
+the log contains a recognized runtime exception or failed U1 refresh, or the
+launcher JSON falsely claims human approval. The startup and managed shutdown
+markers match the requirements used in the hosted native GUI probe; a
+synthetic nonempty log with valid hashes is not sufficient. A successful
+preflight reports `machineEvidencePreflightPassed=true` and still reports
+`physicalHumanAcceptance=false`. This cannot infer whether an actual GPU
+frame was correct, the operator interacted with controls, or a device worked.
+The expected commit SHA must be independently checked against the source
+of the downloaded Actions artifact. Player.log and screenshots can contain
+local paths/model names: review before sharing.
+
+The operator must independently record **pass/fail/not tested**, operating
+system and display scale, reproduction steps and screenshots for each of:
+
+- Native caption/titlebar; normal minimize/maximize/restore/close; width-only
+  and height-only resizing without a forced aspect ratio; restore after a
+  compact approximately 960×520 dashboard and after maximizing
+- Dock drag/reorder/resize, short-window clipping and scroll behavior,
+  settings and layout persistence after a fresh restart
+- Actual native Settings pages, model loading/reload/unload with a real VRM,
+  opaque/transparent/click-through window modes and visible recovery
+- Keyboard focus, feature search and Korean IME composition/commit; all UI
+  labels readable at 100%, 150% and available high-DPI/multiple-monitor modes
+- Real camera/tracking discovery, enable/disable/recovery and absent-device
+  behavior; check Player.log for recurring exceptions
+- macOS AppKit caption/input/overlay behavior and supported macOS hardware
+  **separately**, using a source-matched macOS Player
+
+Do not turn skipped/unavailable real hardware checks into PASS. Keep screenshots
+and device-specific results separately from the machine-generated launch JSON.
+PR #44 remains Draft until the actual operator and macOS acceptance requirements
+are explicitly satisfied. Successful CI and machine preflight do **not** authorize
+merging, uGUI retirement or release.
+
+## macOS P1 native Player launch and evidence boundary
+
+The macOS P1 launcher is `tools/run-p1-player.sh`. In ordinary use,
+`--mode release` / `--mode development` resolves the matching locally built
+`.app` under `unity/Builds/P1`, then opens it via LaunchServices (`open -W`).
+That is useful for normal GUI interaction but **does not reliably report
+the app's actual native process exit code**.
+
+For a real macOS hardware/operator test, supply a fresh unique evidence
+folder to run `CFBundleExecutable` directly and collect its exit status and
+isolated Unity `Player.log`:
+
+```bash
+bash tools/run-p1-player.sh \
+  --mode release \
+  --evidence-dir "./u1-macos-physical-01"
+```
+
+To test a manually located macOS `.app` bundle and optional existing VRM
+and configuration, use:
+
+```bash
+bash tools/run-p1-player.sh \
+  --app "/path/to/VirtualCharacterRender.app" \
+  --vrm "/path/to/character.vrm" \
+  --config "/path/to/config.json" \
+  --evidence-dir "./u1-macos-physical-02"
+```
+
+The launcher resolves the app's executable from `Contents/Info.plist`
+rather than assuming its name, rejects missing/config-directory and VRM
+inputs before launch, and refuses to reuse an existing evidence directory.
+The resulting `launch-evidence.json` records the executable and log SHA-256,
+log byte count and actual process exit code; a zero-exit process missing
+a fresh nonempty `Player.log` is rejected. Machine-generated records contain
+`sourceBound=false` and `physicalHumanAcceptance=false`, since this launcher
+does **not** yet independently match a packaged macOS P1 binary against a
+source-bound CI artifact. Running directly can differ from normal
+LaunchServices activation; test both routes during real AppKit acceptance.
+
+The `tools/test-p1-macos-launcher.py` fixture exercises the same launch
+contract without Unity, including missing inputs, an unsafe `Info.plist`
+executable path, native mock exit 17, paths with spaces, missing Player.log
+and stale-evidence rejection. Green Ubuntu or macOS CI here means only that
+the **launcher contract** works, not that macOS UI, Settings or real trackers
+were successfully exercised.
+
+macOS physical acceptance still requires an actual P1 build on the supported
+Apple hardware, the AppKit native Settings and window behaviors, rendered
+VRM, working devices, Retina/keyboard behavior and manual confirmation.
+Keep that decision separate from Windows CI and never treat a successful
+mock or alpha Player as P1 macOS acceptance.
+
+### U1/P1 macOS real Player smoke and AppKit bridge lifecycle (2026-11-12)
+
+[Exact-source macOS CI #43110691033](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43110691033)
+**passed** for commit `95f3022`: arm64 project-owned AppKit compilation,
+a real U1/P1 macOS **nondevelopment Mono** Player (not the Alpha scene),
+source-bound ZIP SHA-256, native macOS process start/normal managed quit,
+relaunch with persisted configuration, four guarded corrupt/missing/future
+configuration recovery cases and two explicit confirmations. The output
+archive `u1-p1-macos-player-43110691033-1` is CI evidence, not a signed or
+notarized release. This is not macOS IL2CPP and is not GUI acceptance.
+
+Subsequent direct native AppKit inspection revealed two separate issues:
+`VCR_SettingsCreate` had preserved the previous page row counters after
+`Destroy`/recreate, and the programmatic `NSWindow` retained the default
+`releasedWhenClosed=YES` while ARC also managed a strong reference. Closing
+the window under those conditions led to a repeatable SIGSEGV during the
+native test's final autorelease-pool cleanup. The native implementation
+now resets the four row counters when recreating the window and sets
+`releasedWhenClosed=NO` before the window can be closed.
+
+A real arm64 AppKit dynamic-library integration test
+(`tools/test-native-settings-macos.mm`, executed by Repository validation
+on `macos-15`) now exercises native `NSWindow` creation and teardown,
+Korean UTF-8 text fields, native category navigation, scrolling and page
+rebuild. It verifies that a 17-row page (920pt) is replaced with a fresh
+one-row page (650pt), without a segmentation fault. The green native
+integration test is **not** a claim that the Settings button was clicked
+inside Unity, that rendered GUI pixels are correct, or that actual hardware
+was used. Any native source change requires a fresh source-matched complete
+Player build/smoke; the P1 macOS workflow is triggered on the native
+Settings implementation as well as the workflow itself.
+
+## U1 completion and mandatory legacy uGUI retirement
+
+The U1 milestone is **not complete** merely because CI builds a Windows Mono player. Complete the interactive Windows GUI checks, native Settings window integration, model restore, startup diagnostics, and the supported-platform player checks before retiring the old UI. The CI Mono smoke build does not replace a Windows IL2CPP release build.
+
+Once U1 passes its acceptance gates, remove the legacy uGUI application path **in the same follow-up retirement phase**, not as a permanent fallback:
+
+1. Inventory every uGUI scene/prefab, entry point, `ApplicationUiController` partial, legacy dashboard, old settings and event wiring, and all references; distinguish Unity's built-in UI module dependencies from application-level uGUI.
+2. Move any remaining required behavior into the UI Toolkit shell or a UI-independent runtime service. The standalone native Settings window must be callable from the new shell without constructing the legacy uGUI controller.
+3. Remove unused legacy uGUI components, prefabs, scene bindings, UI actions, adapters and tests, along with their `.meta` files where applicable. Keep only reusable, UI-independent contracts actually referenced by the new implementation.
+4. Prove there is no runtime entry point that instantiates the legacy UI, no missing scripts in generated scenes, and no required action that silently falls back to uGUI. Update docs to remove obsolete compatibility instructions.
+5. Re-run P0-P13, U1 scene generation, Windows player CI, repository checks, and Windows interactive smoke tests; only then mark the uGUI retirement complete.
+
+Do not blindly delete the Unity `com.unity.modules.ui` package: UI Toolkit itself can depend on built-in UI modules. Delete obsolete application code, not required engine modules.
+
+## Manual acceptance checklist
+
+1. Verify no Unity C# compilation errors and build Windows x64 and macOS players on their supported build hosts. Check that native Windows P1 startup/quit smoke passes with the exact generated P1 Player (not an alpha-only test scene), including validated artifact provenance and configuration restore. This automated headless check is independent of subsequent interactive GUI acceptance.
+2. Launch the P1 player; verify the UI Toolkit shell is visible and no duplicate UI obscures it. Inspect the optional Windows CI GUI-window probe evidence, if available: check `gui-probe.json` for `windowFrameCaptured` / `windowFrameError`, `partialWindow`, `workspaceUiTreeReady`, `blankOrUniformPossible`, `interiorDominantPixelFraction`, original and captured bounds, and sampled pixel diversity; review `player-window.bmp` only when it exists. The Player log must include the opt-in `VCR U1 GUI probe: workspace_tree_ready=true` marker to establish only UI Toolkit tree attachment, not visible pixels. Compare `unityFrameCaptured` / `unityFrameError` and `unity-frame.png` against the desktop bitmap. If only Unity's internal capture contains U1 widgets, investigate desktop transparency/DWM capture; if neither contains U1 while `workspaceUiTreeReady` is true, investigate UI Toolkit rendering/panel visibility. Partial captures must not be mistaken for a complete view of the 1280×720 Player. Pixel capture is additional visual evidence, not proof that an Inspector button, native Settings panel or model is correct. A visible Unity window and ordinary OS close prove only window lifecycle. Record actual local desktop screenshots and button/field interactions separately.
+3. Test Browse VRM from both the Sources panel and native Settings model page (Windows/macOS and Unity Editor). Verify a valid `.vrm` path is selected without immediate load, a canceled picker preserves existing text, errors do not discard the current model, and Load/Reload/Unload/last-model restore still work. Unsupported FBX must be rejected without claiming an importer exists.
+4. Test live preview in the actual rendering pipeline, camera discovery (including when the PrimaryCameraController is on a parent and its TargetCamera is a child), and preview cleanup after model/scene changes.
+5. Test docking, tab/stack, resize, hide/show, layout persistence, corrupt-layout recovery and keyboard/focus handling. Switch Live→Advanced→Live, change tab/stack mode and move panels between docks while Tracking devices, Module entries and material slots are present; verify the newly rebuilt lists populate immediately even if the underlying runtime data has not changed. Before each layout change, enter an uncommitted VRM path and shader/package fields, and verify the text is retained. Replace or unload a model and verify the previous material slot selection is cleared and cannot act upon an identically named slot in the new model. Verify Scenes displays the active single-scene state/model, can suspend/resume when the runtime permits, and disables controls during loading, shutdown and missing runtime. Verify suspend/resume does not lose the active VRM, and that preview/output are restored appropriately after resume; confirm multi-scene switching is not offered as implemented. From Actions, test Appearance with a loaded VRM and supported provider: list/select a registered preset, apply an outfit and accessory slot, clear the slot, restore default, choose Immediate or a registered transition, observe progress, and cancel only a cancellable transition. Verify invalid IDs, missing/ambiguous providers and a second still-loaded VRM do not redirect edits to another character; switching VRMs clears stale slot/preset text and transition selections, including a click racing a model swap. Verify preview of a selected non-Immediate transition re-applies the current appearance (without using uncommitted preset/outfit input values), and is disabled for Immediate, missing current outfit, busy/faulted appearance or absent provider. Verify appearance drafts persist across a dock-layout rebuild when the active model has not changed. Test per-character user presets: save current, delete, rename, duplicate and reorder; confirm persisted files restore on the next model load, failed writes restore in-memory state, corrupt/unsupported profiles cannot be overwritten inadvertently, no previous-model user presets leak to a different VRM with no profile, and enabling/disabling the workspace shell does not reload stale profiles over unsaved edits. Test Motion with a configured pose layer and connected manual expression layer: valid pose weight 0..1, rejection of NaN/Infinity/out-of-range text, standard VRM1 expression aliases, set, clear and clear-all. Test Motion Cue playback with a registered baked or procedural runtime: select a runtime ID/cue ID pair, play, release, and replay the same source after release has disabled its component; reject empty and unknown cue IDs, duplicate runtime IDs, an inactive GameObject or another loaded VRM's cue, release of a non-playing runtime, and release with a mismatched cue ID. Verify list rendering is bounded and text drafts remain through dock/layout changes. Verify disconnected sources are reported instead of falsely applying values; test two coexisting VRMs and a model swap without editing another model, and confirm motion text persists through dock rebuild but resets on VRM replacement. Then test Environment with a registered provider: select the current state, enter a valid state ID, change Cut/Fade/Crossfade/Dissolve and duration, verify provider state and transition progress, and reject an invalid state and negative/nonfinite durations without corrupting prior state. Verify Apply is disabled and an explicit unavailable status appears when no environment provider is registered; preserve pending environment text/mode across dock and Live/Advanced switches. From Actions, apply 720p60 and 1080p60 targets and verify the actual runtime settings and UI Toolkit Inspector refresh; when the overlay adapter is absent or not ready, capture readiness must report why and must not falsely claim that recording or streaming started. At the default 150px bottom dock height, verify the Actions panel scrolls and both model actions and capture profile controls remain reachable.
+6. Test standalone native Settings without `ApplicationUiController`: switch render, model, tracking and output pages from the native sidebar; apply and reset scale/FPS/VSync; change the background preference while the window is open and after closing; confirm reopening an already-visible Settings window preserves in-progress path/FPS/scale text edits; VRM load/reload/unload; and transparent output, click-through reversal, and recovery. Test runtime configuration Save/Reload, the confirmation required before destructive Reload and before overwriting a recovered/invalid configuration, backup preservation on unsuccessful load, and UI readback/background preference after successful Reload. Enter distinct unapplied camera FOV and light intensity drafts, Save, inspect the saved JSON and confirm only actual runtime values were persisted while both drafts remained visible; then Reload, confirm both drafts revert to the reloaded live settings on the same camera/light targets and the disk file is not modified by that readback. With native Settings open and the saved run-in-background preference disabled, apply **every** render action including FPS/scale and confirm the independent window remains responsive when the Unity window loses focus; closing Settings must restore the chosen preference. The Editor fallback render-scale/FPS/VSync/background fields must update after Reload. After changing FPS/VSync from native Settings or the fallback, verify the Inspector immediately displays the effective values and applying it does not restore stale values. Verify Inspector primary-camera position/rotation, FOV (1–179), near/far clipping (near>=0.001, far>=near+0.01), and strict rejection of nonfinite/out-of-range values without partial mutation; retain an unsaved camera draft across dock rebuilding for the same camera and refresh all five properties after configuration Reload, camera-controller swap or same-controller TargetCamera swap; verify clicking Apply immediately after a Camera retarget (before the next status refresh) cannot apply stale values and requires another click; verify Discard camera edits restores live position/rotation/FOV/clips while preserving any separate pending light edits and never mutates the scene; verify primary light enable/disable, intensity 0–20, local rotation, normalized RGBA 0–1 and None/Hard/Soft shadow mode (including scrolling to every control at the default 260px Advanced Inspector height), invalid/nonfinite rejection without partial mutation, isolation from camera/render settings, same-light unsaved draft retention, and refreshed values after adapter/TargetLight swap or saved configuration Reload, with a rapid Apply on the new light rejected until values have been reviewed; verify Discard light edits restores live enabled/intensity/rotation/RGBA/shadows while preserving separate pending camera edits and never mutates the scene; confirm the change leaves camera clip planes, lighting and frame pacing unchanged. Verify Inspector rejects 29, 121, and busy-runtime apply attempts without mutating render state; values must not silently clamp on focus loss. On both the Tracking workspace panel and native tracking page, verify discovery/refresh, device enable-disable/recover, Add/Remove, per-source configuration validation, persisted settings restored after restart (including legacy preferences), provider errors and disappearing devices. Inject two live providers with the same ControlId (including a casing-only duplicate): neither provider may be selected or mutated, duplicate-ID warnings must appear in both Tracking surfaces, and saved preferences must not auto-restore to an arbitrary one. An inactive GameObject provider must not shadow a live device; disabled components on active GameObjects remain discoverable for re-enable. Confirm inline workspace configuration works when desktop-native Settings are unavailable. Exercise tracking-camera preview with an explicitly bound tracking Texture: it must be hidden by default, remain hidden after a texture bind until Show is clicked, display only the bound texture while opted in, clear the Image source on Hide, show a no-source message when explicitly requested without a texture, and reset to hidden when the UI shell is disabled and re-enabled. Rebuild the dock/layout while preview is opted in; confirm visibility follows the current opt-in rather than silently revealing a hidden texture, and that source controls remain scrollable at the default 150px dock height. Never substitute the scene/render camera for tracking input. Confirm unsupported/missing output adapters report failure without throwing. When native Settings are unsupported, verify the scrollable in-workspace fallback applies render scale (0.5–2.0), FPS (30–120), VSync and background execution, reads back all four effective values, rejects nonfinite/out-of-range scale and invalid FPS without silently clamping, blocks apply while the scene is busy, handles missing runtime and closes on small screens. In fallback Settings, verify output status and transparency changes use the live adapter, output recovery reports the actual runtime result, missing/unsupported adapters report unavailable, busy scene blocks unsafe mutations, and click-through can only be disabled (never enabled). Confirm the native Settings window still allows deliberate click-through with its separate recovery surface. Settings must remain clickable on unsupported native-window platforms.
+7. In advanced mode, verify Modules lists runtime capability IDs, enables/disables supported capabilities and reports errors; confirm declarative providers remain metadata-only. Verify Materials / Shaders binds only to the current VRM: slot selection, registered shader IDs, compiled shader override, finite float editing, clear override, intentional rescan reset, missing controller handling, and package load/reload/unload when the optional validated loader is present. Test model replacement while the Materials panel stays open and confirm edits never affect a prior model. In Log / Events, test rule selection by ID (including rule IDs beyond the first 80), enabling/disabling individual rules, tracing toggle, valid 1..256 and rejected out-of-range/noninteger command limits, explicit Save, two-click Reload and existing `VCR/event-rules.json` startup restoration. With corrupt/unsupported JSON verify no silent overwrite, and with no `EventRuntimeHost` verify unavailable status. Verify rule edits survive ordinary UI rebuilds **and component disable/re-enable**, and don't get overwritten by repeated automatic loads (including when a legacy UI controller remains active). Check scrolling at default 150px dock height. In Log / Events, verify startup messages, warning/error filtering, `Copy visible` copies all rows when unfiltered and only warnings/errors when filtered, bounded queue/history and per-entry truncation under high log volume, Clear removing both pending and displayed entries, concurrent log callbacks during reset retaining a nonnegative count equal to the actual queue with a strict bound of 512, and subscription cleanup preventing late callback enqueues after scene disable/reload. Test Diagnostics capture and JSON export if `RuntimeDiagnostics` is installed (including first-export automatic capture when at least one second has elapsed, and a clear error before that), verify manual capture resets the selected metric page to 1, show up to 12 metrics per page and move forward/backward through multiple pages without changing the captured evidence, and verify P95/P99 frame timings, tracking Hz/age and nonfinite metrics as `n/a`. Toggle CSV evidence and console logging; confirm service values and button state update correctly, and CSV evidence records only when enabled. Verify an unavailable service disables toggles and reports its absence without crashing. Verify startup logs show application/scene modules, capability and declarative-plugin counts, registered shader IDs, active/remembered model states even if the workspace is attached after bootstrap; verify no duplicate inventory entries when callbacks overlap, Clear does not replay them on the next update, and UI disable/re-enable replays the bounded startup snapshot. The native Windows P1 smoke CI must find all seven inventory categories in its actual Player.log. Confirm configured 60 FPS default / 120 FPS maximum; don't infer module/shader inventory is complete just from the UI panel.
+8. Test 720p/1080p and 100%/150%/200% DPI on Windows, Retina scaling on macOS, and multi-monitor moves.
+9. Verify no regressions in the existing uGUI application, tracking, transparent output, shutdown and startup.
+
+## Windows native window frame / independent resize acceptance
+
+The U1/P1 dashboard is a **standard OS-decorated desktop window**, not an always-borderless avatar overlay. Unity P1 builds now explicitly select `FullScreenMode.Windowed` and `PlayerSettings.resizableWindow = true`, while the project-wide P0 alpha-output build retains its transparency test. The P1 scene generator and upgrade path set opaque/clickable output by default and migrate older clean P1 workspace scenes away from inherited P0 borderless-alpha settings. Existing non-window objects and saved scene content are preserved. The P1 UniWinC adapter, **only while the output is opaque**, repairs absent Windows `WS_CAPTION`, `WS_THICKFRAME`, `WS_SYSMENU`, minimize and maximize native style bits without creating a fake Unity title bar. This is a fallback; the ordinary native Unity window remains the primary implementation.
+
+The source-matched Windows GUI probe collects the actual `UnityWndClass` window style and client/outer rectangles, checks the OS caption/system buttons and resizable border, then attempts an independent width/height resize via Win32 before restoring the original window size. It records `nativeFramePassed`, `freeResizePassed` and `windowResize` with actual measured client dimensions. A GUI probe with valid Unity rendering but a borderless/fixed-aspect window must be reported as **failed**, not accepted because the process started and exited successfully. These automated measurements are not a substitute for actual mouse-drag edge resizing and minimize/maximize/restore tests on an operator Windows PC.
+
+The optional **transparent overlay** intentionally switches UniWinC to a borderless nonrectangular window; it is not the default dashboard. When selected, the user can return to a decorated window via **Opaque window**, which disables transparency and click-through. Running two independent dashboard and avatar-output windows requires a future separate-window architecture, not an imitation Windows title bar layered over the Unity viewport.
+
+## P1 operator startup defaults and opaque recovery
+
+The earlier generated P1 Player reused the P0 transparent-alpha test defaults, enabling desktop transparency and starting MediaPipe webcam capture before any device had been configured. Actual Windows log evidence recorded `output.overlay.transparent=1`, `VCR MediaPipe: No webcam devices were found`, and large diagnostics reports every few seconds. These were confirmed startup/usability issues, but **no NullReferenceException stack trace was recorded in the supplied 701-line log**, so the NRE root cause remains unproven.
+
+Freshly generated P1 scenes now retain an opaque alpha-1 scene camera, configure UniWinC with transparency/click-through disabled by default, leave MediaPipe tracking components present but disabled until explicitly enabled, and keep runtime metrics/CSV evidence while disabling periodic console reports by default. The P0 transparent output and P0 tracking validation remain unchanged. P1 scene generation fails if the expected base components are missing or these safe defaults do not hold. A previously saved runtime configuration may still explicitly restore transparency: the U1 header now includes an **Opaque window** action that sets transparency and click-through to false without flipping an already-opaque window back to transparent. The toolbar scrolls horizontally rather than overlapping docks in narrow windows. None of these mitigations is proof that the prior screenshot's NRE has been fixed.
+
+## Real Windows U1 screenshot regression (2026-10-30)
+
+A manual Windows P1 screenshot at approximately 1621×474 showed stacked Scenes/Sources and inspector controls overlapping or clipping, dark-on-dark labels, and a Development Console filled with repeated `NullReferenceException` messages. The screenshot alone has no stack trace and does **not** establish the exception's exact source. The UI now uses readable default labels, scrollable Scenes/Sources, a single compact dock toolbar, and automatically uses visual tabs (without changing saved preference) in Player windows shorter than 640 pixels. Compact bottom height still preserves enough room for scrollable content. The source-free Windows GUI probe requests a 960×520 viewport to exercise this short-window layout and archives a genuine Unity screenshot as evidence. The opt-in probe reconciles the live UI tree marker against the final Player.log after normal exit, without claiming interactive acceptance.
+
+The UI refresh loop now isolates its own stage exceptions and logs the exact stage plus full stack at most once per 15 seconds; a failing panel refresh must not freeze unrelated model/scene status updates. It does **not** claim to have repaired the underlying machine-specific NullReferenceException. Inspect the affected operator's complete Unity Player.log to identify and resolve the originating stack before this issue is closed. On Windows the standard log is under `%USERPROFILE%\\AppData\\LocalLow\\playCosmos\\Virtual Character Renderer\\Player.log`. Confirm the installed product/company names if Unity uses an alternate folder. Retest a short window, restore the full Player size, move panels, and check that the Development Console stays free of repeated exceptions.
+
+## P1 compact Windows GUI quantitative regression evidence (2026-10-31)
+
+At 960×520, U1 must preserve an ordinary captioned, independently resizable Windows
+dashboard while keeping the bottom Tracking/Actions/Events tab strip **above** the active
+panel and its ScrollView **inside** that panel (without covering the status footer).
+Visual review of a prior source-matched Unity screenshot uncovered three separate
+regressions that passed tree-attachment-only checks: an unshrinkable Preview, a bottom
+tab strip placed at the left of its panel, and a nearly collapsed Tracking ScrollView.
+The bottom dock now reserves approximately 34% of the compact window height, capped at
+44%, while full-size layout and saved operator preferences remain unchanged.
+
+The opt-in real Player log emits `VCR U1 GUI probe: workspace_tree_ready=true` **only
+after** the live UIDocument bounds checks pass. That line also records four measurements:
+`compact_bottom_dock_h`, `compact_bottom_tabs_h`,
+`compact_bottom_panel_h` and `compact_bottom_scroll_h`. The Windows
+`tools/probe-u1-windows-gui.py` extracts those values into `gui-probe.json` as
+`compactLayout` and requires `compactLayoutPassed=true` on short-screen probes
+(dock ≥120, tab 15–75, panel ≥70 and usable ScrollView ≥36 UI units). The CI
+step following artifact upload fails if an observed GUI has no usable measurements.
+Inspect the actual screenshot as well: these numerical gates do **not** certify readable
+controls, clicking, keyboard focus, dock resizing or VRM/tracking behavior.
+
+The previous source-matched Unity/Windows run
+[#41147254847](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41147254847)
+at `7bf647c` passed native frame, independent resize, workspace attachment, scene
+configuration and normal-quit checks; its 962×520 Unity screenshot showed the expanded
+Tracking pane. The hosted desktop BitBlt was still uniform on that run. Manual Windows
+interaction and the original operator-specific NullReferenceException investigation
+remain unaccepted, regardless of green CI status.
+
+## Maximized-window UI rebuild and confirmed CI NullReferenceException (2026-10-31)
+
+Source-matched [CI #41168456575](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41168456575)
+at `588dcd3` **failed**, while inherited P0–P13, Windows startup/quit,
+native caption and both resize-edge hit tests, independent aspect resizing
+and initial compact dock measurements passed. The new maximize-to-expanded
+GUI gate failed because no completed expanded layout marker was emitted.
+
+The archived **real P1 Player.log** from that failing run includes a concrete
+`NullReferenceException` at `UnityEngine.UIElements.ScrollView.ShouldDeferScrollTo`,
+called by `ScrollView.ScrollTo` at
+`WorkspaceToolkitShell.RuntimeLog.cs:253` during both
+`BuildWorkspaceLogPanel` and the stage-5 log refresh. On resize,
+`Build()` creates the log ScrollView before the new control is attached
+to the UI Toolkit panel, so immediately calling `ScrollTo` throws,
+aborts the workspace rebuild and prevents the expanded layout marker.
+This is a *reproduced CI exception path*; it is not proof that the
+original operator's unaccompanied NRE screenshot came from the same path.
+
+The fix replaces immediate `ScrollTo` with scheduled, attachment-checked,
+geometry-based scroll offsets and protects against callbacks referring to
+a replaced log ScrollView. The native Windows GUI probe now fails when
+the actual Player.log contains a `NullReferenceException` or a failed
+U1 panel refresh, instead of allowing a successful titlebar/resize check
+to hide runtime errors. The original crash path was subsequently
+re-tested in exact-source Windows GUI CI with both expanded and compact
+rebuild markers and no runtime exceptions; this closes the reproduced
+CI ScrollView regression, but not the operator screenshot's untraced NRE.
+
+## Narrow-window automatic tabs: actual Windows evidence (2026-11-01)
+
+The 1024px-wide, 697px-high maximized Windows Player initially compressed
+a newly tabbed Tracking scroll viewport below its minimum usable height.
+The source-matched [CI #41213541652](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41213541652)
+correctly failed with `reason=bottom_scroll_clipped` and 31px of
+Tracking viewport because the dock still reserved only 150px.
+The responsive fix reserves
+`max(savedBottomHeight, min(240px, Screen.height * 0.30))` in
+narrow-but-tall windows; compact-height and wide-window saved heights
+remain unchanged. The validation additionally rejects a narrow expanded
+dock below 180px and a direct content scroll viewport below 36px.
+
+Exact-source [CI #41217453942](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/41217453942)
+at `98daa23` **passed** inherited Unity P0–P13, Windows P1 build/startup
+and managed quit, native caption and resize hit tests, independent-axis
+window resizing, maximize/minimize/restore, both UI transitions, and
+the repository validators. Downloaded `u1-p1-windows-gui-probe-41217453942-1`
+records expanded UI **1024×697, bottom dock 209px, narrow_tabs=true** and
+restored compact UI **962×520, bottom dock 177px**. The
+`unity-expanded.png` and `unity-restored.png` frames are valid and have
+been visually inspected, with no dock/status overlap. The actual
+`Player.log` and probe report have **no runtime exceptions** and exit code 0.
+The narrow Scenes header still had clipped descriptive text and now uses
+wrapping rather than one-line overflow; that cosmetic follow-up requires
+its own exact-source screenshot verification.
+
+**CI success is not physical Windows operator acceptance.** Native
+mouse dragging, actual dock and Settings interactions, model loading,
+tracking/VRM behavior, DPI/multiple monitors, macOS, and the original
+operator-specific NRE report remain unaccepted. Keep PR #44 Draft
+and do not merge or release U1 before those checks are completed.

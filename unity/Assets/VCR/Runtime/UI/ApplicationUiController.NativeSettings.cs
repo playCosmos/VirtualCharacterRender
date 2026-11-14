@@ -21,6 +21,12 @@ namespace VCR.Runtime.UI
         private int _nativeFeedbackCategory = -1;
         private int _nativePendingCharacterGeneration = -1;
 
+        /// <summary>Open the existing OS-native settings window from alternate workspace shells.</summary>
+        public void ShowNativeSettingsWindow()
+        {
+            OpenNativeSettings();
+        }
+
         private void OpenNativeSettings()
         {
             if (!DesktopNativeSettingsWindow.Supported)
@@ -110,7 +116,7 @@ namespace VCR.Runtime.UI
                 config.RenderScale.ToString("0.###", CultureInfo.InvariantCulture));
             AddNativeAction(0, 200, "렌더 스케일 적용", ApplyNativeRenderScale);
             _nativeSettings.Add(0, 11, DesktopNativeSettingsWindow.ControlKind.Edit,
-                "목표 FPS (30 ~ 240)", config.TargetFrameRate.ToString(CultureInfo.InvariantCulture));
+                "목표 FPS (30 ~ 120)", config.TargetFrameRate.ToString(CultureInfo.InvariantCulture));
             AddNativeAction(0, 201, "목표 FPS 적용", ApplyNativeFps);
             AddNativeAction(0, 202, "VSync 변경", ToggleSettingsVsync);
             AddNativeAction(0, 203, "백그라운드 실행 변경", ToggleSettingsRunInBackground);
@@ -163,9 +169,9 @@ namespace VCR.Runtime.UI
             if (sceneRuntime == null ||
                 !int.TryParse(_nativeSettings.GetText(11), NumberStyles.Integer,
                     CultureInfo.InvariantCulture, out var fps) ||
-                fps < 30 || fps > 240)
+                fps < 30 || fps > 120)
             {
-                _lastActionMessage = "목표 프레임은 30 ~ 240 FPS여야 합니다.";
+                _lastActionMessage = "목표 프레임은 30 ~ 120 FPS여야 합니다.";
                 Debug.LogWarning(_lastActionMessage, this);
                 return;
             }
