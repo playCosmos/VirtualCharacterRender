@@ -86,6 +86,15 @@ The prior restored-instance dictionary correctly replays persisted values on a s
 
 This fixture covers an editor-controlled provider object with simulated failures. Real camera/tracker disconnect, restart side effects, driver hangs, delayed callbacks and a live UI session remain blocked on physical acceptance.
 
+## Delayed tracking configuration schema and atomic native Add
+
+A configurable tracking source can be discovered before its device-dependent configuration schema is ready. Prior to this fix, if `GetConfigurationSettings()` returned `null`, U1 skipped restoring its stored fields but marked that instance restored. Subsequent scans then skipped it permanently. A separate failure path in native device Add recorded configured/restored membership **before** a required disable was accepted, leaving a stale cache entry on failure.
+
+- `c84a524`: a `null` configuration schema now leaves restoration pending without enabling the provider. The next 2-second scan retries the same instance. An empty **non-null** schema remains valid. Native Add now records membership/restore completion **only after** `TrySetControlEnabled(false)` succeeds.
+- `3cd2403`: extend the P1 Unity fixture with a provider that returns `null` once and a persisted setting. Assert first scan does not apply settings or enable, keeps preferences unchanged, and the second scan restores both exactly once; also source-check the native Add ordering.
+- This is a simulated delayed-provider condition; actual camera driver startup and native UI click behavior still require physical acceptance.
+- **Current commit verification:** new Unity regression and exact-source CI are pending; do not inherit PASS from prior `424976e`.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
