@@ -222,6 +222,8 @@ namespace VCR.Editor.P1
                     "recreated tracking control with same ID must restore its saved enabled state");
                 Check(TrackingEditorSchemaParity(),
                     "native and Toolkit tracking editors must reject null/oversized schemas");
+                Check(TrackingRecoveryDoesNotEnableDisabledSource(),
+                    "tracking recovery must not enable disabled sources and must replay saved state after restart");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -651,6 +653,107 @@ namespace VCR.Editor.P1
                    !toolkit.Contains("PlayerPrefs.GetString(");
         }
 
+        private static bool TrackingRecoveryDoesNotEnableDisabledSource()
+        {
+            var id = "vcr-parity-recovery-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var request = type.GetMethod("TryRequestWorkspaceTrackingRecovery", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var nextScanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (request == null || restore == null || configuredField == null ||
+                    restoredField == null || nextScanField == null)
+                    return false;
+
+                var trackingSource = File.ReadAllText(Path.Combine(
+                    Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeAt = trackingSource.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var fallbackAt = trackingSource.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                if (nativeAt < 0 || fallbackAt < nativeAt ||
+                    !trackingSource.Substring(nativeAt, fallbackAt - nativeAt)
+                        .Contains("TryRequestWorkspaceTrackingRecovery(control, out var feedback)") ||
+                    !trackingSource.Substring(fallbackAt)
+                        .Contains("TryRequestWorkspaceTrackingRecovery(source, out var feedback)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking recovery shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 tracking recovery provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+
+                var arguments = new object[] { provider, null };
+                // Recovery must not add an unconfigured source implicitly.
+                if ((bool)request.Invoke(shell, arguments) ||
+                    !((string)arguments[1]).Contains("Add") ||
+                    provider.RecoveryCalls != 0)
+                    return false;
+
+                configured.Add(id);
+                arguments[1] = null;
+                // MediaPipe/Ultraleap's recovery may enable an off source;
+                // require an explicit Enable action before recovery.
+                if ((bool)request.Invoke(shell, arguments) ||
+                    !((string)arguments[1]).Contains("Enable") ||
+                    provider.RecoveryCalls != 0)
+                    return false;
+
+                if (!provider.TrySetControlEnabled(true, out _)) return false;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "saved-after-restart");
+                restored[id] = provider;
+                provider.ResetOnRecovery = true;
+                arguments[1] = null;
+                if (!(bool)request.Invoke(shell, arguments) ||
+                    provider.RecoveryCalls != 1 ||
+                    provider.ControlEnabled || restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+
+                // An accepted restart may clear device state in-place.
+                // The same provider instance must be restored on the next scan.
+                nextScanField.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!provider.ControlEnabled ||
+                    provider.AppliedValue != "saved-after-restart" ||
+                    provider.ConfigurationCalls != 1 ||
+                    !restored.ContainsKey(id))
+                    return false;
+
+                provider.FailRecoveryOnce = true;
+                arguments[1] = null;
+                if ((bool)request.Invoke(shell, arguments) ||
+                    provider.RecoveryCalls != 2 ||
+                    !restored.ContainsKey(id) ||
+                    !provider.ControlEnabled ||
+                    PlayerPrefs.GetString(settingKey) != "saved-after-restart")
+                    return false;
+                return true;
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingReconnectedProviderRestoresPreferences()
         {
             var id = "vcr-parity-reconnect-" + Guid.NewGuid().ToString("N");
@@ -927,6 +1030,9 @@ namespace VCR.Editor.P1
         public bool FailConfigurationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool ReturnNullSchemaOnce { get; set; }
+        public bool ResetOnRecovery { get; set; }
+        public bool FailRecoveryOnce { get; set; }
+        public int RecoveryCalls { get; private set; }
         public int SchemaCalls { get; private set; }
         public string ConfigurationTitle => "P1 reconnect configuration";
         public bool OpenConfigurationOnAdd => false;
@@ -981,6 +1087,19 @@ namespace VCR.Editor.P1
 
         public bool TryRecover(out string error)
         {
+            RecoveryCalls++;
+            if (FailRecoveryOnce)
+            {
+                FailRecoveryOnce = false;
+                error = "Simulated recovery failure";
+                return false;
+            }
+            if (ResetOnRecovery)
+            {
+                ControlEnabled = false;
+                AppliedValue = null;
+                ResetOnRecovery = false;
+            }
             error = null;
             return true;
         }
