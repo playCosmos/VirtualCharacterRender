@@ -105,6 +105,16 @@ Legacy `ApplicationUiController.NativeSettings.ShowNativeTrackingDetails` create
 - Prior exact HEAD `99cd39b` completed [Unity P0–P13 #43559172205](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43559172205) and repository Push/PR #43559172294/#43559176199 with PASS; exact HEAD after these changes requires new CI.
 - Remaining device-specific verification: compare each provider's readback after restart, failed Apply and external configuration changes; inspect Win32/AppKit text-edit controls and Korean IME on physical hosts.
 
+## Explicit Tracking recovery must not implicitly enable a source
+
+Source audit found that U1 had two direct `ITrackingRuntimeControl.TryRecover` call sites (Native Settings and UI Toolkit), without checking the user's configured membership or enabled preference. Both built-in MediaPipe and Ultraleap providers can **enable a disabled component inside `TryRecover`**. Clicking Recover on an off or unconfigured device therefore risks unexpectedly enabling its tracking stream while `PlayerPrefs` still says disabled; the restored-instance cache could then suppress correction on later scans.
+
+- `c480edf`: route both native and UI Toolkit Recovery through one `TryRequestWorkspaceTrackingRecovery` helper; require a configured, currently enabled source. Disabled sources must be enabled explicitly via the separate Enable action. Recovery failure is reported without changing persisted preferences or falsely marking success.
+- After a successful recovery request, invalidate the saved-state restore marker for that specific provider and defer reapplication of saved configuration and enabled preference until the next two-second restore scan. This also handles same-component restart implementations that discard live settings.
+- `0b853ad`: real Unity provider fixture checks that unconfigured and disabled sources cannot trigger recovery; an enabled configured source can recover, the saved preference is unchanged, and an in-place restart which clears runtime settings is restored on the next scan. Also checks a reported recovery failure leaves persisted values untouched and verifies both UI dispatch paths call the shared guard.
+- **Validation:** committed runtime changes and Unity P1 regression need exact-HEAD CI confirmation. Tests simulate provider restart, not actual hardware behavior.
+- Important trade-off: reapplying saved settings after successful recovery may trigger a second provider restart for MediaPipe while playing. The two-second deferral limits immediate back-to-back restarts but physical timing and error handling remain an acceptance requirement.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
