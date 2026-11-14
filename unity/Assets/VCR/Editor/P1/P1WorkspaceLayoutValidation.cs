@@ -620,12 +620,14 @@ namespace VCR.Editor.P1
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var configured = type.GetField("_workspaceConfiguredTracking", flags)
                     ?.GetValue(shell) as HashSet<string>;
+                var restored = type.GetField("_workspaceRestoredTracking", flags)
+                    ?.GetValue(shell) as Dictionary<string, ITrackingRuntimeControl>;
                 var scan = type.GetField("_nextTrackingRestoreScan", flags);
                 var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
                 var editorIdentity = type.GetMethod(
                     "IsWorkspaceTrackingEditorSourceCurrent", StaticPrivate);
-                if (configured == null || scan == null || restore == null ||
-                    editorIdentity == null)
+                if (configured == null || restored == null || scan == null ||
+                    restore == null || editorIdentity == null)
                     return false;
                 // Both the native window and UI Toolkit editor must enforce
                 // the identity check before submitting any pending values.
@@ -667,6 +669,15 @@ namespace VCR.Editor.P1
                     return false;
 
                 UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = null;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                // The logical preference survives disconnect but the destroyed
+                // component reference must not be retained by the live shell.
+                if (restored.ContainsKey(id) || !configured.Contains(id) ||
+                    PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+
                 sourceRoot = new GameObject("P1 tracking reconnect replacement provider");
                 var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 replacement.Id = id;
