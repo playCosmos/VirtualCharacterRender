@@ -622,7 +622,26 @@ namespace VCR.Editor.P1
                     ?.GetValue(shell) as HashSet<string>;
                 var scan = type.GetField("_nextTrackingRestoreScan", flags);
                 var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
-                if (configured == null || scan == null || restore == null)
+                var editorIdentity = type.GetMethod(
+                    "IsWorkspaceTrackingEditorSourceCurrent", StaticPrivate);
+                if (configured == null || scan == null || restore == null ||
+                    editorIdentity == null)
+                    return false;
+                // Both the native window and UI Toolkit editor must enforce
+                // the identity check before submitting any pending values.
+                var trackingSource = File.ReadAllText(Path.Combine(
+                    Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeSaveAt = trackingSource.IndexOf(
+                    "private void SaveWorkspaceNativeTrackingDetails()", StringComparison.Ordinal);
+                var nativeSaveEnd = trackingSource.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var toolkitEditAt = trackingSource.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (nativeSaveAt < 0 || nativeSaveEnd <= nativeSaveAt || toolkitEditAt < 0 ||
+                    !trackingSource.Substring(nativeSaveAt, nativeSaveEnd - nativeSaveAt)
+                        .Contains("IsWorkspaceTrackingEditorSourceCurrent(") ||
+                    !trackingSource.Substring(toolkitEditAt)
+                        .Contains("IsWorkspaceTrackingEditorSourceCurrent("))
                     return false;
 
                 configured.Add(id);
@@ -631,6 +650,9 @@ namespace VCR.Editor.P1
                 sourceRoot = new GameObject("P1 tracking reconnect first provider");
                 var first = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 first.Id = id;
+                if (!(bool)editorIdentity.Invoke(null, new object[] { first, first }) ||
+                    (bool)editorIdentity.Invoke(null, new object[] { first, null }))
+                    return false;
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
                 if (!first.ControlEnabled || first.ToggleCalls != 1 ||
@@ -648,6 +670,13 @@ namespace VCR.Editor.P1
                 sourceRoot = new GameObject("P1 tracking reconnect replacement provider");
                 var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 replacement.Id = id;
+                // A stale editor from the old source may not apply to the
+                // replacement even if both advertise the same logical ID.
+                if ((bool)editorIdentity.Invoke(null,
+                        new object[] { first, replacement }) ||
+                    !(bool)editorIdentity.Invoke(null,
+                        new object[] { replacement, replacement }))
+                    return false;
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
                 if (!replacement.ControlEnabled || replacement.ToggleCalls != 1 ||
