@@ -27,6 +27,9 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
             new Dictionary<int, string>();
         private string _workspaceNativeActiveTrackingId;
+        // The Settings editor belongs to the specific provider that created
+        // its fields, not merely to a reusable logical ControlId.
+        private ITrackingRuntimeControl _workspaceNativeActiveTrackingProvider;
         private float _nextTrackingRestoreScan;
         private float _nextTrackingSummaryScan;
         private string _cachedTrackingSummary = "Checking tracking sources...";
@@ -38,6 +41,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
+            _workspaceNativeActiveTrackingProvider = null;
             foreach (var id in PlayerPrefs.GetString(TrackingConfiguredKey, "")
                          .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
@@ -201,6 +205,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
+            _workspaceNativeActiveTrackingProvider = null;
             _workspaceNativeSettings.Add(2, 4, DesktopNativeSettingsWindow.ControlKind.Label,
                 "Tracking input sources");
             _workspaceNativeSettings.Add(2, 450, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -241,6 +246,12 @@ namespace VCR.Runtime.UI
                 "Select a source to configure it.");
         }
 
+        private static bool IsWorkspaceTrackingEditorSourceCurrent(
+            ITrackingRuntimeControl editorSource, ITrackingRuntimeControl liveSource)
+        {
+            return editorSource != null && ReferenceEquals(editorSource, liveSource);
+        }
+
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
             var control = FindWorkspaceTrackingSource(controlId);
@@ -263,6 +274,7 @@ namespace VCR.Runtime.UI
             }
 
             _workspaceNativeActiveTrackingId = controlId;
+            _workspaceNativeActiveTrackingProvider = control;
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeSettings.Add(2, 6, DesktopNativeSettingsWindow.ControlKind.Label,
@@ -295,6 +307,16 @@ namespace VCR.Runtime.UI
         private void SaveWorkspaceNativeTrackingDetails()
         {
             var control = FindWorkspaceTrackingSource(_workspaceNativeActiveTrackingId);
+            if (!IsWorkspaceTrackingEditorSourceCurrent(
+                    _workspaceNativeActiveTrackingProvider, control))
+            {
+                // Never apply fields from the old provider instance to its
+                // replacement, even when both have the same ControlId.
+                RebuildWorkspaceNativeTrackingSources();
+                _workspaceNativeSettings.SetText(92,
+                    "Tracking source changed. Open settings again before saving.");
+                return;
+            }
             if (!(control is ITrackingRuntimeConfigurable configurable))
             {
                 _workspaceNativeSettings.SetText(92, "Tracking source no longer available.");
@@ -717,6 +739,13 @@ namespace VCR.Runtime.UI
                     try
                     {
                         var live = FindWorkspaceTrackingSource(sourceId);
+                        if (!IsWorkspaceTrackingEditorSourceCurrent(source, live))
+                        {
+                            _workspaceTrackingEditor.Clear();
+                            SetWorkspaceTrackingFeedback(
+                                "Tracking source changed. Reopen its settings before saving.");
+                            return;
+                        }
                         if (!(live is ITrackingRuntimeConfigurable target))
                         {
                             SetWorkspaceTrackingFeedback("Tracking source disconnected.");
