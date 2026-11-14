@@ -607,6 +607,7 @@ namespace VCR.Editor.P1
         {
             var id = "vcr-parity-reconnect-" + Guid.NewGuid().ToString("N");
             var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
             GameObject shellRoot = null;
             GameObject sourceRoot = null;
             try
@@ -626,18 +627,21 @@ namespace VCR.Editor.P1
 
                 configured.Add(id);
                 PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "persisted-value");
                 sourceRoot = new GameObject("P1 tracking reconnect first provider");
                 var first = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 first.Id = id;
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                if (!first.ControlEnabled || first.ToggleCalls != 1)
+                if (!first.ControlEnabled || first.ToggleCalls != 1 ||
+                    first.ConfigurationCalls != 1 ||
+                    first.AppliedValue != "persisted-value")
                     return false;
 
                 // The same component should not repeatedly reapply settings.
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                if (first.ToggleCalls != 1)
+                if (first.ToggleCalls != 1 || first.ConfigurationCalls != 1)
                     return false;
 
                 UnityEngine.Object.DestroyImmediate(sourceRoot);
@@ -646,18 +650,22 @@ namespace VCR.Editor.P1
                 replacement.Id = id;
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                if (!replacement.ControlEnabled || replacement.ToggleCalls != 1)
+                if (!replacement.ControlEnabled || replacement.ToggleCalls != 1 ||
+                    replacement.ConfigurationCalls != 1 ||
+                    replacement.AppliedValue != "persisted-value")
                     return false;
 
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
-                return replacement.ToggleCalls == 1;
+                return replacement.ToggleCalls == 1 &&
+                       replacement.ConfigurationCalls == 1;
             }
             finally
             {
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
             }
         }
 
@@ -737,7 +745,8 @@ namespace VCR.Editor.P1
     }
     // Source-free runtime fixture: an OS/device reconnection can destroy a
     // provider and create a new component with exactly the same logical ID.
-    internal sealed class P1TrackingReconnectProbe : MonoBehaviour, ITrackingRuntimeControl
+    internal sealed class P1TrackingReconnectProbe : MonoBehaviour,
+        ITrackingRuntimeControl, ITrackingRuntimeConfigurable
     {
         public string Id { get; set; }
         public string ControlId => Id;
@@ -747,6 +756,32 @@ namespace VCR.Editor.P1
             TrackingSourceHealthState.Healthy;
         public string ControlError => "";
         public int ToggleCalls { get; private set; }
+        public int ConfigurationCalls { get; private set; }
+        public string AppliedValue { get; private set; }
+        public string ConfigurationTitle => "P1 reconnect configuration";
+        public bool OpenConfigurationOnAdd => false;
+
+        public IReadOnlyList<TrackingRuntimeSetting> GetConfigurationSettings()
+        {
+            return new[]
+            {
+                new TrackingRuntimeSetting("test-value", "Test value", "default-value")
+            };
+        }
+
+        public bool TryApplyConfiguration(
+            IReadOnlyDictionary<string, string> values, out string error)
+        {
+            if (!values.TryGetValue("test-value", out var value))
+            {
+                error = "Missing persisted test value";
+                return false;
+            }
+            AppliedValue = value;
+            ConfigurationCalls++;
+            error = null;
+            return true;
+        }
 
         public bool TrySetControlEnabled(bool enabled, out string error)
         {
