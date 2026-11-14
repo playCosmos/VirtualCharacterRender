@@ -93,7 +93,17 @@ A configurable tracking source can be discovered before its device-dependent con
 - `c84a524`: a `null` configuration schema now leaves restoration pending without enabling the provider. The next 2-second scan retries the same instance. An empty **non-null** schema remains valid. Native Add now records membership/restore completion **only after** `TrySetControlEnabled(false)` succeeds.
 - `3cd2403`: extend the P1 Unity fixture with a provider that returns `null` once and a persisted setting. Assert first scan does not apply settings or enable, keeps preferences unchanged, and the second scan restores both exactly once; also source-check the native Add ordering.
 - This is a simulated delayed-provider condition; actual camera driver startup and native UI click behavior still require physical acceptance.
-- **Current commit verification:** new Unity regression and exact-source CI are pending; do not inherit PASS from prior `424976e`.
+- **Verified baseline:** `99cd39b` Unity P0–P13 #43559172205 passed the delayed-schema regression; subsequent editor changes require their own exact-source CI.
+
+## Native Settings vs UI Toolkit: schema readiness and live values
+
+Legacy `ApplicationUiController.NativeSettings.ShowNativeTrackingDetails` creates controls using each provider's `TrackingRuntimeSetting.Value` (the live readback). U1 previously preferred `PlayerPrefs.GetString(savedKey, setting.Value)` in both the Native Settings and UI Toolkit editors; these saved values can differ from what is actually applied after a failed restore or an external device change. The new editors also disagreed on `null` schemas: UI Toolkit refused editing, whereas native Settings could open a misleading empty Save form.
+
+- `990ccbe`: unify both editors with `IsWorkspaceTrackingEditableSchema`. A `null` schema is not ready, an empty non-null schema is permitted, and more than 256 fields are rejected. Native Settings now returns to the device list and displays explicit feedback rather than offering a Save with no schema; its duplicate configuration keys are filtered case-insensitively, matching UI Toolkit.
+- `994c72e`: both editors now display the provider's **current** `TrackingRuntimeSetting.Value`, not stale PlayerPrefs. Saved settings remain in PlayerPrefs for startup/reconnect restore and are only changed after a successful Apply.
+- `97784d5` and `518141d`: P1 validation invokes the shared schema guard for null, empty, exactly 256, and 257 fields; checks a live value is used and requires both editor paths to call the shared guards. Native GUI interaction is **not** exercised by these source-free checks.
+- Prior exact HEAD `99cd39b` completed [Unity P0–P13 #43559172205](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43559172205) and repository Push/PR #43559172294/#43559176199 with PASS; exact HEAD after these changes requires new CI.
+- Remaining device-specific verification: compare each provider's readback after restart, failed Apply and external configuration changes; inspect Win32/AppKit text-edit controls and Korean IME on physical hosts.
 
 ## Priority next work
 
