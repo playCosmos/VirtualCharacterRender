@@ -224,6 +224,8 @@ namespace VCR.Editor.P1
                     "native and Toolkit tracking editors must reject null/oversized schemas");
                 Check(TrackingRecoveryDoesNotEnableDisabledSource(),
                     "tracking recovery must not enable disabled sources and must replay saved state after restart");
+                Check(TrackingToggleRequiresExplicitMembership(),
+                    "tracking Toggle must not implicitly register an unconfigured source");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -651,6 +653,120 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingToggleRequiresExplicitMembership()
+        {
+            var id = "vcr-parity-toggle-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                if (toggle == null || configuredField == null || restoredField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var listAt = source.IndexOf(
+                    "private void RebuildWorkspaceNativeTrackingSources()",
+                    StringComparison.Ordinal);
+                var listEnd = source.IndexOf(
+                    "private static bool IsWorkspaceTrackingEditorSourceCurrent(",
+                    StringComparison.Ordinal);
+                var nativeAt = source.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(",
+                    StringComparison.Ordinal);
+                var nativeEnd = source.IndexOf(
+                    "private ScrollView _workspaceTrackingList;",
+                    StringComparison.Ordinal);
+                var toolkitAt = source.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(",
+                    StringComparison.Ordinal);
+                var toolkitEnd = source.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(",
+                    StringComparison.Ordinal);
+                if (listAt < 0 || listEnd <= listAt || nativeAt < 0 ||
+                    nativeEnd <= nativeAt || toolkitAt < 0 ||
+                    toolkitEnd <= toolkitAt)
+                    return false;
+                var list = source.Substring(listAt, listEnd - listAt);
+                var native = source.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = source.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!list.Contains("if (configured)") ||
+                    !list.Contains("5200 + i") ||
+                    !list.Contains("5400 + i") ||
+                    !native.Contains("TrySetWorkspaceTrackingEnabled(") ||
+                    !toolkit.Contains("TrySetWorkspaceTrackingEnabled("))
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking toggle membership shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 tracking toggle membership provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null)
+                    return false;
+
+                var args = new object[] { provider, true, null };
+                if ((bool)toggle.Invoke(shell, args) ||
+                    provider.ToggleCalls != 0 ||
+                    provider.ControlEnabled ||
+                    configured.Contains(id) ||
+                    restored.ContainsKey(id) ||
+                    PlayerPrefs.HasKey(enabledKey))
+                    return false;
+
+                configured.Add(id);
+                provider.FailEnableOnce = true;
+                args[2] = null;
+                if ((bool)toggle.Invoke(shell, args) ||
+                    provider.ToggleCalls != 1 ||
+                    provider.ControlEnabled ||
+                    restored.ContainsKey(id) ||
+                    PlayerPrefs.HasKey(enabledKey))
+                    return false;
+
+                args[2] = null;
+                if (!(bool)toggle.Invoke(shell, args) ||
+                    provider.ToggleCalls != 2 ||
+                    !provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1 ||
+                    !restored.TryGetValue(id, out var recorded) ||
+                    !ReferenceEquals(recorded, provider))
+                    return false;
+
+                args[1] = false;
+                args[2] = null;
+                if (!(bool)toggle.Invoke(shell, args) ||
+                    provider.ToggleCalls != 3 ||
+                    provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                configured.Remove(id);
+                args[1] = true;
+                args[2] = null;
+                return !(bool)toggle.Invoke(shell, args) &&
+                       provider.ToggleCalls == 3 &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 0 &&
+                       !configured.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+            }
         }
 
         private static bool TrackingRecoveryDoesNotEnableDisabledSource()
