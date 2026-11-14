@@ -66,6 +66,15 @@ Source review found that `RestoreWorkspaceTrackingPreferences` previously stored
 - **Verification status:** implementation and Unity fixture committed; source-matched P0–P13 and Windows/macOS acceptance are **PENDING** until the new HEAD CI completes. This is not yet physical camera/tracker reconnection approval.
 - Physical disconnect/reconnect with the same component (rather than a replaced component) still depends on each provider's own recovery policy and remains an acceptance item.
 
+## Tracking editor draft vs provider replacement
+
+A separate real-world reconnect risk was found after the restored-instance fix: an operator can open a device's native Settings or UI Toolkit editor, then the device component can be destroyed and replaced by another provider with the same logical ID **while unsaved editor fields remain visible**. Before this fix, both Save handlers rediscovered the current provider by ID and could apply the old provider's draft to the replacement.
+
+- `8af058a`: native Settings now remembers the provider instance that created the editor fields, clears that reference when the device list is rebuilt, and refuses Save if the instance changed. It rebuilds the list and requests that the operator reopen Settings. The UI Toolkit Save closure similarly compares its captured provider with the live current provider, discards the stale editor and reports the issue.
+- `2f81270`: the P1 Unity regression verifies that a provider matches itself, rejects a null target and a same-ID replacement, and requires both native and UI Toolkit submission paths to call the identity guard. This uses actual Unity provider fixtures, but **not** native window click simulation.
+- This is a protection against applying **stale unsaved drafts to a different runtime instance**. It does not verify that a provider's own recovery implementation preserves live settings on a disconnect that keeps the same component.
+- Exact-source CI on these changes and physical device/camera detach–reconnect remain required. Keep status **PENDING** until CI completes.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
