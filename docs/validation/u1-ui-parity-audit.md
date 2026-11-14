@@ -57,6 +57,15 @@ The inventory maps main feature families and concrete entry points, not every dy
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
+## Same-ID tracking runtime replacement regression
+
+Source review found that `RestoreWorkspaceTrackingPreferences` previously stored only a restored `ControlId` in a `HashSet<string>`. Destroying the first provider and reconnecting another MonoBehaviour with the same ID left the restored flag set; persisted per-device settings and enabled state could be skipped on the replacement.
+
+- `f0f89b3`: record the exact `ITrackingRuntimeControl` instance alongside its ID, replace the entry on reconnection, and retain the existing retry-on-failed-apply behavior. All manual add, toggle and save actions also mark the current provider instance.
+- `01e6bd0`: P1 source-free regression creates a real Unity tracking fixture, restores enabled state, verifies same-instance no-op on the next scan, destroys that provider, creates a replacement with the same ID, and verifies the persisted enabled state is applied again exactly once. The test deletes its unique temporary PlayerPrefs enabled-state key.
+- **Verification status:** implementation and Unity fixture committed; source-matched P0–P13 and Windows/macOS acceptance are **PENDING** until the new HEAD CI completes. This is not yet physical camera/tracker reconnection approval.
+- Physical disconnect/reconnect with the same component (rather than a replaced component) still depends on each provider's own recovery policy and remains an acceptance item.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
