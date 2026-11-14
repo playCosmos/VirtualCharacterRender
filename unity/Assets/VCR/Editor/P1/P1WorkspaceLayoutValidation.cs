@@ -226,6 +226,8 @@ namespace VCR.Editor.P1
                     "tracking recovery must not enable disabled sources and must replay saved state after restart");
                 Check(TrackingToggleRequiresExplicitMembership(),
                     "tracking Toggle must not implicitly register an unconfigured source");
+                Check(TrackingSavedOffRestoresBeforeConfiguration(),
+                    "saved-off tracking source must stop capture before applying configuration");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -653,6 +655,73 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingSavedOffRestoresBeforeConfiguration()
+        {
+            var id = "vcr-parity-off-restore-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                shellRoot = new GameObject("P1 saved-off tracking restoration shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 saved-off tracking provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var configured = type.GetField("_workspaceConfiguredTracking", flags)
+                    ?.GetValue(shell) as HashSet<string>;
+                var restored = type.GetField("_workspaceRestoredTracking", flags)
+                    ?.GetValue(shell) as Dictionary<string, ITrackingRuntimeControl>;
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                if (configured == null || restored == null || scan == null || restore == null)
+                    return false;
+
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+                PlayerPrefs.SetString(settingKey, "saved-off-value");
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+
+                // A transient failure to stop capture must prevent settings
+                // applying on the still-active camera. Retry on the next scan.
+                provider.FailDisableOnce = true;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!provider.ControlEnabled || provider.ToggleCalls != 2 ||
+                    provider.ConfigurationCalls != 0 || restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (provider.ControlEnabled || provider.ToggleCalls != 3 ||
+                    provider.ConfigurationCalls != 1 ||
+                    provider.AppliedWhileEnabled ||
+                    provider.AppliedValue != "saved-off-value" ||
+                    !restored.TryGetValue(id, out var marked) ||
+                    !ReferenceEquals(marked, provider))
+                    return false;
+
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                return provider.ToggleCalls == 3 &&
+                       provider.ConfigurationCalls == 1 &&
+                       PlayerPrefs.GetString(settingKey) == "saved-off-value";
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
         }
 
         private static bool TrackingToggleRequiresExplicitMembership()
@@ -1145,6 +1214,8 @@ namespace VCR.Editor.P1
         public string AppliedValue { get; private set; }
         public bool FailConfigurationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
+        public bool FailDisableOnce { get; set; }
+        public bool AppliedWhileEnabled { get; private set; }
         public bool ReturnNullSchemaOnce { get; set; }
         public bool ResetOnRecovery { get; set; }
         public bool FailRecoveryOnce { get; set; }
@@ -1182,6 +1253,7 @@ namespace VCR.Editor.P1
                 error = "Provider not initialized yet";
                 return false;
             }
+            AppliedWhileEnabled |= ControlEnabled;
             AppliedValue = value;
             error = null;
             return true;
@@ -1190,10 +1262,16 @@ namespace VCR.Editor.P1
         public bool TrySetControlEnabled(bool enabled, out string error)
         {
             ToggleCalls++;
-            if (FailEnableOnce)
+            if (FailEnableOnce && enabled)
             {
                 FailEnableOnce = false;
                 error = "Device not available yet";
+                return false;
+            }
+            if (FailDisableOnce && !enabled)
+            {
+                FailDisableOnce = false;
+                error = "Capture is still stopping";
                 return false;
             }
             error = null;
