@@ -272,6 +272,14 @@ namespace VCR.Runtime.UI
             return editorSource != null && ReferenceEquals(editorSource, liveSource);
         }
 
+        private static string GetWorkspaceTrackingDisplayedValue(TrackingRuntimeSetting setting)
+        {
+            // The editor must show the value actually reported by the live
+            // device, not a possibly stale saved preference. PlayerPrefs is
+            // still the persistence source for startup recovery.
+            return setting.Value ?? string.Empty;
+        }
+
         private static bool IsWorkspaceTrackingEditableSchema(
             IReadOnlyList<TrackingRuntimeSetting> settings)
         {
@@ -320,11 +328,9 @@ namespace VCR.Runtime.UI
                 if (string.IsNullOrWhiteSpace(setting.Key) ||
                     !seenKeys.Add(setting.Key))
                     continue;
-                var key = TrackingSettingKey + controlId + "." + setting.Key;
-                var persisted = PlayerPrefs.GetString(key, setting.Value);
                 _workspaceNativeSettings.Add(2, 6000 + i,
                     DesktopNativeSettingsWindow.ControlKind.Edit,
-                    setting.Label, persisted);
+                    setting.Label, GetWorkspaceTrackingDisplayedValue(setting));
                 _workspaceNativeTrackingFields[6000 + i] = setting.Key;
             }
             _workspaceNativeSettings.Add(2, 6900, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -757,10 +763,9 @@ namespace VCR.Runtime.UI
                     if (string.IsNullOrWhiteSpace(setting.Key) ||
                         fields.ContainsKey(setting.Key))
                         continue;
-                    var key = TrackingSettingKey + sourceId + "." + setting.Key;
                     var field = new TextField(setting.Label)
                     {
-                        value = PlayerPrefs.GetString(key, setting.Value),
+                        value = GetWorkspaceTrackingDisplayedValue(setting),
                         tooltip = setting.HelpText
                     };
                     _workspaceTrackingEditor.Add(field);
