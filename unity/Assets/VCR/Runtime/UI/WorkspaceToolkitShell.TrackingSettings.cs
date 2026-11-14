@@ -272,6 +272,14 @@ namespace VCR.Runtime.UI
             return editorSource != null && ReferenceEquals(editorSource, liveSource);
         }
 
+        private static bool IsWorkspaceTrackingEditableSchema(
+            IReadOnlyList<TrackingRuntimeSetting> settings)
+        {
+            // A null schema means the provider is still initializing.
+            // An empty non-null schema is valid (no editable fields).
+            return settings != null && settings.Count <= MaxNativeTrackingFields;
+        }
+
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
             var control = FindWorkspaceTrackingSource(controlId);
@@ -287,9 +295,14 @@ namespace VCR.Runtime.UI
                 _workspaceNativeSettings.SetText(92, "Unable to read settings: " + ex.Message);
                 return;
             }
-            if (settings != null && settings.Count > MaxNativeTrackingFields)
+            if (!IsWorkspaceTrackingEditableSchema(settings))
             {
-                _workspaceNativeSettings.SetText(92, "Too many device settings.");
+                // Do not retain a previous editor or offer Save with zero
+                // fields while the requested provider has no schema yet.
+                RebuildWorkspaceNativeTrackingSources();
+                _workspaceNativeSettings.SetText(92, settings == null
+                    ? "Tracking settings not ready. Refresh and try again."
+                    : "Too many device settings.");
                 return;
             }
 
@@ -299,21 +312,20 @@ namespace VCR.Runtime.UI
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeSettings.Add(2, 6, DesktopNativeSettingsWindow.ControlKind.Label,
                 configurable.ConfigurationTitle);
-            if (settings != null)
+            // Match UI Toolkit's case-insensitive key semantics.
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < settings.Count; i++)
             {
-                for (var i = 0; i < settings.Count; i++)
-                {
-                    var setting = settings[i];
-                    if (string.IsNullOrWhiteSpace(setting.Key) ||
-                        _workspaceNativeTrackingFields.ContainsValue(setting.Key))
-                        continue;
-                    var key = TrackingSettingKey + controlId + "." + setting.Key;
-                    var persisted = PlayerPrefs.GetString(key, setting.Value);
-                    _workspaceNativeSettings.Add(2, 6000 + i,
-                        DesktopNativeSettingsWindow.ControlKind.Edit,
-                        setting.Label, persisted);
-                    _workspaceNativeTrackingFields[6000 + i] = setting.Key;
-                }
+                var setting = settings[i];
+                if (string.IsNullOrWhiteSpace(setting.Key) ||
+                    !seenKeys.Add(setting.Key))
+                    continue;
+                var key = TrackingSettingKey + controlId + "." + setting.Key;
+                var persisted = PlayerPrefs.GetString(key, setting.Value);
+                _workspaceNativeSettings.Add(2, 6000 + i,
+                    DesktopNativeSettingsWindow.ControlKind.Edit,
+                    setting.Label, persisted);
+                _workspaceNativeTrackingFields[6000 + i] = setting.Key;
             }
             _workspaceNativeSettings.Add(2, 6900, DesktopNativeSettingsWindow.ControlKind.Button,
                 "Save and apply");
@@ -733,7 +745,7 @@ namespace VCR.Runtime.UI
                     return;
                 }
                 var settings = configurable.GetConfigurationSettings();
-                if (settings == null || settings.Count > MaxNativeTrackingFields)
+                if (!IsWorkspaceTrackingEditableSchema(settings))
                 {
                     SetWorkspaceTrackingFeedback("Tracking configuration is unavailable.");
                     return;
