@@ -291,6 +291,8 @@ namespace VCR.Editor.P3
 
                 ValidateAudioSnapshotSuppression(
                     failures);
+                ValidateMediaPipeCaptureApplyIdempotence(
+                    failures);
 
                 var mediaPipeSecondsToMicroseconds =
                     typeof(
@@ -973,6 +975,97 @@ namespace VCR.Editor.P3
                     failures));
 
             return false;
+        }
+
+        private static void ValidateMediaPipeCaptureApplyIdempotence(
+            List<string> failures)
+        {
+            GameObject root = null;
+            try
+            {
+                root = new GameObject("P3 MediaPipe configuration idempotence");
+                root.SetActive(false);
+                var runner = root.AddComponent<MediaPipeWebcamTrackingRunner>();
+                var type = typeof(MediaPipeWebcamTrackingRunner);
+                var compare = type.GetMethod(
+                    "HasCaptureConfigurationChanged",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (compare == null)
+                {
+                    failures.Add("MediaPipe capture-change predicate missing");
+                    return;
+                }
+
+                var values = new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (var field in runner.GetConfigurationSettings())
+                    values[field.Key] = field.Value;
+
+                var currentDevice = values["device"];
+                var width = int.Parse(values["width"]);
+                var height = int.Parse(values["height"]);
+                var fps = int.Parse(values["fps"]);
+                bool Changed(string device, int w, int h, int f) =>
+                    (bool)compare.Invoke(runner, new object[] { device, w, h, f });
+
+                Expect(!Changed(currentDevice, width, height, fps) &&
+                       Changed("other-camera", width, height, fps) &&
+                       Changed(currentDevice, width + 160, height, fps) &&
+                       Changed(currentDevice, width, height + 120, fps) &&
+                       Changed(currentDevice, width, height, fps + 1),
+                    "MediaPipe capture change detection must cover each restart-relevant field",
+                    failures);
+
+                // A recover-induced restore replays the same persisted values.
+                // Applying those values must leave the restart predicate false.
+                var sameApplied = runner.TryApplyConfiguration(values, out var sameError);
+                Expect(sameApplied && sameError == null &&
+                       !Changed(currentDevice, width, height, fps),
+                    "MediaPipe identical recovery configuration must not request a restart",
+                    failures);
+
+                values["width"] = (width + 160).ToString();
+                var changeApplied = runner.TryApplyConfiguration(values, out var changedError);
+                Expect(changeApplied && changedError == null &&
+                       !Changed(currentDevice, width + 160, height, fps) &&
+                       Changed(currentDevice, width, height, fps),
+                    "MediaPipe changed capture configuration must update the current state",
+                    failures);
+
+                values["width"] = "10";
+                var invalidApplied = runner.TryApplyConfiguration(values, out var invalidError);
+                Expect(!invalidApplied && !string.IsNullOrEmpty(invalidError) &&
+                       !Changed(currentDevice, width + 160, height, fps),
+                    "MediaPipe invalid capture configuration must not mutate the previous values",
+                    failures);
+
+                // Retain the manual retry path when a capture has faulted,
+                // even if its requested settings are unchanged.
+                var sourceFile = System.IO.File.ReadAllText(
+                    System.IO.Path.Combine(Application.dataPath,
+                        "VCR/Runtime/Tracking/MediaPipe/MediaPipeWebcamTrackingRunner.cs"));
+                var applyAt = sourceFile.IndexOf(
+                    "public bool TryApplyConfiguration(", StringComparison.Ordinal);
+                var helperAt = sourceFile.IndexOf(
+                    "private bool HasCaptureConfigurationChanged(", StringComparison.Ordinal);
+                var apply = applyAt < 0 || helperAt <= applyAt
+                    ? string.Empty
+                    : sourceFile.Substring(applyAt, helperAt - applyAt);
+                Expect(apply.Contains("(configurationChanged ||") &&
+                       apply.Contains("_state == MediaPipeWebcamLifecycleState.Faulted") &&
+                       apply.Contains("Restart();"),
+                    "MediaPipe unchanged configuration must still permit explicit fault recovery",
+                    failures);
+            }
+            catch (Exception exception)
+            {
+                failures.Add("MediaPipe configuration idempotence: " + exception);
+            }
+            finally
+            {
+                if (root != null)
+                    UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         private static void ValidateAudioSnapshotSuppression(
