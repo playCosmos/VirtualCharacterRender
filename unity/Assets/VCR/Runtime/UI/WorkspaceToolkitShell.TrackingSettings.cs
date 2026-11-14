@@ -387,6 +387,49 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private bool TryRequestWorkspaceTrackingRecovery(
+            ITrackingRuntimeControl control, out string feedback)
+        {
+            if (control == null)
+            {
+                feedback = "Tracking source disconnected.";
+                return false;
+            }
+            if (!_workspaceConfiguredTracking.Contains(control.ControlId))
+            {
+                feedback = "Add the tracking source before requesting recovery.";
+                return false;
+            }
+            // MediaPipe and Ultraleap's TryRecover can enable a disabled
+            // component. Recovery is not an implicit Enable command.
+            if (!control.ControlEnabled)
+            {
+                feedback = "Enable the tracking source before requesting recovery.";
+                return false;
+            }
+            try
+            {
+                if (!control.TryRecover(out var error))
+                {
+                    feedback = "Recovery failed: " + (error ?? "unknown error");
+                    return false;
+                }
+                // A successful restart may reset live configuration without
+                // replacing the provider component. Replay saved settings on
+                // the next scan, rather than treating the instance as restored.
+                _workspaceRestoredTracking.Remove(control.ControlId);
+                _nextTrackingRestoreScan = Time.unscaledTime + 2f;
+                feedback = "Recovery requested. Saved tracking settings will be rechecked.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                feedback = "Recovery failed: " + ex.Message;
+                Debug.LogException(ex, this);
+                return false;
+            }
+        }
+
         private bool HandleWorkspaceNativeTrackingAction(int action)
         {
             if (action == 450)
@@ -436,10 +479,8 @@ namespace VCR.Runtime.UI
             }
             else if (action < 5600)
             {
-                if (control.TryRecover(out var error))
-                    _workspaceNativeSettings.SetText(92, "Recovery requested.");
-                else
-                    _workspaceNativeSettings.SetText(92, "Recovery failed: " + error);
+                TryRequestWorkspaceTrackingRecovery(control, out var feedback);
+                _workspaceNativeSettings.SetText(92, feedback);
             }
             else
             {
@@ -717,25 +758,11 @@ namespace VCR.Runtime.UI
 
         private void RecoverWorkspaceTrackingSource(string sourceId)
         {
-            try
-            {
-                var source = FindWorkspaceTrackingSource(sourceId);
-                if (source == null)
-                {
-                    SetWorkspaceTrackingFeedback("Tracking source disconnected.");
-                    return;
-                }
-                if (source.TryRecover(out var error))
-                    TrackingPanelActionFinished("Recovery requested for " +
-                        (source.DisplayName ?? sourceId) + ".");
-                else
-                    SetWorkspaceTrackingFeedback("Recovery failed: " + error);
-            }
-            catch (Exception ex)
-            {
-                SetWorkspaceTrackingFeedback("Recovery failed: " + ex.Message);
-                Debug.LogException(ex, this);
-            }
+            var source = FindWorkspaceTrackingSource(sourceId);
+            if (TryRequestWorkspaceTrackingRecovery(source, out var feedback))
+                TrackingPanelActionFinished(feedback);
+            else
+                SetWorkspaceTrackingFeedback(feedback);
         }
 
         private void EditWorkspaceTrackingSettings(string sourceId)
