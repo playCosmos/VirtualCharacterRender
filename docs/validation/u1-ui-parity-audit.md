@@ -119,6 +119,15 @@ Source audit found that U1 had two direct `ITrackingRuntimeControl.TryRecover` c
 - **New exact-source CI: PENDING.** Source-free Unity runs cannot prove actual webcam startup timing. Repeated hardware Recover, 720p60/1080p60 OBS capture and long-duration tracking remain physical acceptance requirements.
 - **Trade-off:** When saved capture values genuinely differ from the live settings after Recover, the restart remains necessary; a second start may occur. Testing on real hardware must distinguish legitimate reconfiguration from redundant restart.
 
+## Tracking input membership parity: Native vs UI Toolkit Toggle
+
+A native U1 regression was found in `HandleWorkspaceNativeTrackingAction`: clicking the native `Enable/Disable` button on an **unconfigured** tracking provider called `TrySetControlEnabled` and silently inserted the provider into `_workspaceConfiguredTracking`. The UI Toolkit `ToggleWorkspaceTrackingEnabled` correctly refused the same operation. This bypassed the deliberate legacy flow `Add (initially disabled) → explicit Enable` and could activate a camera/tracker without the user's Add action.
+
+- `dd06048`: centralize enabled-state operations in `TrySetWorkspaceTrackingEnabled`, called by both Native Settings and UI Toolkit; require pre-existing membership. Only after a provider accepts the requested change are the restored-instance cache and persisted enabled preference updated. The native device list now shows `Enable/Disable`, `Recover` and `Configure` only for registered sources; unregistered sources show an `Add` action.
+- `dc039bc`: source-free P1 Unity fixture validates an unconfigured provider cannot be toggled or persisted; simulated provider enable failure leaves preferences and restore cache unchanged; registered Enable then Disable succeeds, persists expected values and caches the correct provider; removal prevents subsequent Enable. Static source contract checks both UI call sites and conditional native control registration.
+- A test fixture or hosted Windows GUI check does **not** prove physical webcam activation, permissions or operator behavior. Real hardware Add→Enable→Recover and remove/disconnect transitions remain acceptance gates.
+- **Current head verification:** Pending exact-source Unity CI. Previous `2f83b16` Unity P0–P13/Windows [#43576741254](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43576741254) was PASS; do not infer current-test success from that result.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
