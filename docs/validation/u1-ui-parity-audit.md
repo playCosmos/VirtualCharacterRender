@@ -75,6 +75,17 @@ A separate real-world reconnect risk was found after the restored-instance fix: 
 - This is a protection against applying **stale unsaved drafts to a different runtime instance**. It does not verify that a provider's own recovery implementation preserves live settings on a disconnect that keeps the same component.
 - Exact-source CI on these changes and physical device/camera detach–reconnect remain required. Keep status **PENDING** until CI completes.
 
+## Tracking restore cache lifecycle and transient failures
+
+The prior restored-instance dictionary correctly replays persisted values on a same-ID replacement, but it strongly held disconnected Unity providers until the shell closed. With many unique hot-plug devices this could retain destroyed component references unnecessarily.
+
+- `9ecdce8`: the 2-second restore scan now removes entries for missing, ambiguous or unconfigured source IDs from the restored-instance cache. It **does not remove** the user's configured IDs, saved setting fields or enabled preferences, so reattachment still restores the saved values.
+- `18723f9`: the real Unity provider fixture asserts a disconnected source is released from the cache while its preference remains, before reattaching a same-ID source.
+- `72e9ed2`: extend the fixture with a temporary `TryApplyConfiguration` failure and a separate temporary `TrySetControlEnabled` failure. A failed attempt must leave the source unmarked, not overwrite persisted values, and a later scan must reapply settings and enabled state successfully. Expected warnings from intentionally simulated temporary failure are test input, not physical-device proof.
+- **Current exact-HEAD CI:** Pending until new branch validation runs finish. The previous `bee92b5` Unity/Windows suite passed, but its result cannot validate this new change.
+
+This fixture covers an editor-controlled provider object with simulated failures. Real camera/tracker disconnect, restart side effects, driver hangs, delayed callbacks and a live UI session remain blocked on physical acceptance.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
