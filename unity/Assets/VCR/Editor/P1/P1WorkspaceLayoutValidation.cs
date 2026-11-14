@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using VCR.Runtime.UI;
+using VCR.Runtime.Tracking;
 
 namespace VCR.Editor.P1
 {
@@ -217,6 +218,8 @@ namespace VCR.Editor.P1
                     "native settings actions 204 and 207 must stay load and render-default");
                 Check(SettingsConfirmationLifecycle(),
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
+                Check(TrackingReconnectedProviderRestoresPreferences(),
+                    "recreated tracking control with same ID must restore its saved enabled state");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -600,6 +603,64 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingReconnectedProviderRestoresPreferences()
+        {
+            var id = "vcr-parity-reconnect-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                shellRoot = new GameObject("P1 tracking reconnect shell");
+                // Keep U1 UI setup off; exercise its real tracking restore path.
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var configured = type.GetField("_workspaceConfiguredTracking", flags)
+                    ?.GetValue(shell) as HashSet<string>;
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                if (configured == null || scan == null || restore == null)
+                    return false;
+
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                sourceRoot = new GameObject("P1 tracking reconnect first provider");
+                var first = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                first.Id = id;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!first.ControlEnabled || first.ToggleCalls != 1)
+                    return false;
+
+                // The same component should not repeatedly reapply settings.
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (first.ToggleCalls != 1)
+                    return false;
+
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 tracking reconnect replacement provider");
+                var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                replacement.Id = id;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!replacement.ControlEnabled || replacement.ToggleCalls != 1)
+                    return false;
+
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                return replacement.ToggleCalls == 1;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
         private static bool LegacyRestoreSkipsDestroyedRefresh()
         {
             var source = File.ReadAllText(Path.Combine(
@@ -672,6 +733,33 @@ namespace VCR.Editor.P1
         private static void Check(bool condition, string message)
         {
             if (!condition) throw new InvalidOperationException(message);
+        }
+    }
+    // Source-free runtime fixture: an OS/device reconnection can destroy a
+    // provider and create a new component with exactly the same logical ID.
+    internal sealed class P1TrackingReconnectProbe : MonoBehaviour, ITrackingRuntimeControl
+    {
+        public string Id { get; set; }
+        public string ControlId => Id;
+        public string DisplayName => "P1 reconnect probe";
+        public bool ControlEnabled { get; private set; }
+        public TrackingSourceHealthState ControlHealthState =>
+            TrackingSourceHealthState.Healthy;
+        public string ControlError => "";
+        public int ToggleCalls { get; private set; }
+
+        public bool TrySetControlEnabled(bool enabled, out string error)
+        {
+            error = null;
+            ControlEnabled = enabled;
+            ToggleCalls++;
+            return true;
+        }
+
+        public bool TryRecover(out string error)
+        {
+            error = null;
+            return true;
         }
     }
 }
