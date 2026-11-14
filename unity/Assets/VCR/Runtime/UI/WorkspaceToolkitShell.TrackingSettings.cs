@@ -242,19 +242,24 @@ namespace VCR.Runtime.UI
                 _workspaceNativeTrackingIds[i] = source.ControlId;
                 var title = source.DisplayName + " (" +
                     (source.ControlEnabled ? source.ControlHealthState.ToString() : "Off") + ")";
-                if (source is ITrackingRuntimeConfigurable)
+                var configured = _workspaceConfiguredTracking.Contains(source.ControlId);
+                if (configured && source is ITrackingRuntimeConfigurable)
                     _workspaceNativeSettings.Add(2, 5000 + i,
                         DesktopNativeSettingsWindow.ControlKind.Button, title + " settings");
-                _workspaceNativeSettings.Add(2, 5200 + i,
-                    DesktopNativeSettingsWindow.ControlKind.Button,
-                    (source.ControlEnabled ? "Disable " : "Enable ") + source.DisplayName);
-                _workspaceNativeSettings.Add(2, 5400 + i,
-                    DesktopNativeSettingsWindow.ControlKind.Button,
-                    "Recover " + source.DisplayName);
+                // Unconfigured sources must be added (initially disabled)
+                // before Toggle or Recover, matching the UI Toolkit panel.
+                if (configured)
+                {
+                    _workspaceNativeSettings.Add(2, 5200 + i,
+                        DesktopNativeSettingsWindow.ControlKind.Button,
+                        (source.ControlEnabled ? "Disable " : "Enable ") + source.DisplayName);
+                    _workspaceNativeSettings.Add(2, 5400 + i,
+                        DesktopNativeSettingsWindow.ControlKind.Button,
+                        "Recover " + source.DisplayName);
+                }
                 _workspaceNativeSettings.Add(2, 5600 + i,
                     DesktopNativeSettingsWindow.ControlKind.Button,
-                    (_workspaceConfiguredTracking.Contains(source.ControlId) ?
-                        "Remove " : "Add ") + source.DisplayName);
+                    (configured ? "Remove " : "Add ") + source.DisplayName);
             }
             if (count == 0)
                 _workspaceNativeSettings.Add(2, 5,
@@ -387,6 +392,42 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private bool TrySetWorkspaceTrackingEnabled(
+            ITrackingRuntimeControl control, bool enabled, out string feedback)
+        {
+            if (control == null)
+            {
+                feedback = "Tracking source disconnected.";
+                return false;
+            }
+            var id = control.ControlId;
+            if (!_workspaceConfiguredTracking.Contains(id))
+            {
+                feedback = "Add the tracking source before enabling or disabling it.";
+                return false;
+            }
+            try
+            {
+                if (!control.TrySetControlEnabled(enabled, out var error))
+                {
+                    feedback = "Tracking toggle failed: " + (error ?? "unknown error");
+                    return false;
+                }
+                _workspaceRestoredTracking[id] = control;
+                PlayerPrefs.SetInt(TrackingEnabledKey + id, enabled ? 1 : 0);
+                PlayerPrefs.Save();
+                feedback = (control.DisplayName ?? id) +
+                    (enabled ? " enabled." : " disabled.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                feedback = "Tracking toggle failed: " + ex.Message;
+                Debug.LogException(ex, this);
+                return false;
+            }
+        }
+
         private bool TryRequestWorkspaceTrackingRecovery(
             ITrackingRuntimeControl control, out string feedback)
         {
@@ -464,18 +505,10 @@ namespace VCR.Runtime.UI
             else if (action < 5400)
             {
                 var enabled = !control.ControlEnabled;
-                if (control.TrySetControlEnabled(enabled, out var error))
-                {
-                    _workspaceConfiguredTracking.Add(id);
-                    _workspaceRestoredTracking[id] = control;
-                    PlayerPrefs.SetInt(TrackingEnabledKey + id, enabled ? 1 : 0);
-                    PersistConfiguredWorkspaceTracking();
-                    RebuildWorkspaceNativeTrackingSources();
-                    _workspaceNativeSettings.SetText(92, "Tracking source " +
-                        (enabled ? "enabled." : "disabled."));
-                }
-                else
-                    _workspaceNativeSettings.SetText(92, "Toggle failed: " + error);
+                var changed = TrySetWorkspaceTrackingEnabled(
+                    control, enabled, out var feedback);
+                if (changed) RebuildWorkspaceNativeTrackingSources();
+                _workspaceNativeSettings.SetText(92, feedback);
             }
             else if (action < 5600)
             {
@@ -729,31 +762,12 @@ namespace VCR.Runtime.UI
 
         private void ToggleWorkspaceTrackingEnabled(string sourceId)
         {
-            try
-            {
-                var source = FindWorkspaceTrackingSource(sourceId);
-                if (source == null || !_workspaceConfiguredTracking.Contains(sourceId))
-                {
-                    SetWorkspaceTrackingFeedback("Add a connected source before enabling it.");
-                    return;
-                }
-                var enabled = !source.ControlEnabled;
-                if (!source.TrySetControlEnabled(enabled, out var error))
-                {
-                    SetWorkspaceTrackingFeedback("Tracking toggle failed: " + error);
-                    return;
-                }
-                _workspaceRestoredTracking[sourceId] = source;
-                PlayerPrefs.SetInt(TrackingEnabledKey + sourceId, enabled ? 1 : 0);
-                PlayerPrefs.Save();
-                TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
-                    (enabled ? " enabled." : " disabled."));
-            }
-            catch (Exception ex)
-            {
-                SetWorkspaceTrackingFeedback("Tracking toggle failed: " + ex.Message);
-                Debug.LogException(ex, this);
-            }
+            var source = FindWorkspaceTrackingSource(sourceId);
+            var enabled = source != null && !source.ControlEnabled;
+            if (TrySetWorkspaceTrackingEnabled(source, enabled, out var feedback))
+                TrackingPanelActionFinished(feedback);
+            else
+                SetWorkspaceTrackingFeedback(feedback);
         }
 
         private void RecoverWorkspaceTrackingSource(string sourceId)
