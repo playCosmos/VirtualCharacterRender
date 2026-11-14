@@ -228,6 +228,8 @@ namespace VCR.Editor.P1
                     "tracking Toggle must not implicitly register an unconfigured source");
                 Check(TrackingSavedOffRestoresBeforeConfiguration(),
                     "saved-off tracking source must stop capture before applying configuration");
+                Check(TrackingPersistenceIdsPreserveRegisteredCase(),
+                    "case-insensitive provider reconnect must use registered PlayerPrefs key spelling");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -655,6 +657,114 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingPersistenceIdsPreserveRegisteredCase()
+        {
+            var suffix = Guid.NewGuid().ToString("N");
+            var registeredId = "VCR-PARITY-CASE-" + suffix;
+            var reconnectedId = registeredId.ToLowerInvariant();
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + registeredId;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." +
+                registeredId + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var persistenceId = type.GetMethod(
+                    "GetWorkspaceTrackingPersistenceId", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                if (configuredField == null || restoredField == null ||
+                    persistenceId == null || restore == null ||
+                    toggle == null || scan == null)
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking persisted ID casing shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 tracking changed-case provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = reconnectedId;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null)
+                    return false;
+
+                configured.Add(registeredId);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "registered-case-setting");
+                if ((string)persistenceId.Invoke(shell,
+                        new object[] { reconnectedId }) != registeredId)
+                    return false;
+
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!provider.ControlEnabled ||
+                    provider.ToggleCalls != 1 ||
+                    provider.ConfigurationCalls != 1 ||
+                    provider.AppliedValue != "registered-case-setting" ||
+                    !restored.ContainsKey(registeredId))
+                    return false;
+
+                var args = new object[] { provider, false, null };
+                if (!(bool)toggle.Invoke(shell, args) ||
+                    provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+                args[1] = true;
+                args[2] = null;
+                if (!(bool)toggle.Invoke(shell, args) ||
+                    !provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // The canonical registered spelling persists after a same-ID
+                // reattachment, even when the provider advertises lowercase.
+                UnityEngine.Object.DestroyImmediate(providerRoot);
+                providerRoot = new GameObject("P1 tracking changed-case replacement");
+                var replacement = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                replacement.Id = reconnectedId;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (!replacement.ControlEnabled ||
+                    replacement.AppliedValue != "registered-case-setting" ||
+                    replacement.ToggleCalls != 1)
+                    return false;
+
+                // Both Native Settings and Toolkit must use the registered
+                // spelling for their setting writes and remove operations.
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeAt = source.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = source.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var toolkitAt = source.IndexOf(
+                    "private void UpdateWorkspaceTrackingMembership(", StringComparison.Ordinal);
+                var toolkitEnd = source.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                if (nativeAt < 0 || nativeEnd <= nativeAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                return source.Substring(nativeAt, nativeEnd - nativeAt)
+                           .Contains("TrackingEnabledKey + persistenceId") &&
+                       source.Substring(toolkitAt, toolkitEnd - toolkitAt)
+                           .Contains("TrackingEnabledKey + persistenceId");
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
         }
 
         private static bool TrackingSavedOffRestoresBeforeConfiguration()
