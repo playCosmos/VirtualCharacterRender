@@ -610,13 +610,22 @@ namespace VCR.Editor.P1
             var shellType = typeof(WorkspaceToolkitShell);
             var ready = shellType.GetMethod(
                 "IsWorkspaceTrackingEditableSchema", StaticPrivate);
-            if (ready == null) return false;
+            var display = shellType.GetMethod(
+                "GetWorkspaceTrackingDisplayedValue", StaticPrivate);
+            if (ready == null || display == null) return false;
             bool CanEdit(IReadOnlyList<TrackingRuntimeSetting> schema) =>
                 (bool)ready.Invoke(null, new object[] { schema });
             if (CanEdit(null) ||
                 !CanEdit(Array.Empty<TrackingRuntimeSetting>()) ||
                 !CanEdit(new TrackingRuntimeSetting[256]) ||
                 CanEdit(new TrackingRuntimeSetting[257]))
+                return false;
+            // The live provider readback must take precedence over any
+            // previously persisted value when opening either editor.
+            var liveValue = new TrackingRuntimeSetting(
+                "test-key", "Test value", "current-device-value");
+            if ((string)display.Invoke(null, new object[] { liveValue }) !=
+                "current-device-value")
                 return false;
 
             var source = File.ReadAllText(Path.Combine(Application.dataPath,
@@ -635,7 +644,11 @@ namespace VCR.Editor.P1
                    toolkit.Contains("!IsWorkspaceTrackingEditableSchema(settings)") &&
                    native.Contains("RebuildWorkspaceNativeTrackingSources();") &&
                    native.Contains("new HashSet<string>(StringComparer.OrdinalIgnoreCase)") &&
-                   toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)");
+                   native.Contains("GetWorkspaceTrackingDisplayedValue(setting)") &&
+                   toolkit.Contains("GetWorkspaceTrackingDisplayedValue(setting)") &&
+                   toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
+                   !native.Contains("PlayerPrefs.GetString(") &&
+                   !toolkit.Contains("PlayerPrefs.GetString(");
         }
 
         private static bool TrackingReconnectedProviderRestoresPreferences()
