@@ -132,6 +132,19 @@ namespace VCR.Runtime.UI
                 _workspaceRestoredTracking[id] = source;
                 try
                 {
+                    var enabled = PlayerPrefs.GetInt(TrackingEnabledKey + id, 0) != 0;
+                    // If the saved preference is Off, stop capture before
+                    // applying settings. MediaPipe may restart its webcam when
+                    // capture parameters change, even if we will disable it.
+                    if (!enabled && source.ControlEnabled &&
+                        !source.TrySetControlEnabled(false, out var stopError))
+                    {
+                        Debug.LogWarning("U1 tracking disable restore failed for " +
+                                         id + ": " + stopError, this);
+                        _workspaceRestoredTracking.Remove(id);
+                        continue;
+                    }
+
                     if (source is ITrackingRuntimeConfigurable configurable)
                     {
                         var settings = configurable.GetConfigurationSettings();
@@ -165,7 +178,8 @@ namespace VCR.Runtime.UI
                         }
                     }
 
-                    var enabled = PlayerPrefs.GetInt(TrackingEnabledKey + id, 0) != 0;
+                    // Reconcile again after configuration: a provider may
+                    // update its enabled state while applying settings.
                     if (source.ControlEnabled != enabled &&
                         !source.TrySetControlEnabled(enabled, out var enableError))
                     {
