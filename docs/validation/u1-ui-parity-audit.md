@@ -175,6 +175,15 @@ The canceled Unity job #43668307020 had a successful P0–P13 Editor run. GitHub
 - The underlying Unity/GameCI stall may be intermittent; changing timeout and evidence ordering does not prove its root cause is fixed. If it recurs, inspect the second invocation's Editor log and Unity licensing/process lifecycle instead of weakening validation.
 - **New exact-head CI** required; prior HEAD `855612e` repository Push/PR passed, but its Unity workflow was canceled after P0–P13 PASS and must not be reported as a complete Unity/Windows PASS.
 
+## Tracking configuration Save must not implicitly re-register a removed device
+
+The native Settings and UI Toolkit configuration editors correctly bound their fields to a specific provider instance, but **not to the configured-membership state**. If another Settings surface removed a provider while an editor remained open, the old Save action could still call `TryApplyConfiguration`, write preferences, then silently insert the provider back into `_workspaceConfiguredTracking`. Removing a device must be authoritative until the user explicitly selects Add again.
+
+- `dc01334`: add shared `IsWorkspaceTrackingConfiguredEditorCurrent(sourceId, displayed, live)`; both native and UI Toolkit Save paths now require that the source is **still configured** and the component instance has not changed. A rejected native Save closes/rebuilds its device list; Toolkit clears the stale editor and asks to Add/reopen. Successful Save updates persisted field values and restore marker, **without mutating membership**.
+- `9d5a9ba`: Unity P1 fixture checks unconfigured source cannot Save, configured source can, Remove invalidates pending Save, and a replacement with the same logical ID cannot use the previous editor. Source assertions require both Save paths to guard before `TryApplyConfiguration` and not insert implicit membership.
+- This addresses cross-surface concurrency, not actual OS click behavior. Hardware and native UI acceptance remain pending.
+- **Previous exact-head CI:** `b60724a` Unity P0–P13 / Windows Player [#43676840384](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43676840384), repository Push/PR #43676840390/#43676844405 all PASS. New commits need their own exact-source CI.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
