@@ -98,8 +98,23 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      # Distinguish Editor regression success from the two subsequent
+      # Unity invocations. A workspace generation timeout must not erase
+      # already-produced P0-P13 evidence or imply an Editor test failure.
+      - name: Require P0-P13 PASS before P1 workspace generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify-unity-source-free-report.py Builds/Validation/p0-p13-source-free.json
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "P0-P13 Editor validation: PASS before P1 workspace generation for $GITHUB_SHA"
+
       - name: Generate and validate P1 UI Toolkit workspace
         if: github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026'
+        # Unity can occasionally stall on its second batch-mode invocation.
+        # Fail with a bounded step rather than consuming the full 65-minute
+        # job budget with no diagnosis or Player-build attempt.
+        timeout-minutes: 25
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
