@@ -195,6 +195,15 @@ The exact-head `579271c` Unity P0–P13 [#43697030471](https://github.com/playCo
 - **Limitations:** the revision protects actions within the same U1 shell, not independent processes or a third-party provider making direct settings changes without going through either editor. Hardware and native OS click verification remain required.
 - **Exact-head CI:** pending. Prior full green `b60724a` Unity P0–P13 / Windows [#43676840384](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43676840384) still serves as the last confirmed complete passing baseline until this regression is retested.
 
+## External provider setting changes invalidate open Tracking editor drafts
+
+The prior per-source UI revision only observes writes made through U1's Native Settings or UI Toolkit. A running tracking provider or another runtime component can change its own configuration directly, without incrementing that UI revision. The old open editor's Save could therefore apply stale text fields over the live, newer provider values, even though the provider instance and configured membership had not changed.
+
+- `f5839d5`: capture a case-insensitive key/value snapshot of `ITrackingRuntimeConfigurable.GetConfigurationSettings()` when opening each native or UI Toolkit editor. Immediately before `TryApplyConfiguration`, re-read the provider-owned settings and compare exact editable keys and ordinal value strings. If any value, field set or schema readiness changes, reject Save and require reopening the editor. Do not apply the stale draft or write `PlayerPrefs` in that case. This is additive to instance, membership and UI revision checks.
+- `5262054`: P1 real Unity provider fixture checks unchanged readback, direct provider value changes independent of U1, field-set drift, temporary null schema, oversized schema, case-insensitive setting keys with case-sensitive values; source-contract checks both editor Save paths perform the live-readback guard **before** provider Apply.
+- Trade-off: a provider exposing volatile *readback* values as editable configuration will cause Save to be rejected if those values legitimately drift. This is safer than silently overwriting live provider configuration; providers should expose stable desired settings in `GetConfigurationSettings`, and operators should reopen after external reconfiguration. This protects a U1 editor draft but does not serialize concurrent external writes that race after the pre-Apply comparison.
+- **Exact-head CI:** pending. Previous `9730823` Unity P0–P13/Windows Player [#43720065206](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43720065206), repository Push/PR #43720065201/#43720069059 PASS. Previous `b390169` macOS native startup/quit [#43720016007](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43720016007) PASS.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
