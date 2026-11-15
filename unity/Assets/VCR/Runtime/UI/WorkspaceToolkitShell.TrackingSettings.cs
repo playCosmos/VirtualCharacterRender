@@ -33,6 +33,7 @@ namespace VCR.Runtime.UI
         private readonly Dictionary<string, int> _workspaceTrackingEditVersions =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private int _workspaceNativeTrackingEditVersion;
+        private Dictionary<string, string> _workspaceNativeTrackingOpenValues;
         private string _workspaceNativeActiveTrackingId;
         // The Settings editor belongs to the specific provider that created
         // its fields, not merely to a reusable logical ControlId.
@@ -47,6 +48,7 @@ namespace VCR.Runtime.UI
             _workspaceRestoredTracking.Clear();
             _workspaceTrackingEditVersions.Clear();
             _workspaceNativeTrackingEditVersion = 0;
+            _workspaceNativeTrackingOpenValues = null;
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingFields.Clear();
@@ -287,6 +289,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
             _workspaceNativeTrackingEditVersion = 0;
+            _workspaceNativeTrackingOpenValues = null;
             _workspaceNativeSettings.Add(2, 4, DesktopNativeSettingsWindow.ControlKind.Label,
                 "Tracking input sources");
             _workspaceNativeSettings.Add(2, 450, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -355,6 +358,44 @@ namespace VCR.Runtime.UI
             return settings != null && settings.Count <= MaxNativeTrackingFields;
         }
 
+        private static Dictionary<string, string> CaptureWorkspaceTrackingSettings(
+            IReadOnlyList<TrackingRuntimeSetting> settings)
+        {
+            if (!IsWorkspaceTrackingEditableSchema(settings))
+                return null;
+            var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var setting in settings)
+            {
+                if (string.IsNullOrWhiteSpace(setting.Key) ||
+                    snapshot.ContainsKey(setting.Key))
+                    continue;
+                snapshot[setting.Key] = GetWorkspaceTrackingDisplayedValue(setting);
+            }
+            return snapshot;
+        }
+
+        private static bool AreWorkspaceTrackingSettingsUnchanged(
+            ITrackingRuntimeConfigurable configurable,
+            IReadOnlyDictionary<string, string> openedValues)
+        {
+            if (configurable == null || openedValues == null)
+                return false;
+            // Re-read provider-owned settings instead of trusting PlayerPrefs
+            // or the in-process UI revision. External code can change the
+            // running source without visiting either U1 Settings surface.
+            var current = CaptureWorkspaceTrackingSettings(
+                configurable.GetConfigurationSettings());
+            if (current == null || current.Count != openedValues.Count)
+                return false;
+            foreach (var pair in openedValues)
+            {
+                if (!current.TryGetValue(pair.Key, out var value) ||
+                    !string.Equals(pair.Value, value, StringComparison.Ordinal))
+                    return false;
+            }
+            return true;
+        }
+
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
             var control = FindWorkspaceTrackingSource(controlId);
@@ -385,6 +426,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeActiveTrackingProvider = control;
             _workspaceNativeTrackingEditVersion =
                 GetWorkspaceTrackingEditVersion(controlId);
+            _workspaceNativeTrackingOpenValues = CaptureWorkspaceTrackingSettings(settings);
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeSettings.Add(2, 6, DesktopNativeSettingsWindow.ControlKind.Label,
@@ -448,6 +490,14 @@ namespace VCR.Runtime.UI
                 values[entry.Value] = _workspaceNativeSettings.GetText(entry.Key);
             try
             {
+                if (!AreWorkspaceTrackingSettingsUnchanged(
+                        configurable, _workspaceNativeTrackingOpenValues))
+                {
+                    RebuildWorkspaceNativeTrackingSources();
+                    _workspaceNativeSettings.SetText(92,
+                        "Live tracking settings changed. Reopen the editor before saving.");
+                    return;
+                }
                 if (!configurable.TryApplyConfiguration(values, out var error))
                 {
                     _workspaceNativeSettings.SetText(92,
@@ -931,6 +981,7 @@ namespace VCR.Runtime.UI
                 }
                 _workspaceTrackingEditor.Add(new Label(configurable.ConfigurationTitle));
                 var openedVersion = GetWorkspaceTrackingEditVersion(sourceId);
+                var openedValues = CaptureWorkspaceTrackingSettings(settings);
                 var fields = new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase);
                 foreach (var setting in settings)
                 {
@@ -963,6 +1014,14 @@ namespace VCR.Runtime.UI
                         if (!(live is ITrackingRuntimeConfigurable target))
                         {
                             SetWorkspaceTrackingFeedback("Tracking source disconnected.");
+                            return;
+                        }
+                        if (!AreWorkspaceTrackingSettingsUnchanged(
+                                target, openedValues))
+                        {
+                            _workspaceTrackingEditor.Clear();
+                            SetWorkspaceTrackingFeedback(
+                                "Live tracking settings changed. Reopen the editor before saving.");
                             return;
                         }
                         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
