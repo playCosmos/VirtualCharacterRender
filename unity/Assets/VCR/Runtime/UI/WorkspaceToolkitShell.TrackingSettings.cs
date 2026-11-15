@@ -667,7 +667,12 @@ namespace VCR.Runtime.UI
                 var signature = "blocked:" + ambiguous + ";";
                 foreach (var source in sources)
                 {
-                    signature += source.ControlId + "\u001f" + source.DisplayName + "\u001f" +
+                    // Rebuild the controls when an instance is replaced even
+                    // if ControlId, display name and health are unchanged.
+                    var behaviour = source as MonoBehaviour;
+                    signature += source.ControlId + "\u001f" +
+                        (behaviour != null ? behaviour.GetInstanceID() : 0) + "\u001f" +
+                        source.DisplayName + "\u001f" +
                         source.ControlEnabled + "\u001f" + source.ControlHealthState +
                         "\u001f" + source.ControlError + "\u001f" +
                         _workspaceConfiguredTracking.Contains(source.ControlId) + "\u001e";
