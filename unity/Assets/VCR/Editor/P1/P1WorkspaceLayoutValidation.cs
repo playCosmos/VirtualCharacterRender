@@ -236,6 +236,8 @@ namespace VCR.Editor.P1
                     "tracking settings Save must not re-register a removed device");
                 Check(TrackingEditVersionPreventsStaleSaves(),
                     "concurrent Native and Toolkit tracking drafts must not overwrite newer settings");
+                Check(TrackingExternalProviderChangesRejectStaleSave(),
+                    "tracking editors must reject Save after direct provider setting changes");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -663,6 +665,94 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingExternalProviderChangesRejectStaleSave()
+        {
+            GameObject root = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Static | BindingFlags.NonPublic;
+                var capture = type.GetMethod("CaptureWorkspaceTrackingSettings", flags);
+                var unchanged = type.GetMethod("AreWorkspaceTrackingSettingsUnchanged", flags);
+                if (capture == null || unchanged == null) return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeStart = code.IndexOf(
+                    "private void SaveWorkspaceNativeTrackingDetails()", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var toolkitStart = code.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (nativeStart < 0 || nativeEnd <= nativeStart || toolkitStart < 0)
+                    return false;
+                var native = code.Substring(nativeStart, nativeEnd - nativeStart);
+                var toolkit = code.Substring(toolkitStart);
+                var nativeCheck = native.IndexOf("AreWorkspaceTrackingSettingsUnchanged(",
+                    StringComparison.Ordinal);
+                var nativeApply = native.IndexOf("TryApplyConfiguration(",
+                    StringComparison.Ordinal);
+                var toolkitOpen = toolkit.IndexOf(
+                    "var openedValues = CaptureWorkspaceTrackingSettings(",
+                    StringComparison.Ordinal);
+                var toolkitCheck = toolkit.IndexOf("AreWorkspaceTrackingSettingsUnchanged(",
+                    StringComparison.Ordinal);
+                var toolkitApply = toolkit.IndexOf("TryApplyConfiguration(",
+                    StringComparison.Ordinal);
+                if (!code.Contains("_workspaceNativeTrackingOpenValues = CaptureWorkspaceTrackingSettings(") ||
+                    nativeCheck < 0 || nativeApply <= nativeCheck ||
+                    toolkitOpen < 0 || toolkitCheck <= toolkitOpen ||
+                    toolkitApply <= toolkitCheck)
+                    return false;
+
+                root = new GameObject("P1 external tracking setting change");
+                var provider = root.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = "vcr-external-configuration";
+                var opened = (Dictionary<string, string>)capture.Invoke(
+                    null, new object[] { provider.GetConfigurationSettings() });
+                if (opened == null || opened.Count != 1 ||
+                    opened["test-value"] != "default-value")
+                    return false;
+
+                bool IsUnchanged() => (bool)unchanged.Invoke(null, new object[] {
+                    provider, opened
+                });
+                if (!IsUnchanged()) return false;
+
+                // No U1 UI action has occurred, but direct provider readback
+                // changes while the editor remains open.
+                provider.ExternalReadbackOverride = "changed-externally";
+                if (IsUnchanged()) return false;
+                provider.ExternalReadbackOverride = "default-value";
+                if (!IsUnchanged()) return false;
+
+                // Schema drift, null readiness, and oversized schema must
+                // reject stale edits without mutating the provider.
+                provider.ReportAdditionalSetting = true;
+                if (IsUnchanged()) return false;
+                provider.ReportAdditionalSetting = false;
+                provider.ReturnNullSchemaOnce = true;
+                if (IsUnchanged() || !IsUnchanged()) return false;
+                provider.ReportOversizedSchema = true;
+                if (IsUnchanged()) return false;
+                provider.ReportOversizedSchema = false;
+
+                // Case-insensitive setting keys do not relax value equality.
+                var uppercase = new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase) {
+                        ["TEST-VALUE"] = "default-value"
+                    };
+                if (!(bool)unchanged.Invoke(null, new object[] { provider, uppercase }))
+                    return false;
+                uppercase["TEST-VALUE"] = "Default-Value";
+                return !(bool)unchanged.Invoke(null, new object[] { provider, uppercase });
+            }
+            finally
+            {
+                if (root != null) UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         private static bool TrackingEditVersionPreventsStaleSaves()
@@ -1635,6 +1725,9 @@ namespace VCR.Editor.P1
         public bool FailDisableOnce { get; set; }
         public bool AppliedWhileEnabled { get; private set; }
         public bool ReturnNullSchemaOnce { get; set; }
+        public bool ReportAdditionalSetting { get; set; }
+        public bool ReportOversizedSchema { get; set; }
+        public string ExternalReadbackOverride { get; set; }
         public bool ResetOnRecovery { get; set; }
         public bool FailRecoveryOnce { get; set; }
         public int RecoveryCalls { get; private set; }
@@ -1650,10 +1743,14 @@ namespace VCR.Editor.P1
                 ReturnNullSchemaOnce = false;
                 return null;
             }
-            return new[]
-            {
-                new TrackingRuntimeSetting("test-value", "Test value", "default-value")
-            };
+            if (ReportOversizedSchema)
+                return new TrackingRuntimeSetting[257];
+            var testValue = new TrackingRuntimeSetting(
+                "test-value", "Test value", ExternalReadbackOverride ?? "default-value");
+            return ReportAdditionalSetting
+                ? new[] { testValue, new TrackingRuntimeSetting(
+                    "external-field", "External field", "new") }
+                : new[] { testValue };
         }
 
         public bool TryApplyConfiguration(
