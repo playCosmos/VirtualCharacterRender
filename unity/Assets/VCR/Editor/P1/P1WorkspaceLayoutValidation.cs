@@ -695,6 +695,8 @@ namespace VCR.Editor.P1
                     !code.Substring(nativeStart, nativeEnd - nativeStart).Contains(
                         "IsWorkspaceTrackingEditorSourceCurrent(displayed, control)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
+                        "behaviour.GetInstanceID()") ||
+                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "UpdateWorkspaceTrackingMembership(sourceId, source)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "ToggleWorkspaceTrackingEnabled(sourceId, source)") ||
@@ -716,6 +718,7 @@ namespace VCR.Editor.P1
                 sourceRoot = new GameObject("P1 stale tracking button original");
                 var original = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 original.Id = id;
+                var originalInstanceId = original.GetInstanceID();
                 native[0] = original;
                 if (!(bool)panelGuard.Invoke(shell, new object[] { id, original }))
                     return false;
@@ -725,7 +728,8 @@ namespace VCR.Editor.P1
                 var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
                 replacement.Id = id;
 
-                if ((bool)panelGuard.Invoke(shell, new object[] { id, original }) ||
+                if (replacement.GetInstanceID() == originalInstanceId ||
+                    (bool)panelGuard.Invoke(shell, new object[] { id, original }) ||
                     !(bool)panelGuard.Invoke(shell, new object[] { id, replacement }) ||
                     !ReferenceEquals(native[0], original))
                     return false;
