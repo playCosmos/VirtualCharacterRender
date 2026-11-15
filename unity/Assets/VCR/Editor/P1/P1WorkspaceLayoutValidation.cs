@@ -234,6 +234,8 @@ namespace VCR.Editor.P1
                     "stale tracking buttons must not mutate a replacement provider");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
+                Check(TrackingEditVersionPreventsStaleSaves(),
+                    "concurrent Native and Toolkit tracking drafts must not overwrite newer settings");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -661,6 +663,115 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingEditVersionPreventsStaleSaves()
+        {
+            var id = "vcr-parity-concurrent-" + Guid.NewGuid().ToString("N");
+            GameObject shellRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var read = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var invalidate = type.GetMethod("InvalidateWorkspaceTrackingEditors", flags);
+                var current = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (read == null || invalidate == null || current == null ||
+                    configuredField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeStart = code.IndexOf(
+                    "private void ShowWorkspaceNativeTrackingDetails(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var nativeActionStart = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeActionEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var toolkitStart = code.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                var membershipStart = code.IndexOf(
+                    "private void UpdateWorkspaceTrackingMembership(", StringComparison.Ordinal);
+                var membershipEnd = code.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                if (nativeStart < 0 || nativeEnd <= nativeStart ||
+                    nativeActionStart < 0 || nativeActionEnd <= nativeActionStart ||
+                    toolkitStart < 0 || membershipStart < 0 ||
+                    membershipEnd <= membershipStart)
+                    return false;
+                var native = code.Substring(nativeStart, nativeEnd - nativeStart);
+                var nativeActions = code.Substring(
+                    nativeActionStart, nativeActionEnd - nativeActionStart);
+                var toolkit = code.Substring(toolkitStart);
+                var membership = code.Substring(
+                    membershipStart, membershipEnd - membershipStart);
+                if (!native.Contains("_workspaceNativeTrackingEditVersion =") ||
+                    !native.Contains("IsWorkspaceTrackingEditVersionCurrent(") ||
+                    !toolkit.Contains("var openedVersion = GetWorkspaceTrackingEditVersion(") ||
+                    !toolkit.Contains("IsWorkspaceTrackingEditVersionCurrent(") ||
+                    !nativeActions.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
+                    !membership.Contains("InvalidateWorkspaceTrackingEditors(sourceId)") ||
+                    !native.Contains("InvalidateWorkspaceTrackingEditors(control.ControlId)") ||
+                    !toolkit.Contains("InvalidateWorkspaceTrackingEditors(sourceId)") ||
+                    native.IndexOf("IsWorkspaceTrackingEditVersionCurrent(",
+                        StringComparison.Ordinal) >
+                    native.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    toolkit.IndexOf("IsWorkspaceTrackingEditVersionCurrent(",
+                        StringComparison.Ordinal) >
+                    toolkit.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 concurrent tracking settings shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+                configured.Add(id);
+
+                int Version(string logicalId) =>
+                    (int)read.Invoke(shell, new object[] { logicalId });
+                bool CanSave(string logicalId, int openedVersion) =>
+                    (bool)current.Invoke(shell, new object[] { logicalId, openedVersion });
+                void SaveOrChangeMembership(string logicalId) =>
+                    invalidate.Invoke(shell, new object[] { logicalId });
+
+                var nativeDraft = Version(id);
+                var toolkitDraft = Version(id.ToUpperInvariant());
+                if (nativeDraft != toolkitDraft ||
+                    !CanSave(id, nativeDraft) ||
+                    !CanSave(id.ToUpperInvariant(), toolkitDraft))
+                    return false;
+
+                // After Native Save, an earlier Toolkit draft is rejected,
+                // including when the provider spelling changes by case.
+                SaveOrChangeMembership(id);
+                if (CanSave(id, nativeDraft) ||
+                    CanSave(id.ToUpperInvariant(), toolkitDraft))
+                    return false;
+                var currentDraft = Version(id);
+                if (currentDraft == nativeDraft ||
+                    !CanSave(id, currentDraft))
+                    return false;
+
+                // Remove followed by Add must not revive the original draft,
+                // even though membership is once again present.
+                configured.Remove(id);
+                SaveOrChangeMembership(id);
+                if (CanSave(id, currentDraft)) return false;
+                configured.Add(id.ToUpperInvariant());
+                SaveOrChangeMembership(id.ToUpperInvariant());
+                return !CanSave(id, currentDraft) &&
+                       CanSave(id, Version(id)) &&
+                       Version(id) == Version(id.ToUpperInvariant());
+            }
+            finally
+            {
+                if (shellRoot != null)
+                    UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
         }
 
         private static bool TrackingSettingsSaveRequiresCurrentMembership()
