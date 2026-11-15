@@ -29,6 +29,10 @@ namespace VCR.Runtime.UI
             new Dictionary<int, ITrackingRuntimeControl>();
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
             new Dictionary<int, string>();
+        // Saves and Add/Remove across both UI surfaces invalidate old drafts.
+        private readonly Dictionary<string, int> _workspaceTrackingEditVersions =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private int _workspaceNativeTrackingEditVersion;
         private string _workspaceNativeActiveTrackingId;
         // The Settings editor belongs to the specific provider that created
         // its fields, not merely to a reusable logical ControlId.
@@ -41,6 +45,8 @@ namespace VCR.Runtime.UI
         {
             _workspaceConfiguredTracking.Clear();
             _workspaceRestoredTracking.Clear();
+            _workspaceTrackingEditVersions.Clear();
+            _workspaceNativeTrackingEditVersion = 0;
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingFields.Clear();
@@ -65,6 +71,28 @@ namespace VCR.Runtime.UI
                         StringComparison.OrdinalIgnoreCase))
                     return configuredId;
             return runtimeId;
+        }
+
+        private int GetWorkspaceTrackingEditVersion(string sourceId)
+        {
+            return !string.IsNullOrWhiteSpace(sourceId) &&
+                   _workspaceTrackingEditVersions.TryGetValue(sourceId, out var version)
+                ? version : 0;
+        }
+
+        private void InvalidateWorkspaceTrackingEditors(string sourceId)
+        {
+            if (string.IsNullOrWhiteSpace(sourceId)) return;
+            var version = GetWorkspaceTrackingEditVersion(sourceId);
+            _workspaceTrackingEditVersions[sourceId] =
+                version == int.MaxValue ? 1 : version + 1;
+        }
+
+        private bool IsWorkspaceTrackingEditVersionCurrent(
+            string sourceId, int openedVersion)
+        {
+            return _workspaceConfiguredTracking.Contains(sourceId) &&
+                   GetWorkspaceTrackingEditVersion(sourceId) == openedVersion;
         }
 
         private static List<ITrackingRuntimeControl> DiscoverWorkspaceTrackingSources()
@@ -258,6 +286,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
+            _workspaceNativeTrackingEditVersion = 0;
             _workspaceNativeSettings.Add(2, 4, DesktopNativeSettingsWindow.ControlKind.Label,
                 "Tracking input sources");
             _workspaceNativeSettings.Add(2, 450, DesktopNativeSettingsWindow.ControlKind.Button,
@@ -354,6 +383,8 @@ namespace VCR.Runtime.UI
 
             _workspaceNativeActiveTrackingId = controlId;
             _workspaceNativeActiveTrackingProvider = control;
+            _workspaceNativeTrackingEditVersion =
+                GetWorkspaceTrackingEditVersion(controlId);
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeSettings.Add(2, 6, DesktopNativeSettingsWindow.ControlKind.Label,
@@ -395,13 +426,16 @@ namespace VCR.Runtime.UI
             var control = FindWorkspaceTrackingSource(_workspaceNativeActiveTrackingId);
             if (!IsWorkspaceTrackingConfiguredEditorCurrent(
                     _workspaceNativeActiveTrackingId,
-                    _workspaceNativeActiveTrackingProvider, control))
+                    _workspaceNativeActiveTrackingProvider, control) ||
+                !IsWorkspaceTrackingEditVersionCurrent(
+                    _workspaceNativeActiveTrackingId,
+                    _workspaceNativeTrackingEditVersion))
             {
                 // Rejected if the provider was replaced OR another panel
                 // removed it after this editor was opened.
                 RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92,
-                    "Tracking source changed or was removed. Add it and reopen settings.");
+                    "Tracking source or settings changed. Reopen settings before saving.");
                 return;
             }
             if (!(control is ITrackingRuntimeConfigurable configurable))
@@ -425,6 +459,7 @@ namespace VCR.Runtime.UI
                                           GetWorkspaceTrackingPersistenceId(control.ControlId) +
                                           "." + pair.Key, pair.Value ?? "");
                 _workspaceRestoredTracking[control.ControlId] = control;
+                InvalidateWorkspaceTrackingEditors(control.ControlId);
                 PersistConfiguredWorkspaceTracking();
                 RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, "Tracking settings applied.");
@@ -603,6 +638,7 @@ namespace VCR.Runtime.UI
                     _workspaceRestoredTracking[id] = control;
                     PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
+                InvalidateWorkspaceTrackingEditors(id);
                 PersistConfiguredWorkspaceTracking();
                 RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92,
@@ -828,6 +864,7 @@ namespace VCR.Runtime.UI
                     _workspaceRestoredTracking[sourceId] = source;
                 }
                 PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
+                InvalidateWorkspaceTrackingEditors(sourceId);
                 PersistConfiguredWorkspaceTracking();
                 TrackingPanelActionFinished((source.DisplayName ?? sourceId) +
                     (configured ? " removed." : " added (disabled)."));
@@ -893,6 +930,7 @@ namespace VCR.Runtime.UI
                     return;
                 }
                 _workspaceTrackingEditor.Add(new Label(configurable.ConfigurationTitle));
+                var openedVersion = GetWorkspaceTrackingEditVersion(sourceId);
                 var fields = new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase);
                 foreach (var setting in settings)
                 {
@@ -913,11 +951,13 @@ namespace VCR.Runtime.UI
                     {
                         var live = FindWorkspaceTrackingSource(sourceId);
                         if (!IsWorkspaceTrackingConfiguredEditorCurrent(
-                                sourceId, source, live))
+                                sourceId, source, live) ||
+                            !IsWorkspaceTrackingEditVersionCurrent(
+                                sourceId, openedVersion))
                         {
                             _workspaceTrackingEditor.Clear();
                             SetWorkspaceTrackingFeedback(
-                                "Tracking source changed or was removed. Add it and reopen settings.");
+                                "Tracking source or settings changed. Reopen settings before saving.");
                             return;
                         }
                         if (!(live is ITrackingRuntimeConfigurable target))
@@ -938,6 +978,7 @@ namespace VCR.Runtime.UI
                                 GetWorkspaceTrackingPersistenceId(sourceId) +
                                 "." + pair.Key, pair.Value);
                         _workspaceRestoredTracking[sourceId] = live;
+                        InvalidateWorkspaceTrackingEditors(sourceId);
                         PersistConfiguredWorkspaceTracking();
                         _workspaceTrackingEditor.Clear();
                         TrackingPanelActionFinished("Tracking settings saved and applied.");
