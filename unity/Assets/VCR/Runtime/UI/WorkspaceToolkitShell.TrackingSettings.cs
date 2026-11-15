@@ -542,6 +542,10 @@ namespace VCR.Runtime.UI
                     feedback = "Tracking toggle failed: " + (error ?? "unknown error");
                     return false;
                 }
+                // State transitions may restart capture or reset settings
+                // without changing the exposed readback. Invalidate editors
+                // opened before the transition on either U1 surface.
+                InvalidateWorkspaceTrackingEditors(id);
                 _workspaceRestoredTracking[id] = control;
                 PlayerPrefs.SetInt(
                     TrackingEnabledKey + GetWorkspaceTrackingPersistenceId(id),
@@ -595,6 +599,10 @@ namespace VCR.Runtime.UI
                     feedback = "Recovery failed: " + (error ?? "unknown error");
                     return false;
                 }
+                // Recovery can reset internal device state without changing
+                // the provider reference or immediately visible settings.
+                // An editor opened before recovery must not save its old draft.
+                InvalidateWorkspaceTrackingEditors(control.ControlId);
                 // A successful restart may reset live configuration without
                 // replacing the provider component. Replay saved settings on
                 // the next scan, rather than treating the instance as restored.
