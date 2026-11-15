@@ -204,6 +204,15 @@ The prior per-source UI revision only observes writes made through U1's Native S
 - Trade-off: a provider exposing volatile *readback* values as editable configuration will cause Save to be rejected if those values legitimately drift. This is safer than silently overwriting live provider configuration; providers should expose stable desired settings in `GetConfigurationSettings`, and operators should reopen after external reconfiguration. This protects a U1 editor draft but does not serialize concurrent external writes that race after the pre-Apply comparison.
 - **Exact-head CI:** pending. Previous `9730823` Unity P0–P13/Windows Player [#43720065206](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43720065206), repository Push/PR #43720065201/#43720069059 PASS. Previous `b390169` macOS native startup/quit [#43720016007](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43720016007) PASS.
 
+## Tracking Toggle and Recover invalidate open configuration drafts
+
+The existing per-source edit revision was advanced by successful Save and Add/Remove but **not** by `Enable/Disable` or `Recover`. A capture state transition can restart the device, clear settings or modify internal state while its advertised configuration readback remains the same. An editor opened before that transition could therefore still Save the old draft even though it belonged to a previous capture/recovery session. The live-value comparison introduced earlier does not detect invisible internal state resets.
+
+- `e804c40`: after `ITrackingRuntimeControl.TrySetControlEnabled` accepts an Enable/Disable change, invalidate the configured source's open Native and Toolkit settings drafts. Do the same after a successful `TryRecover`, before cache invalidation and saved-state replay. Rejected/failed operations do not advance the edit revision. Both UI surfaces already call these common helpers.
+- `0c81e60`: P1 Unity fixture uses actual shared Toggle/Recover helpers, injects an Enable failure and a Recover failure (revision must not change), then checks accepted Enable, Recover with unchanged readback and same provider, and Disable all invalidate earlier drafts. ID case differences and rejected operations after Remove are included. Source checks enforce that invalidation follows provider acceptance.
+- This is conservative: a state transition that happens to preserve all settings still requires reopening the configuration editor. It avoids applying a draft whose capture-session context has expired.
+- **Verified prior baseline:** `5c210fe` [Unity/Windows #43733035987](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43733035987), repository Push/PR #43733036054/#43733041058 PASS; `5262054` [macOS #43732997480](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43732997480) PASS. New changes await exact-HEAD CI.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
