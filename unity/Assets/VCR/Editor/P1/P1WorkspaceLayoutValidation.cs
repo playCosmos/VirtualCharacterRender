@@ -1100,6 +1100,27 @@ namespace VCR.Editor.P1
                     return false;
 
                 if (!provider.TrySetControlEnabled(true, out _)) return false;
+                // A provider can be On before startup's saved-Off preference
+                // is restored. Recovery must not restart such a source.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                arguments[1] = null;
+                if ((bool)request.Invoke(shell, arguments) ||
+                    provider.RecoveryCalls != 0 ||
+                    !provider.ControlEnabled ||
+                    !((string)arguments[1]).Contains("saved as disabled") ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // The configured set stores the original spelling. The live
+                // provider ID can differ in case without bypassing the guard.
+                provider.Id = id.ToUpperInvariant();
+                arguments[1] = null;
+                if ((bool)request.Invoke(shell, arguments) ||
+                    provider.RecoveryCalls != 0 ||
+                    !provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
                 PlayerPrefs.SetInt(enabledKey, 1);
                 PlayerPrefs.SetString(settingKey, "saved-after-restart");
                 restored[id] = provider;
