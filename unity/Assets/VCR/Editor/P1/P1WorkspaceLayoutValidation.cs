@@ -232,6 +232,8 @@ namespace VCR.Editor.P1
                     "case-insensitive provider reconnect must use registered PlayerPrefs key spelling");
                 Check(TrackingStaleDeviceActionsRejectReplacement(),
                     "stale tracking buttons must not mutate a replacement provider");
+                Check(TrackingSettingsSaveRequiresCurrentMembership(),
+                    "tracking settings Save must not re-register a removed device");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -659,6 +661,89 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingSettingsSaveRequiresCurrentMembership()
+        {
+            var id = "vcr-parity-save-membership-" + Guid.NewGuid().ToString("N");
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var guard = type.GetMethod(
+                    "IsWorkspaceTrackingConfiguredEditorCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (guard == null || configuredField == null) return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeStart = source.IndexOf(
+                    "private void SaveWorkspaceNativeTrackingDetails()", StringComparison.Ordinal);
+                var nativeEnd = source.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var toolkitStart = source.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (nativeStart < 0 || nativeEnd <= nativeStart || toolkitStart < 0)
+                    return false;
+
+                var nativeSave = source.Substring(nativeStart, nativeEnd - nativeStart);
+                var toolkitEditor = source.Substring(toolkitStart);
+                // Both Save paths check the current membership before Apply.
+                // A successful Save must never implicitly add membership.
+                if (!nativeSave.Contains("IsWorkspaceTrackingConfiguredEditorCurrent(") ||
+                    !toolkitEditor.Contains("IsWorkspaceTrackingConfiguredEditorCurrent(") ||
+                    nativeSave.IndexOf("IsWorkspaceTrackingConfiguredEditorCurrent(",
+                        StringComparison.Ordinal) >
+                    nativeSave.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    toolkitEditor.IndexOf("IsWorkspaceTrackingConfiguredEditorCurrent(",
+                        StringComparison.Ordinal) >
+                    toolkitEditor.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    nativeSave.Contains("_workspaceConfiguredTracking.Add(") ||
+                    toolkitEditor.Contains("_workspaceConfiguredTracking.Add("))
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking Save membership shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 tracking Save membership source");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+
+                bool CanSave(ITrackingRuntimeControl displayed,
+                    ITrackingRuntimeControl live) =>
+                    (bool)guard.Invoke(shell, new object[] { id, displayed, live });
+
+                // Opening a stale editor while unconfigured cannot authorize
+                // Save; adding a source is an explicit independent action.
+                if (CanSave(provider, provider)) return false;
+                configured.Add(id);
+                if (!CanSave(provider, provider)) return false;
+                configured.Remove(id);
+                if (CanSave(provider, provider) ||
+                    configured.Contains(id) ||
+                    provider.ConfigurationCalls != 0)
+                    return false;
+
+                // The same logical ID with a new physical provider must not
+                // revive an old editor, even if membership was re-added.
+                configured.Add(id.ToUpperInvariant());
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 tracking Save replacement");
+                var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                replacement.Id = id;
+                return !CanSave(provider, replacement) &&
+                       CanSave(replacement, replacement) &&
+                       replacement.ConfigurationCalls == 0;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
         }
 
         private static bool TrackingStaleDeviceActionsRejectReplacement()
