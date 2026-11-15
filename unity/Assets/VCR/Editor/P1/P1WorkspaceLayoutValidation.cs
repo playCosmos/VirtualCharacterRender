@@ -230,6 +230,8 @@ namespace VCR.Editor.P1
                     "saved-off tracking source must stop capture before applying configuration");
                 Check(TrackingPersistenceIdsPreserveRegisteredCase(),
                     "case-insensitive provider reconnect must use registered PlayerPrefs key spelling");
+                Check(TrackingStaleDeviceActionsRejectReplacement(),
+                    "stale tracking buttons must not mutate a replacement provider");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -657,6 +659,91 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingStaleDeviceActionsRejectReplacement()
+        {
+            var id = "vcr-parity-stale-action-" + Guid.NewGuid().ToString("N");
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var panelGuard = type.GetMethod("IsWorkspaceTrackingPanelActionCurrent", flags);
+                var membership = type.GetMethod("UpdateWorkspaceTrackingMembership", flags);
+                var toggle = type.GetMethod("ToggleWorkspaceTrackingEnabled", flags);
+                var recover = type.GetMethod("RecoverWorkspaceTrackingSource", flags);
+                var nativeSources = type.GetField("_workspaceNativeTrackingProviders", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (panelGuard == null || membership == null || toggle == null ||
+                    recover == null || nativeSources == null || configuredField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeStart = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelStart = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                if (nativeStart < 0 || nativeEnd <= nativeStart ||
+                    panelStart < 0 || panelEnd <= panelStart ||
+                    !code.Substring(nativeStart, nativeEnd - nativeStart).Contains(
+                        "IsWorkspaceTrackingEditorSourceCurrent(displayed, control)") ||
+                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
+                        "UpdateWorkspaceTrackingMembership(sourceId, source)") ||
+                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
+                        "ToggleWorkspaceTrackingEnabled(sourceId, source)") ||
+                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
+                        "RecoverWorkspaceTrackingSource(sourceId, source)") ||
+                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
+                        "EditWorkspaceTrackingSettings(sourceId, source)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 stale tracking button shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var native = nativeSources.GetValue(shell) as
+                    Dictionary<int, ITrackingRuntimeControl>;
+                if (configured == null || native == null) return false;
+                configured.Add(id);
+
+                sourceRoot = new GameObject("P1 stale tracking button original");
+                var original = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                original.Id = id;
+                native[0] = original;
+                if (!(bool)panelGuard.Invoke(shell, new object[] { id, original }))
+                    return false;
+
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 stale tracking button replacement");
+                var replacement = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                replacement.Id = id;
+
+                if ((bool)panelGuard.Invoke(shell, new object[] { id, original }) ||
+                    !(bool)panelGuard.Invoke(shell, new object[] { id, replacement }) ||
+                    !ReferenceEquals(native[0], original))
+                    return false;
+
+                // A stale Add/Remove or Toggle must not operate on the new
+                // provider or change logical membership.
+                membership.Invoke(shell, new object[] { id, original });
+                toggle.Invoke(shell, new object[] { id, original });
+                recover.Invoke(shell, new object[] { id, original });
+                return configured.Contains(id) &&
+                       replacement.ToggleCalls == 0 &&
+                       replacement.RecoveryCalls == 0;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
         }
 
         private static bool TrackingPersistenceIdsPreserveRegisteredCase()
