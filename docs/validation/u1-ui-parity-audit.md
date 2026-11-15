@@ -157,6 +157,15 @@ The tracking Settings editor already checked provider identity on Save, but the 
 - **Verified previous baseline:** `04a3814` completed Unity P0–P13 and Windows Player [#43650088000](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43650088000), repository Push/PR #43650087993/#43650092498 PASS. The predecessor `6781e2e` macOS build/startup/quit [#43650054431](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43650054431) PASS.
 - **Current latest-HEAD Unity validation:** pending. A real device detach/reconnect during an open native Settings window still requires physical testing; do not infer Windows/macOS GUI user acceptance from the source-free fixture.
 
+## Recovery must honor persisted Off even when runtime is On
+
+A new Recovery edge case remains after the earlier disabled-device safeguard: `TryRequestWorkspaceTrackingRecovery` checked configured membership and the provider's **current** `ControlEnabled` only. During startup or an incomplete disable, a provider can still be On while its persisted `TrackingEnabledKey` is Off. Clicking Recover could therefore restart an explicitly disabled camera, before the next restore scan corrects it.
+
+- `f8ca667`: the shared Native Settings / UI Toolkit Recovery helper now also reads the original registered-ID `PlayerPrefs` enabled key. When the saved preference is Off (including missing/disabled by default), Recover is rejected with explicit feedback even if the current component is On. The intentional Enable action must succeed and persist the new preference before Recover is allowed.
+- `db1d013`: expand the real P1 Unity provider fixture to model a configured and currently enabled source with persisted Off, then repeat when its runtime ID differs in case from the original registered ID. Both requests must leave the provider running without invoking Recover or mutating the persisted preference; once saved On, the existing successful recovery/reapply tests proceed.
+- **Latest prior-head CI issue:** `855612e` repository Push/PR [#43668306955](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43668306955) and [#43668312058](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43668312058) passed, but its Unity run [#43668307020](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43668307020) was **cancelled**, not PASS. Its Unity log contains `VCR P1 workspace layout persistence validation: PASS` and `VCR P0-P13 Unity source-free validation: PASS` before a subsequent Windows Mono Player build stopped reporting progress and was canceled after approximately one hour. Native Windows startup and GUI jobs were skipped; do not confuse an Editor PASS log with completed workflow success.
+- **Latest-head CI:** new runtime/test changes require a separate exact-source Unity run; physical camera behavior still unverified.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
