@@ -238,6 +238,8 @@ namespace VCR.Editor.P1
                     "concurrent Native and Toolkit tracking drafts must not overwrite newer settings");
                 Check(TrackingExternalProviderChangesRejectStaleSave(),
                     "tracking editors must reject Save after direct provider setting changes");
+                Check(TrackingStateTransitionsInvalidateOpenEditors(),
+                    "successful tracking Toggle and Recover must invalidate previous editor drafts");
                 Check(LegacyRestoreSkipsDestroyedRefresh(),
                     "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
@@ -665,6 +667,126 @@ namespace VCR.Editor.P1
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
+        }
+
+        private static bool TrackingStateTransitionsInvalidateOpenEditors()
+        {
+            var id = "vcr-parity-state-transition-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var recover = type.GetMethod("TryRequestWorkspaceTrackingRecovery", flags);
+                var revision = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (toggle == null || recover == null || revision == null ||
+                    canSave == null || configuredField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var toggleStart = source.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var recoverStart = source.IndexOf(
+                    "private bool TryRequestWorkspaceTrackingRecovery(", StringComparison.Ordinal);
+                var nativeStart = source.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                if (toggleStart < 0 || recoverStart <= toggleStart ||
+                    nativeStart <= recoverStart)
+                    return false;
+                var toggleCode = source.Substring(toggleStart, recoverStart - toggleStart);
+                var recoverCode = source.Substring(recoverStart, nativeStart - recoverStart);
+                // Both UI surfaces already share these helpers. A revision
+                // changes only after each provider accepts a state transition.
+                if (!toggleCode.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
+                    !recoverCode.Contains(
+                        "InvalidateWorkspaceTrackingEditors(control.ControlId)") ||
+                    toggleCode.IndexOf("InvalidateWorkspaceTrackingEditors(",
+                        StringComparison.Ordinal) <
+                    toggleCode.IndexOf("if (!control.TrySetControlEnabled(",
+                        StringComparison.Ordinal) ||
+                    recoverCode.IndexOf("InvalidateWorkspaceTrackingEditors(",
+                        StringComparison.Ordinal) <
+                    recoverCode.IndexOf("if (!control.TryRecover(", StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 state transition editor shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 state transition provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+
+                int Version() => (int)revision.Invoke(shell, new object[] { id });
+                bool DraftValid(int openedVersion) =>
+                    (bool)canSave.Invoke(shell,
+                        new object[] { id.ToUpperInvariant(), openedVersion });
+                bool Toggle(bool enabled)
+                {
+                    var args = new object[] { provider, enabled, null };
+                    return (bool)toggle.Invoke(shell, args);
+                }
+                bool Recover()
+                {
+                    var args = new object[] { provider, null };
+                    return (bool)recover.Invoke(shell, args);
+                }
+
+                var initialVersion = Version();
+                if (!DraftValid(initialVersion)) return false;
+                provider.FailEnableOnce = true;
+                if (Toggle(true) || Version() != initialVersion ||
+                    !DraftValid(initialVersion))
+                    return false;
+                if (!Toggle(true) || !provider.ControlEnabled ||
+                    Version() == initialVersion || DraftValid(initialVersion) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                var beforeRecovery = Version();
+                if (!DraftValid(beforeRecovery)) return false;
+                provider.FailRecoveryOnce = true;
+                if (Recover() || Version() != beforeRecovery ||
+                    !DraftValid(beforeRecovery))
+                    return false;
+
+                // The successful Recover probe intentionally leaves the
+                // same component, enabled state and setting readback intact.
+                // Its old editor draft still must be invalidated.
+                if (!Recover() || !provider.ControlEnabled ||
+                    Version() == beforeRecovery || DraftValid(beforeRecovery) ||
+                    provider.ConfigurationCalls != 0)
+                    return false;
+
+                var beforeDisable = Version();
+                if (!Toggle(false) || provider.ControlEnabled ||
+                    Version() == beforeDisable || DraftValid(beforeDisable) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                configured.Remove(id);
+                var afterRemove = Version();
+                return !Toggle(true) && !Recover() &&
+                       Version() == afterRemove &&
+                       !configured.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null)
+                    UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null)
+                    UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+            }
         }
 
         private static bool TrackingExternalProviderChangesRejectStaleSave()
