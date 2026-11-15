@@ -24,6 +24,9 @@ namespace VCR.Runtime.UI
             new Dictionary<string, ITrackingRuntimeControl>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _workspaceNativeTrackingIds =
             new Dictionary<int, string>();
+        // A native button must only act on the provider instance it displayed.
+        private readonly Dictionary<int, ITrackingRuntimeControl> _workspaceNativeTrackingProviders =
+            new Dictionary<int, ITrackingRuntimeControl>();
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
             new Dictionary<int, string>();
         private string _workspaceNativeActiveTrackingId;
@@ -39,6 +42,7 @@ namespace VCR.Runtime.UI
             _workspaceConfiguredTracking.Clear();
             _workspaceRestoredTracking.Clear();
             _workspaceNativeTrackingIds.Clear();
+            _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -250,6 +254,7 @@ namespace VCR.Runtime.UI
             if (_workspaceNativeSettings == null) return;
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeTrackingIds.Clear();
+            _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -267,6 +272,7 @@ namespace VCR.Runtime.UI
             {
                 var source = sources[i];
                 _workspaceNativeTrackingIds[i] = source.ControlId;
+                _workspaceNativeTrackingProviders[i] = source;
                 var title = source.DisplayName + " (" +
                     (source.ControlEnabled ? source.ControlHealthState.ToString() : "Off") + ")";
                 var configured = _workspaceConfiguredTracking.Contains(source.ControlId);
@@ -525,9 +531,12 @@ namespace VCR.Runtime.UI
             if (!_workspaceNativeTrackingIds.TryGetValue(slot, out var id))
                 return true;
             var control = FindWorkspaceTrackingSource(id);
-            if (control == null)
+            if (!_workspaceNativeTrackingProviders.TryGetValue(slot, out var displayed) ||
+                !IsWorkspaceTrackingEditorSourceCurrent(displayed, control))
             {
-                _workspaceNativeSettings.SetText(92, "Tracking source is unavailable.");
+                RebuildWorkspaceNativeTrackingSources();
+                _workspaceNativeSettings.SetText(92,
+                    "Tracking source changed. Refresh and select it again.");
                 return true;
             }
             if (action < 5200)
@@ -708,16 +717,16 @@ namespace VCR.Runtime.UI
                     var buttons = new VisualElement();
                     buttons.style.flexDirection = FlexDirection.Row;
                     buttons.style.flexWrap = Wrap.Wrap;
-                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId))
+                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId, source))
                         { text = configured ? "Remove" : "Add" });
                     if (configured)
                     {
-                        buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(sourceId))
+                        buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(sourceId, source))
                             { text = source.ControlEnabled ? "Disable" : "Enable" });
-                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(sourceId))
+                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(sourceId, source))
                             { text = "Recover" });
                         if (source is ITrackingRuntimeConfigurable)
-                            buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId))
+                            buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId, source))
                                 { text = "Configure" });
                     }
                     container.Add(buttons);
@@ -745,11 +754,28 @@ namespace VCR.Runtime.UI
             RefreshWorkspaceTrackingPanel();
         }
 
-        private void UpdateWorkspaceTrackingMembership(string sourceId)
+        private bool IsWorkspaceTrackingPanelActionCurrent(
+            string sourceId, ITrackingRuntimeControl displayedSource)
+        {
+            var live = FindWorkspaceTrackingSource(sourceId);
+            if (IsWorkspaceTrackingEditorSourceCurrent(displayedSource, live))
+                return true;
+            SetWorkspaceTrackingFeedback(
+                "Tracking source changed. Select it again before continuing.");
+            _workspaceTrackingPanelSignature = null;
+            _nextWorkspaceTrackingPanelRefresh = 0f;
+            RefreshWorkspaceTrackingPanel();
+            return false;
+        }
+
+        private void UpdateWorkspaceTrackingMembership(
+            string sourceId, ITrackingRuntimeControl displayedSource)
         {
             try
             {
-                var source = FindWorkspaceTrackingSource(sourceId);
+                if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
+                    return;
+                var source = displayedSource;
                 if (source == null)
                 {
                     SetWorkspaceTrackingFeedback("Tracking source disconnected.");
@@ -784,7 +810,7 @@ namespace VCR.Runtime.UI
 
                 if (!configured && source is ITrackingRuntimeConfigurable settings &&
                     settings.OpenConfigurationOnAdd)
-                    EditWorkspaceTrackingSettings(sourceId);
+                    EditWorkspaceTrackingSettings(sourceId, source);
             }
             catch (Exception ex)
             {
@@ -793,9 +819,12 @@ namespace VCR.Runtime.UI
             }
         }
 
-        private void ToggleWorkspaceTrackingEnabled(string sourceId)
+        private void ToggleWorkspaceTrackingEnabled(
+            string sourceId, ITrackingRuntimeControl displayedSource)
         {
-            var source = FindWorkspaceTrackingSource(sourceId);
+            if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
+                return;
+            var source = displayedSource;
             var enabled = source != null && !source.ControlEnabled;
             if (TrySetWorkspaceTrackingEnabled(source, enabled, out var feedback))
                 TrackingPanelActionFinished(feedback);
@@ -803,18 +832,27 @@ namespace VCR.Runtime.UI
                 SetWorkspaceTrackingFeedback(feedback);
         }
 
-        private void RecoverWorkspaceTrackingSource(string sourceId)
+        private void RecoverWorkspaceTrackingSource(
+            string sourceId, ITrackingRuntimeControl displayedSource)
         {
-            var source = FindWorkspaceTrackingSource(sourceId);
+            if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
+                return;
+            var source = displayedSource;
             if (TryRequestWorkspaceTrackingRecovery(source, out var feedback))
                 TrackingPanelActionFinished(feedback);
             else
                 SetWorkspaceTrackingFeedback(feedback);
         }
 
-        private void EditWorkspaceTrackingSettings(string sourceId)
+        private void EditWorkspaceTrackingSettings(
+            string sourceId, ITrackingRuntimeControl displayedSource)
         {
             if (_workspaceTrackingEditor == null) return;
+            if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
+            {
+                _workspaceTrackingEditor.Clear();
+                return;
+            }
             _workspaceTrackingEditor.Clear();
             try
             {
