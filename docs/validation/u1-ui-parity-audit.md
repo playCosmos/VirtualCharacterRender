@@ -146,6 +146,15 @@ Restore ordering review found an avoidable runtime side effect: `RestoreWorkspac
 - This does **not** attempt to migrate older split-case preference entries already produced by the previous bug; automatically reconciling conflicting settings under multiple arbitrary spellings would be ambiguous. Actual provider identity stability across hardware reconnect still needs verification.
 - **Validation:** exact-head Unity P0–P13 and Windows Player pending; prior `b28c813` [Unity #43629911476](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43629911476) PASS, Repository Push/PR #43629911439/#43629915926 PASS.
 
+## Tracking device-list action lifetime after provider replacement
+
+The tracking Settings editor already checked provider identity on Save, but the **device-list buttons** remained bound to a logical ID only. If a provider was destroyed and replaced with the same `ControlId` while a native Settings list or UI Toolkit panel was still displayed, a click on the old `Enable`, `Disable`, `Recover` or `Add/Remove` button could unexpectedly control the replacement component. The UI Toolkit list signature also previously lacked instance identity, so a same-ID replacement with identical display status could leave the old buttons visible across periodic refreshes.
+
+- `61a64e0`: Native Settings tracks the exact `ITrackingRuntimeControl` instance displayed for each button slot and rechecks it before every device-list action; a stale action rebuilds the list with explicit feedback. UI Toolkit callbacks capture the actual displayed provider rather than only `ControlId` and invoke a shared current-source guard before membership, Toggle, Recover, or Configure actions; a stale callback refreshes the list instead of touching the replacement. The existing editor Save check remains in place.
+- `83f83c6`: P1 Unity fixture destroys a provider and creates a new component with the same ID. It exercises the actual UI Toolkit action guard and stale Add/Remove, Toggle and Recover methods; checks that the new provider is not controlled and membership is unchanged. Static source checks require exact provider capture in all four UI Toolkit callbacks and native device-list identity verification. This is not a physical native click simulation.
+- **Verified previous baseline:** `04a3814` completed Unity P0–P13 and Windows Player [#43650088000](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43650088000), repository Push/PR #43650087993/#43650092498 PASS. The predecessor `6781e2e` macOS build/startup/quit [#43650054431](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43650054431) PASS.
+- **Current latest-HEAD Unity validation:** pending. A real device detach/reconnect during an open native Settings window still requires physical testing; do not infer Windows/macOS GUI user acceptance from the source-free fixture.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
