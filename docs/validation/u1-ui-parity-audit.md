@@ -184,6 +184,17 @@ The native Settings and UI Toolkit configuration editors correctly bound their f
 - This addresses cross-surface concurrency, not actual OS click behavior. Hardware and native UI acceptance remain pending.
 - **Previous exact-head CI:** `b60724a` Unity P0–P13 / Windows Player [#43676840384](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43676840384), repository Push/PR #43676840390/#43676844405 all PASS. New commits need their own exact-source CI.
 
+## Resolve failing P1 assertion and concurrent Native/Toolkit configuration drafts
+
+The exact-head `579271c` Unity P0–P13 [#43697030471](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43697030471) was a **real test failure**, not an infrastructure cancellation. Its P1 workspace test failed under the umbrella message "recreated tracking control with same ID must restore its saved enabled state". Root cause: the fixture's source-contract check still searched both editor Save paths for the old `IsWorkspaceTrackingEditorSourceCurrent` call after production code correctly switched to `IsWorkspaceTrackingConfiguredEditorCurrent`. Other repository Push/PR checks passed, and intermediate `9d5a9ba` macOS native Player validation passed. No Windows Player acceptance can be inferred from the failed Unity workflow.
+
+- `44a3c84`: update that stale source assertion to require the membership-aware guard used by both Save paths. Do not weaken the runtime or remove the test case.
+- **Additional source-backed concurrency defect:** even after protecting against provider replacement and removal, two still-open editors on the **same configured provider** could silently overwrite each other. The last Save would apply stale fields despite an earlier Save from the other UI, or an intervening Remove→Add on the same logical ID.
+- `12aef12`: add a case-insensitive, per-logical-ID edit revision owned by the U1 shell. Native Settings and UI Toolkit each capture the revision on editor open and reject Save if another editor saved or membership changed since then. Successful Save and successful Add/Remove increment the revision; failed actions do not. Revisions survive Remove→Add within the same shell, so old drafts cannot be revived by re-adding. The user must reopen to inspect current live values before applying.
+- `b390169`: extend P1 Unity fixture with revision checks for concurrent drafts, mixed-case ID matching, and Remove→Add invalidation; also assert both actual UI Save paths check revision **before** calling `TryApplyConfiguration`, and that both membership paths and successful Save increment the shared revision.
+- **Limitations:** the revision protects actions within the same U1 shell, not independent processes or a third-party provider making direct settings changes without going through either editor. Hardware and native OS click verification remain required.
+- **Exact-head CI:** pending. Prior full green `b60724a` Unity P0–P13 / Windows [#43676840384](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43676840384) still serves as the last confirmed complete passing baseline until this regression is retested.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
