@@ -1284,9 +1284,9 @@ namespace VCR.Editor.P1
                     "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
                 if (nativeSaveAt < 0 || nativeSaveEnd <= nativeSaveAt || toolkitEditAt < 0 ||
                     !trackingSource.Substring(nativeSaveAt, nativeSaveEnd - nativeSaveAt)
-                        .Contains("IsWorkspaceTrackingEditorSourceCurrent(") ||
+                        .Contains("IsWorkspaceTrackingConfiguredEditorCurrent(") ||
                     !trackingSource.Substring(toolkitEditAt)
-                        .Contains("IsWorkspaceTrackingEditorSourceCurrent("))
+                        .Contains("IsWorkspaceTrackingConfiguredEditorCurrent("))
                     return false;
                 // Native Add may only mark a device configured/restored after
                 // disabling the source succeeds. The Toolkit path already does.
