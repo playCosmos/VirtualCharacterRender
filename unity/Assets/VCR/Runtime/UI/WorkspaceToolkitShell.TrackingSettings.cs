@@ -484,6 +484,15 @@ namespace VCR.Runtime.UI
                 feedback = "Enable the tracking source before requesting recovery.";
                 return false;
             }
+            // A provider can be active before startup preferences are
+            // restored. Do not let Recover restart a device the user saved
+            // as Off; current runtime state alone is not authorization.
+            var persistenceId = GetWorkspaceTrackingPersistenceId(control.ControlId);
+            if (PlayerPrefs.GetInt(TrackingEnabledKey + persistenceId, 0) == 0)
+            {
+                feedback = "Tracking source is saved as disabled. Enable it before recovery.";
+                return false;
+            }
             try
             {
                 if (!control.TryRecover(out var error))
