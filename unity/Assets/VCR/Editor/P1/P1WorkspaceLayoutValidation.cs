@@ -238,6 +238,8 @@ namespace VCR.Editor.P1
                     "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingStaleRecoveryActionsRejectPriorSessions(),
                     "stale Recover buttons must not restart a newer tracking session");
+                Check(TrackingRecoveryButtonsRequireRunningSavedOnSource(),
+                    "Recover controls must match enabled state and saved preference");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
                 Check(TrackingEditVersionPreventsStaleSaves(),
@@ -1529,6 +1531,106 @@ namespace VCR.Editor.P1
                        CurrentVersion() != freshVersion &&
                        PlayerPrefs.GetInt(enabledKey, -1) == 1 &&
                        configured.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool TrackingRecoveryButtonsRequireRunningSavedOnSource()
+        {
+            var id = "vcr-parity-recovery-visibility-" + Guid.NewGuid().ToString("N");
+            var canonicalId = id.ToUpperInvariant();
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + canonicalId;
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var available = type.GetMethod(
+                    "IsWorkspaceTrackingRecoveryActionAvailable", flags);
+                var intent = type.GetMethod("IsWorkspaceTrackingRecoveryIntentCurrent", flags);
+                var recover = type.GetMethod("TryRequestWorkspaceTrackingRecovery", flags);
+                var getVersion = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (available == null || intent == null || recover == null ||
+                    getVersion == null || configuredField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var listAt = code.IndexOf(
+                    "private void RebuildWorkspaceNativeTrackingSources()", StringComparison.Ordinal);
+                var listEnd = code.IndexOf(
+                    "private static bool IsWorkspaceTrackingEditorSourceCurrent(", StringComparison.Ordinal);
+                var panelAt = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                if (listAt < 0 || listEnd <= listAt ||
+                    panelAt < 0 || panelEnd <= panelAt)
+                    return false;
+                var listCode = code.Substring(listAt, listEnd - listAt);
+                var panelCode = code.Substring(panelAt, panelEnd - panelAt);
+                // Recover must not be a clickable dead action for Off sources.
+                // A saved-Off preference also overrides a transient live-On
+                // state until the restoration scan reconciles the provider.
+                if (!listCode.Contains(
+                        "if (IsWorkspaceTrackingRecoveryActionAvailable(source.ControlId, source))") ||
+                    !panelCode.Contains(
+                        "if (IsWorkspaceTrackingRecoveryActionAvailable(sourceId, source))") ||
+                    !panelCode.Contains(
+                        "PlayerPrefs.GetInt(TrackingEnabledKey +") ||
+                    !panelCode.Contains(
+                        "GetWorkspaceTrackingPersistenceId(source.ControlId), 0)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 recovery visibility shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 recovery visibility provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                int Version() => (int)getVersion.Invoke(shell, new object[] { canonicalId });
+                bool Offered() =>
+                    (bool)available.Invoke(shell, new object[] { id, provider });
+                bool Current() =>
+                    (bool)intent.Invoke(shell, new object[] {
+                        canonicalId, provider, true, Version()
+                    });
+
+                // No configured membership: never offer Recover, even if
+                // external code enabled the provider and preferences say On.
+                if (Offered() || !provider.TrySetControlEnabled(true, out _) ||
+                    Offered())
+                    return false;
+                configured.Add(canonicalId);
+                if (!Offered() || !Current()) return false;
+
+                // Saved Off must override transient live On, including when
+                // the live provider spells its ID differently from PlayerPrefs.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                if (Offered() || Current()) return false;
+                var args = new object[] { provider, null };
+                if ((bool)recover.Invoke(shell, args) ||
+                    provider.RecoveryCalls != 0 ||
+                    !((string)args[1]).Contains("saved as disabled"))
+                    return false;
+
+                PlayerPrefs.SetInt(enabledKey, 1);
+                if (!Offered() || !Current()) return false;
+                if (!provider.TrySetControlEnabled(false, out _) ||
+                    Offered() || Current())
+                    return false;
+
+                return provider.RecoveryCalls == 0 && configured.Contains(id);
             }
             finally
             {
