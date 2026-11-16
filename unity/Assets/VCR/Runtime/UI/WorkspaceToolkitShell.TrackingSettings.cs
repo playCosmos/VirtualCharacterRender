@@ -336,9 +336,12 @@ namespace VCR.Runtime.UI
                     _workspaceNativeSettings.Add(2, 5200 + i,
                         DesktopNativeSettingsWindow.ControlKind.Button,
                         (source.ControlEnabled ? "Disable " : "Enable ") + source.DisplayName);
-                    _workspaceNativeSettings.Add(2, 5400 + i,
-                        DesktopNativeSettingsWindow.ControlKind.Button,
-                        "Recover " + source.DisplayName);
+                    // Recovery must not be offered for a disabled or saved-Off
+                    // source: the provider explicitly rejects those requests.
+                    if (IsWorkspaceTrackingRecoveryActionAvailable(source.ControlId, source))
+                        _workspaceNativeSettings.Add(2, 5400 + i,
+                            DesktopNativeSettingsWindow.ControlKind.Button,
+                            "Recover " + source.DisplayName);
                 }
                 _workspaceNativeSettings.Add(2, 5600 + i,
                     DesktopNativeSettingsWindow.ControlKind.Button,
@@ -489,6 +492,18 @@ namespace VCR.Runtime.UI
                    IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion);
         }
 
+        private bool IsWorkspaceTrackingRecoveryActionAvailable(
+            string sourceId, ITrackingRuntimeControl control)
+        {
+            // A live On state alone is insufficient: a saved-Off preference
+            // means capture is pending reconciliation to Off, not recoverable.
+            return control != null &&
+                   _workspaceConfiguredTracking.Contains(sourceId) &&
+                   control.ControlEnabled &&
+                   PlayerPrefs.GetInt(
+                       TrackingEnabledKey + GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0;
+        }
+
         private bool IsWorkspaceTrackingRecoveryIntentCurrent(
             string sourceId, ITrackingRuntimeControl control,
             bool displayedEnabled, int displayedVersion)
@@ -496,6 +511,7 @@ namespace VCR.Runtime.UI
             // A successful Recover restarts a capture session and advances
             // the shared revision. Do not replay an old Recover button.
             return displayedEnabled &&
+                   IsWorkspaceTrackingRecoveryActionAvailable(sourceId, control) &&
                    IsWorkspaceTrackingToggleIntentCurrent(
                        sourceId, control, displayedEnabled, displayedVersion);
         }
@@ -863,7 +879,9 @@ namespace VCR.Runtime.UI
                         source.DisplayName + "\u001f" +
                         source.ControlEnabled + "\u001f" + source.ControlHealthState +
                         "\u001f" + source.ControlError + "\u001f" +
-                        _workspaceConfiguredTracking.Contains(source.ControlId) + "\u001e";
+                        _workspaceConfiguredTracking.Contains(source.ControlId) + "\u001f" +
+                        PlayerPrefs.GetInt(TrackingEnabledKey +
+                            GetWorkspaceTrackingPersistenceId(source.ControlId), 0) + "\u001e";
                 }
                 if (signature == _workspaceTrackingPanelSignature)
                     return;
@@ -919,9 +937,10 @@ namespace VCR.Runtime.UI
                         buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(
                                 sourceId, source, displayedEnabled, displayedVersion))
                             { text = displayedEnabled ? "Disable" : "Enable" });
-                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(
-                                sourceId, source, displayedEnabled, displayedVersion))
-                            { text = "Recover" });
+                        if (IsWorkspaceTrackingRecoveryActionAvailable(sourceId, source))
+                            buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(
+                                    sourceId, source, displayedEnabled, displayedVersion))
+                                { text = "Recover" });
                         if (source is ITrackingRuntimeConfigurable)
                             buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId, source))
                                 { text = "Configure" });
