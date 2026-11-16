@@ -246,6 +246,8 @@ namespace VCR.Editor.P1
                     "Recover controls must match enabled state and saved preference");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
+                Check(TrackingStaleConfigureButtonsRejectRemovedSources(),
+                    "tracking settings must not open a removed source's editor");
                 Check(TrackingEditVersionPreventsStaleSaves(),
                     "concurrent Native and Toolkit tracking drafts must not overwrite newer settings");
                 Check(TrackingExternalProviderChangesRejectStaleSave(),
@@ -995,6 +997,92 @@ namespace VCR.Editor.P1
             {
                 if (shellRoot != null)
                     UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
+        }
+
+        private static bool TrackingStaleConfigureButtonsRejectRemovedSources()
+        {
+            var id = "vcr-parity-stale-configure-" + Guid.NewGuid().ToString("N");
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var edit = type.GetMethod("EditWorkspaceTrackingSettings", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var editorField = type.GetField("_workspaceTrackingEditor", flags);
+                var feedbackField = type.GetField("_workspaceTrackingFeedback", flags);
+                if (edit == null || configuredField == null || editorField == null ||
+                    feedbackField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeAt = code.IndexOf(
+                    "private void ShowWorkspaceNativeTrackingDetails(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private bool IsWorkspaceTrackingMembershipStateCurrent(", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (nativeAt < 0 || nativeEnd <= nativeAt || toolkitAt < 0)
+                    return false;
+                var native = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = code.Substring(toolkitAt);
+                var nativeGuard = native.IndexOf(
+                    "_workspaceConfiguredTracking.Contains(controlId)", StringComparison.Ordinal);
+                var nativeRead = native.IndexOf(
+                    "configurable.GetConfigurationSettings()", StringComparison.Ordinal);
+                var toolkitGuard = toolkit.IndexOf(
+                    "_workspaceConfiguredTracking.Contains(sourceId)", StringComparison.Ordinal);
+                var toolkitRead = toolkit.IndexOf(
+                    "configurable.GetConfigurationSettings()", StringComparison.Ordinal);
+                if (nativeGuard < 0 || nativeRead <= nativeGuard ||
+                    toolkitGuard < 0 || toolkitRead <= toolkitGuard ||
+                    !native.Contains("RebuildWorkspaceNativeTrackingSources()") ||
+                    !toolkit.Contains("_workspaceTrackingEditor.Clear()"))
+                    return false;
+
+                shellRoot = new GameObject("P1 stale configure shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 stale configure provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id.ToLowerInvariant();
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+                var editor = new UnityEngine.UIElements.VisualElement();
+                var feedback = new UnityEngine.UIElements.Label();
+                editorField.SetValue(shell, editor);
+                feedbackField.SetValue(shell, feedback);
+
+                // A stale Configure button must not inspect live fields
+                // on an unconfigured device or offer Save.
+                edit.Invoke(shell, new object[] { id, provider });
+                if (provider.SchemaCalls != 0 || editor.childCount != 0 ||
+                    !feedback.text.Contains("Add"))
+                    return false;
+
+                configured.Add(id.ToUpperInvariant());
+                edit.Invoke(shell, new object[] { id, provider });
+                if (provider.SchemaCalls != 1 || editor.childCount == 0 ||
+                    provider.ConfigurationCalls != 0)
+                    return false;
+
+                // Another UI removes membership without replacing the
+                // component. A stale Configure click must clear old fields.
+                configured.Remove(id);
+                edit.Invoke(shell, new object[] { id, provider });
+                return provider.SchemaCalls == 1 &&
+                       provider.ConfigurationCalls == 0 &&
+                       editor.childCount == 0 &&
+                       !configured.Contains(id) &&
+                       feedback.text.Contains("removed");
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
             }
         }
 
