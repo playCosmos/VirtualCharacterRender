@@ -186,6 +186,10 @@ namespace VCR.Runtime.UI
                 // settings and enabled state again. Mark before applying so a
                 // synchronous callback cannot trigger duplicate restore work.
                 _workspaceRestoredTracking[id] = source;
+                // A background restore can update live device state while a
+                // Native/Toolkit settings draft is open on the same instance.
+                // Invalidate only if the provider actually accepts a change.
+                var acceptedMutation = false;
                 try
                 {
                     var persistenceId = GetWorkspaceTrackingPersistenceId(id);
@@ -194,13 +198,16 @@ namespace VCR.Runtime.UI
                     // If the saved preference is Off, stop capture before
                     // applying settings. MediaPipe may restart its webcam when
                     // capture parameters change, even if we will disable it.
-                    if (!enabled && source.ControlEnabled &&
-                        !source.TrySetControlEnabled(false, out var stopError))
+                    if (!enabled && source.ControlEnabled)
                     {
-                        Debug.LogWarning("U1 tracking disable restore failed for " +
-                                         id + ": " + stopError, this);
-                        _workspaceRestoredTracking.Remove(id);
-                        continue;
+                        if (!source.TrySetControlEnabled(false, out var stopError))
+                        {
+                            Debug.LogWarning("U1 tracking disable restore failed for " +
+                                             id + ": " + stopError, this);
+                            _workspaceRestoredTracking.Remove(id);
+                            continue;
+                        }
+                        acceptedMutation = true;
                     }
 
                     if (source is ITrackingRuntimeConfigurable configurable)
@@ -225,25 +232,34 @@ namespace VCR.Runtime.UI
                                 values[setting.Key] = PlayerPrefs.GetString(key, setting.Value);
                                 hasPersisted |= PlayerPrefs.HasKey(key);
                             }
-                            if (hasPersisted &&
-                                !configurable.TryApplyConfiguration(values, out var applyError))
+                            if (hasPersisted)
                             {
-                                Debug.LogWarning("U1 tracking settings restore failed for " +
-                                                 id + ": " + applyError, this);
-                                _workspaceRestoredTracking.Remove(id);
-                                continue;
+                                if (!configurable.TryApplyConfiguration(values, out var applyError))
+                                {
+                                    Debug.LogWarning("U1 tracking settings restore failed for " +
+                                                     id + ": " + applyError, this);
+                                    _workspaceRestoredTracking.Remove(id);
+                                    continue;
+                                }
+                                acceptedMutation = true;
                             }
                         }
                     }
 
                     // Reconcile again after configuration: a provider may
                     // update its enabled state while applying settings.
-                    if (source.ControlEnabled != enabled &&
-                        !source.TrySetControlEnabled(enabled, out var enableError))
+                    if (source.ControlEnabled != enabled)
                     {
-                        Debug.LogWarning("U1 tracking enable restore failed for " +
-                                         id + ": " + enableError, this);
-                        _workspaceRestoredTracking.Remove(id);
+                        if (!source.TrySetControlEnabled(enabled, out var enableError))
+                        {
+                            Debug.LogWarning("U1 tracking enable restore failed for " +
+                                             id + ": " + enableError, this);
+                            _workspaceRestoredTracking.Remove(id);
+                        }
+                        else
+                        {
+                            acceptedMutation = true;
+                        }
                     }
                 }
                 catch (Exception exception)
@@ -252,6 +268,13 @@ namespace VCR.Runtime.UI
                                      id + ": " + exception, this);
                     // Retry if a provider was not yet initialized.
                     _workspaceRestoredTracking.Remove(id);
+                }
+                finally
+                {
+                    // Also covers partially successful restores followed by
+                    // a failure or transient schema-unavailable retry.
+                    if (acceptedMutation)
+                        InvalidateWorkspaceTrackingEditors(id);
                 }
             }
         }
