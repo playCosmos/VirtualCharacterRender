@@ -232,6 +232,8 @@ namespace VCR.Editor.P1
                     "case-insensitive provider reconnect must use registered PlayerPrefs key spelling");
                 Check(TrackingStaleDeviceActionsRejectReplacement(),
                     "stale tracking buttons must not mutate a replacement provider");
+                Check(TrackingStaleMembershipActionsRejectStateChanges(),
+                    "stale Add/Remove labels must not invert membership changes");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
                 Check(TrackingEditVersionPreventsStaleSaves(),
@@ -1105,7 +1107,7 @@ namespace VCR.Editor.P1
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "behaviour.GetInstanceID()") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "UpdateWorkspaceTrackingMembership(sourceId, source)") ||
+                        "UpdateWorkspaceTrackingMembership(sourceId, source, configured)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "ToggleWorkspaceTrackingEnabled(sourceId, source)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
@@ -1144,12 +1146,104 @@ namespace VCR.Editor.P1
 
                 // A stale Add/Remove or Toggle must not operate on the new
                 // provider or change logical membership.
-                membership.Invoke(shell, new object[] { id, original });
+                membership.Invoke(shell, new object[] { id, original, true });
                 toggle.Invoke(shell, new object[] { id, original });
                 recover.Invoke(shell, new object[] { id, original });
                 return configured.Contains(id) &&
                        replacement.ToggleCalls == 0 &&
                        replacement.RecoveryCalls == 0;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
+        }
+
+        private static bool TrackingStaleMembershipActionsRejectStateChanges()
+        {
+            var id = "vcr-parity-stale-membership-" + Guid.NewGuid().ToString("N");
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var membership = type.GetMethod("UpdateWorkspaceTrackingMembership", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var nativeMembershipField = type.GetField(
+                    "_workspaceNativeTrackingConfigured", flags);
+                if (membership == null || configuredField == null ||
+                    nativeMembershipField == null ||
+                    membership.GetParameters().Length != 3)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var rebuildAt = code.IndexOf(
+                    "private void RebuildWorkspaceNativeTrackingSources(", StringComparison.Ordinal);
+                var rebuildEnd = code.IndexOf(
+                    "private static bool IsWorkspaceTrackingEditorSourceCurrent(", StringComparison.Ordinal);
+                var nativeAt = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelAt = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void UpdateWorkspaceTrackingMembership(", StringComparison.Ordinal);
+                var toolkitEnd = code.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                if (rebuildAt < 0 || rebuildEnd <= rebuildAt ||
+                    nativeAt < 0 || nativeEnd <= nativeAt ||
+                    panelAt < 0 || panelEnd <= panelAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                var rebuildCode = code.Substring(rebuildAt, rebuildEnd - rebuildAt);
+                var nativeCode = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var panelCode = code.Substring(panelAt, panelEnd - panelAt);
+                var toolkitCode = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!rebuildCode.Contains("_workspaceNativeTrackingConfigured[i] = configured") ||
+                    !nativeCode.Contains("_workspaceNativeTrackingConfigured.TryGetValue(slot") ||
+                    !panelCode.Contains(
+                        "UpdateWorkspaceTrackingMembership(sourceId, source, configured)") ||
+                    !toolkitCode.Contains(
+                        "IsWorkspaceTrackingMembershipStateCurrent(sourceId, displayedConfigured)") ||
+                    nativeCode.IndexOf("IsWorkspaceTrackingMembershipStateCurrent(id, displayedConfigured)",
+                        StringComparison.Ordinal) > nativeCode.IndexOf(
+                        "if (remove && control.ControlEnabled", StringComparison.Ordinal) ||
+                    toolkitCode.IndexOf("IsWorkspaceTrackingMembershipStateCurrent(",
+                        StringComparison.Ordinal) > toolkitCode.IndexOf(
+                        "source.TrySetControlEnabled(", StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 stale membership shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 stale membership source");
+                var source = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                source.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var nativeMembership = nativeMembershipField.GetValue(shell) as
+                    Dictionary<int, bool>;
+                if (configured == null || nativeMembership == null) return false;
+
+                // Button still says Add, but another surface has already added it.
+                configured.Add(id);
+                nativeMembership[0] = false;
+                membership.Invoke(shell, new object[] { id, source, false });
+                if (!configured.Contains(id) || source.ToggleCalls != 0 ||
+                    nativeMembership[0])
+                    return false;
+
+                // Button still says Remove, but another surface removed it.
+                configured.Remove(id);
+                nativeMembership[0] = true;
+                membership.Invoke(shell, new object[] { id.ToUpperInvariant(), source, true });
+                return !configured.Contains(id) && source.ToggleCalls == 0 &&
+                       nativeMembership[0];
             }
             finally
             {
