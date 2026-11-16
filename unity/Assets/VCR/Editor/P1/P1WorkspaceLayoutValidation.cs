@@ -220,6 +220,8 @@ namespace VCR.Editor.P1
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
                     "recreated tracking control with same ID must restore its saved enabled state");
+                Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
+                    "accepted background tracking restore must invalidate stale U1 settings drafts");
                 Check(TrackingEditorSchemaParity(),
                     "native and Toolkit tracking editors must reject null/oversized schemas");
                 Check(TrackingRecoveryDoesNotEnableDisabledSource(),
@@ -2045,6 +2047,183 @@ namespace VCR.Editor.P1
             finally
             {
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
+        private static bool TrackingBackgroundRestoreInvalidatesStaleEditors()
+        {
+            var id = "vcr-parity-background-restore-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                if (restore == null || version == null || canSave == null ||
+                    scan == null || configuredField == null || restoredField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var start = code.IndexOf(
+                    "private void RestoreWorkspaceTrackingPreferences()", StringComparison.Ordinal);
+                var end = code.IndexOf(
+                    "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
+                if (start < 0 || end <= start) return false;
+                var restoreCode = code.Substring(start, end - start);
+                if (!restoreCode.Contains("var acceptedMutation = false;") ||
+                    !restoreCode.Contains("if (acceptedMutation)") ||
+                    !restoreCode.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
+                    restoreCode.Split(new[] { "acceptedMutation = true;" },
+                        StringSplitOptions.None).Length != 4)
+                    return false;
+
+                shellRoot = new GameObject("P1 background restore revision shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "persisted-restore");
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int opened) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), opened });
+                void Scan()
+                {
+                    scan.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                sourceRoot = new GameObject("P1 restore config rejection");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.FailConfigurationOnce = true;
+                var originalVersion = Version();
+                if (!DraftValid(originalVersion)) return false;
+                Scan();
+                // A failed provider Apply before any accepted mutation is not
+                // allowed to discard a user's open settings draft.
+                if (provider.ConfigurationCalls != 1 ||
+                    provider.ToggleCalls != 0 ||
+                    restored.ContainsKey(id) ||
+                    Version() != originalVersion ||
+                    !DraftValid(originalVersion))
+                    return false;
+
+                Scan();
+                if (!provider.ControlEnabled ||
+                    provider.ConfigurationCalls != 2 ||
+                    provider.ToggleCalls != 1 ||
+                    Version() == originalVersion ||
+                    DraftValid(originalVersion) ||
+                    !restored.ContainsKey(id))
+                    return false;
+                var stableVersion = Version();
+                Scan();
+                if (Version() != stableVersion ||
+                    provider.ConfigurationCalls != 2 ||
+                    provider.ToggleCalls != 1)
+                    return false;
+
+                // Configuration was accepted but enabling failed. Even the
+                // partial restore must invalidate earlier drafts, then retry.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 partial background restore");
+                provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.FailEnableOnce = true;
+                var beforePartial = Version();
+                Scan();
+                if (provider.ControlEnabled ||
+                    provider.ConfigurationCalls != 1 ||
+                    provider.ToggleCalls != 1 ||
+                    restored.ContainsKey(id) ||
+                    Version() == beforePartial ||
+                    DraftValid(beforePartial))
+                    return false;
+
+                var beforeRetry = Version();
+                Scan();
+                if (!provider.ControlEnabled ||
+                    provider.ConfigurationCalls != 2 ||
+                    provider.ToggleCalls != 2 ||
+                    Version() == beforeRetry ||
+                    DraftValid(beforeRetry))
+                    return false;
+
+                // Saved-Off restoration must stop an externally running
+                // capture before requesting settings, even if the schema
+                // becomes temporarily unavailable after the successful stop.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 saved-off partial restore");
+                provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+                provider.ReturnNullSchemaOnce = true;
+                PlayerPrefs.SetInt(enabledKey, 0);
+                var beforeStop = Version();
+                Scan();
+                if (provider.ControlEnabled ||
+                    provider.ConfigurationCalls != 0 ||
+                    provider.ToggleCalls != 2 ||
+                    restored.ContainsKey(id) ||
+                    Version() == beforeStop ||
+                    DraftValid(beforeStop))
+                    return false;
+                var beforeSettingsRetry = Version();
+                Scan();
+                if (provider.ControlEnabled ||
+                    provider.ConfigurationCalls != 1 ||
+                    provider.ToggleCalls != 2 ||
+                    !restored.ContainsKey(id) ||
+                    Version() == beforeSettingsRetry)
+                    return false;
+
+                // With no persisted field to apply, a rejected Enable
+                // changes neither provider state nor editor revision.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 no accepted restore mutation");
+                provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.FailEnableOnce = true;
+                PlayerPrefs.DeleteKey(settingKey);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                var beforeFailedEnable = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 0 ||
+                    provider.ToggleCalls != 1 ||
+                    provider.ControlEnabled ||
+                    restored.ContainsKey(id) ||
+                    Version() != beforeFailedEnable ||
+                    !DraftValid(beforeFailedEnable))
+                    return false;
+                Scan();
+                return provider.ControlEnabled &&
+                       provider.ToggleCalls == 2 &&
+                       provider.ConfigurationCalls == 0 &&
+                       Version() != beforeFailedEnable &&
+                       !DraftValid(beforeFailedEnable) &&
+                       restored.ContainsKey(id);
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
                 PlayerPrefs.DeleteKey(settingKey);
