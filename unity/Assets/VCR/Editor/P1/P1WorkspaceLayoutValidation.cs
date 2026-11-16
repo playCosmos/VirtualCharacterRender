@@ -236,6 +236,8 @@ namespace VCR.Editor.P1
                     "stale tracking buttons must not mutate a replacement provider");
                 Check(TrackingStaleMembershipActionsRejectStateChanges(),
                     "stale Add/Remove labels must not invert membership changes");
+                Check(TrackingMembershipABAActionsRejectPriorRevisions(),
+                    "stale Add/Remove must reject a later membership with the same displayed state");
                 Check(TrackingStaleToggleActionsRejectStateChanges(),
                     "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingStaleRecoveryActionsRejectPriorSessions(),
@@ -1115,7 +1117,7 @@ namespace VCR.Editor.P1
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "behaviour.GetInstanceID()") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "UpdateWorkspaceTrackingMembership(sourceId, source, configured)") ||
+                        "UpdateWorkspaceTrackingMembership(\n                            sourceId, source, configured, displayedVersion)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "ToggleWorkspaceTrackingEnabled(\n                                " +
                         "sourceId, source, displayedEnabled, displayedVersion)") ||
@@ -1156,7 +1158,7 @@ namespace VCR.Editor.P1
 
                 // A stale Add/Remove or Toggle must not operate on the new
                 // provider or change logical membership.
-                membership.Invoke(shell, new object[] { id, original, true });
+                membership.Invoke(shell, new object[] { id, original, true, 0 });
                 toggle.Invoke(shell, new object[] { id, original, false, 0 });
                 recover.Invoke(shell, new object[] { id, original, true, 0 });
                 return configured.Contains(id) &&
@@ -1185,7 +1187,7 @@ namespace VCR.Editor.P1
                     "_workspaceNativeTrackingConfigured", flags);
                 if (membership == null || configuredField == null ||
                     nativeMembershipField == null ||
-                    membership.GetParameters().Length != 3)
+                    membership.GetParameters().Length != 4)
                     return false;
 
                 var code = File.ReadAllText(Path.Combine(Application.dataPath,
@@ -1218,13 +1220,13 @@ namespace VCR.Editor.P1
                 if (!rebuildCode.Contains("_workspaceNativeTrackingConfigured[i] = configured") ||
                     !nativeCode.Contains("_workspaceNativeTrackingConfigured.TryGetValue(slot") ||
                     !panelCode.Contains(
-                        "UpdateWorkspaceTrackingMembership(sourceId, source, configured)") ||
+                        "UpdateWorkspaceTrackingMembership(\n                            sourceId, source, configured, displayedVersion)") ||
                     !toolkitCode.Contains(
-                        "IsWorkspaceTrackingMembershipStateCurrent(sourceId, displayedConfigured)") ||
-                    nativeCode.IndexOf("IsWorkspaceTrackingMembershipStateCurrent(id, displayedConfigured)",
+                        "IsWorkspaceTrackingMembershipIntentCurrent(") ||
+                    nativeCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
                         StringComparison.Ordinal) > nativeCode.IndexOf(
                         "if (remove && control.ControlEnabled", StringComparison.Ordinal) ||
-                    toolkitCode.IndexOf("IsWorkspaceTrackingMembershipStateCurrent(",
+                    toolkitCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
                         StringComparison.Ordinal) > toolkitCode.IndexOf(
                         "source.TrySetControlEnabled(", StringComparison.Ordinal))
                     return false;
@@ -1243,7 +1245,7 @@ namespace VCR.Editor.P1
                 // Button still says Add, but another surface has already added it.
                 configured.Add(id);
                 nativeMembership[0] = false;
-                membership.Invoke(shell, new object[] { id, source, false });
+                membership.Invoke(shell, new object[] { id, source, false, 0 });
                 if (!configured.Contains(id) || source.ToggleCalls != 0 ||
                     nativeMembership[0])
                     return false;
@@ -1251,7 +1253,7 @@ namespace VCR.Editor.P1
                 // Button still says Remove, but another surface removed it.
                 configured.Remove(id);
                 nativeMembership[0] = true;
-                membership.Invoke(shell, new object[] { id.ToUpperInvariant(), source, true });
+                membership.Invoke(shell, new object[] { id.ToUpperInvariant(), source, true, 0 });
                 return !configured.Contains(id) && source.ToggleCalls == 0 &&
                        nativeMembership[0];
             }
@@ -1259,6 +1261,137 @@ namespace VCR.Editor.P1
             {
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
+        }
+
+        private static bool TrackingMembershipABAActionsRejectPriorRevisions()
+        {
+            var id = "vcr-parity-membership-aba-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var membership = type.GetMethod("UpdateWorkspaceTrackingMembership", flags);
+                var intent = type.GetMethod("IsWorkspaceTrackingMembershipIntentCurrent", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var nativeVersionsField = type.GetField("_workspaceNativeTrackingVersions", flags);
+                if (membership == null || membership.GetParameters().Length != 4 ||
+                    intent == null || version == null || configuredField == null ||
+                    nativeVersionsField == null)
+                    return false;
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeAt = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelAt = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                var actionAt = code.IndexOf(
+                    "private void UpdateWorkspaceTrackingMembership(", StringComparison.Ordinal);
+                var actionEnd = code.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                if (nativeAt < 0 || nativeEnd <= nativeAt ||
+                    panelAt < 0 || panelEnd <= panelAt ||
+                    actionAt < 0 || actionEnd <= actionAt)
+                    return false;
+                var nativeCode = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var panelCode = code.Substring(panelAt, panelEnd - panelAt);
+                var actionCode = code.Substring(actionAt, actionEnd - actionAt);
+                if (!nativeCode.Contains("_workspaceNativeTrackingVersions.TryGetValue(slot") ||
+                    !nativeCode.Contains("IsWorkspaceTrackingMembershipIntentCurrent(") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(panelCode,
+                        @"UpdateWorkspaceTrackingMembership\(\s*sourceId, source, configured, displayedVersion\)") ||
+                    !panelCode.Contains(
+                        "GetWorkspaceTrackingEditVersion(source.ControlId) +") ||
+                    !actionCode.Contains("IsWorkspaceTrackingMembershipIntentCurrent(") ||
+                    nativeCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    nativeCode.IndexOf("control.TrySetControlEnabled(false",
+                        StringComparison.Ordinal) ||
+                    actionCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    actionCode.IndexOf("source.TrySetControlEnabled(false",
+                        StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 membership ABA shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 membership ABA provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var nativeVersions = nativeVersionsField.GetValue(shell) as
+                    Dictionary<int, int>;
+                if (configured == null || nativeVersions == null) return false;
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool Current(bool displayedConfigured, int displayedVersion) =>
+                    (bool)intent.Invoke(shell, new object[] {
+                        id.ToUpperInvariant(), displayedConfigured, displayedVersion
+                    });
+                void Click(bool displayedConfigured, int displayedVersion) =>
+                    membership.Invoke(shell, new object[] {
+                        id, provider, displayedConfigured, displayedVersion
+                    });
+
+                var initial = Version();
+                nativeVersions[0] = initial;
+                if (!Current(false, initial)) return false;
+                Click(false, initial); // Another surface adds the provider.
+                var addedVersion = Version();
+                if (!configured.Contains(id) || addedVersion == initial ||
+                    !Current(true, addedVersion))
+                    return false;
+                Click(true, addedVersion); // Then removes it again.
+                var removedVersion = Version();
+                if (configured.Contains(id) || removedVersion == initial ||
+                    Current(false, initial))
+                    return false;
+                Click(false, initial); // Stale Add from the initial session.
+                if (configured.Contains(id) || Version() != removedVersion ||
+                    provider.ToggleCalls != 0 ||
+                    nativeVersions[0] != initial)
+                    return false;
+
+                Click(false, removedVersion); // Fresh Add.
+                var secondAddedVersion = Version();
+                if (!configured.Contains(id) ||
+                    secondAddedVersion == removedVersion ||
+                    !Current(true, secondAddedVersion))
+                    return false;
+                Click(true, secondAddedVersion); // Another surface removes.
+                var secondRemovedVersion = Version();
+                Click(false, secondRemovedVersion); // Another surface adds.
+                var thirdAddedVersion = Version();
+                if (!configured.Contains(id) ||
+                    thirdAddedVersion == secondAddedVersion ||
+                    Current(true, secondAddedVersion))
+                    return false;
+
+                Click(true, secondAddedVersion); // Stale Remove, same membership.
+                if (!configured.Contains(id) ||
+                    Version() != thirdAddedVersion ||
+                    provider.ToggleCalls != 0)
+                    return false;
+
+                Click(true, thirdAddedVersion); // Fresh Remove still works.
+                return !configured.Contains(id) &&
+                       Version() != thirdAddedVersion &&
+                       provider.ToggleCalls == 0;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
