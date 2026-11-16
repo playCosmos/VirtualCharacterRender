@@ -213,6 +213,15 @@ The existing per-source edit revision was advanced by successful Save and Add/Re
 - This is conservative: a state transition that happens to preserve all settings still requires reopening the configuration editor. It avoids applying a draft whose capture-session context has expired.
 - **Verified prior baseline:** `5c210fe` [Unity/Windows #43733035987](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43733035987), repository Push/PR #43733036054/#43733041058 PASS; `5262054` [macOS #43732997480](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43732997480) PASS. New changes await exact-HEAD CI.
 
+## Tracking Add/Remove buttons reject stale cross-surface membership
+
+A source may remain the same provider instance while its configured membership changes in the other U1 surface. Previously, the Native Settings and Toolkit device-list buttons displayed **Add** or **Remove** based on a captured state, but their callbacks re-evaluated the live configured set at click time. Thus a stale **Add** click could unintentionally remove an already-added provider, and a stale **Remove** click could re-add one that the operator just removed elsewhere. Provider instance checks and the edit-revision guards do not prevent this inverted action.
+
+- `f0ba358`: Native Settings captures the displayed membership for each source slot and compares it with the current configured state before performing any Add/Remove mutation. A mismatch rebuilds the list and asks the operator to select again. Toolkit passes its displayed membership into the callback and rejects a mismatch before changing provider state or persistence. The per-source provider identity checks remain mandatory.
+- `92843d5`: P1 fixture rejects an obsolete Add on an already-added logical source and an obsolete Remove on a removed one, including case-insensitive IDs. Source contracts check Native's recorded label state and both UI paths' pre-mutation guards; the existing stale-provider replacement fixture now calls the updated Toolkit callback signature.
+- **Confirmed preceding baseline:** `7dac27a` [Unity P0–P13 / Windows native Player and hosted GUI #43774042796](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43774042796), Repository Push/PR #43774042729/#43774047372 PASS. New `92843d5` [Unity #43781230639](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43781230639), [Repository Push #43781230734](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43781230734), [Repository PR #43781237279](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43781237279) and [macOS #43781230747](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43781230747) **pending** at documentation time.
+- This closes a stale-button intent inversion, **not** native Win32/AppKit physical click, accessibility, real tracking device, or dual-window interaction acceptance. Leave PR Draft and preserve existing uGUI.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
