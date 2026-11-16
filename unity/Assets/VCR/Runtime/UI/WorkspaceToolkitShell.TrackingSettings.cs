@@ -489,6 +489,17 @@ namespace VCR.Runtime.UI
                    IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion);
         }
 
+        private bool IsWorkspaceTrackingRecoveryIntentCurrent(
+            string sourceId, ITrackingRuntimeControl control,
+            bool displayedEnabled, int displayedVersion)
+        {
+            // A successful Recover restarts a capture session and advances
+            // the shared revision. Do not replay an old Recover button.
+            return displayedEnabled &&
+                   IsWorkspaceTrackingToggleIntentCurrent(
+                       sourceId, control, displayedEnabled, displayedVersion);
+        }
+
         private bool IsWorkspaceTrackingConfiguredEditorCurrent(
             string sourceId, ITrackingRuntimeControl displayed,
             ITrackingRuntimeControl live)
@@ -708,7 +719,18 @@ namespace VCR.Runtime.UI
             }
             else if (action < 5600)
             {
-                TryRequestWorkspaceTrackingRecovery(control, out var feedback);
+                if (!_workspaceNativeTrackingEnabled.TryGetValue(slot, out var displayedEnabled) ||
+                    !_workspaceNativeTrackingVersions.TryGetValue(slot, out var displayedVersion) ||
+                    !IsWorkspaceTrackingRecoveryIntentCurrent(
+                        id, control, displayedEnabled, displayedVersion))
+                {
+                    RebuildWorkspaceNativeTrackingSources();
+                    _workspaceNativeSettings.SetText(92,
+                        "Tracking session changed. Select Recover again.");
+                    return true;
+                }
+                var recovered = TryRequestWorkspaceTrackingRecovery(control, out var feedback);
+                if (recovered) RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, feedback);
             }
             else
@@ -897,7 +919,8 @@ namespace VCR.Runtime.UI
                         buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(
                                 sourceId, source, displayedEnabled, displayedVersion))
                             { text = displayedEnabled ? "Disable" : "Enable" });
-                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(sourceId, source))
+                        buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(
+                                sourceId, source, displayedEnabled, displayedVersion))
                             { text = "Recover" });
                         if (source is ITrackingRuntimeConfigurable)
                             buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId, source))
@@ -1025,12 +1048,19 @@ namespace VCR.Runtime.UI
         }
 
         private void RecoverWorkspaceTrackingSource(
-            string sourceId, ITrackingRuntimeControl displayedSource)
+            string sourceId, ITrackingRuntimeControl displayedSource,
+            bool displayedEnabled, int displayedVersion)
         {
             if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
                 return;
-            var source = displayedSource;
-            if (TryRequestWorkspaceTrackingRecovery(source, out var feedback))
+            if (!IsWorkspaceTrackingRecoveryIntentCurrent(
+                    sourceId, displayedSource, displayedEnabled, displayedVersion))
+            {
+                TrackingPanelActionFinished(
+                    "Tracking session changed. Select Recover again.");
+                return;
+            }
+            if (TryRequestWorkspaceTrackingRecovery(displayedSource, out var feedback))
                 TrackingPanelActionFinished(feedback);
             else
                 SetWorkspaceTrackingFeedback(feedback);
