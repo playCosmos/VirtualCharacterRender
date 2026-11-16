@@ -236,6 +236,8 @@ namespace VCR.Editor.P1
                     "stale Add/Remove labels must not invert membership changes");
                 Check(TrackingStaleToggleActionsRejectStateChanges(),
                     "stale Enable/Disable labels must not invert tracking state changes");
+                Check(TrackingStaleRecoveryActionsRejectPriorSessions(),
+                    "stale Recover buttons must not restart a newer tracking session");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
                 Check(TrackingEditVersionPreventsStaleSaves(),
@@ -1114,7 +1116,8 @@ namespace VCR.Editor.P1
                         "ToggleWorkspaceTrackingEnabled(\n                                " +
                         "sourceId, source, displayedEnabled, displayedVersion)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "RecoverWorkspaceTrackingSource(sourceId, source)") ||
+                        "RecoverWorkspaceTrackingSource(\n                                " +
+                        "sourceId, source, displayedEnabled, displayedVersion)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "EditWorkspaceTrackingSettings(sourceId, source)"))
                     return false;
@@ -1151,7 +1154,7 @@ namespace VCR.Editor.P1
                 // provider or change logical membership.
                 membership.Invoke(shell, new object[] { id, original, true });
                 toggle.Invoke(shell, new object[] { id, original, false, 0 });
-                recover.Invoke(shell, new object[] { id, original });
+                recover.Invoke(shell, new object[] { id, original, true, 0 });
                 return configured.Contains(id) &&
                        replacement.ToggleCalls == 0 &&
                        replacement.RecoveryCalls == 0;
@@ -1398,6 +1401,138 @@ namespace VCR.Editor.P1
             finally
             {
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool TrackingStaleRecoveryActionsRejectPriorSessions()
+        {
+            var id = "vcr-parity-stale-recover-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var recover = type.GetMethod("RecoverWorkspaceTrackingSource", flags);
+                var request = type.GetMethod("TryRequestWorkspaceTrackingRecovery", flags);
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var intent = type.GetMethod("IsWorkspaceTrackingRecoveryIntentCurrent", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                if (recover == null || recover.GetParameters().Length != 4 ||
+                    request == null || toggle == null || intent == null ||
+                    version == null || configuredField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var nativeAt = source.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = source.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelAt = source.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = source.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                var toolkitAt = source.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                var toolkitEnd = source.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (nativeAt < 0 || nativeEnd <= nativeAt ||
+                    panelAt < 0 || panelEnd <= panelAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                var nativeCode = source.Substring(nativeAt, nativeEnd - nativeAt);
+                var panelCode = source.Substring(panelAt, panelEnd - panelAt);
+                var toolkitCode = source.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!panelCode.Contains(
+                        "sourceId, source, displayedEnabled, displayedVersion)") ||
+                    !nativeCode.Contains(
+                        "IsWorkspaceTrackingRecoveryIntentCurrent(") ||
+                    !nativeCode.Contains("if (recovered) RebuildWorkspaceNativeTrackingSources()") ||
+                    !toolkitCode.Contains(
+                        "IsWorkspaceTrackingRecoveryIntentCurrent(") ||
+                    nativeCode.IndexOf("IsWorkspaceTrackingRecoveryIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    nativeCode.IndexOf("TryRequestWorkspaceTrackingRecovery(",
+                        StringComparison.Ordinal) ||
+                    toolkitCode.IndexOf("IsWorkspaceTrackingRecoveryIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    toolkitCode.IndexOf("TryRequestWorkspaceTrackingRecovery(",
+                        StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 stale recovery shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 stale recovery provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                if (configured == null) return false;
+                configured.Add(id);
+
+                int CurrentVersion() => (int)version.Invoke(shell, new object[] { id });
+                bool CanRecover(bool displayedEnabled, int displayedVersion) =>
+                    (bool)intent.Invoke(shell, new object[]
+                    {
+                        id.ToUpperInvariant(), provider, displayedEnabled, displayedVersion
+                    });
+                void Recover(bool displayedEnabled, int displayedVersion) =>
+                    recover.Invoke(shell, new object[]
+                    {
+                        id, provider, displayedEnabled, displayedVersion
+                    });
+                bool Toggle(bool enabled) =>
+                    (bool)toggle.Invoke(shell, new object[] { provider, enabled, null });
+
+                if (!Toggle(true) || !provider.ControlEnabled) return false;
+                var firstVersion = CurrentVersion();
+                if (!CanRecover(true, firstVersion)) return false;
+
+                Recover(true, firstVersion);
+                if (provider.RecoveryCalls != 1 ||
+                    CurrentVersion() == firstVersion ||
+                    CanRecover(true, firstVersion))
+                    return false;
+                Recover(true, firstVersion);
+                if (provider.RecoveryCalls != 1) return false;
+
+                // A failed recovery leaves its current button usable for a retry.
+                var failedVersion = CurrentVersion();
+                provider.FailRecoveryOnce = true;
+                Recover(true, failedVersion);
+                if (provider.RecoveryCalls != 2 ||
+                    CurrentVersion() != failedVersion ||
+                    !CanRecover(true, failedVersion))
+                    return false;
+                Recover(true, failedVersion);
+                if (provider.RecoveryCalls != 3 ||
+                    CurrentVersion() == failedVersion)
+                    return false;
+
+                // A stale Recover must not affect an explicitly disabled source.
+                var beforeDisable = CurrentVersion();
+                if (!Toggle(false) || CanRecover(true, beforeDisable))
+                    return false;
+                Recover(true, beforeDisable);
+                if (provider.RecoveryCalls != 3) return false;
+
+                // A fresh enabled session can recover once.
+                if (!Toggle(true)) return false;
+                var freshVersion = CurrentVersion();
+                Recover(true, freshVersion);
+                return provider.RecoveryCalls == 4 &&
+                       CurrentVersion() != freshVersion &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 1 &&
+                       configured.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
             }
@@ -1722,7 +1857,7 @@ namespace VCR.Editor.P1
                     !trackingSource.Substring(nativeAt, fallbackAt - nativeAt)
                         .Contains("TryRequestWorkspaceTrackingRecovery(control, out var feedback)") ||
                     !trackingSource.Substring(fallbackAt)
-                        .Contains("TryRequestWorkspaceTrackingRecovery(source, out var feedback)"))
+                        .Contains("TryRequestWorkspaceTrackingRecovery(displayedSource, out var feedback)"))
                     return false;
 
                 shellRoot = new GameObject("P1 tracking recovery shell");
