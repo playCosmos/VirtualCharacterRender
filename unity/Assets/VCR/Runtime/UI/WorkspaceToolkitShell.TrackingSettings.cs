@@ -30,6 +30,11 @@ namespace VCR.Runtime.UI
         // The Add/Remove button must retain the membership state it displayed.
         private readonly Dictionary<int, bool> _workspaceNativeTrackingConfigured =
             new Dictionary<int, bool>();
+        // Keep the state and revision that produced each native Enable/Disable label.
+        private readonly Dictionary<int, bool> _workspaceNativeTrackingEnabled =
+            new Dictionary<int, bool>();
+        private readonly Dictionary<int, int> _workspaceNativeTrackingVersions =
+            new Dictionary<int, int>();
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
             new Dictionary<int, string>();
         // Saves and Add/Remove across both UI surfaces invalidate old drafts.
@@ -55,6 +60,8 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingConfigured.Clear();
+            _workspaceNativeTrackingEnabled.Clear();
+            _workspaceNativeTrackingVersions.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -290,6 +297,8 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
             _workspaceNativeTrackingConfigured.Clear();
+            _workspaceNativeTrackingEnabled.Clear();
+            _workspaceNativeTrackingVersions.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -314,6 +323,9 @@ namespace VCR.Runtime.UI
                     (source.ControlEnabled ? source.ControlHealthState.ToString() : "Off") + ")";
                 var configured = _workspaceConfiguredTracking.Contains(source.ControlId);
                 _workspaceNativeTrackingConfigured[i] = configured;
+                _workspaceNativeTrackingEnabled[i] = source.ControlEnabled;
+                _workspaceNativeTrackingVersions[i] =
+                    GetWorkspaceTrackingEditVersion(source.ControlId);
                 if (configured && source is ITrackingRuntimeConfigurable)
                     _workspaceNativeSettings.Add(2, 5000 + i,
                         DesktopNativeSettingsWindow.ControlKind.Button, title + " settings");
@@ -463,6 +475,18 @@ namespace VCR.Runtime.UI
             string sourceId, bool displayedConfigured)
         {
             return _workspaceConfiguredTracking.Contains(sourceId) == displayedConfigured;
+        }
+
+        private bool IsWorkspaceTrackingToggleIntentCurrent(
+            string sourceId, ITrackingRuntimeControl control,
+            bool displayedEnabled, int displayedVersion)
+        {
+            // A previous Enable label must never become a Disable command
+            // because another UI, recovery or provider changed state.
+            return control != null &&
+                   _workspaceConfiguredTracking.Contains(sourceId) &&
+                   control.ControlEnabled == displayedEnabled &&
+                   IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion);
         }
 
         private bool IsWorkspaceTrackingConfiguredEditorCurrent(
@@ -667,9 +691,18 @@ namespace VCR.Runtime.UI
                 ShowWorkspaceNativeTrackingDetails(id);
             else if (action < 5400)
             {
-                var enabled = !control.ControlEnabled;
+                if (!_workspaceNativeTrackingEnabled.TryGetValue(slot, out var displayedEnabled) ||
+                    !_workspaceNativeTrackingVersions.TryGetValue(slot, out var displayedVersion) ||
+                    !IsWorkspaceTrackingToggleIntentCurrent(
+                        id, control, displayedEnabled, displayedVersion))
+                {
+                    RebuildWorkspaceNativeTrackingSources();
+                    _workspaceNativeSettings.SetText(92,
+                        "Tracking state changed. Select Enable/Disable again.");
+                    return true;
+                }
                 var changed = TrySetWorkspaceTrackingEnabled(
-                    control, enabled, out var feedback);
+                    control, !displayedEnabled, out var feedback);
                 if (changed) RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, feedback);
             }
@@ -834,6 +867,8 @@ namespace VCR.Runtime.UI
                 {
                     var sourceId = source.ControlId;
                     var configured = _workspaceConfiguredTracking.Contains(sourceId);
+                    var displayedEnabled = source.ControlEnabled;
+                    var displayedVersion = GetWorkspaceTrackingEditVersion(sourceId);
                     var container = new VisualElement();
                     container.style.marginBottom = 5;
                     container.style.paddingBottom = 5;
@@ -859,8 +894,9 @@ namespace VCR.Runtime.UI
                         { text = configured ? "Remove" : "Add" });
                     if (configured)
                     {
-                        buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(sourceId, source))
-                            { text = source.ControlEnabled ? "Disable" : "Enable" });
+                        buttons.Add(new Button(() => ToggleWorkspaceTrackingEnabled(
+                                sourceId, source, displayedEnabled, displayedVersion))
+                            { text = displayedEnabled ? "Disable" : "Enable" });
                         buttons.Add(new Button(() => RecoverWorkspaceTrackingSource(sourceId, source))
                             { text = "Recover" });
                         if (source is ITrackingRuntimeConfigurable)
@@ -969,13 +1005,20 @@ namespace VCR.Runtime.UI
         }
 
         private void ToggleWorkspaceTrackingEnabled(
-            string sourceId, ITrackingRuntimeControl displayedSource)
+            string sourceId, ITrackingRuntimeControl displayedSource,
+            bool displayedEnabled, int displayedVersion)
         {
             if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
                 return;
-            var source = displayedSource;
-            var enabled = source != null && !source.ControlEnabled;
-            if (TrySetWorkspaceTrackingEnabled(source, enabled, out var feedback))
+            if (!IsWorkspaceTrackingToggleIntentCurrent(
+                    sourceId, displayedSource, displayedEnabled, displayedVersion))
+            {
+                TrackingPanelActionFinished(
+                    "Tracking state changed. Select Enable/Disable again.");
+                return;
+            }
+            if (TrySetWorkspaceTrackingEnabled(
+                    displayedSource, !displayedEnabled, out var feedback))
                 TrackingPanelActionFinished(feedback);
             else
                 SetWorkspaceTrackingFeedback(feedback);
