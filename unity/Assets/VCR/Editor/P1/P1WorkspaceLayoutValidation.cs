@@ -1117,9 +1117,9 @@ namespace VCR.Editor.P1
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "ToggleWorkspaceTrackingEnabled(\n                                " +
                         "sourceId, source, displayedEnabled, displayedVersion)") ||
-                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "RecoverWorkspaceTrackingSource(\n                                " +
-                        "sourceId, source, displayedEnabled, displayedVersion)") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(
+                        code.Substring(panelStart, panelEnd - panelStart),
+                        @"RecoverWorkspaceTrackingSource\(\s*sourceId, source, displayedEnabled, displayedVersion\)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "EditWorkspaceTrackingSettings(sourceId, source)"))
                     return false;
