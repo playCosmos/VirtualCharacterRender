@@ -271,6 +271,15 @@ The earlier Native Settings and Toolkit Add/Remove guard compared only the regis
 - **Last verified exact-head baseline:** `7fb80c2` Unity P0–P13, Windows P1 startup/quit and hosted GUI [#43906075577](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43906075577) PASS; Repository Push/PR #43906075199/#43906089861 PASS. Exact-HEAD macOS player/GUI acceptance and physical camera/Win32/AppKit controls remain unverified.
 - **Validation:** new exact-head Unity/Windows/Repository checks required before this regression can be called PASS. A provider can still change its state entirely outside U1 without advancing the U1 revision; full device-session ABA detection requires a provider generation counter or transition event. Preserve Draft and legacy uGUI until interactive acceptance.
 
+## Tracking Configure must reject removed membership before opening
+
+The U1 Native/Toolkit **Save** paths already reject an editor for a source removed or replaced by another surface. The **Configure open** paths did not reject a provider that remained live but was no longer registered. A stale Native Settings button or Toolkit Configure callback could still read that unregistered device's settings, present editable fields and a Save action guaranteed to fail later. This is an inconsistent, avoidable operator path and can expose fields for devices deliberately removed from management.
+
+- `1a448c3`: both Configure entry paths check the current configured membership before reading the live setting schema. Native Settings rebuilds its device list and displays an Add-before-Configure prompt on stale membership; Toolkit clears any previously visible editor, refreshes its device list and gives the same prompt. Existing provider-instance and Save-time revision/readback checks remain unchanged.
+- `42147db`: a P1 Unity fixture invokes the actual Toolkit Configure callback for an unconfigured device, registered device and same live device after another surface removes registration. The removed/unconfigured cases must not read provider schema, apply configuration or retain editor fields; a fresh registered Configure still opens. Source contracts independently enforce the Native and Toolkit membership checks before their schema-read calls.
+- **Last verified exact-HEAD:** `aa24f79` Unity P0–P13 / Windows native Player and GUI [#43921487154](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43921487154) PASS, repository Push/PR #43921487296/#43921500294 PASS. Code predecessor `38bdeb6` macOS AppKit and Player [#43921410084](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43921410084) PASS.
+- **New code acceptance:** latest-head Unity/Windows/Repository validation is required before this specific fix is marked PASS. Physical Win32/AppKit native Settings clicks, actual camera/tracker control, Korean IME, VRM swap, OBS alpha and soak remain unverified. Preserve legacy uGUI and PR Draft; no merge or release.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
