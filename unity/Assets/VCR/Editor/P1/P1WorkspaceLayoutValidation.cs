@@ -1269,6 +1269,9 @@ namespace VCR.Editor.P1
         {
             var id = "vcr-parity-membership-aba-" + Guid.NewGuid().ToString("N");
             var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            const string configuredKey = "VCR.TrackingInputs.Configured.v1";
+            var hadConfiguredKey = PlayerPrefs.HasKey(configuredKey);
+            var previousConfigured = PlayerPrefs.GetString(configuredKey, "");
             GameObject shellRoot = null;
             GameObject sourceRoot = null;
             try
@@ -1393,6 +1396,11 @@ namespace VCR.Editor.P1
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+                if (hadConfiguredKey)
+                    PlayerPrefs.SetString(configuredKey, previousConfigured);
+                else
+                    PlayerPrefs.DeleteKey(configuredKey);
+                PlayerPrefs.Save();
             }
         }
 
