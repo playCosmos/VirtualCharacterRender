@@ -27,6 +27,9 @@ namespace VCR.Runtime.UI
         // A native button must only act on the provider instance it displayed.
         private readonly Dictionary<int, ITrackingRuntimeControl> _workspaceNativeTrackingProviders =
             new Dictionary<int, ITrackingRuntimeControl>();
+        // The Add/Remove button must retain the membership state it displayed.
+        private readonly Dictionary<int, bool> _workspaceNativeTrackingConfigured =
+            new Dictionary<int, bool>();
         private readonly Dictionary<int, string> _workspaceNativeTrackingFields =
             new Dictionary<int, string>();
         // Saves and Add/Remove across both UI surfaces invalidate old drafts.
@@ -51,6 +54,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeTrackingOpenValues = null;
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
+            _workspaceNativeTrackingConfigured.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -285,6 +289,7 @@ namespace VCR.Runtime.UI
             _workspaceNativeSettings.ClearCategory(2);
             _workspaceNativeTrackingIds.Clear();
             _workspaceNativeTrackingProviders.Clear();
+            _workspaceNativeTrackingConfigured.Clear();
             _workspaceNativeTrackingFields.Clear();
             _workspaceNativeActiveTrackingId = null;
             _workspaceNativeActiveTrackingProvider = null;
@@ -308,6 +313,7 @@ namespace VCR.Runtime.UI
                 var title = source.DisplayName + " (" +
                     (source.ControlEnabled ? source.ControlHealthState.ToString() : "Off") + ")";
                 var configured = _workspaceConfiguredTracking.Contains(source.ControlId);
+                _workspaceNativeTrackingConfigured[i] = configured;
                 if (configured && source is ITrackingRuntimeConfigurable)
                     _workspaceNativeSettings.Add(2, 5000 + i,
                         DesktopNativeSettingsWindow.ControlKind.Button, title + " settings");
@@ -451,6 +457,12 @@ namespace VCR.Runtime.UI
             _workspaceNativeSettings.Add(2, 92, DesktopNativeSettingsWindow.ControlKind.Label,
                 "Values are validated by the selected tracking provider.");
             _workspaceNativeSettings.SelectCategory(2);
+        }
+
+        private bool IsWorkspaceTrackingMembershipStateCurrent(
+            string sourceId, bool displayedConfigured)
+        {
+            return _workspaceConfiguredTracking.Contains(sourceId) == displayedConfigured;
         }
 
         private bool IsWorkspaceTrackingConfiguredEditorCurrent(
@@ -668,7 +680,15 @@ namespace VCR.Runtime.UI
             }
             else
             {
-                var remove = _workspaceConfiguredTracking.Contains(id);
+                if (!_workspaceNativeTrackingConfigured.TryGetValue(slot, out var displayedConfigured) ||
+                    !IsWorkspaceTrackingMembershipStateCurrent(id, displayedConfigured))
+                {
+                    RebuildWorkspaceNativeTrackingSources();
+                    _workspaceNativeSettings.SetText(92,
+                        "Tracking membership changed. Select Add/Remove again.");
+                    return true;
+                }
+                var remove = displayedConfigured;
                 // Resolve before removal, before the original spelling is lost.
                 var persistenceId = GetWorkspaceTrackingPersistenceId(id);
                 if (remove && control.ControlEnabled &&
@@ -835,7 +855,7 @@ namespace VCR.Runtime.UI
                     var buttons = new VisualElement();
                     buttons.style.flexDirection = FlexDirection.Row;
                     buttons.style.flexWrap = Wrap.Wrap;
-                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId, source))
+                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId, source, configured))
                         { text = configured ? "Remove" : "Add" });
                     if (configured)
                     {
@@ -887,19 +907,29 @@ namespace VCR.Runtime.UI
         }
 
         private void UpdateWorkspaceTrackingMembership(
-            string sourceId, ITrackingRuntimeControl displayedSource)
+            string sourceId, ITrackingRuntimeControl displayedSource,
+            bool displayedConfigured)
         {
             try
             {
                 if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
                     return;
+                if (!IsWorkspaceTrackingMembershipStateCurrent(sourceId, displayedConfigured))
+                {
+                    SetWorkspaceTrackingFeedback(
+                        "Tracking membership changed. Select Add/Remove again.");
+                    _workspaceTrackingPanelSignature = null;
+                    _nextWorkspaceTrackingPanelRefresh = 0f;
+                    RefreshWorkspaceTrackingPanel();
+                    return;
+                }
                 var source = displayedSource;
                 if (source == null)
                 {
                     SetWorkspaceTrackingFeedback("Tracking source disconnected.");
                     return;
                 }
-                var configured = _workspaceConfiguredTracking.Contains(sourceId);
+                var configured = displayedConfigured;
                 var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
                 // Keep the former dashboard behavior: newly added devices start disabled.
                 if (source.ControlEnabled &&
