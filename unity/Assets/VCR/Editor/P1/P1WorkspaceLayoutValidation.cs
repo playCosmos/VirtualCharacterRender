@@ -1116,8 +1116,9 @@ namespace VCR.Editor.P1
                         "IsWorkspaceTrackingEditorSourceCurrent(displayed, control)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "behaviour.GetInstanceID()") ||
-                    !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "UpdateWorkspaceTrackingMembership(\n                            sourceId, source, configured, displayedVersion)") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(
+                        code.Substring(panelStart, panelEnd - panelStart),
+                        @"UpdateWorkspaceTrackingMembership\(\s*sourceId, source, configured, displayedVersion\)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "ToggleWorkspaceTrackingEnabled(\n                                " +
                         "sourceId, source, displayedEnabled, displayedVersion)") ||
@@ -1219,8 +1220,8 @@ namespace VCR.Editor.P1
                 var toolkitCode = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
                 if (!rebuildCode.Contains("_workspaceNativeTrackingConfigured[i] = configured") ||
                     !nativeCode.Contains("_workspaceNativeTrackingConfigured.TryGetValue(slot") ||
-                    !panelCode.Contains(
-                        "UpdateWorkspaceTrackingMembership(\n                            sourceId, source, configured, displayedVersion)") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(panelCode,
+                        @"UpdateWorkspaceTrackingMembership\(\s*sourceId, source, configured, displayedVersion\)") ||
                     !toolkitCode.Contains(
                         "IsWorkspaceTrackingMembershipIntentCurrent(") ||
                     nativeCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
