@@ -503,6 +503,16 @@ namespace VCR.Runtime.UI
             return _workspaceConfiguredTracking.Contains(sourceId) == displayedConfigured;
         }
 
+        private bool IsWorkspaceTrackingMembershipIntentCurrent(
+            string sourceId, bool displayedConfigured, int displayedVersion)
+        {
+            // Membership alone is insufficient: Remove->Add or Add->Remove
+            // can return to the displayed state while invalidating its intent.
+            // This also works for an unconfigured source (unlike editor Save).
+            return IsWorkspaceTrackingMembershipStateCurrent(sourceId, displayedConfigured) &&
+                   GetWorkspaceTrackingEditVersion(sourceId) == displayedVersion;
+        }
+
         private bool IsWorkspaceTrackingToggleIntentCurrent(
             string sourceId, ITrackingRuntimeControl control,
             bool displayedEnabled, int displayedVersion)
@@ -775,7 +785,9 @@ namespace VCR.Runtime.UI
             else
             {
                 if (!_workspaceNativeTrackingConfigured.TryGetValue(slot, out var displayedConfigured) ||
-                    !IsWorkspaceTrackingMembershipStateCurrent(id, displayedConfigured))
+                    !_workspaceNativeTrackingVersions.TryGetValue(slot, out var displayedVersion) ||
+                    !IsWorkspaceTrackingMembershipIntentCurrent(
+                        id, displayedConfigured, displayedVersion))
                 {
                     RebuildWorkspaceNativeTrackingSources();
                     _workspaceNativeSettings.SetText(92,
@@ -904,7 +916,8 @@ namespace VCR.Runtime.UI
                         "\u001f" + source.ControlError + "\u001f" +
                         _workspaceConfiguredTracking.Contains(source.ControlId) + "\u001f" +
                         PlayerPrefs.GetInt(TrackingEnabledKey +
-                            GetWorkspaceTrackingPersistenceId(source.ControlId), 0) + "\u001e";
+                            GetWorkspaceTrackingPersistenceId(source.ControlId), 0) + "\u001f" +
+                        GetWorkspaceTrackingEditVersion(source.ControlId) + "\u001e";
                 }
                 if (signature == _workspaceTrackingPanelSignature)
                     return;
@@ -953,7 +966,8 @@ namespace VCR.Runtime.UI
                     var buttons = new VisualElement();
                     buttons.style.flexDirection = FlexDirection.Row;
                     buttons.style.flexWrap = Wrap.Wrap;
-                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(sourceId, source, configured))
+                    buttons.Add(new Button(() => UpdateWorkspaceTrackingMembership(
+                            sourceId, source, configured, displayedVersion))
                         { text = configured ? "Remove" : "Add" });
                     if (configured)
                     {
@@ -1009,13 +1023,14 @@ namespace VCR.Runtime.UI
 
         private void UpdateWorkspaceTrackingMembership(
             string sourceId, ITrackingRuntimeControl displayedSource,
-            bool displayedConfigured)
+            bool displayedConfigured, int displayedVersion)
         {
             try
             {
                 if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
                     return;
-                if (!IsWorkspaceTrackingMembershipStateCurrent(sourceId, displayedConfigured))
+                if (!IsWorkspaceTrackingMembershipIntentCurrent(
+                        sourceId, displayedConfigured, displayedVersion))
                 {
                     SetWorkspaceTrackingFeedback(
                         "Tracking membership changed. Select Add/Remove again.");
