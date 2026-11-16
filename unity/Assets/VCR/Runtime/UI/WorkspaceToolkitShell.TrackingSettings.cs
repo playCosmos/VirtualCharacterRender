@@ -442,6 +442,15 @@ namespace VCR.Runtime.UI
 
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
+            // This settings button may outlive a Remove from the Toolkit
+            // surface. Never open fields for a source no longer configured.
+            if (!_workspaceConfiguredTracking.Contains(controlId))
+            {
+                RebuildWorkspaceNativeTrackingSources();
+                _workspaceNativeSettings.SetText(92,
+                    "Tracking source was removed. Add it before opening settings.");
+                return;
+            }
             var control = FindWorkspaceTrackingSource(controlId);
             if (!(control is ITrackingRuntimeConfigurable configurable))
             {
@@ -1130,6 +1139,13 @@ namespace VCR.Runtime.UI
             if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
             {
                 _workspaceTrackingEditor.Clear();
+                return;
+            }
+            if (!_workspaceConfiguredTracking.Contains(sourceId))
+            {
+                _workspaceTrackingEditor.Clear();
+                TrackingPanelActionFinished(
+                    "Tracking source was removed. Add it before opening settings.");
                 return;
             }
             _workspaceTrackingEditor.Clear();
