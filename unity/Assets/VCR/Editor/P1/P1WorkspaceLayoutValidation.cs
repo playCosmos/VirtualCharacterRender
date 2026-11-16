@@ -234,6 +234,8 @@ namespace VCR.Editor.P1
                     "stale tracking buttons must not mutate a replacement provider");
                 Check(TrackingStaleMembershipActionsRejectStateChanges(),
                     "stale Add/Remove labels must not invert membership changes");
+                Check(TrackingStaleToggleActionsRejectStateChanges(),
+                    "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingSettingsSaveRequiresCurrentMembership(),
                     "tracking settings Save must not re-register a removed device");
                 Check(TrackingEditVersionPreventsStaleSaves(),
@@ -1109,7 +1111,8 @@ namespace VCR.Editor.P1
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "UpdateWorkspaceTrackingMembership(sourceId, source, configured)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "ToggleWorkspaceTrackingEnabled(sourceId, source)") ||
+                        "ToggleWorkspaceTrackingEnabled(\n                                " +
+                        "sourceId, source, displayedEnabled, displayedVersion)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
                         "RecoverWorkspaceTrackingSource(sourceId, source)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
@@ -1147,7 +1150,7 @@ namespace VCR.Editor.P1
                 // A stale Add/Remove or Toggle must not operate on the new
                 // provider or change logical membership.
                 membership.Invoke(shell, new object[] { id, original, true });
-                toggle.Invoke(shell, new object[] { id, original });
+                toggle.Invoke(shell, new object[] { id, original, false, 0 });
                 recover.Invoke(shell, new object[] { id, original });
                 return configured.Contains(id) &&
                        replacement.ToggleCalls == 0 &&
@@ -1249,6 +1252,154 @@ namespace VCR.Editor.P1
             {
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
+        }
+
+        private static bool TrackingStaleToggleActionsRejectStateChanges()
+        {
+            var id = "vcr-parity-stale-toggle-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = type.GetMethod("ToggleWorkspaceTrackingEnabled", flags);
+                var setEnabled = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var intent = type.GetMethod("IsWorkspaceTrackingToggleIntentCurrent", flags);
+                var getVersion = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var nativeEnabledField = type.GetField("_workspaceNativeTrackingEnabled", flags);
+                var nativeVersionField = type.GetField("_workspaceNativeTrackingVersions", flags);
+                if (toggle == null || toggle.GetParameters().Length != 4 ||
+                    setEnabled == null || intent == null || getVersion == null ||
+                    configuredField == null || nativeEnabledField == null ||
+                    nativeVersionField == null)
+                    return false;
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var rebuildAt = code.IndexOf(
+                    "private void RebuildWorkspaceNativeTrackingSources(", StringComparison.Ordinal);
+                var rebuildEnd = code.IndexOf(
+                    "private static bool IsWorkspaceTrackingEditorSourceCurrent(", StringComparison.Ordinal);
+                var nativeAt = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelAt = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var toolkitEnd = code.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                if (rebuildAt < 0 || rebuildEnd <= rebuildAt ||
+                    nativeAt < 0 || nativeEnd <= nativeAt ||
+                    panelAt < 0 || panelEnd <= panelAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                var rebuildCode = code.Substring(rebuildAt, rebuildEnd - rebuildAt);
+                var nativeCode = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var panelCode = code.Substring(panelAt, panelEnd - panelAt);
+                var toolkitCode = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!rebuildCode.Contains("_workspaceNativeTrackingEnabled[i] = source.ControlEnabled") ||
+                    !rebuildCode.Contains("_workspaceNativeTrackingVersions[i] =") ||
+                    !nativeCode.Contains("_workspaceNativeTrackingEnabled.TryGetValue(slot") ||
+                    !nativeCode.Contains("_workspaceNativeTrackingVersions.TryGetValue(slot") ||
+                    !panelCode.Contains("var displayedEnabled = source.ControlEnabled") ||
+                    !panelCode.Contains("var displayedVersion = GetWorkspaceTrackingEditVersion(sourceId)") ||
+                    !panelCode.Contains("sourceId, source, displayedEnabled, displayedVersion)") ||
+                    !toolkitCode.Contains("IsWorkspaceTrackingToggleIntentCurrent(") ||
+                    !nativeCode.Contains("IsWorkspaceTrackingToggleIntentCurrent(") ||
+                    nativeCode.IndexOf("IsWorkspaceTrackingToggleIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    nativeCode.IndexOf("TrySetWorkspaceTrackingEnabled(",
+                        StringComparison.Ordinal) ||
+                    toolkitCode.IndexOf("IsWorkspaceTrackingToggleIntentCurrent(",
+                        StringComparison.Ordinal) >
+                    toolkitCode.IndexOf("TrySetWorkspaceTrackingEnabled(",
+                        StringComparison.Ordinal))
+                    return false;
+
+                shellRoot = new GameObject("P1 stale tracking toggle shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 stale tracking toggle provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var nativeEnabled = nativeEnabledField.GetValue(shell) as
+                    Dictionary<int, bool>;
+                var nativeVersions = nativeVersionField.GetValue(shell) as
+                    Dictionary<int, int>;
+                if (configured == null || nativeEnabled == null || nativeVersions == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+
+                int Version() => (int)getVersion.Invoke(shell, new object[] { id });
+                bool Current(bool displayedEnabled, int displayedVersion) =>
+                    (bool)intent.Invoke(shell, new object[] {
+                        id.ToUpperInvariant(), provider, displayedEnabled, displayedVersion
+                    });
+                void Click(bool displayedEnabled, int displayedVersion) =>
+                    toggle.Invoke(shell, new object[] {
+                        id, provider, displayedEnabled, displayedVersion
+                    });
+                bool Set(bool enabled) =>
+                    (bool)setEnabled.Invoke(shell, new object[] {
+                        provider, enabled, null
+                    });
+
+                var firstVersion = Version();
+                nativeEnabled[0] = false;
+                nativeVersions[0] = firstVersion;
+                if (!Current(nativeEnabled[0], nativeVersions[0])) return false;
+
+                // The stale Enable label must not disable an externally enabled provider.
+                if (!provider.TrySetControlEnabled(true, out _) ||
+                    Current(false, firstVersion))
+                    return false;
+                Click(false, firstVersion);
+                if (!provider.ControlEnabled || provider.ToggleCalls != 1 ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // A state change through the other U1 surface invalidates the
+                // earlier Disable, even if both callbacks retain the same provider.
+                var disableVersion = Version();
+                if (!Current(true, disableVersion) || !Set(false) ||
+                    Current(true, disableVersion))
+                    return false;
+                Click(true, disableVersion);
+                if (provider.ControlEnabled || provider.ToggleCalls != 2 ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // An Enable-Disable round trip restores the original boolean
+                // but not the original edit revision; reject ABA stale clicks.
+                var beforeRoundTrip = Version();
+                if (!Set(true) || !Set(false) || Current(false, beforeRoundTrip))
+                    return false;
+                Click(false, beforeRoundTrip);
+                if (provider.ControlEnabled || provider.ToggleCalls != 4)
+                    return false;
+
+                // A fresh Enable action still succeeds and persists.
+                var freshVersion = Version();
+                Click(false, freshVersion);
+                return provider.ControlEnabled &&
+                       provider.ToggleCalls == 5 &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 1 &&
+                       configured.Contains(id);
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
