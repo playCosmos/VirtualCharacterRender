@@ -190,8 +190,19 @@ namespace VCR.Runtime.UI
                 // Native/Toolkit settings draft is open on the same instance.
                 // Invalidate only if the provider actually accepts a change.
                 var acceptedMutation = false;
+                var beforeRestoreEnabled = false;
+                var beforeRestoreHealth = default(TrackingSourceHealthState);
+                string beforeRestoreError = null;
+                var hasInitialReadback = false;
                 try
                 {
+                    // A rejected provider operation may already have changed
+                    // enabled/health state, including when it throws. Observe
+                    // the entire restore attempt, not only accepted calls.
+                    beforeRestoreEnabled = source.ControlEnabled;
+                    beforeRestoreHealth = source.ControlHealthState;
+                    beforeRestoreError = source.ControlError;
+                    hasInitialReadback = true;
                     var persistenceId = GetWorkspaceTrackingPersistenceId(id);
                     var enabled = PlayerPrefs.GetInt(
                         TrackingEnabledKey + persistenceId, 0) != 0;
@@ -275,6 +286,28 @@ namespace VCR.Runtime.UI
                 }
                 finally
                 {
+                    if (!acceptedMutation)
+                    {
+                        try
+                        {
+                            // A provider might change state *before* returning
+                            // false from TrySetControlEnabled or throwing.
+                            // Even if all calls reject, old drafts are unsafe
+                            // when public readback differs from the snapshot.
+                            acceptedMutation = !hasInitialReadback ||
+                                source.ControlEnabled != beforeRestoreEnabled ||
+                                source.ControlHealthState != beforeRestoreHealth ||
+                                !string.Equals(source.ControlError, beforeRestoreError,
+                                    StringComparison.Ordinal);
+                        }
+                        catch (Exception ex)
+                        {
+                            acceptedMutation = true;
+                            Debug.LogWarning(
+                                "U1 tracking post-restore readback failed for " +
+                                id + ": " + ex.Message, this);
+                        }
+                    }
                     // Also covers partially successful restores followed by
                     // a failure or transient schema-unavailable retry.
                     if (acceptedMutation)
