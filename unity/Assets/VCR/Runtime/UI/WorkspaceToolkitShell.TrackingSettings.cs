@@ -701,6 +701,13 @@ namespace VCR.Runtime.UI
                 feedback = "Add the tracking source before enabling or disabling it.";
                 return false;
             }
+            // The control contract does not promise rollback if Toggle
+            // returns false or throws. In particular, a failed Enable can
+            // leave capture On while the persisted preference is still Off.
+            var beforeEnabled = control.ControlEnabled;
+            var beforeHealth = control.ControlHealthState;
+            var beforeError = control.ControlError;
+            var completed = false;
             try
             {
                 if (!control.TrySetControlEnabled(enabled, out var error))
@@ -717,6 +724,7 @@ namespace VCR.Runtime.UI
                     TrackingEnabledKey + GetWorkspaceTrackingPersistenceId(id),
                     enabled ? 1 : 0);
                 PlayerPrefs.Save();
+                completed = true;
                 feedback = (control.DisplayName ?? id) +
                     (enabled ? " enabled." : " disabled.");
                 return true;
@@ -726,6 +734,35 @@ namespace VCR.Runtime.UI
                 feedback = "Tracking toggle failed: " + ex.Message;
                 Debug.LogException(ex, this);
                 return false;
+            }
+            finally
+            {
+                if (!completed)
+                {
+                    var stateChanged = true;
+                    try
+                    {
+                        stateChanged = control.ControlEnabled != beforeEnabled ||
+                                       control.ControlHealthState != beforeHealth ||
+                                       !string.Equals(control.ControlError, beforeError,
+                                           StringComparison.Ordinal);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning(
+                            "U1 tracking failed-toggle readback unavailable for " +
+                            id + ": " + ex.Message, this);
+                    }
+                    if (stateChanged)
+                    {
+                        // The original saved On/Off preference remains the
+                        // authority. Reconcile a partially changed live source
+                        // on the next scan, rather than silently caching it.
+                        InvalidateWorkspaceTrackingEditors(id);
+                        _workspaceRestoredTracking.Remove(id);
+                        _nextTrackingRestoreScan = 0f;
+                    }
+                }
             }
         }
 
@@ -845,7 +882,9 @@ namespace VCR.Runtime.UI
                 }
                 var changed = TrySetWorkspaceTrackingEnabled(
                     control, !displayedEnabled, out var feedback);
-                if (changed) RebuildWorkspaceNativeTrackingSources();
+                if (changed ||
+                    !IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion))
+                    RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, feedback);
             }
             else if (action < 5600)
@@ -1181,8 +1220,10 @@ namespace VCR.Runtime.UI
                     "Tracking state changed. Select Enable/Disable again.");
                 return;
             }
-            if (TrySetWorkspaceTrackingEnabled(
-                    displayedSource, !displayedEnabled, out var feedback))
+            var changed = TrySetWorkspaceTrackingEnabled(
+                displayedSource, !displayedEnabled, out var feedback);
+            if (changed ||
+                !IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion))
                 TrackingPanelActionFinished(feedback);
             else
                 SetWorkspaceTrackingFeedback(feedback);
