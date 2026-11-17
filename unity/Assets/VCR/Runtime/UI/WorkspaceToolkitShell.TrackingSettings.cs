@@ -178,10 +178,35 @@ namespace VCR.Runtime.UI
             foreach (var source in sources)
             {
                 var id = source.ControlId;
-                if (!_workspaceConfiguredTracking.Contains(id) ||
-                    (_workspaceRestoredTracking.TryGetValue(id, out var previous) &&
-                     ReferenceEquals(previous, source)))
+                if (!_workspaceConfiguredTracking.Contains(id))
                     continue;
+                if (_workspaceRestoredTracking.TryGetValue(id, out var previous) &&
+                    ReferenceEquals(previous, source))
+                {
+                    // The provider may be toggled outside U1 after its first
+                    // restore (or stop capture during its own lifecycle).
+                    // Never treat a cached instance as settled when live
+                    // On/Off diverges from the saved user's preference.
+                    var stateMatches = false;
+                    try
+                    {
+                        stateMatches = source.ControlEnabled ==
+                            (PlayerPrefs.GetInt(TrackingEnabledKey +
+                                GetWorkspaceTrackingPersistenceId(id), 0) != 0);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("U1 tracking cached-state readback failed for " +
+                                         id + ": " + ex.Message, this);
+                    }
+                    if (stateMatches)
+                        continue;
+                    _workspaceRestoredTracking.Remove(id);
+                    // An external session change also invalidates old UI
+                    // actions, even if the following restore attempt fails
+                    // before the provider accepts a new command.
+                    InvalidateWorkspaceTrackingEditors(id);
+                }
                 // A new component with the same ID must receive the saved
                 // settings and enabled state again. Mark before applying so a
                 // synchronous callback cannot trigger duplicate restore work.
