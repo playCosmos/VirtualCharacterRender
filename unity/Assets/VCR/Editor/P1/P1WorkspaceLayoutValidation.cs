@@ -222,6 +222,8 @@ namespace VCR.Editor.P1
                     "recreated tracking control with same ID must restore its saved enabled state");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
                     "accepted background tracking restore must invalidate stale U1 settings drafts");
+                Check(TrackingFailedApplyMutationsInvalidateOldDrafts(),
+                    "failed provider configuration must not preserve a stale U1 editor after live mutation");
                 Check(TrackingEditorSchemaParity(),
                     "native and Toolkit tracking editors must reject null/oversized schemas");
                 Check(TrackingRecoveryDoesNotEnableDisabledSource(),
@@ -828,14 +830,14 @@ namespace VCR.Editor.P1
                 var toolkit = code.Substring(toolkitStart);
                 var nativeCheck = native.IndexOf("AreWorkspaceTrackingSettingsUnchanged(",
                     StringComparison.Ordinal);
-                var nativeApply = native.IndexOf("TryApplyConfiguration(",
+                var nativeApply = native.IndexOf("TryApplyWorkspaceTrackingSettings(",
                     StringComparison.Ordinal);
                 var toolkitOpen = toolkit.IndexOf(
                     "var openedValues = CaptureWorkspaceTrackingSettings(",
                     StringComparison.Ordinal);
                 var toolkitCheck = toolkit.IndexOf("AreWorkspaceTrackingSettingsUnchanged(",
                     StringComparison.Ordinal);
-                var toolkitApply = toolkit.IndexOf("TryApplyConfiguration(",
+                var toolkitApply = toolkit.IndexOf("TryApplyWorkspaceTrackingSettings(",
                     StringComparison.Ordinal);
                 if (!code.Contains("_workspaceNativeTrackingOpenValues = CaptureWorkspaceTrackingSettings(") ||
                     nativeCheck < 0 || nativeApply <= nativeCheck ||
@@ -944,10 +946,10 @@ namespace VCR.Editor.P1
                     !toolkit.Contains("InvalidateWorkspaceTrackingEditors(sourceId)") ||
                     native.IndexOf("IsWorkspaceTrackingEditVersionCurrent(",
                         StringComparison.Ordinal) >
-                    native.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    native.IndexOf("TryApplyWorkspaceTrackingSettings(", StringComparison.Ordinal) ||
                     toolkit.IndexOf("IsWorkspaceTrackingEditVersionCurrent(",
                         StringComparison.Ordinal) >
-                    toolkit.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal))
+                    toolkit.IndexOf("TryApplyWorkspaceTrackingSettings(", StringComparison.Ordinal))
                     return false;
 
                 shellRoot = new GameObject("P1 concurrent tracking settings shell");
@@ -1178,10 +1180,10 @@ namespace VCR.Editor.P1
                     !toolkitEditor.Contains("IsWorkspaceTrackingConfiguredEditorCurrent(") ||
                     nativeSave.IndexOf("IsWorkspaceTrackingConfiguredEditorCurrent(",
                         StringComparison.Ordinal) >
-                    nativeSave.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    nativeSave.IndexOf("TryApplyWorkspaceTrackingSettings(", StringComparison.Ordinal) ||
                     toolkitEditor.IndexOf("IsWorkspaceTrackingConfiguredEditorCurrent(",
                         StringComparison.Ordinal) >
-                    toolkitEditor.IndexOf("TryApplyConfiguration(", StringComparison.Ordinal) ||
+                    toolkitEditor.IndexOf("TryApplyWorkspaceTrackingSettings(", StringComparison.Ordinal) ||
                     nativeSave.Contains("_workspaceConfiguredTracking.Add(") ||
                     toolkitEditor.Contains("_workspaceConfiguredTracking.Add("))
                     return false;
@@ -2343,6 +2345,156 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingFailedApplyMutationsInvalidateOldDrafts()
+        {
+            var id = "vcr-parity-partial-apply-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var apply = type.GetMethod("TryApplyWorkspaceTrackingSettings", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var invalidate = type.GetMethod("InvalidateWorkspaceTrackingEditors", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                if (apply == null || version == null || invalidate == null ||
+                    canSave == null || restore == null || scan == null ||
+                    configuredField == null || restoredField == null ||
+                    apply.GetParameters().Length != 6)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var sharedAt = code.IndexOf(
+                    "private bool TryApplyWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                var nativeAt = code.IndexOf(
+                    "private void SaveWorkspaceNativeTrackingDetails()", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                var restoreAt = code.IndexOf(
+                    "private void RestoreWorkspaceTrackingPreferences()", StringComparison.Ordinal);
+                var restoreEnd = code.IndexOf(
+                    "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
+                if (sharedAt < 0 || nativeAt <= sharedAt ||
+                    nativeEnd <= nativeAt || toolkitAt < 0 ||
+                    restoreAt < 0 || restoreEnd <= restoreAt)
+                    return false;
+                var shared = code.Substring(sharedAt, nativeAt - sharedAt);
+                var native = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = code.Substring(toolkitAt);
+                var background = code.Substring(restoreAt, restoreEnd - restoreAt);
+                if (!shared.Contains("configurable.TryApplyConfiguration(values, out error)") ||
+                    !shared.Contains("AreWorkspaceTrackingSettingsUnchanged(configurable, beforeValues)") ||
+                    !shared.Contains("control.ControlHealthState != previousHealth") ||
+                    !native.Contains("TryApplyWorkspaceTrackingSettings(control, configurable, values,") ||
+                    !native.Contains("if (changedOnFailure)") ||
+                    !native.Contains("InvalidateWorkspaceTrackingEditors(control.ControlId)") ||
+                    !toolkit.Contains("TryApplyWorkspaceTrackingSettings(") ||
+                    !toolkit.Contains("if (changedOnFailure)") ||
+                    !toolkit.Contains("InvalidateWorkspaceTrackingEditors(sourceId)") ||
+                    !background.Contains("acceptedMutation |= changedOnFailure"))
+                    return false;
+
+                shellRoot = new GameObject("P1 failed apply revision shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 failed apply provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+                configured.Add(id);
+                var before = new Dictionary<string, string> {
+                    { "test-value", "default-value" }
+                };
+                var values = new Dictionary<string, string> {
+                    { "test-value", "new-value" }
+                };
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int current) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), current });
+                bool Apply(out bool changedOnFailure)
+                {
+                    var args = new object[] { provider, provider, values, before, null, false };
+                    var success = (bool)apply.Invoke(shell, args);
+                    changedOnFailure = (bool)args[5];
+                    return success;
+                }
+
+                var initial = Version();
+                provider.FailConfigurationOnce = true;
+                if (Apply(out var unchangedOnFailure) || unchangedOnFailure ||
+                    Version() != initial || !DraftValid(initial) ||
+                    provider.ConfigurationCalls != 1)
+                    return false;
+
+                provider.FailConfigurationAfterMutationOnce = true;
+                if (Apply(out var mutatedOnFailure) || !mutatedOnFailure ||
+                    provider.ExternalReadbackOverride != "new-value" ||
+                    provider.ConfigurationCalls != 2)
+                    return false;
+
+                // The shared helper reports observed mutation; manual Native
+                // and Toolkit callers invalidate the edit revision on failure.
+                invalidate.Invoke(shell, new object[] { id });
+                if (Version() == initial || DraftValid(initial)) return false;
+
+                // Startup restore also detects a provider that wrote live
+                // settings and then failed restarting. Do not cache the
+                // partially restored component as fully initialized.
+                UnityEngine.Object.DestroyImmediate(sourceRoot);
+                sourceRoot = new GameObject("P1 failed startup restore");
+                provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.FailConfigurationAfterMutationOnce = true;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "saved-value");
+                var beforeRestore = Version();
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (provider.ConfigurationCalls != 1 ||
+                    provider.ExternalReadbackOverride != "saved-value" ||
+                    restored.ContainsKey(id) || Version() == beforeRestore ||
+                    DraftValid(beforeRestore) ||
+                    PlayerPrefs.GetString(settingKey) != "saved-value")
+                    return false;
+
+                var afterFailedRestore = Version();
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (provider.ConfigurationCalls != 2 ||
+                    provider.AppliedValue != "saved-value" ||
+                    !provider.ControlEnabled ||
+                    !restored.ContainsKey(id) ||
+                    Version() == afterFailedRestore)
+                    return false;
+
+                var afterSuccess = Version();
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                return provider.ConfigurationCalls == 2 &&
+                       Version() == afterSuccess;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingBackgroundRestoreInvalidatesStaleEditors()
         {
             var id = "vcr-parity-background-restore-" + Guid.NewGuid().ToString("N");
@@ -2794,6 +2946,7 @@ namespace VCR.Editor.P1
         public int ConfigurationCalls { get; private set; }
         public string AppliedValue { get; private set; }
         public bool FailConfigurationOnce { get; set; }
+        public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
         public bool AppliedWhileEnabled { get; private set; }
@@ -2839,6 +2992,13 @@ namespace VCR.Editor.P1
             {
                 FailConfigurationOnce = false;
                 error = "Provider not initialized yet";
+                return false;
+            }
+            if (FailConfigurationAfterMutationOnce)
+            {
+                FailConfigurationAfterMutationOnce = false;
+                ExternalReadbackOverride = value;
+                error = "Simulated restart fault after applying live settings";
                 return false;
             }
             AppliedWhileEnabled |= ControlEnabled;
