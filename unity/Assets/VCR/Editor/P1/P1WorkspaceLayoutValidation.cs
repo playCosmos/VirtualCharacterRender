@@ -250,6 +250,8 @@ namespace VCR.Editor.P1
                     "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingFailedToggleRestoresSavedState(),
                     "failed toggles with live side effects must retry the saved On/Off preference");
+                Check(TrackingAcknowledgedToggleRequiresMatchingReadback(),
+                    "acknowledged tracking toggles must reach the requested enabled state before persistence");
                 Check(TrackingStaleRecoveryActionsRejectPriorSessions(),
                     "stale Recover buttons must not restart a newer tracking session");
                 Check(TrackingRecoveryButtonsRequireRunningSavedOnSource(),
@@ -1802,6 +1804,157 @@ namespace VCR.Editor.P1
                 else
                     PlayerPrefs.DeleteKey(configuredKey);
                 PlayerPrefs.Save();
+            }
+        }
+
+        private static bool TrackingAcknowledgedToggleRequiresMatchingReadback()
+        {
+            var id = "vcr-parity-toggle-ack-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (toggle == null || restore == null || version == null ||
+                    canSave == null || configuredField == null ||
+                    restoredField == null || scanField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var coreAt = source.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var coreEnd = source.IndexOf(
+                    "private bool TryRequestWorkspaceTrackingRecovery(", StringComparison.Ordinal);
+                var backgroundAt = source.IndexOf(
+                    "private void RestoreWorkspaceTrackingPreferences()", StringComparison.Ordinal);
+                var backgroundEnd = source.IndexOf(
+                    "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
+                if (coreAt < 0 || coreEnd <= coreAt ||
+                    backgroundAt < 0 || backgroundEnd <= backgroundAt)
+                    return false;
+                var core = source.Substring(coreAt, coreEnd - coreAt);
+                var background = source.Substring(backgroundAt, backgroundEnd - backgroundAt);
+                if (!core.Contains("control.ControlEnabled != enabled") ||
+                    !core.Contains("unconfirmedToggle = acknowledged") ||
+                    !core.Contains("if (stateChanged || unconfirmedToggle)") ||
+                    !background.Contains("!stopAcknowledged || source.ControlEnabled") ||
+                    !background.Contains("!toggleAcknowledged || source.ControlEnabled != enabled") ||
+                    !background.Contains("_workspaceRestoredTracking.Remove(id)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 acknowledged-toggle shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 acknowledged-toggle provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null)
+                    return false;
+                configured.Add(id);
+                restored[id] = provider;
+                PlayerPrefs.SetInt(enabledKey, 0);
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int initial) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), initial });
+                bool Toggle(bool enabled, out string feedback)
+                {
+                    var args = new object[] { provider, enabled, null };
+                    var success = (bool)toggle.Invoke(shell, args);
+                    feedback = args[2] as string;
+                    return success;
+                }
+                void Scan()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                // Acknowledged Enable without enabling cannot persist On.
+                var initial = Version();
+                provider.AcknowledgeEnableWithoutChangingOnce = true;
+                if (Toggle(true, out var feedback) ||
+                    !feedback.Contains("did not change") ||
+                    provider.ControlEnabled ||
+                    restored.ContainsKey(id) ||
+                    Version() == initial || DraftValid(initial) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+                Scan(); // Original saved Off is authoritative.
+                if (provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // Successful explicit Enable still persists and caches.
+                if (!Toggle(true, out _) || !provider.ControlEnabled ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1 ||
+                    !restored.ContainsKey(id))
+                    return false;
+                var beforeDisable = Version();
+                provider.AcknowledgeDisableWithoutStoppingOnce = true;
+                if (Toggle(false, out feedback) ||
+                    !feedback.Contains("did not change") ||
+                    !provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() == beforeDisable || DraftValid(beforeDisable) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+                Scan(); // The existing saved On is unchanged.
+                if (!provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // Automatic restoration must not mark a true-without-enable
+                // response complete. The next scan should retry and succeed.
+                if (!provider.TrySetControlEnabled(false, out _))
+                    return false;
+                restored.Remove(id);
+                provider.AcknowledgeEnableWithoutChangingOnce = true;
+                var beforeAutomaticEnable = Version();
+                Scan();
+                if (provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() != beforeAutomaticEnable ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+                Scan();
+                if (!provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    Version() == beforeAutomaticEnable ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // Automatic saved-Off stop has the symmetric postcondition.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                restored.Remove(id);
+                provider.AcknowledgeDisableWithoutStoppingOnce = true;
+                var beforeAutomaticStop = Version();
+                Scan();
+                if (!provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() != beforeAutomaticStop ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+                Scan();
+                return !provider.ControlEnabled &&
+                       restored.ContainsKey(id) &&
+                       Version() != beforeAutomaticStop &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 0;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
@@ -3573,6 +3726,7 @@ namespace VCR.Editor.P1
         public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
+        public bool AcknowledgeEnableWithoutChangingOnce { get; set; }
         public bool AcknowledgeDisableWithoutStoppingOnce { get; set; }
         public bool FailEnableAfterMutationOnce { get; set; }
         public bool FailDisableAfterMutationOnce { get; set; }
@@ -3650,6 +3804,12 @@ namespace VCR.Editor.P1
                 FailDisableOnce = false;
                 error = "Capture is still stopping";
                 return false;
+            }
+            if (enabled && AcknowledgeEnableWithoutChangingOnce)
+            {
+                AcknowledgeEnableWithoutChangingOnce = false;
+                error = null;
+                return true;
             }
             if (!enabled && AcknowledgeDisableWithoutStoppingOnce)
             {
