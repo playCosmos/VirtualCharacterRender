@@ -234,8 +234,12 @@ namespace VCR.Runtime.UI
                             }
                             if (hasPersisted)
                             {
-                                if (!configurable.TryApplyConfiguration(values, out var applyError))
+                                if (!TryApplyWorkspaceTrackingSettings(
+                                        source, configurable, values,
+                                        CaptureWorkspaceTrackingSettings(settings),
+                                        out var applyError, out var changedOnFailure))
                                 {
+                                    acceptedMutation |= changedOnFailure;
                                     Debug.LogWarning("U1 tracking settings restore failed for " +
                                                      id + ": " + applyError, this);
                                     _workspaceRestoredTracking.Remove(id);
@@ -440,6 +444,53 @@ namespace VCR.Runtime.UI
             return true;
         }
 
+        private bool TryApplyWorkspaceTrackingSettings(
+            ITrackingRuntimeControl control, ITrackingRuntimeConfigurable configurable,
+            IReadOnlyDictionary<string, string> values,
+            IReadOnlyDictionary<string, string> beforeValues,
+            out string error, out bool changedOnFailure)
+        {
+            // Provider APIs can mutate device settings before reporting a
+            // failed restart. Failure alone is not proof of no side effects.
+            var wasEnabled = control.ControlEnabled;
+            var previousHealth = control.ControlHealthState;
+            var previousError = control.ControlError;
+            bool applied;
+            try
+            {
+                applied = configurable.TryApplyConfiguration(values, out error);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Debug.LogException(ex, this);
+                applied = false;
+            }
+            changedOnFailure = false;
+            if (!applied)
+            {
+                try
+                {
+                    changedOnFailure =
+                        !AreWorkspaceTrackingSettingsUnchanged(configurable, beforeValues) ||
+                        control.ControlEnabled != wasEnabled ||
+                        control.ControlHealthState != previousHealth ||
+                        !string.Equals(control.ControlError, previousError,
+                            StringComparison.Ordinal);
+                }
+                catch (Exception ex)
+                {
+                    // If post-failure readback is unavailable, be conservative:
+                    // do not let the old draft overwrite an uncertain device.
+                    changedOnFailure = true;
+                    Debug.LogWarning(
+                        "U1 tracking post-apply readback failed for " +
+                        control.ControlId + ": " + ex.Message, this);
+                }
+            }
+            return applied;
+        }
+
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
             // This settings button may outlive a Remove from the Toolkit
@@ -603,10 +654,20 @@ namespace VCR.Runtime.UI
                         "Live tracking settings changed. Reopen the editor before saving.");
                     return;
                 }
-                if (!configurable.TryApplyConfiguration(values, out var error))
+                if (!TryApplyWorkspaceTrackingSettings(control, configurable, values,
+                        _workspaceNativeTrackingOpenValues, out var error,
+                        out var changedOnFailure))
                 {
+                    if (changedOnFailure)
+                    {
+                        InvalidateWorkspaceTrackingEditors(control.ControlId);
+                        RebuildWorkspaceNativeTrackingSources();
+                    }
                     _workspaceNativeSettings.SetText(92,
-                        "Apply failed: " + (error ?? "unknown error"));
+                        "Apply failed: " + (error ?? "unknown error") +
+                        (changedOnFailure
+                            ? " Live settings changed. Reopen Configure before retrying."
+                            : ""));
                     return;
                 }
                 foreach (var pair in values)
@@ -1233,9 +1294,22 @@ namespace VCR.Runtime.UI
                         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var field in fields)
                             values[field.Key] = field.Value.value ?? "";
-                        if (!target.TryApplyConfiguration(values, out var error))
+                        if (!TryApplyWorkspaceTrackingSettings(
+                                live, target, values, openedValues, out var error,
+                                out var changedOnFailure))
                         {
-                            SetWorkspaceTrackingFeedback("Apply failed: " + error);
+                            if (changedOnFailure)
+                            {
+                                InvalidateWorkspaceTrackingEditors(sourceId);
+                                _workspaceTrackingEditor.Clear();
+                                TrackingPanelActionFinished(
+                                    "Apply failed: " + error +
+                                    ". Live settings changed. Reopen Configure before retrying.");
+                            }
+                            else
+                            {
+                                SetWorkspaceTrackingFeedback("Apply failed: " + error);
+                            }
                             return;
                         }
                         foreach (var pair in values)
