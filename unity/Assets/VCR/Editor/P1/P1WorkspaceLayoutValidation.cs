@@ -1010,11 +1010,14 @@ namespace VCR.Editor.P1
                 var type = typeof(WorkspaceToolkitShell);
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var edit = type.GetMethod("EditWorkspaceTrackingSettings", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var invalidate = type.GetMethod("InvalidateWorkspaceTrackingEditors", flags);
                 var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
                 var editorField = type.GetField("_workspaceTrackingEditor", flags);
                 var feedbackField = type.GetField("_workspaceTrackingFeedback", flags);
-                if (edit == null || configuredField == null || editorField == null ||
-                    feedbackField == null)
+                if (edit == null || edit.GetParameters().Length != 3 ||
+                    version == null || invalidate == null || configuredField == null ||
+                    editorField == null || feedbackField == null)
                     return false;
 
                 var code = File.ReadAllText(Path.Combine(Application.dataPath,
@@ -1025,10 +1028,30 @@ namespace VCR.Editor.P1
                     "private bool IsWorkspaceTrackingMembershipStateCurrent(", StringComparison.Ordinal);
                 var toolkitAt = code.IndexOf(
                     "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
-                if (nativeAt < 0 || nativeEnd <= nativeAt || toolkitAt < 0)
+                var actionAt = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var actionEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var panelAt = code.IndexOf(
+                    "private void RefreshWorkspaceTrackingPanel()", StringComparison.Ordinal);
+                var panelEnd = code.IndexOf(
+                    "private void SetWorkspaceTrackingFeedback(", StringComparison.Ordinal);
+                if (nativeAt < 0 || nativeEnd <= nativeAt || toolkitAt < 0 ||
+                    actionAt < 0 || actionEnd <= actionAt ||
+                    panelAt < 0 || panelEnd <= panelAt)
                     return false;
                 var native = code.Substring(nativeAt, nativeEnd - nativeAt);
                 var toolkit = code.Substring(toolkitAt);
+                var action = code.Substring(actionAt, actionEnd - actionAt);
+                var panel = code.Substring(panelAt, panelEnd - panelAt);
+                var nativeConfigureAt = action.IndexOf(
+                    "if (action < 5200)", StringComparison.Ordinal);
+                var nativeToggleAt = action.IndexOf(
+                    "else if (action < 5400)", StringComparison.Ordinal);
+                if (nativeConfigureAt < 0 || nativeToggleAt <= nativeConfigureAt)
+                    return false;
+                var configureBranch = action.Substring(
+                    nativeConfigureAt, nativeToggleAt - nativeConfigureAt);
                 var nativeGuard = native.IndexOf(
                     "_workspaceConfiguredTracking.Contains(controlId)", StringComparison.Ordinal);
                 var nativeRead = native.IndexOf(
@@ -1037,10 +1060,22 @@ namespace VCR.Editor.P1
                     "_workspaceConfiguredTracking.Contains(sourceId)", StringComparison.Ordinal);
                 var toolkitRead = toolkit.IndexOf(
                     "configurable.GetConfigurationSettings()", StringComparison.Ordinal);
+                var toolkitVersionGuard = toolkit.IndexOf(
+                    "IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion)",
+                    StringComparison.Ordinal);
                 if (nativeGuard < 0 || nativeRead <= nativeGuard ||
                     toolkitGuard < 0 || toolkitRead <= toolkitGuard ||
+                    toolkitVersionGuard < 0 || toolkitRead <= toolkitVersionGuard ||
                     !native.Contains("RebuildWorkspaceNativeTrackingSources()") ||
-                    !toolkit.Contains("_workspaceTrackingEditor.Clear()"))
+                    !toolkit.Contains("_workspaceTrackingEditor.Clear()") ||
+                    !configureBranch.Contains("_workspaceNativeTrackingVersions.TryGetValue(slot") ||
+                    !configureBranch.Contains("IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion)") ||
+                    configureBranch.IndexOf("IsWorkspaceTrackingEditVersionCurrent(",
+                        StringComparison.Ordinal) >
+                    configureBranch.IndexOf("ShowWorkspaceNativeTrackingDetails(id)",
+                        StringComparison.Ordinal) ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(panel,
+                        @"EditWorkspaceTrackingSettings\(\s*sourceId, source, displayedVersion\)"))
                     return false;
 
                 shellRoot = new GameObject("P1 stale configure shell");
@@ -1058,13 +1093,14 @@ namespace VCR.Editor.P1
 
                 // A stale Configure button must not inspect live fields
                 // on an unconfigured device or offer Save.
-                edit.Invoke(shell, new object[] { id, provider });
+                var initialVersion = (int)version.Invoke(shell, new object[] { id });
+                edit.Invoke(shell, new object[] { id, provider, initialVersion });
                 if (provider.SchemaCalls != 0 || editor.childCount != 0 ||
                     !feedback.text.Contains("Add"))
                     return false;
 
                 configured.Add(id.ToUpperInvariant());
-                edit.Invoke(shell, new object[] { id, provider });
+                edit.Invoke(shell, new object[] { id, provider, initialVersion });
                 if (provider.SchemaCalls != 1 || editor.childCount == 0 ||
                     provider.ConfigurationCalls != 0)
                     return false;
@@ -1072,12 +1108,35 @@ namespace VCR.Editor.P1
                 // Another UI removes membership without replacing the
                 // component. A stale Configure click must clear old fields.
                 configured.Remove(id);
-                edit.Invoke(shell, new object[] { id, provider });
-                return provider.SchemaCalls == 1 &&
+                invalidate.Invoke(shell, new object[] { id });
+                edit.Invoke(shell, new object[] { id, provider, initialVersion });
+                if (provider.SchemaCalls != 1 ||
+                    provider.ConfigurationCalls != 0 ||
+                    editor.childCount != 0 || configured.Contains(id) ||
+                    !feedback.text.Contains("removed"))
+                    return false;
+
+                // Remove->Add returns to the same provider and membership
+                // state. The original Configure button belongs to the old
+                // revision and must not open an editor for the new session.
+                configured.Add(id.ToUpperInvariant());
+                invalidate.Invoke(shell, new object[] { id.ToUpperInvariant() });
+                var latestVersion = (int)version.Invoke(shell, new object[] { id });
+                if (latestVersion == initialVersion) return false;
+                edit.Invoke(shell, new object[] { id, provider, initialVersion });
+                if (provider.SchemaCalls != 1 ||
+                    provider.ConfigurationCalls != 0 ||
+                    editor.childCount != 0 ||
+                    !configured.Contains(id) ||
+                    !feedback.text.Contains("Select Configure again"))
+                    return false;
+
+                // A fresh Configure on the newly registered session works.
+                edit.Invoke(shell, new object[] { id, provider, latestVersion });
+                return provider.SchemaCalls == 2 &&
                        provider.ConfigurationCalls == 0 &&
-                       editor.childCount == 0 &&
-                       !configured.Contains(id) &&
-                       feedback.text.Contains("removed");
+                       editor.childCount > 0 &&
+                       configured.Contains(id);
             }
             finally
             {
@@ -1214,7 +1273,8 @@ namespace VCR.Editor.P1
                         code.Substring(panelStart, panelEnd - panelStart),
                         @"RecoverWorkspaceTrackingSource\(\s*sourceId, source, displayedEnabled, displayedVersion\)") ||
                     !code.Substring(panelStart, panelEnd - panelStart).Contains(
-                        "EditWorkspaceTrackingSettings(sourceId, source)"))
+                        "EditWorkspaceTrackingSettings(\n                                    " +
+                        "sourceId, source, displayedVersion)"))
                     return false;
 
                 shellRoot = new GameObject("P1 stale tracking button shell");
