@@ -242,6 +242,8 @@ namespace VCR.Editor.P1
                     "stale Add/Remove must reject a later membership with the same displayed state");
                 Check(TrackingStaleToggleActionsRejectStateChanges(),
                     "stale Enable/Disable labels must not invert tracking state changes");
+                Check(TrackingFailedToggleRestoresSavedState(),
+                    "failed toggles with live side effects must retry the saved On/Off preference");
                 Check(TrackingStaleRecoveryActionsRejectPriorSessions(),
                     "stale Recover buttons must not restart a newer tracking session");
                 Check(TrackingRecoveryButtonsRequireRunningSavedOnSource(),
@@ -1551,6 +1553,157 @@ namespace VCR.Editor.P1
                 else
                     PlayerPrefs.DeleteKey(configuredKey);
                 PlayerPrefs.Save();
+            }
+        }
+
+        private static bool TrackingFailedToggleRestoresSavedState()
+        {
+            var id = "vcr-parity-toggle-partial-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = type.GetMethod("TrySetWorkspaceTrackingEnabled", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (toggle == null || restore == null || version == null ||
+                    canSave == null || configuredField == null ||
+                    restoredField == null || scanField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var coreAt = code.IndexOf(
+                    "private bool TrySetWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var coreEnd = code.IndexOf(
+                    "private bool TryRequestWorkspaceTrackingRecovery(", StringComparison.Ordinal);
+                var nativeAt = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                var toolkitEnd = code.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                if (coreAt < 0 || coreEnd <= coreAt ||
+                    nativeAt < 0 || nativeEnd <= nativeAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                var core = code.Substring(coreAt, coreEnd - coreAt);
+                var native = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!core.Contains("finally") ||
+                    !core.Contains("control.ControlEnabled != beforeEnabled") ||
+                    !core.Contains("control.ControlHealthState != beforeHealth") ||
+                    !core.Contains("if (stateChanged)") ||
+                    !core.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
+                    !core.Contains("_workspaceRestoredTracking.Remove(id)") ||
+                    !core.Contains("_nextTrackingRestoreScan = 0f") ||
+                    !native.Contains(
+                        "!IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion)") ||
+                    !toolkit.Contains(
+                        "!IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 failed toggle restore shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 failed toggle source");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+                configured.Add(id);
+                restored[id] = provider;
+                PlayerPrefs.SetInt(enabledKey, 0);
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int opened) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), opened });
+                bool Toggle(bool next)
+                {
+                    var args = new object[] { provider, next, null };
+                    return (bool)toggle.Invoke(shell, args);
+                }
+                void Restore()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                // A clean rejected Enable must not discard the editor or
+                // reapply preferences that the provider never changed.
+                var original = Version();
+                provider.FailEnableOnce = true;
+                if (Toggle(true) || provider.ControlEnabled ||
+                    provider.ToggleCalls != 1 ||
+                    !restored.ContainsKey(id) || Version() != original ||
+                    !DraftValid(original) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // A rejected Enable may have turned capture On. Persisted
+                // Off must be preserved and reconciled on the next scan.
+                provider.FailEnableAfterMutationOnce = true;
+                if (Toggle(true) || !provider.ControlEnabled ||
+                    provider.ToggleCalls != 2 ||
+                    restored.ContainsKey(id) || Version() == original ||
+                    DraftValid(original) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0 ||
+                    (float)scanField.GetValue(shell) != 0f)
+                    return false;
+                Restore();
+                if (provider.ControlEnabled ||
+                    provider.ToggleCalls != 3 ||
+                    !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+
+                // Symmetric failure: a Disable may have turned capture Off.
+                // Saved On must be reasserted without recording the failed
+                // request as a new persistent user preference.
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                restored[id] = provider;
+                var beforeDisable = Version();
+                provider.FailDisableAfterMutationOnce = true;
+                if (Toggle(false) || provider.ControlEnabled ||
+                    restored.ContainsKey(id) || Version() == beforeDisable ||
+                    DraftValid(beforeDisable) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+                Restore();
+                if (!provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    provider.ToggleCalls != 6 ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // No mutation on a failed Disable leaves the existing
+                // editor revision and restored-instance cache intact.
+                var stable = Version();
+                provider.FailDisableOnce = true;
+                return !Toggle(false) &&
+                       provider.ControlEnabled &&
+                       Version() == stable &&
+                       DraftValid(stable) &&
+                       restored.ContainsKey(id) &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 1;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
@@ -2949,6 +3102,8 @@ namespace VCR.Editor.P1
         public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
+        public bool FailEnableAfterMutationOnce { get; set; }
+        public bool FailDisableAfterMutationOnce { get; set; }
         public bool AppliedWhileEnabled { get; private set; }
         public bool ReturnNullSchemaOnce { get; set; }
         public bool ReportAdditionalSetting { get; set; }
@@ -3020,6 +3175,15 @@ namespace VCR.Editor.P1
             {
                 FailDisableOnce = false;
                 error = "Capture is still stopping";
+                return false;
+            }
+            if ((enabled && FailEnableAfterMutationOnce) ||
+                (!enabled && FailDisableAfterMutationOnce))
+            {
+                FailEnableAfterMutationOnce = false;
+                FailDisableAfterMutationOnce = false;
+                ControlEnabled = enabled;
+                error = "Simulated failed toggle after changing the live source";
                 return false;
             }
             error = null;
