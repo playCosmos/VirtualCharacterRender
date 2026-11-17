@@ -228,6 +228,8 @@ namespace VCR.Editor.P1
                     "native and Toolkit tracking editors must reject null/oversized schemas");
                 Check(TrackingRecoveryDoesNotEnableDisabledSource(),
                     "tracking recovery must not enable disabled sources and must replay saved state after restart");
+                Check(TrackingFailedRecoveryRestoresChangedDeviceState(),
+                    "failed recovery that changed live source must invalidate drafts and replay saved settings");
                 Check(TrackingToggleRequiresExplicitMembership(),
                     "tracking Toggle must not implicitly register an unconfigured source");
                 Check(TrackingSavedOffRestoresBeforeConfiguration(),
@@ -1947,7 +1949,8 @@ namespace VCR.Editor.P1
                         "sourceId, source, displayedEnabled, displayedVersion)") ||
                     !nativeCode.Contains(
                         "IsWorkspaceTrackingRecoveryIntentCurrent(") ||
-                    !nativeCode.Contains("if (recovered) RebuildWorkspaceNativeTrackingSources()") ||
+                    !nativeCode.Contains(
+                        "!IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion)") ||
                     !toolkitCode.Contains(
                         "IsWorkspaceTrackingRecoveryIntentCurrent(") ||
                     nativeCode.IndexOf("IsWorkspaceTrackingRecoveryIntentCurrent(",
@@ -2419,6 +2422,158 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool TrackingFailedRecoveryRestoresChangedDeviceState()
+        {
+            var id = "vcr-parity-recovery-partial-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var recover = type.GetMethod("TryRequestWorkspaceTrackingRecovery", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var revision = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (recover == null || restore == null || revision == null ||
+                    canSave == null || configuredField == null ||
+                    restoredField == null || scanField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var coreAt = code.IndexOf(
+                    "private bool TryRequestWorkspaceTrackingRecovery(", StringComparison.Ordinal);
+                var coreEnd = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeAt = coreEnd;
+                var nativeEnd = code.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var toolkitAt = code.IndexOf(
+                    "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                var toolkitEnd = code.IndexOf(
+                    "private void EditWorkspaceTrackingSettings(", StringComparison.Ordinal);
+                if (coreAt < 0 || coreEnd <= coreAt ||
+                    nativeEnd <= nativeAt ||
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    return false;
+                var core = code.Substring(coreAt, coreEnd - coreAt);
+                var native = code.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!core.Contains("configurable.GetConfigurationSettings()") ||
+                    !core.Contains("AreWorkspaceTrackingSettingsUnchanged(") ||
+                    !core.Contains("control.ControlEnabled != beforeEnabled") ||
+                    !core.Contains("control.ControlHealthState != beforeHealth") ||
+                    !core.Contains("if (stateChanged)") ||
+                    !core.Contains("_workspaceRestoredTracking.Remove(control.ControlId)") ||
+                    !core.Contains("InvalidateWorkspaceTrackingEditors(control.ControlId)") ||
+                    !core.Contains("_nextTrackingRestoreScan = 0f") ||
+                    !native.Contains("if (recovered ||") ||
+                    !native.Contains(
+                        "!IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion)") ||
+                    !toolkit.Contains("if (recovered ||") ||
+                    !toolkit.Contains(
+                        "!IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 partially failed recovery shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 partially failed recovery provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+                configured.Add(id);
+                if (!provider.TrySetControlEnabled(true, out _)) return false;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "saved-recovery-value");
+                restored[id] = provider;
+
+                int Version() => (int)revision.Invoke(shell, new object[] { id });
+                bool DraftValid(int opened) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), opened });
+                bool Recover()
+                {
+                    var args = new object[] { provider, null };
+                    return (bool)recover.Invoke(shell, args);
+                }
+                void Restore()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                // Clean provider refusal: no changed live state, so retain
+                // the editor revision, cache and saved preference for retry.
+                var baseline = Version();
+                provider.FailRecoveryOnce = true;
+                if (Recover() || !provider.ControlEnabled ||
+                    Version() != baseline || !DraftValid(baseline) ||
+                    !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // The restart may have stopped capture before reporting a
+                // failure. A stale editor is invalid and saved On must replay.
+                provider.FailRecoveryAfterMutationOnce = true;
+                if (Recover() || provider.ControlEnabled ||
+                    Version() == baseline || DraftValid(baseline) ||
+                    restored.ContainsKey(id) ||
+                    (float)scanField.GetValue(shell) != 0f ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1 ||
+                    PlayerPrefs.GetString(settingKey) != "saved-recovery-value")
+                    return false;
+                var afterFailedRestart = Version();
+                Restore();
+                if (!provider.ControlEnabled ||
+                    provider.AppliedValue != "saved-recovery-value" ||
+                    provider.ConfigurationCalls != 1 ||
+                    !restored.ContainsKey(id) ||
+                    Version() == afterFailedRestart)
+                    return false;
+
+                // A recovery failure may preserve enabled/health while
+                // mutating settings. Detect readback-only changes too.
+                provider.ExternalReadbackOverride = "before-second-recovery";
+                restored[id] = provider;
+                var beforeSettingsOnlyFailure = Version();
+                provider.FailRecoveryAfterSettingsMutationOnce = true;
+                if (Recover() || !provider.ControlEnabled ||
+                    provider.ExternalReadbackOverride != "changed-after-failed-recovery" ||
+                    Version() == beforeSettingsOnlyFailure ||
+                    DraftValid(beforeSettingsOnlyFailure) ||
+                    restored.ContainsKey(id) ||
+                    PlayerPrefs.GetString(settingKey) != "saved-recovery-value")
+                    return false;
+
+                Restore();
+                if (!provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    provider.ConfigurationCalls != 2 ||
+                    provider.AppliedValue != "saved-recovery-value")
+                    return false;
+                var stable = Version();
+                Restore();
+                return Version() == stable && provider.ConfigurationCalls == 2 &&
+                       provider.RecoveryCalls == 3 &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 1;
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
             }
         }
 
@@ -3168,6 +3323,8 @@ namespace VCR.Editor.P1
         public string ExternalReadbackOverride { get; set; }
         public bool ResetOnRecovery { get; set; }
         public bool FailRecoveryOnce { get; set; }
+        public bool FailRecoveryAfterMutationOnce { get; set; }
+        public bool FailRecoveryAfterSettingsMutationOnce { get; set; }
         public int RecoveryCalls { get; private set; }
         public int SchemaCalls { get; private set; }
         public string ConfigurationTitle => "P1 reconnect configuration";
@@ -3255,6 +3412,21 @@ namespace VCR.Editor.P1
             {
                 FailRecoveryOnce = false;
                 error = "Simulated recovery failure";
+                return false;
+            }
+            if (FailRecoveryAfterMutationOnce)
+            {
+                FailRecoveryAfterMutationOnce = false;
+                ControlEnabled = false;
+                ExternalReadbackOverride = "reset-after-failed-recovery";
+                error = "Simulated restart fault after mutating device state";
+                return false;
+            }
+            if (FailRecoveryAfterSettingsMutationOnce)
+            {
+                FailRecoveryAfterSettingsMutationOnce = false;
+                ExternalReadbackOverride = "changed-after-failed-recovery";
+                error = "Simulated restart fault after changing device settings";
                 return false;
             }
             if (ResetOnRecovery)
