@@ -242,6 +242,8 @@ namespace VCR.Editor.P1
                     "stale Add/Remove labels must not invert membership changes");
                 Check(TrackingMembershipABAActionsRejectPriorRevisions(),
                     "stale Add/Remove must reject a later membership with the same displayed state");
+                Check(TrackingFailedMembershipStopPreservesRegistration(),
+                    "failed Add/Remove stop must not commit membership or retain stale tracking state");
                 Check(TrackingStaleToggleActionsRejectStateChanges(),
                     "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingFailedToggleRestoresSavedState(),
@@ -1327,6 +1329,151 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingFailedMembershipStopPreservesRegistration()
+        {
+            var id = "vcr-parity-membership-stop-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var stop = type.GetMethod("TryStopWorkspaceTrackingForMembership", flags);
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (stop == null || restore == null || version == null ||
+                    canSave == null || configuredField == null ||
+                    restoredField == null || scanField == null)
+                    return false;
+
+                var sourceCode = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var helperAt = sourceCode.IndexOf(
+                    "private bool TryStopWorkspaceTrackingForMembership(", StringComparison.Ordinal);
+                var nativeAt = sourceCode.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                var nativeEnd = sourceCode.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                var toolkitAt = sourceCode.IndexOf(
+                    "private void UpdateWorkspaceTrackingMembership(", StringComparison.Ordinal);
+                var toolkitEnd = sourceCode.IndexOf(
+                    "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
+                if (helperAt < 0 || nativeAt <= helperAt ||
+                    nativeEnd <= nativeAt || toolkitAt < 0 ||
+                    toolkitEnd <= toolkitAt)
+                    return false;
+                var helper = sourceCode.Substring(helperAt, nativeAt - helperAt);
+                var native = sourceCode.Substring(nativeAt, nativeEnd - nativeAt);
+                var toolkit = sourceCode.Substring(toolkitAt, toolkitEnd - toolkitAt);
+                if (!helper.Contains("control.TrySetControlEnabled(false, out error)") ||
+                    !helper.Contains("if (stateChanged)") ||
+                    !helper.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
+                    !helper.Contains("_workspaceRestoredTracking.Remove(id)") ||
+                    !helper.Contains("_workspaceConfiguredTracking.Contains(id)") ||
+                    !helper.Contains("_nextTrackingRestoreScan = 0f") ||
+                    !native.Contains("TryStopWorkspaceTrackingForMembership(control,") ||
+                    !native.Contains("IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion)") ||
+                    !toolkit.Contains("TryStopWorkspaceTrackingForMembership(source,") ||
+                    !toolkit.Contains("IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 partial membership stop shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 partial membership stop provider");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null) return false;
+                configured.Add(id);
+                if (!provider.TrySetControlEnabled(true, out _)) return false;
+                restored[id] = provider;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "membership-saved-setting");
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int opened) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), opened });
+                bool Stop(out string feedback)
+                {
+                    var args = new object[] { provider, null };
+                    var success = (bool)stop.Invoke(shell, args);
+                    feedback = args[1] as string;
+                    return success;
+                }
+                void Scan()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                // A clean rejected Remove leaves the running, registered
+                // device, previous revision and saved preference untouched.
+                var original = Version();
+                provider.FailDisableOnce = true;
+                if (Stop(out _) || !provider.ControlEnabled ||
+                    !configured.Contains(id) || !restored.ContainsKey(id) ||
+                    Version() != original || !DraftValid(original) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // If failed Remove already turned capture Off, do not commit
+                // the removal. Restore must replay saved On and settings.
+                provider.FailDisableAfterMutationOnce = true;
+                if (Stop(out var error) || provider.ControlEnabled ||
+                    !configured.Contains(id) || restored.ContainsKey(id) ||
+                    Version() == original || DraftValid(original) ||
+                    !error.Contains("Live tracking state changed") ||
+                    (float)scanField.GetValue(shell) != 0f ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+                Scan();
+                if (!provider.ControlEnabled ||
+                    provider.AppliedValue != "membership-saved-setting" ||
+                    provider.ConfigurationCalls != 1 ||
+                    !restored.ContainsKey(id))
+                    return false;
+                var stable = Version();
+                Scan();
+                if (Version() != stable || provider.ConfigurationCalls != 1)
+                    return false;
+
+                // Failed Add must not register an external source nor
+                // automatically re-enable it: U1 does not own it yet.
+                configured.Remove(id);
+                restored.Remove(id);
+                var beforeUnregistered = Version();
+                var oldScan = (float)scanField.GetValue(shell);
+                provider.FailDisableAfterMutationOnce = true;
+                if (Stop(out error) || provider.ControlEnabled ||
+                    configured.Contains(id) || restored.ContainsKey(id) ||
+                    Version() == beforeUnregistered ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1 ||
+                    (float)scanField.GetValue(shell) != oldScan)
+                    return false;
+                Scan();
+                return !provider.ControlEnabled &&
+                       !configured.Contains(id) &&
+                       !restored.ContainsKey(id) &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 1;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingStaleMembershipActionsRejectStateChanges()
         {
             var id = "vcr-parity-stale-membership-" + Guid.NewGuid().ToString("N");
@@ -1383,7 +1530,7 @@ namespace VCR.Editor.P1
                         "if (remove && control.ControlEnabled", StringComparison.Ordinal) ||
                     toolkitCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
                         StringComparison.Ordinal) > toolkitCode.IndexOf(
-                        "source.TrySetControlEnabled(", StringComparison.Ordinal))
+                        "TryStopWorkspaceTrackingForMembership(source,", StringComparison.Ordinal))
                     return false;
 
                 shellRoot = new GameObject("P1 stale membership shell");
@@ -1471,11 +1618,11 @@ namespace VCR.Editor.P1
                     !actionCode.Contains("IsWorkspaceTrackingMembershipIntentCurrent(") ||
                     nativeCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
                         StringComparison.Ordinal) >
-                    nativeCode.IndexOf("control.TrySetControlEnabled(false",
+                    nativeCode.IndexOf("TryStopWorkspaceTrackingForMembership(control,",
                         StringComparison.Ordinal) ||
                     actionCode.IndexOf("IsWorkspaceTrackingMembershipIntentCurrent(",
                         StringComparison.Ordinal) >
-                    actionCode.IndexOf("source.TrySetControlEnabled(false",
+                    actionCode.IndexOf("TryStopWorkspaceTrackingForMembership(source,",
                         StringComparison.Ordinal))
                     return false;
 
