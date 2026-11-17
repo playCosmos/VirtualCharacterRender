@@ -2723,11 +2723,22 @@ namespace VCR.Editor.P1
                     "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
                 if (start < 0 || end <= start) return false;
                 var restoreCode = code.Substring(start, end - start);
+                // Contract is about which accepted operations invalidate
+                // drafts, not the literal count of assignments. A rejected
+                // provider call may also change state or make readback fail.
                 if (!restoreCode.Contains("var acceptedMutation = false;") ||
                     !restoreCode.Contains("if (acceptedMutation)") ||
                     !restoreCode.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
-                    restoreCode.Split(new[] { "acceptedMutation = true;" },
-                        StringSplitOptions.None).Length != 4)
+                    !System.Text.RegularExpressions.Regex.IsMatch(restoreCode,
+                        @"TrySetControlEnabled\(false, out var stopError\)[\s\S]*?acceptedMutation = true;") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(restoreCode,
+                        @"TryApplyWorkspaceTrackingSettings\([\s\S]*?acceptedMutation = true;") ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(restoreCode,
+                        @"TrySetControlEnabled\(enabled, out var enableError\)[\s\S]*?acceptedMutation = true;") ||
+                    !restoreCode.Contains("acceptedMutation |= changedOnFailure") ||
+                    !restoreCode.Contains("source.ControlEnabled != beforeRestoreEnabled") ||
+                    !restoreCode.Contains("source.ControlHealthState != beforeRestoreHealth") ||
+                    !restoreCode.Contains("if (acceptedMutation)\n                        InvalidateWorkspaceTrackingEditors(id)"))
                     return false;
 
                 shellRoot = new GameObject("P1 background restore revision shell");
