@@ -220,6 +220,8 @@ namespace VCR.Editor.P1
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
                     "recreated tracking control with same ID must restore its saved enabled state");
+                Check(TrackingCachedProviderExternalStateDriftRestoresSavedPreference(),
+                    "cached tracking sources must reconcile external On/Off drift without stale drafts");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
                     "accepted background tracking restore must invalidate stale U1 settings drafts");
                 Check(TrackingFailedApplyMutationsInvalidateOldDrafts(),
@@ -3435,6 +3437,148 @@ namespace VCR.Editor.P1
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
                 PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
+        private static bool TrackingCachedProviderExternalStateDriftRestoresSavedPreference()
+        {
+            var id = "vcr-parity-cached-drift-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (restore == null || version == null || canSave == null ||
+                    configuredField == null || restoredField == null ||
+                    scanField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var restoreAt = source.IndexOf(
+                    "private void RestoreWorkspaceTrackingPreferences()", StringComparison.Ordinal);
+                var restoreEnd = source.IndexOf(
+                    "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
+                if (restoreAt < 0 || restoreEnd <= restoreAt)
+                    return false;
+                var restoreCode = source.Substring(restoreAt, restoreEnd - restoreAt);
+                var cachedGuard = restoreCode.IndexOf(
+                    "_workspaceRestoredTracking.TryGetValue(id, out var previous)",
+                    StringComparison.Ordinal);
+                var stateGuard = restoreCode.IndexOf(
+                    "if (stateMatches)", StringComparison.Ordinal);
+                var cacheDrop = restoreCode.IndexOf(
+                    "_workspaceRestoredTracking.Remove(id)", stateGuard,
+                    StringComparison.Ordinal);
+                var invalidate = restoreCode.IndexOf(
+                    "InvalidateWorkspaceTrackingEditors(id)", stateGuard,
+                    StringComparison.Ordinal);
+                if (cachedGuard < 0 || stateGuard <= cachedGuard ||
+                    cacheDrop <= stateGuard || invalidate <= cacheDrop ||
+                    !restoreCode.Contains("source.ControlEnabled ==") ||
+                    !restoreCode.Contains("GetWorkspaceTrackingPersistenceId(id)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 cached tracking drift shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 cached tracking drift provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 1);
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int old) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), old });
+                void Scan()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                Scan();
+                if (!provider.ControlEnabled || provider.ToggleCalls != 1 ||
+                    !restored.ContainsKey(id))
+                    return false;
+                var settled = Version();
+                Scan();
+                if (Version() != settled || provider.ToggleCalls != 1)
+                    return false;
+
+                // External source code stopped the already-cached tracker.
+                // Reconcile the same instance and reject its former UI draft.
+                if (!provider.TrySetControlEnabled(false, out _))
+                    return false;
+                var oldDraft = Version();
+                Scan();
+                if (!provider.ControlEnabled || provider.ToggleCalls != 3 ||
+                    !restored.ContainsKey(id) || Version() == oldDraft ||
+                    DraftValid(oldDraft) || PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+                var stable = Version();
+                Scan();
+                if (Version() != stable || provider.ToggleCalls != 3)
+                    return false;
+
+                // Failed recovery of external drift must leave the cache
+                // uncached so a later scan retries the saved preference.
+                if (!provider.TrySetControlEnabled(false, out _))
+                    return false;
+                provider.FailEnableOnce = true;
+                oldDraft = Version();
+                Scan();
+                if (provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() == oldDraft || DraftValid(oldDraft) ||
+                    PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+                Scan();
+                if (!provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, 0) != 1)
+                    return false;
+
+                // Changing the saved preference while an instance remains
+                // cached must also settle it instead of skipping the device.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                oldDraft = Version();
+                Scan();
+                if (provider.ControlEnabled || restored.ContainsKey(id) == false ||
+                    Version() == oldDraft || DraftValid(oldDraft))
+                    return false;
+                var stoppedVersion = Version();
+                Scan();
+                if (Version() != stoppedVersion || provider.ControlEnabled)
+                    return false;
+
+                // An externally reenabled source must be turned back Off.
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+                oldDraft = Version();
+                Scan();
+                return !provider.ControlEnabled &&
+                       restored.ContainsKey(id) &&
+                       Version() != oldDraft &&
+                       !DraftValid(oldDraft) &&
+                       PlayerPrefs.GetInt(enabledKey, -1) == 0;
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
