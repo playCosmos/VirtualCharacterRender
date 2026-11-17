@@ -934,9 +934,18 @@ namespace VCR.Runtime.UI
             try
             {
                 stopped = control.TrySetControlEnabled(false, out error);
+                // Acknowledgement is not proof that the device was stopped.
+                // Never remove a configured source while it still reports
+                // capture enabled (or let Add claim it starts disabled).
+                if (stopped && control.ControlEnabled)
+                {
+                    stopped = false;
+                    error = "Tracking provider accepted Stop but remains enabled.";
+                }
             }
             catch (Exception ex)
             {
+                stopped = false;
                 error = ex.Message;
                 Debug.LogException(ex, this);
             }
