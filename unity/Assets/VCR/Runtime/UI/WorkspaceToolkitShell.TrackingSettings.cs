@@ -211,10 +211,15 @@ namespace VCR.Runtime.UI
                     // capture parameters change, even if we will disable it.
                     if (!enabled && source.ControlEnabled)
                     {
-                        if (!source.TrySetControlEnabled(false, out var stopError))
+                        var stopAcknowledged =
+                            source.TrySetControlEnabled(false, out var stopError);
+                        if (!stopAcknowledged || source.ControlEnabled)
                         {
                             Debug.LogWarning("U1 tracking disable restore failed for " +
-                                             id + ": " + stopError, this);
+                                             id + ": " +
+                                             (stopAcknowledged
+                                                 ? "Provider acknowledged Stop but remains enabled."
+                                                 : stopError), this);
                             _workspaceRestoredTracking.Remove(id);
                             continue;
                         }
@@ -265,10 +270,15 @@ namespace VCR.Runtime.UI
                     // update its enabled state while applying settings.
                     if (source.ControlEnabled != enabled)
                     {
-                        if (!source.TrySetControlEnabled(enabled, out var enableError))
+                        var toggleAcknowledged =
+                            source.TrySetControlEnabled(enabled, out var enableError);
+                        if (!toggleAcknowledged || source.ControlEnabled != enabled)
                         {
                             Debug.LogWarning("U1 tracking enable restore failed for " +
-                                             id + ": " + enableError, this);
+                                             id + ": " +
+                                             (toggleAcknowledged
+                                                 ? "Provider acknowledged the toggle but did not reach the saved state."
+                                                 : enableError), this);
                             _workspaceRestoredTracking.Remove(id);
                         }
                         else
@@ -741,11 +751,20 @@ namespace VCR.Runtime.UI
             var beforeHealth = control.ControlHealthState;
             var beforeError = control.ControlError;
             var completed = false;
+            var unconfirmedToggle = false;
             try
             {
-                if (!control.TrySetControlEnabled(enabled, out var error))
+                var acknowledged = control.TrySetControlEnabled(enabled, out var error);
+                if (!acknowledged || control.ControlEnabled != enabled)
                 {
-                    feedback = "Tracking toggle failed: " + (error ?? "unknown error");
+                    // A true acknowledgment can still leave capture in the
+                    // opposite state. Do not persist an unconfirmed toggle
+                    // or mark this provider as restored.
+                    unconfirmedToggle = acknowledged;
+                    feedback = "Tracking toggle failed: " +
+                        (acknowledged
+                            ? "Provider acknowledged the request but enabled state did not change."
+                            : (error ?? "unknown error"));
                     return false;
                 }
                 // State transitions may restart capture or reset settings
@@ -786,11 +805,12 @@ namespace VCR.Runtime.UI
                             "U1 tracking failed-toggle readback unavailable for " +
                             id + ": " + ex.Message, this);
                     }
-                    if (stateChanged)
+                    if (stateChanged || unconfirmedToggle)
                     {
                         // The original saved On/Off preference remains the
-                        // authority. Reconcile a partially changed live source
-                        // on the next scan, rather than silently caching it.
+                        // authority. Reconcile a partially changed or
+                        // unconfirmed live source on the next scan rather
+                        // than silently caching it.
                         InvalidateWorkspaceTrackingEditors(id);
                         _workspaceRestoredTracking.Remove(id);
                         _nextTrackingRestoreScan = 0f;
