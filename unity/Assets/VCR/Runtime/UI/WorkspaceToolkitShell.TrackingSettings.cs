@@ -828,6 +828,29 @@ namespace VCR.Runtime.UI
                 feedback = "Tracking source is saved as disabled. Enable it before recovery.";
                 return false;
             }
+            // A provider can tear down or reset capture before reporting
+            // that recovery failed. Compare the public state and configuration
+            // so an old editor cannot overwrite a partly restarted session.
+            var beforeEnabled = control.ControlEnabled;
+            var beforeHealth = control.ControlHealthState;
+            var beforeError = control.ControlError;
+            var configurable = control as ITrackingRuntimeConfigurable;
+            Dictionary<string, string> beforeSettings = null;
+            if (configurable != null)
+            {
+                try
+                {
+                    beforeSettings = CaptureWorkspaceTrackingSettings(
+                        configurable.GetConfigurationSettings());
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning(
+                        "U1 tracking pre-recovery readback failed for " +
+                        control.ControlId + ": " + ex.Message, this);
+                }
+            }
+            var recovered = false;
             try
             {
                 if (!control.TryRecover(out var error))
@@ -844,6 +867,7 @@ namespace VCR.Runtime.UI
                 // the next scan, rather than treating the instance as restored.
                 _workspaceRestoredTracking.Remove(control.ControlId);
                 _nextTrackingRestoreScan = Time.unscaledTime + 2f;
+                recovered = true;
                 feedback = "Recovery requested. Saved tracking settings will be rechecked.";
                 return true;
             }
@@ -852,6 +876,38 @@ namespace VCR.Runtime.UI
                 feedback = "Recovery failed: " + ex.Message;
                 Debug.LogException(ex, this);
                 return false;
+            }
+            finally
+            {
+                if (!recovered)
+                {
+                    var stateChanged = true;
+                    try
+                    {
+                        stateChanged =
+                            control.ControlEnabled != beforeEnabled ||
+                            control.ControlHealthState != beforeHealth ||
+                            !string.Equals(control.ControlError, beforeError,
+                                StringComparison.Ordinal) ||
+                            (configurable != null &&
+                             !AreWorkspaceTrackingSettingsUnchanged(
+                                 configurable, beforeSettings));
+                    }
+                    catch (Exception ex)
+                    {
+                        // Unavailable post-failure readback is not evidence
+                        // that the original device session survived.
+                        Debug.LogWarning(
+                            "U1 tracking failed-recovery readback unavailable for " +
+                            control.ControlId + ": " + ex.Message, this);
+                    }
+                    if (stateChanged)
+                    {
+                        InvalidateWorkspaceTrackingEditors(control.ControlId);
+                        _workspaceRestoredTracking.Remove(control.ControlId);
+                        _nextTrackingRestoreScan = 0f;
+                    }
+                }
             }
         }
 
@@ -933,7 +989,9 @@ namespace VCR.Runtime.UI
                     return true;
                 }
                 var recovered = TryRequestWorkspaceTrackingRecovery(control, out var feedback);
-                if (recovered) RebuildWorkspaceNativeTrackingSources();
+                if (recovered ||
+                    !IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion))
+                    RebuildWorkspaceNativeTrackingSources();
                 _workspaceNativeSettings.SetText(92, feedback);
             }
             else
@@ -1275,7 +1333,10 @@ namespace VCR.Runtime.UI
                     "Tracking session changed. Select Recover again.");
                 return;
             }
-            if (TryRequestWorkspaceTrackingRecovery(displayedSource, out var feedback))
+            var recovered = TryRequestWorkspaceTrackingRecovery(
+                displayedSource, out var feedback);
+            if (recovered ||
+                !IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion))
                 TrackingPanelActionFinished(feedback);
             else
                 SetWorkspaceTrackingFeedback(feedback);
