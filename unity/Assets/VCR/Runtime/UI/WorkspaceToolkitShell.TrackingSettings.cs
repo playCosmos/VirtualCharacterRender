@@ -911,6 +911,67 @@ namespace VCR.Runtime.UI
             }
         }
 
+        private bool TryStopWorkspaceTrackingForMembership(
+            ITrackingRuntimeControl control, out string error)
+        {
+            error = null;
+            if (control == null)
+            {
+                error = "Tracking source disconnected.";
+                return false;
+            }
+            if (!control.ControlEnabled)
+                return true;
+
+            // Add/Remove must not commit membership until capture stops.
+            // A rejected provider stop can nonetheless have stopped capture,
+            // or altered its health, before reporting a failure.
+            var id = control.ControlId;
+            var beforeEnabled = control.ControlEnabled;
+            var beforeHealth = control.ControlHealthState;
+            var beforeError = control.ControlError;
+            var stopped = false;
+            try
+            {
+                stopped = control.TrySetControlEnabled(false, out error);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Debug.LogException(ex, this);
+            }
+            if (stopped)
+                return true;
+
+            var stateChanged = true;
+            try
+            {
+                stateChanged = control.ControlEnabled != beforeEnabled ||
+                               control.ControlHealthState != beforeHealth ||
+                               !string.Equals(control.ControlError, beforeError,
+                                   StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(
+                    "U1 tracking membership-stop readback failed for " +
+                    id + ": " + ex.Message, this);
+            }
+            if (stateChanged)
+            {
+                InvalidateWorkspaceTrackingEditors(id);
+                _workspaceRestoredTracking.Remove(id);
+                // A failed Remove leaves membership intact: saved On/Off
+                // is still authoritative and must be reapplied. A failed
+                // Add is not registered; never auto-enable that provider.
+                if (_workspaceConfiguredTracking.Contains(id))
+                    _nextTrackingRestoreScan = 0f;
+                error = (error ?? "unknown error") +
+                        " Live tracking state changed; refresh before retrying.";
+            }
+            return false;
+        }
+
         private bool HandleWorkspaceNativeTrackingAction(int action)
         {
             if (action == 450)
@@ -1010,8 +1071,10 @@ namespace VCR.Runtime.UI
                 // Resolve before removal, before the original spelling is lost.
                 var persistenceId = GetWorkspaceTrackingPersistenceId(id);
                 if (remove && control.ControlEnabled &&
-                    !control.TrySetControlEnabled(false, out var error))
+                    !TryStopWorkspaceTrackingForMembership(control, out var error))
                 {
+                    if (!IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion))
+                        RebuildWorkspaceNativeTrackingSources();
                     _workspaceNativeSettings.SetText(92, "Remove failed: " + error);
                     return true;
                 }
@@ -1025,8 +1088,11 @@ namespace VCR.Runtime.UI
                 {
                     // Newly added inputs start disabled. Do not cache or
                     // persist membership before the provider accepts this.
-                    if (control.ControlEnabled && !control.TrySetControlEnabled(false, out var addError))
+                    if (control.ControlEnabled &&
+                        !TryStopWorkspaceTrackingForMembership(control, out var addError))
                     {
+                        if (!IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion))
+                            RebuildWorkspaceNativeTrackingSources();
                         _workspaceNativeSettings.SetText(92, "Add failed: " + addError);
                         return true;
                     }
@@ -1262,10 +1328,14 @@ namespace VCR.Runtime.UI
                 var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
                 // Keep the former dashboard behavior: newly added devices start disabled.
                 if (source.ControlEnabled &&
-                    !source.TrySetControlEnabled(false, out var error))
+                    !TryStopWorkspaceTrackingForMembership(source, out var error))
                 {
-                    SetWorkspaceTrackingFeedback("Cannot " + (configured ? "remove" : "add") +
-                        " source: " + error);
+                    var feedback = "Cannot " + (configured ? "remove" : "add") +
+                        " source: " + error;
+                    if (!IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion))
+                        TrackingPanelActionFinished(feedback);
+                    else
+                        SetWorkspaceTrackingFeedback(feedback);
                     return;
                 }
 
