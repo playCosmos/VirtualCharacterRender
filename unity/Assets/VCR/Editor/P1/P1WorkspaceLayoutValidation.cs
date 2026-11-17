@@ -3227,16 +3227,27 @@ namespace VCR.Editor.P1
                     !trackingSource.Substring(toolkitEditAt)
                         .Contains("IsWorkspaceTrackingConfiguredEditorCurrent("))
                     return false;
-                // Native Add may only mark a device configured/restored after
-                // disabling the source succeeds. The Toolkit path already does.
+                // Native Add must stop capture through the shared guard
+                // before it commits membership or caches the provider. Its
+                // rejected path must return before either mutation.
                 var nativeAddAt = trackingSource.IndexOf(
-                    "if (control.ControlEnabled && !control.TrySetControlEnabled(false",
+                    "!TryStopWorkspaceTrackingForMembership(control, out var addError)",
                     StringComparison.Ordinal);
-                if (nativeAddAt < 0 ||
+                var nativeAddReturn = nativeAddAt < 0 ? -1 :
+                    trackingSource.IndexOf("return true;", nativeAddAt,
+                        StringComparison.Ordinal);
+                var nativeAddCommit = nativeAddAt < 0 ? -1 :
                     trackingSource.IndexOf("_workspaceConfiguredTracking.Add(id);",
-                        nativeAddAt, StringComparison.Ordinal) <= nativeAddAt ||
+                        nativeAddAt, StringComparison.Ordinal);
+                var nativeAddCache = nativeAddAt < 0 ? -1 :
                     trackingSource.IndexOf("_workspaceRestoredTracking[id] = control;",
-                        nativeAddAt, StringComparison.Ordinal) <= nativeAddAt)
+                        nativeAddAt, StringComparison.Ordinal);
+                var nativeAddEnd = trackingSource.IndexOf(
+                    "private ScrollView _workspaceTrackingList;", StringComparison.Ordinal);
+                if (nativeAddAt < 0 || nativeAddReturn <= nativeAddAt ||
+                    nativeAddCommit <= nativeAddReturn ||
+                    nativeAddCache <= nativeAddCommit ||
+                    nativeAddEnd <= nativeAddCache)
                     return false;
 
                 configured.Add(id);
