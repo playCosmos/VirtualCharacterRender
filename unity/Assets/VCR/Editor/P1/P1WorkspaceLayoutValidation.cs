@@ -2013,7 +2013,7 @@ namespace VCR.Editor.P1
                     !core.Contains("finally") ||
                     !core.Contains("control.ControlEnabled != beforeEnabled") ||
                     !core.Contains("control.ControlHealthState != beforeHealth") ||
-                    !core.Contains("if (stateChanged)") ||
+                    !core.Contains("if (stateChanged || unconfirmedToggle)") ||
                     !core.Contains("InvalidateWorkspaceTrackingEditors(id)") ||
                     !core.Contains("_workspaceRestoredTracking.Remove(id)") ||
                     !core.Contains("_nextTrackingRestoreScan = 0f") ||
