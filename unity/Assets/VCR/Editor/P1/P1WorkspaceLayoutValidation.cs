@@ -2606,8 +2606,9 @@ namespace VCR.Editor.P1
                 if (nativeAt < 0 || fallbackAt < nativeAt ||
                     !trackingSource.Substring(nativeAt, fallbackAt - nativeAt)
                         .Contains("TryRequestWorkspaceTrackingRecovery(control, out var feedback)") ||
-                    !trackingSource.Substring(fallbackAt)
-                        .Contains("TryRequestWorkspaceTrackingRecovery(displayedSource, out var feedback)"))
+                    !System.Text.RegularExpressions.Regex.IsMatch(
+                        trackingSource.Substring(fallbackAt),
+                        @"TryRequestWorkspaceTrackingRecovery\(\s*displayedSource\s*,\s*out\s+var\s+feedback\s*\)"))
                     return false;
 
                 shellRoot = new GameObject("P1 tracking recovery shell");
