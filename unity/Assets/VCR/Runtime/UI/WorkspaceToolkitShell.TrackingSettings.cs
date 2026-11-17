@@ -757,7 +757,19 @@ namespace VCR.Runtime.UI
                 return true;
             }
             if (action < 5200)
+            {
+                // A displayed Configure button must not survive Remove->Add,
+                // a recovery or a background restoration on the same source.
+                if (!_workspaceNativeTrackingVersions.TryGetValue(slot, out var displayedVersion) ||
+                    !IsWorkspaceTrackingEditVersionCurrent(id, displayedVersion))
+                {
+                    RebuildWorkspaceNativeTrackingSources();
+                    _workspaceNativeSettings.SetText(92,
+                        "Tracking source or settings changed. Select Configure again.");
+                    return true;
+                }
                 ShowWorkspaceNativeTrackingDetails(id);
+            }
             else if (action < 5400)
             {
                 if (!_workspaceNativeTrackingEnabled.TryGetValue(slot, out var displayedEnabled) ||
@@ -988,7 +1000,8 @@ namespace VCR.Runtime.UI
                                     sourceId, source, displayedEnabled, displayedVersion))
                                 { text = "Recover" });
                         if (source is ITrackingRuntimeConfigurable)
-                            buttons.Add(new Button(() => EditWorkspaceTrackingSettings(sourceId, source))
+                            buttons.Add(new Button(() => EditWorkspaceTrackingSettings(
+                                    sourceId, source, displayedVersion))
                                 { text = "Configure" });
                     }
                     container.Add(buttons);
@@ -1084,7 +1097,8 @@ namespace VCR.Runtime.UI
 
                 if (!configured && source is ITrackingRuntimeConfigurable settings &&
                     settings.OpenConfigurationOnAdd)
-                    EditWorkspaceTrackingSettings(sourceId, source);
+                    EditWorkspaceTrackingSettings(
+                        sourceId, source, GetWorkspaceTrackingEditVersion(sourceId));
             }
             catch (Exception ex)
             {
@@ -1133,7 +1147,8 @@ namespace VCR.Runtime.UI
         }
 
         private void EditWorkspaceTrackingSettings(
-            string sourceId, ITrackingRuntimeControl displayedSource)
+            string sourceId, ITrackingRuntimeControl displayedSource,
+            int displayedVersion)
         {
             if (_workspaceTrackingEditor == null) return;
             if (!IsWorkspaceTrackingPanelActionCurrent(sourceId, displayedSource))
@@ -1146,6 +1161,13 @@ namespace VCR.Runtime.UI
                 _workspaceTrackingEditor.Clear();
                 TrackingPanelActionFinished(
                     "Tracking source was removed. Add it before opening settings.");
+                return;
+            }
+            if (!IsWorkspaceTrackingEditVersionCurrent(sourceId, displayedVersion))
+            {
+                _workspaceTrackingEditor.Clear();
+                TrackingPanelActionFinished(
+                    "Tracking source or settings changed. Select Configure again.");
                 return;
             }
             _workspaceTrackingEditor.Clear();
