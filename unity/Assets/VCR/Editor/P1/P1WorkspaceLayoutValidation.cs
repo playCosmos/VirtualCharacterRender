@@ -1592,14 +1592,23 @@ namespace VCR.Editor.P1
                     "private void ToggleWorkspaceTrackingEnabled(", StringComparison.Ordinal);
                 var toolkitEnd = code.IndexOf(
                     "private void RecoverWorkspaceTrackingSource(", StringComparison.Ordinal);
+                var restoreAt = code.IndexOf(
+                    "private void RestoreWorkspaceTrackingPreferences()", StringComparison.Ordinal);
+                var restoreEnd = code.IndexOf(
+                    "private string GetWorkspaceTrackingSummary()", StringComparison.Ordinal);
                 if (coreAt < 0 || coreEnd <= coreAt ||
                     nativeAt < 0 || nativeEnd <= nativeAt ||
-                    toolkitAt < 0 || toolkitEnd <= toolkitAt)
+                    toolkitAt < 0 || toolkitEnd <= toolkitAt ||
+                    restoreAt < 0 || restoreEnd <= restoreAt)
                     return false;
                 var core = code.Substring(coreAt, coreEnd - coreAt);
                 var native = code.Substring(nativeAt, nativeEnd - nativeAt);
                 var toolkit = code.Substring(toolkitAt, toolkitEnd - toolkitAt);
-                if (!core.Contains("finally") ||
+                var background = code.Substring(restoreAt, restoreEnd - restoreAt);
+                if (!background.Contains("source.ControlEnabled != beforeRestoreEnabled") ||
+                    !background.Contains("source.ControlHealthState != beforeRestoreHealth") ||
+                    !background.Contains("if (acceptedMutation)") ||
+                    !core.Contains("finally") ||
                     !core.Contains("control.ControlEnabled != beforeEnabled") ||
                     !core.Contains("control.ControlHealthState != beforeHealth") ||
                     !core.Contains("if (stateChanged)") ||
@@ -1692,11 +1701,48 @@ namespace VCR.Editor.P1
                 // editor revision and restored-instance cache intact.
                 var stable = Version();
                 provider.FailDisableOnce = true;
-                return !Toggle(false) &&
-                       provider.ControlEnabled &&
-                       Version() == stable &&
-                       DraftValid(stable) &&
+                if (Toggle(false) || !provider.ControlEnabled ||
+                    Version() != stable || !DraftValid(stable) ||
+                    !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // The same failure-after-write can occur during automatic
+                // restoration, not only from explicit Native/Toolkit actions.
+                // A failed stop must still invalidate the pre-restore draft.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                restored.Remove(id);
+                provider.FailDisableAfterMutationOnce = true;
+                var beforeAutomaticStop = Version();
+                Restore();
+                if (provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() == beforeAutomaticStop ||
+                    DraftValid(beforeAutomaticStop) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 0)
+                    return false;
+                var afterAutomaticStop = Version();
+                Restore();
+                if (provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    Version() != afterAutomaticStop)
+                    return false;
+
+                // A failed start can likewise leave capture On. Preserve
+                // saved On and the invalidation, then settle without replay.
+                PlayerPrefs.SetInt(enabledKey, 1);
+                restored.Remove(id);
+                provider.FailEnableAfterMutationOnce = true;
+                var beforeAutomaticStart = Version();
+                Restore();
+                if (!provider.ControlEnabled || restored.ContainsKey(id) ||
+                    Version() == beforeAutomaticStart ||
+                    DraftValid(beforeAutomaticStart) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+                var afterAutomaticStart = Version();
+                Restore();
+                return provider.ControlEnabled &&
                        restored.ContainsKey(id) &&
+                       Version() == afterAutomaticStart &&
                        PlayerPrefs.GetInt(enabledKey, -1) == 1;
             }
             finally
