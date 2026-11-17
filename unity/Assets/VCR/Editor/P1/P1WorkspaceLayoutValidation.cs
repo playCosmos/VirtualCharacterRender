@@ -244,6 +244,8 @@ namespace VCR.Editor.P1
                     "stale Add/Remove must reject a later membership with the same displayed state");
                 Check(TrackingFailedMembershipStopPreservesRegistration(),
                     "failed Add/Remove stop must not commit membership or retain stale tracking state");
+                Check(TrackingMembershipStopRequiresDisabledReadback(),
+                    "an acknowledged Stop must not unregister a still-enabled tracker");
                 Check(TrackingStaleToggleActionsRejectStateChanges(),
                     "stale Enable/Disable labels must not invert tracking state changes");
                 Check(TrackingFailedToggleRestoresSavedState(),
@@ -1326,6 +1328,104 @@ namespace VCR.Editor.P1
             {
                 if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+            }
+        }
+
+        private static bool TrackingMembershipStopRequiresDisabledReadback()
+        {
+            var id = "vcr-parity-stop-postcondition-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            GameObject shellRoot = null;
+            GameObject sourceRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var stop = type.GetMethod("TryStopWorkspaceTrackingForMembership", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                if (stop == null || version == null ||
+                    configuredField == null || restoredField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                var helperAt = code.IndexOf(
+                    "private bool TryStopWorkspaceTrackingForMembership(", StringComparison.Ordinal);
+                var helperEnd = code.IndexOf(
+                    "private bool HandleWorkspaceNativeTrackingAction(", StringComparison.Ordinal);
+                if (helperAt < 0 || helperEnd <= helperAt)
+                    return false;
+                var helper = code.Substring(helperAt, helperEnd - helperAt);
+                var postconditionAt = helper.IndexOf(
+                    "if (stopped && control.ControlEnabled)", StringComparison.Ordinal);
+                var returnAt = helper.IndexOf("if (stopped)\n                return true;",
+                    StringComparison.Ordinal);
+                if (postconditionAt < 0 || returnAt <= postconditionAt ||
+                    !helper.Contains("stopped = false;") ||
+                    !helper.Contains("remains enabled"))
+                    return false;
+
+                shellRoot = new GameObject("P1 membership Stop postcondition shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                sourceRoot = new GameObject("P1 membership Stop postcondition source");
+                var provider = sourceRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                if (configured == null || restored == null ||
+                    !provider.TrySetControlEnabled(true, out _))
+                    return false;
+                configured.Add(id);
+                restored[id] = provider;
+                PlayerPrefs.SetInt(enabledKey, 1);
+                var beforeVersion = (int)version.Invoke(shell, new object[] { id });
+
+                bool Stop(out string failure)
+                {
+                    var args = new object[] { provider, null };
+                    var accepted = (bool)stop.Invoke(shell, args);
+                    failure = args[1] as string;
+                    return accepted;
+                }
+
+                // Some third-party implementations acknowledge Stop before
+                // they really change ControlEnabled. Removal must not proceed.
+                provider.AcknowledgeDisableWithoutStoppingOnce = true;
+                if (Stop(out var error) ||
+                    string.IsNullOrEmpty(error) ||
+                    !error.Contains("remains enabled") ||
+                    !provider.ControlEnabled ||
+                    !configured.Contains(id) ||
+                    !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1 ||
+                    (int)version.Invoke(shell, new object[] { id }) != beforeVersion)
+                    return false;
+
+                // Unregistered Add must likewise refuse a false-positive Stop
+                // and must not acquire or persist ownership of the live source.
+                configured.Remove(id);
+                restored.Remove(id);
+                provider.AcknowledgeDisableWithoutStoppingOnce = true;
+                if (Stop(out error) ||
+                    string.IsNullOrEmpty(error) ||
+                    provider.ControlEnabled == false ||
+                    configured.Contains(id) ||
+                    restored.ContainsKey(id) ||
+                    PlayerPrefs.GetInt(enabledKey, -1) != 1)
+                    return false;
+
+                // A confirmed Stop is still accepted; no permanent block.
+                return Stop(out _) && !provider.ControlEnabled;
+            }
+            finally
+            {
+                if (sourceRoot != null) UnityEngine.Object.DestroyImmediate(sourceRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
             }
         }
 
@@ -3473,6 +3573,7 @@ namespace VCR.Editor.P1
         public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
+        public bool AcknowledgeDisableWithoutStoppingOnce { get; set; }
         public bool FailEnableAfterMutationOnce { get; set; }
         public bool FailDisableAfterMutationOnce { get; set; }
         public bool AppliedWhileEnabled { get; private set; }
@@ -3549,6 +3650,12 @@ namespace VCR.Editor.P1
                 FailDisableOnce = false;
                 error = "Capture is still stopping";
                 return false;
+            }
+            if (!enabled && AcknowledgeDisableWithoutStoppingOnce)
+            {
+                AcknowledgeDisableWithoutStoppingOnce = false;
+                error = null;
+                return true;
             }
             if ((enabled && FailEnableAfterMutationOnce) ||
                 (!enabled && FailDisableAfterMutationOnce))
