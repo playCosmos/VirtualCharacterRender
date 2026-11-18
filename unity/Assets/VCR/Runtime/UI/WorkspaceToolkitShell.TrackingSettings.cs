@@ -419,7 +419,7 @@ namespace VCR.Runtime.UI
                 // Native/Toolkit settings draft is open on the same instance.
                 // Invalidate only if the provider actually accepts a change.
                 var acceptedMutation = false;
-                var savedOffInitialStopFailed = false;
+                var savedOffStopFailedThisAttempt = false;
                 var beforeRestoreEnabled = false;
                 var beforeRestoreHealth = default(TrackingSourceHealthState);
                 string beforeRestoreError = null;
@@ -445,7 +445,7 @@ namespace VCR.Runtime.UI
                             source.TrySetControlEnabled(false, out var stopError);
                         if (!stopAcknowledged || source.ControlEnabled)
                         {
-                            savedOffInitialStopFailed = true;
+                            savedOffStopFailedThisAttempt = true;
                             Debug.LogWarning("U1 tracking disable restore failed for " +
                                              id + ": " +
                                              (stopAcknowledged
@@ -505,6 +505,8 @@ namespace VCR.Runtime.UI
                             source.TrySetControlEnabled(enabled, out var enableError);
                         if (!toggleAcknowledged || source.ControlEnabled != enabled)
                         {
+                            if (!enabled)
+                                savedOffStopFailedThisAttempt = true;
                             Debug.LogWarning("U1 tracking enable restore failed for " +
                                              id + ": " +
                                              (toggleAcknowledged
@@ -530,7 +532,7 @@ namespace VCR.Runtime.UI
                     // A failed Apply may have restarted capture without
                     // acknowledging the changed device state. Stop it before
                     // entering a prolonged configuration retry delay.
-                    if (!savedOffInitialStopFailed &&
+                    if (!savedOffStopFailedThisAttempt &&
                         TryEnforceWorkspaceTrackingSavedOff(source, id))
                         acceptedMutation = true;
                     if (!acceptedMutation)
