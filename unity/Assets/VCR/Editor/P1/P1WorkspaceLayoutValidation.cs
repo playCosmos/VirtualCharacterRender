@@ -226,6 +226,8 @@ namespace VCR.Editor.P1
                     "cached tracking sources must reconcile normalized config-only drift, saved-value updates and failed retries");
                 Check(TrackingRepeatedRestoreFailuresBackoffPerProvider(),
                     "repeated tracking restore faults must back off without delaying a new provider or operator recovery");
+                Check(TrackingSavedOffSafetyBypassesConfigurationBackoff(),
+                    "saved-Off source must be stopped after failed Apply and while config retries are deferred");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
                     "accepted background tracking restore must invalidate stale U1 settings drafts");
                 Check(TrackingFailedApplyMutationsInvalidateOldDrafts(),
@@ -3607,6 +3609,130 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingSavedOffSafetyBypassesConfigurationBackoff()
+        {
+            var id = "vcr-parity-saved-off-backoff-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var retriesField = type.GetField("_workspaceTrackingRestoreRetries", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (restore == null || configuredField == null || restoredField == null ||
+                    retriesField == null || scanField == null)
+                    return false;
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                if (!code.Contains("TryEnforceWorkspaceTrackingSavedOff(source, id)") ||
+                    !code.Contains("if (!savedOffInitialStopFailed &&"))
+                    return false;
+
+                shellRoot = new GameObject("P1 saved-Off backoff shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 saved-Off backoff provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.FailConfigurationAfterEnablingOnce = true;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                var retries = retriesField.GetValue(shell) as System.Collections.IDictionary;
+                if (configured == null || restored == null || retries == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+                PlayerPrefs.SetString(settingKey, "saved-off-value");
+
+                void Scan()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                // The provider wrongly starts capture before reporting a failed
+                // Apply. Restore's finally must stop it in the SAME attempt.
+                Scan();
+                if (provider.ConfigurationCalls != 1 || provider.ControlEnabled ||
+                    provider.ToggleCalls != 1 || restored.ContainsKey(id) ||
+                    !retries.Contains(id) || PlayerPrefs.GetInt(enabledKey, 1) != 0)
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 2 ||
+                    provider.AppliedValue != "saved-off-value" ||
+                    provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    retries.Contains(id))
+                    return false;
+
+                // Build up a real configuration backoff while saved Off.
+                provider.ExternalReadbackOverride = "out-of-band-config";
+                provider.ConfigurationFailuresRemaining = 3;
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 5 || !retries.Contains(id) ||
+                    restored.ContainsKey(id) || provider.ControlEnabled)
+                    return false;
+                var retry = retries[id];
+                var retryAfter = retry.GetType().GetField("RetryAfter",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (retryAfter == null ||
+                    (float)retryAfter.GetValue(retry) <= Time.unscaledTime + 2f)
+                    return false;
+
+                // An external SDK now turns a saved-Off camera On during the
+                // four-second configuration delay. The next two-second global
+                // scan must issue Stop without retrying configuration.
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+                var beforeSafetyToggle = provider.ToggleCalls;
+                Scan();
+                if (provider.ControlEnabled ||
+                    provider.ToggleCalls != beforeSafetyToggle + 1 ||
+                    provider.ConfigurationCalls != 5 ||
+                    !retries.Contains(id))
+                    return false;
+
+                // A failed stop must be attempted again on the following scan
+                // even though configuration remains backed off.
+                if (!provider.TrySetControlEnabled(true, out _))
+                    return false;
+                provider.FailDisableOnce = true;
+                Scan();
+                if (!provider.ControlEnabled || provider.ConfigurationCalls != 5)
+                    return false;
+                Scan();
+                if (provider.ControlEnabled || provider.ConfigurationCalls != 5)
+                    return false;
+
+                // Once the delayed provider recovers, restore saved config and
+                // discard both the backoff and old cached source state.
+                retryAfter.SetValue(retries[id], 0f);
+                Scan();
+                if (provider.ControlEnabled || provider.ConfigurationCalls != 6 ||
+                    !restored.ContainsKey(id) || retries.Contains(id) ||
+                    provider.AppliedValue != "saved-off-value")
+                    return false;
+                Scan();
+                return provider.ConfigurationCalls == 6 &&
+                       !provider.ControlEnabled && !retries.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingRepeatedRestoreFailuresBackoffPerProvider()
         {
             var id = "vcr-parity-retry-backoff-" + Guid.NewGuid().ToString("N");
@@ -4209,6 +4335,7 @@ namespace VCR.Editor.P1
         public bool FailConfigurationOnce { get; set; }
         public int ConfigurationFailuresRemaining { get; set; }
         public bool FailConfigurationAfterMutationOnce { get; set; }
+        public bool FailConfigurationAfterEnablingOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
         public bool AcknowledgeEnableWithoutChangingOnce { get; set; }
@@ -4267,6 +4394,13 @@ namespace VCR.Editor.P1
             {
                 FailConfigurationOnce = false;
                 error = "Provider not initialized yet";
+                return false;
+            }
+            if (FailConfigurationAfterEnablingOnce)
+            {
+                FailConfigurationAfterEnablingOnce = false;
+                ControlEnabled = true;
+                error = "Simulated Apply failure after starting capture";
                 return false;
             }
             if (FailConfigurationAfterMutationOnce)
