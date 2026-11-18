@@ -128,10 +128,12 @@ namespace VCR.Runtime.UI
                 _workspaceTrackingRestoreRetries[sourceId] = retry;
             }
             retry.Failures = Math.Min(retry.Failures + 1, 8);
-            // First two attempts retain existing 2-second recovery responsiveness.
-            // Subsequently: 4, 8, 16, 32, 60 seconds (capped).
+            // The global restore scan already throttles the first two failures
+            // to two seconds. Preserve existing fast retry behavior, including
+            // source-free tests that explicitly advance that global scan.
+            // After three consecutive failures: 4, 8, 16, 32, 60 seconds.
             var delay = retry.Failures <= 2
-                ? 2f : Mathf.Min(60f, (float)(2 << Math.Min(retry.Failures - 2, 5)));
+                ? 0f : Mathf.Min(60f, (float)(2 << Math.Min(retry.Failures - 2, 5)));
             retry.RetryAfter = Time.unscaledTime + delay;
         }
 
