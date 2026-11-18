@@ -3734,9 +3734,42 @@ namespace VCR.Editor.P1
                     return false;
                 settled = Version();
                 Scan();
-                return provider.ConfigurationCalls == 7 && Version() == settled &&
-                       !provider.ControlEnabled && restored.ContainsKey(id) &&
-                       snapshots.Contains(id);
+                if (provider.ConfigurationCalls != 7 || Version() != settled ||
+                    provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    !snapshots.Contains(id))
+                    return false;
+
+                // Native/Toolkit Add or Toggle can mark a provider cached before
+                // the first successful restore snapshot. Existing saved fields
+                // must still be replayed on the next scan, not skipped forever.
+                snapshots.Remove(id);
+                provider.ExternalReadbackOverride = "readded-with-old-prefs";
+                oldDraft = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 8 ||
+                    provider.ExternalReadbackOverride != "updated-value" ||
+                    Version() == oldDraft || DraftValid(oldDraft) ||
+                    provider.ControlEnabled || !snapshots.Contains(id))
+                    return false;
+                settled = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 8 || Version() != settled)
+                    return false;
+
+                // No saved configuration: a missing snapshot should establish
+                // a clean baseline without restarting or applying device fields.
+                PlayerPrefs.DeleteKey(settingKey);
+                snapshots.Remove(id);
+                provider.ExternalReadbackOverride = "unpersisted-live-value";
+                settled = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 8 || Version() != settled ||
+                    provider.ExternalReadbackOverride != "unpersisted-live-value" ||
+                    !restored.ContainsKey(id) || !snapshots.Contains(id))
+                    return false;
+                Scan();
+                return provider.ConfigurationCalls == 8 && Version() == settled &&
+                       !provider.ControlEnabled;
             }
             finally
             {
