@@ -222,6 +222,8 @@ namespace VCR.Editor.P1
                     "recreated tracking control with same ID must restore its saved enabled state");
                 Check(TrackingCachedProviderExternalStateDriftRestoresSavedPreference(),
                     "cached tracking sources must reconcile external On/Off drift without stale drafts");
+                Check(TrackingCachedProviderExternalSettingsDriftRestoresSavedPreference(),
+                    "cached tracking sources must reconcile normalized config-only drift, saved-value updates and failed retries");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
                     "accepted background tracking restore must invalidate stale U1 settings drafts");
                 Check(TrackingFailedApplyMutationsInvalidateOldDrafts(),
@@ -3603,6 +3605,148 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingCachedProviderExternalSettingsDriftRestoresSavedPreference()
+        {
+            var id = "vcr-parity-cached-settings-drift-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
+                var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var baselineField = type.GetField("_workspaceTrackingRestoredReadbacks", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                if (restore == null || version == null || canSave == null ||
+                    configuredField == null || restoredField == null ||
+                    baselineField == null || scan == null)
+                    return false;
+
+                // Run actual shell restoration, not just a source-text assertion.
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                if (!source.Contains("AreWorkspaceTrackingCachedSettingsCurrent(source, id)") ||
+                    !source.Contains("TryRememberWorkspaceTrackingReadback(source, id)") ||
+                    !source.Contains("WorkspaceTrackingValuesMatch(baseline.Saved, current.Saved)") ||
+                    !source.Contains("WorkspaceTrackingValuesMatch(baseline.Live, current.Live)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 cached tracking settings drift shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 cached tracking settings drift provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.NormalizeAppliedReadback = true;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                var snapshots = baselineField.GetValue(shell) as System.Collections.IDictionary;
+                if (configured == null || restored == null || snapshots == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "  saved-value  ");
+
+                int Version() => (int)version.Invoke(shell, new object[] { id });
+                bool DraftValid(int previous) => (bool)canSave.Invoke(
+                    shell, new object[] { id.ToUpperInvariant(), previous });
+                void Scan()
+                {
+                    scan.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                Scan();
+                if (!provider.ControlEnabled || provider.ConfigurationCalls != 1 ||
+                    provider.AppliedValue != "  saved-value  " ||
+                    provider.ExternalReadbackOverride != "saved-value" ||
+                    !restored.ContainsKey(id) || !snapshots.Contains(id))
+                    return false;
+                var settled = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 1 || Version() != settled ||
+                    provider.ToggleCalls != 1)
+                    return false;
+
+                // External configuration-only drift: live On/Off did not change.
+                provider.ExternalReadbackOverride = "external-change";
+                var oldDraft = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 2 ||
+                    provider.ExternalReadbackOverride != "saved-value" ||
+                    Version() == oldDraft || DraftValid(oldDraft) ||
+                    !restored.ContainsKey(id) ||
+                    PlayerPrefs.GetString(settingKey) != "  saved-value  ")
+                    return false;
+                settled = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 2 || Version() != settled)
+                    return false;
+
+                // Persisted value drift with unchanged live readback also replays.
+                PlayerPrefs.SetString(settingKey, "  updated-value  ");
+                oldDraft = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 3 ||
+                    provider.ExternalReadbackOverride != "updated-value" ||
+                    Version() == oldDraft || DraftValid(oldDraft))
+                    return false;
+                settled = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 3 || Version() != settled)
+                    return false;
+
+                // A failed first replay must not leave a restored cache entry.
+                provider.ExternalReadbackOverride = "drift-before-retry";
+                provider.FailConfigurationOnce = true;
+                oldDraft = Version();
+                Scan();
+                if (provider.ConfigurationCalls != 4 ||
+                    restored.ContainsKey(id) || snapshots.Contains(id) ||
+                    Version() == oldDraft || DraftValid(oldDraft) ||
+                    PlayerPrefs.GetString(settingKey) != "  updated-value  ")
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 5 ||
+                    provider.ExternalReadbackOverride != "updated-value" ||
+                    !restored.ContainsKey(id) || !snapshots.Contains(id))
+                    return false;
+
+                // Saved Off means config-only drift must not start capture.
+                PlayerPrefs.SetInt(enabledKey, 0);
+                Scan();
+                if (provider.ControlEnabled || provider.ConfigurationCalls != 6 ||
+                    !restored.ContainsKey(id))
+                    return false;
+                var stoppedToggles = provider.ToggleCalls;
+                provider.ExternalReadbackOverride = "off-but-config-drift";
+                Scan();
+                if (provider.ControlEnabled || provider.ToggleCalls != stoppedToggles ||
+                    provider.ConfigurationCalls != 7 ||
+                    provider.ExternalReadbackOverride != "updated-value")
+                    return false;
+                settled = Version();
+                Scan();
+                return provider.ConfigurationCalls == 7 && Version() == settled &&
+                       !provider.ControlEnabled && restored.ContainsKey(id) &&
+                       snapshots.Contains(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingReconnectedProviderRestoresPreferences()
         {
             var id = "vcr-parity-reconnect-" + Guid.NewGuid().ToString("N");
@@ -3783,7 +3927,7 @@ namespace VCR.Editor.P1
                 scan.SetValue(shell, 0f);
                 restore.Invoke(shell, null);
                 return restored.ContainsKey(id) &&
-                       delayed.SchemaCalls == 2 &&
+                       delayed.SchemaCalls == 3 &&
                        delayed.ControlEnabled &&
                        delayed.ToggleCalls == 1 &&
                        delayed.ConfigurationCalls == 1 &&
@@ -3900,6 +4044,7 @@ namespace VCR.Editor.P1
         public bool ReportAdditionalSetting { get; set; }
         public bool ReportOversizedSchema { get; set; }
         public string ExternalReadbackOverride { get; set; }
+        public bool NormalizeAppliedReadback { get; set; }
         public bool ResetOnRecovery { get; set; }
         public bool FailRecoveryOnce { get; set; }
         public bool FailRecoveryAfterMutationOnce { get; set; }
@@ -3951,6 +4096,8 @@ namespace VCR.Editor.P1
             }
             AppliedWhileEnabled |= ControlEnabled;
             AppliedValue = value;
+            if (NormalizeAppliedReadback)
+                ExternalReadbackOverride = value.Trim();
             error = null;
             return true;
         }
