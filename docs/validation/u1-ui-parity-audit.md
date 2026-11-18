@@ -385,6 +385,15 @@ The U1 restore scan retries each source roughly every two seconds. A provider wh
 - **Verification pending:** these commits require exact-HEAD Unity P0–P13, Windows Player/hosted GUI, repository push/PR and macOS source-matched verification before being called PASS. Earlier `ad56319` checks all passed, but do not establish this change.
 - **Trade-off:** persisted device faults are retried less aggressively after the third failure (up to one minute between attempts). Operators can still explicitly request recovery; the provider's own health/readback may not prove hardware shutdown. Actual MediaPipe/Ultraleap reconnect, UI interaction, Korean IME, OBS alpha, VRM swap and four-hour soak remain physical acceptance blockers. PR stays Draft/unmerged, legacy uGUI remains, no release.
 
+## Saved-Off stop must preempt configuration retry backoff
+
+A device can start capture while applying settings and still return `false`. Delaying the next configuration retry can then inadvertently leave a webcam or other tracking source active despite its saved **Off** preference. The general backoff therefore **must not** throttle safety-related Stop attempts.
+
+- `0f519a7`: after each restore attempt, a saved-Off provider is checked again before caching the outcome or scheduling failure backoff. If a failed Apply enabled capture, Stop is attempted in the **same scan**, even though configuration will be retried later. If Stop was already attempted and failed at the start of that restore, it is not issued twice consecutively. During delayed configuration retries, each ordinary two-second scan still checks saved-Off and tries to stop any source that became On. Unconfirmed Stop readbacks and errors keep the limitation explicit.
+- `212de91`: real Unity shell fixture simulates Apply starting capture and failing, verifies same-attempt Stop, builds three consecutive configuration failures, toggles a saved-Off source externally while backoff is active, verifies Stop is issued without a premature configuration replay, tests a failed Stop followed by a later successful Stop, then validates normal saved configuration replay after the retry deadline.
+- **Trade-off:** repeated safety Stop attempts can still call an unhealthy SDK every two seconds, intentionally overriding the slower configuration retry schedule. Neither a successful `ControlEnabled=false` readback nor Unity automation proves a real camera has physically stopped. Device-level privacy and lifecycle tests remain mandatory.
+- **CI not yet accepted for these new commits.** Require exact-HEAD Unity P0–P13, native Windows startup/GUI, macOS and repository validation before marking green. Keep PR #44 Draft/unmerged and legacy uGUI.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
