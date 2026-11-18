@@ -374,6 +374,17 @@ A restored source was previously kept in `_workspaceRestoredTracking` while the 
 - **CI status:** newly committed source changes still require exact-head Unity P0–P13, Windows native Player/hosted GUI and repository checks. These changes are not physically approved. Existing hardware, Win32/AppKit click, Korean IME, VRM swap, OBS alpha and four-hour soak/clean quit gates are unchanged.
 - **Limits:** sources with **no persisted configuration fields** are deliberately not subject to configuration rollback. A device that lies about readback cannot be made correct by this generic interface. Asynchronous/dynamic normalized provider readback can still oscillate, and persistent failures are retried approximately every two seconds; vendor-specific settle delays, last-good telemetry and backoff require physical evidence before expanding the generic contract. The source has no hardware-verified rollback transaction.
 
+## Bounded retry backoff for repeatedly failing tracking providers
+
+The U1 restore scan retries each source roughly every two seconds. A provider whose configuration cannot be applied or whose enabled state cannot be confirmed can otherwise drive unbounded SDK calls, device restarts and repeated warnings for hours.
+
+- `97616bd` introduces **per-ID, per-provider-instance** restore failure state. The first two consecutive faults continue using the existing global two-second scan; beginning with the third fault, independent retry delays become **4, 8, 16, 32, then at most 60 seconds**. Success discards the retry state. Missing/removed/ambiguous sources are pruned. A replacement component with the same logical ID bypasses the failed predecessor's delay.
+- `ef7aa95` clarifies that the first two faults are exclusively throttled by the existing global scan, rather than a duplicate per-source timer, so recovery responsiveness and existing fast-retry regressions remain unchanged.
+- Operator-driven Add/Remove, successful Enable/Disable, Recover, and successful/partially-mutating manual settings Apply clear the retry delay so an intentional action can proceed. A failed manual command with no observed side effects does not automatically claim device recovery.
+- `88106c5` / `c63c10d` add a real-shell regression using repeated provider initialization faults, explicit passage of simulated retry deadlines, a stable successful recovery, and same-ID replacement during a pending delay. It checks the real global scan gate separately from added prolonged-failure backoff. Delays are **best-effort scheduling**, not a guarantee that physical camera SDK calls have been cancelled or stopped.
+- **Verification pending:** these commits require exact-HEAD Unity P0–P13, Windows Player/hosted GUI, repository push/PR and macOS source-matched verification before being called PASS. Earlier `ad56319` checks all passed, but do not establish this change.
+- **Trade-off:** persisted device faults are retried less aggressively after the third failure (up to one minute between attempts). Operators can still explicitly request recovery; the provider's own health/readback may not prove hardware shutdown. Actual MediaPipe/Ultraleap reconnect, UI interaction, Korean IME, OBS alpha, VRM swap and four-hour soak remain physical acceptance blockers. PR stays Draft/unmerged, legacy uGUI remains, no release.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
