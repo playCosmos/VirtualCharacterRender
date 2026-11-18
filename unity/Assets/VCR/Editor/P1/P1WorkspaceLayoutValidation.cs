@@ -3631,7 +3631,7 @@ namespace VCR.Editor.P1
                 var code = File.ReadAllText(Path.Combine(Application.dataPath,
                     "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
                 if (!code.Contains("TryEnforceWorkspaceTrackingSavedOff(source, id)") ||
-                    !code.Contains("if (!savedOffInitialStopFailed &&"))
+                    !code.Contains("if (!savedOffStopFailedThisAttempt &&"))
                     return false;
 
                 shellRoot = new GameObject("P1 saved-Off backoff shell");
@@ -3721,8 +3721,29 @@ namespace VCR.Editor.P1
                     provider.AppliedValue != "saved-off-value")
                     return false;
                 Scan();
-                return provider.ConfigurationCalls == 6 &&
-                       !provider.ControlEnabled && !retries.Contains(id);
+                if (provider.ConfigurationCalls != 6 ||
+                    provider.ControlEnabled || retries.Contains(id))
+                    return false;
+
+                // A *successful* Apply may restart capture, then its
+                // post-Apply Stop can fail. Do not send a second Stop inside
+                // finally; leave the source uncached for the next scan.
+                provider.ExternalReadbackOverride = "new-config-only-drift";
+                provider.EnableOnSuccessfulConfigurationOnce = true;
+                provider.FailDisableOnce = true;
+                var beforeStop = provider.ToggleCalls;
+                Scan();
+                if (provider.ConfigurationCalls != 7 || !provider.ControlEnabled ||
+                    provider.ToggleCalls != beforeStop + 1 ||
+                    restored.ContainsKey(id) || !retries.Contains(id))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 8 || provider.ControlEnabled ||
+                    provider.ToggleCalls != beforeStop + 2 ||
+                    !restored.ContainsKey(id) || retries.Contains(id))
+                    return false;
+                Scan();
+                return provider.ConfigurationCalls == 8 && !provider.ControlEnabled;
             }
             finally
             {
@@ -4336,6 +4357,7 @@ namespace VCR.Editor.P1
         public int ConfigurationFailuresRemaining { get; set; }
         public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailConfigurationAfterEnablingOnce { get; set; }
+        public bool EnableOnSuccessfulConfigurationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
         public bool AcknowledgeEnableWithoutChangingOnce { get; set; }
@@ -4412,6 +4434,11 @@ namespace VCR.Editor.P1
             }
             AppliedWhileEnabled |= ControlEnabled;
             AppliedValue = value;
+            if (EnableOnSuccessfulConfigurationOnce)
+            {
+                EnableOnSuccessfulConfigurationOnce = false;
+                ControlEnabled = true;
+            }
             if (NormalizeAppliedReadback)
                 ExternalReadbackOverride = value.Trim();
             error = null;
