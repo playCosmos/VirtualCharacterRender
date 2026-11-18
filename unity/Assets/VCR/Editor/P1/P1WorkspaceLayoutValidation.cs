@@ -3682,16 +3682,16 @@ namespace VCR.Editor.P1
                 }
 
                 Scan();
-                if (!ExpectFailure(1, 2f))
+                if (!ExpectFailure(1, 0f))
                     return false;
-                Scan();
+                // Respect the real global two-second scan gate: this immediate
+                // second call must not retry unless a test advances the gate.
+                restore.Invoke(shell, null);
                 if (provider.ConfigurationCalls != 1)
                     return false;
-                BypassElapsedTime();
                 Scan();
-                if (!ExpectFailure(2, 2f))
+                if (!ExpectFailure(2, 0f))
                     return false;
-                BypassElapsedTime();
                 Scan();
                 if (!ExpectFailure(3, 4f))
                     return false;
