@@ -224,6 +224,8 @@ namespace VCR.Editor.P1
                     "cached tracking sources must reconcile external On/Off drift without stale drafts");
                 Check(TrackingCachedProviderExternalSettingsDriftRestoresSavedPreference(),
                     "cached tracking sources must reconcile normalized config-only drift, saved-value updates and failed retries");
+                Check(TrackingRepeatedRestoreFailuresBackoffPerProvider(),
+                    "repeated tracking restore faults must back off without delaying a new provider or operator recovery");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
                     "accepted background tracking restore must invalidate stale U1 settings drafts");
                 Check(TrackingFailedApplyMutationsInvalidateOldDrafts(),
@@ -3605,6 +3607,146 @@ namespace VCR.Editor.P1
             }
         }
 
+        private static bool TrackingRepeatedRestoreFailuresBackoffPerProvider()
+        {
+            var id = "vcr-parity-retry-backoff-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var retriesField = type.GetField("_workspaceTrackingRestoreRetries", flags);
+                var scanField = type.GetField("_nextTrackingRestoreScan", flags);
+                if (restore == null || configuredField == null || restoredField == null ||
+                    retriesField == null || scanField == null)
+                    return false;
+
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                if (!code.Contains("IsWorkspaceTrackingRestoreRetryDue(id, source)") ||
+                    !code.Contains("RecordWorkspaceTrackingRestoreFailure(id, source)") ||
+                    !code.Contains("_workspaceTrackingRestoreRetries.Remove(id)") ||
+                    !code.Contains("!ReferenceEquals(retry.Provider, source)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking retry backoff shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 repeatedly failing tracking provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.ConfigurationFailuresRemaining = 4;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                var retries = retriesField.GetValue(shell) as System.Collections.IDictionary;
+                if (configured == null || restored == null || retries == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 1);
+                PlayerPrefs.SetString(settingKey, "saved-after-retry");
+
+                void Scan()
+                {
+                    scanField.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+                object Retry() => retries.Contains(id) ? retries[id] : null;
+                var retryType = retriesField.FieldType.GetGenericArguments()[1];
+                var failures = retryType.GetField("Failures",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                var retryAfter = retryType.GetField("RetryAfter",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (failures == null || retryAfter == null)
+                    return false;
+                bool ExpectFailure(int count, float expectedDelay)
+                {
+                    var retry = Retry();
+                    return retry != null && !restored.ContainsKey(id) &&
+                           provider.ConfigurationCalls == count &&
+                           (int)failures.GetValue(retry) == count &&
+                           (float)retryAfter.GetValue(retry) - Time.unscaledTime >= expectedDelay - 0.75f &&
+                           (float)retryAfter.GetValue(retry) - Time.unscaledTime <= expectedDelay + 0.75f;
+                }
+                void BypassElapsedTime()
+                {
+                    var retry = Retry();
+                    if (retry != null)
+                        retryAfter.SetValue(retry, 0f);
+                }
+
+                Scan();
+                if (!ExpectFailure(1, 2f))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 1)
+                    return false;
+                BypassElapsedTime();
+                Scan();
+                if (!ExpectFailure(2, 2f))
+                    return false;
+                BypassElapsedTime();
+                Scan();
+                if (!ExpectFailure(3, 4f))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 3)
+                    return false;
+                BypassElapsedTime();
+                Scan();
+                if (!ExpectFailure(4, 8f))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 4)
+                    return false;
+                BypassElapsedTime();
+                Scan();
+                if (provider.ConfigurationCalls != 5 ||
+                    provider.AppliedValue != "saved-after-retry" ||
+                    !provider.ControlEnabled || !restored.ContainsKey(id) ||
+                    retries.Contains(id))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 5)
+                    return false;
+
+                // Failed replay from a cached provider must not delay the next
+                // instance with the same logical ID after a real disconnect.
+                provider.ExternalReadbackOverride = "changed-externally";
+                provider.FailConfigurationOnce = true;
+                Scan();
+                if (provider.ConfigurationCalls != 6 || !retries.Contains(id) ||
+                    restored.ContainsKey(id))
+                    return false;
+                UnityEngine.Object.DestroyImmediate(providerRoot);
+                providerRoot = new GameObject("P1 replacement during retry backoff");
+                var replacement = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                replacement.Id = id;
+                Scan();
+                if (replacement.ConfigurationCalls != 1 ||
+                    replacement.AppliedValue != "saved-after-retry" ||
+                    !replacement.ControlEnabled || retries.Contains(id) ||
+                    !restored.ContainsKey(id))
+                    return false;
+                Scan();
+                return replacement.ConfigurationCalls == 1 &&
+                       PlayerPrefs.GetString(settingKey) == "saved-after-retry";
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+            }
+        }
+
         private static bool TrackingCachedProviderExternalSettingsDriftRestoresSavedPreference()
         {
             var id = "vcr-parity-cached-settings-drift-" + Guid.NewGuid().ToString("N");
@@ -4065,6 +4207,7 @@ namespace VCR.Editor.P1
         public int ConfigurationCalls { get; private set; }
         public string AppliedValue { get; private set; }
         public bool FailConfigurationOnce { get; set; }
+        public int ConfigurationFailuresRemaining { get; set; }
         public bool FailConfigurationAfterMutationOnce { get; set; }
         public bool FailEnableOnce { get; set; }
         public bool FailDisableOnce { get; set; }
@@ -4114,6 +4257,12 @@ namespace VCR.Editor.P1
                 return false;
             }
             ConfigurationCalls++;
+            if (ConfigurationFailuresRemaining > 0)
+            {
+                ConfigurationFailuresRemaining--;
+                error = "Repeated simulated device initialization fault";
+                return false;
+            }
             if (FailConfigurationOnce)
             {
                 FailConfigurationOnce = false;
