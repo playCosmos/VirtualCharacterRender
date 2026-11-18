@@ -118,6 +118,37 @@ namespace VCR.Runtime.UI
             return Time.unscaledTime >= retry.RetryAfter;
         }
 
+        private bool TryEnforceWorkspaceTrackingSavedOff(
+            ITrackingRuntimeControl source, string sourceId)
+        {
+            // A failed Apply can restart a webcam before returning false.
+            // Never let configuration backoff postpone a saved-Off stop.
+            try
+            {
+                if (PlayerPrefs.GetInt(TrackingEnabledKey +
+                        GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0 ||
+                    !source.ControlEnabled)
+                    return false;
+                var acknowledged =
+                    source.TrySetControlEnabled(false, out var stopError);
+                if (!acknowledged || source.ControlEnabled)
+                    Debug.LogWarning("U1 tracking saved-Off safety stop failed for " +
+                        sourceId + ": " +
+                        (acknowledged
+                            ? "Provider acknowledged Stop but remains enabled."
+                            : stopError), this);
+                // Attempted stop or unexpected readback invalidates stale drafts,
+                // even if the SDK cannot confirm physical shutdown.
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("U1 tracking saved-Off safety readback/stop failed for " +
+                                 sourceId + ": " + ex.Message, this);
+                return true;
+            }
+        }
+
         private void RecordWorkspaceTrackingRestoreFailure(
             string sourceId, ITrackingRuntimeControl source)
         {
@@ -340,7 +371,12 @@ namespace VCR.Runtime.UI
                 if (!_workspaceConfiguredTracking.Contains(id))
                     continue;
                 if (!IsWorkspaceTrackingRestoreRetryDue(id, source))
+                {
+                    // Configuration backoff never blocks a necessary camera stop.
+                    if (TryEnforceWorkspaceTrackingSavedOff(source, id))
+                        InvalidateWorkspaceTrackingEditors(id);
                     continue;
+                }
                 if (_workspaceRestoredTracking.TryGetValue(id, out var previous) &&
                     ReferenceEquals(previous, source))
                 {
@@ -383,6 +419,7 @@ namespace VCR.Runtime.UI
                 // Native/Toolkit settings draft is open on the same instance.
                 // Invalidate only if the provider actually accepts a change.
                 var acceptedMutation = false;
+                var savedOffInitialStopFailed = false;
                 var beforeRestoreEnabled = false;
                 var beforeRestoreHealth = default(TrackingSourceHealthState);
                 string beforeRestoreError = null;
@@ -408,6 +445,7 @@ namespace VCR.Runtime.UI
                             source.TrySetControlEnabled(false, out var stopError);
                         if (!stopAcknowledged || source.ControlEnabled)
                         {
+                            savedOffInitialStopFailed = true;
                             Debug.LogWarning("U1 tracking disable restore failed for " +
                                              id + ": " +
                                              (stopAcknowledged
@@ -489,6 +527,12 @@ namespace VCR.Runtime.UI
                 }
                 finally
                 {
+                    // A failed Apply may have restarted capture without
+                    // acknowledging the changed device state. Stop it before
+                    // entering a prolonged configuration retry delay.
+                    if (!savedOffInitialStopFailed &&
+                        TryEnforceWorkspaceTrackingSavedOff(source, id))
+                        acceptedMutation = true;
                     if (!acceptedMutation)
                     {
                         try
