@@ -228,6 +228,8 @@ namespace VCR.Editor.P1
                     "repeated tracking restore faults must back off without delaying a new provider or operator recovery");
                 Check(TrackingSavedEnabledPreferenceChangeCancelsRestoreBackoff(),
                     "external saved On/Off changes must not inherit stale tracking retry delays");
+                Check(TrackingSavedConfigurationChangesCancelRestoreBackoff(),
+                    "external saved configuration updates/additions/deletions must bypass retry backoff without SDK polling");
                 Check(TrackingSavedOffSafetyBypassesConfigurationBackoff(),
                     "saved-Off source must be stopped after failed Apply and while config retries are deferred");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
@@ -3608,6 +3610,137 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool TrackingSavedConfigurationChangesCancelRestoreBackoff()
+        {
+            var id = "vcr-parity-retry-config-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            var additionalKey = "VCR.TrackingInputs.Setting.v1." + id + ".external-field";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var retryField = type.GetField("_workspaceTrackingRestoreRetries", flags);
+                if (restore == null || scan == null || configuredField == null ||
+                    restoredField == null || retryField == null)
+                    return false;
+                var code = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                if (!code.Contains("HaveWorkspaceTrackingSavedFieldsChanged(sourceId, retry.SavedFields)") ||
+                    !code.Contains("observedRetrySettings = settings") ||
+                    !code.Contains("settings = CaptureWorkspaceTrackingSettings(observedSettings)"))
+                    return false;
+
+                shellRoot = new GameObject("P1 changed saved configuration backoff shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 changed saved configuration backoff provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.ReportAdditionalSetting = true;
+                provider.ConfigurationFailuresRemaining = 3;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                var retries = retryField.GetValue(shell) as System.Collections.IDictionary;
+                if (configured == null || restored == null || retries == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+                PlayerPrefs.SetString(settingKey, "original");
+
+                void Scan()
+                {
+                    scan.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+                bool BackedOff()
+                {
+                    if (!retries.Contains(id) || restored.ContainsKey(id))
+                        return false;
+                    var retry = retries[id];
+                    var field = retry.GetType().GetField("RetryAfter",
+                        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                    return field != null &&
+                        (float)field.GetValue(retry) > Time.unscaledTime + 2f;
+                }
+
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 3 || !BackedOff())
+                    return false;
+                var schemaCalls = provider.SchemaCalls;
+                Scan();
+                if (provider.ConfigurationCalls != 3 || provider.SchemaCalls != schemaCalls)
+                    return false;
+
+                // Changed saved field replays immediately (at the next global
+                // scan), without waiting for its old per-source deadline.
+                PlayerPrefs.SetString(settingKey, "updated");
+                Scan();
+                if (provider.ConfigurationCalls != 4 ||
+                    provider.AppliedValue != "updated" || provider.ControlEnabled ||
+                    !restored.ContainsKey(id) || retries.Contains(id))
+                    return false;
+
+                // An added key for a field present in the previously observed
+                // provider schema also invalidates the old retry.
+                provider.ExternalReadbackOverride = "external-drift-add";
+                provider.ConfigurationFailuresRemaining = 3;
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 7 || !BackedOff())
+                    return false;
+                schemaCalls = provider.SchemaCalls;
+                Scan();
+                if (provider.ConfigurationCalls != 7 || provider.SchemaCalls != schemaCalls)
+                    return false;
+                PlayerPrefs.SetString(additionalKey, "new-extra-value");
+                Scan();
+                if (provider.ConfigurationCalls != 8 ||
+                    provider.AppliedValue != "updated" ||
+                    !restored.ContainsKey(id) || retries.Contains(id) ||
+                    PlayerPrefs.GetString(additionalKey) != "new-extra-value")
+                    return false;
+
+                // Deleting the same persisted key also cancels backoff.
+                provider.ExternalReadbackOverride = "external-drift-delete";
+                provider.ConfigurationFailuresRemaining = 3;
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 11 || !BackedOff())
+                    return false;
+                PlayerPrefs.DeleteKey(additionalKey);
+                Scan();
+                if (provider.ConfigurationCalls != 12 ||
+                    provider.AppliedValue != "updated" || provider.ControlEnabled ||
+                    !restored.ContainsKey(id) || retries.Contains(id))
+                    return false;
+                schemaCalls = provider.SchemaCalls;
+                Scan();
+                return provider.ConfigurationCalls == 12 &&
+                       provider.SchemaCalls == schemaCalls &&
+                       PlayerPrefs.GetString(settingKey) == "updated";
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
+                PlayerPrefs.DeleteKey(additionalKey);
             }
         }
 
