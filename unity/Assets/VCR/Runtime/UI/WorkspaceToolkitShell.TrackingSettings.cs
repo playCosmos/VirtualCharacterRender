@@ -26,6 +26,10 @@ namespace VCR.Runtime.UI
         // raw persisted strings: providers may normalize input on Apply.
         private readonly Dictionary<string, WorkspaceTrackingRestoredReadback> _workspaceTrackingRestoredReadbacks =
             new Dictionary<string, WorkspaceTrackingRestoredReadback>(StringComparer.OrdinalIgnoreCase);
+        // Avoid unbounded SDK restart attempts from a persistently faulty provider.
+        // A replacement instance or explicit operator command resets its delay.
+        private readonly Dictionary<string, WorkspaceTrackingRestoreRetry> _workspaceTrackingRestoreRetries =
+            new Dictionary<string, WorkspaceTrackingRestoreRetry>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _workspaceNativeTrackingIds =
             new Dictionary<int, string>();
         // A native button must only act on the provider instance it displayed.
@@ -59,6 +63,7 @@ namespace VCR.Runtime.UI
             _workspaceConfiguredTracking.Clear();
             _workspaceRestoredTracking.Clear();
             _workspaceTrackingRestoredReadbacks.Clear();
+            _workspaceTrackingRestoreRetries.Clear();
             _workspaceTrackingEditVersions.Clear();
             _workspaceNativeTrackingEditVersion = 0;
             _workspaceNativeTrackingOpenValues = null;
@@ -89,6 +94,45 @@ namespace VCR.Runtime.UI
                         StringComparison.OrdinalIgnoreCase))
                     return configuredId;
             return runtimeId;
+        }
+
+        private sealed class WorkspaceTrackingRestoreRetry
+        {
+            internal ITrackingRuntimeControl Provider;
+            internal int Failures;
+            internal float RetryAfter;
+        }
+
+        private bool IsWorkspaceTrackingRestoreRetryDue(
+            string sourceId, ITrackingRuntimeControl source)
+        {
+            if (!_workspaceTrackingRestoreRetries.TryGetValue(sourceId, out var retry))
+                return true;
+            if (!ReferenceEquals(retry.Provider, source))
+            {
+                // A reconnected component is not responsible for its predecessor's
+                // failures; never delay recovery of a newly discovered device.
+                _workspaceTrackingRestoreRetries.Remove(sourceId);
+                return true;
+            }
+            return Time.unscaledTime >= retry.RetryAfter;
+        }
+
+        private void RecordWorkspaceTrackingRestoreFailure(
+            string sourceId, ITrackingRuntimeControl source)
+        {
+            if (!_workspaceTrackingRestoreRetries.TryGetValue(sourceId, out var retry) ||
+                !ReferenceEquals(retry.Provider, source))
+            {
+                retry = new WorkspaceTrackingRestoreRetry { Provider = source };
+                _workspaceTrackingRestoreRetries[sourceId] = retry;
+            }
+            retry.Failures = Math.Min(retry.Failures + 1, 8);
+            // First two attempts retain existing 2-second recovery responsiveness.
+            // Subsequently: 4, 8, 16, 32, 60 seconds (capped).
+            var delay = retry.Failures <= 2
+                ? 2f : Mathf.Min(60f, (float)(2 << Math.Min(retry.Failures - 2, 5)));
+            retry.RetryAfter = Time.unscaledTime + delay;
         }
 
         private sealed class WorkspaceTrackingRestoredReadback
@@ -283,11 +327,17 @@ namespace VCR.Runtime.UI
                     _workspaceRestoredTracking.Remove(previousId);
                     _workspaceTrackingRestoredReadbacks.Remove(previousId);
                 }
+            foreach (var previousId in new List<string>(_workspaceTrackingRestoreRetries.Keys))
+                if (!presentIds.Contains(previousId) ||
+                    !_workspaceConfiguredTracking.Contains(previousId))
+                    _workspaceTrackingRestoreRetries.Remove(previousId);
 
             foreach (var source in sources)
             {
                 var id = source.ControlId;
                 if (!_workspaceConfiguredTracking.Contains(id))
+                    continue;
+                if (!IsWorkspaceTrackingRestoreRetryDue(id, source))
                     continue;
                 if (_workspaceRestoredTracking.TryGetValue(id, out var previous) &&
                     ReferenceEquals(previous, source))
@@ -470,7 +520,14 @@ namespace VCR.Runtime.UI
                             _workspaceRestoredTracking.Remove(id);
                     }
                     if (!_workspaceRestoredTracking.ContainsKey(id))
+                    {
                         _workspaceTrackingRestoredReadbacks.Remove(id);
+                        RecordWorkspaceTrackingRestoreFailure(id, source);
+                    }
+                    else
+                    {
+                        _workspaceTrackingRestoreRetries.Remove(id);
+                    }
                     // Also covers partially successful restores followed by
                     // a failure or transient schema-unavailable retry.
                     if (acceptedMutation)
@@ -696,6 +753,7 @@ namespace VCR.Runtime.UI
             InvalidateWorkspaceTrackingEditors(sourceId);
             _workspaceRestoredTracking.Remove(sourceId);
             _workspaceTrackingRestoredReadbacks.Remove(sourceId);
+            _workspaceTrackingRestoreRetries.Remove(sourceId);
             _nextTrackingRestoreScan = 0f;
         }
 
@@ -883,6 +941,7 @@ namespace VCR.Runtime.UI
                                           GetWorkspaceTrackingPersistenceId(control.ControlId) +
                                           "." + pair.Key, pair.Value ?? "");
                 _workspaceRestoredTracking[control.ControlId] = control;
+                _workspaceTrackingRestoreRetries.Remove(control.ControlId);
                 if (!TryRememberWorkspaceTrackingReadback(control, control.ControlId))
                 {
                     _workspaceRestoredTracking.Remove(control.ControlId);
@@ -943,6 +1002,7 @@ namespace VCR.Runtime.UI
                 // opened before the transition on either U1 surface.
                 InvalidateWorkspaceTrackingEditors(id);
                 _workspaceRestoredTracking[id] = control;
+                _workspaceTrackingRestoreRetries.Remove(id);
                 PlayerPrefs.SetInt(
                     TrackingEnabledKey + GetWorkspaceTrackingPersistenceId(id),
                     enabled ? 1 : 0);
@@ -985,6 +1045,7 @@ namespace VCR.Runtime.UI
                         InvalidateWorkspaceTrackingEditors(id);
                         _workspaceRestoredTracking.Remove(id);
                         _workspaceTrackingRestoredReadbacks.Remove(id);
+                        _workspaceTrackingRestoreRetries.Remove(id);
                         _nextTrackingRestoreScan = 0f;
                     }
                 }
@@ -1059,6 +1120,7 @@ namespace VCR.Runtime.UI
                 // the next scan, rather than treating the instance as restored.
                 _workspaceRestoredTracking.Remove(control.ControlId);
                 _workspaceTrackingRestoredReadbacks.Remove(control.ControlId);
+                _workspaceTrackingRestoreRetries.Remove(control.ControlId);
                 _nextTrackingRestoreScan = Time.unscaledTime + 2f;
                 recovered = true;
                 feedback = "Recovery requested. Saved tracking settings will be rechecked.";
@@ -1099,6 +1161,7 @@ namespace VCR.Runtime.UI
                         InvalidateWorkspaceTrackingEditors(control.ControlId);
                         _workspaceRestoredTracking.Remove(control.ControlId);
                         _workspaceTrackingRestoredReadbacks.Remove(control.ControlId);
+                        _workspaceTrackingRestoreRetries.Remove(control.ControlId);
                         _nextTrackingRestoreScan = 0f;
                     }
                 }
@@ -1165,6 +1228,7 @@ namespace VCR.Runtime.UI
                 InvalidateWorkspaceTrackingEditors(id);
                 _workspaceRestoredTracking.Remove(id);
                 _workspaceTrackingRestoredReadbacks.Remove(id);
+                _workspaceTrackingRestoreRetries.Remove(id);
                 // A failed Remove leaves membership intact: saved On/Off
                 // is still authoritative and must be reapplied. A failed
                 // Add is not registered; never auto-enable that provider.
@@ -1287,6 +1351,7 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Remove(id);
                     _workspaceRestoredTracking.Remove(id);
                     _workspaceTrackingRestoredReadbacks.Remove(id);
+                    _workspaceTrackingRestoreRetries.Remove(id);
                     PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 else
@@ -1304,6 +1369,7 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Add(id);
                     _workspaceRestoredTracking[id] = control;
                     _workspaceTrackingRestoredReadbacks.Remove(id);
+                    _workspaceTrackingRestoreRetries.Remove(id);
                     PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 InvalidateWorkspaceTrackingEditors(id);
@@ -1550,6 +1616,7 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Remove(sourceId);
                     _workspaceRestoredTracking.Remove(sourceId);
                     _workspaceTrackingRestoredReadbacks.Remove(sourceId);
+                    _workspaceTrackingRestoreRetries.Remove(sourceId);
                     _workspaceTrackingEditor?.Clear();
                 }
                 else
@@ -1557,6 +1624,7 @@ namespace VCR.Runtime.UI
                     _workspaceConfiguredTracking.Add(sourceId);
                     _workspaceRestoredTracking[sourceId] = source;
                     _workspaceTrackingRestoredReadbacks.Remove(sourceId);
+                    _workspaceTrackingRestoreRetries.Remove(sourceId);
                 }
                 PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 InvalidateWorkspaceTrackingEditors(sourceId);
@@ -1730,6 +1798,7 @@ namespace VCR.Runtime.UI
                                 GetWorkspaceTrackingPersistenceId(sourceId) +
                                 "." + pair.Key, pair.Value);
                         _workspaceRestoredTracking[sourceId] = live;
+                        _workspaceTrackingRestoreRetries.Remove(sourceId);
                         if (!TryRememberWorkspaceTrackingReadback(live, sourceId))
                         {
                             _workspaceRestoredTracking.Remove(sourceId);
