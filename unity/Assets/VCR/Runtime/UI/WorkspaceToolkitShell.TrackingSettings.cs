@@ -101,6 +101,7 @@ namespace VCR.Runtime.UI
             internal ITrackingRuntimeControl Provider;
             internal int Failures;
             internal float RetryAfter;
+            internal bool SavedEnabled;
         }
 
         private bool IsWorkspaceTrackingRestoreRetryDue(
@@ -108,10 +109,14 @@ namespace VCR.Runtime.UI
         {
             if (!_workspaceTrackingRestoreRetries.TryGetValue(sourceId, out var retry))
                 return true;
-            if (!ReferenceEquals(retry.Provider, source))
+            // An external preference editor can change PlayerPrefs while a
+            // failed device is backed off. A new user intent must not inherit
+            // the previous saved On/Off state’s retry delay.
+            var savedEnabled = PlayerPrefs.GetInt(TrackingEnabledKey +
+                GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0;
+            if (!ReferenceEquals(retry.Provider, source) ||
+                retry.SavedEnabled != savedEnabled)
             {
-                // A reconnected component is not responsible for its predecessor's
-                // failures; never delay recovery of a newly discovered device.
                 _workspaceTrackingRestoreRetries.Remove(sourceId);
                 return true;
             }
@@ -159,6 +164,8 @@ namespace VCR.Runtime.UI
                 _workspaceTrackingRestoreRetries[sourceId] = retry;
             }
             retry.Failures = Math.Min(retry.Failures + 1, 8);
+            retry.SavedEnabled = PlayerPrefs.GetInt(TrackingEnabledKey +
+                GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0;
             // The global restore scan already throttles the first two failures
             // to two seconds. Preserve existing fast retry behavior, including
             // source-free tests that explicitly advance that global scan.
