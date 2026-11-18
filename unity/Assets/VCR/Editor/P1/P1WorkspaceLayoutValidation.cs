@@ -226,6 +226,8 @@ namespace VCR.Editor.P1
                     "cached tracking sources must reconcile normalized config-only drift, saved-value updates and failed retries");
                 Check(TrackingRepeatedRestoreFailuresBackoffPerProvider(),
                     "repeated tracking restore faults must back off without delaying a new provider or operator recovery");
+                Check(TrackingSavedEnabledPreferenceChangeCancelsRestoreBackoff(),
+                    "external saved On/Off changes must not inherit stale tracking retry delays");
                 Check(TrackingSavedOffSafetyBypassesConfigurationBackoff(),
                     "saved-Off source must be stopped after failed Apply and while config retries are deferred");
                 Check(TrackingBackgroundRestoreInvalidatesStaleEditors(),
@@ -3606,6 +3608,109 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool TrackingSavedEnabledPreferenceChangeCancelsRestoreBackoff()
+        {
+            var id = "vcr-parity-retry-intent-" + Guid.NewGuid().ToString("N");
+            var enabledKey = "VCR.TrackingInputs.Enabled.v1." + id;
+            var settingKey = "VCR.TrackingInputs.Setting.v1." + id + ".test-value";
+            GameObject shellRoot = null;
+            GameObject providerRoot = null;
+            try
+            {
+                var type = typeof(WorkspaceToolkitShell);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
+                var scan = type.GetField("_nextTrackingRestoreScan", flags);
+                var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
+                var restoredField = type.GetField("_workspaceRestoredTracking", flags);
+                var retryField = type.GetField("_workspaceTrackingRestoreRetries", flags);
+                if (restore == null || scan == null || configuredField == null ||
+                    restoredField == null || retryField == null)
+                    return false;
+
+                var source = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
+                if (!source.Contains("retry.SavedEnabled != savedEnabled") ||
+                    !source.Contains("retry.SavedEnabled = PlayerPrefs.GetInt("))
+                    return false;
+
+                shellRoot = new GameObject("P1 tracking changed saved intent shell");
+                shellRoot.SetActive(false);
+                var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
+                providerRoot = new GameObject("P1 tracking changed saved intent provider");
+                var provider = providerRoot.AddComponent<P1TrackingReconnectProbe>();
+                provider.Id = id;
+                provider.ConfigurationFailuresRemaining = 3;
+                var configured = configuredField.GetValue(shell) as HashSet<string>;
+                var restored = restoredField.GetValue(shell) as
+                    Dictionary<string, ITrackingRuntimeControl>;
+                var retries = retryField.GetValue(shell) as System.Collections.IDictionary;
+                if (configured == null || restored == null || retries == null)
+                    return false;
+                configured.Add(id);
+                PlayerPrefs.SetInt(enabledKey, 0);
+                PlayerPrefs.SetString(settingKey, "saved");
+                void Scan()
+                {
+                    scan.SetValue(shell, 0f);
+                    restore.Invoke(shell, null);
+                }
+
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 3 || !retries.Contains(id) ||
+                    restored.ContainsKey(id) || provider.ControlEnabled)
+                    return false;
+                var oldDelay = retries[id].GetType().GetField("RetryAfter",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (oldDelay == null ||
+                    (float)oldDelay.GetValue(retries[id]) <= Time.unscaledTime + 2f)
+                    return false;
+                // A further scan with identical persisted intent cannot retry.
+                Scan();
+                if (provider.ConfigurationCalls != 3)
+                    return false;
+
+                // An external settings surface changes the durable preference.
+                // A new On intent bypasses the *old* failure delay immediately.
+                PlayerPrefs.SetInt(enabledKey, 1);
+                Scan();
+                if (provider.ConfigurationCalls != 4 ||
+                    provider.AppliedValue != "saved" ||
+                    !provider.ControlEnabled ||
+                    !restored.ContainsKey(id) || retries.Contains(id))
+                    return false;
+                Scan();
+                if (provider.ConfigurationCalls != 4)
+                    return false;
+
+                // A newly failing On source must also release its delay when
+                // an external settings surface changes the saved intent to Off.
+                provider.ExternalReadbackOverride = "drift";
+                provider.ConfigurationFailuresRemaining = 3;
+                Scan();
+                Scan();
+                Scan();
+                if (provider.ConfigurationCalls != 7 || !retries.Contains(id) ||
+                    !provider.ControlEnabled)
+                    return false;
+                PlayerPrefs.SetInt(enabledKey, 0);
+                Scan();
+                return !provider.ControlEnabled &&
+                       provider.ConfigurationCalls == 8 &&
+                       provider.AppliedValue == "saved" &&
+                       !retries.Contains(id) && restored.ContainsKey(id);
+            }
+            finally
+            {
+                if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
+                if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
+                PlayerPrefs.DeleteKey(enabledKey);
+                PlayerPrefs.DeleteKey(settingKey);
             }
         }
 
