@@ -3115,13 +3115,14 @@ namespace VCR.Editor.P1
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var apply = type.GetMethod("TryApplyWorkspaceTrackingSettings", flags);
                 var version = type.GetMethod("GetWorkspaceTrackingEditVersion", flags);
-                var invalidate = type.GetMethod("InvalidateWorkspaceTrackingEditors", flags);
+                var reconcile = type.GetMethod(
+                    "ReconcileWorkspaceTrackingFailedApplyMutation", flags);
                 var canSave = type.GetMethod("IsWorkspaceTrackingEditVersionCurrent", flags);
                 var restore = type.GetMethod("RestoreWorkspaceTrackingPreferences", flags);
                 var scan = type.GetField("_nextTrackingRestoreScan", flags);
                 var configuredField = type.GetField("_workspaceConfiguredTracking", flags);
                 var restoredField = type.GetField("_workspaceRestoredTracking", flags);
-                if (apply == null || version == null || invalidate == null ||
+                if (apply == null || version == null || reconcile == null ||
                     canSave == null || restore == null || scan == null ||
                     configuredField == null || restoredField == null ||
                     apply.GetParameters().Length != 6)
@@ -3154,11 +3155,13 @@ namespace VCR.Editor.P1
                     !shared.Contains("control.ControlHealthState != previousHealth") ||
                     !native.Contains("TryApplyWorkspaceTrackingSettings(control, configurable, values,") ||
                     !native.Contains("if (changedOnFailure)") ||
-                    !native.Contains("InvalidateWorkspaceTrackingEditors(control.ControlId)") ||
+                    !native.Contains("ReconcileWorkspaceTrackingFailedApplyMutation(control.ControlId)") ||
                     !toolkit.Contains("TryApplyWorkspaceTrackingSettings(") ||
                     !toolkit.Contains("if (changedOnFailure)") ||
-                    !toolkit.Contains("InvalidateWorkspaceTrackingEditors(sourceId)") ||
-                    !background.Contains("acceptedMutation |= changedOnFailure"))
+                    !toolkit.Contains("ReconcileWorkspaceTrackingFailedApplyMutation(sourceId)") ||
+                    !background.Contains("acceptedMutation |= changedOnFailure") ||
+                    !shared.Contains("_workspaceRestoredTracking.Remove(sourceId)") ||
+                    !shared.Contains("_nextTrackingRestoreScan = 0f"))
                     return false;
 
                 shellRoot = new GameObject("P1 failed apply revision shell");
@@ -3172,6 +3175,10 @@ namespace VCR.Editor.P1
                     Dictionary<string, ITrackingRuntimeControl>;
                 if (configured == null || restored == null) return false;
                 configured.Add(id);
+                restored[id] = provider;
+                PlayerPrefs.SetInt(enabledKey, 0);
+                PlayerPrefs.SetString(settingKey, "default-value");
+                scan.SetValue(shell, 123f);
                 var before = new Dictionary<string, string> {
                     { "test-value", "default-value" }
                 };
@@ -3193,6 +3200,8 @@ namespace VCR.Editor.P1
                 provider.FailConfigurationOnce = true;
                 if (Apply(out var unchangedOnFailure) || unchangedOnFailure ||
                     Version() != initial || !DraftValid(initial) ||
+                    !restored.ContainsKey(id) ||
+                    (float)scan.GetValue(shell) != 123f ||
                     provider.ConfigurationCalls != 1)
                     return false;
 
@@ -3202,10 +3211,22 @@ namespace VCR.Editor.P1
                     provider.ConfigurationCalls != 2)
                     return false;
 
-                // The shared helper reports observed mutation; manual Native
-                // and Toolkit callers invalidate the edit revision on failure.
-                invalidate.Invoke(shell, new object[] { id });
-                if (Version() == initial || DraftValid(initial)) return false;
+                // Both Native and Toolkit apply paths now schedule a saved
+                // preference replay after a failed-but-mutating Apply.
+                reconcile.Invoke(shell, new object[] { id });
+                if (Version() == initial || DraftValid(initial) ||
+                    restored.ContainsKey(id) ||
+                    (float)scan.GetValue(shell) != 0f ||
+                    PlayerPrefs.GetString(settingKey) != "default-value")
+                    return false;
+                scan.SetValue(shell, 0f);
+                restore.Invoke(shell, null);
+                if (provider.ConfigurationCalls != 3 ||
+                    provider.AppliedValue != "default-value" ||
+                    !restored.ContainsKey(id) ||
+                    provider.ControlEnabled ||
+                    PlayerPrefs.GetString(settingKey) != "default-value")
+                    return false;
 
                 // Startup restore also detects a provider that wrote live
                 // settings and then failed restarting. Do not cache the
