@@ -22,6 +22,10 @@ namespace VCR.Runtime.UI
         // component. Remember the exact provider instance, not only its ID.
         private readonly Dictionary<string, ITrackingRuntimeControl> _workspaceRestoredTracking =
             new Dictionary<string, ITrackingRuntimeControl>(StringComparer.OrdinalIgnoreCase);
+        // A successful restore is defined by actual provider readback, not by
+        // raw persisted strings: providers may normalize input on Apply.
+        private readonly Dictionary<string, WorkspaceTrackingRestoredReadback> _workspaceTrackingRestoredReadbacks =
+            new Dictionary<string, WorkspaceTrackingRestoredReadback>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _workspaceNativeTrackingIds =
             new Dictionary<int, string>();
         // A native button must only act on the provider instance it displayed.
@@ -54,6 +58,7 @@ namespace VCR.Runtime.UI
         {
             _workspaceConfiguredTracking.Clear();
             _workspaceRestoredTracking.Clear();
+            _workspaceTrackingRestoredReadbacks.Clear();
             _workspaceTrackingEditVersions.Clear();
             _workspaceNativeTrackingEditVersion = 0;
             _workspaceNativeTrackingOpenValues = null;
@@ -84,6 +89,98 @@ namespace VCR.Runtime.UI
                         StringComparison.OrdinalIgnoreCase))
                     return configuredId;
             return runtimeId;
+        }
+
+        private sealed class WorkspaceTrackingRestoredReadback
+        {
+            internal readonly Dictionary<string, string> Saved;
+            internal readonly Dictionary<string, string> Live;
+
+            internal WorkspaceTrackingRestoredReadback(
+                Dictionary<string, string> saved, Dictionary<string, string> live)
+            {
+                Saved = saved;
+                Live = live;
+            }
+        }
+
+        private WorkspaceTrackingRestoredReadback CaptureWorkspaceTrackingRestoredReadback(
+            ITrackingRuntimeControl source, string sourceId)
+        {
+            var saved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var live = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!(source is ITrackingRuntimeConfigurable configurable))
+                return new WorkspaceTrackingRestoredReadback(saved, live);
+            // Capture only fields with an authoritative persisted value.
+            // Unpersisted device-owned settings must not be overwritten.
+            var current = CaptureWorkspaceTrackingSettings(
+                configurable.GetConfigurationSettings());
+            if (current == null)
+                return null;
+            var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
+            foreach (var pair in current)
+            {
+                var key = TrackingSettingKey + persistenceId + "." + pair.Key;
+                if (!PlayerPrefs.HasKey(key))
+                    continue;
+                saved[pair.Key] = PlayerPrefs.GetString(key);
+                live[pair.Key] = pair.Value;
+            }
+            return new WorkspaceTrackingRestoredReadback(saved, live);
+        }
+
+        private static bool WorkspaceTrackingValuesMatch(
+            IReadOnlyDictionary<string, string> left,
+            IReadOnlyDictionary<string, string> right)
+        {
+            if (left == null || right == null || left.Count != right.Count)
+                return false;
+            foreach (var pair in left)
+                if (!right.TryGetValue(pair.Key, out var value) ||
+                    !string.Equals(pair.Value, value, StringComparison.Ordinal))
+                    return false;
+            return true;
+        }
+
+        private bool AreWorkspaceTrackingCachedSettingsCurrent(
+            ITrackingRuntimeControl source, string sourceId)
+        {
+            // A newly added source can be cached before a persisted-configuration
+            // restore exists; do not invent an authoritative readback for it.
+            if (!_workspaceTrackingRestoredReadbacks.TryGetValue(sourceId, out var baseline))
+                return true;
+            try
+            {
+                var current = CaptureWorkspaceTrackingRestoredReadback(source, sourceId);
+                return current != null &&
+                    WorkspaceTrackingValuesMatch(baseline.Saved, current.Saved) &&
+                    WorkspaceTrackingValuesMatch(baseline.Live, current.Live);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("U1 tracking cached-settings readback failed for " +
+                                 sourceId + ": " + ex.Message, this);
+                return false;
+            }
+        }
+
+        private bool TryRememberWorkspaceTrackingReadback(
+            ITrackingRuntimeControl source, string sourceId)
+        {
+            try
+            {
+                var readback = CaptureWorkspaceTrackingRestoredReadback(source, sourceId);
+                if (readback == null)
+                    return false;
+                _workspaceTrackingRestoredReadbacks[sourceId] = readback;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("U1 tracking post-restore readback failed for " +
+                                 sourceId + ": " + ex.Message, this);
+                return false;
+            }
         }
 
         private int GetWorkspaceTrackingEditVersion(string sourceId)
@@ -173,7 +270,10 @@ namespace VCR.Runtime.UI
             foreach (var previousId in new List<string>(_workspaceRestoredTracking.Keys))
                 if (!presentIds.Contains(previousId) ||
                     !_workspaceConfiguredTracking.Contains(previousId))
+                {
                     _workspaceRestoredTracking.Remove(previousId);
+                    _workspaceTrackingRestoredReadbacks.Remove(previousId);
+                }
 
             foreach (var source in sources)
             {
@@ -200,8 +300,14 @@ namespace VCR.Runtime.UI
                                          id + ": " + ex.Message, this);
                     }
                     if (stateMatches)
-                        continue;
+                    {
+                        // Also compare real readback and the persisted input
+                        // revision, so config-only external drift is restored.
+                        if (AreWorkspaceTrackingCachedSettingsCurrent(source, id))
+                            continue;
+                    }
                     _workspaceRestoredTracking.Remove(id);
+                    _workspaceTrackingRestoredReadbacks.Remove(id);
                     // An external session change also invalidates old UI
                     // actions, even if the following restore attempt fails
                     // before the provider accepts a new command.
@@ -211,6 +317,7 @@ namespace VCR.Runtime.UI
                 // settings and enabled state again. Mark before applying so a
                 // synchronous callback cannot trigger duplicate restore work.
                 _workspaceRestoredTracking[id] = source;
+                _workspaceTrackingRestoredReadbacks.Remove(id);
                 // A background restore can update live device state while a
                 // Native/Toolkit settings draft is open on the same instance.
                 // Invalidate only if the provider actually accepts a change.
@@ -343,6 +450,18 @@ namespace VCR.Runtime.UI
                                 id + ": " + ex.Message, this);
                         }
                     }
+                    // A cached provider is settled only after post-apply
+                    // readback. Store both raw saved values and normalized live
+                    // values so a stable normalized setting never causes a
+                    // two-second Apply/restart loop.
+                    if (_workspaceRestoredTracking.TryGetValue(id, out var settled) &&
+                        ReferenceEquals(settled, source))
+                    {
+                        if (!TryRememberWorkspaceTrackingReadback(source, id))
+                            _workspaceRestoredTracking.Remove(id);
+                    }
+                    if (!_workspaceRestoredTracking.ContainsKey(id))
+                        _workspaceTrackingRestoredReadbacks.Remove(id);
                     // Also covers partially successful restores followed by
                     // a failure or transient schema-unavailable retry.
                     if (acceptedMutation)
@@ -567,6 +686,7 @@ namespace VCR.Runtime.UI
             // preventing a later saved-settings replay.
             InvalidateWorkspaceTrackingEditors(sourceId);
             _workspaceRestoredTracking.Remove(sourceId);
+            _workspaceTrackingRestoredReadbacks.Remove(sourceId);
             _nextTrackingRestoreScan = 0f;
         }
 
@@ -754,6 +874,12 @@ namespace VCR.Runtime.UI
                                           GetWorkspaceTrackingPersistenceId(control.ControlId) +
                                           "." + pair.Key, pair.Value ?? "");
                 _workspaceRestoredTracking[control.ControlId] = control;
+                if (!TryRememberWorkspaceTrackingReadback(control, control.ControlId))
+                {
+                    _workspaceRestoredTracking.Remove(control.ControlId);
+                    _workspaceTrackingRestoredReadbacks.Remove(control.ControlId);
+                    _nextTrackingRestoreScan = 0f;
+                }
                 InvalidateWorkspaceTrackingEditors(control.ControlId);
                 PersistConfiguredWorkspaceTracking();
                 RebuildWorkspaceNativeTrackingSources();
@@ -849,6 +975,7 @@ namespace VCR.Runtime.UI
                         // than silently caching it.
                         InvalidateWorkspaceTrackingEditors(id);
                         _workspaceRestoredTracking.Remove(id);
+                        _workspaceTrackingRestoredReadbacks.Remove(id);
                         _nextTrackingRestoreScan = 0f;
                     }
                 }
@@ -922,6 +1049,7 @@ namespace VCR.Runtime.UI
                 // replacing the provider component. Replay saved settings on
                 // the next scan, rather than treating the instance as restored.
                 _workspaceRestoredTracking.Remove(control.ControlId);
+                _workspaceTrackingRestoredReadbacks.Remove(control.ControlId);
                 _nextTrackingRestoreScan = Time.unscaledTime + 2f;
                 recovered = true;
                 feedback = "Recovery requested. Saved tracking settings will be rechecked.";
@@ -961,6 +1089,7 @@ namespace VCR.Runtime.UI
                     {
                         InvalidateWorkspaceTrackingEditors(control.ControlId);
                         _workspaceRestoredTracking.Remove(control.ControlId);
+                        _workspaceTrackingRestoredReadbacks.Remove(control.ControlId);
                         _nextTrackingRestoreScan = 0f;
                     }
                 }
@@ -1026,6 +1155,7 @@ namespace VCR.Runtime.UI
             {
                 InvalidateWorkspaceTrackingEditors(id);
                 _workspaceRestoredTracking.Remove(id);
+                _workspaceTrackingRestoredReadbacks.Remove(id);
                 // A failed Remove leaves membership intact: saved On/Off
                 // is still authoritative and must be reapplied. A failed
                 // Add is not registered; never auto-enable that provider.
@@ -1147,6 +1277,7 @@ namespace VCR.Runtime.UI
                 {
                     _workspaceConfiguredTracking.Remove(id);
                     _workspaceRestoredTracking.Remove(id);
+                    _workspaceTrackingRestoredReadbacks.Remove(id);
                     PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 else
@@ -1163,6 +1294,7 @@ namespace VCR.Runtime.UI
                     }
                     _workspaceConfiguredTracking.Add(id);
                     _workspaceRestoredTracking[id] = control;
+                    _workspaceTrackingRestoredReadbacks.Remove(id);
                     PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 }
                 InvalidateWorkspaceTrackingEditors(id);
@@ -1408,12 +1540,14 @@ namespace VCR.Runtime.UI
                 {
                     _workspaceConfiguredTracking.Remove(sourceId);
                     _workspaceRestoredTracking.Remove(sourceId);
+                    _workspaceTrackingRestoredReadbacks.Remove(sourceId);
                     _workspaceTrackingEditor?.Clear();
                 }
                 else
                 {
                     _workspaceConfiguredTracking.Add(sourceId);
                     _workspaceRestoredTracking[sourceId] = source;
+                    _workspaceTrackingRestoredReadbacks.Remove(sourceId);
                 }
                 PlayerPrefs.SetInt(TrackingEnabledKey + persistenceId, 0);
                 InvalidateWorkspaceTrackingEditors(sourceId);
@@ -1587,6 +1721,12 @@ namespace VCR.Runtime.UI
                                 GetWorkspaceTrackingPersistenceId(sourceId) +
                                 "." + pair.Key, pair.Value);
                         _workspaceRestoredTracking[sourceId] = live;
+                        if (!TryRememberWorkspaceTrackingReadback(live, sourceId))
+                        {
+                            _workspaceRestoredTracking.Remove(sourceId);
+                            _workspaceTrackingRestoredReadbacks.Remove(sourceId);
+                            _nextTrackingRestoreScan = 0f;
+                        }
                         InvalidateWorkspaceTrackingEditors(sourceId);
                         PersistConfiguredWorkspaceTracking();
                         _workspaceTrackingEditor.Clear();
