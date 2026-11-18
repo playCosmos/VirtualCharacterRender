@@ -559,6 +559,17 @@ namespace VCR.Runtime.UI
             return applied;
         }
 
+        private void ReconcileWorkspaceTrackingFailedApplyMutation(string sourceId)
+        {
+            // A failed Apply may have changed the live device's settings
+            // while the saved preferences remain unchanged. Invalidating
+            // the draft alone leaves this same provider marked restored,
+            // preventing a later saved-settings replay.
+            InvalidateWorkspaceTrackingEditors(sourceId);
+            _workspaceRestoredTracking.Remove(sourceId);
+            _nextTrackingRestoreScan = 0f;
+        }
+
         private void ShowWorkspaceNativeTrackingDetails(string controlId)
         {
             // This settings button may outlive a Remove from the Toolkit
@@ -728,7 +739,7 @@ namespace VCR.Runtime.UI
                 {
                     if (changedOnFailure)
                     {
-                        InvalidateWorkspaceTrackingEditors(control.ControlId);
+                        ReconcileWorkspaceTrackingFailedApplyMutation(control.ControlId);
                         RebuildWorkspaceNativeTrackingSources();
                     }
                     _workspaceNativeSettings.SetText(92,
@@ -1559,7 +1570,7 @@ namespace VCR.Runtime.UI
                         {
                             if (changedOnFailure)
                             {
-                                InvalidateWorkspaceTrackingEditors(sourceId);
+                                ReconcileWorkspaceTrackingFailedApplyMutation(sourceId);
                                 _workspaceTrackingEditor.Clear();
                                 TrackingPanelActionFinished(
                                     "Apply failed: " + error +
