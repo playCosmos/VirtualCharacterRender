@@ -145,15 +145,24 @@ namespace VCR.Runtime.UI
         private bool AreWorkspaceTrackingCachedSettingsCurrent(
             ITrackingRuntimeControl source, string sourceId)
         {
-            // A newly added source can be cached before a persisted-configuration
-            // restore exists; do not invent an authoritative readback for it.
-            if (!_workspaceTrackingRestoredReadbacks.TryGetValue(sourceId, out var baseline))
-                return true;
             try
             {
                 var current = CaptureWorkspaceTrackingRestoredReadback(source, sourceId);
-                return current != null &&
-                    WorkspaceTrackingValuesMatch(baseline.Saved, current.Saved) &&
+                if (current == null)
+                    return false;
+                if (!_workspaceTrackingRestoredReadbacks.TryGetValue(sourceId, out var baseline))
+                {
+                    // Add/Toggle may cache a provider before its first successful
+                    // saved-configuration restoration. When persisted fields exist,
+                    // a missing baseline is NOT proof that their values were applied.
+                    // With no persisted fields, accepting the live readback is safe:
+                    // there is no authoritative configuration to replay.
+                    if (current.Saved.Count != 0)
+                        return false;
+                    _workspaceTrackingRestoredReadbacks[sourceId] = current;
+                    return true;
+                }
+                return WorkspaceTrackingValuesMatch(baseline.Saved, current.Saved) &&
                     WorkspaceTrackingValuesMatch(baseline.Live, current.Live);
             }
             catch (Exception ex)
