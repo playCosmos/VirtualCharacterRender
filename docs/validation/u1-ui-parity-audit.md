@@ -404,6 +404,15 @@ Even after source-specific retry backoff, a separate settings surface or externa
 - **Scope and trade-off:** this bypass covers saved On/Off only. Out-of-band changes to individual saved configuration fields without an On/Off change can still wait for the existing configuration retry deadline. Reading every provider schema while backed off would recreate the SDK traffic this feature was intended to limit. A future versioned preference revision could support inexpensive configuration-only invalidation.
 - **Acceptance:** new changes require exact-HEAD Unity/Windows/macOS and Repository CI; physical camera state and UI interaction remain unverified. PR #44 stays Draft/unmerged, old uGUI paths remain available.
 
+## Persisted configuration changes bypass known-schema Tracking restore backoff
+
+A failed provider restore can stay in a 4–60-second retry delay even when another settings surface edits only an individual persisted configuration field, with saved On/Off unchanged. Blindly polling live device configuration every two seconds would defeat the SDK backoff policy.
+
+- `5f55a72` captures the **already observed** provider schema on each failed restore attempt. The retry record stores the `PlayerPrefs` value (or key-absent sentinel) for each known editable setting key, alongside saved On/Off and provider identity. While delayed, the existing global two-second scan compares these persisted values **without fetching a new provider schema, invoking Apply, or restarting the SDK**. Any changed, newly created, or deleted saved field discards the old backoff and invokes the ordinary saved-value reconciliation in the same scan. A new failed restore obtains its own new deadline and snapshot.
+- `82ffcc1` adds a real Unity P1 shell regression for stable delayed scans with zero extra `GetConfigurationSettings` calls, changed saved field, setting key added while absent from `PlayerPrefs`, and key deletion. The fixture verifies that each change bypasses the prior delay, uses the existing restoration logic, and remains saved-Off.
+- **Explicit limit:** detection covers fields whose keys were known from a **non-null, accepted-size provider schema during the failed attempt**. If the SDK has never exposed a usable schema (initialization failure, null schema, over-limit schema), U1 cannot enumerate its unregistered future keys from `PlayerPrefs` and cannot guarantee prompt config-only invalidation; saved On/Off changes and source replacement still bypass the retry. A dynamic field newly introduced by an external SDK but absent from the last observed schema is not detected until the next actual restore attempt.
+- **Verification pending:** new commits require exact-HEAD Unity P0–P13, Windows Player/GUI, Repository checks and relevant macOS smoke. Existing hardware/UI acceptance gates remain outstanding; do not merge PR #44 or remove legacy uGUI.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
