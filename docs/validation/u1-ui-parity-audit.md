@@ -395,6 +395,15 @@ A device can start capture while applying settings and still return `false`. Del
 - **Trade-off:** repeated safety Stop attempts can still call an unhealthy SDK every two seconds, intentionally overriding the slower configuration retry schedule. Neither a successful `ControlEnabled=false` readback nor Unity automation proves a real camera has physically stopped. Device-level privacy and lifecycle tests remain mandatory.
 - **CI not yet accepted for these new commits.** Require exact-HEAD Unity P0–P13, native Windows startup/GUI, macOS and repository validation before marking green. Keep PR #44 Draft/unmerged and legacy uGUI.
 
+## Changed persisted Tracking On/Off must bypass an old restore backoff
+
+Even after source-specific retry backoff, a separate settings surface or external integration can update the saved `PlayerPrefs` enabled preference without invoking the U1 Toggle handler. Previously the failed provider retained its old retry deadline (up to 60 seconds) even though its authoritative saved On/Off intent had changed. Safety Stop already bypassed the delay for Off, but ordinary On recovery could be unnecessarily postponed.
+
+- `1a97078`: store the canonical saved enabled preference in each provider-instance failure record; compare it on each ordinary restore scan without calling provider SDK configuration/readback methods. A changed saved On/Off value clears the old retry delay before the normal saved-setting restoration path. The existing two-second global scan remains in effect; this is **not an immediate callback or background timer**. Provider replacement and explicit operator recovery continue to bypass old failures.
+- `dc3d6e9`: real-shell P1 test verifies saved Off→On is applied despite an active four-second backoff, and saved On→Off cancels the previous delay, stops capture and restores configuration. It also checks that an unchanged saved intent does not defeat backoff.
+- **Scope and trade-off:** this bypass covers saved On/Off only. Out-of-band changes to individual saved configuration fields without an On/Off change can still wait for the existing configuration retry deadline. Reading every provider schema while backed off would recreate the SDK traffic this feature was intended to limit. A future versioned preference revision could support inexpensive configuration-only invalidation.
+- **Acceptance:** new changes require exact-HEAD Unity/Windows/macOS and Repository CI; physical camera state and UI interaction remain unverified. PR #44 stays Draft/unmerged, old uGUI paths remain available.
+
 ## Priority next work
 
 - P0: exact-HEAD Unity Editor CI for confirmation lifecycle; investigate failures rather than weakening checks.
