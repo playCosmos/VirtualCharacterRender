@@ -102,6 +102,27 @@ namespace VCR.Runtime.UI
             internal int Failures;
             internal float RetryAfter;
             internal bool SavedEnabled;
+            // Captured only from a schema that the failed restore already read.
+            // Null means schema unavailable; null entry means no persisted key.
+            internal Dictionary<string, string> SavedFields;
+        }
+
+        private bool HaveWorkspaceTrackingSavedFieldsChanged(
+            string sourceId, IReadOnlyDictionary<string, string> fields)
+        {
+            if (fields == null)
+                return false;
+            var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
+            foreach (var pair in fields)
+            {
+                var key = TrackingSettingKey + persistenceId + "." + pair.Key;
+                var present = PlayerPrefs.HasKey(key);
+                if (present != (pair.Value != null) ||
+                    (present && !string.Equals(PlayerPrefs.GetString(key),
+                        pair.Value, StringComparison.Ordinal)))
+                    return true;
+            }
+            return false;
         }
 
         private bool IsWorkspaceTrackingRestoreRetryDue(
@@ -115,7 +136,8 @@ namespace VCR.Runtime.UI
             var savedEnabled = PlayerPrefs.GetInt(TrackingEnabledKey +
                 GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0;
             if (!ReferenceEquals(retry.Provider, source) ||
-                retry.SavedEnabled != savedEnabled)
+                retry.SavedEnabled != savedEnabled ||
+                HaveWorkspaceTrackingSavedFieldsChanged(sourceId, retry.SavedFields))
             {
                 _workspaceTrackingRestoreRetries.Remove(sourceId);
                 return true;
@@ -155,7 +177,8 @@ namespace VCR.Runtime.UI
         }
 
         private void RecordWorkspaceTrackingRestoreFailure(
-            string sourceId, ITrackingRuntimeControl source)
+            string sourceId, ITrackingRuntimeControl source,
+            IReadOnlyList<TrackingRuntimeSetting> observedSettings)
         {
             if (!_workspaceTrackingRestoreRetries.TryGetValue(sourceId, out var retry) ||
                 !ReferenceEquals(retry.Provider, source))
@@ -166,6 +189,25 @@ namespace VCR.Runtime.UI
             retry.Failures = Math.Min(retry.Failures + 1, 8);
             retry.SavedEnabled = PlayerPrefs.GetInt(TrackingEnabledKey +
                 GetWorkspaceTrackingPersistenceId(sourceId), 0) != 0;
+            // Do not call GetConfigurationSettings() from the backoff path.
+            // Snapshot all known field keys, including keys currently absent
+            // from PlayerPrefs, to detect additions and deletions as well.
+            // If the provider has no schema yet, preserve an earlier snapshot
+            // for this same instance, if one exists.
+            var settings = CaptureWorkspaceTrackingSettings(observedSettings);
+            if (settings != null)
+            {
+                var fields = new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+                var persistenceId = GetWorkspaceTrackingPersistenceId(sourceId);
+                foreach (var field in settings)
+                {
+                    var key = TrackingSettingKey + persistenceId + "." + field.Key;
+                    fields[field.Key] = PlayerPrefs.HasKey(key)
+                        ? PlayerPrefs.GetString(key) : null;
+                }
+                retry.SavedFields = fields;
+            }
             // The global restore scan already throttles the first two failures
             // to two seconds. Preserve existing fast retry behavior, including
             // source-free tests that explicitly advance that global scan.
@@ -426,6 +468,7 @@ namespace VCR.Runtime.UI
                 // Native/Toolkit settings draft is open on the same instance.
                 // Invalidate only if the provider actually accepts a change.
                 var acceptedMutation = false;
+                IReadOnlyList<TrackingRuntimeSetting> observedRetrySettings = null;
                 var savedOffStopFailedThisAttempt = false;
                 var beforeRestoreEnabled = false;
                 var beforeRestoreHealth = default(TrackingSourceHealthState);
@@ -467,6 +510,7 @@ namespace VCR.Runtime.UI
                     if (source is ITrackingRuntimeConfigurable configurable)
                     {
                         var settings = configurable.GetConfigurationSettings();
+                        observedRetrySettings = settings;
                         // A configurable provider may return no schema while
                         // initializing. Treat null as not ready rather than
                         // permanently skipping the saved configuration.
@@ -577,7 +621,8 @@ namespace VCR.Runtime.UI
                     if (!_workspaceRestoredTracking.ContainsKey(id))
                     {
                         _workspaceTrackingRestoredReadbacks.Remove(id);
-                        RecordWorkspaceTrackingRestoreFailure(id, source);
+                        RecordWorkspaceTrackingRestoreFailure(
+                            id, source, observedRetrySettings);
                     }
                     else
                     {
