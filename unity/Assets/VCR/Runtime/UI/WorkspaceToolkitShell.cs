@@ -2402,6 +2402,7 @@ namespace VCR.Runtime.UI
             sourcesContent.Add(sourceActions);
             _sourcesFeedback = new Label("");
             sourcesContent.Add(_sourcesFeedback);
+            BuildWorkspaceModelLibrary(sourcesContent);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview, "Preview", 360);
             // The central Preview is flexible in all window sizes. A hard

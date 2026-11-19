@@ -219,6 +219,8 @@ namespace VCR.Editor.P1
                     "native settings actions 204 and 207 must stay load and render-default");
                 Check(ModelSessionPreferenceAndBootstrapOwnership(),
                     "U2 session must preserve legacy path, CLI priority, explicit unload and UI-independent startup restoration");
+                Check(ModelLibraryExplicitRegistrationAndCorruptionSafety(),
+                    "U2 opt-in VRM catalog must preserve legacy session, reject unsafe paths, and protect damaged backups");
                 Check(SettingsConfirmationLifecycle(),
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
@@ -3614,6 +3616,128 @@ namespace VCR.Editor.P1
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
             }
+        }
+
+        private static bool ModelLibraryExplicitRegistrationAndCorruptionSafety()
+        {
+            var folder = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-model-library-" + Guid.NewGuid().ToString("N"));
+            var libraryFile = Path.Combine(folder, "model-library.v1.json");
+            var first = Path.Combine(folder, "a.vrm");
+            var second = Path.Combine(folder, "b.vrm");
+            var missing = Path.Combine(folder, "missing.vrm");
+            var unsupported = Path.Combine(folder, "unsupported.fbx");
+            var key = ModelSessionController.PreferenceKey;
+            var hadRemembered = PlayerPrefs.HasKey(key);
+            var remembered = PlayerPrefs.GetString(key, string.Empty);
+            try
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(first, "fixture, not a VRM");
+                File.WriteAllText(second, "fixture, not a VRM");
+                File.WriteAllText(unsupported, "fixture, not an FBX");
+                PlayerPrefs.SetString(key, first);
+
+                var store = new ModelLibraryStore(libraryFile);
+                if (!store.TryRead(out var entries, out var error) || entries.Length != 0 ||
+                    File.Exists(libraryFile) || File.Exists(libraryFile + ".bak"))
+                    return false;
+                if (store.TryAdd(missing, out _) ||
+                    store.TryAdd(unsupported, out _) ||
+                    store.TryAdd("relative.vrm", out _) ||
+                    store.TryAdd(first + "\n", out _) ||
+                    File.Exists(libraryFile))
+                    return false;
+
+                if (!store.TryAdd(first, out error) ||
+                    !store.TryAdd(second, out error) ||
+                    !store.TryRead(out entries, out error) ||
+                    entries.Length != 2 ||
+                    entries[0].Path != Path.GetFullPath(first) ||
+                    entries[1].Path != Path.GetFullPath(second) ||
+                    entries[0].Format != "vrm" ||
+                    !File.Exists(libraryFile + ".bak") ||
+                    PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                var good = File.ReadAllText(libraryFile);
+                var backup = File.ReadAllText(libraryFile + ".bak");
+                if (store.TryAdd(first, out _) || File.ReadAllText(libraryFile) != good ||
+                    File.ReadAllText(libraryFile + ".bak") != backup)
+                    return false;
+
+                // Missing models remain registered, visible and removable.
+                File.Delete(second);
+                if (!store.TryRead(out entries, out error) || entries.Length != 2 ||
+                    !store.TryRemove(second, out error) ||
+                    !store.TryRead(out entries, out error) || entries.Length != 1 ||
+                    entries[0].Path != Path.GetFullPath(first) ||
+                    !File.Exists(first) || PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                // Never overwrite a damaged primary or rotate its valid
+                // recovery backup from a subsequent register/remove action.
+                File.WriteAllText(libraryFile, "{ broken catalog");
+                var corrupt = File.ReadAllBytes(libraryFile);
+                backup = File.ReadAllText(libraryFile + ".bak");
+                if (store.TryRead(out entries, out error) ||
+                    store.TryAdd(first, out _) ||
+                    store.TryRemove(first, out _) ||
+                    !ByteArraysEqual(corrupt, File.ReadAllBytes(libraryFile)) ||
+                    File.ReadAllText(libraryFile + ".bak") != backup)
+                    return false;
+
+                // A future-version document is not downgraded using a v1
+                // backup, nor overwritten on the next operator action.
+                File.WriteAllText(libraryFile,
+                    "{\"Version\":2,\"Entries\":[]}");
+                var future = File.ReadAllBytes(libraryFile);
+                if (store.TryRead(out entries, out _) ||
+                    store.TryRemove(first, out _) ||
+                    !ByteArraysEqual(future, File.ReadAllBytes(libraryFile)))
+                    return false;
+
+                // Missing primary plus existing backup is not a fresh empty
+                // catalog; only explicit operator repair may restore it.
+                File.Delete(libraryFile);
+                if (store.TryRead(out entries, out error) ||
+                    store.TryAdd(first, out _) || File.Exists(libraryFile))
+                    return false;
+                File.Copy(libraryFile + ".bak", libraryFile);
+                if (!store.TryRead(out entries, out error) || entries.Length != 2 ||
+                    PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                var shell = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                var panel = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.ModelLibrary.cs"));
+                return shell.Contains("BuildWorkspaceModelLibrary(sourcesContent)") &&
+                       panel.Contains("TryAdd(path, out var error)") &&
+                       panel.Contains("TryRemove(_modelLibrarySelectedPath, out var error)") &&
+                       panel.Contains("_modelLibrarySelectedPath ?? ModelLibraryPlaceholder") &&
+                       panel.Contains("Click Load VRM to load it.");
+            }
+            finally
+            {
+                if (hadRemembered) PlayerPrefs.SetString(key, remembered);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(folder))
+                    Directory.Delete(folder, true);
+            }
+        }
+
+        private static bool ByteArraysEqual(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+            for (var i = 0; i < left.Length; ++i)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+            return true;
         }
 
         private static bool ModelSessionPreferenceAndBootstrapOwnership()
