@@ -223,6 +223,8 @@ namespace VCR.Editor.P1
                     "U2 opt-in VRM catalog must preserve legacy session, reject unsafe paths, and protect damaged backups");
                 Check(ModelSessionVersionedCheckpointAndRollbackSafety(),
                     "U2 versioned session checkpoint must preserve v1 authority and reject corrupt/future records without overwrites");
+                Check(ModelSessionExplicitAdoptionAndRollback(),
+                    "U2 checkpoint adoption must require fresh review, preserve prior v1 preference and reject external drift");
                 Check(SettingsConfirmationLifecycle(),
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
@@ -3617,6 +3619,146 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool ModelSessionExplicitAdoptionAndRollback()
+        {
+            var dir = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-session-adopt-" + Guid.NewGuid().ToString("N"));
+            var checkpointPath = Path.Combine(dir, "model-session.v1.json");
+            var journalPath = Path.Combine(dir, "model-session-adoption-rollback.v1.json");
+            var oldModel = Path.Combine(dir, "old.vrm");
+            var targetModel = Path.Combine(dir, "target.vrm");
+            var laterModel = Path.Combine(dir, "later.vrm");
+            var missingModel = Path.Combine(dir, "missing.vrm");
+            var key = ModelSessionController.PreferenceKey;
+            var oldPresent = PlayerPrefs.HasKey(key);
+            var oldValue = PlayerPrefs.GetString(key, "");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(oldModel, "old VRM test fixture");
+                File.WriteAllText(targetModel, "target VRM test fixture");
+                File.WriteAllText(laterModel, "later VRM test fixture");
+                PlayerPrefs.SetString(key, oldModel);
+
+                var store = new ModelSessionSnapshotStore(checkpointPath);
+                var service = new ModelSessionAdoptionService(store, journalPath);
+                if (!store.TrySaveExplicitCheckpoint(targetModel, oldModel, out var error) ||
+                    !service.TryPreview(out var reviewed, out error) ||
+                    reviewed.PreviousPath != oldModel ||
+                    !reviewed.PreviousPresent ||
+                    reviewed.TargetPath != targetModel ||
+                    File.Exists(journalPath))
+                    return false;
+
+                // Both review source and current preference are guarded.
+                if (!store.TrySaveExplicitCheckpoint(laterModel, oldModel, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+                if (!service.TryPreview(out reviewed, out error))
+                    return false;
+                PlayerPrefs.SetString(key, targetModel);
+                if (service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != targetModel)
+                    return false;
+                PlayerPrefs.SetString(key, oldModel);
+
+                if (!service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    !File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != laterModel)
+                    return false;
+                var firstJournal = File.ReadAllBytes(journalPath);
+
+                // An outstanding adoption cannot be replaced by a second
+                // migration even after the operator reviews a new checkpoint.
+                if (!store.TrySaveExplicitCheckpoint(oldModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    !ByteArraysEqual(firstJournal, File.ReadAllBytes(journalPath)))
+                    return false;
+
+                // Do not overwrite an explicit newer interactive choice.
+                PlayerPrefs.SetString(key, missingModel);
+                if (service.TryRollback(out _) ||
+                    service.TryKeepAdoptedPreference(out _) ||
+                    PlayerPrefs.GetString(key) != missingModel ||
+                    !ByteArraysEqual(firstJournal, File.ReadAllBytes(journalPath)))
+                    return false;
+                PlayerPrefs.SetString(key, laterModel);
+                if (!service.TryRollback(out error) ||
+                    PlayerPrefs.GetString(key) != oldModel ||
+                    service.TryRollback(out _))
+                    return false;
+
+                // A checkpoint can explicitly request an empty preference.
+                // The next-start restore key must be deleted, not set to "".
+                if (!store.TrySaveExplicitCheckpoint("", "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    PlayerPrefs.HasKey(key) ||
+                    !service.TryRollback(out error) ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+
+                // Keeping a valid adoption closes its rollback opportunity
+                // and leaves the actual model runtime untouched.
+                if (!store.TrySaveExplicitCheckpoint(targetModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    !service.TryKeepAdoptedPreference(out error) ||
+                    PlayerPrefs.GetString(key) != targetModel ||
+                    service.TryRollback(out _))
+                    return false;
+
+                // An unreadable journal is never silently replaced by a
+                // subsequent successful-looking adoption.
+                File.WriteAllText(journalPath, "{ broken journal");
+                var corrupt = File.ReadAllBytes(journalPath);
+                if (!store.TrySaveExplicitCheckpoint(oldModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    !ByteArraysEqual(corrupt, File.ReadAllBytes(journalPath)) ||
+                    PlayerPrefs.GetString(key) != targetModel)
+                    return false;
+
+                // A missing journal primary with an existing backup also
+                // blocks reuse; the operator must inspect it first.
+                File.Delete(journalPath);
+                if (!File.Exists(journalPath + ".bak") ||
+                    service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath))
+                    return false;
+
+                // A checkpoint with a missing referenced VRM remains readable
+                // but must never be adopted as the next startup target.
+                if (!store.TrySaveExplicitCheckpoint(missingModel, "", out error) ||
+                    service.TryPreview(out _, out _))
+                    return false;
+
+                var panel = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.ModelSession.cs"));
+                return panel.Contains("ReviewWorkspaceModelSessionAdoption") &&
+                       panel.Contains("ApplyWorkspaceModelSessionAdoption") &&
+                       panel.Contains("RollbackWorkspaceModelSessionAdoption") &&
+                       panel.Contains("KeepWorkspaceModelSessionAdoption") &&
+                       panel.Contains("_adoptionReviewExpiresAt") &&
+                       panel.Contains("TryAdopt(reviewed, out var error)") &&
+                       panel.Contains("TryRollback(out var error)") &&
+                       panel.Contains("TryKeepAdoptedPreference(out var error)");
+            }
+            finally
+            {
+                if (oldPresent) PlayerPrefs.SetString(key, oldValue);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
             }
         }
 
