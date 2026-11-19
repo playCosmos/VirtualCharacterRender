@@ -7,6 +7,7 @@ on:
     branches:
       - feature/obs-ui-u1-layout-contract-20261026
       - feature/u2-model-session-bootstrap-20261119
+      - feature/u3-toolkit-only-retirement-20261119
     paths:
       - .github/workflows/u1-p1-macos-native.yml
       - native/macos/VcrSettingsWindow.mm

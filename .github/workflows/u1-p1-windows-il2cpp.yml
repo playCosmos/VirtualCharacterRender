@@ -30,7 +30,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/feature/obs-ui-u1-layout-contract-20261026"
+          # Explicit manual verification is permitted for stacked U2/U3
+          # integration, but no global IL2CPP build is auto-triggered.
+          case "$GITHUB_REF" in
+            refs/heads/feature/obs-ui-u1-layout-contract-20261026|\
+            refs/heads/feature/u2-model-session-bootstrap-20261119|\
+            refs/heads/feature/u3-toolkit-only-retirement-20261119) ;;
+            *) echo "P1 IL2CPP gate requires an approved U1/U2/U3 feature ref." >&2; exit 1 ;;
+          esac
 
       - name: Checkout exact source
         uses: actions/checkout@v4

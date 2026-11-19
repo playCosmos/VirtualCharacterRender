@@ -61,6 +61,12 @@ namespace VCR.Editor.P1
 
             try
             {
+                // Fail before changing an authored scene. A Toolkit shell must
+                // never be packaged alongside the legacy application uGUI,
+                // including inactive controllers and missing MonoScripts.
+                if (!ValidateToolkitOnlyScene(scene))
+                    return false;
+
                 var workspaceCount = 0;
                 WorkspaceToolkitShell existingShell = null;
                 foreach (var root in scene.GetRootGameObjects())
@@ -266,6 +272,39 @@ namespace VCR.Editor.P1
                 if (!targetAlreadyLoaded && scene.IsValid() && scene.isLoaded)
                     EditorSceneManager.CloseScene(scene, true);
             }
+        }
+
+        private static bool ValidateToolkitOnlyScene(
+            UnityEngine.SceneManagement.Scene scene)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                // Check inactive objects as well: merely disabling the legacy
+                // controller does not remove its serialized build dependency.
+                foreach (var transform in root.GetComponentsInChildren<Transform>(true))
+                {
+                    var candidate = transform.gameObject;
+                    if (GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(candidate) != 0)
+                    {
+                        Debug.LogError("VCR P1: missing MonoBehaviour script in scene object '" +
+                            candidate.name + "'; refusing to package an unverified UI.");
+                        return false;
+                    }
+                    foreach (var behaviour in candidate.GetComponents<MonoBehaviour>())
+                    {
+                        if (behaviour != null &&
+                            behaviour.GetType().FullName ==
+                                "VCR.Runtime.UI.ApplicationUiController")
+                        {
+                            Debug.LogError("VCR P1: scene contains legacy application uGUI on '" +
+                                candidate.name + "'. Remove the controller and its authored " +
+                                "Canvas/EventSystem wiring before upgrading to Toolkit.");
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
         }
 
         [MenuItem("VCR/P1/Upgrade Existing Runtime Scene With Workspace")]

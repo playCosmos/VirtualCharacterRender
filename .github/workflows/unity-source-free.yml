@@ -8,6 +8,7 @@ on:
       # U1 must compile in Unity, not just pass repository lint.
       - feature/obs-ui-u1-layout-contract-20261026
       - feature/u2-model-session-bootstrap-20261119
+      - feature/u3-toolkit-only-retirement-20261119
   pull_request:
     branches:
       - develop
@@ -17,6 +18,8 @@ on:
       - feature/commercial-readiness-m2-evidence
       # Stacked U2 model-session changes must exercise the U1 base.
       - feature/obs-ui-u1-layout-contract-20261026
+      # U3 retirement hardening validates against the stacked U2 integration.
+      - feature/u2-model-session-bootstrap-20261119
   workflow_dispatch:
 
 permissions:
@@ -53,7 +56,7 @@ jobs:
       # host-side dotnet tooling while initializing the Bee build backend.
       # Removing it produced "No .NET SDKs were found" in Editor CI logs.
       - name: Reclaim unused Ubuntu SDK storage for Unity Docker
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         shell: bash
         run: |
           set -euo pipefail
@@ -113,7 +116,7 @@ jobs:
           echo "P0-P13 Editor validation: PASS before P1 workspace generation for $GITHUB_SHA"
 
       - name: Generate and validate P1 UI Toolkit workspace
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         # Unity can occasionally stall on its second batch-mode invocation.
         # Fail with a bounded step rather than consuming the full 65-minute
         # job budget with no diagnosis or Player-build attempt.
@@ -134,7 +137,7 @@ jobs:
           allowDirtyBuild: true
 
       - name: Require generated P1 workspace assets
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         shell: bash
         run: |
           set -euo pipefail
@@ -146,7 +149,7 @@ jobs:
       # Preserve disk evidence before the heaviest of the three Unity runs.
       # No pruning of Unity/Library or the source dependencies is allowed here.
       - name: Measure disk headroom before Windows Player build
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         shell: bash
         run: |
           set -euo pipefail
@@ -155,7 +158,7 @@ jobs:
           docker system df || true
 
       - name: Build P1 Windows development player
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -172,7 +175,7 @@ jobs:
           allowDirtyBuild: true
 
       - name: Restore pinned IL2CPP project settings after Mono smoke build
-        if: always() && (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: always() && (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         shell: bash
         run: |
           set -euo pipefail
@@ -184,7 +187,7 @@ jobs:
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
 
       - name: Require P1 Windows player output
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         shell: bash
         run: |
           set -euo pipefail
@@ -194,7 +197,7 @@ jobs:
           echo "P1 Windows development player: PASS"
 
       - name: Archive P1 Windows development player
-        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+        if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
         uses: actions/upload-artifact@v4
         with:
           name: p1-windows-dev-${{ github.run_id }}-${{ github.run_attempt }}
@@ -243,7 +246,7 @@ jobs:
   # claim that the native Settings UI, click-through or rendered GUI was tested.
   u1-windows-native-smoke:
     name: Run P1 Windows Player startup/quit smoke
-    if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+    if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
     needs: unity-source-free
     runs-on: windows-latest
     timeout-minutes: 25
@@ -342,7 +345,7 @@ jobs:
   # or claiming that rendered pixels/native Settings have been accepted.
   u1-windows-gui-probe:
     name: Observe visible P1 Windows window and normal WM_CLOSE (informational)
-    if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119')
+    if: (github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' || github.ref == 'refs/heads/feature/u2-model-session-bootstrap-20261119' || github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119')
     needs: [unity-source-free, u1-windows-native-smoke]
     runs-on: windows-latest
     timeout-minutes: 15
