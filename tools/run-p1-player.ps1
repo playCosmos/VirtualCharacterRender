@@ -94,8 +94,11 @@ if ($EvidenceDirectory) {
     }
 }
 
+# Record the executable identity before launch. Post-run evidence must not
+# quietly describe an EXE or payload different from the one we verified.
+$launchExecutableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
 Write-Host "Launching P1 $Mode Player: $exe"
-Write-Host "Executable SHA-256: $((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash)"
+Write-Host "Executable SHA-256: $launchExecutableSha256"
 if ($Vrm) { Write-Host "VRM: $vrmPath" }
 if ($Config) { Write-Host "Config: $configPath" }
 if ($evidenceRoot) { Write-Host "Local evidence directory: $evidenceRoot" }
@@ -118,6 +121,24 @@ if ($argsList.Count -gt 0) {
 $playerProcess = Start-Process @launchOptions
 $exitCode = $playerProcess.ExitCode
 
+# A prelaunch manifest check alone is not proof that the files remained
+# unchanged while the GUI Player ran. Reject mismatches before writing any
+# source-bound launch-evidence.json; retain the raw Player.log for diagnosis.
+if ((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ine $launchExecutableSha256) {
+    throw 'P1 Player executable changed during the session; launch evidence is invalid.'
+}
+if ($manifestEvidence) {
+    $afterRunEvidence = & (Join-Path $PSScriptRoot 'verify-p1-player-payload.ps1') `
+        -PlayerDirectory $playerRoot `
+        -ManifestFile $ManifestFile `
+        -ExpectedSourceSha $ExpectedSourceSha
+    if ($afterRunEvidence.manifestSha256 -ine $manifestEvidence.manifestSha256 -or
+        $afterRunEvidence.fileCount -ne $manifestEvidence.fileCount -or
+        $afterRunEvidence.sourceSha -ine $manifestEvidence.sourceSha) {
+        throw 'P1 Player manifest/payload changed during the session; launch evidence is invalid.'
+    }
+}
+
 if ($evidenceRoot) {
     $logPath = Join-Path $evidenceRoot "Player.log"
     if (-not (Test-Path -LiteralPath $logPath -PathType Leaf) -or
@@ -126,7 +147,7 @@ if ($evidenceRoot) {
     }
     [ordered]@{
         mode = $Mode
-        playerExecutableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        playerExecutableSha256 = $launchExecutableSha256
         payloadManifestVerified = ($null -ne $manifestEvidence)
         payloadManifestSha256 = if ($manifestEvidence) { $manifestEvidence.manifestSha256 } else { $null }
         expectedSourceSha = if ($manifestEvidence) { $manifestEvidence.sourceSha } else { $null }
