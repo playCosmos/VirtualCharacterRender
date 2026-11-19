@@ -25,6 +25,9 @@ class MockP1Player {
         if (index < 0 || index + 1 == args.Length) return 81;
         if (Environment.GetEnvironmentVariable("VCR_P1_MOCK_NO_LOG") != "1")
             File.WriteAllText(args[index + 1], "Mock test Player - NOT Unity evidence\n");
+        if (Environment.GetEnvironmentVariable("VCR_P1_MOCK_MUTATE_PAYLOAD") == "1")
+            File.AppendAllText(Path.Combine(Environment.CurrentDirectory,
+                "GameAssembly.dll"), "tampered during the running session");
         return 17;
     }
 }
@@ -128,6 +131,21 @@ class MockP1Player {
         throw 'P1 launcher accepted an untracked payload file'
     }
     Remove-Item -LiteralPath $extra -Force
+
+    # The full payload is verified before launch AND after process exit.
+    # A process altering a DLL after the initial manifest check must never
+    # receive source-bound launch evidence, even when the mock exits normally.
+    $env:VCR_P1_MOCK_MUTATE_PAYLOAD = '1'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher `
+        -Mode IL2CPP -PlayerDirectory $player -EvidenceDirectory $evidence `
+        -ManifestFile $manifestPath -ExpectedSourceSha $sourceSha
+    if ($LASTEXITCODE -eq 17 -or
+        -not ((Get-Content -LiteralPath $dll -Raw) -match 'tampered during the running session') -or
+        (Test-Path -LiteralPath (Join-Path $evidence 'launch-evidence.json'))) {
+        throw 'P1 launcher accepted a payload mutated after its prelaunch verification'
+    }
+    Remove-Item Env:\VCR_P1_MOCK_MUTATE_PAYLOAD -ErrorAction SilentlyContinue
+    Set-Content -LiteralPath $dll -Value 'mock binary marker' -Encoding UTF8
 
     # The mock returns 17. The launcher must wait for it and preserve 17,
     # instead of treating GUI launch as a successful asynchronous spawn.
@@ -302,6 +320,7 @@ class MockP1Player {
 } finally {
     Remove-Item Env:\VCR_P1_MOCK_ARGUMENTS -ErrorAction SilentlyContinue
     Remove-Item Env:\VCR_P1_MOCK_NO_LOG -ErrorAction SilentlyContinue
+    Remove-Item Env:\VCR_P1_MOCK_MUTATE_PAYLOAD -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue
 }
 # An expected mock exit code 17 must not leak into GitHub Actions' own exit.
