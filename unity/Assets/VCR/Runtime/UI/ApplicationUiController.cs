@@ -483,8 +483,10 @@ namespace VCR.Runtime.UI
             // Never race it or silently retry its previous failed candidate.
             if (!UnityEngine.Application.isEditor)
             {
-                var bootstrap = applicationBootstrap != null
-                    ? applicationBootstrap : FindFirstObjectByType<ApplicationRuntimeBootstrap>();
+                // Awake/ResolveDependencies already resolves the shared
+                // application bootstrap. Do not add a second global search
+                // to this UI hot path.
+                var bootstrap = applicationBootstrap;
                 if (bootstrap != null && bootstrap.isActiveAndEnabled)
                 {
                     _characterRestoreAttempted = true;
