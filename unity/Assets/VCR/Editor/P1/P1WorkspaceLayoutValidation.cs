@@ -3730,8 +3730,12 @@ namespace VCR.Editor.P1
                     return false;
                 schemaCalls = provider.SchemaCalls;
                 Scan();
+                // A restored provider is no longer backed off: its ordinary
+                // two-second cached scan must read its schema once to catch
+                // external configuration drift. Zero SDK calls is required
+                // only while a failed provider is still in retry backoff.
                 return provider.ConfigurationCalls == 12 &&
-                       provider.SchemaCalls == schemaCalls &&
+                       provider.SchemaCalls == schemaCalls + 1 &&
                        PlayerPrefs.GetString(settingKey) == "updated";
             }
             finally
