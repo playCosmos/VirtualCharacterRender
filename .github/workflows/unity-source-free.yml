@@ -130,7 +130,7 @@ jobs:
           projectPath: unity
           unityVersion: 6000.3.25f1
           targetPlatform: StandaloneWindows64
-          buildMethod: VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit
+          buildMethod: ${{ github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119' && 'VCR.Editor.Alpha.U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit' || 'VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit' }}
           customImage: unityci/editor:6000.3.25f1-windows-mono-3
           manualExit: true
           versioning: None
@@ -145,6 +145,18 @@ jobs:
           test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
           sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
           echo "P1 UI Toolkit workspace generation: PASS"
+
+      - name: Require generated U3 Alpha and P11 Toolkit scenes
+        if: github.ref == 'refs/heads/feature/u3-toolkit-only-retirement-20261119'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Assets/VCR/Alpha/AlphaRuntime.unity
+          test -s unity/Assets/VCR/Alpha/AlphaWorkspacePanelSettings.asset
+          test -s unity/Assets/VCR/P11/P11Runtime.unity
+          test -s unity/Assets/VCR/P11/P11WorkspacePanelSettings.asset
+          sha256sum --check "$RUNNER_TEMP/unity-reproducibility.sha256"
+          echo "U3 generated P1/P11/Alpha Toolkit scene inspection: PASS"
 
       # Preserve disk evidence before the heaviest of the three Unity runs.
       # No pruning of Unity/Library or the source dependencies is allowed here.

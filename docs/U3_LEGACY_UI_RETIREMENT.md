@@ -47,3 +47,26 @@ not auto-migrated. They require an explicit scene rebuild/manual migration
 and missing-script verification. Source edits and hosted CI are not
 hardware/operator acceptance. PRs #44/#45/#46 remain Draft; no merge,
 release or tag is authorized.
+
+## U3.3 — exact-source generated scene acceptance gate
+
+The U3 branch's existing Unity workspace-generation pass now runs
+`VCR.Editor.Alpha.U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit`
+instead of creating only P1. It refuses to overwrite any pre-existing P1,
+P11, or Alpha scene/PanelSettings, generates each from the actual Editor
+builders, then inspects the saved scene graph for a single active Toolkit
+shell, a persistent matching `UIDocument`/`PanelSettings`, missing
+MonoBehaviour scripts, bootstrap/output ownership, and opaque framed
+desktop defaults. P1 is reloaded after the P11/Alpha generation to catch
+scene-order side effects before the normal P1 Windows Player build.
+
+Repository-level retirement audit now scans tracked/untracked Unity text
+serialization under all `unity/Assets` for the retained retired MonoScript
+GUID, detects any orphaned retired partial `.meta`, checks the U3 Editor
+generation gate is present, and fails global retirement acceptance when
+a required generator or CI contract disappears.
+
+Passing generated-Editor-scene validation is **not** proof of actual Alpha/P11
+Player execution, macOS native UI acceptance, authored-scene migration, or
+hardware approval. Generated fixture scenes are used only in CI; the
+operator's existing scenes are not changed by this gate.

@@ -25,7 +25,9 @@
     "VCR.Runtime.Core",
     "VCR.Runtime.Tracking.Ultraleap",
     "Ultraleap.Tracking.Core",
-    "VCR.Runtime.Output.Unity"
+    "VCR.Runtime.Output.Unity",
+    "VCR.Editor.P1",
+    "VCR.Editor.P11"
   ],
   "includePlatforms": [
     "Editor"

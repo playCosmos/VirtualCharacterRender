@@ -20,6 +20,13 @@ ALPHA = "unity/Assets/VCR/Editor/Alpha/AlphaApplicationSceneBuilder.cs"
 META = "unity/Assets/VCR/Runtime/UI/ApplicationUiController.cs.meta"
 RETIRED_GUID = "0a9969a7685c4bf9a390aef29d61a66f"
 P11 = "unity/Assets/VCR/Editor/P11/P11ApplicationSceneBuilder.cs"
+U3_VALIDATOR = "unity/Assets/VCR/Editor/Alpha/U3ToolkitSceneValidation.cs"
+UNITY_CI = ".github/workflows/unity-source-free.yml"
+UNITY_SERIALIZED_SUFFIXES = (
+    ".unity", ".prefab", ".asset", ".controller", ".overridecontroller",
+    ".anim", ".mat", ".playable", ".mask", ".rendertexture",
+    ".lighting", ".meta",
+)
 SOURCE = Path("unity/Assets/VCR")
 
 
@@ -67,9 +74,13 @@ def scan(root):
     bad_meta_guid = match is not None and match.group(1).lower() != RETIRED_GUID
     serialized = []
     if legacy_guid:
-        for ext in ("*.unity", "*.prefab", "*.asset"):
-            for path in sorted((root / SOURCE).rglob(ext)):
-                if legacy_guid in path.read_text(encoding="utf-8", errors="replace"):
+        assets = root / "unity/Assets"
+        if assets.is_dir():
+            for path in sorted(assets.rglob("*")):
+                if (not path.is_file() or
+                        path.suffix.lower() not in UNITY_SERIALIZED_SUFFIXES):
+                    continue
+                if legacy_guid in path.read_text(encoding="utf-8", errors="replace").lower():
                     serialized.append(str(path.relative_to(root)).replace("\\", "/"))
 
     alpha = read(root, ALPHA)
@@ -86,13 +97,39 @@ def scan(root):
         blockers.append({"kind": "alpha-scene-entrypoint", "path": ALPHA})
     if p11_entrypoint:
         blockers.append({"kind": "p11-scene-entrypoint", "path": P11})
-    if (root / META).is_file():
-        blockers.append({"kind": "legacy-meta-retained", "path": META})
+    for path in sorted(ui_root.glob("ApplicationUiController*")):
+        if path.is_file():
+            blockers.append({
+                "kind": "legacy-source-or-meta-retained",
+                "path": str(path.relative_to(root)).replace("\\", "/")
+            })
     if bad_meta_guid:
         blockers.append({"kind": "unexpected-legacy-meta-guid", "path": META})
     for scene_path, scene_text in ((ALPHA, alpha), (P11, p11)):
-        if scene_text and "workspace.AddComponent<WorkspaceToolkitShell>();" not in scene_text:
+        if "workspace.AddComponent<WorkspaceToolkitShell>();" not in scene_text:
             blockers.append({"kind": "missing-toolkit-scene", "path": scene_path})
+    generation = read(root, U3_VALIDATOR)
+    ci = read(root, UNITY_CI)
+    for path, content, required in (
+        (U3_VALIDATOR, generation, (
+            "P1ApplicationSceneBuilder.EnsureWorkspaceInExistingScene()",
+            "P11ApplicationSceneBuilder.CreateApplicationUiRuntimeScene()",
+            "AlphaApplicationSceneBuilder.CreateAlphaRuntimeScene()",
+            "GetMonoBehavioursWithMissingScriptCount(go)",
+            "document.panelSettings",
+            "scene.isDirty"
+        )),
+        (UNITY_CI, ci, (
+            "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit",
+            "Require generated U3 Alpha and P11 Toolkit scenes",
+        )),
+    ):
+        for token in required:
+            if token not in content:
+                blockers.append({
+                    "kind": "missing-generated-scene-verification",
+                    "path": path, "required": token
+                })
     for path in owners:
         blockers.append({"kind": "legacy-controller-source", "path": path})
     for path in serialized:
@@ -116,7 +153,7 @@ def scan(root):
                       ", ".join(shell_legacy))
 
     return {
-        "schema": 1,
+        "schema": 2,
         "p1_guard_active": gate_contract and not legacy_constructor,
         "p1_toolkit_legacy_references": shell_legacy,
         "alpha_instantiates_legacy_ui": alpha_entrypoint,
@@ -126,7 +163,7 @@ def scan(root):
         "legacy_code_references": references,
         "tracked_serialized_legacy_guid_references": serialized,
         "global_retirement_blockers": blockers,
-        "global_retirement_complete": len(blockers) == 0 and not shell_legacy,
+        "global_retirement_complete": len(blockers) == 0 and not errors,
         "p1_contract_errors": errors,
         "note": "Generated Unity scenes are not repository files; the P1 Editor scene guard checks those at build time.",
     }
@@ -146,6 +183,15 @@ def self_test():
             "unity/Assets/VCR/Runtime/UI/WorkspaceToolkitShell.cs": "class WorkspaceToolkitShell {}\n",
             "unity/Assets/VCR/Runtime/UI/ApplicationUiController.cs": "class ApplicationUiController {}\n",
             P11: "workspace.AddComponent<WorkspaceToolkitShell>();\n",
+            U3_VALIDATOR: (
+                "P1ApplicationSceneBuilder.EnsureWorkspaceInExistingScene()\n"
+                "P11ApplicationSceneBuilder.CreateApplicationUiRuntimeScene()\n"
+                "AlphaApplicationSceneBuilder.CreateAlphaRuntimeScene()\n"
+                "GetMonoBehavioursWithMissingScriptCount(go)\n"
+                "document.panelSettings\nscene.isDirty\n"),
+            UNITY_CI: (
+                "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit\n"
+                "Require generated U3 Alpha and P11 Toolkit scenes\n"),
             "unity/Assets/VCR/P0/Legacy.prefab":
                 "m_Script: {fileID: 11500000, guid: " + RETIRED_GUID + ", type: 3}\n",
         }
@@ -156,7 +202,14 @@ def self_test():
         report = scan(root)
         assert report["p1_guard_active"] and not report["p1_contract_errors"]
         assert report["alpha_instantiates_legacy_ui"]
-        assert len(report["tracked_serialized_legacy_guid_references"]) == 1
+        # The obsolete script definition .meta and the authored prefab both
+        # contain the retired GUID in this adversarial fixture.
+        assert len(report["tracked_serialized_legacy_guid_references"]) == 2
+        assert any(path.endswith("Legacy.prefab") for path in
+                   report["tracked_serialized_legacy_guid_references"])
+        (root / META).unlink()
+        assert any(path.endswith("Legacy.prefab") for path in
+                   scan(root)["tracked_serialized_legacy_guid_references"])
         assert not report["global_retirement_complete"]
         assert not report["p11_instantiates_legacy_ui"]
         shell = root / "unity/Assets/VCR/Runtime/UI/WorkspaceToolkitShell.cs"
