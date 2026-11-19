@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
+using VCR.Runtime.Output.Unity;
 using VCR.Editor.P0;
 using VCR.Runtime.Application;
 using VCR.Runtime.EventRuntime;
@@ -40,14 +42,39 @@ namespace VCR.Editor.P11
                 return;
             }
 
-            if (bootstrap.GetComponent<
-                    ApplicationUiController>() ==
-                null)
+            // Keep P11's application-policy tests while generating only
+            // the UI Toolkit application shell.
+            var mainCamera = bootstrap.GetComponentInChildren<Camera>(true);
+            var output = bootstrap.GetComponent<UniWinCOverlayOutput>();
+            if (mainCamera == null || output == null)
             {
-                Undo.AddComponent<
-                    ApplicationUiController>(
-                        bootstrap.gameObject);
+                Debug.LogError("VCR P11: Toolkit workspace requires camera and output.");
+                return;
             }
+            mainCamera.backgroundColor = new Color(0.105f, 0.12f, 0.14f, 1f);
+            output.ConfigureForP1Workspace(mainCamera);
+
+            const string panelPath =
+                "Assets/VCR/P11/P11WorkspacePanelSettings.asset";
+            var panelSettings =
+                AssetDatabase.LoadAssetAtPath<PanelSettings>(panelPath);
+            if (panelSettings == null)
+            {
+                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panelSettings, panelPath);
+            }
+            if (!AssetDatabase.Contains(panelSettings))
+            {
+                Debug.LogError("VCR P11: Toolkit PanelSettings could not be persisted.");
+                return;
+            }
+            var workspace = new GameObject("Workspace UI Toolkit");
+            workspace.SetActive(false);
+            workspace.transform.SetParent(bootstrap.transform, false);
+            var document = workspace.AddComponent<UIDocument>();
+            document.panelSettings = panelSettings;
+            workspace.AddComponent<WorkspaceToolkitShell>();
+            workspace.SetActive(true);
 
             if (bootstrap.GetComponent<
                     DesktopCharacterFileSelectionAdapter>() ==
@@ -217,6 +244,8 @@ namespace VCR.Editor.P11
                 eventRuntime.SetActionHandlers(
                     handlers.ToArray());
             }
+
+            AssetDatabase.SaveAssets();
 
             if (!EditorSceneManager
                 .SaveOpenScenes())

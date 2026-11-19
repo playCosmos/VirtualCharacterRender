@@ -156,9 +156,9 @@ for token, message in (
 ):
     require_source_contains(native_settings_source, token, message)
 require_source_contains(
-    VCR / "Runtime" / "UI" / "ApplicationUiController.NativeSettings.cs",
-    "_nativeSettings.PumpMessages();",
-    "Native Settings must pump child controls before draining native actions",
+    VCR / "Runtime" / "UI" / "WorkspaceToolkitShell.cs",
+    "_workspaceNativeSettings.PumpMessages();",
+    "Toolkit native Settings must pump child controls before draining native actions",
 )
 require_source_contains(
     VCR / "Runtime" / "Tracking" / "Ultraleap" /
@@ -1390,12 +1390,13 @@ require_source_contains(
 )
 
 
-application_ui = (
-    VCR
-    / "Runtime"
-    / "UI"
-    / "ApplicationUiController.cs"
-)
+workspace_shell = VCR / "Runtime" / "UI" / "WorkspaceToolkitShell.cs"
+if not workspace_shell.is_file():
+    errors.append("Toolkit application UI shell is missing")
+for old_ui_file in (VCR / "Runtime" / "UI").glob("ApplicationUiController*.cs*"):
+    errors.append("retired application uGUI file remains: " +
+                  str(old_ui_file.relative_to(ROOT)))
+
 single_character_scene_runtime = (
     VCR
     / "Runtime"
@@ -2244,561 +2245,36 @@ require_source_contains(
     "P1 validation must cover overlay adapter failure before configuration commit",
 )
 
-require_source_contains(
-    application_ui,
-    "_buttonLabels",
-    "application UI must cache button label components across refreshes",
-)
-require_source_contains(
-    application_ui,
-    "_buttonLabels.TryGetValue",
-    "application UI button label refresh must use the component cache",
-)
-require_source_contains(
-    application_ui,
-    "SetSectionLabel(",
-    "application UI section labels must avoid unchanged text assignments",
-)
-require_source_contains(
-    application_ui,
-    "currentAppearance",
-    "appearance UI refresh must reuse one current-state snapshot within a refresh pass",
-)
-require_source_contains(
-    application_ui,
-    "_summaryBuilder",
-    "application UI summary rendering must reuse one StringBuilder scratch buffer",
-)
-forbid_source_pattern(
-    application_ui,
-    r"new\s+List<string>\s*\(\s*_trackingControls\.Count\s*\)",
-    "tracking summary refresh must not allocate a temporary line list",
-)
-forbid_source_pattern(
-    application_ui,
-    r"new\s+string\s*\[\s*visibleCount\s*\]",
-    "appearance preset-order summary must not allocate a temporary string array",
-)
-require_source_contains(
-    application_ui,
-    "SetTextIfChanged(",
-    "application UI status/title/content refresh must skip unchanged Text.text assignments",
-)
-forbid_source_pattern(
-    application_ui,
-    r"_(?:statusText|sectionTitle|contentText)\.text\s*=",
-    "application UI primary text fields must route assignments through SetTextIfChanged",
-)
-require_source_contains(
-    application_ui,
-    "_subscribedAppearanceRuntime",
-    "application UI must subscribe to appearance snapshots instead of polling defensive Current copies every refresh",
-)
-require_source_contains(
-    application_ui,
-    "OnAppearanceChanged(",
-    "application UI must cache AppearanceChanged snapshots",
-)
-require_source_occurrences(
-    application_ui,
-    "_appearanceRuntime.Current",
-    1,
-    "application UI may read the defensive appearance Current snapshot only in its cache fallback",
-)
-forbid_source_pattern(
-    application_ui,
-    r"_appearanceRuntime\.Current\.PresetId",
-    "application UI preset-id-only paths must use allocation-free appearance status",
-)
-require_source_occurrences(
-    application_ui,
-    "eventRuntime.CaptureRules()",
-    1,
-    "application UI may defensively clone event rules only for persistence, not refresh/navigation",
-)
-require_source_contains(
-    application_ui,
-    "eventRuntime.RuleCount",
-    "application UI event controls must use allocation-free event rule count lookup",
-)
-require_source_contains(
-    application_ui,
-    "eventRuntime.TryGetRuleSummaryAt(",
-    "application UI event controls must use allocation-free readonly indexed event rule summaries",
-)
-require_source_contains(
-    application_ui,
-    "eventRuntime.TryGetRuleSummary(",
-    "application UI event toggle lookup must use allocation-free readonly id summaries",
-)
-forbid_source_pattern(
-    application_ui,
-    r"eventRuntime\.GetRuleAt\s*\(",
-    "application UI refresh/navigation must not allocate defensive mutable rule clones",
-)
-forbid_source_pattern(
-    application_ui,
-    r"eventRuntime\.TryGetRule\s*\(",
-    "application UI refresh/toggle paths must not allocate defensive mutable rule clones",
-)
-forbid_source_pattern(
-    application_ui,
-    r"eventRuntime\.Engine\b",
-    "application UI must read event counters/trace state through the host readonly facade",
-)
-forbid_source_pattern(
-    application_ui,
-    r"CaptureStatuses\s*\(",
-    "application UI Settings refresh must not clone capability status arrays",
-)
-require_source_contains(
-    application_ui,
-    ".StatusCount",
-    "application UI Settings refresh must use allocation-free capability status counts",
-)
-require_source_contains(
-    application_ui,
-    "TryGetStatusAt(",
-    "application UI Settings refresh must use allocation-free indexed capability status lookup",
-)
-forbid_source_pattern(
-    application_ui,
-    r"_materialController\.GetSlots\s*\(",
-    "application UI Materials refresh must not clone material slot descriptors",
-)
-require_source_contains(
-    application_ui,
-    "_materialController.TryGetSlotAt(",
-    "application UI Materials refresh must use allocation-free indexed material slot lookup",
-)
-require_source_contains(
-    application_ui,
-    "_diagnosticsMetricSource",
-    "application UI Diagnostics refresh must cache the source metric snapshot identity",
-)
-require_source_contains(
-    application_ui,
-    "_trackingSummaryCache",
-    "application UI Tracking refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_environmentSummaryCache",
-    "application UI Environment refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_settingsSummaryCache",
-    "application UI Settings refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_eventsSummaryCache",
-    "application UI Events refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_outputSummaryCache",
-    "application UI Output refresh must cache unchanged readiness/summary state",
-)
-forbid_source_pattern(
-    application_ui,
-    r'"Transparent: "\s*\+|"Topmost: "\s*\+|"Click-through: "\s*\+',
-    "output control refresh must use stable label literals instead of rebuilding unchanged strings",
-)
-require_source_contains(
-    application_ui,
-    "out var outputSettings,",
-    "output control refresh must reuse the sampled overlay settings snapshot within a refresh pass",
-)
-require_source_contains(
-    application_ui,
-    "GetTrackingToggleLabel(",
-    "tracking control refresh must cache dynamic enable/disable labels",
-)
-require_source_contains(
-    application_ui,
-    "_trackingToggleLabelHasControl",
-    "tracking toggle label cache must distinguish no-control state explicitly",
-)
-require_source_contains(
-    application_ui,
-    "GetSettingsCapabilityLabel(",
-    "settings capability refresh must cache dynamic enable/disable/retry labels",
-)
-require_source_contains(
-    application_ui,
-    "GetAppearanceTransitionButtonLabel(",
-    "appearance transition control refresh must cache dynamic transition/progress labels",
-)
-require_source_contains(
-    application_ui,
-    "GetEnvironmentTransitionModeLabel(",
-    "environment transition control refresh must use stable enum label literals",
-)
-require_source_contains(
-    application_ui,
-    "GetDiagnosticsNextPageLabel(",
-    "diagnostics paging control refresh must cache dynamic page labels",
-)
-forbid_source_pattern(
-    application_ui,
-    r'"Transition: "\s*\+',
-    "transition control refresh labels must not rebuild unchanged prefix strings",
-)
-forbid_source_pattern(
-    application_ui,
-    r'\$"Next Metrics \(',
-    "diagnostics paging refresh must not interpolate a new label every tick",
-)
-forbid_source_pattern(
-    application_ui,
-    r'"Trace: "\s*\+|"VSync: "\s*\+|"Background: "\s*\+|"CSV Evidence: "\s*\+|"Console Log: "\s*\+',
-    "boolean control refresh labels must use stable full-string literals",
-)
-require_source_contains(
-    application_ui,
-    "_materialSummaryCache",
-    "application UI Materials refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_characterSummaryCache",
-    "application UI Character refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_characterUiOperationGeneration",
-    "application UI character async actions must version requests so stale completions cannot overwrite newer state",
-)
-require_source_contains(
-    application_ui,
-    "IsCurrentCharacterUiOperation(",
-    "application UI character async completions must verify request generation and scene-runtime identity",
-)
-require_source_contains(
-    application_ui,
-    "operationGeneration =\n                ++_characterUiOperationGeneration;",
-    "character load/reload requests must advance the UI operation generation before awaiting",
-)
-require_source_contains(
-    application_ui,
-    "_characterUiOperationGeneration++;\n\n            try\n            {\n                sceneRuntime.UnloadCharacter();",
-    "character unload must invalidate outstanding async load/reload UI completions",
-)
-require_source_contains(
-    application_ui,
-    "ReferenceEquals(\n                    sceneRuntime,\n                    runtime);",
-    "stale character UI completion checks must reject results from a replaced scene runtime",
-)
-require_source_contains(
-    application_ui,
-    "_motionSummaryCache",
-    "application UI Motion refresh must cache unchanged rendered summary text",
-)
-require_source_contains(
-    application_ui,
-    "_contextVisibilitySection",
-    "application UI context-control visibility must be cached by selected section",
-)
-require_source_contains(
-    application_ui,
-    "_statusBarCache",
-    "application UI status bar must cache unchanged rendered text",
-)
-require_source_contains(
-    application_ui,
-    "MonoBehaviour[] activeDependencyBehaviours",
-    "application UI dependency refresh must share one active-behaviour discovery snapshot",
-)
-require_source_contains(
-    application_ui,
-    "ResolveConcreteDependencies(",
-    "application UI concrete runtime dependencies must resolve through the shared discovery snapshot",
-)
-require_source_occurrences(
-    application_ui,
-    "FindFirstObjectByType<",
-    1,
-    "application UI must not perform separate global FindFirstObjectByType scans for each optional runtime dependency",
-)
-require_source_contains(
-    application_ui,
-    "GetActiveDependencyBehaviours(",
-    "application UI optional dependency resolvers must reuse the shared active-behaviour snapshot",
-)
-require_source_contains(
-    application_ui,
-    "ResolveCharacterFileSelectionAdapter(\n                    ref activeDependencyBehaviours);",
-    "application UI file-selection discovery must participate in shared dependency scanning",
-)
-require_source_contains(
-    application_ui,
-    "ResolveAppearanceRuntime(\n                    ref activeDependencyBehaviours);",
-    "application UI appearance discovery must participate in shared dependency scanning",
-)
 
-require_source_contains(
-    application_ui,
-    "_environmentRuntime",
-    "application UI must cache the resolved environment runtime instead of polling scene discovery every refresh",
-)
-require_source_contains(
-    application_ui,
-    "_environmentRuntime =\n                        sceneRuntime?.EnvironmentRuntime;",
-    "application UI environment dependency must be refreshed on the bounded dependency pass",
-)
-require_source_contains(
-    application_ui,
-    "_environmentRuntimeOwner",
-    "application UI cached environment runtime must be bound to its owning scene runtime",
-)
-require_source_contains(
-    application_ui,
-    "GetCachedEnvironmentRuntime()",
-    "application UI Environment availability/control/summary must reject stale cached environment runtimes",
-)
-require_source_contains(
-    application_ui,
-    "MissingTrackingControlDiscoveryRetrySeconds = 5f;",
-    "missing tracking controls must use a bounded low-frequency discovery retry",
-)
-require_source_contains(
-    application_ui,
-    "_nextTrackingControlResolveTime",
-    "tracking control discovery must retain its negative-cache deadline",
-)
-require_source_contains(
-    application_ui,
-    "ResolveTrackingControls(\n                    force);",
-    "periodic tracking-control resolution must preserve forced startup discovery",
-)
-require_source_contains(
-    application_ui,
-    "ResolveTrackingControls(\n                    force: true);",
-    "capability changes must bypass tracking-control negative caching",
-)
-
-require_source_contains(
-    application_ui,
-    "_uiRefreshPassActive",
-    "application UI must scope runtime sample reuse to one RefreshAll pass",
-)
-require_source_contains(
-    application_ui,
-    "TryGetOverlayOutputForUiRefresh(",
-    "application UI must share one exception-contained overlay status/settings snapshot within a refresh pass",
-)
-require_source_contains(
-    application_ui,
-    "TryGetRenderSettingsForUiRefresh(",
-    "application UI must share one render-settings sample within a refresh pass",
-)
-require_source_contains(
-    application_ui,
-    "finally\n            {\n                _uiRefreshPassActive",
-    "application UI refresh-pass cache must be invalidated even if refresh throws",
-)
-require_source_contains(
-    application_ui,
-    "_statusBarOutputState",
-    "status-bar cache must include overlay output state",
-)
-require_source_contains(
-    application_ui,
-    "_statusBarActionMessage",
-    "status-bar cache must include the last action message",
-)
-require_source_contains(
-    application_ui,
-    "RefreshContextActionVisibility(",
-    "application UI context-control visibility work must be isolated from per-refresh state updates",
-)
-require_source_contains(
-    application_ui,
-    "_sectionAvailabilityCache",
-    "application UI section availability/labels must only update when availability changes",
-)
-require_source_contains(
-    application_ui,
-    "Array.Clear(\n                _sectionAvailabilityCache",
-    "application UI rebuild must invalidate cached section availability",
-)
-require_source_contains(
-    application_ui,
-    "_motionSummaryManualSequence",
-    "motion summary cache must use manual expression source sequence to skip unchanged expression formatting",
-)
-require_source_contains(
-    application_ui,
-    "_motionPoseWeightLabelStateValid",
-    "motion pose-weight label formatting must be cached across unchanged refreshes",
-)
-require_source_contains(
-    application_ui,
-    "RefreshMotionPoseWeightLabel(",
-    "motion pose-weight slider callback and refresh path must share the cached label formatter",
-)
-require_source_contains(
-    application_ui,
-    "_motionSummaryExpressionInput",
-    "motion summary cache must include the selected expression input text",
-)
-require_source_contains(
-    application_ui,
-    "CharacterSummaryCacheMatches(",
-    "application UI Character refresh must compare displayed scene/appearance state before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_characterSummaryPresetIds",
-    "character summary cache must retain visible user-preset ids without rebuilding order text on cache hits",
-)
-require_source_contains(
-    application_ui,
-    "AppendUserPresetOrder(",
-    "character summary must append preset order directly into the shared summary builder on cache miss",
-)
-forbid_source_pattern(
-    application_ui,
-    r"FormatUserPresetOrder\s*\(",
-    "character summary refresh must not allocate a standalone preset-order string",
-)
-require_source_contains(
-    application_ui,
-    "MaterialSummaryCacheMatches(",
-    "application UI Materials refresh must compare selected status/descriptor state before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_materialSummaryRequestedSlotId",
-    "material summary cache must include the displayed/requested slot id",
-)
-require_source_contains(
-    application_ui,
-    "_materialSummaryErrorCount",
-    "material summary cache must include controller error count",
-)
-require_source_contains(
-    application_ui,
-    "TryCaptureRenderSettings(",
-    "application UI Output refresh must sample render-bootstrap availability once for its cache key",
-)
-forbid_source_pattern(
-    application_ui,
-    r"EvaluateBroadcastCaptureTarget\s*\(",
-    "application UI Output refresh must not re-enter scene broadcast readiness evaluation every 2 Hz tick",
-)
-require_source_contains(
-    application_ui,
-    "EventsSummaryCacheMatches(",
-    "application UI Events refresh must compare rule/runtime counters before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_eventsSummaryProcessedEvents",
-    "events summary cache must include processed-event counters",
-)
-require_source_contains(
-    application_ui,
-    "_eventsSummaryRuleStorePath",
-    "events summary cache must include the displayed persisted-rule path",
-)
-require_source_contains(
-    application_ui,
-    "SettingsSummaryCacheMatches(",
-    "application UI Settings refresh must compare displayed runtime/capability/render state before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_settingsSummaryCapabilityId",
-    "settings summary cache must include the selected capability identity",
-)
-require_source_contains(
-    application_ui,
-    "_settingsSummaryRenderScale",
-    "settings summary cache must include displayed render settings",
-)
-require_source_contains(
-    application_ui,
-    "EnvironmentSummaryCacheMatches(",
-    "application UI Environment refresh must compare displayed state before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_environmentSummaryTransitionPercent",
-    "environment summary cache must key active transitions by displayed progress percentage",
-)
-require_source_contains(
-    application_ui,
-    "TrackingSummaryCacheMatches(",
-    "application UI Tracking refresh must compare displayed presence/control state before rebuilding text",
-)
-require_source_contains(
-    application_ui,
-    "_trackingSummaryEvents",
-    "tracking summary cache must include transient presence-event flags in its cache key",
-)
-require_source_contains(
-    application_ui,
-    "TrackingSummaryControlState[]",
-    "tracking summary cache must reuse control-state storage instead of allocating per refresh",
-)
-require_source_contains(
-    application_ui,
-    "GetSortedDiagnosticMetrics(",
-    "application UI Diagnostics refresh must reuse one sorted metric snapshot per diagnostics report",
-)
-require_source_contains(
-    application_ui,
-    "_diagnosticsSummaryCache",
-    "application UI Diagnostics refresh must reuse completed summary text while the snapshot/page/settings key is unchanged",
-)
-require_source_contains(
-    application_ui,
-    "InvalidateDiagnosticsSummaryCache()",
-    "application UI Diagnostics summary cache must be invalidated when diagnostics binding lifecycle changes",
-)
-require_source_contains(
-    application_ui,
-    "_diagnosticsSummarySequence ==",
-    "application UI Diagnostics summary cache must key reuse to the published snapshot sequence",
-)
-forbid_source_pattern(
-    application_ui,
-    r"RuntimeMetric\[\]\)\s*\n?\s*source\.Clone\s*\(",
-    "application UI Diagnostics refresh must not clone already-sorted published metric arrays",
-)
-forbid_source_pattern(
-    application_ui,
-    r"new\s+(?:System\.Text\.)?StringBuilder\s*\(",
-    "application UI refresh must reuse its shared StringBuilder instead of allocating a new builder",
-)
-require_source_contains(
-    application_ui,
-    "SetInputTextIfChanged(",
-    "application UI refresh must suppress unchanged InputField text assignments",
-)
-forbid_source_pattern(
-    application_ui,
-    r"_(?:eventMaxCommandsInput|settingsRenderScaleInput|settingsFpsInput)\.text\s*=",
-    "stable numeric UI refresh fields must not assign InputField.text directly",
-)
-require_source_contains(
-    application_ui,
-    "displayedMaxCommands",
-    "event max-command refresh must compare the existing numeric value before formatting",
-)
-require_source_contains(
-    application_ui,
-    "displayedRenderScale",
-    "render-scale refresh must compare the existing numeric value before formatting",
-)
-require_source_contains(
-    application_ui,
-    "displayedTargetFps",
-    "target-FPS refresh must compare the existing numeric value before formatting",
-)
+# Historical uGUI micro-allocation assertions are not applicable to Toolkit.
+# Keep P11's UI model/action tests and P1's behavioral workspace validation;
+# assert the new runtime owner and native Settings dispatch explicitly here.
+for source, symbol, label in (
+    (workspace_shell, "public sealed partial class WorkspaceToolkitShell",
+     "Toolkit shell must be the application UI owner"),
+    (workspace_shell, "private void OpenWorkspaceNativeSettings()",
+     "Toolkit must open native Settings directly"),
+    (workspace_shell, "private void PumpWorkspaceNativeSettings()",
+     "Toolkit must drain native Settings actions"),
+    (workspace_shell, "_workspaceNativeSettings.PumpMessages();",
+     "Toolkit must pump native Settings control messages"),
+    (workspace_shell, "if (action == 204)",
+     "native Reload action must retain its distinct identifier"),
+    (workspace_shell, "action != 207",
+     "native Restore Defaults must stay independent"),
+    (workspace_shell, "ResetWorkspaceConfigurationActions();",
+     "Toolkit must disarm stale confirmations"),
+    (VCR / "Runtime" / "UI" / "WorkspaceToolkitShell.Configuration.cs",
+     "private void ResetWorkspaceConfigurationActions()",
+     "Toolkit must own Save/Reload confirmations"),
+    (VCR / "Runtime" / "UI" / "WorkspaceToolkitShell.ModelSession.cs",
+     "SaveWorkspaceModelSessionSnapshot",
+     "Toolkit model checkpoint must remain available"),
+    (VCR / "Runtime" / "UI" / "WorkspaceToolkitShell.EventRules.cs",
+     "_workspaceEventStartupCheckedHost",
+     "Toolkit must not replay disk rules on shell rebuild"),
+):
+    require_source_contains(source, symbol, label)
 
 material_override_controller = (
     VCR
@@ -4438,8 +3914,18 @@ require_source_contains(
 )
 require_source_contains(
     alpha_builder,
-    "ApplicationUiController",
-    "alpha scene must include the application UI",
+    "workspace.AddComponent<WorkspaceToolkitShell>();",
+    "Alpha scene must generate the Toolkit application UI",
+)
+forbid_source_pattern(
+    alpha_builder,
+    r"AddComponent\s*<\s*ApplicationUiController\s*>",
+    "Alpha scene must not recreate the retired uGUI",
+)
+require_source_contains(
+    VCR / "Editor" / "P11" / "P11ApplicationSceneBuilder.cs",
+    "workspace.AddComponent<WorkspaceToolkitShell>();",
+    "P11 scene must generate the Toolkit application UI",
 )
 require_source_contains(
     alpha_builder,

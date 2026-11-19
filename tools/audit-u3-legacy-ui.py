@@ -18,6 +18,8 @@ LEGACY_FULL = "VCR.Runtime.UI.ApplicationUiController"
 BUILDER = "unity/Assets/VCR/Editor/P1/P1ApplicationSceneBuilder.cs"
 ALPHA = "unity/Assets/VCR/Editor/Alpha/AlphaApplicationSceneBuilder.cs"
 META = "unity/Assets/VCR/Runtime/UI/ApplicationUiController.cs.meta"
+RETIRED_GUID = "0a9969a7685c4bf9a390aef29d61a66f"
+P11 = "unity/Assets/VCR/Editor/P11/P11ApplicationSceneBuilder.cs"
 SOURCE = Path("unity/Assets/VCR")
 
 
@@ -59,7 +61,10 @@ def scan(root):
 
     meta = read(root, META)
     match = re.search(r"(?m)^guid:\s*([0-9a-fA-F]{32})\s*$", meta)
-    legacy_guid = match.group(1) if match else None
+    # Keep the old MonoScript GUID after .meta deletion: a stale scene must
+    # not evade the inventory simply because its source no longer exists.
+    legacy_guid = RETIRED_GUID
+    bad_meta_guid = match is not None and match.group(1).lower() != RETIRED_GUID
     serialized = []
     if legacy_guid:
         for ext in ("*.unity", "*.prefab", "*.asset"):
@@ -68,14 +73,26 @@ def scan(root):
                     serialized.append(str(path.relative_to(root)).replace("\\", "/"))
 
     alpha = read(root, ALPHA)
+    p11 = read(root, P11)
     alpha_entrypoint = re.search(
         r"AddComponent\s*<\s*ApplicationUiController\s*>", alpha) is not None
+    p11_entrypoint = re.search(
+        r"AddComponent\s*<\s*ApplicationUiController\s*>", p11) is not None
 
     # Explicit blockers are not errors in a staged migration. The P0-P13
     # historical Alpha path and editor validation must be migrated separately.
     blockers = []
     if alpha_entrypoint:
         blockers.append({"kind": "alpha-scene-entrypoint", "path": ALPHA})
+    if p11_entrypoint:
+        blockers.append({"kind": "p11-scene-entrypoint", "path": P11})
+    if (root / META).is_file():
+        blockers.append({"kind": "legacy-meta-retained", "path": META})
+    if bad_meta_guid:
+        blockers.append({"kind": "unexpected-legacy-meta-guid", "path": META})
+    for scene_path, scene_text in ((ALPHA, alpha), (P11, p11)):
+        if scene_text and "workspace.AddComponent<WorkspaceToolkitShell>();" not in scene_text:
+            blockers.append({"kind": "missing-toolkit-scene", "path": scene_path})
     for path in owners:
         blockers.append({"kind": "legacy-controller-source", "path": path})
     for path in serialized:
@@ -103,6 +120,8 @@ def scan(root):
         "p1_guard_active": gate_contract and not legacy_constructor,
         "p1_toolkit_legacy_references": shell_legacy,
         "alpha_instantiates_legacy_ui": alpha_entrypoint,
+        "p11_instantiates_legacy_ui": p11_entrypoint,
+        "retired_monoscript_guid": RETIRED_GUID,
         "legacy_controller_files": owners,
         "legacy_code_references": references,
         "tracked_serialized_legacy_guid_references": serialized,
@@ -123,11 +142,12 @@ def self_test():
                 "GetComponentsInChildren<Transform>(true);\n"
                 "const string key = \"" + LEGACY_FULL + "\";\n"),
             ALPHA: "root.AddComponent<\n    ApplicationUiController>();\n",
-            META: "fileFormatVersion: 2\nguid: 1234567890abcdef1234567890abcdef\n",
+            META: "fileFormatVersion: 2\nguid: " + RETIRED_GUID + "\n",
             "unity/Assets/VCR/Runtime/UI/WorkspaceToolkitShell.cs": "class WorkspaceToolkitShell {}\n",
             "unity/Assets/VCR/Runtime/UI/ApplicationUiController.cs": "class ApplicationUiController {}\n",
+            P11: "workspace.AddComponent<WorkspaceToolkitShell>();\n",
             "unity/Assets/VCR/P0/Legacy.prefab":
-                "m_Script: {fileID: 11500000, guid: 1234567890abcdef1234567890abcdef, type: 3}\n",
+                "m_Script: {fileID: 11500000, guid: " + RETIRED_GUID + ", type: 3}\n",
         }
         for name, content in samples.items():
             file = root / name
@@ -138,6 +158,7 @@ def self_test():
         assert report["alpha_instantiates_legacy_ui"]
         assert len(report["tracked_serialized_legacy_guid_references"]) == 1
         assert not report["global_retirement_complete"]
+        assert not report["p11_instantiates_legacy_ui"]
         shell = root / "unity/Assets/VCR/Runtime/UI/WorkspaceToolkitShell.cs"
         shell.write_text("FindFirstObjectByType<ApplicationUiController>();\n",
                          encoding="utf-8")
@@ -153,6 +174,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strict-p1", action="store_true",
                         help="fail on regressions in the P1 Toolkit-only contract")
+    parser.add_argument("--strict-global", action="store_true",
+                        help="fail if historical application uGUI still exists")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--output", type=Path, help="write JSON inventory")
     args = parser.parse_args()
@@ -172,6 +195,8 @@ def main():
     for error in report["p1_contract_errors"]:
         print("ERROR: " + error)
     if args.strict_p1 and report["p1_contract_errors"]:
+        raise SystemExit(1)
+    if args.strict_global and not report["global_retirement_complete"]:
         raise SystemExit(1)
 
 

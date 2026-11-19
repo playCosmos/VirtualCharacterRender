@@ -24,3 +24,26 @@ The script intentionally distinguishes **no legacy UI in generated P1** from **n
 **Next retirement batch:** move the remaining historical Alpha UI behavior/tests to Toolkit-backed or UI-independent fixtures; update the Alpha scene builder and repository assertions together; delete controller partials and their `.meta` files in the same change; verify GUID/reference absence and build all original P0–P13 plus generated P1 Windows/macOS Players; exercise native Settings and quit paths. Then and only then change the global retirement status to complete. Exact-source Unity CI, hosted native smoke and source audits are distinct from physical hardware/operator acceptance.
 
 No release, tag, merge, or automatic upgrade of historical Alpha scenes is authorized by this U3 separation change.
+
+## U3.2 — historical scene migration / retired uGUI (validation pending)
+
+Alpha and P11 scene generators now instantiate a single `UIDocument`
++ `WorkspaceToolkitShell` with project-owned persistent `PanelSettings`.
+Generated Alpha/P11 scenes switch to opaque framed desktop output as required
+for a clickable interactive Toolkit workspace. Three retired application
+controller partial sources and their matching Unity `.meta` files are
+deleted in the same commit, rather than leaving missing C# references.
+
+P11 application model/policy checks remain. P1 Workspace behavioral
+regressions no longer open deleted controller source files. Repository
+validation replaces 110 micro-allocation assertions that only made sense
+for the removed Canvas renderer with explicit Toolkit/native Settings
+contracts; P0–P13 validation and exact-source hosted Player checks must
+still execute. The U3 auditor permanently preserves the retired MonoScript
+GUID, checks authored serialized files, and fails CI using `--strict-global`.
+
+**Limitations:** existing user-authored or untracked Alpha/P11 scenes are
+not auto-migrated. They require an explicit scene rebuild/manual migration
+and missing-script verification. Source edits and hosted CI are not
+hardware/operator acceptance. PRs #44/#45/#46 remain Draft; no merge,
+release or tag is authorized.

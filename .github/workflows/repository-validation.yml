@@ -79,7 +79,7 @@ jobs:
 
       - name: Audit legacy application UI dependency and Toolkit-only P1 isolation
         run: |
-          python3 tools/audit-u3-legacy-ui.py --self-test --strict-p1 \
+          python3 tools/audit-u3-legacy-ui.py --self-test --strict-p1 --strict-global \
             --output Builds/Validation/u3-legacy-ui-inventory.json
 
       - name: Upload staged legacy UI dependency inventory
