@@ -4015,7 +4015,8 @@ namespace VCR.Editor.P1
                 var code = File.ReadAllText(Path.Combine(Application.dataPath,
                     "VCR/Runtime/UI/WorkspaceToolkitShell.TrackingSettings.cs"));
                 if (!code.Contains("IsWorkspaceTrackingRestoreRetryDue(id, source)") ||
-                    !code.Contains("RecordWorkspaceTrackingRestoreFailure(id, source)") ||
+                    !code.Contains("RecordWorkspaceTrackingRestoreFailure(") ||
+                    !code.Contains("id, source, observedRetrySettings)") ||
                     !code.Contains("_workspaceTrackingRestoreRetries.Remove(id)") ||
                     !code.Contains("!ReferenceEquals(retry.Provider, source)"))
                     return false;
