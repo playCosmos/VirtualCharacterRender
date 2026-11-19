@@ -357,6 +357,12 @@ Once U1 passes its acceptance gates, remove the legacy uGUI application path **i
 
 Do not blindly delete the Unity `com.unity.modules.ui` package: UI Toolkit itself can depend on built-in UI modules. Delete obsolete application code, not required engine modules.
 
+## Physical P1 Player evidence: post-exit payload integrity
+
+The source-bound Windows IL2CPP operator launcher (`tools/run-p1-player.ps1`) verifies the full extracted Player directory against the CI-created payload manifest **before launching** and again **after the GUI process exits**, before writing `launch-evidence.json`. It also compares the executable SHA-256 with its pre-launch value. File additions, deletion, or payload/manifest hash changes during the run reject machine evidence rather than emitting a false clean result. Any raw `Player.log` remains available for fault diagnosis; it is not an acceptance record after a rejected payload. `tools/test-p1-player-launch.ps1` includes a real native mock that mutates `GameAssembly.dll` during execution and requires the launcher to reject the run after exit.
+
+These checks establish **before/after consistency**, not continuous immutable-file monitoring, trusted publisher identity, actual source-compilation authenticity, or a guarantee against files being changed and reverted between checks. Use an independently verified source SHA and signed/trusted distribution channel; do not mark physical human acceptance from hashes or native-hosted CI.
+
 ## Manual acceptance checklist
 
 1. Verify no Unity C# compilation errors and build Windows x64 and macOS players on their supported build hosts. Check that native Windows P1 startup/quit smoke passes with the exact generated P1 Player (not an alpha-only test scene), including validated artifact provenance and configuration restore. This automated headless check is independent of subsequent interactive GUI acceptance.
