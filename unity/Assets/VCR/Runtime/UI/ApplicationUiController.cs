@@ -403,7 +403,7 @@ namespace VCR.Runtime.UI
         public ApplicationUiModel Model => _model;
 
         private const string LastCharacterPathKey =
-            ApplicationRuntimeBootstrap.LastCharacterPathPreferenceKey;
+            ModelSessionController.PreferenceKey;
         private bool _characterRestoreAttempted;
         private bool _configurationStartupNoticeDelivered;
 
@@ -479,6 +479,18 @@ namespace VCR.Runtime.UI
 
         private async void TryRestoreLastCharacter()
         {
+            // Application bootstrap owns remembered restoration in Players.
+            // Never race it or silently retry its previous failed candidate.
+            if (!UnityEngine.Application.isEditor)
+            {
+                var bootstrap = applicationBootstrap != null
+                    ? applicationBootstrap : FindFirstObjectByType<ApplicationRuntimeBootstrap>();
+                if (bootstrap != null && bootstrap.isActiveAndEnabled)
+                {
+                    _characterRestoreAttempted = true;
+                    return;
+                }
+            }
             if (_characterRestoreAttempted ||
                 sceneRuntime == null ||
                 sceneRuntime.Status.HasCharacter)
@@ -486,7 +498,7 @@ namespace VCR.Runtime.UI
                 return;
             }
 
-            var path = PlayerPrefs.GetString(LastCharacterPathKey, string.Empty);
+            var path = ModelSessionController.RememberedPath;
             if (string.IsNullOrWhiteSpace(path))
             {
                 _characterRestoreAttempted = true;
@@ -3129,8 +3141,7 @@ namespace VCR.Runtime.UI
 
                 if (loaded != null)
                 {
-                    PlayerPrefs.SetString(LastCharacterPathKey, path);
-                    PlayerPrefs.Save();
+                    ModelSessionController.RememberSuccessfulManualLoad(path);
                 }
 
                 _lastActionMessage =
@@ -3268,8 +3279,7 @@ namespace VCR.Runtime.UI
             try
             {
                 sceneRuntime.UnloadCharacter();
-                PlayerPrefs.DeleteKey(LastCharacterPathKey);
-                PlayerPrefs.Save();
+                ModelSessionController.ForgetOnExplicitUnload();
                 _lastActionMessage =
                     "Character unloaded.";
             }

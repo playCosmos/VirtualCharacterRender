@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using VCR.Runtime.UI;
+using VCR.Runtime.Application;
 using VCR.Runtime.Tracking;
 
 namespace VCR.Editor.P1
@@ -216,6 +217,8 @@ namespace VCR.Editor.P1
                     Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
                 Check(NativeSettingsActionsKeepDistinctMeanings(),
                     "native settings actions 204 and 207 must stay load and render-default");
+                Check(ModelSessionPreferenceAndBootstrapOwnership(),
+                    "U2 session must preserve legacy path, CLI priority, explicit unload and UI-independent startup restoration");
                 Check(SettingsConfirmationLifecycle(),
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
@@ -3610,6 +3613,82 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool ModelSessionPreferenceAndBootstrapOwnership()
+        {
+            var key = ModelSessionController.PreferenceKey;
+            var originalPresent = PlayerPrefs.HasKey(key);
+            var original = PlayerPrefs.GetString(key, string.Empty);
+            var directory = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-model-" + Guid.NewGuid().ToString("N"));
+            var validVrm = Path.Combine(directory, "remembered.vrm");
+            var missingVrm = Path.Combine(directory, "missing.vrm");
+            try
+            {
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(validVrm, "model session test; not real VRM bytes");
+                PlayerPrefs.DeleteKey(key);
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.NoPreference)
+                    return false;
+
+                // A saved v1 key needs neither migration nor rewrite.
+                PlayerPrefs.SetString(key, validVrm);
+                if (ModelSessionController.RememberedPath != validVrm ||
+                    ModelSessionController.SelectStartupRestore(false, false,
+                        out var candidate) != RememberedModelRestoreDecision.RestoreVrm ||
+                    candidate != validVrm)
+                    return false;
+                if (ModelSessionController.SelectStartupRestore(true, false,
+                        out _) != RememberedModelRestoreDecision.ExplicitStartupModel ||
+                    ModelSessionController.SelectStartupRestore(false, true,
+                        out _) != RememberedModelRestoreDecision.AlreadyActive)
+                    return false;
+
+                PlayerPrefs.SetString(key, missingVrm);
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.MissingFile ||
+                    ModelSessionController.RememberedPath != missingVrm)
+                    return false;
+                PlayerPrefs.SetString(key, Path.ChangeExtension(validVrm, ".fbx"));
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.UnsupportedFormat)
+                    return false;
+
+                // Only the confirmed-success path is ever persisted.
+                ModelSessionController.RememberSuccessfulManualLoad(validVrm);
+                if (PlayerPrefs.GetString(key) != validVrm)
+                    return false;
+                ModelSessionController.ForgetOnExplicitUnload();
+                if (PlayerPrefs.HasKey(key))
+                    return false;
+
+                var bootstrap = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/Application/ApplicationRuntimeBootstrap.cs"));
+                var u1 = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/ApplicationUiController.cs"));
+                var scene = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/Scene/SingleCharacterSceneRuntime.cs"));
+                return bootstrap.Contains("await TryRestoreRememberedModelAsync()") &&
+                       bootstrap.Contains("ModelSessionController.SelectStartupRestore(") &&
+                       bootstrap.Contains("TryRecoverOptionalModelFailure()") &&
+                       scene.Contains("TryRecoverFailedOptionalCharacterLoad()") &&
+                       u1.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
+                       u1.Contains("ModelSessionController.ForgetOnExplicitUnload()") &&
+                       legacy.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
+                       legacy.Contains("ModelSessionController.ForgetOnExplicitUnload()");
+            }
+            finally
+            {
+                if (originalPresent) PlayerPrefs.SetString(key, original);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, true);
             }
         }
 
