@@ -66,6 +66,22 @@ jobs:
           manualExit: true
           versioning: None
           allowDirtyBuild: true
+      # The CI-only Windows Mono backend and decorated-window defaults
+      # intentionally modify Unity PlayerSettings during the two builds.
+      # Restore only the checked-in ProjectSettings baseline, like the P1
+      # Windows Mono workflow, then require both the lock and settings hashes.
+      # Preserve a readable diff before restoration for regression diagnosis.
+      - name: Restore pinned IL2CPP baseline after U3 Mono builds
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- unity/ProjectSettings/ProjectSettings.asset; then
+            echo "Restoring checked-in ProjectSettings after U3-only Mono/desktop Player builds."
+            git diff -- unity/ProjectSettings/ProjectSettings.asset
+            git restore --source=HEAD -- unity/ProjectSettings/ProjectSettings.asset
+          fi
+          sha256sum --check "$RUNNER_TEMP/u3-input.sha256"
       - name: Require both Player outputs and pinned settings
         shell: bash
         run: |
