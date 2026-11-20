@@ -1,0 +1,181 @@
+name: U3 Alpha/P11 Windows Player native smoke
+
+# Isolated from the P0-P13/P1 evidence lane. Build both historical
+# application scenes as actual Windows development Players, then execute
+# them on a native Windows runner. No release, signing or physical approval.
+on:
+  push:
+    branches:
+      - feature/u3-toolkit-only-retirement-20261119
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: u3-alpha-p11-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-players:
+    name: Build actual Alpha and P11 Windows Mono Players
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Verify pinned Unity baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          python3 tools/validate-unity-reproducibility.py
+          python3 tools/validate-repository-structure.py --strict-reproducibility
+          sha256sum unity/Packages/packages-lock.json unity/ProjectSettings/ProjectSettings.asset > "$RUNNER_TEMP/u3-input.sha256"
+          test ! -e unity/Library
+      - name: Reclaim unrelated Ubuntu SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sdk in /usr/local/lib/android /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
+            if [ -d "$sdk" ]; then sudo rm -rf -- "$sdk"; fi
+          done
+          command -v dotnet
+          test -n "$(dotnet --list-sdks)"
+          df -h "$GITHUB_WORKSPACE"
+      - name: Bootstrap pinned runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/bootstrap-mediapipe.sh
+          bash tools/bootstrap-ui-fonts.sh
+          bash tools/bootstrap-ultraleap.sh
+          bash tools/bootstrap-uniwinc.sh
+      - name: Build genuine U3 Alpha and P11 development Players
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.Alpha.U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit
+          customImage: unityci/editor:6000.3.25f1-windows-mono-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+      # The CI-only Windows Mono backend and decorated-window defaults
+      # intentionally modify Unity PlayerSettings during the two builds.
+      # Restore only the checked-in ProjectSettings baseline, like the P1
+      # Windows Mono workflow, then require both the lock and settings hashes.
+      # Preserve a readable diff before restoration for regression diagnosis.
+      - name: Restore pinned IL2CPP baseline after U3 Mono builds
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- unity/ProjectSettings/ProjectSettings.asset; then
+            echo "Restoring checked-in ProjectSettings after U3-only Mono/desktop Player builds."
+            git diff -- unity/ProjectSettings/ProjectSettings.asset
+            git restore --source=HEAD -- unity/ProjectSettings/ProjectSettings.asset
+          fi
+          sha256sum --check "$RUNNER_TEMP/u3-input.sha256"
+      - name: Require both Player outputs and pinned settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in Alpha P11; do
+            test -s "unity/Builds/U3/$variant/Windows-Development/VirtualCharacterRender.exe"
+            test -d "unity/Builds/U3/$variant/Windows-Development/VirtualCharacterRender_Data"
+          done
+          sha256sum --check "$RUNNER_TEMP/u3-input.sha256"
+      - name: Package each exact-source Player with independent SHA-256 sidecars
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          for variant in ("Alpha", "P11"):
+              root = Path("unity/Builds/U3") / variant / "Windows-Development"
+              if not (root / "VirtualCharacterRender.exe").is_file():
+                  raise SystemExit("Missing Windows Player: " + variant)
+              destination = Path("u3-player-artifacts") / variant
+              destination.mkdir(parents=True, exist_ok=True)
+              archive = destination / "windows.zip"
+              with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=1,
+                           allowZip64=True) as z:
+                  for path in sorted(root.rglob("*")):
+                      if path.is_file():
+                          z.write(path, path.relative_to(root).as_posix())
+              digest = hashlib.sha256()
+              with archive.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              (destination / "windows.sha256").write_text(
+                  digest.hexdigest() + "  windows.zip\n", encoding="utf-8")
+              (destination / "windows.source-sha").write_text(
+                  os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
+              print(variant + " Player SHA-256: " + digest.hexdigest())
+          PY
+      - name: Preserve source-bound Alpha/P11 Player archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: u3-alpha-p11-players-${{ github.run_id }}-${{ github.run_attempt }}
+          path: u3-player-artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-windows-smoke:
+    name: Execute Alpha and P11 Players on real Windows runner
+    needs: build-players
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+      - name: Download exact-source Players
+        uses: actions/download-artifact@v4
+        with:
+          name: u3-alpha-p11-players-${{ github.run_id }}-${{ github.run_attempt }}
+          path: u3-player-artifacts
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute Alpha native startup/relaunch/recovery/normal quit
+        shell: pwsh
+        run: |
+          python tools/run-player-smoke.py `
+            --platform windows `
+            --archive u3-player-artifacts/Alpha/windows.zip `
+            --source "$env:GITHUB_SHA" `
+            --output Builds/PlayerSmoke/U3/Alpha
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Execute P11 native startup/relaunch/recovery/normal quit
+        shell: pwsh
+        run: |
+          python tools/run-player-smoke.py `
+            --platform windows `
+            --archive u3-player-artifacts/P11/windows.zip `
+            --source "$env:GITHUB_SHA" `
+            --output Builds/PlayerSmoke/U3/P11
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u3-alpha-p11-native-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            u3-player-artifacts/Alpha/windows.sha256
+            u3-player-artifacts/Alpha/windows.source-sha
+            u3-player-artifacts/P11/windows.sha256
+            u3-player-artifacts/P11/windows.source-sha
+            Builds/PlayerSmoke/U3/
+          if-no-files-found: warn
+          retention-days: 30

@@ -287,8 +287,6 @@ namespace VCR.Editor.P1
                     "tracking editors must reject Save after direct provider setting changes");
                 Check(TrackingStateTransitionsInvalidateOpenEditors(),
                     "successful tracking Toggle and Recover must invalidate previous editor drafts");
-                Check(LegacyRestoreSkipsDestroyedRefresh(),
-                    "legacy character restore must not refresh a destroyed controller");
                 Check(ContinuationStopsBeforeUi(shellSource, "LoadCharacterAsync") &&
                       ContinuationStopsBeforeUi(shellSource, "ReloadCharacterAsync"),
                     "character load continuation must stop before UI writes when the shell is destroyed");
@@ -596,8 +594,6 @@ namespace VCR.Editor.P1
         {
             var shell = File.ReadAllText(Path.Combine(Application.dataPath,
                 "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
-            var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
-                "VCR/Runtime/UI/ApplicationUiController.NativeSettings.cs"));
             var register = shell.IndexOf("Add(0, 204,", StringComparison.Ordinal);
             var restore = shell.IndexOf("Add(0, 207,", StringComparison.Ordinal);
             if (register < 0 || restore < 0 || restore < register) return false;
@@ -607,11 +603,11 @@ namespace VCR.Editor.P1
             if (!restoreLabel.Contains("Restore render defaults")) return false;
             if (!shell.Contains("if (action == 204)")) return false;
             if (!shell.Contains("action != 207")) return false;
-            // Native Settings has one visible Reload action (legacy 204).
-            // Internal U1 action 206 remains supported by the fallback.
+            // The one visible native Reload routes to the guarded config
+            // reload (206), distinct from the Restore Defaults action.
             if (shell.Contains("Add(0, 206,")) return false;
-            return legacy.Contains("AddNativeAction(0, 204") &&
-                   legacy.Contains("ShowProfileLoadUnavailable");
+            return shell.Contains("ApplyWorkspaceConfigurationActionWithNativeFeedback(206);") &&
+                   shell.Contains("_workspaceNativeSettings.PumpMessages();");
         }
         private static bool SettingsConfirmationLifecycle()
         {
@@ -4060,8 +4056,6 @@ namespace VCR.Editor.P1
                     "VCR/Runtime/Application/ApplicationRuntimeBootstrap.cs"));
                 var u1 = File.ReadAllText(Path.Combine(Application.dataPath,
                     "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
-                var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
-                    "VCR/Runtime/UI/ApplicationUiController.cs"));
                 var scene = File.ReadAllText(Path.Combine(Application.dataPath,
                     "VCR/Runtime/Scene/SingleCharacterSceneRuntime.cs"));
                 return bootstrap.Contains("await TryRestoreRememberedModelAsync()") &&
@@ -4069,9 +4063,7 @@ namespace VCR.Editor.P1
                        bootstrap.Contains("TryRecoverOptionalModelFailure()") &&
                        scene.Contains("TryRecoverFailedOptionalCharacterLoad()") &&
                        u1.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
-                       u1.Contains("ModelSessionController.ForgetOnExplicitUnload()") &&
-                       legacy.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
-                       legacy.Contains("ModelSessionController.ForgetOnExplicitUnload()");
+                       u1.Contains("ModelSessionController.ForgetOnExplicitUnload()");
             }
             finally
             {
@@ -4977,22 +4969,6 @@ namespace VCR.Editor.P1
             }
         }
 
-        private static bool LegacyRestoreSkipsDestroyedRefresh()
-        {
-            var source = File.ReadAllText(Path.Combine(
-                Application.dataPath, "VCR/Runtime/UI/ApplicationUiController.cs"));
-            var at = source.IndexOf("Previous character restored.", StringComparison.Ordinal);
-            if (at < 0) return false;
-            var load = source.IndexOf("Loading character...", at, StringComparison.Ordinal);
-            var reload = source.IndexOf("Reloading character...", at, StringComparison.Ordinal);
-            if (load < 0 || reload < 0) return false;
-            if (!HasLiveRefreshAfter(source, load, "LoadCharacterAsync") ||
-                !HasLiveRefreshAfter(source, reload, "ReloadCharacterAsync")) return false;
-            var refresh = source.IndexOf("RefreshAll();", at, StringComparison.Ordinal);
-            if (refresh < 0) return false;
-            var guard = source.LastIndexOf("this != null", refresh, StringComparison.Ordinal);
-            return guard > at && refresh - guard < 400;
-        }
         private static bool ContinuationStopsBeforeUi(string source, string awaitCall)
         {
             var awaitAt = source.IndexOf("await sceneRuntime." + awaitCall, StringComparison.Ordinal);

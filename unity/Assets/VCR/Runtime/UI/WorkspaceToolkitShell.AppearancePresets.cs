@@ -115,10 +115,9 @@ namespace VCR.Runtime.UI
             {
                 _workspacePresetStore ??= AppearanceUserPresetStore.CreateDefault();
                 var file = _workspacePresetStore.GetProfilePath(path);
-                // The legacy controller loads this profile as well. Do not
-                // race it or overwrite its in-memory pending changes.
-                if (FindFirstObjectByType<ApplicationUiController>() != null)
-                    return true;
+                // The Toolkit-only P1 scene owns its profile restore. A
+                // legacy-controller presence test would silently skip this
+                // load and retain the wrong model's in-memory presets.
                 // A shared scene-level provider can survive a VRM swap. In
                 // the absence of a saved profile, clear its previous model's
                 // user presets rather than exposing them to the new model.

@@ -76,6 +76,20 @@ jobs:
 
       - name: Validate repository structure
         run: python3 tools/validate-repository-structure.py
+
+      - name: Audit legacy application UI dependency and Toolkit-only P1 isolation
+        run: |
+          python3 tools/audit-u3-legacy-ui.py --self-test --strict-p1 --strict-global \
+            --output Builds/Validation/u3-legacy-ui-inventory.json
+
+      - name: Upload staged legacy UI dependency inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u3-legacy-ui-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/Validation/u3-legacy-ui-inventory.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Parse PowerShell tooling
         shell: pwsh
         run: |
