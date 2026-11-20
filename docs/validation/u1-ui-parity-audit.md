@@ -53,7 +53,8 @@ The inventory maps main feature families and concrete entry points, not every dy
 | b4c53fb / macOS P1 #43447066150 | AppKit arm64 and managed Unity Player native smoke | PASS |
 | b4c53fb / repository #43447076442 and #43447066213 | macOS launcher job cancelled before runner assignment | NOT PASS; cancellation is not an assertion failure |
 | 034a2bd / repository #43519155074 and #43519145789 | Push and PR repository validation | PASS |
-| Current Settings follow-up HEAD | Run current Repository validation, P0–P13, Windows Player and macOS as applicable | PENDING until exact run results are checked |
+| 10157e14 / repository #44448406205 and #44448396924 | Push and PR repository validation, including macOS launcher | PASS |
+| 10157e14 / Unity P0-P13 #44448396928 | Source-free validation, Windows Player startup/quit, informational WM_CLOSE | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
@@ -63,7 +64,7 @@ Source review found that `RestoreWorkspaceTrackingPreferences` previously stored
 
 - `f0f89b3`: record the exact `ITrackingRuntimeControl` instance alongside its ID, replace the entry on reconnection, and retain the existing retry-on-failed-apply behavior. All manual add, toggle and save actions also mark the current provider instance.
 - `01e6bd0`, strengthened by `645f0c6`: P1 source-free regression creates an actual Unity tracking provider implementing both runtime control and runtime configuration, restores a persisted configuration field and enabled state, verifies same-instance no-op on the next scan, destroys that provider, creates a replacement with the same ID, and verifies both persisted settings and enabled state are applied again exactly once. The test deletes its uniquely named temporary PlayerPrefs keys.
-- **Verification status:** implementation and Unity fixture committed; source-matched P0–P13 and Windows/macOS acceptance are **PENDING** until the new HEAD CI completes. This is not yet physical camera/tracker reconnection approval.
+- **Verification status:** source-matched Unity P0-P13 and repository validation passed on 10157e14. This is not physical camera/tracker reconnection approval.
 - Physical disconnect/reconnect with the same component (rather than a replaced component) still depends on each provider's own recovery policy and remains an acceptance item.
 
 ## Tracking editor draft vs provider replacement
@@ -73,7 +74,7 @@ A separate real-world reconnect risk was found after the restored-instance fix: 
 - `8af058a`: native Settings now remembers the provider instance that created the editor fields, clears that reference when the device list is rebuilt, and refuses Save if the instance changed. It rebuilds the list and requests that the operator reopen Settings. The UI Toolkit Save closure similarly compares its captured provider with the live current provider, discards the stale editor and reports the issue.
 - `2f81270`: the P1 Unity regression verifies that a provider matches itself, rejects a null target and a same-ID replacement, and requires both native and UI Toolkit submission paths to call the identity guard. This uses actual Unity provider fixtures, but **not** native window click simulation.
 - This is a protection against applying **stale unsaved drafts to a different runtime instance**. It does not verify that a provider's own recovery implementation preserves live settings on a disconnect that keeps the same component.
-- Exact-source CI on these changes and physical device/camera detach–reconnect remain required. Keep status **PENDING** until CI completes.
+- Exact-source CI passed on 10157e14. Physical device/camera detach-reconnect remains required.
 
 ## Tracking restore cache lifecycle and transient failures
 
@@ -116,7 +117,7 @@ Source audit found that U1 had two direct `ITrackingRuntimeControl.TryRecover` c
 - **Confirmed duplicate restart:** MediaPipe's `TryRecover()` restarts the webcam, and its `TryApplyConfiguration()` previously called `Restart()` on **every** successful apply while enabled/in Play mode. The U1 post-Recover preference replay therefore restarted the camera again even when the saved capture device, width, height and FPS already matched the live configuration.
 - `a167c16`: MediaPipe now calls `Restart()` for actual capture-setting changes or when `_state == Faulted` (explicit retry), not when reapplying identical values. This preserves the saved-settings reconciliation while eliminating an unnecessary second restart for unchanged settings.
 - `c4146fa`: P3 source-free fixture creates a MediaPipe runner on an inactive Unity GameObject, checks all four restart-relevant values, applies identical settings, applies a changed width and rejects an invalid width without overwriting the current configuration. A source contract also retains the faulted retry guard.
-- **New exact-source CI: PENDING.** Source-free Unity runs cannot prove actual webcam startup timing. Repeated hardware Recover, 720p60/1080p60 OBS capture and long-duration tracking remain physical acceptance requirements.
+- Exact-source CI passed on 10157e14. Source-free Unity runs cannot prove actual webcam startup timing. Repeated hardware Recover, 720p60/1080p60 OBS capture and long-duration tracking remain physical acceptance requirements.
 - **Trade-off:** When saved capture values genuinely differ from the live settings after Recover, the restart remains necessary; a second start may occur. Testing on real hardware must distinguish legitimate reconfiguration from redundant restart.
 
 ## Tracking input membership parity: Native vs UI Toolkit Toggle
@@ -393,7 +394,7 @@ A device can start capture while applying settings and still return `false`. Del
 - `212de91`: real Unity shell fixture simulates Apply starting capture and failing, verifies same-attempt Stop, builds three consecutive configuration failures, toggles a saved-Off source externally while backoff is active, verifies Stop is issued without a premature configuration replay, tests a failed Stop followed by a later successful Stop, then validates normal saved configuration replay after the retry deadline.
 - `5a3a9eb` and `a65f602`: a second narrow case occurs when configuration Apply **succeeds**, but the provider starts capture and its subsequent saved-Off Stop returns failure. The restore attempt must leave the provider uncached without immediately repeating the failed Stop in its `finally` block. The real-shell regression verifies exactly one Stop call in that attempt and subsequent successful Stop/restoration on the next scan.
 - **Trade-off:** repeated safety Stop attempts can still call an unhealthy SDK every two seconds, intentionally overriding the slower configuration retry schedule. Neither a successful `ControlEnabled=false` readback nor Unity automation proves a real camera has physically stopped. Device-level privacy and lifecycle tests remain mandatory.
-- **CI not yet accepted for these new commits.** Require exact-HEAD Unity P0–P13, native Windows startup/GUI, macOS and repository validation before marking green. Keep PR #44 Draft/unmerged and legacy uGUI.
+- Exact-HEAD Unity P0-P13, Windows Player startup/quit, and repository validation passed on 10157e14. Native GUI interaction, macOS physical acceptance, and a 4-hour run remain open. Keep PR #44 Draft/unmerged and legacy uGUI.
 
 ## Changed persisted Tracking On/Off must bypass an old restore backoff
 
