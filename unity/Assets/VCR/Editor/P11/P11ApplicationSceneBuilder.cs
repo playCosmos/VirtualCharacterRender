@@ -4,6 +4,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VCR.Runtime.Output.Unity;
+using VCR.Runtime.Diagnostics;
+using VCR.Runtime.Tracking.MediaPipe;
 using VCR.Editor.P0;
 using VCR.Runtime.Application;
 using VCR.Runtime.EventRuntime;
@@ -53,6 +55,25 @@ namespace VCR.Editor.P11
             }
             mainCamera.backgroundColor = new Color(0.105f, 0.12f, 0.14f, 1f);
             output.ConfigureForP1Workspace(mainCamera);
+
+            // P11 is now an interactive application scene, not the P0
+            // transparent/webcam hardware probe. The operator opts in to
+            // physical tracking after the normal window starts.
+            var webcam = bootstrap.GetComponentInChildren<
+                MediaPipeWebcamTrackingRunner>(true);
+            var diagnostics = bootstrap.GetComponent<RuntimeDiagnostics>();
+            if (webcam == null || diagnostics == null)
+            {
+                Debug.LogError("VCR P11: missing tracking or diagnostics base service.");
+                return;
+            }
+            webcam.enabled = false;
+            diagnostics.ConfigureForP1Workspace();
+
+            // Inert on regular launches: only the explicit smoke-report
+            // command-line option tests real Player startup and shutdown.
+            if (bootstrap.GetComponent<PlayerStartupSmoke>() == null)
+                bootstrap.gameObject.AddComponent<PlayerStartupSmoke>();
 
             const string panelPath =
                 "Assets/VCR/P11/P11WorkspacePanelSettings.asset";

@@ -67,7 +67,7 @@ namespace VCR.Editor.Alpha
 
                 P11ApplicationSceneBuilder.CreateApplicationUiRuntimeScene();
                 if (!ValidateGeneratedScene(P11ApplicationSceneBuilder.ScenePath,
-                        P11Panel, false))
+                        P11Panel, true))
                 {
                     Debug.LogError("VCR U3: generated P11 Toolkit workspace failed validation.");
                     EditorApplication.Exit(1);
@@ -141,7 +141,7 @@ namespace VCR.Editor.Alpha
             }
         }
 
-        private static bool ValidateExistingAlphaAndP11Scenes()
+        internal static bool ValidateExistingAlphaAndP11Scenes()
         {
             var paths = new[]
             {
@@ -167,7 +167,7 @@ namespace VCR.Editor.Alpha
             var alpha = ValidateGeneratedScene(
                 AlphaApplicationSceneBuilder.ScenePath, AlphaPanel, true);
             var p11 = ValidateGeneratedScene(
-                P11ApplicationSceneBuilder.ScenePath, P11Panel, false);
+                P11ApplicationSceneBuilder.ScenePath, P11Panel, true);
 
             var unchanged = true;
             for (var i = 0; i < paths.Length; i++)

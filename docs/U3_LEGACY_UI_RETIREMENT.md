@@ -99,3 +99,26 @@ This acceptance only checks Unity Editor serialization and ownership, not
 per-pixel/UI interaction equivalence, hardware operation or Alpha/P11
 Player startup. A successful U3.3 generated-scene test is not a substitute
 for the operator validating their actual authored scene assets.
+
+## U3.5 — actual Alpha/P11 Windows Player native smoke
+
+The isolated U3-only workflow `.github/workflows/u3-alpha-p11-windows-native.yml`
+builds **two separate** development Windows Mono Players, directly from
+the real generated Alpha and P11 Toolkit scenes. It refuses any existing
+scene/panel input in the clean batch workspace; the native Player build
+requires the same read-only acceptance used for authored scenes.
+`P11ApplicationSceneBuilder` now keeps the ordinary framed window,
+starts MediaPipe webcam and diagnostics logging disabled (consistent with
+interactive P1/Alpha defaults), and attaches an **opt-in-only**
+`PlayerStartupSmoke` component. A normal P11 launch does not invoke the
+test or automatically quit. Both Players use the pinned source commit and
+separate ZIP archives with SHA-256 + source identity sidecars. The native
+Windows job runs the existing complete startup/relaunch/config-recovery/
+normal-shutdown suite **for both** Players, not the P1 binary as a proxy.
+
+This workflow is separate from the existing P0–P13/P1 CI job to preserve
+its bounded build time and avoid claiming U3 Alpha/P11 native validation
+when only scene generation succeeded. It is diagnostic development Mono
+evidence, **not** Windows IL2CPP release, macOS Alpha/P11, GUI pixel
+acceptance, or physical operator/hardware acceptance. PRs remain Draft;
+no merge, tag, or release is authorized.

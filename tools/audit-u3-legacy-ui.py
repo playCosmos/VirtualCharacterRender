@@ -22,6 +22,8 @@ RETIRED_GUID = "0a9969a7685c4bf9a390aef29d61a66f"
 P11 = "unity/Assets/VCR/Editor/P11/P11ApplicationSceneBuilder.cs"
 U3_VALIDATOR = "unity/Assets/VCR/Editor/Alpha/U3ToolkitSceneValidation.cs"
 UNITY_CI = ".github/workflows/unity-source-free.yml"
+U3_PLAYER = "unity/Assets/VCR/Editor/Alpha/U3AlphaP11PlayerBuild.cs"
+U3_PLAYER_CI = ".github/workflows/u3-alpha-p11-windows-native.yml"
 UNITY_SERIALIZED_SUFFIXES = (
     ".unity", ".prefab", ".asset", ".controller", ".overridecontroller",
     ".anim", ".mat", ".playable", ".mask", ".rendertexture",
@@ -129,6 +131,19 @@ def scan(root):
             "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit",
             "Require generated U3 Alpha and P11 Toolkit scenes",
         )),
+        (U3_PLAYER, read(root, U3_PLAYER), (
+            "BuildWindowsMonoAndExit",
+            "ValidateExistingAlphaAndP11Scenes()",
+            "BuildPipeline.BuildPlayer(",
+            "P11ApplicationSceneBuilder.ScenePath",
+            "AlphaApplicationSceneBuilder.ScenePath",
+        )),
+        (U3_PLAYER_CI, read(root, U3_PLAYER_CI), (
+            "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit",
+            "run-player-smoke.py",
+            "u3-player-artifacts/Alpha/windows.zip",
+            "u3-player-artifacts/P11/windows.zip",
+        )),
     ):
         for token in required:
             if token not in content:
@@ -203,6 +218,16 @@ def self_test():
             UNITY_CI: (
                 "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit\n"
                 "Require generated U3 Alpha and P11 Toolkit scenes\n"),
+            U3_PLAYER: (
+                "BuildWindowsMonoAndExit\nValidateExistingAlphaAndP11Scenes()\n"
+                "BuildPipeline.BuildPlayer(\n"
+                "P11ApplicationSceneBuilder.ScenePath\n"
+                "AlphaApplicationSceneBuilder.ScenePath\n"),
+            U3_PLAYER_CI: (
+                "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit\n"
+                "run-player-smoke.py\n"
+                "u3-player-artifacts/Alpha/windows.zip\n"
+                "u3-player-artifacts/P11/windows.zip\n"),
             "unity/Assets/VCR/P0/Legacy.prefab":
                 "m_Script: {fileID: 11500000, guid: " + RETIRED_GUID + ", type: 3}\n",
         }

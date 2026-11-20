@@ -25,7 +25,8 @@
     "VCR.Runtime.Capabilities",
     "VCR.Runtime.Core",
     "VCR.Runtime.Diagnostics",
-    "VCR.Runtime.Output.Unity"
+    "VCR.Runtime.Output.Unity",
+    "VCR.Runtime.Tracking.MediaPipe"
   ],
   "includePlatforms": [
     "Editor"
