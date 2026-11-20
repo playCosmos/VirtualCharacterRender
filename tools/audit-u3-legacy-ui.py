@@ -117,7 +117,13 @@ def scan(root):
             "AlphaApplicationSceneBuilder.CreateAlphaRuntimeScene()",
             "GetMonoBehavioursWithMissingScriptCount(go)",
             "document.panelSettings",
-            "scene.isDirty"
+            "scene.isDirty",
+            "ValidateExistingAlphaAndP11ScenesFromMenu",
+            "ValidateExistingAlphaAndP11ScenesAndExit",
+            "retired application UI MonoScript GUID remains",
+            "documentCount != 1",
+            "HashFile(paths[i])",
+            "if (!ValidateExistingAlphaAndP11Scenes())"
         )),
         (UNITY_CI, ci, (
             "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit",
@@ -188,7 +194,12 @@ def self_test():
                 "P11ApplicationSceneBuilder.CreateApplicationUiRuntimeScene()\n"
                 "AlphaApplicationSceneBuilder.CreateAlphaRuntimeScene()\n"
                 "GetMonoBehavioursWithMissingScriptCount(go)\n"
-                "document.panelSettings\nscene.isDirty\n"),
+                "document.panelSettings\nscene.isDirty\n"
+                "ValidateExistingAlphaAndP11ScenesFromMenu\n"
+                "ValidateExistingAlphaAndP11ScenesAndExit\n"
+                "retired application UI MonoScript GUID remains\n"
+                "documentCount != 1\nHashFile(paths[i])\n"
+                "if (!ValidateExistingAlphaAndP11Scenes())\n"),
             UNITY_CI: (
                 "U3ToolkitSceneValidation.GenerateAndValidateAllScenesAndExit\n"
                 "Require generated U3 Alpha and P11 Toolkit scenes\n"),

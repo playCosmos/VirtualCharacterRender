@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -26,6 +27,8 @@ namespace VCR.Editor.Alpha
             "Assets/VCR/P11/P11WorkspacePanelSettings.asset";
         private const string AlphaPanel =
             "Assets/VCR/Alpha/AlphaWorkspacePanelSettings.asset";
+        private const string RetiredMonoScriptGuid =
+            "0a9969a7685c4bf9a390aef29d61a66f";
 
         public static void GenerateAndValidateAllScenesAndExit()
         {
@@ -91,6 +94,15 @@ namespace VCR.Editor.Alpha
                     EditorApplication.Exit(1);
                     return;
                 }
+                // Exercise the operator read-only acceptance against the
+                // generated Alpha/P11 fixtures as a genuine Editor CI test,
+                // including the before/after scene/PanelSettings digests.
+                if (!ValidateExistingAlphaAndP11Scenes())
+                {
+                    Debug.LogError("VCR U3: read-only Alpha/P11 acceptance failed on generated fixtures.");
+                    EditorApplication.Exit(1);
+                    return;
+                }
                 Debug.Log("VCR U3 exact-source generated P1/P11/Alpha Toolkit scene checks: PASS.");
                 EditorApplication.Exit(0);
             }
@@ -102,14 +114,90 @@ namespace VCR.Editor.Alpha
             }
         }
 
+        // Read-only acceptance for an existing, user-authored Alpha/P11
+        // workspace. A scene with legacy missing scripts must be migrated
+        // explicitly; never regenerate or save it during inspection.
+        [MenuItem("VCR/U3/Validate Existing Alpha and P11 Scenes (Read Only)")]
+        public static void ValidateExistingAlphaAndP11ScenesFromMenu()
+        {
+            var passed = ValidateExistingAlphaAndP11Scenes();
+            Debug.Log(passed
+                ? "VCR U3 authored Alpha/P11 Toolkit scenes: PASS (read only)."
+                : "VCR U3 authored Alpha/P11 Toolkit scenes: FAIL (no changes saved).");
+        }
+
+        // Batch CI/operator entrypoint. It deliberately does NOT call any
+        // scene generator, the P1 upgrader, or SaveScene / SaveAssets.
+        public static void ValidateExistingAlphaAndP11ScenesAndExit()
+        {
+            try
+            {
+                EditorApplication.Exit(ValidateExistingAlphaAndP11Scenes() ? 0 : 1);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        private static bool ValidateExistingAlphaAndP11Scenes()
+        {
+            var paths = new[]
+            {
+                AlphaApplicationSceneBuilder.ScenePath,
+                P11ApplicationSceneBuilder.ScenePath,
+                AlphaPanel,
+                P11Panel
+            };
+            var before = new string[paths.Length];
+            for (var i = 0; i < paths.Length; i++)
+            {
+                if (!File.Exists(paths[i]))
+                {
+                    Debug.LogError("VCR U3: existing authored scene/PanelSettings missing: " +
+                        paths[i] + ". Validation does not regenerate it.");
+                    return false;
+                }
+                before[i] = HashFile(paths[i]);
+            }
+
+            // Evaluate both scenes even when the first one fails to show all
+            // actionable migration errors in one validation pass.
+            var alpha = ValidateGeneratedScene(
+                AlphaApplicationSceneBuilder.ScenePath, AlphaPanel, true);
+            var p11 = ValidateGeneratedScene(
+                P11ApplicationSceneBuilder.ScenePath, P11Panel, false);
+
+            var unchanged = true;
+            for (var i = 0; i < paths.Length; i++)
+            {
+                if (File.Exists(paths[i]) && HashFile(paths[i]) == before[i])
+                    continue;
+                Debug.LogError("VCR U3: read-only scene inspection changed " + paths[i]);
+                unchanged = false;
+            }
+            return alpha && p11 && unchanged;
+        }
+
+        private static string HashFile(string path)
+        {
+            using (var sha = SHA256.Create())
+            using (var stream = File.OpenRead(path))
+                return BitConverter.ToString(sha.ComputeHash(stream));
+        }
+
         private static bool ValidateGeneratedScene(
             string scenePath, string panelPath, bool requireSmoke)
         {
             if (!File.Exists(scenePath) || !File.Exists(panelPath))
             {
-                Debug.LogError("VCR U3: generated scene/PanelSettings missing: " + scenePath);
+                Debug.LogError("VCR U3: scene/PanelSettings missing: " + scenePath);
                 return false;
             }
+            if (File.ReadAllText(scenePath).IndexOf(
+                    RetiredMonoScriptGuid, StringComparison.OrdinalIgnoreCase) >= 0)
+                return Fail(scenePath, "retired application UI MonoScript GUID remains");
             var alreadyOpen = false;
             var scene = default(Scene);
             for (var i = 0; i < SceneManager.sceneCount; i++)
@@ -131,6 +219,7 @@ namespace VCR.Editor.Alpha
                     return Fail(scenePath, "scene unavailable or contains unsaved changes");
 
                 var shells = 0;
+                var documentCount = 0;
                 var bootstraps = 0;
                 var smokeComponents = 0;
                 var outputs = 0;
@@ -139,6 +228,7 @@ namespace VCR.Editor.Alpha
                     foreach (var item in root.GetComponentsInChildren<Transform>(true))
                     {
                         var go = item.gameObject;
+                        documentCount += go.GetComponents<UIDocument>().Length;
                         if (GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(go) != 0)
                             return Fail(scenePath, "missing MonoBehaviour script on " + go.name);
                         foreach (var shell in go.GetComponents<WorkspaceToolkitShell>())
@@ -163,7 +253,8 @@ namespace VCR.Editor.Alpha
                         }
                     }
                 }
-                if (shells != 1 || bootstraps != 1 || outputs != 1 ||
+                if (shells != 1 || documentCount != 1 ||
+                    bootstraps != 1 || outputs != 1 ||
                     (requireSmoke && smokeComponents != 1))
                     return Fail(scenePath, "expected exactly one Toolkit shell, bootstrap and output");
                 return true;

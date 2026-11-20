@@ -70,3 +70,32 @@ Passing generated-Editor-scene validation is **not** proof of actual Alpha/P11
 Player execution, macOS native UI acceptance, authored-scene migration, or
 hardware approval. Generated fixture scenes are used only in CI; the
 operator's existing scenes are not changed by this gate.
+
+## U3.4 — read-only migration acceptance of existing Alpha/P11 scenes
+
+Unity Editor menu **VCR → U3 → Validate Existing Alpha and P11 Scenes
+(Read Only)** and batch method
+`VCR.Editor.Alpha.U3ToolkitSceneValidation.ValidateExistingAlphaAndP11ScenesAndExit`
+inspect the *existing* authored assets, without invoking a generator or
+saving the scene. They require both scene assets and their persistent
+PanelSettings, reject unsaved/dirty loaded scenes, missing scripts including
+inactive objects, the retired `ApplicationUiController` MonoScript GUID,
+duplicate Toolkit shell/`UIDocument` ownership, incorrect or inactive
+PanelSettings, missing bootstrap/output, and unwanted transparent or
+click-through window defaults. SHA-256 of the two scenes and two PanelSettings
+is compared before and after to detect accidental writes. A failed
+inspection leaves the scenes intact. It **does not** silently detach or
+delete missing scripts, recreate scenes, or convert Canvas components.
+
+For manual migration: back up the authored scenes and external dependencies;
+remove or replace the retired UI and its bindings explicitly; attach one
+active `WorkspaceToolkitShell` and `UIDocument` using the expected
+persistent panel asset; ensure an opaque framed output; save intentionally
+in Unity; then run the read-only acceptance. Canvas/EventSystem use by
+other subsystems is not globally deleted. Existing P1 has its separate
+upgrade/validation gate.
+
+This acceptance only checks Unity Editor serialization and ownership, not
+per-pixel/UI interaction equivalence, hardware operation or Alpha/P11
+Player startup. A successful U3.3 generated-scene test is not a substitute
+for the operator validating their actual authored scene assets.
