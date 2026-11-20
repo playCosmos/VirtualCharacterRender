@@ -55,6 +55,7 @@ The inventory maps main feature families and concrete entry points, not every dy
 | 034a2bd / repository #43519155074 and #43519145789 | Push and PR repository validation | PASS |
 | 10157e14 / repository #44448406205 and #44448396924 | Push and PR repository validation, including macOS launcher | PASS |
 | 10157e14 / Unity P0-P13 #44448396928 | Source-free validation, Windows Player startup/quit, informational WM_CLOSE | PASS |
+| debb650e / repository #44839011299 and #44839003320 | Push and PR repository validation | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
