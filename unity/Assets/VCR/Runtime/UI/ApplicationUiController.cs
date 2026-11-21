@@ -547,7 +547,10 @@ namespace VCR.Runtime.UI
                 }
             }
 
-            RefreshAll();
+            if (this != null)
+            {
+                RefreshAll();
+            }
         }
 
         public bool SelectSection(
@@ -3137,10 +3140,6 @@ namespace VCR.Runtime.UI
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    "VCR LoadCharacterFromPath failed for '" + path +
-                    "': " + exception,
-                    this);
 
                 if (!IsCurrentCharacterUiOperation(
                         operationGeneration,
@@ -3148,6 +3147,10 @@ namespace VCR.Runtime.UI
                 {
                     return;
                 }
+                Debug.LogError(
+                    "VCR LoadCharacterFromPath failed for '" + path +
+                    "': " + exception,
+                    this);
 
                 _lastActionMessage =
                     "Character load failed: " +
@@ -3155,7 +3158,10 @@ namespace VCR.Runtime.UI
             }
 
             CompleteNativeCharacterActionFeedback(operationGeneration);
-            RefreshAll();
+            if (this != null)
+            {
+                RefreshAll();
+            }
         }
 
         private async void ReloadCharacter()
@@ -3226,7 +3232,10 @@ namespace VCR.Runtime.UI
             }
 
             CompleteNativeCharacterActionFeedback(operationGeneration);
-            RefreshAll();
+            if (this != null)
+            {
+                RefreshAll();
+            }
         }
 
         private void UnloadCharacter()

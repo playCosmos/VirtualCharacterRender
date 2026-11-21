@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
+using UnityEditor.Build;
 using UnityEngine;
 using VCR.Editor.P0;
 
@@ -44,11 +45,40 @@ namespace VCR.Editor.P1
                 development: false);
         }
 
+        // The Ubuntu P1 CI intentionally uses Mono for its development
+        // smoke Player. A non-development Windows P1 Player must not silently
+        // inherit that temporary backend and be mistaken for IL2CPP evidence.
+        internal static bool AllowsPlayerBackend(
+            BuildTarget target, bool development, ScriptingImplementation backend)
+        {
+            return target != BuildTarget.StandaloneWindows64 ||
+                development || backend == ScriptingImplementation.IL2CPP;
+        }
+
         public static bool Build(
             BuildTarget target,
             string location,
             bool development)
         {
+            if (target != BuildTarget.StandaloneWindows64 &&
+                target != BuildTarget.StandaloneOSX)
+            {
+                Debug.LogError("VCR P1 build: unsupported target " + target + ".");
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(location))
+            {
+                Debug.LogError("VCR P1 build: output location is required.");
+                return false;
+            }
+            if (!AllowsPlayerBackend(target, development,
+                    PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone)))
+            {
+                Debug.LogError("VCR P1 build: non-development Windows Player requires " +
+                    "IL2CPP scripting backend; refusing to package a Mono release.");
+                return false;
+            }
+
             if (!File.Exists(
                     P1ApplicationSceneBuilder.ScenePath))
             {
@@ -58,7 +88,29 @@ namespace VCR.Editor.P1
                 return false;
             }
 
+            // Existing P1 scenes may predate the UI Toolkit workspace.
+            // Upgrade in place before packaging, rather than shipping a
+            // successfully built player without the U1 application shell.
+            if (!P1ApplicationSceneBuilder.EnsureWorkspaceInExistingScene())
+            {
+                Debug.LogError("VCR P1 build: workspace scene upgrade failed.");
+                return false;
+            }
+
             P0TransparentOutputMenu.ConfigureProjectBaseline();
+            // P0 transparency is a separate output mode. The P1 editor
+            // starts as a standard decorated, freely resizable desktop
+            // window; never package it as fullscreen/popup-only.
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.defaultScreenWidth = 1280;
+            PlayerSettings.defaultScreenHeight = 800;
+            if (PlayerSettings.fullScreenMode != FullScreenMode.Windowed ||
+                !PlayerSettings.resizableWindow)
+            {
+                Debug.LogError("VCR P1: native window must be windowed and resizable.");
+                return false;
+            }
             AssetDatabase.SaveAssets();
 
             var directory =
@@ -75,8 +127,10 @@ namespace VCR.Editor.P1
                       BuildOptions.AllowDebugging
                     : BuildOptions.None;
 
-            var report =
-                BuildPipeline.BuildPlayer(
+            BuildReport report;
+            try
+            {
+                report = BuildPipeline.BuildPlayer(
                     new BuildPlayerOptions
                     {
                         scenes =
@@ -91,7 +145,21 @@ namespace VCR.Editor.P1
                         options =
                             options
                     });
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError(
+                    "VCR P1 build: BuildPipeline exception for " + target + ".");
+                Debug.LogException(exception);
+                return false;
+            }
 
+            if (report == null)
+            {
+                Debug.LogError("VCR P1 build: BuildPipeline returned no report.");
+                return false;
+            }
+            // BuildReport.summary is a BuildSummary value type, not a nullable report.
             var summary = report.summary;
 
             if (summary.result !=

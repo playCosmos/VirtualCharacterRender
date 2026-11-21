@@ -14,7 +14,11 @@
     "VCR.Runtime.Capabilities",
     "VCR.Runtime.Application",
     "VCR.Runtime.Tracking",
-    "VCR.Runtime.P1ValidationFixtures"
+    "VCR.Runtime.Tracking.MediaPipe",
+    "VCR.Runtime.Diagnostics",
+    "VCR.Runtime.Output.Unity",
+    "VCR.Runtime.P1ValidationFixtures",
+    "VCR.Runtime.UI"
   ],
   "includePlatforms": [
     "Editor"
