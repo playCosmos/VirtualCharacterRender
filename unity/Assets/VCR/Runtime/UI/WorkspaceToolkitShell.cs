@@ -1906,7 +1906,28 @@ namespace VCR.Runtime.UI
                 }
             });
             BuildWorkspaceOverlayFallback(content);
+            // Editing a render field or using an output control is not the
+            // second click that confirms Save or Reload. Native Settings gets
+            // this revocation from every nonmatching action; the fallback has
+            // no action IDs for these controls, so revoke on their interaction.
+            void RevokeConfigurationConfirmationOnFocus(FocusInEvent _)
+            {
+                ResetWorkspaceConfigurationActions();
+            }
+            scale.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);
+            fps.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);
+            vsync.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);
+            background.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);
+            scale.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            fps.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            vsync.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            background.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
+            panel.Query<Button>().ForEach(button =>
+            {
+                if (button.text != "Save config" && button.text != "Reload config")
+                    button.clicked += ResetWorkspaceConfigurationActions;
+            });
             _workspaceRoot.Add(panel);
         }
 

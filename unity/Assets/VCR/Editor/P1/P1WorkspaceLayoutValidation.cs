@@ -626,7 +626,7 @@ namespace VCR.Editor.P1
             var pump = shellSource.Substring(pumpAt,
                 Math.Min(8500, shellSource.Length - pumpAt));
             var fallback = shellSource.Substring(fallbackAt,
-                Math.Min(8000, shellSource.Length - fallbackAt));
+                Math.Min(9000, shellSource.Length - fallbackAt));
             // A new Settings session or a different action cannot inherit
             // destructive confirmation armed in a previous context.
             if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
@@ -636,12 +636,17 @@ namespace VCR.Editor.P1
                 !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
+                !fallback.Contains("scale.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);") ||
+                !fallback.Contains("scale.RegisterValueChangedCallback") ||
+                !fallback.Contains("button.text != \"Save config\"") ||
+                !fallback.Contains("button.clicked += ResetWorkspaceConfigurationActions;") ||
                 !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
                 !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
+            {
+                Debug.LogError("Settings confirmation lifecycle source contract failed.");
                 return false;
+            }
 
-            // Exercise the actual runtime reset method rather than checking
-            // only that its name appears in source.
             var host = new GameObject("VCR Settings confirmation regression");
             host.SetActive(false);
             try
@@ -653,19 +658,29 @@ namespace VCR.Editor.P1
                 var reload = type.GetField("_workspaceReloadConfirmUntil", flags);
                 var reset = type.GetMethod("ResetWorkspaceConfigurationActions", flags);
                 if (shell == null || save == null || reload == null || reset == null)
+                {
+                    Debug.LogError("Settings confirmation runtime members were not found.");
                     return false;
+                }
+                save.SetValue(shell, 30f); reload.SetValue(shell, 45f); reset.Invoke(shell, null);
+                if ((float)save.GetValue(shell) != 0f || (float)reload.GetValue(shell) != 0f)
+                {
+                    Debug.LogError("Settings confirmation reset did not clear both states.");
+                    return false;
+                }
                 save.SetValue(shell, 30f);
+                reset.Invoke(shell, null);
+                if ((float)save.GetValue(shell) != 0f) return false;
                 reload.SetValue(shell, 45f);
                 reset.Invoke(shell, null);
-                return (float)save.GetValue(shell) == 0f &&
-                       (float)reload.GetValue(shell) == 0f;
+                var buttonClearedReload = (float)reload.GetValue(shell) == 0f;
+                return buttonClearedReload;
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(host);
-            }
         }
-
+            }
         private static bool TrackingEditorSchemaParity()
         {
             var shellType = typeof(WorkspaceToolkitShell);
