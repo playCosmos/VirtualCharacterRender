@@ -622,7 +622,7 @@ namespace VCR.Editor.P1
             var pump = shellSource.Substring(pumpAt,
                 Math.Min(8500, shellSource.Length - pumpAt));
             var fallback = shellSource.Substring(fallbackAt,
-                Math.Min(8000, shellSource.Length - fallbackAt));
+                Math.Min(9000, shellSource.Length - fallbackAt));
             // A new Settings session or a different action cannot inherit
             // destructive confirmation armed in a previous context.
             if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
