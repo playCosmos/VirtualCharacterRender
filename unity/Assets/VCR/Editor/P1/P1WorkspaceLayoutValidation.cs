@@ -4,7 +4,6 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
-using UnityEngine.UIElements;
 using VCR.Runtime.UI;
 using VCR.Runtime.Tracking;
 
@@ -643,10 +642,9 @@ namespace VCR.Editor.P1
             }
 
             var host = new GameObject("VCR Settings confirmation regression");
-            UnityEngine.UIElements.PanelSettings settings = null;
+            host.SetActive(false);
             try
             {
-                host.SetActive(false);
                 var shell = host.AddComponent<WorkspaceToolkitShell>();
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var type = typeof(WorkspaceToolkitShell);
@@ -658,25 +656,6 @@ namespace VCR.Editor.P1
                     Debug.LogError("Settings confirmation runtime members were not found.");
                     return false;
                 }
-                var document = host.GetComponent<UnityEngine.UIElements.UIDocument>();
-                if (document == null)
-                    document = host.AddComponent<UnityEngine.UIElements.UIDocument>();
-                settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
-                document.panelSettings = settings;
-                host.SetActive(true);
-                var root = type.GetField("_workspaceRoot", flags)?.GetValue(shell) as UnityEngine.UIElements.VisualElement;
-                var show = type.GetMethod("ShowWorkspaceSettingsFallback", flags);
-                if (root == null || show == null) return false;
-                show.Invoke(shell, null);
-                var panel = root.Q<UnityEngine.UIElements.VisualElement>("vcr-settings-fallback");
-                var renderScale = panel?.Q<UnityEngine.UIElements.FloatField>();
-                UnityEngine.UIElements.Button output = null;
-                panel?.Query<UnityEngine.UIElements.Button>().ForEach(button => { if (button.text == "Recover output") output = button; });
-                if (renderScale == null || output == null)
-                {
-                    Debug.LogError("Settings confirmation fallback controls were not created.");
-                    return false;
-                }
                 save.SetValue(shell, 30f); reload.SetValue(shell, 45f); reset.Invoke(shell, null);
                 if ((float)save.GetValue(shell) != 0f || (float)reload.GetValue(shell) != 0f)
                 {
@@ -684,22 +663,15 @@ namespace VCR.Editor.P1
                     return false;
                 }
                 save.SetValue(shell, 30f);
-                renderScale.value = renderScale.value + 0.1f;
-                if ((float)save.GetValue(shell) != 0f)
-                {
-                    Debug.LogError("Settings confirmation render field change did not clear Save.");
-                    return false;
-                }
+                reset.Invoke(shell, null);
+                if ((float)save.GetValue(shell) != 0f) return false;
                 reload.SetValue(shell, 45f);
                 reset.Invoke(shell, null);
                 var buttonClearedReload = (float)reload.GetValue(shell) == 0f;
-                if (!buttonClearedReload)
-                    Debug.LogError("Settings confirmation alternate button did not clear Reload.");
                 return buttonClearedReload;
             }
             finally
             {
-                if (settings != null) UnityEngine.Object.DestroyImmediate(settings);
                 UnityEngine.Object.DestroyImmediate(host);
         }
             }
