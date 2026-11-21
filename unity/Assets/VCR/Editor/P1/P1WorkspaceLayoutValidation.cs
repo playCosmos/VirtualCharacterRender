@@ -634,6 +634,7 @@ namespace VCR.Editor.P1
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
                 !fallback.Contains("scale.RegisterValueChangedCallback") ||
                 !fallback.Contains("button.text != \"Save config\"") ||
+                !fallback.Contains("button.clicked += ResetWorkspaceConfigurationActions;") ||
                 !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
                 !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
                 return false;
@@ -670,7 +671,7 @@ namespace VCR.Editor.P1
                 renderScale.value = renderScale.value + 0.1f;
                 if ((float)save.GetValue(shell) != 0f) return false;
                 reload.SetValue(shell, 45f);
-                output.clicked?.Invoke();
+                reset.Invoke(shell, null);
                 return (float)reload.GetValue(shell) == 0f;
             }
             finally
