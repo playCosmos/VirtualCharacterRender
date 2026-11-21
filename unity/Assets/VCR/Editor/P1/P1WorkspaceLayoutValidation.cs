@@ -627,20 +627,21 @@ namespace VCR.Editor.P1
             if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
                 !pump.Contains("ResetWorkspaceConfigurationActions();") ||
                 !Regex.IsMatch(pump,
-                    @"if \(!_workspaceNativeSettings\.IsVisible\)\s*return;") ||
+                    @"if \!_workspaceNativeSettings\.IsVisible\)\s*return;") ||
                 !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
+                !fallback.Contains("RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmation);") ||
+                !fallback.Contains("clicked.text != \"Save config\"") ||
                 !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
                 !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
                 return false;
 
-            // Exercise the actual runtime reset method rather than checking
-            // only that its name appears in source.
             var host = new GameObject("VCR Settings confirmation regression");
-            host.SetActive(false);
+            UnityEngine.UIElements.PanelSettings settings = null;
             try
             {
+                host.SetActive(false);
                 var shell = host.AddComponent<WorkspaceToolkitShell>();
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var type = typeof(WorkspaceToolkitShell);
@@ -649,18 +650,34 @@ namespace VCR.Editor.P1
                 var reset = type.GetMethod("ResetWorkspaceConfigurationActions", flags);
                 if (shell == null || save == null || reload == null || reset == null)
                     return false;
+                var document = host.AddComponent<UnityEngine.UIElements.UIDocument>();
+                settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
+                document.panelSettings = settings;
+                host.SetActive(true);
+                var root = type.GetField("_workspaceRoot", flags)?.GetValue(shell) as UnityEngine.UIElements.VisualElement;
+                var show = type.GetMethod("ShowWorkspaceSettingsFallback", flags);
+                if (root == null || show == null) return false;
+                show.Invoke(shell, null);
+                var panel = root.Q<UnityEngine.UIElements.VisualElement>("vcr-settings-fallback");
+                var renderScale = panel?.Q<UnityEngine.UIElements.FloatField>();
+                UnityEngine.UIElements.Button output = null;
+                panel?.Query<UnityEngine.UIElements.Button>().ForEach(button => { if (button.text == "Recover output") output = button; });
+                if (renderScale == null || output == null) return false;
+                save.SetValue(shell, 30f); reload.SetValue(shell, 45f); reset.Invoke(shell, null);
+                if ((float)save.GetValue(shell) != 0f || (float)reload.GetValue(shell) != 0f) return false;
                 save.SetValue(shell, 30f);
+                using (var focus = UnityEngine.UIElements.FocusInEvent.GetPooled()) { focus.target = renderScale; renderScale.SendEvent(focus); }
+                if ((float)save.GetValue(shell) != 0f) return false;
                 reload.SetValue(shell, 45f);
-                reset.Invoke(shell, null);
-                return (float)save.GetValue(shell) == 0f &&
-                       (float)reload.GetValue(shell) == 0f;
+                using (var click = UnityEngine.UIElements.ClickEvent.GetPooled()) { click.target = output; output.SendEvent(click); }
+                return (float)reload.GetValue(shell) == 0f;
             }
             finally
             {
+                if (settings != null) UnityEngine.Object.DestroyImmediate(settings);
                 UnityEngine.Object.DestroyImmediate(host);
-            }
         }
-
+            }
         private static bool TrackingEditorSchemaParity()
         {
             var shellType = typeof(WorkspaceToolkitShell);
