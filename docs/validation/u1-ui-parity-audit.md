@@ -3,7 +3,7 @@
 Repository: playCosmos/VirtualCharacterRender
 PR: #44, Draft / unmerged
 Baseline before current follow-up: 034a2bdfd3d9ac140cbfcaa786821467b535dc1f (2026-11-14 KST).
-The current follow-up modifies Settings confirmation lifecycle and its source-free regression. Recheck the branch HEAD and exact CI run before claiming completion.
+The latest code follow-up fixes fallback Settings confirmation revocation on focus changes and other controls. Source-matched Unity, Windows, macOS and repository validation passed on `12c9cfde`; physical acceptance remains open.
 
 ## Evidence hierarchy
 
@@ -41,8 +41,8 @@ The inventory maps main feature families and concrete entry points, not every dy
 1. Layout regression fixed at ec676fad: v1 positions could assign docks to different panels after catalog change. v2 stores panel IDs; unknown newer IDs are ignored, invalid/truncated snapshots rejected. P1WorkspaceLayoutValidation exercises round-trip, backup, legacy read, unknown IDs and corruption.
 2. VRM async UI lifecycle fixed at ec676fad: loading/reloading continuation must not update destroyed shell; legacy restored-model refresh is also guarded. Static guard contracts are checked, but physical VRM load/swap is open.
 3. Native command parity fixed at b4c53fb: 204 now reloads saved configuration in both legacy and U1; 207 exclusively restores render defaults. 205 saves and 206 remains the internal U1/fallback reload action. Control IDs are window-local and not persisted. U1 reload intentionally demands a second click; this safety difference requires an operator acceptance decision.
-4. Subsequent Settings confirmation fix: native window close/reopen and fallback panel toggle must revoke pending Save/Reload confirmation. An unrelated native action or fallback Apply/Status and switching Save ↔ Reload must also revoke it. The duplicate visible native Reload button 206 was removed; handler 206 remains for U1 fallback. P1WorkspaceLayoutValidation includes source-call-site checks plus a runtime reset-field invocation. Do not mark the feature Verified until source-matched Unity CI passes.
-5. Fallback Settings confirmation revocation: focusing a render field or clicking another fallback control now clears armed Save/Reload confirmation. The source-free regression sends those UI events. Physical pointer, keyboard, and IME behavior remains unverified.
+4. Settings confirmation lifecycle: native window close/reopen and fallback panel toggle revoke pending Save/Reload confirmation. An unrelated native action or fallback Apply/Status and switching Save ↔ Reload also revoke it. The duplicate visible native Reload button 206 was removed; handler 206 remains for U1 fallback. P1WorkspaceLayoutValidation checks these source paths and invokes the actual runtime reset method.
+5. Fallback Settings confirmation revocation: focusing any render field, changing its value, or clicking another fallback button now clears armed Save/Reload confirmation. The source-free regression checks callback wiring and the runtime reset method. Physical pointer, keyboard, and IME behavior remains unverified.
 6. The exact fields, ranges, disabled states, error messages and recovery actions of dynamic Tracking Settings still need per-control comparison between legacy and U1. Device-side acceptance blocked.
 
 ## Source-matched CI ledger
@@ -59,6 +59,9 @@ The inventory maps main feature families and concrete entry points, not every dy
 | e3781a11 / repository #44839192763 and #44839184954 | Push and PR repository validation | PASS |
 | e3781a11 / Unity P0-P13 #44839184980 | Source-free validation, Windows Player startup/quit, informational WM_CLOSE | PASS |
 | debb650e / Unity P0-P13 #44839003295 | Superseded by the e3781a11 documentation push before completion | CANCELLED; not a product failure or pass |
+| 12c9cfde / repository #44912038032 and #44912042597 | Push and PR repository validation | PASS |
+| 12c9cfde / Unity P0-P13 #44912038081 | P0–P13, P1 workspace generation, Windows Player build/startup/quit and informational GUI observation | PASS; initial second Unity invocation timed out, same-SHA failed-job retry completed successfully |
+| 12c9cfde / macOS P1 #44912038041 | AppKit arm64 build, nondevelopment Mono Player, managed native Settings startup/shutdown smoke | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
