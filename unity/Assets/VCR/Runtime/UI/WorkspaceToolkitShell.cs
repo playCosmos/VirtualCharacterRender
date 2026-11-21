@@ -1911,12 +1911,10 @@ namespace VCR.Runtime.UI
             // second click that confirms Save or Reload. Native Settings gets
             // this revocation from every nonmatching action; the fallback has
             // no action IDs for these controls, so revoke on their interaction.
-            void RevokeConfigurationConfirmation(FocusInEvent _)
-            {
-                ResetWorkspaceConfigurationActions();
-            }
-            foreach (var field in new VisualElement[] { scale, fps, vsync, background })
-                field.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmation);
+            scale.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            fps.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            vsync.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
+            background.RegisterValueChangedCallback(_ => ResetWorkspaceConfigurationActions());
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
             panel.Query<Button>().ForEach(button =>
             {
