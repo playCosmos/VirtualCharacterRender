@@ -631,6 +631,7 @@ namespace VCR.Editor.P1
                 !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
+                !fallback.Contains("scale.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmationOnFocus);") ||
                 !fallback.Contains("scale.RegisterValueChangedCallback") ||
                 !fallback.Contains("button.text != \"Save config\"") ||
                 !fallback.Contains("button.clicked += ResetWorkspaceConfigurationActions;") ||
