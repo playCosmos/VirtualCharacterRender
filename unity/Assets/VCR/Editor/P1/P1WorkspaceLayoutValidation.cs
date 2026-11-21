@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.UIElements;
 using VCR.Runtime.UI;
 using VCR.Runtime.Tracking;
 
