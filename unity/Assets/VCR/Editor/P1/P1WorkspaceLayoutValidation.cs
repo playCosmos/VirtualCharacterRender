@@ -628,7 +628,7 @@ namespace VCR.Editor.P1
             if (!open.Contains("ResetWorkspaceConfigurationActions();") ||
                 !pump.Contains("ResetWorkspaceConfigurationActions();") ||
                 !Regex.IsMatch(pump,
-                    @"if \!_workspaceNativeSettings\.IsVisible\)\s*return;") ||
+                    @"if \(!_workspaceNativeSettings\.IsVisible\)\s*return;") ||
                 !pump.Contains("if (action != 205) _workspaceSaveConfirmUntil = 0f;") ||
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
