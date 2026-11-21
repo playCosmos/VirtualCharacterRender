@@ -633,7 +633,7 @@ namespace VCR.Editor.P1
                 !pump.Contains("if (action != 204 && action != 206) _workspaceReloadConfirmUntil = 0f;") ||
                 !fallback.Contains("ResetWorkspaceConfigurationActions();") ||
                 !fallback.Contains("RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmation);") ||
-                !fallback.Contains("clicked.text != \"Save config\"") ||
+                !fallback.Contains("button.text != \"Save config\"") ||
                 !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
                 !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
                 return false;
@@ -670,7 +670,7 @@ namespace VCR.Editor.P1
                 using (var focus = UnityEngine.UIElements.FocusInEvent.GetPooled()) { focus.target = renderScale; renderScale.SendEvent(focus); }
                 if ((float)save.GetValue(shell) != 0f) return false;
                 reload.SetValue(shell, 45f);
-                using (var click = UnityEngine.UIElements.ClickEvent.GetPooled()) { click.target = output; output.SendEvent(click); }
+                using (var click = new UnityEngine.UIElements.ClickEvent()) output.SendEvent(click);
                 return (float)reload.GetValue(shell) == 0f;
             }
             finally

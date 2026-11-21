@@ -1917,14 +1917,12 @@ namespace VCR.Runtime.UI
             }
             foreach (var field in new VisualElement[] { scale, fps, vsync, background })
                 field.RegisterCallback<FocusInEvent>(RevokeConfigurationConfirmation);
-            panel.RegisterCallback<ClickEvent>(click =>
-            {
-                if (click.target is Button clicked &&
-                    clicked.text != "Save config" &&
-                    clicked.text != "Reload config")
-                    ResetWorkspaceConfigurationActions();
-            }, TrickleDown.TrickleDown);
             panel.Add(new Button(() => panel.RemoveFromHierarchy()) { text = "Close" });
+            panel.Query<Button>().ForEach(button =>
+            {
+                if (button.text != "Save config" && button.text != "Reload config")
+                    button.clicked += ResetWorkspaceConfigurationActions;
+            });
             _workspaceRoot.Add(panel);
         }
 
