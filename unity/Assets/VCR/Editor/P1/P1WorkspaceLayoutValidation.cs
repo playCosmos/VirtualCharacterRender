@@ -658,7 +658,9 @@ namespace VCR.Editor.P1
                     Debug.LogError("Settings confirmation runtime members were not found.");
                     return false;
                 }
-                var document = host.AddComponent<UnityEngine.UIElements.UIDocument>();
+                var document = host.GetComponent<UnityEngine.UIElements.UIDocument>();
+                if (document == null)
+                    document = host.AddComponent<UnityEngine.UIElements.UIDocument>();
                 settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
                 document.panelSettings = settings;
                 host.SetActive(true);
