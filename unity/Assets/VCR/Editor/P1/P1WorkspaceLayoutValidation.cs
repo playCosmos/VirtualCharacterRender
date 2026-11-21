@@ -637,7 +637,10 @@ namespace VCR.Editor.P1
                 !fallback.Contains("button.clicked += ResetWorkspaceConfigurationActions;") ||
                 !configSource.Contains("_workspaceReloadConfirmUntil = 0f;\n                    // A recovered/failed configuration") ||
                 !configSource.Contains("_workspaceSaveConfirmUntil = 0f;\n                    // Reload replaces live runtime settings"))
+            {
+                Debug.LogError("Settings confirmation lifecycle source contract failed.");
                 return false;
+            }
 
             var host = new GameObject("VCR Settings confirmation regression");
             UnityEngine.UIElements.PanelSettings settings = null;
@@ -651,7 +654,10 @@ namespace VCR.Editor.P1
                 var reload = type.GetField("_workspaceReloadConfirmUntil", flags);
                 var reset = type.GetMethod("ResetWorkspaceConfigurationActions", flags);
                 if (shell == null || save == null || reload == null || reset == null)
+                {
+                    Debug.LogError("Settings confirmation runtime members were not found.");
                     return false;
+                }
                 var document = host.AddComponent<UnityEngine.UIElements.UIDocument>();
                 settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
                 document.panelSettings = settings;
@@ -664,15 +670,30 @@ namespace VCR.Editor.P1
                 var renderScale = panel?.Q<UnityEngine.UIElements.FloatField>();
                 UnityEngine.UIElements.Button output = null;
                 panel?.Query<UnityEngine.UIElements.Button>().ForEach(button => { if (button.text == "Recover output") output = button; });
-                if (renderScale == null || output == null) return false;
+                if (renderScale == null || output == null)
+                {
+                    Debug.LogError("Settings confirmation fallback controls were not created.");
+                    return false;
+                }
                 save.SetValue(shell, 30f); reload.SetValue(shell, 45f); reset.Invoke(shell, null);
-                if ((float)save.GetValue(shell) != 0f || (float)reload.GetValue(shell) != 0f) return false;
+                if ((float)save.GetValue(shell) != 0f || (float)reload.GetValue(shell) != 0f)
+                {
+                    Debug.LogError("Settings confirmation reset did not clear both states.");
+                    return false;
+                }
                 save.SetValue(shell, 30f);
                 renderScale.value = renderScale.value + 0.1f;
-                if ((float)save.GetValue(shell) != 0f) return false;
+                if ((float)save.GetValue(shell) != 0f)
+                {
+                    Debug.LogError("Settings confirmation render field change did not clear Save.");
+                    return false;
+                }
                 reload.SetValue(shell, 45f);
                 reset.Invoke(shell, null);
-                return (float)reload.GetValue(shell) == 0f;
+                var buttonClearedReload = (float)reload.GetValue(shell) == 0f;
+                if (!buttonClearedReload)
+                    Debug.LogError("Settings confirmation alternate button did not clear Reload.");
+                return buttonClearedReload;
             }
             finally
             {
