@@ -54,7 +54,11 @@ def verify(root, artifacts, source):
         if (directory / "MonoBleedingEdge").exists():
             raise ValueError(variant + ": unexpected Mono runtime")
         manifest_names = [entry.get("path") for entry in entries]
-        if manifest_names != names:
+        # Windows Path orders names case-insensitively while ZIP and POSIX
+        # inventory sorting use case-sensitive strings; compare sets of
+        # exact spellings, not platform-dependent enumeration order.
+        if (len(manifest_names) != len(set(manifest_names)) or
+                sorted(manifest_names) != names):
             raise ValueError(variant + ": manifest path inventory mismatch")
         with ZipFile(archive) as zipfile:
             zipped = zipfile.namelist()
