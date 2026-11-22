@@ -24,6 +24,7 @@ U3_VALIDATOR = "unity/Assets/VCR/Editor/Alpha/U3ToolkitSceneValidation.cs"
 UNITY_CI = ".github/workflows/unity-source-free.yml"
 U3_PLAYER = "unity/Assets/VCR/Editor/Alpha/U3AlphaP11PlayerBuild.cs"
 U3_PLAYER_CI = ".github/workflows/u3-alpha-p11-windows-native.yml"
+U3_GUI = "tools/probe-u3-windows-gui.py"
 UNITY_SERIALIZED_SUFFIXES = (
     ".unity", ".prefab", ".asset", ".controller", ".overridecontroller",
     ".anim", ".mat", ".playable", ".mask", ".rendertexture",
@@ -143,6 +144,18 @@ def scan(root):
             "run-player-smoke.py",
             "u3-player-artifacts/Alpha/windows.zip",
             "u3-player-artifacts/P11/windows.zip",
+            "tools/probe-u3-windows-gui.py",
+            "nativeFramePassed",
+            "workspaceUiTreeReady",
+            "managedQuitObserved",
+        )),
+        (U3_GUI, read(root, U3_GUI), (
+            "validate_player_archive(archive)",
+            "gui.visible_player_windows(process.pid)",
+            "gui.WORKSPACE_LAYOUT_MARKER",
+            "gui.probe_free_resize(",
+            "gui.QUIT_MARKER",
+            "u3-gui-probe.json",
         )),
     ):
         for token in required:
@@ -227,7 +240,15 @@ def self_test():
                 "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit\n"
                 "run-player-smoke.py\n"
                 "u3-player-artifacts/Alpha/windows.zip\n"
-                "u3-player-artifacts/P11/windows.zip\n"),
+                "u3-player-artifacts/P11/windows.zip\n"
+                "tools/probe-u3-windows-gui.py\n"
+                "nativeFramePassed\nworkspaceUiTreeReady\nmanagedQuitObserved\n"),
+            U3_GUI: (
+                "validate_player_archive(archive)\n"
+                "gui.visible_player_windows(process.pid)\n"
+                "gui.WORKSPACE_LAYOUT_MARKER\n"
+                "gui.probe_free_resize(\n"
+                "gui.QUIT_MARKER\nu3-gui-probe.json\n"),
             "unity/Assets/VCR/P0/Legacy.prefab":
                 "m_Script: {fileID: 11500000, guid: " + RETIRED_GUID + ", type: 3}\n",
         }

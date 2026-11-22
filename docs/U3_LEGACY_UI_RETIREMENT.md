@@ -122,3 +122,24 @@ when only scene generation succeeded. It is diagnostic development Mono
 evidence, **not** Windows IL2CPP release, macOS Alpha/P11, GUI pixel
 acceptance, or physical operator/hardware acceptance. PRs remain Draft;
 no merge, tag, or release is authorized.
+
+## U3.6 — real Alpha/P11 Windows GUI smoke (hosted, not operator approval)
+
+The U3 Windows workflow now has two independent native Windows GUI
+observations (Alpha and P11), gated behind the real standalone smoke. It
+reuses the P1 Win32 observation/Unity screenshot helpers while **not**
+assuming the P1-only feature-search/docking interactions exist on all
+historical scenes. Each separate source-hashed Player is verified against
+its archive digest and extracted after unsafe ZIP path/link checks.
+The visible, non-batchmode Player must show a real Unity HWND with an OS
+title bar and freely resizable frame, native mouse hit targets, measured
+compact UI Toolkit controls, an opaque desktop configuration, a diverse
+Unity-generated frame, no UI exceptions, and actual managed WM_CLOSE
+shutdown. Separate JSON reports, native logs and images are uploaded.
+
+A runner with no GUI records `windowObserved=false`; this **does not**
+count as a GUI observation, even if the Actions job is green. A runner that
+**does** expose a Unity HWND must satisfy every measured invariant or fail
+the job. This remains hosted automation, not user-authored scene parity,
+native Settings interactive acceptance, tracking hardware, or Windows
+production IL2CPP certification. PR #46 stays Draft.

@@ -179,3 +179,77 @@ jobs:
             Builds/PlayerSmoke/U3/
           if-no-files-found: warn
           retention-days: 30
+
+  u3-windows-gui:
+    name: Observe ${{ matrix.variant }} real GUI and normal WM_CLOSE
+    needs: [build-players, native-windows-smoke]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [Alpha, P11]
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Download same-run source-bound Players
+        uses: actions/download-artifact@v4
+        with:
+          name: u3-alpha-p11-players-${{ github.run_id }}-${{ github.run_attempt }}
+          path: u3-player-artifacts
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Observe real Alpha/P11 GUI and preserve truthful failure
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -m py_compile tools/probe-u3-windows-gui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u3-windows-gui.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/probe-u3-windows-gui.py `
+            --variant "${{ matrix.variant }}" `
+            --archive "u3-player-artifacts/${{ matrix.variant }}/windows.zip" `
+            --source "$env:GITHUB_SHA" `
+            --screen-width 960 --screen-height 520 `
+            --output "Builds/GUIProbe/U3/${{ matrix.variant }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Archive Alpha/P11 actual GUI screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u3-${{ matrix.variant }}-windows-gui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: Builds/GUIProbe/U3/${{ matrix.variant }}/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Require actual GUI invariants if native HWND was observed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = "Builds/GUIProbe/U3/${{ matrix.variant }}/u3-gui-probe.json"
+          if (-not (Test-Path -LiteralPath $path)) {
+            throw 'No U3 GUI report; the observation script failed before recording evidence.'
+          }
+          $report = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+          if ($report.sourceSha -ne "$env:GITHUB_SHA" -or
+              $report.variant -ne "${{ matrix.variant }}") {
+            throw 'U3 GUI report is not bound to the exact source and variant.'
+          }
+          if ($report.windowObserved -ne $true) {
+            Write-Warning 'Real Unity HWND unavailable on runner; no U3 GUI acceptance claimed.'
+            exit 0
+          }
+          if ($report.passed -ne $true -or
+              $report.workspaceUiTreeReady -ne $true -or
+              $report.nativeFramePassed -ne $true -or
+              $report.nativeInputTargetsPassed -ne $true -or
+              $report.freeResizePassed -ne $true -or
+              $report.compactLayoutPassed -ne $true -or
+              $report.opaqueWindowConfigPassed -ne $true -or
+              $report.unityFrameDiverse -ne $true -or
+              $report.managedQuitObserved -ne $true -or $report.exitCode -ne 0) {
+            throw "U3 ${{ matrix.variant }} real HWND GUI regression: $($report.error)"
+          }
+          Write-Host 'U3 ${{ matrix.variant }} actual Windows GUI, framed resize, Toolkit workspace, rendered pixels and WM_CLOSE: PASS.'
