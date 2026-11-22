@@ -168,3 +168,18 @@ P/Invoke, nondevelopment build and normal runtime termination.
 This is a CI integration test, not signed/notarized production
 distribution, physical device/OBS/VRM tests, GUI pointer acceptance,
 or authored-scene migration acceptance. All PRs remain Draft.
+
+## U3.8 — Windows native IL2CPP Alpha/P11 nondevelopment verification
+
+The dedicated Windows-2022 workflow builds the actual Alpha and P11
+Toolkit scenes separately with pinned Unity 6000.3.25f1 **IL2CPP**,
+not the Linux-hosted Mono fallback. Both must be nondevelopment builds
+containing `GameAssembly.dll`, `UnityPlayer.dll` and IL2CPP metadata
+without a Mono runtime. Each packaged archive has independent exact
+source and SHA-256 evidence, with every payload byte verified against
+the build output. Real Windows startup/relaunch/config recovery/normal
+quit and visible GUI/OS-frame/resize/UIToolkit/pixel checks are then
+required for both scenes. These tests are hosted CI, not signed release
+artifacts, operator-authored scene acceptance or physical device/OBS
+verification. The job is isolated and only runs on its workflow change
+or an explicit manual dispatch.

@@ -26,6 +26,8 @@ U3_PLAYER = "unity/Assets/VCR/Editor/Alpha/U3AlphaP11PlayerBuild.cs"
 U3_PLAYER_CI = ".github/workflows/u3-alpha-p11-windows-native.yml"
 U3_GUI = "tools/probe-u3-windows-gui.py"
 U3_MAC_CI = ".github/workflows/u3-alpha-p11-macos-native.yml"
+U3_IL2CPP_CI = ".github/workflows/u3-alpha-p11-windows-il2cpp.yml"
+U3_IL2CPP_CHECK = "tools/verify-u3-il2cpp-payload.py"
 UNITY_SERIALIZED_SUFFIXES = (
     ".unity", ".prefab", ".asset", ".controller", ".overridecontroller",
     ".anim", ".mat", ".playable", ".mask", ".rendertexture",
@@ -140,6 +142,7 @@ def scan(root):
             "P11ApplicationSceneBuilder.ScenePath",
             "AlphaApplicationSceneBuilder.ScenePath",
             "BuildMacMonoAndExit",
+            "BuildWindowsIl2CppAndExit",
         )),
         (U3_PLAYER_CI, read(root, U3_PLAYER_CI), (
             "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit",
@@ -150,6 +153,20 @@ def scan(root):
             "nativeFramePassed",
             "workspaceUiTreeReady",
             "managedQuitObserved",
+        )),
+        (U3_IL2CPP_CI, read(root, U3_IL2CPP_CI), (
+            "U3AlphaP11PlayerBuild.BuildWindowsIl2CppAndExit",
+            "windows-6000.3.25f1-windows-il2cpp-3",
+            "GameAssembly.dll",
+            "global-metadata.dat",
+            "--platform windows-nodebug",
+            "tools/probe-u3-windows-gui.py",
+            "u3-il2cpp-artifacts/Alpha/windows.zip",
+            "u3-il2cpp-artifacts/P11/windows.zip",
+        )),
+        (U3_IL2CPP_CHECK, read(root, U3_IL2CPP_CHECK), (
+            "GameAssembly.dll", "windows.payload-sha256.json",
+            "archive_sha256", "zipfile.open(entry",
         )),
         (U3_MAC_CI, read(root, U3_MAC_CI), (
             "U3AlphaP11PlayerBuild.BuildMacMonoAndExit",
@@ -247,7 +264,8 @@ def self_test():
                 "BuildPipeline.BuildPlayer(\n"
                 "P11ApplicationSceneBuilder.ScenePath\n"
                 "AlphaApplicationSceneBuilder.ScenePath\n"
-                "BuildMacMonoAndExit\n"),
+                "BuildMacMonoAndExit\n"
+                "BuildWindowsIl2CppAndExit\n"),
             U3_PLAYER_CI: (
                 "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit\n"
                 "run-player-smoke.py\n"
@@ -255,6 +273,17 @@ def self_test():
                 "u3-player-artifacts/P11/windows.zip\n"
                 "tools/probe-u3-windows-gui.py\n"
                 "nativeFramePassed\nworkspaceUiTreeReady\nmanagedQuitObserved\n"),
+            U3_IL2CPP_CI: (
+                "U3AlphaP11PlayerBuild.BuildWindowsIl2CppAndExit\n"
+                "windows-6000.3.25f1-windows-il2cpp-3\n"
+                "GameAssembly.dll\nglobal-metadata.dat\n"
+                "--platform windows-nodebug\n"
+                "tools/probe-u3-windows-gui.py\n"
+                "u3-il2cpp-artifacts/Alpha/windows.zip\n"
+                "u3-il2cpp-artifacts/P11/windows.zip\n"),
+            U3_IL2CPP_CHECK: (
+                "GameAssembly.dll\nwindows.payload-sha256.json\n"
+                "archive_sha256\nzipfile.open(entry\n"),
             U3_MAC_CI: (
                 "U3AlphaP11PlayerBuild.BuildMacMonoAndExit\n"
                 "select-p1-macos-appkit-artifact.py\n"
