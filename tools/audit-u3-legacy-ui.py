@@ -25,6 +25,7 @@ UNITY_CI = ".github/workflows/unity-source-free.yml"
 U3_PLAYER = "unity/Assets/VCR/Editor/Alpha/U3AlphaP11PlayerBuild.cs"
 U3_PLAYER_CI = ".github/workflows/u3-alpha-p11-windows-native.yml"
 U3_GUI = "tools/probe-u3-windows-gui.py"
+U3_MAC_CI = ".github/workflows/u3-alpha-p11-macos-native.yml"
 UNITY_SERIALIZED_SUFFIXES = (
     ".unity", ".prefab", ".asset", ".controller", ".overridecontroller",
     ".anim", ".mat", ".playable", ".mask", ".rendertexture",
@@ -138,6 +139,7 @@ def scan(root):
             "BuildPipeline.BuildPlayer(",
             "P11ApplicationSceneBuilder.ScenePath",
             "AlphaApplicationSceneBuilder.ScenePath",
+            "BuildMacMonoAndExit",
         )),
         (U3_PLAYER_CI, read(root, U3_PLAYER_CI), (
             "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit",
@@ -148,6 +150,15 @@ def scan(root):
             "nativeFramePassed",
             "workspaceUiTreeReady",
             "managedQuitObserved",
+        )),
+        (U3_MAC_CI, read(root, U3_MAC_CI), (
+            "U3AlphaP11PlayerBuild.BuildMacMonoAndExit",
+            "select-p1-macos-appkit-artifact.py",
+            "u3-macos-player-artifacts/Alpha/macos.zip",
+            "u3-macos-player-artifacts/P11/macos.zip",
+            "VCR_SMOKE_NATIVE_SETTINGS: '1'",
+            "--platform macos-nodebug",
+            "nativeSettingsInteropPassed",
         )),
         (U3_GUI, read(root, U3_GUI), (
             "validate_player_archive(archive)",
@@ -235,7 +246,8 @@ def self_test():
                 "BuildWindowsMonoAndExit\nValidateExistingAlphaAndP11Scenes()\n"
                 "BuildPipeline.BuildPlayer(\n"
                 "P11ApplicationSceneBuilder.ScenePath\n"
-                "AlphaApplicationSceneBuilder.ScenePath\n"),
+                "AlphaApplicationSceneBuilder.ScenePath\n"
+                "BuildMacMonoAndExit\n"),
             U3_PLAYER_CI: (
                 "U3AlphaP11PlayerBuild.BuildWindowsMonoAndExit\n"
                 "run-player-smoke.py\n"
@@ -243,6 +255,14 @@ def self_test():
                 "u3-player-artifacts/P11/windows.zip\n"
                 "tools/probe-u3-windows-gui.py\n"
                 "nativeFramePassed\nworkspaceUiTreeReady\nmanagedQuitObserved\n"),
+            U3_MAC_CI: (
+                "U3AlphaP11PlayerBuild.BuildMacMonoAndExit\n"
+                "select-p1-macos-appkit-artifact.py\n"
+                "u3-macos-player-artifacts/Alpha/macos.zip\n"
+                "u3-macos-player-artifacts/P11/macos.zip\n"
+                "VCR_SMOKE_NATIVE_SETTINGS: '1'\n"
+                "--platform macos-nodebug\n"
+                "nativeSettingsInteropPassed\n"),
             U3_GUI: (
                 "validate_player_archive(archive)\n"
                 "gui.visible_player_windows(process.pid)\n"

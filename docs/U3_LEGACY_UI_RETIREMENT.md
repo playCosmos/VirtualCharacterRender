@@ -143,3 +143,28 @@ count as a GUI observation, even if the Actions job is green. A runner that
 the job. This remains hosted automation, not user-authored scene parity,
 native Settings interactive acceptance, tracking hardware, or Windows
 production IL2CPP certification. PR #46 stays Draft.
+
+## U3.7 — independent native macOS Alpha/P11 Player integration
+
+The U3-only source-bound workflow
+`.github/workflows/u3-alpha-p11-macos-native.yml` first compiles
+the arm64 AppKit Settings bridge on a real macOS runner. The existing
+strict source/sha verifier then restores that binary and its exact Unity
+importer to a clean pinned Unity 6000.3.25f1 project. The generalized
+`U3AlphaP11PlayerBuild.BuildMacMonoAndExit` refuses to overwrite
+existing authored scenes, generates and read-only validates both
+independent Toolkit scenes, and creates two **non-development** macOS
+Mono applications, each with its own native executable and AppKit dylib.
+The original IL2CPP project baseline is restored and SHA-verified.
+
+Alpha and P11 macOS bundles are packaged into separate symlink-aware
+ZIP archives, each containing exact source and SHA-256 sidecars.
+Only a complete same-run source-verified pair may be consumed by
+the real `macos-15` test. Both Players execute the established
+startup/relaunch/recovery/normal-shutdown suite, and every one of
+the eight reports per variant must confirm managed-to-native AppKit
+P/Invoke, nondevelopment build and normal runtime termination.
+
+This is a CI integration test, not signed/notarized production
+distribution, physical device/OBS/VRM tests, GUI pointer acceptance,
+or authored-scene migration acceptance. All PRs remain Draft.
