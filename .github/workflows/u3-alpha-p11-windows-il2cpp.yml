@@ -46,7 +46,7 @@ jobs:
           mkdir -p "$shim"
           printf '#!/usr/bin/env bash\nexec python "$@"\n' > "$shim/python3"
           chmod +x "$shim/python3"
-          printf '%s\n' "$(cygpath -w "$shim")" >> "$GITHUB_P$H"
+          printf '%s\n' "$(cygpath -w "$shim")" >> "$GITHUB_PATH"
           "$shim/python3" --version
       - name: Bootstrap pinned Unity dependencies
         shell: bash
@@ -115,7 +115,7 @@ jobs:
           import json
           import os
           from pathlib import Path
-          from zipfile import ZipFile, ZIP_DEFL$ED
+          from zipfile import ZipFile, ZIP_DEFLATED
 
           for variant in ("Alpha", "P11"):
               root = Path("unity/Builds/U3") / variant / "Windows-IL2CPP"
@@ -132,7 +132,7 @@ jobs:
               target.mkdir(parents=True, exist_ok=True)
               archive = target / "windows.zip"
               entries = []
-              with ZipFile(archive, "w", ZIP_DEFL$ED, compresslevel=1) as packed:
+              with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=1) as packed:
                   for file in sorted(root.rglob("*")):
                       if not file.is_file():
                           continue
