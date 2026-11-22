@@ -26,7 +26,19 @@ namespace VCR.Editor.Alpha
         {
             BuildBothPlayersAndExit(
                 BuildTarget.StandaloneWindows64, AlphaOutput, P11Output,
-                BuildOptions.Development | BuildOptions.AllowDebugging);
+                BuildOptions.Development | BuildOptions.AllowDebugging,
+                ScriptingImplementation.Mono2x);
+        }
+
+        // Native Windows host with the pinned IL2CPP Editor module only.
+        // This nondevelopment evidence is not a signed release.
+        public static void BuildWindowsIl2CppAndExit()
+        {
+            BuildBothPlayersAndExit(
+                BuildTarget.StandaloneWindows64,
+                "Builds/U3/Alpha/Windows-IL2CPP/VirtualCharacterRender.exe",
+                "Builds/U3/P11/Windows-IL2CPP/VirtualCharacterRender.exe",
+                BuildOptions.None, ScriptingImplementation.IL2CPP);
         }
 
         // macOS Mono Players exercise the exact Toolkit scenes without
@@ -37,18 +49,25 @@ namespace VCR.Editor.Alpha
                 BuildTarget.StandaloneOSX,
                 "Builds/U3/Alpha/macOS/VirtualCharacterRender.app",
                 "Builds/U3/P11/macOS/VirtualCharacterRender.app",
-                BuildOptions.None);
+                BuildOptions.None, ScriptingImplementation.Mono2x);
         }
 
         private static void BuildBothPlayersAndExit(
             BuildTarget buildTarget, string alphaOutput, string p11Output,
-            BuildOptions options)
+            BuildOptions options, ScriptingImplementation backend)
         {
             bool passed = false;
             var target = NamedBuildTarget.Standalone;
             var originalBackend = PlayerSettings.GetScriptingBackend(target);
             try
             {
+                if (backend == ScriptingImplementation.IL2CPP &&
+                    (buildTarget != BuildTarget.StandaloneWindows64 ||
+                     originalBackend != ScriptingImplementation.IL2CPP ||
+                     options != BuildOptions.None))
+                    throw new InvalidOperationException(
+                        "U3 IL2CPP evidence requires pinned native Windows " +
+                        "IL2CPP baseline and nondevelopment build.");
                 // Never overwrite authored scenes or persisted PanelSettings.
                 // The exact-source AppKit plugin is restored by CI before
                 // native macOS packaging, not created in this builder.
@@ -79,10 +98,8 @@ namespace VCR.Editor.Alpha
                     throw new InvalidOperationException(
                         "U3 generated Alpha/P11 scenes failed read-only acceptance.");
 
-                // The pinned repository release baseline stays IL2CPP.
-                // Both development Windows and nondevelopment macOS Players are diagnostic.
-                PlayerSettings.SetScriptingBackend(
-                    target, ScriptingImplementation.Mono2x);
+                // Restore the committed IL2CPP baseline after every build.
+                PlayerSettings.SetScriptingBackend(target, backend);
                 P0TransparentOutputMenu.ConfigureProjectBaseline();
                 PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
                 PlayerSettings.resizableWindow = true;
@@ -93,13 +110,15 @@ namespace VCR.Editor.Alpha
                     !BuildOne(P11ApplicationSceneBuilder.ScenePath,
                         p11Output, "P11", buildTarget, options))
                     throw new InvalidOperationException(
-                        "U3 Alpha/P11 standalone Mono Player build failed.");
+                        "U3 Alpha/P11 standalone " + backend + " Player build failed.");
                 passed = true;
-                Debug.Log("VCR U3 Alpha/P11 " + buildTarget + " Mono Players: PASS");
+                Debug.Log("VCR U3 Alpha/P11 " + buildTarget +
+                    " " + backend + " Players: PASS");
             }
             catch (Exception exception)
             {
-                Debug.LogError("VCR U3 Alpha/P11 " + buildTarget + " Mono Players: FAIL");
+                Debug.LogError("VCR U3 Alpha/P11 " + buildTarget +
+                    " " + backend + " Players: FAIL");
                 Debug.LogException(exception);
             }
             finally
@@ -130,7 +149,7 @@ namespace VCR.Editor.Alpha
                 });
             if (report == null || report.summary.result != BuildResult.Succeeded)
             {
-                Debug.LogError("VCR U3: " + label + " " + buildTarget + " Mono build failed.");
+                Debug.LogError("VCR U3: " + label + " " + buildTarget + " build failed.");
                 return false;
             }
             var found = buildTarget == BuildTarget.StandaloneOSX
