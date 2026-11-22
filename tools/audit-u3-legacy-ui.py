@@ -161,8 +161,8 @@ def scan(root):
             "global-metadata.dat",
             "--platform windows-nodebug",
             "tools/probe-u3-windows-gui.py",
-            "u3-il2cpp-artifacts/Alpha/windows.zip",
-            "u3-il2cpp-artifacts/P11/windows.zip",
+            "for variant in Alpha P11; do",
+            'u3-il2cpp-artifacts/$variant/windows.zip',
         )),
         (U3_IL2CPP_CHECK, read(root, U3_IL2CPP_CHECK), (
             "GameAssembly.dll", "windows.payload-sha256.json",
@@ -279,8 +279,8 @@ def self_test():
                 "GameAssembly.dll\nglobal-metadata.dat\n"
                 "--platform windows-nodebug\n"
                 "tools/probe-u3-windows-gui.py\n"
-                "u3-il2cpp-artifacts/Alpha/windows.zip\n"
-                "u3-il2cpp-artifacts/P11/windows.zip\n"),
+                "for variant in Alpha P11; do\n"
+                "u3-il2cpp-artifacts/$variant/windows.zip\n"),
             U3_IL2CPP_CHECK: (
                 "GameAssembly.dll\nwindows.payload-sha256.json\n"
                 "archive_sha256\nzipfile.open(entry\n"),
