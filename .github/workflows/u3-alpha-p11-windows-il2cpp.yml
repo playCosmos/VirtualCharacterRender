@@ -6,6 +6,9 @@ on:
       - feature/u3-toolkit-only-retirement-20261119
     paths:
       - .github/workflows/u3-alpha-p11-windows-il2cpp.yml
+      # A digest/manifest verifier edit changes the acceptance predicate.
+      # Retest the real native IL2CPP payload on that exact source SHA.
+      - tools/verify-u3-il2cpp-payload.py
   workflow_dispatch:
 permissions:
   contents: read
