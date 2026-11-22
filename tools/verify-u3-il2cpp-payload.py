@@ -133,7 +133,9 @@ def self_test():
         # inventory ordering is ignored.
         changed = root / "Alpha" / "Windows-IL2CPP" / "zReadme.txt"
         original = changed.read_bytes()
-        changed.write_bytes(b"tampered")
+        # Keep the exact byte count: require the cryptographic digest,
+        # rather than the easier file-length check, to catch this tampering.
+        changed.write_bytes(bytes([original[0] ^ 1]) + original[1:])
         try:
             verify(root, artifacts, source)
         except ValueError as error:
