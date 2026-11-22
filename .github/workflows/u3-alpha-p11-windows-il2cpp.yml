@@ -38,6 +38,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Regression-test IL2CPP payload ordering and tamper rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/verify-u3-il2cpp-payload.py --self-test
       - name: Supply python3 to verified bash bootstraps
         shell: bash
         run: |

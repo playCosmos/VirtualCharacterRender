@@ -183,3 +183,17 @@ required for both scenes. These tests are hosted CI, not signed release
 artifacts, operator-authored scene acceptance or physical device/OBS
 verification. The job is isolated and only runs on its workflow change
 or an explicit manual dispatch.
+
+## U3.8 source-bound IL2CPP revalidation after manifest-order failure
+
+The first real native Windows IL2CPP build on source `65f01af`
+completed separate Alpha/P11 builds and packages but failed at
+`Alpha: manifest path inventory mismatch`. This was a checker
+false negative: Windows `Path` enumeration ordering differs from the
+canonical case-sensitive ZIP string sort. The updated verifier compares
+exact unique inventories independent of producer ordering, still hashes
+all built files and archived members. An early CI self-test now creates
+both complete synthetic variant archives in deliberately reversed order,
+requires their acceptance, then requires failure on modified build
+bytes and a modified ZIP. The native Windows IL2CPP gate must pass on
+its exact retested source before U3.8 may be marked complete.

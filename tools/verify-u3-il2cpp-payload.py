@@ -3,8 +3,9 @@
 import argparse
 import hashlib
 import json
+import tempfile
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZipFile, ZIP_DEFLATED
 
 NEEDED = (
     "VirtualCharacterRender.exe",
@@ -79,12 +80,96 @@ def verify(root, artifacts, source):
               str(len(entries)) + " files, ZIP SHA-256=" + archive_sha256)
 
 
+
+def self_test():
+    """Exercise Windows-style case ordering and reject forged payload evidence.
+
+    The old checker required source/ZIP manifest insertion order to match
+    case-sensitive sorted names. On Windows, Path ordering can be
+    case-insensitive. Both complete inventories must match regardless
+    of enumeration order, but a changed byte still fails closed.
+    """
+    source = "a" * 40
+    with tempfile.TemporaryDirectory(prefix="u3-il2cpp-payload-test-") as temp:
+        root = Path(temp) / "build"
+        artifacts = Path(temp) / "artifacts"
+        for variant in ("Alpha", "P11"):
+            directory = root / variant / "Windows-IL2CPP"
+            bundle = artifacts / variant
+            bundle.mkdir(parents=True)
+            # Deliberately choose an insertion order unlike the canonical
+            # lexicographic spelling; simulate Windows Path enumeration.
+            names = list(reversed(sorted(NEEDED + (
+                "zReadme.txt", "AlphaAsset.txt", "subdir/aData.bin",
+                "subdir/ZMeta.bin",
+            ))))
+            manifest_entries = []
+            zip_path = bundle / "windows.zip"
+            with ZipFile(zip_path, "w", ZIP_DEFLATED) as archive:
+                for index, name in enumerate(names):
+                    path = directory / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    payload = (variant + ":" + name + ":" + str(index)).encode()
+                    path.write_bytes(payload)
+                    archive.write(path, name)
+                    manifest_entries.append({
+                        "path": name, "bytes": len(payload),
+                        "sha256": hashlib.sha256(payload).hexdigest(),
+                    })
+            (bundle / "windows.payload-sha256.json").write_text(
+                json.dumps({"format": "vcr-u3-il2cpp-payload-v1",
+                            "variant": variant, "sourceSha": source,
+                            "files": manifest_entries}), encoding="utf-8")
+            with zip_path.open("rb") as stream:
+                digest = sha256_stream(stream)
+            (bundle / "windows.sha256").write_text(
+                digest + "  windows.zip\n", encoding="utf-8")
+            (bundle / "windows.source-sha").write_text(
+                source + "\n", encoding="utf-8")
+
+        verify(root, artifacts, source)
+
+        # A genuine content mismatch must still be rejected even when
+        # inventory ordering is ignored.
+        changed = root / "Alpha" / "Windows-IL2CPP" / "zReadme.txt"
+        original = changed.read_bytes()
+        changed.write_bytes(b"tampered")
+        try:
+            verify(root, artifacts, source)
+        except ValueError as error:
+            if "build-file hash mismatch" not in str(error):
+                raise
+        else:
+            raise AssertionError("Tampered IL2CPP build payload accepted")
+        changed.write_bytes(original)
+
+        # A forged ZIP with a different digest must be rejected before
+        # any member is used.
+        zip_path = artifacts / "P11" / "windows.zip"
+        with zip_path.open("ab") as stream:
+            stream.write(b"invalid trailing payload")
+        try:
+            verify(root, artifacts, source)
+        except ValueError as error:
+            if "archive_sha256 mismatch" not in str(error):
+                raise
+        else:
+            raise AssertionError("Tampered IL2CPP archive accepted")
+    print("U3 IL2CPP case-order and tamper self-test: PASS")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--artifacts", type=Path, required=True)
-    parser.add_argument("--source", required=True)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--artifacts", type=Path)
+    parser.add_argument("--source")
     args = parser.parse_args()
+    if args.self_test:
+        self_test()
+        return
+    if not args.root or not args.artifacts or not args.source:
+        parser.error("--root, --artifacts and --source are required")
     verify(args.root, args.artifacts, args.source)
 
 
