@@ -132,16 +132,13 @@ namespace VCR.Runtime.UI
                     var path = Path.Combine(UnityEngine.Application.persistentDataPath,
                         "VCR", "event-rules.json");
                     _workspaceEventStore = new EventRuntimeConfigurationStore(path);
-                    // Match the legacy dashboard: restore only once on first
-                    // discovery, never silently create/overwrite a saved file.
-                    // If the legacy dashboard is still active it retains
-                    // responsibility for its own startup restoration. Do
-                    // not overwrite its live, potentially unsaved edits.
+                    // A Toolkit-only P1 host restores saved rules once on
+                    // first discovery. Re-enable and dock rebuild must never
+                    // discard unsaved runtime edits by replaying disk state.
                     if (!ReferenceEquals(_workspaceEventStartupCheckedHost, current))
                     {
                         _workspaceEventStartupCheckedHost = current;
-                        if (FindFirstObjectByType<ApplicationUiController>() == null &&
-                            File.Exists(path) &&
+                        if (File.Exists(path) &&
                             !TryReloadWorkspaceEventRules(current, out var error))
                             ReportWorkspaceEvent("Saved event rules not restored: " + error);
                     }

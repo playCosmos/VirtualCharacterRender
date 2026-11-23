@@ -3,6 +3,8 @@ using Leap;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
+using VCR.Runtime.Output.Unity;
 using VCR.Editor.P0;
 using VCR.Runtime.Appearance.Unity;
 using VCR.Runtime.Application;
@@ -219,8 +221,41 @@ namespace VCR.Editor.Alpha
 
             root.AddComponent<
                 DesktopCharacterFileSelectionAdapter>();
-            root.AddComponent<
-                ApplicationUiController>();
+
+            // Alpha now uses the same single-owner interactive Toolkit
+            // workspace as P1; do not recreate a legacy Canvas UI.
+            var mainCamera = root.GetComponentInChildren<Camera>(true);
+            var output = root.GetComponent<UniWinCOverlayOutput>();
+            if (mainCamera == null || output == null)
+            {
+                Debug.LogError("VCR Alpha: Toolkit workspace requires camera and desktop output.");
+                return false;
+            }
+            mainCamera.backgroundColor = new Color(0.105f, 0.12f, 0.14f, 1f);
+            output.ConfigureForP1Workspace(mainCamera);
+            diagnostics.ConfigureForP1Workspace();
+
+            const string panelPath =
+                "Assets/VCR/Alpha/AlphaWorkspacePanelSettings.asset";
+            var panelSettings =
+                AssetDatabase.LoadAssetAtPath<PanelSettings>(panelPath);
+            if (panelSettings == null)
+            {
+                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panelSettings, panelPath);
+            }
+            if (!AssetDatabase.Contains(panelSettings))
+            {
+                Debug.LogError("VCR Alpha: Toolkit PanelSettings could not be persisted.");
+                return false;
+            }
+            var workspace = new GameObject("Workspace UI Toolkit");
+            workspace.SetActive(false);
+            workspace.transform.SetParent(root.transform, false);
+            var document = workspace.AddComponent<UIDocument>();
+            document.panelSettings = panelSettings;
+            workspace.AddComponent<WorkspaceToolkitShell>();
+            workspace.SetActive(true);
 
             // Inert during normal launches; activated only by the explicit
             // --vcr-smoke-report=... standalone CI command-line option.
@@ -270,7 +305,7 @@ namespace VCR.Editor.Alpha
             AssetDatabase.SaveAssets();
 
             Debug.Log(
-                "VCR Alpha integrated runtime scene created. " +
+                "VCR Alpha integrated Toolkit runtime scene created. " +
                 "All current runtime feature families remain included; " +
                 "MediaPipe webcam, ARKit/iFacialMocap, Ultraleap hands, VMC receive/send, and 2D host start disabled for equipment-free alpha validation.");
 
