@@ -132,7 +132,11 @@ namespace VCR.Editor.Alpha
         {
             try
             {
-                EditorApplication.Exit(ValidateExistingAlphaAndP11Scenes() ? 0 : 1);
+                var passed = ValidateExistingAlphaAndP11Scenes();
+                Debug.Log(passed
+                    ? "VCR U3 authored Alpha/P11 Toolkit scenes: PASS (read only)."
+                    : "VCR U3 authored Alpha/P11 Toolkit scenes: FAIL (no changes saved).");
+                EditorApplication.Exit(passed ? 0 : 1);
             }
             catch (Exception exception)
             {
