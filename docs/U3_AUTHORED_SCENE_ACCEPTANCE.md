@@ -33,6 +33,10 @@ macOS (shell; use the actual Unity 6 application binary):
 python3 tools/run-u3-authored-scene-acceptance.py --editor "/Applications/Unity/Hub/Editor/6000.3.25f1/Unity.app/Contents/MacOS/Unity" --project "/path/to/VirtualCharacterRender/unity" --output "$HOME/VCR-U3-acceptance"
 ```
 
+The CI mock-Editor self-test validates argument passing, stale PASS rejection,
+nonzero exits, timeout handling, same-length asset-byte changes and output
+location safety. **It does not run Unity or establish authored-scene acceptance**.
+
 The tool launches the **real Unity Editor** in batch mode, invoking
 `VCR.Editor.Alpha.U3ToolkitSceneValidation.ValidateExistingAlphaAndP11ScenesAndExit`.
 It calls **no** scene generator or SaveScene/SaveAssets. The Editor checks

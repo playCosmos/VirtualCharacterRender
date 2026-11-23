@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest.mock import patch
 
 
 EXPECTED_EDITOR_VERSION = "6000.3.25f1"
@@ -84,7 +85,92 @@ def self_test():
             assert "missing/linked" in str(exc)
         else:
             raise AssertionError("Missing authored .meta was accepted")
-    print("U3 authored-scene read-only evidence self-test: PASS")
+
+    # Integration contract: exercise the actual launcher/report path using
+    # a fake Editor subprocess, never a generated Unity fixture as proof
+    # that any operator-authored scene has been accepted.
+    with tempfile.TemporaryDirectory(prefix="vcr-u3-editor-launch-") as tmp:
+        root = Path(tmp)
+        project = root / "unity"
+        evidence_dir = root / "evidence"
+        editor = root / "mock-Unity-editor"
+        editor.write_bytes(b"fake-executable-placeholder")
+        version = project / "ProjectSettings" / "ProjectVersion.txt"
+        version.parent.mkdir(parents=True)
+        version.write_text("m_EditorVersion: " + EXPECTED_EDITOR_VERSION + "\n",
+                           encoding="utf-8")
+        for number, relative in enumerate(TRACKED):
+            target = project / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(("test-data-" + str(number)).encode("utf-8"))
+
+        args = argparse.Namespace(project=project, editor=editor,
+                                  output=evidence_dir, timeout_seconds=60)
+
+        def editor_response(cmd, *, marker=PASS_MARKER, exit_code=0,
+                            mutate=False, timeout=False, **kwargs):
+            assert cmd[0] == str(editor.resolve())
+            assert cmd[1:4] == ["-batchmode", "-nographics", "-quit"]
+            assert cmd[cmd.index("-executeMethod") + 1] == METHOD
+            assert cmd[cmd.index("-projectPath") + 1] == str(project.resolve())
+            assert kwargs["cwd"] == str(project.resolve())
+            assert kwargs["check"] is False
+            if timeout:
+                raise subprocess.TimeoutExpired(cmd, 60)
+            if mutate:
+                target = project / TRACKED[0]
+                initial = target.read_bytes()
+                target.write_bytes(bytes([initial[0] ^ 1]) + initial[1:])
+            if marker is not None:
+                log = Path(cmd[cmd.index("-logFile") + 1])
+                log.write_text("start\n" + marker + "\n", encoding="utf-8")
+            return subprocess.CompletedProcess(cmd, exit_code)
+
+        def attempt(**params):
+            with patch("subprocess.run",
+                       side_effect=lambda cmd, **kwargs: editor_response(
+                           cmd, **params, **kwargs)) as invoked:
+                status = run(args)
+            assert invoked.call_count == 1
+            return status, json.loads(
+                (evidence_dir / "authored-scene-evidence.json").read_text(
+                    encoding="utf-8"))
+
+        status, report = attempt()
+        assert status == 0 and report["passed"]
+        assert report["explicitPassMarkerObserved"]
+        assert report["assetBytesUnchanged"]
+        assert report["editorExitCode"] == 0
+        assert not report["physicalOperatorAccepted"]
+        assert not report["obsOrDeviceAccepted"]
+        # The previous PASS is deleted and cannot be recycled.
+        status, report = attempt(marker=None)
+        assert status == 1 and not report["passed"]
+        assert not report["explicitPassMarkerObserved"]
+        status, report = attempt(exit_code=9)
+        assert status == 1 and report["editorExitCode"] == 9
+        status, report = attempt(mutate=True)
+        assert status == 1 and not report["assetBytesUnchanged"]
+        assert report["explicitPassMarkerObserved"]
+        original = project / TRACKED[0]
+        original.write_bytes(b"test-data-0")
+        status, report = attempt(timeout=True)
+        assert status == 1 and report["timedOut"]
+        assert not report["passed"]
+        # A bad Unity pin must reject without starting any Editor process.
+        version.write_text("m_EditorVersion: 6000.3.24f1\n", encoding="utf-8")
+        with patch("subprocess.run") as invoked:
+            assert run(args) == 1
+            invoked.assert_not_called()
+        # Artifacts must never be emitted into the Unity project itself.
+        args.output = project / "acceptance-logs"
+        try:
+            run(args)
+        except ValueError as error:
+            assert "outside the Unity project" in str(error)
+        else:
+            raise AssertionError("Evidence written into authored project")
+    print("U3 authored-scene read-only evidence and mock Editor integration self-test: PASS")
 
 
 def run(args):

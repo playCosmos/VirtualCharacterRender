@@ -197,3 +197,15 @@ both complete synthetic variant archives in deliberately reversed order,
 requires their acceptance, then requires failure on modified build
 bytes and a modified ZIP. The native Windows IL2CPP gate must pass on
 its exact retested source before U3.8 may be marked complete.
+
+## U3.10 — operator launcher negative-path integration tests
+
+The U3.9 authored-scene handoff script's source-free CI contract now
+invokes its full command/report path with an injected **mock Editor process**.
+It checks exact Editor command arguments, source asset hash identity,
+explicit PASS requirement, rejection of a stale PASS log, nonzero exit,
+timeout, same-size scene-file tampering, incorrect Unity Editor pin, and
+refusal to store evidence inside the authored Unity project. The tests
+never create or claim a real authored-scene acceptance. Actual Unity
+Editor inspection and physical Windows/macOS/OBS/VRM/hardware sign-off
+remain entirely operator-run prerequisites, separate from CI green.
