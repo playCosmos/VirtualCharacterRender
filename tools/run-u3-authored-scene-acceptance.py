@@ -108,15 +108,16 @@ def self_test():
                                   output=evidence_dir, timeout_seconds=60)
 
         def editor_response(cmd, *, marker=PASS_MARKER, exit_code=0,
-                            mutate=False, timeout=False, **kwargs):
+                            mutate=False, simulate_timeout=False, **kwargs):
             assert cmd[0] == str(editor.resolve())
             assert cmd[1:4] == ["-batchmode", "-nographics", "-quit"]
             assert cmd[cmd.index("-executeMethod") + 1] == METHOD
             assert cmd[cmd.index("-projectPath") + 1] == str(project.resolve())
             assert kwargs["cwd"] == str(project.resolve())
             assert kwargs["check"] is False
-            if timeout:
-                raise subprocess.TimeoutExpired(cmd, 60)
+            assert kwargs["timeout"] == args.timeout_seconds
+            if simulate_timeout:
+                raise subprocess.TimeoutExpired(cmd, args.timeout_seconds)
             if mutate:
                 target = project / TRACKED[0]
                 initial = target.read_bytes()
@@ -154,7 +155,7 @@ def self_test():
         assert report["explicitPassMarkerObserved"]
         original = project / TRACKED[0]
         original.write_bytes(b"test-data-0")
-        status, report = attempt(timeout=True)
+        status, report = attempt(simulate_timeout=True)
         assert status == 1 and report["timedOut"]
         assert not report["passed"]
         # A bad Unity pin must reject without starting any Editor process.
