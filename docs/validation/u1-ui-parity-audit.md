@@ -3,7 +3,7 @@
 Repository: playCosmos/VirtualCharacterRender
 PR: #44, Draft / unmerged
 Baseline before current follow-up: 034a2bdfd3d9ac140cbfcaa786821467b535dc1f (2026-11-14 KST).
-The latest code follow-up fixes fallback Settings confirmation revocation on focus changes and other controls. Source-matched Unity, Windows, macOS and repository validation passed on `12c9cfde`; physical acceptance remains open.
+The latest code follow-up restores dynamic Tracking field placeholder/help parity in the UI Toolkit fallback. Source-matched Unity, Windows, macOS and repository validation passed on `aa995ac9`; physical acceptance remains open.
 
 ## Evidence hierarchy
 
@@ -36,6 +36,29 @@ The latest code follow-up fixes fallback Settings confirmation revocation on foc
 
 The inventory maps main feature families and concrete entry points, not every dynamic device-specific setting field. Treat any unexamined device control, error branch, or persisted key as OPEN, not Complete.
 
+## Dynamic tracking settings field parity
+
+Both legacy Native Settings and U1 consume the provider-owned `ITrackingRuntimeConfigurable.GetConfigurationSettings()` list and submit values through that provider's `TryApplyConfiguration()`. The saved field key is compatible: `VCR.TrackingInputs.Setting.v1.<registered ControlId>.<setting key>`. U1 displays live provider readback, while legacy uGUI prefers the saved value when opening its modal; this is an intentional recovery/editing difference, and U1 writes the saved value only after Apply succeeds.
+
+| Provider / field key | Meaning, default or hint | Provider validation and effect | Legacy ↔ U1 evidence |
+|---|---|---|---|
+| MediaPipe `device` | Unity camera device name; empty selects the first available camera | Trimmed then used as the selected webcam; alongside capture values it can restart an enabled camera | Both show the provider label/value and call the same provider Apply service. U1 fallback now shows placeholder and help text. |
+| MediaPipe `width` | Input width; hint 640 | Integer 160–7680 | Same provider schema and Apply validation in both generations. |
+| MediaPipe `height` | Input height; hint 480 | Integer 120–4320 | Same provider schema and Apply validation in both generations. |
+| MediaPipe `fps` | Camera frame rate; hint 30 | Integer 1–120 | Same provider schema and Apply validation in both generations. |
+| Ultraleap `tracking-mode` | Tracking space mode | Case-insensitive enum; Desktop or Screentop accepted, HMD rejected | Same provider schema and Apply validation; U1 uses live values and shows HelpText in fallback. |
+| Ultraleap `service-ip` | Tracking Service IPv4; default 127.0.0.1 | Blank normalizes to loopback; otherwise valid IPv4 required | Same provider schema, persistence key and Apply service. |
+| Ultraleap `service-port` | Tracking Service port; default 12345 | Integer 1–65535 | Same provider schema and Apply validation in both generations. |
+| Ultraleap `offset-x/y/z` | Local position offset in metres; default 0 | Each value must parse as a finite float | Same provider schema and Apply validation in both generations. |
+| Ultraleap `rotation-x/y/z` | Local Euler offset in degrees; default 0 | Each value must parse as a finite float | Same provider schema and Apply validation in both generations. |
+| ARKit `ios-ip` | iPhone/iPad sender IPv4; example 192.168.0.25 | Valid IPv4 required | Same provider schema and Apply service. U1 native Settings uses the same label/value edit; fallback shows provider guidance. |
+| ARKit `remote-port` | Sender port; default 49983 | Integer 1–65535 | Same provider schema, key and validation. |
+| ARKit `local-port` | Receiver port; default 49983 | Integer 1–65535 | Same provider schema, key and validation. |
+
+**Confirmed surface difference and fix:** legacy uGUI's tracking modal passes each provider's `Placeholder` to its InputField and renders `HelpText` beneath the field. The shared native Settings window on both legacy and U1 accepts only label/value, so neither native surface renders those two hints. U1 UI Toolkit fallback had omitted both. Commit `aa995ac9` now assigns `TextField.textEdition.placeholder`, hides it on focus, and renders HelpText as a wrapped secondary label. The P1 tracking schema regression checks both UI Toolkit hint paths. Exact-source Unity P0–P13, P1 generation/Windows Player, macOS AppKit/Player/native shutdown, and Repository push/PR validation passed on `aa995ac9`.
+
+U1 additionally rejects a null schema and schemas above 256 fields, permits a non-null empty schema, and filters blank/duplicate keys case-insensitively; the legacy native modal had no equivalent guards. Built-in MediaPipe, Ultraleap and ARKit schemas are non-null, contain 4/9/3 fields respectively, and use unique nonblank keys, so these guards do not remove any current built-in control. **Evidence boundary:** this is a source/provider-contract comparison, not proof of actual device readback, driver acceptance, camera restart, tracking output or physical UI layout. Those remain physical acceptance.
+
 ## Confirmed corrections and residual risks
 
 1. Layout regression fixed at ec676fad: v1 positions could assign docks to different panels after catalog change. v2 stores panel IDs; unknown newer IDs are ignored, invalid/truncated snapshots rejected. P1WorkspaceLayoutValidation exercises round-trip, backup, legacy read, unknown IDs and corruption.
@@ -62,6 +85,9 @@ The inventory maps main feature families and concrete entry points, not every dy
 | 12c9cfde / repository #44912038032 and #44912042597 | Push and PR repository validation | PASS |
 | 12c9cfde / Unity P0-P13 #44912038081 | P0–P13, P1 workspace generation, Windows Player build/startup/quit and informational GUI observation | PASS; initial second Unity invocation timed out, same-SHA failed-job retry completed successfully |
 | 12c9cfde / macOS P1 #44912038041 | AppKit arm64 build, nondevelopment Mono Player, managed native Settings startup/shutdown smoke | PASS |
+| aa995ac9 / repository #45708884339 and #45708890033 | Push and PR repository validation | PASS |
+| aa995ac9 / Unity P0–P13 #45708884356 | P0–P13, P1 workspace generation, Windows Player build/startup/quit and informational GUI observation | PASS |
+| aa995ac9 / macOS P1 #45708884291 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
