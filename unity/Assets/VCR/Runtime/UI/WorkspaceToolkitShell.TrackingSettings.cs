@@ -1841,7 +1841,16 @@ namespace VCR.Runtime.UI
                         value = GetWorkspaceTrackingDisplayedValue(setting),
                         tooltip = setting.HelpText
                     };
+                    field.textEdition.placeholder = setting.Placeholder;
+                    field.textEdition.hidePlaceholderOnFocus = true;
                     _workspaceTrackingEditor.Add(field);
+                    if (!string.IsNullOrWhiteSpace(setting.HelpText))
+                    {
+                        var help = new Label(setting.HelpText);
+                        help.style.whiteSpace = WhiteSpace.Normal;
+                        help.style.color = new Color(0.56f, 0.62f, 0.70f, 1f);
+                        _workspaceTrackingEditor.Add(help);
+                    }
                     fields[setting.Key] = field;
                 }
                 _workspaceTrackingEditor.Add(new Button(() =>

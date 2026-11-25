@@ -717,6 +717,9 @@ namespace VCR.Editor.P1
                    native.Contains("new HashSet<string>(StringComparer.OrdinalIgnoreCase)") &&
                    native.Contains("GetWorkspaceTrackingDisplayedValue(setting)") &&
                    toolkit.Contains("GetWorkspaceTrackingDisplayedValue(setting)") &&
+                   toolkit.Contains("field.textEdition.placeholder = setting.Placeholder;") &&
+                   toolkit.Contains("field.textEdition.hidePlaceholderOnFocus = true;") &&
+                   toolkit.Contains("new Label(setting.HelpText)") &&
                    toolkit.Contains("new Dictionary<string, TextField>(StringComparer.OrdinalIgnoreCase)") &&
                    !native.Contains("PlayerPrefs.GetString(") &&
                    !toolkit.Contains("PlayerPrefs.GetString(");
