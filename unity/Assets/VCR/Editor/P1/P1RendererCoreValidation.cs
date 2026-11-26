@@ -59,6 +59,11 @@ namespace VCR.Editor.P1
                     "workspace layout snapshots must survive save/restore, corruption and schema migration",
                     failures);
 
+                Expect(
+                    P1EventRulesPersistenceValidation.RunChecks(),
+                    "U1 event rule Save/Reload must round-trip runtime state and preserve unsaved edits on damaged files",
+                    failures);
+
                 var characterRoot =
                     new GameObject("Character");
                 characterRoot.transform.SetParent(
