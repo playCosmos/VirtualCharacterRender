@@ -3,7 +3,7 @@
 Repository: playCosmos/VirtualCharacterRender
 PR: #44, Draft / unmerged
 Baseline before current follow-up: 034a2bdfd3d9ac140cbfcaa786821467b535dc1f (2026-11-14 KST).
-The latest code follow-up restores dynamic Tracking field placeholder/help parity in the UI Toolkit fallback. Source-matched Unity, Windows, macOS and repository validation passed on `aa995ac9`; physical acceptance remains open.
+The latest follow-up adds regression coverage for native Settings actions 200–207 and v2 layout catalog reorder/removal. The fallback Tracking hint fix is in `aa995ac9`. Source-matched Unity, Windows, macOS and repository validation passed on `6c551e3a`; physical acceptance remains open.
 
 ## Evidence hierarchy
 
@@ -20,7 +20,7 @@ The latest code follow-up restores dynamic Tracking field placeholder/help parit
 | Reload saved runtime config | Native Settings 204 → `ReloadSavedConfiguration` | Native 204 → guarded action 206; fallback Reload config → 206 | `ApplicationRuntimeBootstrap.ReloadSavedConfiguration` | Versioned config file, backup, save suppression | Partial | Source parity contract covers ID 204; Unity startup/config smoke passes. Native/fallback clicks and destructive confirmation behavior still need hands-on acceptance. | P0 |
 | Save current runtime config | Native 205 → bootstrap save | Native 205 / fallback Save config | `ApplicationRuntimeBootstrap.SaveConfiguration` | Same config file and backup policy | Partial | Runtime save path and recovery confirmation are source-checked; click path and on-disk preservation under real failure remain unverified. | P0 |
 | Render defaults | No legacy native action | Native 207 | `SingleCharacterSceneRuntime.ApplyRenderSettings` | Runtime config persistence on the normal bootstrap path | Intentional | Regression contract requires 207 to remain distinct from reload 204; applies scale 1, FPS 60, VSync off, retaining background preference. | P1 |
-| Render scale / FPS | Native actions 200/201 | Native 200/201 and fallback Apply | `SingleCharacterSceneRuntime` | Runtime render configuration | Partial | Source validates scale 0.5–2 and FPS 30–120 and reads back applied values; interactive cross-platform control behavior is not fully verified. | P1 |
+| Render scale / FPS | Native actions 200/201 | Native 200/201 and fallback Apply | `SingleCharacterSceneRuntime` | Runtime render configuration | Partial | Source validates scale 0.5–2 and FPS 30–120 and reads back applied values; `P1WorkspaceLayoutValidation` maps Settings IDs 200–207 across legacy/U1 and verifies Win32/AppKit ID forwarding. Interactive cross-platform control behavior is not fully verified. | P1 |
 | VSync / background | Native actions 202/203 | Native 202/203 and fallback toggles | Render runtime and Unity background execution | Runtime render configuration | Partial | Source updates runtime state and reports it; real focus-loss/background behavior needs physical testing. | P1 |
 | VRM path / load / reload / unload / restore | Legacy model controls and last-successful-model restore | Native 300–303, Sources panel load/reload/unload/restore | `SingleCharacterSceneRuntime` async operations | Last successful path in PlayerPrefs | Partial | P1 regression guards destroyed-shell continuations and Windows startup smoke passes; actual VRM file load/swap remains unverified. | P0 |
 | Tracking list / edit / enable / reconnect | `RebuildNativeTrackingSources`, `ShowNativeTrackingDetails`, `SaveNativeTrackingDetails` | Native and Toolkit `WorkspaceToolkitShell.TrackingSettings` | Provider `ITrackingRuntimeControl` / `ITrackingRuntimeConfigurable` | Shared `VCR.TrackingInputs.*.v1` PlayerPrefs keys | Partial | Provider fixtures cover replacement, stale editor, failed Apply/recovery, retry and field schema contracts; actual devices and per-control interactions remain open. | P0 |
@@ -31,7 +31,7 @@ The latest code follow-up restores dynamic Tracking field placeholder/help parit
 | Event rules | Legacy event controls | U1 EventRules save/reload | Event-rule runtime | JSON event-rule file | Partial | Source connects save/reload to the runtime; file recovery and rule-trigger effect need execution verification. | P1 |
 | Overlay / output / recovery | Legacy actions 401–403 | U1 native actions 401–403, fallback and Broadcast panel | Active overlay adapter and scene runtime | Runtime output configuration | Partial | Source routes actions and status; real OBS transparent capture and device recovery remain unverified. | P1 |
 | Diagnostics / log | Legacy diagnostics controls | U1 RuntimeLog and diagnostics paging | Bounded log queue, metrics and export services | Diagnostic export artifact | Partial | Automated log stress exists; operator export contents and troubleshooting path need acceptance. | P1 |
-| Workspace docks / tabs / layout | No equivalent OBS dock in legacy | `WorkspaceToolkitShell` / `WorkspaceLayoutFile` v2 | Workspace panel catalog and layout file service | Panel-ID JSON, manual/automatic snapshots and backups; v1 positional migration | Partial | `P1WorkspaceLayoutValidation` exercises round-trip, migration, backup, corruption and unknown IDs; physical rearrange/reopen remains open. | P0 |
+| Workspace docks / tabs / layout | No equivalent OBS dock in legacy | `WorkspaceToolkitShell` / `WorkspaceLayoutFile` v2 | Workspace panel catalog and layout file service | Panel-ID JSON, manual/automatic snapshots and backups; v1 positional migration | Partial | `P1WorkspaceLayoutValidation` exercises round-trip, migration, backup, corruption, unknown IDs, reordered v2 panel IDs, and removal of a middle catalog panel without shifting later entries; physical rearrange/reopen remains open. | P0 |
 | Search / shortcuts / focus | Legacy keyboard/UI actions | U1 FeatureSearch and IME composition guards | Workspace UI and focus controller | Search transient; workspace preferences in PlayerPrefs | Partial | Source and automated contracts exist; Korean IME, focus movement and keyboard traversal remain physical checks. | P2 |
 | Independent Settings window / fallback | Legacy `DesktopNativeSettingsWindow` | U1 Win32/AppKit Settings plus UI Toolkit fallback | Win32/AppKit bridge and shared runtime services | Window-local control IDs; settings use runtime service persistence | Partial | Repository checks validate action IDs and bridge contracts; macOS AppKit build/P/Invoke smoke passes. Real Windows/macOS clicks and IME remain unverified. | P1 |
 
@@ -89,6 +89,11 @@ U1 additionally rejects a null schema and schemas above 256 fields, permits a no
 | aa995ac9 / repository #45708884339 and #45708890033 | Push and PR repository validation | PASS |
 | aa995ac9 / Unity P0–P13 #45708884356 | P0–P13, P1 workspace generation, Windows Player build/startup/quit and informational GUI observation | PASS |
 | aa995ac9 / macOS P1 #45708884291 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
+| d78aef3c / Unity P0–P13 #45904287800 | P0–P13 plus reordered v2 catalog and middle-panel removal regression, P1 workspace generation, Windows Player/GUI | PASS |
+| d78aef3c / macOS P1 #45904287820 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
+| 6c551e3a / repository #45908631418 and #45908637237 | Push and PR repository validation | PASS |
+| 6c551e3a / Unity P0–P13 #45908631310 | P0–P13 including Settings action 200–207 and Win32/AppKit control ID forwarding; P1 workspace/Windows Player/GUI | PASS |
+| 6c551e3a / macOS P1 #45908631388 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
