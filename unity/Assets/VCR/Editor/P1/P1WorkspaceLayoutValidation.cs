@@ -180,6 +180,58 @@ namespace VCR.Editor.P1
                 Check(!PlayerPrefs.HasKey("VCR.UI.Workspace.Dock.futurePanel.v1"),
                     "unknown panel IDs must be ignored, not persisted");
 
+                // v2 binds parallel arrays by stable panel ID, so a catalog
+                // reorder must preserve each panel's dock and order.
+                BuildLegacySnapshot(directory, legacyDirectory, 555f, PanelIds.Length, 2,
+                    mirror =>
+                    {
+                        Array.Reverse(mirror.panelIds);
+                        Array.Reverse(mirror.docks);
+                        Array.Reverse(mirror.orders);
+                    });
+                ApplySentinel();
+                Check(InvokeBool(load, legacyDirectory),
+                    "v2 snapshots must load after panel catalog reordering");
+                Check(PlayerPrefs.GetString(
+                          "VCR.UI.Workspace.Dock.scenes.v1", "") == "left" &&
+                      PlayerPrefs.GetString(
+                          "VCR.UI.Workspace.Dock.tracking.v1", "") == "bottom" &&
+                      PlayerPrefs.GetString(
+                          "VCR.UI.Workspace.Dock.materials.v1", "") == "right" &&
+                      PlayerPrefs.GetInt(
+                          "VCR.UI.Workspace.Order.materials.v1", -1) == 7,
+                    "reordered v2 entries must remain attached to their panel IDs");
+
+                // Remove a middle panel from the newer ID catalog. Its stale
+                // preference must be deleted without shifting later panels.
+                BuildLegacySnapshot(directory, legacyDirectory, 556f, PanelIds.Length, 2,
+                    mirror =>
+                    {
+                        var removedIndex = Array.IndexOf(mirror.panelIds, "tracking");
+                        if (removedIndex < 0)
+                            throw new InvalidOperationException(
+                                "Expected tracking panel in the default v2 catalog.");
+                        var ids = new List<string>(mirror.panelIds);
+                        var docks = new List<string>(mirror.docks);
+                        var orders = new List<int>(mirror.orders);
+                        ids.RemoveAt(removedIndex);
+                        docks.RemoveAt(removedIndex);
+                        orders.RemoveAt(removedIndex);
+                        mirror.panelIds = ids.ToArray();
+                        mirror.docks = docks.ToArray();
+                        mirror.orders = orders.ToArray();
+                    });
+                PlayerPrefs.SetString("VCR.UI.Workspace.Dock.tracking.v1", "left");
+                ApplySentinel();
+                Check(InvokeBool(load, legacyDirectory),
+                    "v2 snapshots must load when a panel was removed");
+                Check(!PlayerPrefs.HasKey("VCR.UI.Workspace.Dock.tracking.v1") &&
+                      PlayerPrefs.GetString(
+                          "VCR.UI.Workspace.Dock.materials.v1", "") == "right" &&
+                      PlayerPrefs.GetInt(
+                          "VCR.UI.Workspace.Order.materials.v1", -1) == 7,
+                    "removed v2 panel state must clear without shifting surviving panel state");
+
                 // Persisted dimensions are clamped into their supported ranges.
                 BuildLegacySnapshot(directory, legacyDirectory, 9999f, PanelIds.Length, 2,
                     mirror =>
