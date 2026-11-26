@@ -641,20 +641,96 @@ namespace VCR.Editor.P1
                 "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
             var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
                 "VCR/Runtime/UI/ApplicationUiController.NativeSettings.cs"));
-            var register = shell.IndexOf("Add(0, 204,", StringComparison.Ordinal);
-            var restore = shell.IndexOf("Add(0, 207,", StringComparison.Ordinal);
-            if (register < 0 || restore < 0 || restore < register) return false;
-            var registerLabel = shell.Substring(register, Math.Min(180, shell.Length - register));
-            var restoreLabel = shell.Substring(restore, Math.Min(180, shell.Length - restore));
-            if (!registerLabel.Contains("Reload saved configuration")) return false;
-            if (!restoreLabel.Contains("Restore render defaults")) return false;
-            if (!shell.Contains("if (action == 204)")) return false;
-            if (!shell.Contains("action != 207")) return false;
-            // Native Settings has one visible Reload action (legacy 204).
-            // Internal U1 action 206 remains supported by the fallback.
-            if (shell.Contains("Add(0, 206,")) return false;
-            return legacy.Contains("AddNativeAction(0, 204") &&
-                   legacy.Contains("ShowProfileLoadUnavailable");
+            var legacyController = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/ApplicationUiController.cs"));
+            var configuration = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/WorkspaceToolkitShell.Configuration.cs"));
+            var bridge = File.ReadAllText(Path.Combine(Application.dataPath,
+                "VCR/Runtime/UI/DesktopNativeSettingsWindow.cs"));
+            var appKit = File.ReadAllText(Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../../native/macos/VcrSettingsWindow.mm")));
+            var openAt = shell.IndexOf("private void OpenWorkspaceNativeSettings()",
+                StringComparison.Ordinal);
+            var pumpAt = shell.IndexOf("private void PumpWorkspaceNativeSettings()",
+                StringComparison.Ordinal);
+            var pumpEnd = shell.IndexOf("private string GetWorkspaceOverlayStatus()",
+                pumpAt, StringComparison.Ordinal);
+            if (openAt < 0 || pumpAt <= openAt || pumpEnd <= pumpAt)
+                return false;
+            var registration = shell.Substring(openAt, pumpAt - openAt);
+            var pump = shell.Substring(pumpAt, pumpEnd - pumpAt);
+
+            // Legacy IDs 200-205 keep their established meanings. U1 native
+            // controls dispatch through the same runtime services; 206 remains
+            // a fallback-only reload implementation and 207 is U1-only defaults.
+            var legacyActions = new[]
+            {
+                new[] { "200", "ApplyNativeRenderScale" },
+                new[] { "201", "ApplyNativeFps" },
+                new[] { "202", "ToggleSettingsVsync" },
+                new[] { "203", "ToggleSettingsRunInBackground" },
+                new[] { "204", "ShowProfileLoadUnavailable" },
+                new[] { "205", "SaveConfiguration" }
+            };
+            foreach (var action in legacyActions)
+                if (!legacy.Contains("AddNativeAction(0, " + action[0]) ||
+                    !legacy.Contains(action[1]))
+                    return false;
+
+            var u1Actions = new[]
+            {
+                new[] { "200", "Apply render scale" },
+                new[] { "201", "Apply FPS" },
+                new[] { "202", "Toggle VSync" },
+                new[] { "203", "Toggle background execution" },
+                new[] { "204", "Reload saved configuration" },
+                new[] { "205", "Save runtime configuration" },
+                new[] { "207", "Restore render defaults" }
+            };
+            foreach (var action in u1Actions)
+            {
+                var at = registration.IndexOf("Add(0, " + action[0] + ",",
+                    StringComparison.Ordinal);
+                if (at < 0) return false;
+                var control = registration.Substring(at,
+                    Math.Min(220, registration.Length - at));
+                if (!control.Contains(action[1])) return false;
+            }
+
+            if (!pump.Contains("if (action == 200)") ||
+                !pump.Contains("else if (action == 201)") ||
+                !pump.Contains("else if (action == 202)") ||
+                !pump.Contains("else if (action == 203)") ||
+                !pump.Contains("settings.RenderScale = scale;") ||
+                !pump.Contains("settings.TargetFrameRate = fps;") ||
+                !pump.Contains("settings.UseVSync = !settings.UseVSync;") ||
+                !pump.Contains("settings.RunInBackground = !settings.RunInBackground;") ||
+                !pump.Contains("settings.RenderScale = 1f;") ||
+                !pump.Contains("settings.TargetFrameRate = 60;") ||
+                !pump.Contains("settings.UseVSync = false;") ||
+                !pump.Contains("ApplyWorkspaceConfigurationActionWithNativeFeedback(206);") ||
+                !configuration.Contains("if (action == 205)") ||
+                !configuration.Contains("bootstrap.SaveConfiguration(") ||
+                !configuration.Contains("if (action == 206)") ||
+                !configuration.Contains("bootstrap.ReloadSavedConfiguration(") ||
+                !configuration.Contains("ApplyWorkspaceConfigurationAction(205)") ||
+                !configuration.Contains("ApplyWorkspaceConfigurationAction(206)") ||
+                registration.Contains("Add(0, 206,") ||
+                !bridge.Contains("var id = unchecked((int)((long)wParam & 0xffff));") ||
+                !bridge.Contains("id == 0 ? IntPtr.Zero : new IntPtr(id)") ||
+                !bridge.Contains("owner.events.Enqueue(id);") ||
+                !bridge.Contains("MacAddControl(category, id,") ||
+                !bridge.Contains("return MacPollAction();") ||
+                !appKit.Contains("button.tag = ident;") ||
+                !appKit.Contains("const int button = (int)[sender tag];") ||
+                !appKit.Contains("actions.push_back(button);"))
+                return false;
+
+            // Legacy 204 is a real saved-config reload when its bootstrap is
+            // available; lack of bootstrap produces feedback rather than a
+            // render-default reset.
+            return legacyController.Contains("applicationBootstrap") &&
+                   legacyController.Contains("ReloadSavedConfiguration(");
         }
         private static bool SettingsConfirmationLifecycle()
         {
