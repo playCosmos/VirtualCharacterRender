@@ -6,8 +6,8 @@ using VCR.Runtime.UI;
 
 namespace VCR.Editor.P1
 {
-    // Exercises the U1 reload helper against the real EventRuntimeHost and
-    // versioned disk store without requiring external event providers.
+    // Exercises the U1 Save/Reload handlers against the real EventRuntimeHost
+    // and versioned disk store without requiring external event providers.
     internal static class P1EventRulesPersistenceValidation
     {
         public static bool RunChecks()
@@ -29,6 +29,10 @@ namespace VCR.Editor.P1
                 Directory.CreateDirectory(directory);
                 var store = Activator.CreateInstance(storeType,
                     Path.Combine(directory, "event-rules.json"));
+                var storePath = storeType.GetProperty("Path");
+                var tryLoad = storeType.GetMethod("TryLoad");
+                if (storePath == null || tryLoad == null)
+                    return false;
                 runtimeRoot = new GameObject("VCR P1 Event Runtime Persistence");
                 runtimeRoot.SetActive(false);
                 var eventHost = runtimeRoot.AddComponent(hostType);
@@ -37,22 +41,6 @@ namespace VCR.Editor.P1
                 SetRules(hostType, eventHost, ruleType, new[] { persistedRule });
                 if (!SetMaxCommands(hostType, eventHost, 19))
                     return false;
-                var captureRules = hostType.GetMethod("CaptureRules");
-                var maxCommands = hostType.GetProperty("MaxCommandsPerEvent");
-                var storePath = storeType.GetProperty("Path");
-                var trySave = storeType.GetMethod("TrySave");
-                if (captureRules == null || maxCommands == null ||
-                    storePath == null || trySave == null)
-                    return false;
-                var savedRules = captureRules.Invoke(eventHost, null);
-                var saveArgs = new[]
-                {
-                    savedRules, maxCommands.GetValue(eventHost), null
-                };
-                if (!(bool)trySave.Invoke(store, saveArgs) ||
-                    !string.IsNullOrWhiteSpace(saveArgs[2] as string) ||
-                    !File.Exists(storePath.GetValue(store) as string))
-                    return false;
 
                 shellRoot = new GameObject("VCR P1 Event Settings Shell");
                 shellRoot.SetActive(false);
@@ -60,10 +48,32 @@ namespace VCR.Editor.P1
                 var type = typeof(WorkspaceToolkitShell);
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var storeField = type.GetField("_workspaceEventStore", flags);
-                var reload = type.GetMethod("TryReloadWorkspaceEventRules", flags);
-                if (storeField == null || reload == null)
+                var hostField = type.GetField("_workspaceEventHost", flags);
+                var restoreCheckedField =
+                    type.GetField("_workspaceEventRestoreChecked", flags);
+                var save = type.GetMethod("SaveWorkspaceEventRules", flags);
+                var reload = type.GetMethod("ReloadWorkspaceEventRules", flags);
+                if (storeField == null || hostField == null ||
+                    restoreCheckedField == null || save == null || reload == null)
                     return false;
                 storeField.SetValue(shell, store);
+                hostField.SetValue(shell, eventHost);
+                restoreCheckedField.SetValue(shell, true);
+
+                var eventSource = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.EventRules.cs"));
+                if (!eventSource.Contains("new Button(SaveWorkspaceEventRules)") ||
+                    !eventSource.Contains("new Button(ReloadWorkspaceEventRules)"))
+                    return false;
+                save.Invoke(shell, null);
+                if (!File.Exists(storePath.GetValue(store) as string))
+                    return false;
+                var saved = LoadStoredRules(tryLoad, store);
+                if (saved == null ||
+                    !MatchesRule(ruleType, saved.Value.Rule,
+                        "p1.persisted.rule", "Persisted rule", false) ||
+                    saved.Value.MaxCommands != 19)
+                    return false;
 
                 var unsavedRule = CreateRule(ruleType, "p1.unsaved.rule",
                     "Unsaved rule", enabled: true);
@@ -71,12 +81,20 @@ namespace VCR.Editor.P1
                 if (!SetMaxCommands(hostType, eventHost, 7))
                     return false;
 
-                var reloadArguments = new object[] { eventHost, null };
-                if (!(bool)reload.Invoke(shell, reloadArguments))
+                // First click arms the deliberate unsaved-edit safeguard.
+                reload.Invoke(shell, null);
+                if (!MatchesRule(hostType, eventHost, ruleType,
+                        "p1.unsaved.rule", "Unsaved rule", true) ||
+                    (int)hostType.GetProperty("MaxCommandsPerEvent")
+                        .GetValue(eventHost) != 7)
                     return false;
+                // The second immediate click follows the actual U1 handler
+                // and restores the saved rule set into the live runtime.
+                reload.Invoke(shell, null);
                 if (!MatchesRule(hostType, eventHost, ruleType,
                         "p1.persisted.rule", "Persisted rule", false) ||
-                    (int)maxCommands.GetValue(eventHost) != 19)
+                    (int)hostType.GetProperty("MaxCommandsPerEvent")
+                        .GetValue(eventHost) != 19)
                     return false;
 
                 // The reload helper must read and validate the complete file
@@ -87,12 +105,13 @@ namespace VCR.Editor.P1
                     return false;
                 var path = storePath.GetValue(store) as string;
                 File.WriteAllText(path, "{ damaged event rules");
-                reloadArguments = new object[] { eventHost, null };
-                if ((bool)reload.Invoke(shell, reloadArguments))
+                reload.Invoke(shell, null);
+                reload.Invoke(shell, null);
+                if (!MatchesRule(hostType, eventHost, ruleType,
+                        "p1.unsaved.rule", "Unsaved rule", true))
                     return false;
-                return MatchesRule(hostType, eventHost, ruleType,
-                           "p1.unsaved.rule", "Unsaved rule", true) &&
-                       (int)maxCommands.GetValue(eventHost) == 7;
+                return (int)hostType.GetProperty("MaxCommandsPerEvent")
+                           .GetValue(eventHost) == 7;
             }
             catch (Exception exception)
             {
@@ -172,6 +191,19 @@ namespace VCR.Editor.P1
                    Math.Abs((double)ruleType.GetField("CooldownSeconds")
                        ?.GetValue(rule) - 3.5d) < 0.0001d &&
                    (bool)ruleType.GetField("StopAfterMatch")?.GetValue(rule);
+        }
+
+        private static (object Rule, int MaxCommands)?
+            LoadStoredRules(MethodInfo tryLoad, object store)
+        {
+            var args = new object[] { null, 0, null };
+            if (!(bool)tryLoad.Invoke(store, args) ||
+                !string.IsNullOrWhiteSpace(args[2] as string))
+                return null;
+            var rules = args[0] as Array;
+            if (rules == null || rules.Length != 1)
+                return null;
+            return (rules.GetValue(0), (int)args[1]);
         }
     }
 }
