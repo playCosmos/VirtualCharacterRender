@@ -78,7 +78,7 @@ namespace VCR.Editor.P1
                 var saved = LoadStoredRules(tryLoad, store);
                 if (saved == null ||
                     !MatchesRule(ruleType, saved.Value.Rule,
-                        "p1.persisted.rule", "Persisted rule", false) ||
+                        "p1.persisted.rule", "Persisted rule", true) ||
                     saved.Value.MaxCommands != 19)
                     return false;
 
