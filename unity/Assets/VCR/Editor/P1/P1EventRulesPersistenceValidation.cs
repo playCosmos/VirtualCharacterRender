@@ -17,6 +17,13 @@ namespace VCR.Editor.P1
             GameObject runtimeRoot = null;
             GameObject shellRoot = null;
             GameObject hubRoot = null;
+            var stage = "resolving runtime types";
+            bool Fail(string reason)
+            {
+                Debug.LogError(
+                    "P1 event rule persistence failed at " + stage + ": " + reason);
+                return false;
+            }
             try
             {
                 var storeType = FindRuntimeType(
@@ -31,7 +38,8 @@ namespace VCR.Editor.P1
                     "VCR.Runtime.Events.NormalizedEvent");
                 if (storeType == null || hostType == null || ruleType == null ||
                     eventHubType == null || eventType == null)
-                    return false;
+                    return Fail("required runtime type was not loaded");
+                stage = "creating store and initial runtime rule";
                 Directory.CreateDirectory(directory);
                 var store = Activator.CreateInstance(storeType,
                     Path.Combine(directory, "event-rules.json"));
@@ -47,8 +55,9 @@ namespace VCR.Editor.P1
                     matchLocalManualEvent: true);
                 SetRules(hostType, eventHost, ruleType, new[] { persistedRule });
                 if (!SetMaxCommands(hostType, eventHost, 19))
-                    return false;
+                    return Fail("initial command limit was rejected");
 
+                stage = "wiring U1 EventRules Save/Reload handlers";
                 shellRoot = new GameObject("VCR P1 Event Settings Shell");
                 shellRoot.SetActive(false);
                 var shell = shellRoot.AddComponent<WorkspaceToolkitShell>();
@@ -62,7 +71,7 @@ namespace VCR.Editor.P1
                 var reload = type.GetMethod("ReloadWorkspaceEventRules", flags);
                 if (storeField == null || hostField == null ||
                     restoreCheckedField == null || save == null || reload == null)
-                    return false;
+                    return Fail("U1 store, host, or handler member was not found");
                 storeField.SetValue(shell, store);
                 hostField.SetValue(shell, eventHost);
                 restoreCheckedField.SetValue(shell, true);
@@ -71,38 +80,42 @@ namespace VCR.Editor.P1
                     "VCR/Runtime/UI/WorkspaceToolkitShell.EventRules.cs"));
                 if (!eventSource.Contains("new Button(SaveWorkspaceEventRules)") ||
                     !eventSource.Contains("new Button(ReloadWorkspaceEventRules)"))
-                    return false;
+                    return Fail("Save/Reload buttons are not connected to their handlers");
+                stage = "invoking U1 Save handler";
                 save.Invoke(shell, null);
                 if (!File.Exists(storePath.GetValue(store) as string))
-                    return false;
+                    return Fail("Save handler did not create the event-rule file");
                 var saved = LoadStoredRules(tryLoad, store);
                 if (saved == null ||
                     !MatchesRule(ruleType, saved.Value.Rule,
                         "p1.persisted.rule", "Persisted rule", true) ||
                     saved.Value.MaxCommands != 19)
-                    return false;
+                    return Fail("saved file did not preserve rule and command limit");
 
+                stage = "preparing unsaved live rules before Reload";
                 var unsavedRule = CreateRule(ruleType, "p1.unsaved.rule",
                     "Unsaved rule", enabled: true);
                 SetRules(hostType, eventHost, ruleType, new[] { unsavedRule });
                 if (!SetMaxCommands(hostType, eventHost, 7))
-                    return false;
+                    return Fail("unsaved command limit was rejected");
 
                 // First click arms the deliberate unsaved-edit safeguard.
+                stage = "checking first-click Reload confirmation";
                 reload.Invoke(shell, null);
                 if (!MatchesRule(hostType, eventHost, ruleType,
                         "p1.unsaved.rule", "Unsaved rule", true) ||
                     (int)hostType.GetProperty("MaxCommandsPerEvent")
                         .GetValue(eventHost) != 7)
-                    return false;
+                    return Fail("first Reload click changed unsaved live state");
                 // The second immediate click follows the actual U1 handler
                 // and restores the saved rule set into the live runtime.
+                stage = "checking confirmed Reload into EventRuntimeHost";
                 reload.Invoke(shell, null);
                 if (!MatchesRule(hostType, eventHost, ruleType,
                         "p1.persisted.rule", "Persisted rule", true) ||
                     (int)hostType.GetProperty("MaxCommandsPerEvent")
                         .GetValue(eventHost) != 19)
-                    return false;
+                    return Fail("confirmed Reload did not restore saved rules/limit");
 
                 // Publish through the actual bounded event hub after U1 Reload.
                 // An unhandled probe action still proves the restored rule
@@ -118,7 +131,7 @@ namespace VCR.Editor.P1
                 var emitted = hostType.GetProperty("EmittedCommands");
                 if (setEventHub == null || publish == null || update == null ||
                     processed == null || matched == null || emitted == null)
-                    return false;
+                    return Fail("event hub or host dispatch API was not found");
                 setEventHub.Invoke(eventHost, new[] { eventHub });
                 runtimeRoot.SetActive(true);
                 var eventConstructor = null as ConstructorInfo;
@@ -128,7 +141,8 @@ namespace VCR.Editor.P1
                         eventConstructor = candidate;
                         break;
                     }
-                if (eventConstructor == null) return false;
+                if (eventConstructor == null)
+                    return Fail("normalized event constructor was not found");
                 var normalizedEvent = eventConstructor.Invoke(new object[]
                 {
                     "local.manual", "p1.persistence.probe", 1000000L,
@@ -136,31 +150,38 @@ namespace VCR.Editor.P1
                 });
                 publish.Invoke(eventHub, new[] { normalizedEvent });
                 update.Invoke(eventHub, null);
-                if ((long)processed.GetValue(eventHost) != 1L ||
-                    (long)matched.GetValue(eventHost) != 1L ||
-                    (long)emitted.GetValue(eventHost) != 1L)
-                    return false;
+                var processedCount = (long)processed.GetValue(eventHost);
+                var matchedCount = (long)matched.GetValue(eventHost);
+                var emittedCount = (long)emitted.GetValue(eventHost);
+                if (processedCount != 1L || matchedCount != 1L ||
+                    emittedCount != 1L)
+                    return Fail("event dispatch counts were processed=" + processedCount +
+                        ", matched=" + matchedCount + ", emitted=" + emittedCount);
 
                 // The reload helper must read and validate the complete file
                 // before mutating the live host. A damaged file must leave
                 // unsaved runtime rules and limits intact.
+                stage = "preparing unsaved state before corrupt-file Reload";
                 SetRules(hostType, eventHost, ruleType, new[] { unsavedRule });
                 if (!SetMaxCommands(hostType, eventHost, 7))
-                    return false;
+                    return Fail("corrupt-file test command limit was rejected");
                 var path = storePath.GetValue(store) as string;
                 File.WriteAllText(path, "{ damaged event rules");
+                stage = "checking corrupt-file Reload preservation";
                 reload.Invoke(shell, null);
                 reload.Invoke(shell, null);
                 if (!MatchesRule(hostType, eventHost, ruleType,
                         "p1.unsaved.rule", "Unsaved rule", true))
-                    return false;
-                return (int)hostType.GetProperty("MaxCommandsPerEvent")
-                           .GetValue(eventHost) == 7;
+                    return Fail("corrupt-file Reload replaced unsaved rules");
+                if ((int)hostType.GetProperty("MaxCommandsPerEvent")
+                        .GetValue(eventHost) != 7)
+                    return Fail("corrupt-file Reload replaced unsaved command limit");
+                return true;
             }
             catch (Exception exception)
             {
                 Debug.LogError(
-                    "P1 event rule persistence validation failed: " + exception);
+                    "P1 event rule persistence failed at " + stage + ": " + exception);
                 return false;
             }
             finally
