@@ -123,16 +123,23 @@ namespace VCR.Editor.P1
                 hubRoot = new GameObject("VCR P1 Event Persistence Hub");
                 var eventHub = hubRoot.AddComponent(eventHubType);
                 var setEventHub = hostType.GetMethod("SetEventHub");
+                var refreshEventHubSubscription =
+                    hostType.GetMethod("RefreshEventHubSubscription",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
                 var publish = eventHubType.GetMethod("Publish");
                 var update = eventHubType.GetMethod("Update",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 var processed = hostType.GetProperty("ProcessedEvents");
                 var matched = hostType.GetProperty("MatchedRules");
                 var emitted = hostType.GetProperty("EmittedCommands");
-                if (setEventHub == null || publish == null || update == null ||
-                    processed == null || matched == null || emitted == null)
+                if (setEventHub == null || refreshEventHubSubscription == null ||
+                    publish == null || update == null || processed == null ||
+                    matched == null || emitted == null)
                     return Fail("event hub or host dispatch API was not found");
                 setEventHub.Invoke(eventHost, new[] { eventHub });
+                // EditMode does not call MonoBehaviour.OnEnable, so explicitly
+                // exercise the same real host subscription helper used there.
+                refreshEventHubSubscription.Invoke(eventHost, null);
                 runtimeRoot.SetActive(true);
                 var eventConstructor = null as ConstructorInfo;
                 foreach (var candidate in eventType.GetConstructors())
