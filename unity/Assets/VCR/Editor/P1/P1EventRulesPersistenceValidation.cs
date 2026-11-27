@@ -184,6 +184,13 @@ namespace VCR.Editor.P1
             if (!(count is int countValue) || countValue != 1 || getRule == null)
                 return false;
             var rule = getRule.Invoke(host, new object[] { 0 });
+            return MatchesRule(ruleType, rule, id, label, enabled);
+        }
+
+        private static bool MatchesRule(
+            Type ruleType, object rule,
+            string id, string label, bool enabled)
+        {
             return rule != null &&
                    (string)ruleType.GetField("Id")?.GetValue(rule) == id &&
                    (string)ruleType.GetField("GraphLabel")?.GetValue(rule) == label &&
