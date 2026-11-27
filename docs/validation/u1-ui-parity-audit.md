@@ -3,7 +3,7 @@
 Repository: playCosmos/VirtualCharacterRender
 PR: #44, Draft / unmerged
 Baseline before current follow-up: 034a2bdfd3d9ac140cbfcaa786821467b535dc1f (2026-11-14 KST).
-The latest follow-up adds regression coverage for native Settings actions 200–207 and v2 layout catalog reorder/removal. The fallback Tracking hint fix is in `aa995ac9`. Source-matched Unity, Windows, macOS and repository validation passed on `6c551e3a`; physical acceptance remains open.
+The latest follow-up adds service-level EventRules persistence/reload coverage. Earlier source changes restore fallback Tracking hints and test Settings actions 200–207 plus v2 layout reorder/removal. Source-matched Unity, Windows, macOS and repository validation passed on `25eb224c`; physical acceptance remains open.
 
 ## Evidence hierarchy
 
@@ -28,7 +28,7 @@ The latest follow-up adds regression coverage for native Settings actions 200–
 | Appearance / expression / saved presets | Legacy appearance and expression controls | U1 Appearance, presets and manual expression actions | Model/scene expression services | Per-model preset persistence | Partial | Source mappings exist; actual model change, preset restore and rollback are unverified. | P1 |
 | Motion / Motion Cue | Legacy motion controls | U1 Motion pose weighting and cue execution | Scene motion services and mixer | Runtime state; cue persistence path requires execution verification | Partial | Source call paths identified; device/model integration and saved cue behavior are unverified. | P1 |
 | Scene / environment | Legacy scene/environment controls | U1 Scenes suspension and Environment actions | Scene runtime | Runtime configuration path; round-trip needs execution evidence | Partial | Source call paths identified; live scene/environment results remain unverified. | P1 |
-| Event rules | Legacy event controls | U1 EventRules save/reload | Event-rule runtime | JSON event-rule file | Partial | Source connects save/reload to the runtime; file recovery and rule-trigger effect need execution verification. | P1 |
+| Event rules | Legacy event controls | U1 EventRules save/reload | `EventRuntimeHost` and event-rule engine | JSON event-rule file via `EventRuntimeConfigurationStore` | Partial | `P1EventRulesPersistenceValidation` uses the real store and host to save/reload a rule and command limit, then verifies corrupt JSON leaves unsaved live state intact. P9 exercises engine matching; the user-edit-to-live-trigger chain remains unverified. | P1 |
 | Overlay / output / recovery | Legacy actions 401–403 | U1 native actions 401–403, fallback and Broadcast panel | Active overlay adapter and scene runtime | Runtime output configuration | Partial | Source routes actions and status; real OBS transparent capture and device recovery remain unverified. | P1 |
 | Diagnostics / log | Legacy diagnostics controls | U1 RuntimeLog and diagnostics paging | Bounded log queue, metrics and export services | Diagnostic export artifact | Partial | Automated log stress exists; operator export contents and troubleshooting path need acceptance. | P1 |
 | Workspace docks / tabs / layout | No equivalent OBS dock in legacy | `WorkspaceToolkitShell` / `WorkspaceLayoutFile` v2 | Workspace panel catalog and layout file service | Panel-ID JSON, manual/automatic snapshots and backups; v1 positional migration | Partial | `P1WorkspaceLayoutValidation` exercises round-trip, migration, backup, corruption, unknown IDs, reordered v2 panel IDs, and removal of a middle catalog panel without shifting later entries; physical rearrange/reopen remains open. | P0 |
@@ -94,6 +94,9 @@ U1 additionally rejects a null schema and schemas above 256 fields, permits a no
 | 6c551e3a / repository #45908631418 and #45908637237 | Push and PR repository validation | PASS |
 | 6c551e3a / Unity P0–P13 #45908631310 | P0–P13 including Settings action 200–207 and Win32/AppKit control ID forwarding; P1 workspace/Windows Player/GUI | PASS |
 | 6c551e3a / macOS P1 #45908631388 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
+| 25eb224c / repository #45913416985 and #45913421684 | Push and PR repository validation | PASS |
+| 25eb224c / Unity P0–P13 #45913417023 | P0–P13 including EventRules store/host round-trip and corrupted-file preservation; P1 workspace/Windows Player/GUI | PASS |
+| 25eb224c / macOS P1 #45913417004 | AppKit arm64 build, nondevelopment Mono Player, native startup/shutdown smoke | PASS |
 
 Other earlier CI successes remain valid for their own SHA only. Never claim a previous source revision proves the current fix.
 
@@ -459,7 +462,7 @@ A failed provider restore can stay in a 4–60-second retry delay even when anot
 - P0: real first/second-click behavior in native and fallback Settings, including close/reopen within 15 seconds, mixing Save/Reload, error/recovery and pending Inspector drafts.
 - P0: physical VRM swap and Tracking stop/reconnect, with output state correctness.
 - P1: complete field-by-field native Win32/AppKit/fallback comparison, including tracking dynamic fields and disabled/readback states.
-- P1: actual material, appearance, motion, scene, event-rule and output persistence/effect tests.
+- P1: actual material, appearance, motion, scene and output persistence/effect tests; EventRules live trigger integration from the U1-edited persisted rule.
 - P2: keyboard/IME/DPI/focus, OBS transparent capture at 720p60 and 1080p60, four-hour soak and proper quit.
 
 ## Physical acceptance status
