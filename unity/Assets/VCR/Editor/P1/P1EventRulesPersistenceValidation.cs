@@ -16,6 +16,7 @@ namespace VCR.Editor.P1
                 "vcr-p1-event-rules-" + Guid.NewGuid().ToString("N"));
             GameObject runtimeRoot = null;
             GameObject shellRoot = null;
+            GameObject hubRoot = null;
             try
             {
                 var storeType = FindRuntimeType(
@@ -24,7 +25,12 @@ namespace VCR.Editor.P1
                     "VCR.Runtime.EventRuntime.Unity.EventRuntimeHost");
                 var ruleType = FindRuntimeType(
                     "VCR.Runtime.EventRuntime.EventRuntimeRule");
-                if (storeType == null || hostType == null || ruleType == null)
+                var eventHubType = FindRuntimeType(
+                    "VCR.Runtime.Events.Unity.NormalizedEventHub");
+                var eventType = FindRuntimeType(
+                    "VCR.Runtime.Events.NormalizedEvent");
+                if (storeType == null || hostType == null || ruleType == null ||
+                    eventHubType == null || eventType == null)
                     return false;
                 Directory.CreateDirectory(directory);
                 var store = Activator.CreateInstance(storeType,
@@ -37,7 +43,8 @@ namespace VCR.Editor.P1
                 runtimeRoot.SetActive(false);
                 var eventHost = runtimeRoot.AddComponent(hostType);
                 var persistedRule = CreateRule(ruleType, "p1.persisted.rule",
-                    "Persisted rule", enabled: false);
+                    "Persisted rule", enabled: true,
+                    matchLocalManualEvent: true);
                 SetRules(hostType, eventHost, ruleType, new[] { persistedRule });
                 if (!SetMaxCommands(hostType, eventHost, 19))
                     return false;
@@ -92,9 +99,46 @@ namespace VCR.Editor.P1
                 // and restores the saved rule set into the live runtime.
                 reload.Invoke(shell, null);
                 if (!MatchesRule(hostType, eventHost, ruleType,
-                        "p1.persisted.rule", "Persisted rule", false) ||
+                        "p1.persisted.rule", "Persisted rule", true) ||
                     (int)hostType.GetProperty("MaxCommandsPerEvent")
                         .GetValue(eventHost) != 19)
+                    return false;
+
+                // Publish through the actual bounded event hub after U1 Reload.
+                // An unhandled probe action still proves the restored rule
+                // matched and emitted its command into the host dispatcher.
+                hubRoot = new GameObject("VCR P1 Event Persistence Hub");
+                var eventHub = hubRoot.AddComponent(eventHubType);
+                var setEventHub = hostType.GetMethod("SetEventHub");
+                var publish = eventHubType.GetMethod("Publish");
+                var update = eventHubType.GetMethod("Update",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var processed = hostType.GetProperty("ProcessedEvents");
+                var matched = hostType.GetProperty("MatchedRules");
+                var emitted = hostType.GetProperty("EmittedCommands");
+                if (setEventHub == null || publish == null || update == null ||
+                    processed == null || matched == null || emitted == null)
+                    return false;
+                setEventHub.Invoke(eventHost, new[] { eventHub });
+                runtimeRoot.SetActive(true);
+                var eventConstructor = null as ConstructorInfo;
+                foreach (var candidate in eventType.GetConstructors())
+                    if (candidate.GetParameters().Length == 10)
+                    {
+                        eventConstructor = candidate;
+                        break;
+                    }
+                if (eventConstructor == null) return false;
+                var normalizedEvent = eventConstructor.Invoke(new object[]
+                {
+                    "local.manual", "p1.persistence.probe", 1000000L,
+                    null, null, 0d, null, false, 0L, null
+                });
+                publish.Invoke(eventHub, new[] { normalizedEvent });
+                update.Invoke(eventHub, null);
+                if ((long)processed.GetValue(eventHost) != 1L ||
+                    (long)matched.GetValue(eventHost) != 1L ||
+                    (long)emitted.GetValue(eventHost) != 1L)
                     return false;
 
                 // The reload helper must read and validate the complete file
@@ -125,6 +169,8 @@ namespace VCR.Editor.P1
                     UnityEngine.Object.DestroyImmediate(shellRoot);
                 if (runtimeRoot != null)
                     UnityEngine.Object.DestroyImmediate(runtimeRoot);
+                if (hubRoot != null)
+                    UnityEngine.Object.DestroyImmediate(hubRoot);
                 if (Directory.Exists(directory))
                     Directory.Delete(directory, recursive: true);
             }
@@ -141,7 +187,8 @@ namespace VCR.Editor.P1
         }
 
         private static object CreateRule(
-            Type ruleType, string id, string label, bool enabled)
+            Type ruleType, string id, string label, bool enabled,
+            bool matchLocalManualEvent = false)
         {
             var rule = Activator.CreateInstance(ruleType);
             ruleType.GetField("Id")?.SetValue(rule, id);
@@ -150,6 +197,27 @@ namespace VCR.Editor.P1
             ruleType.GetField("Enabled")?.SetValue(rule, enabled);
             ruleType.GetField("CooldownSeconds")?.SetValue(rule, 3.5d);
             ruleType.GetField("StopAfterMatch")?.SetValue(rule, true);
+            if (matchLocalManualEvent)
+            {
+                var filterType = FindRuntimeType(
+                    "VCR.Runtime.EventRuntime.EventRuleFilter");
+                var actionType = FindRuntimeType(
+                    "VCR.Runtime.EventRuntime.EventActionTemplate");
+                if (filterType == null || actionType == null)
+                    throw new TypeLoadException(
+                        "Event rule filter/action runtime types were not found.");
+                var filter = Activator.CreateInstance(filterType);
+                filterType.GetField("Type")?.SetValue(filter, "local.manual");
+                ruleType.GetField("Filter")?.SetValue(rule, filter);
+                var action = Activator.CreateInstance(actionType);
+                actionType.GetField("ActionType")?.SetValue(
+                    action, "p1.event.persistence.probe");
+                actionType.GetField("Name")?.SetValue(
+                    action, "Persisted event probe");
+                var actions = Array.CreateInstance(actionType, 1);
+                actions.SetValue(action, 0);
+                ruleType.GetField("Actions")?.SetValue(rule, actions);
+            }
             return rule;
         }
 
