@@ -475,6 +475,8 @@ A failed provider restore can stay in a 4–60-second retry delay even when anot
 
 ## Physical acceptance status
 
+Windows webcam hardware run preparation: [`windows-webcam-physical-test.md`](windows-webcam-physical-test.md) downloads the successful source-bound IL2CPP artifact, launches the Player with fresh log evidence, records Windows camera inventory changes, and requires explicit operator results for camera On/Off, tracking response, recovery, and optional USB reconnect/VRM swap. The scripts are prepared; no webcam-hosted physical run has been performed or accepted yet.
+
 BLOCKED — Requires Physical Acceptance: Windows/macOS hands-on GUI; Korean IME compose/commit/delete/long text; actual VRM load/swap; camera/tracker connect, disconnect and reconnect; OBS transparent capture; 720p60/1080p60 measurements; four-hour soak and native quit.
 
 Legacy uGUI stays until functionality, failure paths, persistence and physical acceptance are demonstrated. PR #44 stays Draft; do not merge, tag or release.
