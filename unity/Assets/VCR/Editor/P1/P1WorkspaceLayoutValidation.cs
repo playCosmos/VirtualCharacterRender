@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using VCR.Runtime.UI;
+using VCR.Runtime.Application;
 using VCR.Runtime.Tracking;
 
 namespace VCR.Editor.P1
@@ -268,6 +269,14 @@ namespace VCR.Editor.P1
                     Application.dataPath, "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
                 Check(NativeSettingsActionsKeepDistinctMeanings(),
                     "native settings actions 204 and 207 must stay load and render-default");
+                Check(ModelSessionPreferenceAndBootstrapOwnership(),
+                    "U2 session must preserve legacy path, CLI priority, explicit unload and UI-independent startup restoration");
+                Check(ModelLibraryExplicitRegistrationAndCorruptionSafety(),
+                    "U2 opt-in VRM catalog must preserve legacy session, reject unsafe paths, and protect damaged backups");
+                Check(ModelSessionVersionedCheckpointAndRollbackSafety(),
+                    "U2 versioned session checkpoint must preserve v1 authority and reject corrupt/future records without overwrites");
+                Check(ModelSessionExplicitAdoptionAndRollback(),
+                    "U2 checkpoint adoption must require fresh review, preserve prior v1 preference and reject external drift");
                 Check(SettingsConfirmationLifecycle(),
                     "Settings close, reopen, alternate actions and reset must disarm confirmation");
                 Check(TrackingReconnectedProviderRestoresPreferences(),
@@ -3756,6 +3765,467 @@ namespace VCR.Editor.P1
                 if (providerRoot != null) UnityEngine.Object.DestroyImmediate(providerRoot);
                 if (shellRoot != null) UnityEngine.Object.DestroyImmediate(shellRoot);
                 PlayerPrefs.DeleteKey(enabledKey);
+            }
+        }
+
+        private static bool ModelSessionExplicitAdoptionAndRollback()
+        {
+            var dir = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-session-adopt-" + Guid.NewGuid().ToString("N"));
+            var checkpointPath = Path.Combine(dir, "model-session.v1.json");
+            var journalPath = Path.Combine(dir, "model-session-adoption-rollback.v1.json");
+            var oldModel = Path.Combine(dir, "old.vrm");
+            var targetModel = Path.Combine(dir, "target.vrm");
+            var laterModel = Path.Combine(dir, "later.vrm");
+            var missingModel = Path.Combine(dir, "missing.vrm");
+            var key = ModelSessionController.PreferenceKey;
+            var oldPresent = PlayerPrefs.HasKey(key);
+            var oldValue = PlayerPrefs.GetString(key, "");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(oldModel, "old VRM test fixture");
+                File.WriteAllText(targetModel, "target VRM test fixture");
+                File.WriteAllText(laterModel, "later VRM test fixture");
+                PlayerPrefs.SetString(key, oldModel);
+
+                var store = new ModelSessionSnapshotStore(checkpointPath);
+                var service = new ModelSessionAdoptionService(store, journalPath);
+                if (!store.TrySaveExplicitCheckpoint(targetModel, oldModel, out var error) ||
+                    !service.TryPreview(out var reviewed, out error) ||
+                    reviewed.PreviousPath != oldModel ||
+                    !reviewed.PreviousPresent ||
+                    reviewed.TargetPath != targetModel ||
+                    File.Exists(journalPath))
+                    return false;
+
+                // Both review source and current preference are guarded.
+                if (!store.TrySaveExplicitCheckpoint(laterModel, oldModel, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+                if (!service.TryPreview(out reviewed, out error))
+                    return false;
+                PlayerPrefs.SetString(key, targetModel);
+                if (service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != targetModel)
+                    return false;
+                PlayerPrefs.SetString(key, oldModel);
+
+                if (!service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    !File.Exists(journalPath) ||
+                    PlayerPrefs.GetString(key) != laterModel)
+                    return false;
+                var firstJournal = File.ReadAllBytes(journalPath);
+
+                // An outstanding adoption cannot be replaced by a second
+                // migration even after the operator reviews a new checkpoint.
+                if (!store.TrySaveExplicitCheckpoint(oldModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    !ByteArraysEqual(firstJournal, File.ReadAllBytes(journalPath)))
+                    return false;
+
+                // Do not overwrite an explicit newer interactive choice.
+                PlayerPrefs.SetString(key, missingModel);
+                if (service.TryRollback(out _) ||
+                    service.TryKeepAdoptedPreference(out _) ||
+                    PlayerPrefs.GetString(key) != missingModel ||
+                    !ByteArraysEqual(firstJournal, File.ReadAllBytes(journalPath)))
+                    return false;
+                PlayerPrefs.SetString(key, laterModel);
+                if (!service.TryRollback(out error) ||
+                    PlayerPrefs.GetString(key) != oldModel ||
+                    service.TryRollback(out _))
+                    return false;
+
+                // A checkpoint can explicitly request an empty preference.
+                // The next-start restore key must be deleted, not set to "".
+                if (!store.TrySaveExplicitCheckpoint("", "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    PlayerPrefs.HasKey(key) ||
+                    !service.TryRollback(out error) ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+
+                // Keeping a valid adoption closes its rollback opportunity
+                // and leaves the actual model runtime untouched.
+                if (!store.TrySaveExplicitCheckpoint(targetModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    !service.TryAdopt(reviewed, out error) ||
+                    !service.TryKeepAdoptedPreference(out error) ||
+                    PlayerPrefs.GetString(key) != targetModel ||
+                    service.TryRollback(out _))
+                    return false;
+
+                // An unreadable journal is never silently replaced by a
+                // subsequent successful-looking adoption.
+                File.WriteAllText(journalPath, "{ broken journal");
+                var corrupt = File.ReadAllBytes(journalPath);
+                if (!store.TrySaveExplicitCheckpoint(oldModel, "", out error) ||
+                    !service.TryPreview(out reviewed, out error) ||
+                    service.TryAdopt(reviewed, out _) ||
+                    !ByteArraysEqual(corrupt, File.ReadAllBytes(journalPath)) ||
+                    PlayerPrefs.GetString(key) != targetModel)
+                    return false;
+
+                // A missing journal primary with an existing backup also
+                // blocks reuse; the operator must inspect it first.
+                File.Delete(journalPath);
+                if (!File.Exists(journalPath + ".bak") ||
+                    service.TryAdopt(reviewed, out _) ||
+                    File.Exists(journalPath))
+                    return false;
+
+                // A checkpoint with a missing referenced VRM remains readable
+                // but must never be adopted as the next startup target.
+                if (!store.TrySaveExplicitCheckpoint(missingModel, "", out error) ||
+                    service.TryPreview(out _, out _))
+                    return false;
+
+                var panel = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.ModelSession.cs"));
+                return panel.Contains("ReviewWorkspaceModelSessionAdoption") &&
+                       panel.Contains("ApplyWorkspaceModelSessionAdoption") &&
+                       panel.Contains("RollbackWorkspaceModelSessionAdoption") &&
+                       panel.Contains("KeepWorkspaceModelSessionAdoption") &&
+                       panel.Contains("_adoptionReviewExpiresAt") &&
+                       panel.Contains("TryAdopt(reviewed, out var error)") &&
+                       panel.Contains("TryRollback(out var error)") &&
+                       panel.Contains("TryKeepAdoptedPreference(out var error)");
+            }
+            finally
+            {
+                if (oldPresent) PlayerPrefs.SetString(key, oldValue);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+        }
+
+        private static bool ModelSessionVersionedCheckpointAndRollbackSafety()
+        {
+            var dir = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-session-checkpoint-" + Guid.NewGuid().ToString("N"));
+            var file = Path.Combine(dir, "model-session.v1.json");
+            var oldModel = Path.Combine(dir, "remembered.vrm");
+            var activeModel = Path.Combine(dir, "active.vrm");
+            var missingModel = Path.Combine(dir, "missing.vrm");
+            var key = ModelSessionController.PreferenceKey;
+            var hadKey = PlayerPrefs.HasKey(key);
+            var previous = PlayerPrefs.GetString(key, "");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(oldModel, "test fixture not actual VRM");
+                File.WriteAllText(activeModel, "test fixture not actual VRM");
+                PlayerPrefs.SetString(key, oldModel);
+                var store = new ModelSessionSnapshotStore(file);
+
+                // An absent checkpoint must not fabricate an active model.
+                if (!store.TryRead(out var snapshot, out var error) ||
+                    snapshot != null || File.Exists(file))
+                    return false;
+                if (!store.TrySaveExplicitCheckpoint(oldModel, "", out error) ||
+                    !store.TryRead(out snapshot, out error) || snapshot == null ||
+                    snapshot.Version != 1 ||
+                    snapshot.RememberedPath != Path.GetFullPath(oldModel) ||
+                    snapshot.RememberedFormat != "vrm" ||
+                    snapshot.ActivePath != "" || snapshot.ActiveFormat != "" ||
+                    snapshot.CaptureReason != "operator" ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+                var firstJson = File.ReadAllText(file);
+                if (File.Exists(file + ".bak"))
+                    return false;
+
+                // A runtime-active VRM and the remembered VRM can differ
+                // (for example after a command-line load).
+                if (!store.TrySaveExplicitCheckpoint(oldModel, activeModel, out error) ||
+                    !store.TryRead(out snapshot, out error) ||
+                    snapshot.ActivePath != Path.GetFullPath(activeModel) ||
+                    !store.TryReadBackup(out var backup, out error) ||
+                    backup.ActivePath != "" || backup.RememberedPath != oldModel ||
+                    File.ReadAllText(file + ".bak") != firstJson ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+
+                var primaryBytes = File.ReadAllBytes(file);
+                var backupBytes = File.ReadAllBytes(file + ".bak");
+                if (store.TrySaveExplicitCheckpoint("relative.vrm", activeModel, out _) ||
+                    store.TrySaveExplicitCheckpoint(oldModel, "unsupported.fbx", out _) ||
+                    store.TrySaveExplicitCheckpoint(oldModel + "\n", "", out _) ||
+                    !ByteArraysEqual(primaryBytes, File.ReadAllBytes(file)) ||
+                    !ByteArraysEqual(backupBytes, File.ReadAllBytes(file + ".bak")))
+                    return false;
+
+                // An unavailable remembered VRM is still a valid reference
+                // in an explicit snapshot, not proof that a model is loaded.
+                if (!store.TrySaveExplicitCheckpoint(missingModel, "", out error) ||
+                    !store.TryRead(out snapshot, out error) ||
+                    snapshot.RememberedPath != missingModel ||
+                    snapshot.ActivePath != "" ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+
+                File.WriteAllText(file, "{ corrupt session");
+                primaryBytes = File.ReadAllBytes(file);
+                backupBytes = File.ReadAllBytes(file + ".bak");
+                if (store.TryRead(out snapshot, out _) ||
+                    store.TrySaveExplicitCheckpoint(oldModel, activeModel, out _) ||
+                    !store.TryReadBackup(out backup, out error) ||
+                    !ByteArraysEqual(primaryBytes, File.ReadAllBytes(file)) ||
+                    !ByteArraysEqual(backupBytes, File.ReadAllBytes(file + ".bak")))
+                    return false;
+
+                File.WriteAllText(file, "{\"Version\":99}");
+                primaryBytes = File.ReadAllBytes(file);
+                if (store.TryRead(out snapshot, out _) ||
+                    store.TrySaveExplicitCheckpoint("", "", out _) ||
+                    !ByteArraysEqual(primaryBytes, File.ReadAllBytes(file)))
+                    return false;
+
+                // Missing primary plus valid backup is NOT a fresh session.
+                File.Delete(file);
+                if (store.TryRead(out snapshot, out _) ||
+                    store.TrySaveExplicitCheckpoint("", "", out _) ||
+                    File.Exists(file) ||
+                    !store.TryReadBackup(out backup, out error))
+                    return false;
+
+                // Explicit operator rollback is out of band: restore a reviewed
+                // backup to primary. Neither file changes legacy PlayerPrefs.
+                File.Copy(file + ".bak", file);
+                if (!store.TryRead(out snapshot, out error) ||
+                    snapshot == null || snapshot.RememberedPath != oldModel ||
+                    PlayerPrefs.GetString(key) != oldModel)
+                    return false;
+
+                File.WriteAllText(file, new string('x', 33000));
+                if (store.TryRead(out snapshot, out _) ||
+                    store.TrySaveExplicitCheckpoint(oldModel, "", out _))
+                    return false;
+
+                var shell = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                var panel = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.ModelSession.cs"));
+                return shell.Contains("BuildWorkspaceModelSessionSnapshot(sourcesContent)") &&
+                       panel.Contains("TrySaveExplicitCheckpoint(") &&
+                       panel.Contains("TryReadBackup(") &&
+                       panel.Contains("sceneRuntime.Status.HasCharacter") &&
+                       panel.Contains("No session state was restored.");
+            }
+            finally
+            {
+                if (hadKey) PlayerPrefs.SetString(key, previous);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+        }
+
+        private static bool ModelLibraryExplicitRegistrationAndCorruptionSafety()
+        {
+            var folder = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-model-library-" + Guid.NewGuid().ToString("N"));
+            var libraryFile = Path.Combine(folder, "model-library.v1.json");
+            var first = Path.Combine(folder, "a.vrm");
+            var second = Path.Combine(folder, "b.vrm");
+            var missing = Path.Combine(folder, "missing.vrm");
+            var unsupported = Path.Combine(folder, "unsupported.fbx");
+            var key = ModelSessionController.PreferenceKey;
+            var hadRemembered = PlayerPrefs.HasKey(key);
+            var remembered = PlayerPrefs.GetString(key, string.Empty);
+            try
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(first, "fixture, not a VRM");
+                File.WriteAllText(second, "fixture, not a VRM");
+                File.WriteAllText(unsupported, "fixture, not an FBX");
+                PlayerPrefs.SetString(key, first);
+
+                var store = new ModelLibraryStore(libraryFile);
+                if (!store.TryRead(out var entries, out var error) || entries.Length != 0 ||
+                    File.Exists(libraryFile) || File.Exists(libraryFile + ".bak"))
+                    return false;
+                if (store.TryAdd(missing, out _) ||
+                    store.TryAdd(unsupported, out _) ||
+                    store.TryAdd("relative.vrm", out _) ||
+                    store.TryAdd(first + "\n", out _) ||
+                    File.Exists(libraryFile))
+                    return false;
+
+                if (!store.TryAdd(first, out error) ||
+                    !store.TryAdd(second, out error) ||
+                    !store.TryRead(out entries, out error) ||
+                    entries.Length != 2 ||
+                    entries[0].Path != Path.GetFullPath(first) ||
+                    entries[1].Path != Path.GetFullPath(second) ||
+                    entries[0].Format != "vrm" ||
+                    !File.Exists(libraryFile + ".bak") ||
+                    PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                var good = File.ReadAllText(libraryFile);
+                var backup = File.ReadAllText(libraryFile + ".bak");
+                if (store.TryAdd(first, out _) || File.ReadAllText(libraryFile) != good ||
+                    File.ReadAllText(libraryFile + ".bak") != backup)
+                    return false;
+
+                // Missing models remain registered, visible and removable.
+                File.Delete(second);
+                if (!store.TryRead(out entries, out error) || entries.Length != 2 ||
+                    !store.TryRemove(second, out error) ||
+                    !store.TryRead(out entries, out error) || entries.Length != 1 ||
+                    entries[0].Path != Path.GetFullPath(first) ||
+                    !File.Exists(first) || PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                // Never overwrite a damaged primary or rotate its valid
+                // recovery backup from a subsequent register/remove action.
+                File.WriteAllText(libraryFile, "{ broken catalog");
+                var corrupt = File.ReadAllBytes(libraryFile);
+                backup = File.ReadAllText(libraryFile + ".bak");
+                if (store.TryRead(out entries, out error) ||
+                    store.TryAdd(first, out _) ||
+                    store.TryRemove(first, out _) ||
+                    !ByteArraysEqual(corrupt, File.ReadAllBytes(libraryFile)) ||
+                    File.ReadAllText(libraryFile + ".bak") != backup)
+                    return false;
+
+                // A future-version document is not downgraded using a v1
+                // backup, nor overwritten on the next operator action.
+                File.WriteAllText(libraryFile,
+                    "{\"Version\":2,\"Entries\":[]}");
+                var future = File.ReadAllBytes(libraryFile);
+                if (store.TryRead(out entries, out _) ||
+                    store.TryRemove(first, out _) ||
+                    !ByteArraysEqual(future, File.ReadAllBytes(libraryFile)))
+                    return false;
+
+                // Missing primary plus existing backup is not a fresh empty
+                // catalog; only explicit operator repair may restore it.
+                File.Delete(libraryFile);
+                if (store.TryRead(out entries, out error) ||
+                    store.TryAdd(first, out _) || File.Exists(libraryFile))
+                    return false;
+                File.Copy(libraryFile + ".bak", libraryFile);
+                if (!store.TryRead(out entries, out error) || entries.Length != 2 ||
+                    PlayerPrefs.GetString(key) != first)
+                    return false;
+
+                var shell = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                var panel = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.ModelLibrary.cs"));
+                return shell.Contains("BuildWorkspaceModelLibrary(sourcesContent)") &&
+                       panel.Contains("TryAdd(path, out var error)") &&
+                       panel.Contains("TryRemove(_modelLibrarySelectedPath, out var error)") &&
+                       panel.Contains("_modelLibrarySelectedPath ?? ModelLibraryPlaceholder") &&
+                       panel.Contains("Click Load VRM to load it.");
+            }
+            finally
+            {
+                if (hadRemembered) PlayerPrefs.SetString(key, remembered);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(folder))
+                    Directory.Delete(folder, true);
+            }
+        }
+
+        private static bool ByteArraysEqual(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+            for (var i = 0; i < left.Length; ++i)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool ModelSessionPreferenceAndBootstrapOwnership()
+        {
+            var key = ModelSessionController.PreferenceKey;
+            var originalPresent = PlayerPrefs.HasKey(key);
+            var original = PlayerPrefs.GetString(key, string.Empty);
+            var directory = Path.Combine(Path.GetTempPath(),
+                "vcr-u2-model-" + Guid.NewGuid().ToString("N"));
+            var validVrm = Path.Combine(directory, "remembered.vrm");
+            var missingVrm = Path.Combine(directory, "missing.vrm");
+            try
+            {
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(validVrm, "model session test; not real VRM bytes");
+                PlayerPrefs.DeleteKey(key);
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.NoPreference)
+                    return false;
+
+                // A saved v1 key needs neither migration nor rewrite.
+                PlayerPrefs.SetString(key, validVrm);
+                if (ModelSessionController.RememberedPath != validVrm ||
+                    ModelSessionController.SelectStartupRestore(false, false,
+                        out var candidate) != RememberedModelRestoreDecision.RestoreVrm ||
+                    candidate != validVrm)
+                    return false;
+                if (ModelSessionController.SelectStartupRestore(true, false,
+                        out _) != RememberedModelRestoreDecision.ExplicitStartupModel ||
+                    ModelSessionController.SelectStartupRestore(false, true,
+                        out _) != RememberedModelRestoreDecision.AlreadyActive)
+                    return false;
+
+                PlayerPrefs.SetString(key, missingVrm);
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.MissingFile ||
+                    ModelSessionController.RememberedPath != missingVrm)
+                    return false;
+                PlayerPrefs.SetString(key, Path.ChangeExtension(validVrm, ".fbx"));
+                if (ModelSessionController.SelectStartupRestore(false, false,
+                        out _) != RememberedModelRestoreDecision.UnsupportedFormat)
+                    return false;
+
+                // Only the confirmed-success path is ever persisted.
+                ModelSessionController.RememberSuccessfulManualLoad(validVrm);
+                if (PlayerPrefs.GetString(key) != validVrm)
+                    return false;
+                ModelSessionController.ForgetOnExplicitUnload();
+                if (PlayerPrefs.HasKey(key))
+                    return false;
+
+                var bootstrap = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/Application/ApplicationRuntimeBootstrap.cs"));
+                var u1 = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/WorkspaceToolkitShell.cs"));
+                var legacy = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/UI/ApplicationUiController.cs"));
+                var scene = File.ReadAllText(Path.Combine(Application.dataPath,
+                    "VCR/Runtime/Scene/SingleCharacterSceneRuntime.cs"));
+                return bootstrap.Contains("await TryRestoreRememberedModelAsync()") &&
+                       bootstrap.Contains("ModelSessionController.SelectStartupRestore(") &&
+                       bootstrap.Contains("TryRecoverOptionalModelFailure()") &&
+                       scene.Contains("TryRecoverFailedOptionalCharacterLoad()") &&
+                       u1.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
+                       u1.Contains("ModelSessionController.ForgetOnExplicitUnload()") &&
+                       legacy.Contains("ModelSessionController.RememberSuccessfulManualLoad(path)") &&
+                       legacy.Contains("ModelSessionController.ForgetOnExplicitUnload()");
+            }
+            finally
+            {
+                if (originalPresent) PlayerPrefs.SetString(key, original);
+                else PlayerPrefs.DeleteKey(key);
+                PlayerPrefs.Save();
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, true);
             }
         }
 

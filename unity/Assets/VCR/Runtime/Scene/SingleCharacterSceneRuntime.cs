@@ -367,6 +367,20 @@ namespace VCR.Runtime.Scene
             }
         }
 
+        // An optional remembered-model restore may fault the character loader.
+        // Reset only that failed character state, not the previously applied
+        // render/camera/light configuration or unrelated scene faults.
+        public bool TryRecoverFailedOptionalCharacterLoad()
+        {
+            if (_applicationQuitting || _operationCancellation != null ||
+                _state != SceneRuntimeState.Faulted ||
+                characterLoader == null || characterLoader.Current != null)
+                return false;
+            _lastError = null;
+            SetState(SceneRuntimeState.Ready);
+            return true;
+        }
+
         public Task<Vrm10Instance> ReloadCharacterAsync(
             CancellationToken cancellationToken = default)
         {

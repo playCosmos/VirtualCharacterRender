@@ -88,7 +88,6 @@ namespace VCR.Runtime.UI
         private bool _characterActionPending;
         private bool _characterRestoreAttempted;
         private bool _characterRestoreInProgress;
-        private const string LastSuccessfulCharacterPathKey = "VCR.Character.LastSuccessfulPath.v1";
         private Label _previewStatus;
         private VisualElement _leftDock;
         private VisualElement _rightDock;
@@ -1401,7 +1400,7 @@ namespace VCR.Runtime.UI
                     }
                     _workspaceNativeSettings.SetText(12,
                         _modelPathInput != null ? _modelPathInput.value ?? "" :
-                        PlayerPrefs.GetString("VCR.Character.LastSuccessfulPath.v1", ""));
+                        ModelSessionController.RememberedPath);
                     RefreshWorkspaceConfigurationStatus();
                     RefreshWorkspaceOverlayStatus();
                     _runInBackgroundBeforeSettings = UnityEngine.Application.runInBackground;
@@ -2037,7 +2036,7 @@ namespace VCR.Runtime.UI
             // with the last successful model from PlayerPrefs.
             var modelPathDraft = _modelPathInput != null
                 ? _modelPathInput.value
-                : PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
+                : ModelSessionController.RememberedPath;
             CaptureWorkspaceMaterialEditorDrafts();
             if (_cameraFieldOfViewInput != null && _cameraDraftOwner != null &&
                 sceneRuntime != null && _cameraDraftRuntime == sceneRuntime &&
@@ -2424,6 +2423,8 @@ namespace VCR.Runtime.UI
             sourcesContent.Add(sourceActions);
             _sourcesFeedback = new Label("");
             sourcesContent.Add(_sourcesFeedback);
+            BuildWorkspaceModelLibrary(sourcesContent);
+            BuildWorkspaceModelSessionSnapshot(sourcesContent);
             PlacePanel(sources, WorkspacePanelCatalog.Sources, "left");
             var preview = Panel(WorkspacePanelCatalog.Preview, "Preview", 360);
             // The central Preview is flexible in all window sizes. A hard
@@ -3623,20 +3624,24 @@ namespace VCR.Runtime.UI
         {
             if (_characterRestoreAttempted || _characterActionPending || sceneRuntime == null)
                 return;
-            // The application bootstrap may be restoring configuration or a
-            // command-line VRM asynchronously. Never race that startup load.
+            // Desktop Player session restoration is owned by the bootstrap.
+            // Never race it or retry a failed restore after it finishes.
+            // Editor and scenes without a bootstrap retain the UI fallback.
             if (!UnityEngine.Application.isEditor)
             {
                 var bootstrap = FindFirstObjectByType<ApplicationRuntimeBootstrap>();
-                if (bootstrap != null && bootstrap.isActiveAndEnabled && !bootstrap.IsStarted)
+                if (bootstrap != null && bootstrap.isActiveAndEnabled)
+                {
+                    _characterRestoreAttempted = true;
                     return;
+                }
             }
             if (sceneRuntime.Status.HasCharacter)
             {
                 _characterRestoreAttempted = true;
                 return;
             }
-            var path = PlayerPrefs.GetString(LastSuccessfulCharacterPathKey, "");
+            var path = ModelSessionController.RememberedPath;
             if (string.IsNullOrWhiteSpace(path))
             {
                 _characterRestoreAttempted = true;
@@ -3706,8 +3711,7 @@ namespace VCR.Runtime.UI
                 if (restoringPreviousCharacter)
                     Debug.Log("VCR inventory: stage=restore category=model status=restored filename=" +
                         System.IO.Path.GetFileName(path), this);
-                PlayerPrefs.SetString(LastSuccessfulCharacterPathKey, path);
-                PlayerPrefs.Save();
+                ModelSessionController.RememberSuccessfulManualLoad(path);
                 if (_sourcesFeedback != null) _sourcesFeedback.text = "Loaded: " + System.IO.Path.GetFileName(path);
             }
             catch (System.OperationCanceledException)
@@ -3780,8 +3784,7 @@ namespace VCR.Runtime.UI
                 sceneRuntime.UnloadCharacter();
                 // Unloading intentionally clears the next-start restoration target.
                 // Do not restore a model that the user explicitly removed.
-                PlayerPrefs.DeleteKey(LastSuccessfulCharacterPathKey);
-                PlayerPrefs.Save();
+                ModelSessionController.ForgetOnExplicitUnload();
                 _characterRestoreAttempted = true;
                 _nativeModelPathOverride = null;
                 if (_modelPathInput != null) _modelPathInput.SetValueWithoutNotify("");

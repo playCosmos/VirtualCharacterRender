@@ -219,6 +219,10 @@ namespace VCR.Runtime.Application
                 var vrmPath =
                     options.GetOrDefault(
                         VrmOption);
+                var explicitVrmRequested = options.TryGet(VrmOption, out _);
+                if (explicitVrmRequested && string.IsNullOrWhiteSpace(vrmPath))
+                    throw new ArgumentException(
+                        "Explicit --vcr-vrm requires a nonempty model path.");
 
                 if (!string.IsNullOrWhiteSpace(
                         vrmPath))
@@ -257,6 +261,15 @@ namespace VCR.Runtime.Application
                     return false;
                 }
 
+                if (!explicitVrmRequested)
+                {
+                    // Startup and CLI precedence belong to the application,
+                    // never to either visual controller.
+                    await TryRestoreRememberedModelAsync();
+                    if (_quitting)
+                        return false;
+                }
+
                 _configurationStore =
                     startupConfigurationStore;
                 _started = true;
@@ -292,9 +305,80 @@ namespace VCR.Runtime.Application
             }
         }
 
+        private async Task TryRestoreRememberedModelAsync()
+        {
+            var decision = ModelSessionController.SelectStartupRestore(
+                false, sceneRuntime.Status.HasCharacter, out var path);
+            if (decision == RememberedModelRestoreDecision.NoPreference ||
+                decision == RememberedModelRestoreDecision.AlreadyActive)
+                return;
+
+            var filename = string.IsNullOrWhiteSpace(path)
+                ? "<none>" : Path.GetFileName(path);
+            if (decision != RememberedModelRestoreDecision.RestoreVrm)
+            {
+                Debug.LogWarning(
+                    "VCR inventory: stage=restore category=model status=" +
+                    (decision == RememberedModelRestoreDecision.MissingFile
+                        ? "missing" : "unsupported") +
+                    " filename=" + filename, this);
+                return;
+            }
+
+            Debug.Log("VCR inventory: stage=restore category=model status=loading filename=" +
+                      filename, this);
+            try
+            {
+                var loaded = await sceneRuntime.LoadCharacterAsync(path);
+                if (_quitting)
+                    return;
+                if (loaded != null)
+                {
+                    Debug.Log("VCR inventory: stage=restore category=model status=restored filename=" +
+                              filename, this);
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        "VCR inventory: stage=restore category=model status=not_loaded filename=" +
+                        filename, this);
+                    TryRecoverOptionalModelFailure();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_quitting)
+                {
+                    Debug.LogWarning(
+                        "VCR inventory: stage=restore category=model status=canceled filename=" +
+                        filename, this);
+                    TryRecoverOptionalModelFailure();
+                }
+            }
+            catch (Exception exception)
+            {
+                // A corrupt remembered model must not block app startup or
+                // overwrite the saved reference; log no full personal paths.
+                Debug.LogWarning(
+                    "VCR inventory: stage=restore category=model status=failed filename=" +
+                    filename + " exception=" + exception.GetType().Name, this);
+                TryRecoverOptionalModelFailure();
+            }
+        }
+
+        private void TryRecoverOptionalModelFailure()
+        {
+            if (_quitting || sceneRuntime.State != SceneRuntimeState.Faulted)
+                return;
+            if (!sceneRuntime.TryRecoverFailedOptionalCharacterLoad())
+                Debug.LogWarning(
+                    "VCR inventory: stage=restore category=model status=recovery_unavailable",
+                    this);
+        }
+
         // Reporting is snapshot-only and never activates optional services.
-        // A remembered path is not an active character. UI restoration may
-        // complete later, with its own result/event logs.
+        // A remembered path and an active model are separate facts.
+        // In Players the session restore runs before this inventory.
         private void LogStartupInventory()
         {
             try
@@ -353,8 +437,7 @@ namespace VCR.Runtime.Application
                     " filename=" +
                     (string.IsNullOrWhiteSpace(activePath)
                         ? "<none>" : Path.GetFileName(activePath)), this);
-                var rememberedPath = PlayerPrefs.GetString(
-                    LastCharacterPathPreferenceKey, string.Empty);
+                var rememberedPath = ModelSessionController.RememberedPath;
                 Debug.Log(
                     "VCR inventory: stage=startup-pre-ui-restore category=remembered_model" +
                     " present=" + !string.IsNullOrWhiteSpace(rememberedPath) +
