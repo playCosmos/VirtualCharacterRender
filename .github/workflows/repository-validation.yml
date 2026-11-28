@@ -32,6 +32,40 @@ jobs:
       - name: Launch native mock Player and inspect diagnostic ZIP
         shell: powershell
         run: .\\tools\\test-exit-collector.ps1
+      - name: Verify P1 operator launcher with real native mock process
+        shell: powershell
+        run: .\\tools\\test-p1-player-launch.ps1
+
+  macos-p1-launcher:
+    name: Validate P1 macOS native launcher contract
+    # Scope this macOS-hosted job to U1 development, not every repository PR.
+    if: >-
+      ${{
+        github.ref == 'refs/heads/feature/obs-ui-u1-layout-contract-20261026' ||
+        github.head_ref == 'feature/obs-ui-u1-layout-contract-20261026'
+      }}
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exercise native mock .app and capture actual process exit evidence
+        run: python3 tools/test-p1-macos-launcher.py
+      - name: Test macOS AppKit export ABI mismatch rejection
+        run: python3 tools/verify-macos-settings-exports.py --self-test
+      - name: Compile actual AppKit Settings bridge from source
+        run: bash tools/build-native-settings-macos.sh
+      - name: Exercise native AppKit window, Korean text and reopen layout
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -fobjc-arc -arch arm64 \
+            -framework AppKit -framework Foundation \
+            tools/test-native-settings-macos.mm -o "$RUNNER_TEMP/test-vcr-appkit"
+          "$RUNNER_TEMP/test-vcr-appkit" "$GITHUB_WORKSPACE/unity/Assets/Plugins/macOS/VcrSettingsWindow.dylib"
 
   repository-structure:
     runs-on: ubuntu-latest
@@ -68,8 +102,26 @@ jobs:
       - name: Validate immutable alpha release policy
         run: python3 tools/validate-alpha-release-policy.py
 
+      - name: Verify real Settings feedback control ID across Win32, AppKit and Unity
+        run: python3 tools/test-native-settings-feedback-contract.py
+
       - name: Test native Player smoke sidecar resolution
         run: python3 tools/test-player-smoke-sidecars.py
+
+      - name: Test complete P1 IL2CPP archive and source manifest verifier
+        run: python3 tools/verify-p1-il2cpp-archive.py --self-test
+
+      - name: Test safe P1 IL2CPP Player extraction for physical Windows
+        run: python3 tools/prepare-p1-physical-player.py --self-test
+
+      - name: Test macOS P1 launcher input validation and native exit evidence
+        run: python3 tools/test-p1-macos-launcher.py
+
+      - name: Test source-bound macOS Player artifact selection across retries
+        run: python3 tools/select-p1-macos-player-artifact.py --self-test
+
+      - name: Test source-bound AppKit plugin selection across build-only retries
+        run: python3 tools/select-p1-macos-appkit-artifact.py --self-test
 
       - name: Test Unity source-free evidence verifier
         run: python3 tools/verify-unity-source-free-report.py --self-test
@@ -104,8 +156,14 @@ jobs:
       - name: Test real desktop quit evidence observer
         run: python3 tools/diagnose-gui-shutdown.py --self-test
 
+      - name: Test U1 GUI probe waits for managed startup before WM_CLOSE
+        run: python3 tools/probe-u1-windows-gui.py --self-test
+
       - name: Test native Player quit timer including timeout preservation
         run: python3 tools/run-player-smoke.py --self-test
+
+      - name: Reject instance-capturing Win32 callbacks incompatible with IL2CPP
+        run: python3 tools/test-il2cpp-window-frame-callback.py
 
       # Unused LeapC hint connection is blocked by VCR-owned runtime policy.
       # Static source checks verify it; external package modification is not needed.

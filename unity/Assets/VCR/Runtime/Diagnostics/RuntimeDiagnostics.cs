@@ -105,6 +105,14 @@ namespace VCR.Runtime.Diagnostics
         public bool ConsoleLoggingEnabled =>
             logToConsole;
 
+        // P1's operator-facing console should not fill with periodic
+        // multi-kilobyte performance reports. Metrics and opt-in CSV evidence
+        // remain available; Settings may still re-enable console reporting.
+        public void ConfigureForP1Workspace()
+        {
+            logToConsole = false;
+        }
+
         public bool CsvEvidenceEnabled =>
             writeCsvEvidence;
 

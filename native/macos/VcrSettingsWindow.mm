@@ -51,19 +51,54 @@ namespace {
         }
     }
 
+    // The General action feedback (ID 90) and U1 configuration status (ID 94)
+    // can contain a long path
+    // or recovery warning. Reserve its *actual* text height before laying
+    // out rows; a fixed 52pt row clips the message and overlaps the row above.
+    void resizeConfigurationStatus(NSTextField *field) {
+        if (!field) return;
+        NSFont *font = field.font ?: [NSFont systemFontOfSize:13];
+        NSRect measurement = [field.stringValue boundingRectWithSize:
+            NSMakeSize(596, CGFLOAT_MAX)
+            options:NSStringDrawingUsesLineFragmentOrigin |
+                    NSStringDrawingUsesFontLeading
+            attributes:@{NSFontAttributeName: font}
+            context:nil];
+        NSRect frame = field.frame;
+        frame.size.height = std::max((CGFloat)88,
+            std::ceil(measurement.size.height) + 16);
+        field.frame = frame;
+        // Full details remain available to copy, even for long warnings.
+        field.toolTip = field.stringValue;
+    }
+
     void layoutRows(int category) {
         if (category < 0 || category >= 4 || !pages) return;
         NSView *page = pages[@(category)];
-        CGFloat height = std::max((CGFloat)650, (CGFloat)categoryRows[category] * 52 + 36);
-        page.frame = NSMakeRect(0, 0, 660, height);
         NSArray<NSArray<NSView *> *> *rows = rowGroups[@(category)];
-        for (NSUInteger index = 0; index < rows.count; ++index) {
-            CGFloat y = height - 64 - (CGFloat)index * 52;
-            for (NSView *view in rows[index]) {
+        // Use each row's intrinsic control height. A multiline status row
+        // must push earlier rows upward and expand the scroll document rather
+        // than paint over the previous button or fall below the viewport.
+        CGFloat height = 36;
+        for (NSArray<NSView *> *row in rows) {
+            CGFloat tallest = 36;
+            for (NSView *view in row)
+                tallest = std::max(tallest, NSHeight(view.frame));
+            height += std::max((CGFloat)52, tallest + 16);
+        }
+        height = std::max((CGFloat)650, height);
+        page.frame = NSMakeRect(0, 0, 660, height);
+        CGFloat top = height - 28;
+        for (NSArray<NSView *> *row in rows) {
+            CGFloat tallest = 36;
+            for (NSView *view in row)
+                tallest = std::max(tallest, NSHeight(view.frame));
+            for (NSView *view in row) {
                 NSRect frame = view.frame;
-                frame.origin.y = y;
+                frame.origin.y = top - std::max((CGFloat)36, NSHeight(frame));
                 view.frame = frame;
             }
+            top -= std::max((CGFloat)52, tallest + 16);
         }
     }
 }
@@ -96,6 +131,10 @@ namespace {
 extern "C" {
 __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
     if (settingsWindow) return;
+    // Recreating Settings after disposal must not retain the previous
+    // page's row counters: stale counts make short pages unnecessarily tall
+    // and change the scroll position on subsequent opens.
+    for (int &count : categoryRows) count = 0;
     delegate = [[VcrSettingsWindowDelegate alloc] init];
     settingsWindow = [[NSWindow alloc]
         initWithContentRect:NSMakeRect(0, 0, 940, 720)
@@ -105,6 +144,11 @@ __attribute__((visibility("default"))) void VCR_SettingsCreate(void) {
                              NSWindowStyleMaskResizable)
                     backing:NSBackingStoreBuffered
                       defer:NO];
+    // NSWindow defaults to releasedWhenClosed=YES. This auto-release
+    // conflicts with ARC's strong static window reference: Destroy calls
+    // close and then sets the reference to nil, otherwise over-releasing
+    // the window when the autorelease pool drains.
+    [settingsWindow setReleasedWhenClosed:NO];
     [settingsWindow setTitle:@"VirtualCharacterRender - 환경설정"];
     // The detail document is 660pt wide and horizontal scrolling is disabled.
     // Do not allow a narrower content area to clip its text fields/buttons.
@@ -227,10 +271,21 @@ __attribute__((visibility("default"))) void VCR_SettingsAddControl(
         [row addObject:button];
     } else {
         NSTextField *text = [NSTextField labelWithString:toString(label)];
+        text.tag = ident;
         text.frame = NSMakeRect(20, 0, 604, 30);
         text.font = [NSFont systemFontOfSize:16 weight:NSFontWeightSemibold];
         text.textColor = foregroundColor();
         text.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+        if (category == 0 && (ident == 90 || ident == 94)) {
+            // The saved configuration path and recovery errors are not
+            // disposable one-line toast messages: keep them legible/copyable.
+            text.font = [NSFont systemFontOfSize:13];
+            text.usesSingleLineMode = NO;
+            [(NSTextFieldCell *)text.cell setWraps:YES];
+            text.lineBreakMode = NSLineBreakByWordWrapping;
+            text.selectable = YES;
+            resizeConfigurationStatus(text);
+        }
         [page addSubview:text];
         [views addObject:text];
         [row addObject:text];
@@ -262,7 +317,14 @@ __attribute__((visibility("default"))) void VCR_SettingsClearCategory(int catego
 __attribute__((visibility("default"))) void VCR_SettingsSetText(
     int ident, const char *value) {
     NSTextField *field = fields[@(ident)];
-    if (field) field.stringValue = toString(value);
+    if (field) {
+        field.stringValue = toString(value);
+        if (categoryViews[@0] && (ident == 90 || ident == 94) &&
+            fields[@(ident)] == field) {
+            resizeConfigurationStatus(field);
+            layoutRows(0);
+        }
+    }
 }
 
 __attribute__((visibility("default"))) void VCR_SettingsGetText(
@@ -270,8 +332,21 @@ __attribute__((visibility("default"))) void VCR_SettingsGetText(
     if (!buffer || capacity <= 0) return;
     const char *value = [fields[@(ident)].stringValue UTF8String];
     if (!value) value = "";
-    std::strncpy(buffer, value, (size_t)(capacity - 1));
-    buffer[capacity - 1] = 0;
+    // A truncated Korean/emoji path must never finish with an incomplete
+    // UTF-8 sequence: downstream C# marshaling expects valid UTF-8.
+    const size_t maxBytes = static_cast<size_t>(capacity - 1);
+    const size_t available = std::strlen(value);
+    size_t bytes = std::min(available, maxBytes);
+    if (bytes < available) {
+        // If the next source byte is a continuation, the cut is inside
+        // a multibyte code point. Backtrack to the code point's start.
+        while (bytes > 0 &&
+               (static_cast<unsigned char>(value[bytes]) & 0xC0) == 0x80) {
+            --bytes;
+        }
+    }
+    if (bytes) std::memcpy(buffer, value, bytes);
+    buffer[bytes] = '\0';
 }
 
 __attribute__((visibility("default"))) int VCR_SettingsPollAction(void) {

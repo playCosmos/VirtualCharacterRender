@@ -1,0 +1,309 @@
+name: U1 P1 Windows IL2CPP build and native smoke (manual)
+
+# Deliberately manual: the Windows IL2CPP editor image is expensive. This
+# checks the actual P1/U1 scene, not the existing Alpha release candidate.
+on:
+  # One isolated premerge P1 IL2CPP gate on edits to this workflow only.
+  # Ordinary U1 source pushes still run the lighter Linux Mono GUI suite.
+  push:
+    branches:
+      - feature/obs-ui-u1-layout-contract-20261026
+    paths:
+      - .github/workflows/u1-p1-windows-il2cpp.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: u1-p1-windows-il2cpp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  p1-windows-il2cpp:
+    name: Build actual U1 P1 IL2CPP Player and run native startup/quit
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Require the U1 feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/feature/obs-ui-u1-layout-contract-20261026"
+
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify pinned Unity version and clean generated scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fx 'm_EditorVersion: 6000.3.25f1' unity/ProjectSettings/ProjectVersion.txt
+          test ! -e unity/Library
+          test ! -e unity/Assets/VCR/P1/P1Runtime.unity
+          find tools -maxdepth 1 -name '*.sh' -print0 | xargs -0 sed -i 's/\r$//'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Supply python3 for pinned bash bootstraps
+        shell: bash
+        run: |
+          set -euo pipefail
+          shim="$RUNNER_TEMP/vcr-shims"
+          mkdir -p "$shim"
+          printf '#!/usr/bin/env bash\nexec python "$@"\n' > "$shim/python3"
+          chmod +x "$shim/python3"
+          printf '%s\n' "$(cygpath -w "$shim")" >> "$GITHUB_PATH"
+          "$shim/python3" --version
+
+      - name: Bootstrap pinned dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/bootstrap-mediapipe.sh
+          bash tools/bootstrap-ui-fonts.sh
+          bash tools/bootstrap-ultraleap.sh
+          bash tools/bootstrap-uniwinc.sh
+
+      - name: Start Windows Docker daemon
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 10; $attempt++) {
+            $service = Get-Service docker -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq 'Stopped') {
+              Start-Service docker -ErrorAction SilentlyContinue
+            }
+            docker version 2>$null
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Start-Sleep -Seconds 6
+          }
+          throw 'Windows Docker daemon unavailable'
+
+      - name: Pull pinned Windows IL2CPP Unity editor
+        shell: powershell
+        timeout-minutes: 30
+        run: |
+          $image = 'unityci/editor:windows-6000.3.25f1-windows-il2cpp-3'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            docker pull $image
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Start-Sleep -Seconds 30
+          }
+          throw "Failed pulling $image"
+
+      - name: Generate real U1 P1 workspace scene
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.GenerateWorkspaceAndExit
+          customImage: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require generated U1 scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s unity/Assets/VCR/P1/P1Runtime.unity
+          test -s unity/Assets/VCR/P1/WorkspacePanelSettings.asset
+
+      - name: Build P1 non-development Windows IL2CPP Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.3.25f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: VCR.Editor.P1.P1BatchValidation.BuildWindowsIl2CppAndExit
+          customImage: unityci/editor:windows-6000.3.25f1-windows-il2cpp-3
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Verify P1 IL2CPP binaries and package source-bound Player
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          root = Path("unity/Builds/P1/Windows-IL2CPP")
+          required = (
+              "VirtualCharacterRender.exe",
+              "UnityPlayer.dll",
+              "GameAssembly.dll",
+              "VirtualCharacterRender_Data/il2cpp_data/Metadata/global-metadata.dat",
+          )
+          for name in required:
+              file = root / name
+              if not file.is_file() or file.stat().st_size == 0:
+                  raise SystemExit("Missing P1 IL2CPP binary: " + name)
+          if (root / "MonoBleedingEdge").exists():
+              raise SystemExit("P1 release unexpectedly bundles the Mono runtime")
+
+          target = Path("p1-il2cpp-artifacts")
+          target.mkdir(exist_ok=True)
+          archive = target / "windows.zip"
+          manifest_files = []
+          with ZipFile(archive, "w", compression=ZIP_DEFLATED, compresslevel=6) as z:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      relative = file.relative_to(root).as_posix()
+                      z.write(file, relative)
+                      file_hash = hashlib.sha256()
+                      with file.open("rb") as content:
+                          for chunk in iter(lambda: content.read(1024 * 1024), b""):
+                              file_hash.update(chunk)
+                      manifest_files.append({"path": relative, "size": file.stat().st_size,
+                                             "sha256": file_hash.hexdigest()})
+          (target / "windows.payload-sha256.json").write_text(
+              json.dumps({"format": "vcr-p1-payload-sha256-v1",
+                          "sourceSha": os.environ["GITHUB_SHA"],
+                          "files": manifest_files}, indent=2) + "\n", encoding="utf-8")
+          digest_state = hashlib.sha256()
+          with archive.open("rb") as source:
+              for block in iter(lambda: source.read(1024 * 1024), b""):
+                  digest_state.update(block)
+          digest = digest_state.hexdigest()
+          (target / "windows.sha256").write_text(digest + "  windows.zip\n", encoding="utf-8")
+          (target / "windows.source-sha").write_text(os.environ["GITHUB_SHA"] + "\n", encoding="utf-8")
+          (target / "build-evidence.txt").write_text(
+              "scene=P1/U1\nbackend=IL2CPP\nbuild_options=None\nunity=6000.3.25f1\n"
+              "source_sha=" + os.environ["GITHUB_SHA"] + "\n"
+              "archive_sha256=" + digest + "\n", encoding="utf-8")
+          print("P1 Windows IL2CPP artifact SHA-256:", digest)
+          PY
+
+      - name: Verify exact built P1 IL2CPP payload and source manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = 'p1-il2cpp-artifacts/windows.payload-sha256.json'
+          $evidence = & ./tools/verify-p1-player-payload.ps1 `
+            -PlayerDirectory 'unity/Builds/P1/Windows-IL2CPP' `
+            -ManifestFile $manifest `
+            -ExpectedSourceSha "$env:GITHUB_SHA"
+          if ($evidence.fileCount -le 0 -or -not $evidence.manifestSha256) {
+            throw 'Complete P1 IL2CPP payload verification produced no valid evidence'
+          }
+          Write-Host "P1 IL2CPP payload hash verification PASS: $($evidence.fileCount) files"
+
+      - name: Verify packaged IL2CPP ZIP against complete manifest and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/verify-p1-il2cpp-archive.py \
+            --artifact-dir p1-il2cpp-artifacts \
+            --source "$GITHUB_SHA"
+
+      - name: Run native P1 IL2CPP startup/shutdown and config relaunch smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/run-player-smoke.py \
+            --platform windows-nodebug \
+            --archive p1-il2cpp-artifacts/windows.zip \
+            --source "$GITHUB_SHA" \
+            --output Builds/PlayerSmoke/p1-windows-il2cpp
+
+      # The Mono development Player already gets OS GUI probing in the
+      # source-free workflow. Probe the actual nondevelopment IL2CPP Player,
+      # too: this catches AOT-only window/frame/settings failures that do
+      # not surface in the headless startup/config smoke.
+      - name: Exercise actual P1 IL2CPP native GUI and dock persistence
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $player = 'unity/Builds/P1/Windows-IL2CPP/VirtualCharacterRender.exe'
+          $reportPath = 'Builds/GUIProbe/p1-windows-il2cpp/gui-probe.json'
+          if (-not (Test-Path -LiteralPath $player)) {
+            throw 'Source-built P1 IL2CPP executable missing'
+          }
+          python -m py_compile tools/probe-u1-windows-gui.py
+          if ($LASTEXITCODE -ne 0) { throw 'GUI probe syntax validation failed' }
+          python tools/probe-u1-windows-gui.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'GUI probe self-test failed' }
+          python tools/probe-u1-windows-gui.py `
+            --player $player `
+            --source "$env:GITHUB_SHA" `
+            --screen-width 960 `
+            --screen-height 520 `
+            --output Builds/GUIProbe/p1-windows-il2cpp
+          if ($LASTEXITCODE -ne 0) {
+            throw 'P1 IL2CPP GUI probe failed; inspect archived gui-probe.json and Player.log'
+          }
+          if (-not (Test-Path -LiteralPath $reportPath)) {
+            throw 'P1 IL2CPP GUI probe produced no JSON evidence'
+          }
+          $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          if ($report.windowObserved -ne $true -or $report.passed -ne $true -or
+              $report.nativeFramePassed -ne $true -or
+              $report.nativeInputTargetsPassed -ne $true -or
+              $report.nativeWindowControlsPassed -ne $true -or
+              $report.freeResizePassed -ne $true -or
+              $report.nativeSettingsNavigationPassed -ne $true -or
+              $report.featureSearchKeyboardPassed -ne $true -or
+              $report.layoutRestartPassed -ne $true -or
+              $report.runtimeExceptionFree -ne $true -or
+              $report.managedQuitObserved -ne $true -or
+              $report.exitCode -ne 0) {
+            throw 'P1 IL2CPP GUI evidence is incomplete or rejected'
+          }
+          if ($report.interactiveU1Accepted -eq $true) {
+            throw 'Hosted GUI regression must not claim physical operator acceptance'
+          }
+          Write-Host 'Source-bound P1 IL2CPP native GUI regression PASS; physical acceptance remains pending'
+
+      - name: Report failure details from actual Player smoke evidence
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("Builds/PlayerSmoke/p1-windows-il2cpp")
+          for path in sorted(root.glob("*-player-smoke.json")) + [
+                  root / "player-smoke.json", root / "runner-evidence.json"]:
+              if not path.is_file():
+                  continue
+              report = json.loads(path.read_text(encoding="utf-8"))
+              print(path.name, "passed=", report.get("passed"),
+                    "exitCode=", report.get("exitCode"),
+                    "error=", report.get("error", ""))
+          PY
+
+      - name: Archive tested binary and diagnostics (not a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1-p1-windows-il2cpp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            p1-il2cpp-artifacts/
+            Builds/PlayerSmoke/p1-windows-il2cpp/
+            Builds/GUIProbe/p1-windows-il2cpp/
+          if-no-files-found: warn
+          retention-days: 7

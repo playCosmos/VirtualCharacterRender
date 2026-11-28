@@ -28,6 +28,75 @@ On each native desktop, check all four Settings pages; OS titlebar drag; minimiz
 
 Published alpha releases are immutable. This development change must remain on a feature branch/PR until separately approved; **do not create any additional version tag, release intent or GitHub Release without an explicit new instruction.**
 
+## P1 macOS native Settings verification (2026-11-12)
+
+The source-matched nondevelopment P1 macOS Mono Player build and native
+startup/relaunch/normal-shutdown smoke passed at commit `fd5acf8` in
+[Actions #43142149736](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43142149736).
+That job also packages the arm64 AppKit bridge. This is **not** a signed release,
+macOS IL2CPP acceptance, or a real operator-driven GUI test.
+
+Separately, Repository validation runs a real compiled AppKit bridge on the
+`macos-15` runner through `tools/test-native-settings-macos.mm`. The native
+integration test covers system titlebar, independent resize, show, close-to-hide,
+reopen, page switches, button action routing, safe destroy/recreate, Korean
+Unicode text, and bounded UTF-8 text retrieval without partial code points.
+Native code also uses `releasedWhenClosed=NO` to avoid double release under
+ARC, and resets page row counters on recreation.
+
+The macOS build now runs `tools/verify-macos-settings-exports.py` against
+the actual arm64 `VcrSettingsWindow.dylib` and the managed
+`DesktopNativeSettingsWindow.cs`. All **10** P/Invoke entrypoints must match
+real exported C symbols. The synthetic ABI verifier rejects renamed,
+missing, duplicate and unexpected exports. In
+[Repository validation #43194180380](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43194180380),
+the real dylib export ABI, standalone native AppKit bridge integration and
+mock launcher all passed. This checks the ABI *names*, not successful managed
+P/Invoke calls inside the Unity Player.
+
+The source-bound U1/P1 macOS Player workflow additionally enables the opt-in
+`VCR_SMOKE_NATIVE_SETTINGS=1` switch **only for the native smoke process**.
+The scene's `PlayerStartupSmoke` then invokes the preserved
+`DesktopNativeSettingsWindow.VerifyMacManagedInteropSmoke` through reflection
+(to avoid an Application/UI assembly dependency cycle). It exercises the
+actual managed-to-native P/Invoke path for **all 10** AppKit exports: native
+window creation, text control creation, Korean UTF-8 Get/Set, category
+selection/clear, action queue, show/visibility and window disposal. Each real
+Player quit report records `nativeSettingsInteropPassed`. CI rejects missing
+or false evidence in any of the expected **eight** startup/relaunch/recovery/
+acceptance reports. Regular user launches never run this test. This managed
+smoke is still a programmatic API test; it cannot substitute for GUI/IME,
+real device, Retina, multi-monitor or operator acceptance. The source-bound nondevelopment Unity/macOS Mono Player workflow
+[Actions #43213727212](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43213727212)
+**passed**: its real Player process reported managed-to-AppKit P/Invoke success
+on each of eight startup/relaunch/recovery/acceptance launches. This is still
+an API-level native integration smoke, not human GUI acceptance.
+
+
+The desktop Settings bridge supports **two distinct** General status
+controls. Legacy `ApplicationUiController.AddNativeFeedback(0)` uses **90**
+for operation feedback. The U1 UI Toolkit `WorkspaceToolkitShell` creates
+both operation feedback **90** and a separate configuration status **94**;
+`WorkspaceToolkitShell.GetWorkspaceConfigurationStatus()` supplies the active
+configuration file path, automatic-save state and recovery warnings to **94**.
+The real P1 Windows GUI test therefore inspects child control **94**, not
+feedback **90**. Both 90 and 94 render as scrollable, read-only multiline
+controls in Win32 and dynamically measured wrapping/selectable AppKit labels
+on macOS. AppKit `SetText` must relayout either control without overlapping
+adjacent rows.
+
+A previous investigation incorrectly concluded that 94 was a synthetic,
+nonexistent control by examining only the **legacy** UI owner. The change to
+support 90 alone broke actual U1 Windows GUI validation
+[#43223134060](https://github.com/playCosmos/VirtualCharacterRender/actions/runs/43223134060).
+This is a production regression, not merely a test mismatch. The correction
+restores **both** control IDs in the native implementations and tests; the
+cross-platform regression guard covers both UI owners, the actual U1 Windows
+GUI probe, and native AppKit integration with a long Korean warning and an
+unbroken path. None of these checks proves Korean IME composition, real
+VRM/tracker devices, Retina/multi-monitor behavior, or physical operator
+approval.
+
 ## Current Windows IL2CPP input validation boundary
 
 The Windows implementation must pump native child-control messages on Unity's main thread. Pumping only the top-level HWND leaves edit and button keyboard/mouse messages undispatched even though the controls paint and can be inspected. `DesktopNativeSettingsWindow.PumpMessages()` therefore pumps the top-level window, the four category tabs, and every category control; `PollAction()` only drains the queued commands. The category tabs are tracked separately so selecting a category does not hide them. The window procedure also carries `[AOT.MonoPInvokeCallback(typeof(WindowProcedure))]` for IL2CPP and uses `SetWindowPos(HWND_TOPMOST)` while visible so the Settings window stays above the render overlay.
